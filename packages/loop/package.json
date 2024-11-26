@@ -2,11 +2,11 @@
   "name": "@danstack/loop",
   "version": "0.0.1",
   "author": "Daniel Montilla",
-  "description": "",
+  "description": "A precise, lightweight, and high-performance utility library for managing loops and timing in the browser",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/danstack-dev/danstack"
+    "url": "git+https://github.com/danstack-dev/danstack.git"
   },
   "keywords": [
     "typescript"
