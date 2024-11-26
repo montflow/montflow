@@ -1,23 +1,54 @@
 import { state as _ } from "./internal";
-import { Loop, Priority, StepCallback } from "./loop";
+import { Loop } from "./loop";
+import type { Ticker } from "./types";
 
+/**
+ * Represents an object that can be added to a `loop`
+ * @extends {Disposable}
+ * @see {@link Loop}
+ */
 export interface Loopable extends Disposable {
   readonly id: number;
-  readonly priority: Priority;
-  readonly callback: StepCallback;
+  readonly priority: number;
+  readonly ticker: Ticker;
 
+  /**
+   * Indicates if the loop is currently running (ticking).
+   * @readonly
+   */
   running: boolean;
+
+  /**
+   * Reference to registered `loop`
+   * @readonly
+   * @see {@link Loop}
+   */
   loop?: Loop;
 
+  /**
+   * Attempts to stop this loopable.
+   * Does nothing if there's no associated loop or if it's not currently running.
+   */
   stop(): void;
+
+  /**
+   * Attempts to start this loopable.
+   * Does nothing if there's no associated loop or if it's already running.
+   */
   start(): void;
 }
 
 export namespace Loopable {
-  export type Options = { priority?: Priority };
+  export type Options = { priority?: number };
 }
 
-export const Loopable = (callback: StepCallback, opts?: Loopable.Options): Loopable => {
+/**
+ * @param {Ticker} ticker - Function to be called on each tick of the loop
+ * @param {Loopable.Options} opts - Optional configuration settings
+ *
+ * @returns A new Loopable instance
+ */
+export const Loopable = (ticker: Ticker, opts?: Loopable.Options): Loopable => {
   const { priority } = { priority: 0, ...opts } satisfies Required<Loopable.Options>;
 
   const id: Loopable["id"] = _.next++;
@@ -36,7 +67,7 @@ export const Loopable = (callback: StepCallback, opts?: Loopable.Options): Loopa
 
   const self: Loopable = {
     id,
-    callback,
+    ticker: ticker,
     priority,
 
     get running() {

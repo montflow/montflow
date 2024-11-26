@@ -10,7 +10,7 @@ export interface Interval extends Loopable {
 
 export namespace Interval {
   export type Options = Loopable.Options & {
-    onTick?: (self: Interval) => void;
+    onIteration?: (self: Interval) => void;
     onComplete?: (self: Interval) => void;
     duration: Interval["duration"];
     maxIterations?: number;
@@ -19,7 +19,7 @@ export namespace Interval {
 
 export const Interval = (opts: Interval.Options): Interval => {
   const {
-    onTick,
+    onIteration,
     onComplete,
     duration: initialDuration,
     maxIterations = "infinite",
@@ -38,7 +38,7 @@ export const Interval = (opts: Interval.Options): Interval => {
         elapsed -= duration;
         iterations++;
 
-        onTick?.(_self);
+        onIteration?.(_self);
 
         if (maxIterations !== "infinite" && iterations >= maxIterations) {
           self.stop();

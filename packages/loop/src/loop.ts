@@ -1,36 +1,87 @@
-import { state as _ } from "./internal";
+import { state as _, scoped } from "./internal";
 import { Loopable } from "./loopable";
+import type { Ticker } from "./types";
 
-export type Priority = number;
-export type StepCallback = (dt: number, self: Loopable) => any;
-
+/**
+ * Represents loop that manages multiple loopable objects
+ * @extends {Disposable}
+ * @see {@link Loopable}
+ */
 export interface Loop extends Disposable {
   readonly id: number;
+
+  /**
+   * Time scale factor for the loop
+   * Values greater than 1 speed up time, less than 1 slow it down
+   */
   rate: number;
+
+  /**
+   * Indicates if the loop is currently running (processing loopabled)
+   */
   readonly running: boolean;
 
+  /**
+   * Checks if a loopable is currently attached
+   * @param {Loopable} loopable - The loopable to check
+   * @returns {boolean} True if the loopable is registered to this loop
+   */
   has(loopable: Loopable): boolean;
+
+  /**
+   * Registers an existing loopable to this loop
+   * @param {Loopable} loopable - The loopable to register
+   * @returns {Loopable} The registered loopable
+   * @throws {Error} If the loopable is already running or registered to another loop
+   */
   register(loopable: Loopable): Loopable;
-  add(callback: StepCallback, opts?: Loopable.Options): Loopable;
+
+  /**
+   * Constructs a new loopable and auto-registers
+   * @param {Ticker} callback - Function to be called on each tick
+   * @param {Loopable.Options} [opts] - Optional configuration settings
+   * @returns {Loopable} The newly created and registered loopable
+   */
+  add(callback: Ticker, opts?: Loopable.Options): Loopable;
+
+  /**
+   * Removes a loopable from this loop
+   * @param {Loopable} loopable - The loopable to remove
+   * @returns {Loopable} The removed loopable
+   * @throws {Error} If the loopable is registered to another loop
+   */
   remove(loopable: Loopable): Loopable;
+
+  /**
+   * Removes all loopables from this loop
+   */
   clear(): void;
 }
 
-const scoped = <T = void>(fn: () => T): T => {
-  _.inContext = true;
-  const val = fn();
-  _.inContext = false;
-  return val;
-};
+export namespace Loop {
+  export type Options = {
+    rate?: number;
+  };
+}
 
-export const Loop = (): Loop => {
+/**
+ * Creates a new Loop instance that manages the execution of loopables
+ * The loop automatically starts when the first loopable is added and
+ * stops when the last one is removed.
+ *
+ * @param {Loop.Options} [opts] - Optional configuration settings
+ * @returns {Loop} A new Loop instance
+ */
+export const Loop = (opts?: Loop.Options): Loop => {
+  const { rate: initialRate } = { rate: 1, ...opts } satisfies Required<Loop.Options>;
+
   const id = _.next++;
-  let callbacks: Record<Priority, Record<Loopable["id"], Loopable>> = {};
+  let callbacks: Record<number, Record<Loopable["id"], Loopable>> = {};
   let removeQueue: Loopable[] = [];
   let running = false;
   let lastTime = 0;
   let inLoop = false;
-  let rate = 1;
+  let rate = initialRate;
 
   const startLoop = () => {
     running = true;
@@ -119,7 +170,7 @@ export const Loop = (): Loop => {
     for (const priority of priorities) {
       const callbackGroup = callbacks[priority];
       for (const loopable of Object.values(callbackGroup)) {
-        loopable.callback(dt, loopable);
+        loopable.ticker(dt, loopable);
       }
     }
 

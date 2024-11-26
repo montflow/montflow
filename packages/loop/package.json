@@ -3,16 +3,16 @@
   "version": "0.0.1",
   "author": "Daniel Montilla",
   "description": "",
-  "license": "ISC",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DanielMontilla/solzu"
+    "url": "git+https://github.com/danstack-dev/danstack"
   },
   "keywords": [
     "typescript"
   ],
   "bugs": {
-    "url": "https://github.com/DanielMontilla/solzu/issues"
+    "url": "https://github.com/danstack-dev/danstack/issues"
   },
   "scripts": {
     "build": "tsup",
