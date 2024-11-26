@@ -1,0 +1,21 @@
+{
+  "name": "@danstack/root",
+  "author": "Daniel Montilla",
+  "version": "0.0.0",
+  "packageManager": "pnpm@9.0.0",
+  "private": true,
+  "scripts": {
+    "web:dev": "pnpm --filter @danstack/web run dev"
+  },
+  "dependencies": {
+    "solzu": "^2.0.0",
+    "valibot": "^0.42.1"
+  },
+  "devDependencies": {
+    "turbo": "^2.2.3",
+    "prettier": "^3.3.3",
+    "prettier-plugin-svelte": "^3.2.3",
+    "prettier-plugin-tailwindcss": "^0.6.8",
+    "prettier-plugin-organize-imports": "^4.1.0"
+  }
+}
