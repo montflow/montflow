@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>@solzu/loop bounce-animation</title>
+  <style>
+    :root {
+      background-color: #242424;
+
+    }
+
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-width: 100vw;
+      min-height: 100vh;
+    }
+
+    .viewport {
+      position: relative;
+      height: 512px;
+      width: 720px;
+      background-color: #1d1c1c;
+    }
+
+    .ball {
+      position: absolute;
+      height: 128px;
+      width: 128px;
+      border-radius: 100%;
+      background-color: #545454;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="viewport">
+    <div class="ball"></div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
