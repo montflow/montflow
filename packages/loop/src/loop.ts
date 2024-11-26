@@ -1,4 +1,4 @@
-import { internal as _ } from "./internal";
+import { state as _ } from "./internal";
 import { Loopable } from "./loopable";
 
 export type Priority = number;

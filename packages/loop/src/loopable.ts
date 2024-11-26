@@ -1,4 +1,4 @@
-import { internal as _ } from "./internal";
+import { state as _ } from "./internal";
 import { Loop, Priority, StepCallback } from "./loop";
 
 export interface Loopable extends Disposable {
