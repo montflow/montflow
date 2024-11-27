@@ -34,7 +34,7 @@ export interface Loop extends Disposable {
    * @returns {Loopable} The registered loopable
    * @throws {Error} If the loopable is already running or registered to another loop
    */
-  register(loopable: Loopable): Loopable;
+  register<L extends Loopable>(loopable: L): L;
 
   /**
    * Constructs a new loopable and auto-registers

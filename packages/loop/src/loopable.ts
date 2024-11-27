@@ -67,7 +67,7 @@ export const Loopable = (ticker: Ticker, opts?: Loopable.Options): Loopable => {
 
   const self: Loopable = {
     id,
-    ticker: ticker,
+    ticker,
     priority,
 
     get running() {
