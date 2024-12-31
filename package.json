@@ -5,17 +5,21 @@
   "packageManager": "pnpm@9.0.0",
   "private": true,
   "scripts": {
-    "web:dev": "pnpm --filter @danstack/web run dev"
+    "web:dev": "pnpm --filter @danstack/web run dev",
+    "core:test": "pnpm --filter @danstack/core run test",
+    "core:build": "pnpm --filter @danstack/core run build",
+    "core:dev": "pnpm --filter @danstack/core run dev"
   },
   "dependencies": {
     "solzu": "^2.0.0",
     "valibot": "^0.42.1"
   },
   "devDependencies": {
-    "turbo": "^2.2.3",
     "prettier": "^3.3.3",
+    "prettier-plugin-astro": "^0.14.1",
+    "prettier-plugin-organize-imports": "^4.1.0",
     "prettier-plugin-svelte": "^3.2.3",
     "prettier-plugin-tailwindcss": "^0.6.8",
-    "prettier-plugin-organize-imports": "^4.1.0"
+    "turbo": "^2.2.3"
   }
 }
