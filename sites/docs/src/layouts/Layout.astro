@@ -1,0 +1,26 @@
+---
+import { ClientRouter } from "astro:transitions";
+import "../styles/index.css";
+import Header from "src/components/Header.astro";
+
+const { theme } = Astro.locals;
+---
+
+<!doctype html>
+<html lang="en" data-theme={theme} class="bg-background text-foreground">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>Danstack</title>
+    <script src="../lib/client"></script>
+    <ClientRouter />
+  </head>
+  <body class="box-content flex min-h-screen flex-col">
+    <Header />
+    <main class="size-full grow">
+      <slot />
+    </main>
+  </body>
+</html>
