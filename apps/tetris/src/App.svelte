@@ -4,7 +4,7 @@
   import { onNone, onSome } from "solzu/@maybe/fp";
   import type { PieceLabel, Color, Cell, Piece, Input, Position } from "./types";
   import { pieces } from "./data";
-  import { Loop, Interval } from "@danstack/loop";
+  import { Loop, Interval } from "@montflow/loop";
   import { cycle, gridPrint, keysOf, nextRandomElement, nextRandomInt } from "./helpers";
 
   type Props = {

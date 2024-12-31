@@ -1,10 +1,10 @@
-# @danstack/loop 🔁
+# @montflow/loop 🔁
 
 A precise, lightweight, and high-performance utility library for managing loops and timing in the browser.
 
 ## Install
 
-`npm install @danstack/loop`
+`npm install @montflow/loop`
 
 ## Features
 
@@ -17,7 +17,7 @@ A precise, lightweight, and high-performance utility library for managing loops 
 ## Usage
 
 ```typescript
-import { Loop } from "@danstack/loop";
+import { Loop } from "@montflow/loop";
 
 const loop = Loop();
 
@@ -45,7 +45,7 @@ loop.clear();
 
 ## Performance
 
-Built with `requestAnimationFrame`, `@danstack/loop` is optimized for modern browsers to ensure precise and efficient timing. By only running active callbacks, it avoids unnecessary computation, making it faster than many polling-based libraries.
+Built with `requestAnimationFrame`, `@montflow/loop` is optimized for modern browsers to ensure precise and efficient timing. By only running active callbacks, it avoids unnecessary computation, making it faster than many polling-based libraries.
 
 
 ## Examples
@@ -53,7 +53,7 @@ Built with `requestAnimationFrame`, `@danstack/loop` is optimized for modern bro
 ### Simple game loop
 
 ```typescript
-import { Loop } from "@danstack/loop";
+import { Loop } from "@montflow/loop";
 
 const loop = Loop();
 

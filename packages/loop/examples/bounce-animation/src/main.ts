@@ -1,4 +1,4 @@
-import { Loop, StepCallback } from "@danstack/loop";
+import { Loop, StepCallback } from "@montflow/loop";
 
 type Position = { x: number; y: number };
 type Vector = Position;

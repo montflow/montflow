@@ -1,5 +1,5 @@
 {
-  "name": "@danstack/loop",
+  "name": "@montflow/loop",
   "version": "0.0.1",
   "author": "Daniel Montilla",
   "description": "A precise, lightweight, and high-performance utility library for managing loops and timing in the browser",

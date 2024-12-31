@@ -1,4 +1,4 @@
-# @danstack/core
+# @montflow/core
 A collection of powerful, lightweight and performant typescript utilities.
 
 # Install

@@ -1,5 +1,5 @@
 {
-  "name": "@danstack/core",
+  "name": "@montflow/core",
   "version": "0.0.1",
   "author": "Daniel Montilla",
   "description": "A collection of powerful, lightweight and performant typescript utilities.",
