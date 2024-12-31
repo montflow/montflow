@@ -16,15 +16,13 @@ A precise and high-performance utility library for managing loops and timing in 
 
 ## 🌐 Sites
 
-### **Docs**  
-[🔗 Link](https://docs.montflow.dev)  
+### [**Docs**](https://docs.montflow.dev)
 Comprehensive documentation for all public @montflow packages.
 
-### **Me**
-[🔗 Link](https://me.montflow.dev)  
+### [**Me**](https://me.montflow.dev)
 My personal portfolio and central hub.
 
-## 🌍 Connect with @montflow
+#### Other
 
 - [Discord](https://example.com)
 - [Reddit](https://www.reddit.com/r/montflow)  
