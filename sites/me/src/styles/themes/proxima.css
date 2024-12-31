@@ -1,0 +1,15 @@
+:root[data-theme="proxima"] {
+  --border: 220 13% 91%;
+  --background: 224 71.4% 4.1%;
+  --foreground: 210 20% 98%;
+  --card: 0 0% 100%;
+  --card-foreground: 224 71.4% 4.1%;
+  --primary: 269 54% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 269 30% 70%;
+  --secondary-foreground: 0 0% 0%;
+  --accent: 231 30% 80%;
+  --accent-foreground: 269 5% 10%;
+  --destructive: 0 56% 30%;
+  --destructive-foreground: 269 5% 90%;
+}

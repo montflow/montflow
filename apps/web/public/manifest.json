@@ -1,9 +1,0 @@
-{
-  "$schema": "https://json.schemastore.org/web-manifest-combined.json",
-  "name": "danstack",
-  "short_name": "ds.dev",
-  "start_url": ".",
-  "display": "standalone",
-  "background_color": "#fff",
-  "description": ""
-}
