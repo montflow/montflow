@@ -30,107 +30,66 @@
   "private": false,
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
     "./array": {
-      "import": {
-        "default": "./dist/array/index.js",
-        "types": "./dist/array/index.d.ts"
-      },
-      "require": {
-        "default": "./dist/array/index.cjs",
-        "types": "./dist/array/index.d.cts"
-      }
+      "types": "./dist/array/index.d.ts",
+      "import": "./dist/array/index.js",
+      "require": "./dist/array/index.cjs"
     },
     "./async": {
-      "import": {
-        "default": "./dist/async/index.js",
-        "types": "./dist/async/index.d.ts"
-      },
-      "require": {
-        "default": "./dist/async/index.cjs",
-        "types": "./dist/async/index.d.cts"
-      }
+      "types": "./dist/async/index.d.ts",
+      "import": "./dist/async/index.js",
+      "require": "./dist/async/index.cjs"
     },
     "./fault": {
-      "import": {
-        "default": "./dist/fault/index.js",
-        "types": "./dist/fault/index.d.ts"
-      },
-      "require": {
-        "default": "./dist/fault/index.cjs",
-        "types": "./dist/fault/index.d.cts"
-      }
+      "types": "./dist/fault/index.d.ts",
+      "import": "./dist/fault/index.js",
+      "require": "./dist/fault/index.cjs"
     },
     "./function": {
-      "import": {
-        "default": "./dist/function/index.js",
-        "types": "./dist/function/index.d.ts"
-      },
-      "require": {
-        "default": "./dist/function/index.cjs",
-        "types": "./dist/function/index.d.cts"
-      }
+      "types": "./dist/function/index.d.ts",
+      "import": "./dist/function/index.js",
+      "require": "./dist/function/index.cjs"
     },
     "./macro": {
-      "import": {
-        "default": "./dist/macro/index.js",
-        "types": "./dist/macro/index.d.ts"
-      },
-      "require": {
-        "default": "./dist/macro/index.cjs",
-        "types": "./dist/macro/index.d.cts"
-      }
+      "types": "./dist/macro/index.d.ts",
+      "import": "./dist/macro/index.js",
+      "require": "./dist/macro/index.cjs"
+    },
+    "./maybe": {
+      "types": "./dist/maybe/index.d.ts",
+      "import": "./dist/maybe/index.js",
+      "require": "./dist/maybe/index.cjs"
     },
     "./nothing": {
-      "import": {
-        "default": "./dist/nothing/index.js",
-        "types": "./dist/nothing/index.d.ts"
-      },
-      "require": {
-        "default": "./dist/nothing/index.cjs",
-        "types": "./dist/nothing/index.d.cts"
-      }
+      "types": "./dist/nothing/index.d.ts",
+      "import": "./dist/nothing/index.js",
+      "require": "./dist/nothing/index.cjs"
     },
     "./number": {
-      "import": {
-        "default": "./dist/number/index.js",
-        "types": "./dist/number/index.d.ts"
-      },
-      "require": {
-        "default": "./dist/number/index.cjs",
-        "types": "./dist/number/index.d.cts"
-      }
+      "types": "./dist/number/index.d.ts",
+      "import": "./dist/number/index.js",
+      "require": "./dist/number/index.cjs"
     },
     "./object": {
-      "import": {
-        "default": "./dist/object/index.js",
-        "types": "./dist/object/index.d.ts"
-      },
-      "require": {
-        "default": "./dist/object/index.cjs",
-        "types": "./dist/object/index.d.cts"
-      }
+      "types": "./dist/object/index.d.ts",
+      "import": "./dist/object/index.js",
+      "require": "./dist/object/index.cjs"
+    },
+    "./result": {
+      "types": "./dist/result/index.d.ts",
+      "import": "./dist/result/index.js",
+      "require": "./dist/result/index.cjs"
     },
     "./string": {
-      "import": {
-        "default": "./dist/string/index.js",
-        "types": "./dist/string/index.d.ts"
-      },
-      "require": {
-        "default": "./dist/string/index.cjs",
-        "types": "./dist/string/index.d.cts"
-      }
+      "types": "./dist/string/index.d.ts",
+      "import": "./dist/string/index.js",
+      "require": "./dist/string/index.cjs"
     }
   },
   "files": [
