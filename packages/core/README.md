@@ -4,10 +4,10 @@ A collection of powerful, lightweight and performant typescript utilities.
 # Install
 ## npm
 ```
-npm i solzu
+npm i @montflow/core
 ```
 
 ## pnpm
 ```
-pnpm add solzu
+pnpm add @montflow/core
 ```

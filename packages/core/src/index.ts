@@ -2,7 +2,6 @@ export * as Array from "./array";
 export * as Async from "./async";
 export * as Fault from "./fault";
 export * as Function from "./function";
-export * as List from "./list";
 export * as Macro from "./macro";
 export * as Maybe from "./maybe";
 export * as Nothing from "./nothing";

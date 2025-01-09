@@ -1,6 +1,6 @@
 {
   "name": "@montflow/core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Daniel Montilla",
   "description": "A collection of powerful, lightweight and performant typescript utilities.",
   "license": "MIT",
@@ -38,28 +38,98 @@
         "default": "./dist/index.js"
       },
       "require": {
-        "type": "./dist/index.d.cts",
+        "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
     },
-    "./maybe": {
+    "./array": {
       "import": {
-        "default": "./dist/maybe/index.js",
-        "types": "./dist/maybe/index.d.ts"
+        "default": "./dist/array/index.js",
+        "types": "./dist/array/index.d.ts"
       },
       "require": {
-        "default": "./dist/maybe/index.cjs",
-        "types": "./dist/maybe/index.d.cts"
+        "default": "./dist/array/index.cjs",
+        "types": "./dist/array/index.d.cts"
       }
     },
-    "./result": {
+    "./async": {
       "import": {
-        "default": "./dist/result/index.js",
-        "types": "./dist/result/index.d.ts"
+        "default": "./dist/async/index.js",
+        "types": "./dist/async/index.d.ts"
       },
       "require": {
-        "default": "./dist/result/index.cjs",
-        "types": "./dist/result/index.d.cts"
+        "default": "./dist/async/index.cjs",
+        "types": "./dist/async/index.d.cts"
+      }
+    },
+    "./fault": {
+      "import": {
+        "default": "./dist/fault/index.js",
+        "types": "./dist/fault/index.d.ts"
+      },
+      "require": {
+        "default": "./dist/fault/index.cjs",
+        "types": "./dist/fault/index.d.cts"
+      }
+    },
+    "./function": {
+      "import": {
+        "default": "./dist/function/index.js",
+        "types": "./dist/function/index.d.ts"
+      },
+      "require": {
+        "default": "./dist/function/index.cjs",
+        "types": "./dist/function/index.d.cts"
+      }
+    },
+    "./macro": {
+      "import": {
+        "default": "./dist/macro/index.js",
+        "types": "./dist/macro/index.d.ts"
+      },
+      "require": {
+        "default": "./dist/macro/index.cjs",
+        "types": "./dist/macro/index.d.cts"
+      }
+    },
+    "./nothing": {
+      "import": {
+        "default": "./dist/nothing/index.js",
+        "types": "./dist/nothing/index.d.ts"
+      },
+      "require": {
+        "default": "./dist/nothing/index.cjs",
+        "types": "./dist/nothing/index.d.cts"
+      }
+    },
+    "./number": {
+      "import": {
+        "default": "./dist/number/index.js",
+        "types": "./dist/number/index.d.ts"
+      },
+      "require": {
+        "default": "./dist/number/index.cjs",
+        "types": "./dist/number/index.d.cts"
+      }
+    },
+    "./object": {
+      "import": {
+        "default": "./dist/object/index.js",
+        "types": "./dist/object/index.d.ts"
+      },
+      "require": {
+        "default": "./dist/object/index.cjs",
+        "types": "./dist/object/index.d.cts"
+      }
+    },
+    "./string": {
+      "import": {
+        "default": "./dist/string/index.js",
+        "types": "./dist/string/index.d.ts"
+      },
+      "require": {
+        "default": "./dist/string/index.cjs",
+        "types": "./dist/string/index.d.cts"
       }
     }
   },
