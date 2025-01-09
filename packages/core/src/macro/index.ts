@@ -1,4 +1,4 @@
-import { isCallable } from "../function";
+import { Evaluable, isCallable } from "../function";
 
 /**
  * Executes a function that takes no arguments and returns its result.
@@ -40,5 +40,7 @@ export const assertType = <Type>(_: unknown): _ is Type => true;
  * @param {T | (() => T)} resolvable value or function to evaluate
  * @returns {T} resolved value
  */
-export const evaluate = <T>(resolvable: T | (() => T)): T =>
+export const evaluate = <T>(resolvable: Evaluable<T>): T =>
   isCallable(resolvable) ? resolvable() : resolvable;
+
+export const todo = (msg?: string) => panic(Error(msg));

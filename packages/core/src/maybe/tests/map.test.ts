@@ -22,6 +22,18 @@ describe("map [runtime]", () => {
 
     expect(isNone(value)).toBe(true);
   });
+
+  it("should work with data first api", () => {
+    const initial = 16;
+    const final = initial * 2;
+    const func = (x: number) => x * 2;
+    const some = Some(initial);
+
+    const value = map(some, func);
+
+    expect(isSome(value)).toBe(true);
+    expect(value).toHaveProperty("value", final);
+  });
 });
 
 describe("map [types]", () => {

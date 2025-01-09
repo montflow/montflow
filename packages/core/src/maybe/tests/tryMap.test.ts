@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { isNone, isSome, None, Some, tryMap } from "..";
+import { isNone, isSome, make, None, Some, tryMap } from "..";
 
 describe("tryMap [runtime]", () => {
+  it("should work with data-first api", () => {
+    const inner = 0;
+    const maybe = make(inner);
+    const mapper = (x: number): number => x + 1;
+    const value = tryMap(maybe, mapper);
+
+    expect(isSome(value)).toBe(true);
+    expect(value).toHaveProperty("value", inner + 1);
+  });
+
   it("should return Some when input is Some and mapper does not throw", () => {
     const inner = 0;
     const some = Some(inner);

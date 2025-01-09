@@ -1,11 +1,10 @@
 import { isArray } from "../array";
-import { PropertyKey } from "../types";
 
 /**
  * Represents a typed list extending the Array type with a discriminator.
  * @template T type of elements in the list
  */
-export interface List<T> extends Array<T> {
+export interface List<T> extends Iterable<T> {
   kind: "list";
 }
 

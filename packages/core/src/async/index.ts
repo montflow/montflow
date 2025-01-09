@@ -1,4 +1,4 @@
-import { isCallable, Nullary } from "../function";
+import { dualify, isCallable, Nullary } from "../function";
 
 /**
  * Returns a promise that resolves after a specified delay.
@@ -47,14 +47,17 @@ export async function withMinimumDuration<T>(
  * @param maybePromise The value to check.
  * @returns {boolean} `True` if the value is a Promise.
  */
-export function isPromise(maybePromise: unknown): maybePromise is Promise<any> {
-  return (
-    maybePromise instanceof Promise ||
-    (maybePromise !== null &&
-      typeof maybePromise === "object" &&
-      "then" in maybePromise &&
-      isCallable(maybePromise.then) &&
-      "catch" in maybePromise &&
-      isCallable(maybePromise.catch))
-  );
-}
+export const isPromise: {
+  (self: unknown): self is Promise<unknown>;
+  (): (self: unknown) => self is Promise<unknown>;
+} = dualify(
+  1,
+  (self: unknown): self is Promise<unknown> =>
+    self instanceof Promise ||
+    (self !== null &&
+      typeof self === "object" &&
+      "then" in self &&
+      isCallable(self.then) &&
+      "catch" in self &&
+      isCallable(self.catch))
+);

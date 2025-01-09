@@ -1,9 +1,9 @@
 import { Predicate } from "solzu";
-import { isFunction, Mapper, Nullary, Operator } from "../function";
+import { dualify, isFunction, Mapper, Nullary } from "../function";
 import { evaluate, panic } from "../macro";
 import { Maybe, None, Some } from "../maybe";
 import { Nothing } from "../nothing";
-import { Decrement } from "../types";
+import { Decrement } from "../number";
 
 /**
  * Represents the successful outcome of operation
@@ -246,6 +246,8 @@ export function Result<ValueOrError, Error>(
   }
 }
 
+export const make = Result;
+
 /**
  * Converts procedure that could potentially throw into `Result`
  * @constructor
@@ -389,203 +391,108 @@ export function isResult(thing: unknown): thing is Any {
   return isOk(thing) || isErr(thing);
 }
 
-/**
- * Creates an operator that extracts the `Ok` value from a `Result`, or throws `TakeError` if it is `Err`.
- * @template V The type of the `Ok` value.
- * @returns An operator that either returns the `Ok` value or throws an error.
- * @throws {Error} if the result is not an `Ok`.
- * @see {@link or}
- */
-export function unwrap<V>(): Operator<Result<V, any>, V> {
-  return result =>
-    isOk(result) ? result.value : panic(new Error("unwrap failed. Result is `Err`"));
-}
+export const unwrap: {
+  <V>(): (self: Result<V, any>) => V;
+  <V>(self: Result<V, any>): V;
+} = dualify(1, <V>(self: Result<V, any>) =>
+  isOk(self) ? self.value : panic(new Error("unwrap failed. Result is `Err`"))
+);
 
-/**
- * Creates an operator that applies a function to the `Ok` value of a `Result`, if present.
- * @template V The type of the `Ok` value.
- * @template E The type of the `Err` error.
- * @param {Operator<V, any>} f A function to apply to the `Ok` value.
- * @returns An operator that returns the same `Result`.
- */
-export function peek<V, E>(f: (ok: V) => any): Operator<Result<V, E>, Result<V, E>> {
-  return result => {
-    if (isOk(result)) f(result.value);
-    return result;
-  };
-}
+export const peek: {
+  <V, E>(fn: (ok: V) => any): (self: Result<V, E>) => Result<V, E>;
+  <V, E>(self: Result<V, E>, fn: (ok: V) => any): Result<V, E>;
+} = dualify(2, <V, E>(self: Result<V, E>, fn: (ok: V) => any) => {
+  if (isOk(self)) fn(self.value);
+  return self;
+});
 
-/**
- * Creates an operator that applies a function to the `Err` value of a `Result`, if present.
- * @template V The type of the `Ok` value.
- * @template E The type of the `Err` error.
- * @param f A function to apply to the `Err` value.
- * @returns An operator that returns the same `Result`.
- */
-export function peekErr<V, E>(f: (err: E) => any): Operator<Result<V, E>, Result<V, E>> {
-  return result => {
-    if (isErr(result)) f(result.error);
-    return result;
-  };
-}
+export const peekErr: {
+  <V, E>(fn: (err: E) => any): (self: Result<V, E>) => Result<V, E>;
+  <V, E>(self: Result<V, E>, fn: (err: E) => any): Result<V, E>;
+} = dualify(2, <V, E>(self: Result<V, E>, fn: (err: E) => any) => {
+  if (isErr(self)) fn(self.error);
+  return self;
+});
 
-/**
- * Creates an operator that transforms the `Ok` value of a `Result` using a provided mapping function, or returns the same `Err`.
- * @template V The type of the `Ok` value before the transformation.
- * @template To The type of the `Ok` value after the transformation.
- * @template E The type of the `Err` error.
- * @param {Mapper<V, To>} mapper A function to transform the `Ok` value.
- * @returns An operator that returns a new `Result` with the transformed `Ok` value or the same `Err`.
- */
-export function map<V, E, To>(mapper: Mapper<V, To>): Operator<Result<V, E>, Result<To, E>> {
-  return result => (isOk(result) ? Ok(mapper(result.value)) : result);
-}
+export const map: {
+  <V, E, To>(mapper: Mapper<V, To>): (self: Result<V, E>) => Result<To, E>;
+  <V, E, To>(self: Result<V, E>, mapper: Mapper<V, To>): Result<To, E>;
+} = dualify(2, <V, E, To>(self: Result<V, E>, mapper: Mapper<V, To>) =>
+  isOk(self) ? Ok(mapper(self.value)) : self
+);
 
-/**
- * Creates an operator that transforms the `Err` value of a `Result` using a provided mapping function, or returns the unchanged `Ok`.
- * @template V The type of the `Ok` value.
- * @template E The original error type.
- * @template To The new error type.
- * @param {Mapper<E, To>} mapper A function to transform the error.
- * @returns An operator that returns a new `Result` with the transformed error or the unchanged `Ok`.
- */
-export function mapErr<V, E, To>(
-  mapper: (error: E) => To
-): Operator<Result<V, E>, Result<V, To>> {
-  return result => (isErr(result) ? Err(mapper(result.error)) : result);
-}
+export const mapErr: {
+  <V, E, To>(mapper: (error: E) => To): (self: Result<V, E>) => Result<V, To>;
+  <V, E, To>(self: Result<V, E>, mapper: (error: E) => To): Result<V, To>;
+} = dualify(2, <V, E, To>(self: Result<V, E>, mapper: (error: E) => To) =>
+  isErr(self) ? Err(mapper(self.error)) : self
+);
 
-/**
- * Creates an operator that returns an alternative value or executes a function if the input `Result` is an instance of `Err`.
- * @template V The type of the `Ok` value.
- * @template E The type of the `Err` error.
- * @param {Mapper<E, V>} f A function that receives an `Err` error and returns an alternative value.
- * @returns An operator that returns either the `Ok` value or an alternative value.
- */
-export function or<V, E>(f: (error: E) => V): Operator<Result<V, E>, V>;
+export const or: {
+  <V, E>(fn: (error: E) => V): (self: Result<V, E>) => V;
+  <V, E>(self: Result<V, E>, fn: (error: E) => V): V;
+  <V>(value: V): (self: Result<V, any>) => V;
+  <V>(self: Result<V, any>, value: V): V;
+} = dualify(2, <V, E>(self: Result<V, E>, fnOrValue: ((error: E) => V) | V) =>
+  isOk(self) ? self.value : isFunction(fnOrValue) ? fnOrValue(self.error) : fnOrValue
+);
 
-/**
- * Creates an operator that returns a specified value if the input `Result` is an instance of `Err`.
- * @template V The type of the `Ok` value.
- * @param {V} value The alternative value to return.
- * @returns An operator that returns either the `Ok` value or the specified alternative value.
- */
-export function or<V>(value: V): Operator<Result<V, any>, V>;
+export const unfold: {
+  <V, E>(): (self: Result<V, E>) => Unfold<Result<V, E>>;
+  <V, E>(self: Result<V, E>): Unfold<Result<V, E>>;
+} = dualify(1, <V, E>(self: Result<V, E>) => {
+  if (isErr(self)) return self as Unfold<Result<V, E>>;
+  let inner = self.value;
 
-/**
- * @internal
- */
-export function or<V, E>(fnOrValue: ((error: E) => V) | V): Operator<Result<V, E>, V> {
-  return result =>
-    isOk(result) ? result.value : isFunction(fnOrValue) ? fnOrValue(result.error) : fnOrValue;
-}
+  for (let i = 0; i < MAX_UNFOLD_DEPTH; i++) {
+    if (!isResult(inner)) break;
+    if (isErr(inner)) return inner as Unfold<Result<V, E>>;
+    inner = inner.value;
+  }
 
-/**
- * Turns a nested Result into a result of depth 1. This is for the Ok channel only. Input result should never exceed a depth of `MAX_UNFOLD_DEPTH`.
- * @template V inner Ok value type
- * @template E inner Err error type
- * @returns An operator that takes a nested result and returns an unfolded result.
- * @see {@link RESULT_MAX_UNFOLD_DEPTH}
- */
-export function unfold<V, E>(): Operator<Result<V, E>, Unfold<Result<V, E>>> {
-  return result => {
-    if (isErr(result)) return result as Unfold<Result<V, E>>;
+  return Ok(inner) as Unfold<Result<V, E>>;
+});
 
-    let inner = result.value;
+export const flatten: {
+  <V, E>(): (self: Result<V, E>) => Flatten<Result<V, E>>;
+  <V, E>(self: Result<V, E>): Flatten<Result<V, E>>;
+} = dualify(1, <V, E>(self: Result<V, E>) => {
+  if (isErr(self) || !isResult(self.value) || isErr(self.value))
+    return self as Flatten<Result<V, E>>;
+  return self.value as Flatten<Result<V, E>>;
+});
 
-    for (let i = 0; i < MAX_UNFOLD_DEPTH; i++) {
-      if (!isResult(inner)) break;
-      if (isErr(inner)) return inner as Unfold<Result<V, E>>;
-      inner = inner.value;
-    }
+export const flatmap: {
+  <V, E, ToV, ToE>(
+    mapper: (ok: V) => Result<ToV, ToE>
+  ): (self: Result<V, E>) => Result<ToV, E | ToE>;
+  <V, E, ToV, ToE>(
+    self: Result<V, E>,
+    mapper: (ok: V) => Result<ToV, ToE>
+  ): Result<ToV, E | ToE>;
+} = dualify(2, <V, E, ToV, ToE>(self: Result<V, E>, mapper: (ok: V) => Result<ToV, ToE>) =>
+  isOk(self) ? (mapper(self.value) as Result<ToV, E | ToE>) : self
+);
 
-    return Ok(inner) as Unfold<Result<V, E>>;
-  };
-}
+export const check: {
+  <V, E>(predicate: Predicate<V>): (self: Result<V, E>) => Result<V, E | Nothing>;
+  <V, E>(self: Result<V, E>, predicate: Predicate<V>): Result<V, E | Nothing>;
+  <V, E, FailE>(
+    predicate: Predicate<V>,
+    fail: FailE | Nullary<FailE>
+  ): (self: Result<V, E>) => Result<V, E | FailE>;
+  <V, E, FailE>(
+    self: Result<V, E>,
+    predicate: Predicate<V>,
+    fail: FailE | Nullary<FailE>
+  ): Result<V, E | FailE>;
+} = dualify(
+  3,
+  <V, E, FailE>(self: Result<V, E>, predicate: Predicate<V>, fail?: FailE | Nullary<FailE>) =>
+    isOk(self) ? (predicate(self.value) ? self : fail ? Err(evaluate(fail)) : Err()) : self
+);
 
-/**
- * Turns a nested `Result` into a result with 1 less depth. This unnesting occurs for the Ok channel.
- * @template V inner Ok value type
- * @template E inner Err error type
- * @returns An operator that takes a nested result and returns a flattened result.
- */
-export function flatten<V, E>(): Operator<Result<V, E>, Flatten<Result<V, E>>> {
-  return result => {
-    if (isErr(result) || !isResult(result.value) || isErr(result.value))
-      return result as Flatten<Result<V, E>>;
-    return result.value as Flatten<Result<V, E>>;
-  };
-}
-
-/**
- * Transforms & unwraps an input `Result`. Used when you'd like to generate an error based on the inner Ok value of the result, if there is one.
- * @template V original Ok value type
- * @template E original Err error type
- * @template ToV mapped Ok value type
- * @template ToE mapped Err error type
- * @param {Mapper<V, Result<ToV, ToE>>} mapper A function that maps the Ok value to a new Result.
- * @returns An operator that takes an original Result and returns a transformed, potentially flattened result.
- * @see {@link map}
- * @see {@link unfold}
- */
-export function flatmap<V, E, ToV, ToE>(
-  mapper: (ok: V) => Result<ToV, ToE>
-): Operator<Result<V, E>, Result<ToV, E | V>> {
-  return result => {
-    return isOk(result) ? (mapper(result.value) as Result<ToV, E | V>) : result;
-  };
-}
-
-/**
- * Checks if the `Ok` value of a `Result` meets a specified condition. If the condition is met, the original `Result` is returned. If not, it returns an empty `Err`.
- * @template V the type of the Ok value
- * @template E the original error type
- * @param {Predicate<V>} predicate a function that checks the Ok value against a condition
- * @returns {Operator<Result<V, E>, Result<V, E | Nothing>>} an operator that returns the original Result if the check passes, or an empty Err
- */
-export function check<V, E>(
-  predicate: Predicate<V>
-): Operator<Result<V, E>, Result<V, E | Nothing>>;
-
-export function check<V, E>(
-  predicate: Predicate<V>
-): Operator<Result<V, E>, Result<V, E | Nothing>>;
-
-/**
- * Checks if the `Ok` value of a `Result` meets a specified condition. If the condition is met, the original `Result` is returned. If not, it returns an `Err` with a new error.
- * @template V The type of the `Ok` value.
- * @template E The original error type.
- * @template FailE The type of the new error when the check fails.
- * @param {Predicate<V>} predicate A function that checks the `Ok` value against a condition.
- * @param {FailE} fail The error to return if the check fails.
- * @returns An operator that returns the original `Result` if the check passes, or a new `Err` with the `failError`.
- */
-export function check<V, E, FailE>(
-  predicate: Predicate<V>,
-  fail: FailE | Nullary<FailE>
-): Operator<Result<V, E>, Result<V, E | FailE>>;
-
-/** @internal */
-export function check<V, E, FailE>(
-  predicate: Predicate<V>,
-  fail?: FailE | Nullary<FailE>
-): Operator<Result<V, E>, Result<V, E | FailE | Nothing>> {
-  return result =>
-    isOk(result)
-      ? predicate(result.value)
-        ? result
-        : fail
-          ? Err(evaluate(fail))
-          : Err()
-      : result;
-}
-
-/**
- * Converts a `Result` into a `Maybe`, returning `Some` if `Ok`, or `None` if `Err`.
- * @template V The type of the `Ok` value.
- * @returns {Operator<Result<V, any>, Maybe<V>>} operator to conver types.
- * @see {@link Maybe}
- */
-export function toMaybe<V>(): Operator<Result<V, any>, Maybe<V>> {
-  return result => (result.ok ? Some(result.value) : None());
-}
+export const toMaybe: {
+  <V>(): (self: Result<V, any>) => Maybe<V>;
+  <V>(self: Result<V, any>): Maybe<V>;
+} = dualify(1, <V>(self: Result<V, any>) => (isOk(self) ? Some(self.value) : None()));
