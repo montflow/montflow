@@ -60,9 +60,11 @@ export type Of<Faults extends Array<Any>> = {
       : never;
 }[number];
 
-export function Fault<F extends Any>(fault: F): F {
+export function Create<F extends Any>(fault: F): F {
   return fault;
 }
+
+export const make = Create;
 
 /**
  * Type guard to check if an object is of type Fault
