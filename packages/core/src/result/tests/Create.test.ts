@@ -1,33 +1,33 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { ErrorOf, Flatten, InfiniteUnfold, isErr, isOk, Result, ValueOf } from "..";
-import { Nothing } from "../../nothing";
+import { Create, ErrorOf, Flatten, InfiniteUnfold, isErr, isOk, Result, ValueOf } from "..";
+import { Create as CreateNothing, Nothing } from "../../nothing";
 
 describe("Result [runtime]", () => {
   it("should create empty Ok when passed in 'kind' of ok wo/ value", () => {
-    const ok = Result("ok");
+    const ok = Create("ok");
 
     expect(isOk(ok)).toBe(true);
-    expect(ok).toHaveProperty("value", Nothing());
+    expect(ok).toHaveProperty("value", CreateNothing());
   });
 
   it("should create Ok when passed in 'kind' of ok and value", () => {
     const value = 0x100;
-    const ok = Result("ok", value);
+    const ok = Create("ok", value);
 
     expect(isOk(ok)).toBe(true);
     expect(ok).toHaveProperty("value", value);
   });
 
   it("should create empty Err when passed in 'kind' of err wo/ error", () => {
-    const err = Result("err");
+    const err = Create("err");
 
     expect(isErr(err)).toBe(true);
-    expect(err).toHaveProperty("error", Nothing());
+    expect(err).toHaveProperty("error", CreateNothing());
   });
 
   it("should create Err when passed in 'kind' or err and error", () => {
     const error = "custom error";
-    const err = Result("err", error);
+    const err = Create("err", error);
 
     expect(isErr(err)).toBe(true);
     expect(err).toHaveProperty("error", error);
@@ -36,7 +36,7 @@ describe("Result [runtime]", () => {
 
 describe("Result [types]", () => {
   it("should be type Result<Nothing, Nothing> when passed in 'kind' ok with no value", () => {
-    const result = Result("err");
+    const result = Create("err");
 
     type Test = typeof result;
     type Expected = Result<Nothing, Nothing>;
@@ -45,7 +45,7 @@ describe("Result [types]", () => {
   });
 
   it("should be type Result<Nothing, Nothing> when passed in 'kind' err with no error", () => {
-    const result = Result("err");
+    const result = Create("err");
 
     type Test = typeof result;
     type Expected = Result<Nothing, Nothing>;
@@ -57,7 +57,7 @@ describe("Result [types]", () => {
     type Value = string;
 
     const value: Value = "str";
-    const result = Result("ok", value);
+    const result = Create("ok", value);
 
     type Test = typeof result;
     type Expected = Result<Value, Nothing>;
@@ -69,7 +69,7 @@ describe("Result [types]", () => {
     type Error = boolean;
 
     const error: Error = true;
-    const result = Result("err", error);
+    const result = Create("err", error);
 
     type Test = typeof result;
     type Expected = Result<Nothing, Error>;
@@ -82,7 +82,7 @@ describe("Result [types]", () => {
     type Error = string;
 
     const value: Value = 0xf;
-    const result = Result<Value, Error>("ok", value);
+    const result = Create<Value, Error>("ok", value);
 
     type Test = typeof result;
     type Expected = Result<Value, Error>;
@@ -95,7 +95,7 @@ describe("Result [types]", () => {
     type Error = string;
 
     const error: Error = "👽";
-    const result = Result<Value, Error>("err", error);
+    const result = Create<Value, Error>("err", error);
 
     type Test = typeof result;
     type Expected = Result<Value, Error>;

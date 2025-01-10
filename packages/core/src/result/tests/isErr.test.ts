@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { Err, isErr, Ok, Result } from "..";
+import { Create, Err, isErr, Ok } from "..";
 
 describe("isOk [runtime]", () => {
   it("should return true when Err is passed in", () => {
@@ -22,7 +22,7 @@ describe("isErr [types]", () => {
     type Value = { "🖖": "👽" };
     type Error = string;
 
-    const value = Result<Value, Error>("err", "hello");
+    const value = Create<Value, Error>("err", "hello");
 
     if (isErr(value)) {
       type Test = typeof value;

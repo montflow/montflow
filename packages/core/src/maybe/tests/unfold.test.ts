@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isNone, isSome, MAX_UNFOLD_DEPTH, Maybe, None, Some, unfold } from "..";
+import { Create, isNone, isSome, MAX_UNFOLD_DEPTH, Maybe, None, Some, unfold } from "..";
 
 describe("unfold [runtime]", () => {
   it("should return the original Some when provided with Some of depth 1", () => {
@@ -39,7 +39,7 @@ describe("unfold [runtime]", () => {
   });
 
   it("should return None on nested maybe with inner None", () => {
-    const maybe = Maybe(Maybe(Maybe(Maybe(None()))));
+    const maybe = Create(Create(Create(Create(None()))));
 
     const value = unfold()(maybe);
 

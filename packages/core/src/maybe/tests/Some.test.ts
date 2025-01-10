@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { Some } from "..";
-import { Nothing } from "../../nothing";
+import { Create } from "../../nothing";
 
 describe("Some [runtime]", () => {
   it("should have true `some` property", () => {
@@ -12,7 +12,7 @@ describe("Some [runtime]", () => {
   it("should return an empty some when no argument is provided", () => {
     const value = Some();
 
-    expect(value).toHaveProperty("value", Nothing());
+    expect(value).toHaveProperty("value", Create());
   });
 
   it("should return a Some with inner value when argument is provided", () => {

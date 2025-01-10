@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { Nothing, isNothing } from "..";
+import { Create, isNothing } from "..";
 
 describe("isNothing", () => {
   it("should return true for Nothing instance", () => {
-    const nothing = Nothing();
+    const nothing = Create();
     const value = isNothing(nothing);
 
     expect(value).toBe(true);

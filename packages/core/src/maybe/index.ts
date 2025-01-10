@@ -1,7 +1,7 @@
 import { Mapper } from "solzu";
 import { dualify, Evaluable, Guard, Predicate } from "../function";
 import { evaluate, panic } from "../macro";
-import { Nothing } from "../nothing";
+import { Create as CreateNothing, Nothing } from "../nothing";
 import { Decrement } from "../number";
 import { hasKey, isObject } from "../object";
 import { Err, Ok, Result } from "../result";
@@ -70,8 +70,8 @@ export type Flatten<Root extends Any> = [Root] extends [Maybe<infer RootSome>]
  * Recursively unwraps nested `Maybe` type **infinitely**. Not recommended for general use. Use simpler versions like `Flatten` or `Unfold`
  * @template Root `Maybe` type to unfold
  * @returns `Maybe` of depth 1
- * @see {@link Maybe.Flatten}
- * @see {@link Maybe.Unfold}
+ * @see {@link Create.Flatten}
+ * @see {@link Create.Unfold}
  */
 export type InfiniteUnfold<Root extends Any> = [Root] extends [Maybe<infer RootSome>]
   ? [RootSome] extends [Maybe<infer NestedSome>]
@@ -128,7 +128,7 @@ export function Some<V>(value: V): Some<V>;
 export function Some<V>(value?: V): Some<V> | Some<Nothing> {
   return {
     some: true,
-    value: value !== undefined ? value : Nothing(),
+    value: value !== undefined ? value : CreateNothing(),
   } as Some<V> | Some<Nothing>;
 }
 
@@ -152,7 +152,7 @@ export function None(): None {
  * @template V inner `some` type
  * @returns {Maybe<V>} maybe. At runtime this will be a `None`
  */
-export function Maybe<V>(): Maybe<V>;
+export function Create<V>(): Maybe<V>;
 
 /**
  * Creates `Some<V>` with type of `Maybe<V>`
@@ -160,16 +160,16 @@ export function Maybe<V>(): Maybe<V>;
  * @param {V} value inner `some` value
  * @returns {Maybe<V>} maybe. At runtime this will be a `Some<V>`
  */
-export function Maybe<V>(value: V): Maybe<V>;
+export function Create<V>(value: V): Maybe<V>;
 
 /**
  * @internal
  */
-export function Maybe<V>(value?: V): Maybe<V> {
+export function Create<V>(value?: V): Maybe<V> {
   return value === undefined ? None() : Some(value);
 }
 
-export const make = Maybe;
+export const make = Create;
 
 /**
  * Converts nullish value into `Maybe`

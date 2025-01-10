@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { isNone, Maybe, None, Some } from "..";
+import { Create, isNone, Maybe, None, Some } from "..";
 
 describe("isNone [runtime]", () => {
   it("should return true when None is passed in", () => {
@@ -19,7 +19,7 @@ describe("isNone [runtime]", () => {
 
 describe("isNone [types]", () => {
   it("should narrow type via control flow inference for maybe type", () => {
-    const value: Maybe<number> = Maybe(10);
+    const value: Maybe<number> = Create(10);
 
     if (isNone(value)) {
       expectTypeOf<typeof value>().toMatchTypeOf<None>();

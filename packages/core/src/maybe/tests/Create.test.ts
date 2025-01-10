@@ -1,17 +1,17 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { Any, Maybe, None, Some, SomeOf, Unfold } from "..";
+import { Any, Create, Maybe, None, Some, SomeOf, Unfold } from "..";
 import { Nothing } from "../../nothing";
 
 describe("Maybe [runtime]", () => {
   it("should return None when no argument is provided", () => {
-    const maybe = Maybe();
+    const maybe = Create();
 
     expect(maybe.some).toBe(false);
   });
 
   it("should return Some when argument is provided", () => {
     const inner = 0xf;
-    const value = Maybe(inner);
+    const value = Create(inner);
 
     expect(value.some).toBe(true);
     expect(value).toHaveProperty("value", inner);
@@ -20,7 +20,7 @@ describe("Maybe [runtime]", () => {
 
 describe("Maybe [types]", () => {
   it("should be Maybe<T> when no argument is provided", () => {
-    const value = Maybe<Inner>();
+    const value = Create<Inner>();
     type Inner = number;
     type Test = typeof value;
 
@@ -28,7 +28,7 @@ describe("Maybe [types]", () => {
   });
   it("should be Maybe<T> when argument is provided", () => {
     const inner: string = "test";
-    const value = Maybe<Inner>();
+    const value = Create<Inner>();
     type Inner = typeof inner;
     type Test = typeof value;
 

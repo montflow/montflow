@@ -18,8 +18,5 @@ export default defineConfig({
   },
   clean: true,
   format: ["esm", "cjs"],
-  minify: true,
   dts: true,
-  treeshake: true,
-  splitting: true,
 });

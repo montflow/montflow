@@ -14,8 +14,10 @@ let _nothing: undefined | Nothing;
  * @constructor
  * @returns {Nothing} nothing instance
  */
-export const Nothing = (): Nothing =>
+export const Create = (): Nothing =>
   _nothing !== undefined ? _nothing : (_nothing = { nothing: true });
+
+export const make = Create;
 
 /**
  * Checks if thing is instance of `Nothing`

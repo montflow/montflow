@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Maybe, None, Some, flatmap, isSome } from "..";
+import { flatmap, isSome, Maybe, None, Some } from "..";
 
 describe("flatmap [runtime]", () => {
   it("should return Some when input is Some and mapper returns Some", () => {

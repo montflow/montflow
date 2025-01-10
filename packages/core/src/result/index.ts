@@ -2,7 +2,7 @@ import { Predicate } from "solzu";
 import { dualify, isFunction, Mapper, Nullary } from "../function";
 import { evaluate, panic } from "../macro";
 import { Maybe, None, Some } from "../maybe";
-import { Nothing } from "../nothing";
+import { Create as CreateNothing, Nothing } from "../nothing";
 import { Decrement } from "../number";
 
 /**
@@ -127,7 +127,7 @@ export function Ok<V>(value: V): Ok<V>;
 export function Ok<V>(value?: V): Ok<V> | Ok<Nothing> {
   return {
     ok: true,
-    value: value !== undefined ? value : Nothing(),
+    value: value !== undefined ? value : CreateNothing(),
   } as Ok<V> | Ok<Nothing>;
 }
 
@@ -153,7 +153,7 @@ export function Err<E>(error: E): Err<E>;
 export function Err<E>(error?: E): Err<E> | Err<Nothing> {
   return {
     ok: false,
-    error: error !== undefined ? error : Nothing(),
+    error: error !== undefined ? error : CreateNothing(),
   } as Err<E> | Err<Nothing>;
 }
 
@@ -163,7 +163,7 @@ export function Err<E>(error?: E): Err<E> | Err<Nothing> {
  * @param {"ok"} kind
  * @returns {Result<Nothing, Nothing>} `Result` of type `Ok<Nothing>`
  */
-export function Result(kind: "ok"): Result<Nothing, Nothing>;
+export function Create(kind: "ok"): Result<Nothing, Nothing>;
 
 /**
  * Creates `Ok` with type of `Result<V, Nothing>`
@@ -173,7 +173,7 @@ export function Result(kind: "ok"): Result<Nothing, Nothing>;
  * @param {V} value inner `Ok` value
  * @returns {Result<V, Nothing>} `Result` of type `Ok` with inner `value`
  */
-export function Result<V>(kind: "ok", value: V): Result<V, Nothing>;
+export function Create<V>(kind: "ok", value: V): Result<V, Nothing>;
 
 /**
  * Creates `Ok` with type of `Result<V, E>`
@@ -184,7 +184,7 @@ export function Result<V>(kind: "ok", value: V): Result<V, Nothing>;
  * @param {V} value inner `Ok` value
  * @returns {Result<V, E>} `Result` of type `Ok` with inner `value`
  */
-export function Result<V = Nothing, E = Nothing>(kind: "ok", value: V): Result<V, E>;
+export function Create<V = Nothing, E = Nothing>(kind: "ok", value: V): Result<V, E>;
 
 /**
  * Creates `Err` with type of `Result<Nothing, Nothing>`
@@ -192,7 +192,7 @@ export function Result<V = Nothing, E = Nothing>(kind: "ok", value: V): Result<V
  * @param {"err"} kind
  * @returns {Result<Nothing, Nothing>} `Result` of type `Err<Nothing>`
  */
-export function Result(kind: "err"): Result<Nothing, Nothing>;
+export function Create(kind: "err"): Result<Nothing, Nothing>;
 
 /**
  * Creates `Err` with type of `Result<Nothing, E>`
@@ -202,7 +202,7 @@ export function Result(kind: "err"): Result<Nothing, Nothing>;
  * @param {E} error inner `Err` error
  * @returns {Result<Nothing, E>} `Result` of type `Err` with inner `error`
  */
-export function Result<E>(kind: "err", error: E): Result<Nothing, E>;
+export function Create<E>(kind: "err", error: E): Result<Nothing, E>;
 
 /**
  * Creates `Err` with type of `Result<V, E>`
@@ -213,12 +213,12 @@ export function Result<E>(kind: "err", error: E): Result<Nothing, E>;
  * @param {E} error inner `Err` error
  * @returns {Result<V, E>} `Result` of type `Err` with inner `error`
  */
-export function Result<V = Nothing, E = Nothing>(kind: "err", error: E): Result<V, E>;
+export function Create<V = Nothing, E = Nothing>(kind: "err", error: E): Result<V, E>;
 
 /**
  * @internal
  */
-export function Result<ValueOrError, Error>(
+export function Create<ValueOrError, Error>(
   kind: "ok" | "err",
   valueOrError?: ValueOrError | Error
 ):
@@ -246,7 +246,7 @@ export function Result<ValueOrError, Error>(
   }
 }
 
-export const make = Result;
+export const make = Create;
 
 /**
  * Converts procedure that could potentially throw into `Result`
