@@ -1,5 +1,5 @@
 import { describe, expectTypeOf, it } from "vitest";
-import { Fault } from "..";
+import { CodeOf, Fault, Of, ReasonOf } from "..";
 
 describe("Fault [types]", () => {
   it("should match type for Fault with code", () => {
@@ -19,61 +19,23 @@ describe("Fault [types]", () => {
     expectTypeOf(faultWithReason).toMatchTypeOf<Fault.WithReason<"ERROR_CODE", string>>();
   });
 
-  it("should match type for Fault with string reason", () => {
-    type MyStringFault = Fault.String<"ERROR_CODE">;
-    const stringFault: MyStringFault = {
-      code: "ERROR_CODE",
-      reason: "Some string reason",
-    };
-
-    expectTypeOf(stringFault).toMatchTypeOf<Fault.String<"ERROR_CODE">>();
-  });
-
-  it("should match type for Fault with number reason", () => {
-    type MyNumberFault = Fault.Number<"ERROR_CODE">;
-    const numberFault: MyNumberFault = { code: "ERROR_CODE", reason: 123 };
-
-    expectTypeOf(numberFault).toMatchTypeOf<Fault.Number<"ERROR_CODE">>();
-  });
-
-  it("should match type for Fault with boolean reason", () => {
-    type MyBooleanFault = Fault.Boolean<"ERROR_CODE">;
-    const booleanFault: MyBooleanFault = { code: "ERROR_CODE", reason: true };
-
-    expectTypeOf(booleanFault).toMatchTypeOf<Fault.Boolean<"ERROR_CODE">>();
-  });
-
-  it("should match type for Fault with unknown reason", () => {
-    type MyUnknownFault = Fault.Unknown<"ERROR_CODE">;
-    const unknownFault: MyUnknownFault = { code: "ERROR_CODE", reason: {} };
-
-    expectTypeOf(unknownFault).toMatchTypeOf<Fault.Unknown<"ERROR_CODE">>();
-  });
-
-  it("should match type for Fault with any type", () => {
-    type MyAnyFault = Fault.Any;
-    const anyFault: MyAnyFault = { code: "ERROR_CODE", reason: "Some reason" };
-
-    expectTypeOf(anyFault).toMatchTypeOf<Fault.Any>();
-  });
-
   it("should extract code type from Fault", () => {
     type MyFault = Fault<"ERROR_CODE">;
-    type CodeType = Fault.CodeOf<MyFault>;
+    type CodeType = CodeOf<MyFault>;
 
     expectTypeOf<CodeType>().toMatchTypeOf<"ERROR_CODE">();
   });
 
   it("should extract reason type from Fault", () => {
     type MyFaultWithReason = Fault.WithReason<"ERROR_CODE", string>;
-    type ReasonType = Fault.ReasonOf<MyFaultWithReason>;
+    type ReasonType = ReasonOf<MyFaultWithReason>;
 
     expectTypeOf<ReasonType>().toMatchTypeOf<string>();
   });
 
   it("should generate a union of provided faults", () => {
     type Faults = [Fault<"ERROR_CODE1">, Fault.WithReason<"ERROR_CODE2", string>];
-    type UnionOfFaults = Fault.Of<Faults>;
+    type UnionOfFaults = Of<Faults>;
 
     const fault1: UnionOfFaults = { code: "ERROR_CODE1" };
     const fault2: UnionOfFaults = {

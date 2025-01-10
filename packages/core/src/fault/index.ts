@@ -8,44 +8,27 @@ export type Fault<Code extends string> = {
   code: Code;
 };
 
-/**
- * Extension of `Fault` with annotatated reason
- * @extends Fault
- * @template Code type of the inner code
- * @template Reason type of the reason for the fault
- */
-export type WithReason<Code extends string, Reason> = Fault<Code> & {
-  reason: Reason;
-};
+export namespace Fault {
+  /**
+   * Extension of `Fault` with annotatated reason
+   * @extends Fault
+   * @template Code type of the inner code
+   * @template Reason type of the reason for the fault
+   */
+  export type WithReason<Code extends string, Reason> = Fault<Code> & {
+    reason: Reason;
+  };
+}
 
 /**
- * Utility type of generic `Fault` w/ string reason
- * @template Code type of the inner code
+ * @alias
  */
-export type String<Code extends string> = WithReason<Code, string>;
-
-/**
- * Utility type of generic `Fault` w/ number reason
- * @template Code type of the inner code
- */
-export type Number<Code extends string> = WithReason<Code, number>;
-
-/**
- * Utility type of generic `Fault` w/ boolean reason
- * @template Code type of the inner code
- */
-export type Boolean<Code extends string> = WithReason<Code, boolean>;
-
-/**
- * Utility type of generic `Fault` w/ unknown reason
- * @template Code type of the inner code
- */
-export type Unknown<Code extends string> = WithReason<Code, unknown>;
+export type WithReason<Code extends string, Reason> = Fault.WithReason<Code, Reason>;
 
 /**
  * Generic any `Fault`. Either a regular fault or with reason.
  */
-export type Any = Fault<any> | WithReason<any, any>;
+export type Any = Fault<any> | Fault.WithReason<any, any>;
 
 /**
  * Utility type to extract code type of `Fault`
@@ -57,14 +40,15 @@ export type CodeOf<F extends Any> = F extends Fault<infer Code> ? Code : never;
  * Utility type to extract reason type of `Fault`
  * @template F fault type to extract the reason from
  */
-export type ReasonOf<F extends Any> = F extends WithReason<any, infer Reason> ? Reason : never;
+export type ReasonOf<F extends Any> =
+  F extends Fault.WithReason<any, infer Reason> ? Reason : never;
 
 /**
  * Generates a union of provided faults
  * @template Faults array of fault types
  */
 export type Of<Faults extends Array<Any>> = {
-  [Index in keyof Faults]: Faults[Index] extends WithReason<any, any>
+  [Index in keyof Faults]: Faults[Index] extends Fault.WithReason<any, any>
     ? {
         code: CodeOf<Faults[Index]>;
         reason: ReasonOf<Faults[Index]>;
@@ -103,9 +87,10 @@ export const isFault: {
  * @returns boolean indicating if the object is of type Fault.WithReason
  */
 export const isFaultWithReason: {
-  (self: unknown): self is WithReason<string, unknown>;
-  (): (self: unknown) => self is WithReason<string, unknown>;
+  (self: unknown): self is Fault.WithReason<string, unknown>;
+  (): (self: unknown) => self is Fault.WithReason<string, unknown>;
 } = dualify(
   1,
-  (self: unknown): self is WithReason<string, unknown> => isFault(self) && "reason" in self
+  (self: unknown): self is Fault.WithReason<string, unknown> =>
+    isFault(self) && "reason" in self
 );

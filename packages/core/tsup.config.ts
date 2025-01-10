@@ -16,7 +16,6 @@ export default defineConfig({
     ["result/index"]: "./src/result/index.ts",
     ["string/index"]: "./src/string/index.ts",
   },
-  sourcemap: true,
   clean: true,
   format: ["esm", "cjs"],
   minify: true,
