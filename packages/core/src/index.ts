@@ -10,4 +10,5 @@ export * as Object from "./object";
 export * as Result from "./result";
 export * as String from "./string";
 
+export * from "./macro";
 export * from "./pipe";
