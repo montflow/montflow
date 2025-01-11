@@ -9,7 +9,7 @@
     "core:test": "pnpm --filter @montflow/core run test",
     "core:build": "pnpm --filter @montflow/core run build",
     "core:dev": "pnpm --filter @montflow/core run dev",
-    "core:publish": "pnpm run core:build && pnpm --filter @montflow/core publish --access public"
+    "core:publish": "pnpm run core:build && pnpm --filter @montflow/core publish --access public --no-git-checks"
   },
   "dependencies": {
     "solzu": "^2.0.0",
