@@ -1,0 +1,39 @@
+{
+  "name": "@montflow/reactive",
+  "version": "0.0.1",
+  "author": "Daniel Montilla",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "@montflow/core": "workspace:*",
+    "tsup": "^8.1.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.10",
+    "vitest": "^1.5.2"
+  },
+  "peerDependencies": {
+    "@montflow/core": "*"
+  },
+  "private": false,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "type": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ]
+}
