@@ -44,7 +44,7 @@ export const DEFAULT_OPTIONS: Required<Options<any>> = {
   trigger: { strategy: "strict" },
 };
 
-export function Mono<In, Out = In>(
+export function Mono<const In, Out = In>(
   source: Source<In>,
   compute: (snapshot: Snapshot<In>) => Out,
   options?: Options<In, Out>
@@ -147,3 +147,196 @@ export function Mono<In, Out = In>(
 
   return self;
 }
+
+export const Poly: {
+  <A, Out>(
+    sources: readonly [Source<A>],
+    compute: (values: [Snapshot<A>]) => Out,
+    options?: Options<[A], Out>
+  ): Computed<Out>;
+  <A, B, Out>(
+    sources: readonly [Source<A>, Source<B>],
+    compute: (values: [Snapshot<A>, Snapshot<B>]) => Out,
+    options?: Options<[A, B], Out>
+  ): Computed<Out>;
+  <A, B, C, Out>(
+    sources: readonly [Source<A>, Source<B>, Source<C>],
+    compute: (values: [Snapshot<A>, Snapshot<B>, Snapshot<C>]) => Out,
+    options?: Options<[A, B, C], Out>
+  ): Computed<Out>;
+  <A, B, C, D, Out>(
+    sources: readonly [Source<A>, Source<B>, Source<C>, Source<D>],
+    compute: (values: [Snapshot<A>, Snapshot<B>, Snapshot<C>, Snapshot<D>]) => Out,
+    options?: Options<[A, B, C, D], Out>
+  ): Computed<Out>;
+  <A, B, C, D, E, Out>(
+    sources: readonly [Source<A>, Source<B>, Source<C>, Source<D>, Source<E>],
+    compute: (values: [Snapshot<A>, Snapshot<B>, Snapshot<C>, Snapshot<D>, Snapshot<E>]) => Out,
+    options?: Options<[A, B, C, D, E], Out>
+  ): Computed<Out>;
+  <A, B, C, D, E, F, Out>(
+    sources: readonly [Source<A>, Source<B>, Source<C>, Source<D>, Source<E>, Source<F>],
+    compute: (
+      values: [Snapshot<A>, Snapshot<B>, Snapshot<C>, Snapshot<D>, Snapshot<E>, Snapshot<F>]
+    ) => Out,
+    options?: Options<[A, B, C, D, E, F], Out>
+  ): Computed<Out>;
+  <A, B, C, D, E, F, G, Out>(
+    sources: readonly [
+      Source<A>,
+      Source<B>,
+      Source<C>,
+      Source<D>,
+      Source<E>,
+      Source<F>,
+      Source<G>,
+    ],
+    compute: (
+      values: [
+        Snapshot<A>,
+        Snapshot<B>,
+        Snapshot<C>,
+        Snapshot<D>,
+        Snapshot<E>,
+        Snapshot<F>,
+        Snapshot<G>,
+      ]
+    ) => Out,
+    options?: Options<[A, B, C, D, E, F, G], Out>
+  ): Computed<Out>;
+  <A, B, C, D, E, F, G, H, Out>(
+    sources: readonly [
+      Source<A>,
+      Source<B>,
+      Source<C>,
+      Source<D>,
+      Source<E>,
+      Source<F>,
+      Source<G>,
+      Source<H>,
+    ],
+    compute: (
+      values: [
+        Snapshot<A>,
+        Snapshot<B>,
+        Snapshot<C>,
+        Snapshot<D>,
+        Snapshot<E>,
+        Snapshot<F>,
+        Snapshot<G>,
+        Snapshot<H>,
+      ]
+    ) => Out,
+    options?: Options<[A, B, C, D, E, F, G, H], Out>
+  ): Computed<Out>;
+} = (<Out>(
+  sources: readonly Source<any>[],
+  compute: (snapshots: Snapshot<any>[]) => any,
+  options?: Options<any, any>
+): Computed<Out> => {
+  const opts: Required<Options<any, any>> = {
+    ...DEFAULT_OPTIONS,
+    ...options,
+  };
+
+  let previous: undefined | any = undefined;
+  let value: any = compute(sources.map(source => ({ previous: undefined, value: source() })));
+
+  let incomingPrevious: any[] = sources.map(source => source());
+
+  let times = 0;
+
+  const get = () => value;
+
+  const self = get as Computed<any>;
+
+  Object.defineProperty(self, "value", { get, enumerable: false, configurable: false });
+
+  Watcher.make(
+    // @ts-ignore
+    sources,
+    (snapshots: Snapshot<any>[]) => {
+      let shouldCompute = false;
+
+      switch (opts.compute.strategy) {
+        case "always": {
+          shouldCompute = true;
+          break;
+        }
+
+        case "once": {
+          shouldCompute = times === 0;
+          break;
+        }
+
+        case "never": {
+          shouldCompute = false;
+          break;
+        }
+
+        case "loose": {
+          shouldCompute = snapshots.some(
+            (snapshot, i) => snapshot.value != incomingPrevious[i]
+          );
+          break;
+        }
+
+        case "strict": {
+          shouldCompute = snapshots.some(
+            (snapshot, i) => snapshot.value !== incomingPrevious[i]
+          );
+          break;
+        }
+
+        case "conditional": {
+          shouldCompute = opts.compute.filter(
+            incomingPrevious,
+            snapshots.map(snapshot => snapshot.value)
+          );
+          break;
+        }
+
+        case "limit": {
+          shouldCompute = times < opts.compute.times;
+          break;
+        }
+      }
+
+      if (!shouldCompute) return;
+
+      const computedValue = compute(snapshots);
+
+      let shouldTrigger = false;
+
+      switch (opts.trigger.strategy) {
+        case "loose": {
+          shouldTrigger = value != computedValue;
+          break;
+        }
+
+        case "strict": {
+          shouldTrigger = value !== computedValue;
+          break;
+        }
+
+        case "conditional": {
+          shouldTrigger = opts.trigger.filter(value, computedValue);
+          break;
+        }
+      }
+
+      if (!shouldTrigger) return;
+
+      times++;
+
+      incomingPrevious = snapshots.map(snapshot => snapshot.value);
+      previous = value;
+      value = computedValue;
+
+      trigger(self, { previous, value });
+    },
+    { immediate: false }
+  );
+
+  return self;
+}) as unknown as typeof Poly;
