@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { Optional } from "@montflow/core";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import * as Computed from "..";
 import * as State from "../../state";
 
@@ -584,5 +585,49 @@ describe("Computed.Mono [runtime]", () => {
     expect(secondFilter).toHaveBeenCalledTimes(1);
     expect(secondCallback).toHaveBeenCalledTimes(2);
     expect(secondComputed.value).toBe(13);
+  });
+});
+
+describe("Computed.Mono [types]", () => {
+  it("should correctly type the callback parameters with known state type", () => {
+    const state = State.make(10);
+
+    Computed.Mono(state, ({ previous, value }) => {
+      type TestPrevious = typeof previous;
+      type ExpectedPrevious = Optional<number>;
+      expectTypeOf<TestPrevious>().toMatchTypeOf<ExpectedPrevious>();
+
+      type TestValue = typeof value;
+      type ExpectedValue = number;
+      expectTypeOf<TestValue>().toMatchTypeOf<ExpectedValue>();
+    });
+  });
+
+  it("should correctly type the callback parameters with unknown state type", () => {
+    const state = State.make<unknown>(10);
+
+    Computed.Mono(state, ({ previous, value }) => {
+      type TestPrevious = typeof previous;
+      type ExpectedPrevious = Optional<unknown>;
+      expectTypeOf<TestPrevious>().toMatchTypeOf<ExpectedPrevious>();
+
+      type TestValue = typeof value;
+      type ExpectedValue = unknown;
+      expectTypeOf<TestValue>().toMatchTypeOf<ExpectedValue>();
+    });
+  });
+
+  it("should correctly type the callback parameters with a complex state type", () => {
+    const state = State.make<{ foo: string; bar: number }>({ foo: "test", bar: 42 });
+
+    Computed.Mono(state, ({ previous, value }) => {
+      type TestPrevious = typeof previous;
+      type ExpectedPrevious = Optional<{ foo: string; bar: number }>;
+      expectTypeOf<TestPrevious>().toMatchTypeOf<ExpectedPrevious>();
+
+      type TestValue = typeof value;
+      type ExpectedValue = { foo: string; bar: number };
+      expectTypeOf<TestValue>().toMatchTypeOf<ExpectedValue>();
+    });
   });
 });

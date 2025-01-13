@@ -1,6 +1,6 @@
+import { Optional } from "@montflow/core";
 import { describe, expect, expectTypeOf, it, vitest } from "vitest";
 import { State, Watcher } from "../..";
-import { Optional } from "../../types";
 
 describe("Watcher.Mono [runtime]", () => {
   it("should trigger callback with initial state when 'immediate' option is true", () => {
