@@ -23,14 +23,29 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "type": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./source": {
+      "types": "./dist/source/index.d.ts",
+      "import": "./dist/source/index.js",
+      "require": "./dist/source/index.cjs"
+    },
+    "./watcher": {
+      "types": "./dist/watcher/index.d.ts",
+      "import": "./dist/watcher/index.js",
+      "require": "./dist/watcher/index.cjs"
+    },
+    "./state": {
+      "types": "./dist/state/index.d.ts",
+      "import": "./dist/state/index.js",
+      "require": "./dist/state/index.cjs"
+    },
+    "./computed": {
+      "types": "./dist/computed/index.d.ts",
+      "import": "./dist/computed/index.js",
+      "require": "./dist/computed/index.cjs"
     }
   },
   "files": [
