@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { isArray } from "..";
 
 describe("isArray [runtime]", () => {
@@ -21,5 +21,27 @@ describe("isArray [runtime]", () => {
     expect(isArrayCurried).toBeInstanceOf(Function);
     expect(isArrayCurried([])).toBe(true);
     expect(isArrayCurried({})).toBe(false);
+  });
+});
+
+describe("isArray [runtime]", () => {
+  it("should infer array item type if checking array", () => {
+    const array = [1, 2, 3];
+
+    if (isArray(array)) {
+      type Test = typeof array;
+      type Expected = Array<number>;
+      expectTypeOf<Test>().toMatchTypeOf<Expected>();
+    }
+  });
+
+  it("should infer array item type as unknown if thing is unknown", () => {
+    const array: unknown = null;
+
+    if (isArray(array)) {
+      type Test = typeof array;
+      type Expected = Array<unknown>;
+      expectTypeOf<Test>().toMatchTypeOf<Expected>();
+    }
   });
 });

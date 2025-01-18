@@ -15,11 +15,17 @@ export const isArrayOf: {
 );
 
 export type NotEmpty<T> = [T, ...T[]];
+export type Empty<_> = [];
 
 export const isNotEmpty: {
   <T>(array: T[]): array is NotEmpty<T>;
   <T>(): (array: T[]) => array is NotEmpty<T>;
 } = dualify(1, <T>(array: T[]): array is NotEmpty<T> => array.length > 0);
+
+export const isEmpty: {
+  <T>(array: T[]): array is Empty<T>;
+  <T>(): (array: T[]) => array is Empty<T>;
+} = dualify(1, <T>(array: T[]): array is Empty<T> => array.length === 0);
 
 export const checkNotEmpty: {
   <T>(array: T[]): Maybe<NotEmpty<T>>;
