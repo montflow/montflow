@@ -1,3 +1,4 @@
+import { isArray } from "../array";
 import { dualify } from "../function";
 
 export const isNumber: {
@@ -14,6 +15,14 @@ export const isInt: {
 } = dualify(1, (thing: unknown): thing is number => isNumber(thing) && Number.isInteger(thing));
 
 export type Range = { min: number; max: number } | [min: number, max: number];
+
+export const resolveRange: {
+  (range: Range): { min: number; max: number };
+  (): (range: Range) => { min: number; max: number };
+} = dualify(1, (range: Range) => {
+  if (isArray(range)) return { min: range[0], max: range[1] };
+  return range;
+});
 
 /**
  * Decrements given number type. Valid inputs inlcude 1 ≤ n ≤ 1024
