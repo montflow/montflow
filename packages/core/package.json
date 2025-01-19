@@ -56,6 +56,11 @@
       "import": "./dist/function/index.js",
       "require": "./dist/function/index.cjs"
     },
+    "./iterable": {
+      "types": "./dist/iterable/index.d.ts",
+      "import": "./dist/iterable/index.js",
+      "require": "./dist/iterable/index.cjs"
+    },
     "./macro": {
       "types": "./dist/macro/index.d.ts",
       "import": "./dist/macro/index.js",
@@ -80,6 +85,11 @@
       "types": "./dist/object/index.d.ts",
       "import": "./dist/object/index.js",
       "require": "./dist/object/index.cjs"
+    },
+    "./random": {
+      "types": "./dist/random/index.d.ts",
+      "import": "./dist/random/index.js",
+      "require": "./dist/random/index.cjs"
     },
     "./result": {
       "types": "./dist/result/index.d.ts",
