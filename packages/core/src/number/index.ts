@@ -17,11 +17,19 @@ export const isInt: {
 export type Range = { min: number; max: number } | [min: number, max: number];
 
 export const resolveRange: {
-  (range: Range): { min: number; max: number };
-  (): (range: Range) => { min: number; max: number };
-} = dualify(1, (range: Range) => {
-  if (isArray(range)) return { min: range[0], max: range[1] };
-  return range;
+  (self: Range): { min: number; max: number };
+  (): (self: Range) => { min: number; max: number };
+} = dualify(1, (self: Range) => {
+  if (isArray(self)) return { min: self[0], max: self[1] };
+  return self;
+});
+
+export const isValidRange: {
+  (): (self: Range) => boolean;
+  (self: Range): boolean;
+} = dualify(1, (self: Range) => {
+  const { min, max } = resolveRange(self);
+  return min <= max;
 });
 
 /**
