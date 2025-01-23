@@ -140,8 +140,12 @@ export const dualify = function <Explicit extends Callable, Curried extends Call
     };
   }
 
-  // @ts-expect-error
-  return (...args) => {
-    return args.length >= arity ? body(...args) : (self: unknown) => body(self, ...args);
-  };
+  return arity === 0
+    ? // @ts-expect-error
+      (...args) => {
+        return args.length !== 0 ? body(...args) : (self: unknown) => body(self);
+      }
+    : // @ts-expect-error
+      (...args) =>
+        args.length >= arity ? body(...args) : (self: unknown) => body(self, ...args);
 };
