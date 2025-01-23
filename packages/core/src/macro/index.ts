@@ -1,4 +1,4 @@
-import { Evaluable, isCallable } from "../function";
+import { Callable, Evaluable, isCallable } from "../function";
 
 /**
  * Executes a function that takes no arguments and returns its result.
@@ -44,3 +44,104 @@ export const evaluate = <T>(resolvable: Evaluable<T>): T =>
   isCallable(resolvable) ? resolvable() : resolvable;
 
 export const todo = (msg?: string) => panic(Error(msg));
+
+export namespace Dualify {
+  export type Options =
+    | { withTail?: false }
+    | { withTail: true; isSelf: (self: unknown) => boolean };
+}
+
+/**
+ * @exprimental
+ *
+ * Creates a function that can be used in both explicit and curried styles.
+ *
+ * @param arity The number of arguments (excluding `self` and `tail`) expected for the function.
+ * @param body The explicit version of the function.
+ * @param options Optional configuration:
+ *   - `withTail`: Indicates if the function should includes an additional "tail" argument.
+ *   - `isSelf`: Predicate to determine if the first argument is the `self` reference.
+ *
+ * @returns A dual-style function supporting both explicit and curried usage.
+ *
+ * @example
+ * ```ts
+ * const sum = Macro.dualify(1, (self: number, that: number) => self + that);
+ *
+ * // Explicit style
+ * sum(2, 3); // 5
+ *
+ * // Curried style
+ * const addTo2 = sum(2); // (self: number) => number
+ * addTo2(3); // 5
+ *
+ * // With `pipe` (curried style)
+ * pipe(3, sum(2)); // 5
+ * ```
+ *
+ * @copyright major credit to [`effect/Function.ts`](https://github.com/Effect-TS/effect/blob/main/packages/effect/src/Function.ts)
+ */
+export const dualify = function <Explicit extends Callable, Curried extends Callable>(
+  arity: number,
+  body: Explicit,
+  options?: Dualify.Options
+): Explicit & Curried {
+  const opts: Required<Dualify.Options> = { withTail: false, ...options };
+
+  if (Number.isNaN(arity)) {
+    throw new Error(`Invalid arity ${arity}. Must be a number.`);
+  }
+
+  if (arity < 0) {
+    throw new RangeError(`Invalid arity ${arity}. Must be < 0`);
+  }
+
+  if (!Number.isInteger(arity)) {
+    throw new Error(`Invalid arity ${arity}. Must be an interger`);
+  }
+
+  /**
+   * When arity = x
+   *
+   * 1. withTail = true & has NO tail
+   *    - Non-curried: (self, ...args) where args.length = x [args=x+1]
+   *    - Curried: (...args) => (self) where args.length = x [args=x]
+   *
+   * 2. withTail = true & has tail
+   *    - Non-curried: (self, ...args, tail) where args.length = x, and tail is an additional parameter [args=x+2]
+   *    - Curried: (...args, tail) => (self) where args.length = x+1 [args=x+1]
+   *
+   * 3. withTail = false
+   *    - Non-curried: (self, ...args) where args.length = x [args=x+1]
+   *    - Curried: (...args) => (self) where args.length = x [args=x]
+   */
+
+  if (opts.withTail) {
+    // @ts-expect-error
+    return (...args) => {
+      switch (args.length) {
+        case arity: {
+          return (self: unknown) => body(self, ...args);
+        }
+
+        case arity + 1: {
+          const first = args[0];
+          return opts.isSelf(first) ? body(...args) : (self: unknown) => body(self, ...args);
+        }
+
+        case arity + 2: {
+          return body(...args);
+        }
+
+        default: {
+          throw new Error("invalid arguments");
+        }
+      }
+    };
+  }
+
+  // @ts-expect-error
+  return (...args) => {
+    return args.length >= arity ? body(...args) : (self: unknown) => body(self, ...args);
+  };
+};
