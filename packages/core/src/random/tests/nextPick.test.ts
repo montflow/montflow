@@ -67,8 +67,6 @@ describe("nextPick [runtime]", () => {
 
     const result = nextPick(items);
 
-    console.log(result);
-
     expect(isSome(result)).toBe(true);
     expect(result).toHaveProperty("value", 1);
   });
