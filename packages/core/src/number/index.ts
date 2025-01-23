@@ -1,6 +1,10 @@
 import { Array } from "..";
 import { isArray } from "../array";
+import * as Fault from "../fault";
+import { dualify } from "../function";
+import * as Macro from "../macro";
 import { keysOf } from "../object";
+import * as Result from "../result";
 
 export const isNumber = (thing: unknown): thing is number =>
   typeof thing === "number" && !Number.isNaN(thing);
@@ -44,6 +48,58 @@ export const resolveRange = (self: Range): Range.Object => {
   if (isArray(self)) return { min: self[0], max: self[1] };
   return self;
 };
+
+export namespace Clamp {
+  export type Mode = "unsafe" | "safe";
+  export type Options<TMode extends Mode = Mode> = { mode?: TMode };
+  export type Fault = Fault.Fault<"invalid range">;
+  export type Return<TMode extends Mode = Mode> = TMode extends "safe"
+    ? Result.Result<number, Fault>
+    : number;
+}
+
+export const unsafeClamp: {
+  (value: number, range: Range): Clamp.Return<"unsafe">;
+  (range: Range): (value: number) => Clamp.Return<"unsafe">;
+} = dualify(2, (value: number, range: Range): Clamp.Return<"unsafe"> => {
+  if (!isValidRange(range)) throw Error(JSON.stringify(range));
+  const { min, max } = resolveRange(range);
+  return value < min ? min : value > max ? max : value;
+});
+
+export const safeClamp: {
+  (value: number, range: Range): Clamp.Return<"safe">;
+  (range: Range): (value: number) => Clamp.Return<"safe">;
+} = dualify(2, (value: number, range: Range): Clamp.Return<"safe"> => {
+  if (!isValidRange(range)) return Result.Err({ code: "invalid range" });
+  const { min, max } = resolveRange(range);
+  return Result.Ok(value < min ? min : value > max ? max : value);
+});
+
+export const clamp: {
+  <const TMode extends Clamp.Mode = "unsafe">(
+    value: number,
+    range: Range,
+    options?: Clamp.Options<TMode>
+  ): Clamp.Return<TMode>;
+
+  <const TMode extends Clamp.Mode = "unsafe">(
+    value: Range,
+    options?: Clamp.Options<TMode>
+  ): (value: number) => Clamp.Return<TMode>;
+} = Macro.dualify(
+  1,
+  (value: number, range: Range, options?: Clamp.Options) => {
+    const { mode = "unsafe" } = options ?? {};
+    switch (mode) {
+      case "safe":
+        return safeClamp(value, range);
+      case "unsafe":
+        return unsafeClamp(value, range);
+    }
+  },
+  { withTail: true, isSelf: isNumber }
+);
 
 /**
  * Decrements given number type. Valid inputs inlcude 1 ≤ n ≤ 1024
