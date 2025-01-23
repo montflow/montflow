@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { Range, isValidRange } from "..";
 
 describe("isValidRange [runtime]", () => {
@@ -36,16 +36,41 @@ describe("isValidRange [runtime]", () => {
     expect(result).toBe(true);
   });
 
-  it("should work with curried version", () => {
-    const resolver = isValidRange();
+  it("should return false for non-range values", () => {
+    expect(isValidRange(null)).toBe(false);
+    expect(isValidRange(undefined)).toBe(false);
+    expect(isValidRange(42)).toBe(false);
+    expect(isValidRange("string")).toBe(false);
+    expect(isValidRange({})).toBe(false);
+    expect(isValidRange([])).toBe(false);
+    expect(isValidRange([1])).toBe(false);
+    expect(isValidRange([1, 2, 3])).toBe(false);
+    expect(isValidRange({ min: "1", max: 2 })).toBe(false);
+    expect(isValidRange({ min: 1, max: "2" })).toBe(false);
+    expect(isValidRange({ min: 1 })).toBe(false);
+    expect(isValidRange({ max: 2 })).toBe(false);
+    expect(isValidRange({ min: 1, max: 2, extra: 3 })).toBe(false);
+  });
+});
 
-    const range1: Range = [1, 10];
-    const range2: Range = { min: -10, max: -400 };
+describe("isValidRange [types]", () => {
+  it("should maintain type narrowing for tuple ranges", () => {
+    const range = [1, 10] as unknown;
 
-    const result1 = resolver(range1);
-    const result2 = resolver(range2);
+    if (isValidRange(range)) {
+      type Test = typeof range;
+      type Expect = Range;
+      expectTypeOf<Test>().toMatchTypeOf<Expect>();
+    }
+  });
 
-    expect(result1).toBe(true);
-    expect(result2).toBe(false);
+  it("should maintain type narrowing for object ranges", () => {
+    const range = { min: 0, max: 100 } as unknown;
+
+    if (isValidRange(range)) {
+      type Test = typeof range;
+      type Expect = Range;
+      expectTypeOf<Test>().toMatchTypeOf<Expect>();
+    }
   });
 });

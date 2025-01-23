@@ -41,16 +41,6 @@ describe("resolveRange [runtime]", () => {
     expect(arrayResult).toEqual(objectResult);
     expect(arrayResult).toEqual({ min: 1.5, max: 10.75 });
   });
-
-  it("should work with curried version", () => {
-    const range: Range = [1, 10];
-    const expected = { min: 1, max: 10 };
-
-    const resolver = resolveRange();
-    const result = resolver(range);
-
-    expect(result).toEqual(expected);
-  });
 });
 
 describe("resolveRange [types]", () => {
@@ -72,20 +62,6 @@ describe("resolveRange [types]", () => {
     type Expected = { min: number; max: number };
 
     expectTypeOf<Result>().toMatchTypeOf<Expected>();
-  });
-
-  it("should maintain correct types in curried version", () => {
-    const resolver = resolveRange();
-    const result = resolver([1, 10]);
-
-    type Resolver = typeof resolver;
-    type Result = typeof result;
-
-    type ExpectedResolver = (range: Range) => { min: number; max: number };
-    type ExpectedResult = { min: number; max: number };
-
-    expectTypeOf<Resolver>().toMatchTypeOf<ExpectedResolver>();
-    expectTypeOf<Result>().toMatchTypeOf<ExpectedResult>();
   });
 });
 

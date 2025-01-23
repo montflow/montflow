@@ -1,36 +1,49 @@
+import { Array } from "..";
 import { isArray } from "../array";
-import { dualify } from "../function";
+import { keysOf } from "../object";
 
-export const isNumber: {
-  (): (thing: unknown) => thing is number;
-  (thing: unknown): thing is number;
-} = dualify(
-  1,
-  (thing: unknown): thing is number => typeof thing === "number" && !Number.isNaN(thing)
-);
+export const isNumber = (thing: unknown): thing is number =>
+  typeof thing === "number" && !Number.isNaN(thing);
 
-export const isInt: {
-  (): (thing: unknown) => thing is number;
-  (thing: unknown): thing is number;
-} = dualify(1, (thing: unknown): thing is number => isNumber(thing) && Number.isInteger(thing));
+export const isInt = (thing: unknown): thing is number =>
+  isNumber(thing) && Number.isInteger(thing);
 
-export type Range = { min: number; max: number } | [min: number, max: number];
+export namespace Range {
+  export type Object = { min: number; max: number };
+  export type Tuple = [min: number, max: number];
+}
+export type Range = Range.Object | Range.Tuple;
 
-export const resolveRange: {
-  (self: Range): { min: number; max: number };
-  (): (self: Range) => { min: number; max: number };
-} = dualify(1, (self: Range) => {
+export const isRange = (thing: unknown): thing is Range => {
+  if (thing === null) return false;
+
+  if (
+    typeof thing === "object" &&
+    keysOf(thing).length === 2 &&
+    "min" in thing &&
+    isNumber(thing.min) &&
+    "max" in thing &&
+    isNumber(thing.max)
+  )
+    return true;
+
+  if (Array.isArrayOf(thing, isNumber) && thing.length === 2) return true;
+
+  return false;
+};
+
+export const isValidRange = (thing: unknown): thing is Range => {
+  if (!isRange(thing)) return false;
+
+  const { min, max } = resolveRange(thing);
+
+  return min <= max;
+};
+
+export const resolveRange = (self: Range): Range.Object => {
   if (isArray(self)) return { min: self[0], max: self[1] };
   return self;
-});
-
-export const isValidRange: {
-  (): (self: Range) => boolean;
-  (self: Range): boolean;
-} = dualify(1, (self: Range) => {
-  const { min, max } = resolveRange(self);
-  return min <= max;
-});
+};
 
 /**
  * Decrements given number type. Valid inputs inlcude 1 ≤ n ≤ 1024
