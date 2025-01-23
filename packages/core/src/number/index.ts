@@ -6,6 +6,8 @@ import * as Macro from "../macro";
 import { keysOf } from "../object";
 import * as Result from "../result";
 
+export const make = Number;
+
 export const isNumber = (thing: unknown): thing is number =>
   typeof thing === "number" && !Number.isNaN(thing);
 
