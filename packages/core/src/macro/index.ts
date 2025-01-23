@@ -81,11 +81,11 @@ export namespace Dualify {
  *
  * @copyright major credit to [`effect/Function.ts`](https://github.com/Effect-TS/effect/blob/main/packages/effect/src/Function.ts)
  */
-export const dualify = function <Explicit extends Callable, Curried extends Callable>(
+export const dualify = <Explicit extends Callable, Curried extends Callable>(
   arity: number,
   body: Explicit,
   options?: Dualify.Options
-): Explicit & Curried {
+): Explicit & Curried => {
   const opts: Required<Dualify.Options> = { withTail: false, ...options };
 
   if (Number.isNaN(arity)) {
@@ -141,11 +141,11 @@ export const dualify = function <Explicit extends Callable, Curried extends Call
   }
 
   return arity === 0
-    ? // @ts-expect-error
-      (...args) => {
-        return args.length !== 0 ? body(...args) : (self: unknown) => body(self);
-      }
-    : // @ts-expect-error
-      (...args) =>
-        args.length >= arity ? body(...args) : (self: unknown) => body(self, ...args);
+    ? (((...args) =>
+        args.length !== 0 ? body(...args) : (self: unknown) => body(self)) as Explicit &
+        Curried)
+    : (((...args) =>
+        args.length >= arity
+          ? body(...args)
+          : (self: unknown) => body(self, ...args)) as Explicit & Curried);
 };
