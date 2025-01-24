@@ -3,16 +3,11 @@
   "version": "0.0.0",
   "author": "Daniel Montilla",
   "private": true,
+  "type": "module",
   "scripts": {
     "test": "vitest"
   },
   "dependencies": {
     "@montflow/core": "workspace:^"
-  },
-  "devDependencies": {
-    "typescript": "^5.4.5",
-    "vite": "^5.2.10",
-    "vitest": "^1.5.2"
-  },
-  "type": "module"
+  }
 }
