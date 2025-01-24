@@ -6,13 +6,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/danstack-dev/danstack.git"
+    "url": "git+https://github.com/montflow/montflow.git"
   },
   "keywords": [
     "typescript"
   ],
   "bugs": {
-    "url": "https://github.com/danstack-dev/danstack/issues"
+    "url": "https://github.com/montflow/montflow/issues"
   },
   "scripts": {
     "build": "tsup",

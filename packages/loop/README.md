@@ -75,4 +75,4 @@ loop.add((dt, self) => {
 ```
 ## License
 
-MIT © [Daniel Montilla](https://danstack.dev)
+MIT © [montflow](https://montflow.dev)
