@@ -16,7 +16,7 @@
     "reactive:publish": "pnpm run reactive:build && pnpm --filter @montflow/reactive publish --access public --no-git-checks"
   },
   "dependencies": {
-    "solzu": "^2.0.0",
+    "effect": "^3.11.5",
     "valibot": "^0.42.1"
   },
   "devDependencies": {

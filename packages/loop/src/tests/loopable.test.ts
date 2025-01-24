@@ -1,4 +1,4 @@
-import { delay } from "solzu";
+import { Async } from "@montflow/core";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { Loop } from "../loop";
 import { Loopable } from "../loopable";
@@ -32,7 +32,7 @@ describe.concurrent("Loopable", it => {
 
     loop.register(loopable);
 
-    await delay(256);
+    await Async.delay(256);
 
     expect(loopable.running).toBe(false);
   });
@@ -45,7 +45,7 @@ describe.concurrent("Loopable", it => {
 
     loop.register(loopable);
 
-    await delay(256);
+    await Async.delay(256);
 
     expect(loopable.running).toBe(false);
 
@@ -53,7 +53,7 @@ describe.concurrent("Loopable", it => {
 
     expect(loopable.running).toBe(true);
 
-    await delay(256);
+    await Async.delay(256);
 
     expect(loopable.running).toBe(false);
   });

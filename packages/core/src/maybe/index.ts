@@ -1,5 +1,4 @@
-import { Mapper } from "solzu";
-import { dualify, Evaluable, Guard, Predicate } from "../function";
+import { dualify, Evaluable, Guard, Mapper, Predicate } from "../function";
 import { evaluate, panic } from "../macro";
 import { Create as CreateNothing, Nothing } from "../nothing";
 import { Decrement } from "../number";

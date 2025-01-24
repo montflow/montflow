@@ -8,9 +8,9 @@ importers:
 
   .:
     dependencies:
-      solzu:
-        specifier: ^2.0.0
-        version: 2.0.0
+      effect:
+        specifier: ^3.11.5
+        version: 3.12.1
       valibot:
         specifier: ^0.42.1
         version: 0.42.1(typescript@5.6.3)
@@ -39,6 +39,9 @@ importers:
 
   apps/tetris:
     dependencies:
+      '@montflow/core':
+        specifier: ^1.0.8
+        version: 1.0.8
       '@montflow/loop':
         specifier: workspace:^
         version: link:../../packages/loop
@@ -90,6 +93,10 @@ importers:
         version: 1.6.0(@types/node@20.17.6)(jsdom@25.0.1)
 
   packages/loop:
+    dependencies:
+      '@montflow/core':
+        specifier: ^1.0.8
+        version: 1.0.8
     devDependencies:
       '@types/node':
         specifier: ^20.12.7
@@ -122,6 +129,31 @@ importers:
       vite:
         specifier: ^5.4.10
         version: 5.4.11(@types/node@20.17.6)
+
+  packages/playground:
+    dependencies:
+      '@montflow/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.2.0
+      '@types/node':
+        specifier: ^20.12.7
+        version: 20.17.6
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      typescript:
+        specifier: ^5.4.5
+        version: 5.6.3
+      vite:
+        specifier: ^5.2.10
+        version: 5.4.11(@types/node@20.17.6)
+      vitest:
+        specifier: ^1.5.2
+        version: 1.6.0(@types/node@20.17.6)(jsdom@25.0.1)
 
   packages/reactive:
     devDependencies:
@@ -194,22 +226,6 @@ importers:
       tailwindcss:
         specifier: ^3.4.16
         version: 3.4.17
-
-  sites/test:
-    dependencies:
-      '@montflow/core':
-        specifier: workspace:^
-        version: link:../../packages/core
-      '@montflow/reactive':
-        specifier: workspace:^
-        version: link:../../packages/reactive
-    devDependencies:
-      typescript:
-        specifier: ~5.6.2
-        version: 5.6.3
-      vite:
-        specifier: ^6.0.5
-        version: 6.0.7(@types/node@20.17.6)(jiti@1.21.6)(yaml@2.6.1)
 
 packages:
 
@@ -897,6 +913,9 @@ packages:
   '@jridgewell/trace-mapping@0.3.25':
     resolution: {integrity: sha512-vNk6aEwybGtawWmy/PzwnGDOjCkLWSD2wqvjGGAgOAwCGWySYXfYoxt00IJkTF+8Lb57DwOb3Aa0o9CApepiYQ==}
 
+  '@montflow/core@1.0.8':
+    resolution: {integrity: sha512-nqEmHeMM3hBlLO7O2VlOq0mhavgHViOqKfqNHSpbsby/SZhMC4lFo58guYTcnyvEqDUa+DUPKsm3iT9Yv8bP8g==}
+
   '@nanostores/solid@0.5.0':
     resolution: {integrity: sha512-bui454Om+smaCFK259D618i01Rb0w+o9uVcwZWlZqMOOQZXuqPR6azyF7tA++skBUlTDty4sB9XDt/1HDsh/CA==}
     peerDependencies:
@@ -1075,6 +1094,9 @@ packages:
   '@types/babel__traverse@7.20.6':
     resolution: {integrity: sha512-r1bzfrm0tomOI8g1SzvCaQHo6Lcv6zu0EA+W2kHrt8dyrHQxGzBBL4kdkzIS+jBMV+EYcMAEAqXqYaLJq5rOZg==}
 
+  '@types/bun@1.2.0':
+    resolution: {integrity: sha512-5N1JqdahfpBlAv4wy6svEYcd/YfO2GNrbL95JOmFx8nkE6dbK4R0oSE5SpBA4vBRqgrOUAXF8Dpiz+gi7r80SA==}
+
   '@types/cookie@0.6.0':
     resolution: {integrity: sha512-4Kh9a6B2bQciAhf7FSuMRRkUWecJgJu9nPnx3yzpsfXX/c50REIqpHY4C82bXP90qrLtXtkDxTZosYO3UpOwlA==}
 
@@ -1101,6 +1123,9 @@ packages:
 
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
+
+  '@types/ws@8.5.14':
+    resolution: {integrity: sha512-bd/YFLW+URhBzMXurx7lWByOu+xzU9+kb3RboOteXYDfW+tr+JZa99OyNmPINEGB/ahzKrEuc8rcv4gnpJmxTw==}
 
   '@ungap/structured-clone@1.2.1':
     resolution: {integrity: sha512-fEzPV3hSkSMltkw152tJKNARhOupqbH96MZWyRjNaYZOMIzbrTeQDG+MTc6Mr2pgzFQzFxAfmhGDNP5QK++2ZA==}
@@ -1244,6 +1269,9 @@ packages:
     resolution: {integrity: sha512-KDi1Ny1gSePi1vm0q4oxSF8b4DR44GF4BbmS2YdhPLOEqd8pDviZOGH/GsmRwoWJ2+5Lr085X7naowMwKHDG1A==}
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
     hasBin: true
+
+  bun-types@1.2.0:
+    resolution: {integrity: sha512-KEaJxyZfbV/c4eyG0vyehDpYmBGreNiQbZIqvVHJwZ4BmeuWlNZ7EAzMN2Zcd7ailmS/tGVW0BgYbGf+lGEpWw==}
 
   bundle-require@5.0.0:
     resolution: {integrity: sha512-GuziW3fSSmopcx4KRymQEJVbZUfqlCqcq7dvs6TYwKRZiegK/2buMxQTPs6MGlNv50wms1699qYO54R8XfRX4w==}
@@ -2524,9 +2552,6 @@ packages:
     peerDependencies:
       solid-js: ^1.3
 
-  solzu@2.0.0:
-    resolution: {integrity: sha512-yFPWXja11xfhMt7Ng7/E55BJc2iDS0/+ZnxkxGIgt+ZyNjlBAtrAHHHIt7sNp5tfmE25ObFIwr4j+O78gu/EhQ==}
-
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
@@ -3659,6 +3684,8 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
 
+  '@montflow/core@1.0.8': {}
+
   '@nanostores/solid@0.5.0(nanostores@0.11.3)(solid-js@1.9.4)':
     dependencies:
       nanostores: 0.11.3
@@ -3825,6 +3852,10 @@ snapshots:
     dependencies:
       '@babel/types': 7.26.3
 
+  '@types/bun@1.2.0':
+    dependencies:
+      bun-types: 1.2.0
+
   '@types/cookie@0.6.0': {}
 
   '@types/debug@4.1.12':
@@ -3852,6 +3883,10 @@ snapshots:
       undici-types: 6.19.8
 
   '@types/unist@3.0.3': {}
+
+  '@types/ws@8.5.14':
+    dependencies:
+      '@types/node': 20.17.6
 
   '@ungap/structured-clone@1.2.1': {}
 
@@ -4096,6 +4131,11 @@ snapshots:
       electron-to-chromium: 1.5.80
       node-releases: 2.0.19
       update-browserslist-db: 1.1.2(browserslist@4.24.4)
+
+  bun-types@1.2.0:
+    dependencies:
+      '@types/node': 20.17.6
+      '@types/ws': 8.5.14
 
   bundle-require@5.0.0(esbuild@0.24.0):
     dependencies:
@@ -5620,8 +5660,6 @@ snapshots:
       solid-js: 1.9.4
     transitivePeerDependencies:
       - supports-color
-
-  solzu@2.0.0: {}
 
   source-map-js@1.2.1: {}
 

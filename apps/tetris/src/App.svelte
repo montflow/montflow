@@ -1,11 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { None, pipe, Some, type Maybe } from "solzu";
-  import { onNone, onSome } from "solzu/@maybe/fp";
   import type { PieceLabel, Color, Cell, Piece, Input, Position } from "./types";
   import { pieces } from "./data";
   import { Loop, Interval } from "@montflow/loop";
   import { cycle, gridPrint, keysOf, nextRandomElement, nextRandomInt } from "./helpers";
+  import { Maybe, pipe } from "@montflow/core";
 
   type Props = {
     rows?: number;
@@ -135,8 +134,8 @@
     return positions.map(({ x, y }) => ({ x: col + x, y: row + y }));
   };
 
-  const tryInput = (input: Input): Maybe<Piece> => {
-    if (!piece) return None();
+  const tryInput = (input: Input): Maybe.Maybe<Piece> => {
+    if (!piece) return Maybe.None();
 
     const future = { ...piece };
 
@@ -187,7 +186,7 @@
       return false;
     });
 
-    const result = hasCollision ? None() : Some(future);
+    const result = hasCollision ? Maybe.None() : Maybe.Some(future);
 
     if (result.some) movePiece(result.value);
     return result;
@@ -201,7 +200,7 @@
       case "s": {
         pipe(
           tryInput("down"),
-          onSome(({ position }) => (piece!.position = position))
+          Maybe.whenSome(({ position }) => (piece!.position = position))
         );
         break;
       }
@@ -210,7 +209,7 @@
       case "a": {
         pipe(
           tryInput("left"),
-          onSome(({ position }) => (piece!.position = position))
+          Maybe.whenSome(({ position }) => (piece!.position = position))
         );
         break;
       }
@@ -219,7 +218,7 @@
       case "d": {
         pipe(
           tryInput("right"),
-          onSome(({ position }) => (piece!.position = position))
+          Maybe.whenSome(({ position }) => (piece!.position = position))
         );
         break;
       }
@@ -228,7 +227,7 @@
       case "z": {
         pipe(
           tryInput("rotate-clockwise"),
-          onSome(({ rotation }) => (piece!.rotation = rotation))
+          Maybe.whenSome(({ rotation }) => (piece!.rotation = rotation))
         );
         break;
       }
@@ -236,7 +235,7 @@
       case "x": {
         pipe(
           tryInput("rotate-anticlockwise"),
-          onSome(({ rotation }) => (piece!.rotation = rotation))
+          Maybe.whenSome(({ rotation }) => (piece!.rotation = rotation))
         );
         break;
       }

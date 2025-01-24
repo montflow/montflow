@@ -1,4 +1,4 @@
-import { delay } from "solzu";
+import { Async } from "@montflow/core";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { Loop } from "../loop";
 import { Loopable } from "../loopable";
@@ -133,7 +133,7 @@ describe.concurrent("Loop", it => {
     loop.register(Loopable(() => stack.push(order[0]), { priority: 1 }));
     loop.register(Loopable(() => stack.push(order[1]), { priority: 2 }));
 
-    await delay(256);
+    await Async.delay(256);
 
     loop.clear();
 
@@ -153,7 +153,7 @@ describe.concurrent("Loop", it => {
     loop.register(Loopable(() => stack.push(order[1]), { priority: 2 }));
     loop.register(Loopable(() => stack.push(order[2]), { priority: 3 }));
 
-    await delay(256);
+    await Async.delay(256);
 
     loop.clear();
 
@@ -175,7 +175,7 @@ describe.concurrent("Loop", it => {
       self.stop();
     });
 
-    await delay(256);
+    await Async.delay(256);
 
     expect(count).toBe(1);
     expect(loop.running).toBe(false);

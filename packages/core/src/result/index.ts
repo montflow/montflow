@@ -1,5 +1,4 @@
-import { Predicate } from "solzu";
-import { dualify, isFunction, Mapper, Nullary } from "../function";
+import { dualify, isFunction, Mapper, Nullary, Predicate } from "../function";
 import { evaluate, panic } from "../macro";
 import { Maybe, None, Some } from "../maybe";
 import { Create as CreateNothing, Nothing } from "../nothing";

@@ -21,6 +21,7 @@
     "vitest": "^1.5.2"
   },
   "dependencies": {
+    "@montflow/core": "^1.0.8",
     "@montflow/loop": "workspace:^"
   }
 }

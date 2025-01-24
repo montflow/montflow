@@ -1,4 +1,4 @@
-import { delay } from "solzu";
+import { Async } from "@montflow/core";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { Interval } from "../interval";
 import { Loop } from "../loop";
@@ -30,7 +30,7 @@ describe.concurrent("Interval", it => {
 
     loop.register(interval);
 
-    await delay(256);
+    await Async.delay(256);
 
     expect(interval.running).toBe(false);
   });
@@ -43,7 +43,7 @@ describe.concurrent("Interval", it => {
 
     loop.register(interval);
 
-    await delay(256);
+    await Async.delay(256);
 
     expect(interval.running).toBe(false);
 
@@ -51,7 +51,7 @@ describe.concurrent("Interval", it => {
 
     expect(interval.running).toBe(true);
 
-    await delay(256);
+    await Async.delay(256);
 
     expect(interval.running).toBe(false);
   });
@@ -71,7 +71,7 @@ describe.concurrent("Interval", it => {
       })
     );
 
-    await delay(512);
+    await Async.delay(512);
 
     expect(completed).toBe(true);
   });
@@ -91,7 +91,7 @@ describe.concurrent("Interval", it => {
       })
     );
 
-    await delay(512);
+    await Async.delay(512);
 
     expect(iterationCounts).toEqual([1, 2, 3]);
   });
@@ -109,7 +109,7 @@ describe.concurrent("Interval", it => {
       })
     );
 
-    await delay(512);
+    await Async.delay(512);
 
     expect(iterations).toEqual([1, 2, 3]);
   });
@@ -129,7 +129,7 @@ describe.concurrent("Interval", it => {
       })
     );
 
-    await delay(512);
+    await Async.delay(512);
 
     elapsedValues.forEach(elapsed => expect(elapsed).toBeLessThan(100 / 1000));
   });
@@ -152,7 +152,7 @@ describe.concurrent("Interval", it => {
       })
     );
 
-    await delay(1024);
+    await Async.delay(1024);
 
     expect(iterationCounts.length).toBe(10);
     expect(interval.running).toBe(false);
@@ -176,7 +176,7 @@ describe.concurrent("Interval", it => {
       })
     );
 
-    await delay(512);
+    await Async.delay(512);
 
     expect(count).toBe(3);
     expect(interval.running).toBe(false);
