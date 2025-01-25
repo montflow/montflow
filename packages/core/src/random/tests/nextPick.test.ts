@@ -26,7 +26,8 @@ describe("nextPick [runtime]", () => {
     const items = [1, 2, 3, 4, 5];
     const generator = () => 0.5;
 
-    const result = nextPick({ generator })(items);
+    const curried = nextPick({ generator });
+    const result = curried(items);
 
     expect(isSome(result)).toBe(true);
     expect(result).toHaveProperty("value", 3);

@@ -1,9 +1,10 @@
-import { dualify, Evaluable, Guard, Mapper, Predicate } from "../function";
-import { evaluate, panic } from "../macro";
-import { Create as CreateNothing, Nothing } from "../nothing";
-import { Decrement } from "../number";
-import { hasKey, isObject } from "../object";
-import { Err, Ok, Result } from "../result";
+import * as Function from "@/function";
+import * as Macro from "@/macro";
+import { Evaluable } from "@/misc";
+import * as Nothing from "@/nothing";
+import * as Number from "@/number";
+import * as Object from "@/object";
+import * as Result from "@/result";
 
 /**
  * Represents the presence of a value
@@ -94,7 +95,7 @@ export type Unfold<
   ? Root
   : [Root] extends [Maybe<infer RootSome>]
     ? [RootSome] extends [Any]
-      ? Unfold<RootSome, Decrement<Limit>>
+      ? Unfold<RootSome, Number.Decrement<Limit>>
       : Root
     : never;
 
@@ -110,7 +111,7 @@ export type Future<V> = Promise<Maybe<V>>;
  * @constructor
  * @returns {Some<None>} empty `Some`
  */
-export function Some(): Some<Nothing>;
+export function Some(): Some<Nothing.Nothing>;
 
 /**
  * Creates `Some` w/ inner `value`
@@ -124,11 +125,11 @@ export function Some<V>(value: V): Some<V>;
 /**
  * @internal
  */
-export function Some<V>(value?: V): Some<V> | Some<Nothing> {
+export function Some<V>(value?: V): Some<V> | Some<Nothing.Nothing> {
   return {
     some: true,
-    value: value !== undefined ? value : CreateNothing(),
-  } as Some<V> | Some<Nothing>;
+    value: value !== undefined ? value : Nothing.make(),
+  } as Some<V> | Some<Nothing.Nothing>;
 }
 
 /**
@@ -234,7 +235,7 @@ export function isSome(thing: unknown): thing is Some<unknown>;
 export function isSome<V>(maybeOrThing: Maybe<V> | unknown): maybeOrThing is Some<V> {
   if (typeof maybeOrThing !== "object") return false;
   if (maybeOrThing === null) return false;
-  if (Object.keys(maybeOrThing).length !== 2) return false;
+  if (Object.keysOf(maybeOrThing).length !== 2) return false;
   if (
     !("some" in maybeOrThing && typeof maybeOrThing.some === "boolean") ||
     !("value" in maybeOrThing)
@@ -274,7 +275,7 @@ export function isNone(thing: unknown): thing is None;
 export function isNone<V>(maybeOrThing: Maybe<V> | unknown): maybeOrThing is None {
   if (typeof maybeOrThing !== "object") return false;
   if (maybeOrThing === null) return false;
-  if (Object.keys(maybeOrThing).length !== 1) return false;
+  if (Object.keysOf(maybeOrThing).length !== 1) return false;
   if (!("some" in maybeOrThing && typeof maybeOrThing.some === "boolean")) return false;
   return !maybeOrThing.some;
 }
@@ -298,37 +299,37 @@ export function isMaybe(thing: unknown): thing is Maybe<unknown> {
 }
 
 export const map: {
-  <From, To>(mapper: Mapper<From, To>): (self: Maybe<From>) => Maybe<To>;
-  <From, To>(self: Maybe<From>, mapper: Mapper<From, To>): Maybe<To>;
-} = dualify(2, <From, To>(self: Maybe<From>, mapper: Mapper<From, To>) =>
+  <From, To>(mapper: Function.Mapper<From, To>): (self: Maybe<From>) => Maybe<To>;
+  <From, To>(self: Maybe<From>, mapper: Function.Mapper<From, To>): Maybe<To>;
+} = Macro.dualify(1, <From, To>(self: Maybe<From>, mapper: Function.Mapper<From, To>) =>
   isSome(self) ? Some(mapper(self.value)) : None()
 );
 
 export const unwrap: {
   <V>(): (self: Maybe<V>) => V;
   <V>(self: Maybe<V>): V;
-} = dualify(1, <V>(self: Maybe<V>) =>
-  isSome(self) ? self.value : panic(new Error("unwrap failed. Maybe is `none`"))
+} = Macro.dualify(0, <V>(self: Maybe<V>) =>
+  isSome(self) ? self.value : Macro.panic(new Error("unwrap failed. Maybe is `none`"))
 );
 
 export const or: {
   <V>(value: Evaluable<V>): (self: Maybe<V>) => V;
   <V>(self: Maybe<V>, value: Evaluable<V>): V;
-} = dualify(2, <V>(self: Maybe<V>, value: Evaluable<V>) =>
-  isSome(self) ? self.value : evaluate(value)
+} = Macro.dualify(1, <V>(self: Maybe<V>, value: Evaluable<V>) =>
+  isSome(self) ? self.value : Macro.evaluate(value)
 );
 
 export const orElse: {
   <V, Or>(value: Evaluable<Or>): (self: Maybe<V>) => Or;
   <V, Or>(self: Maybe<V>, value: Evaluable<Or>): Or;
-} = dualify(2, <V, Or>(self: Maybe<V>, value: Evaluable<Or>) =>
-  isSome(self) ? self.value : evaluate(value)
+} = Macro.dualify(1, <V, Or>(self: Maybe<V>, value: Evaluable<Or>) =>
+  isSome(self) ? self.value : Macro.evaluate(value)
 );
 
 export const unfold: {
   <V>(): (self: Maybe<V>) => Unfold<Maybe<V>>;
   <V>(self: Maybe<V>): Unfold<Maybe<V>>;
-} = dualify(1, <V>(self: Maybe<V>) => {
+} = Macro.dualify(0, <V>(self: Maybe<V>) => {
   if (isNone(self)) return self as Unfold<Maybe<V>>;
   let inner = self.value;
   for (let i = 0; i < MAX_UNFOLD_DEPTH; i++) {
@@ -342,45 +343,45 @@ export const unfold: {
 export const flatten: {
   <V>(): (self: Maybe<V>) => Flatten<Maybe<V>>;
   <V>(self: Maybe<V>): Flatten<Maybe<V>>;
-} = dualify(1, <V>(self: Maybe<V>) => {
+} = Macro.dualify(0, <V>(self: Maybe<V>) => {
   if (isNone(self) || !isMaybe(self.value) || isNone(self.value))
     return self as Flatten<Maybe<V>>;
   return self.value as Flatten<Maybe<V>>;
 });
 
 export const flatmap: {
-  <From, To>(mapper: Mapper<From, Maybe<To>>): (self: Maybe<From>) => Maybe<To>;
-  <From, To>(self: Maybe<From>, mapper: Mapper<From, Maybe<To>>): Maybe<To>;
-} = dualify(2, <From, To>(self: Maybe<From>, mapper: Mapper<From, Maybe<To>>) =>
+  <From, To>(mapper: Function.Mapper<From, Maybe<To>>): (self: Maybe<From>) => Maybe<To>;
+  <From, To>(self: Maybe<From>, mapper: Function.Mapper<From, Maybe<To>>): Maybe<To>;
+} = Macro.dualify(1, <From, To>(self: Maybe<From>, mapper: Function.Mapper<From, Maybe<To>>) =>
   isSome(self) ? mapper(self.value) : None()
 );
 
 export const check: {
-  <V>(predicate: Predicate<V>): (self: Maybe<V>) => Maybe<V>;
-  <V>(self: Maybe<V>, predicate: Predicate<V>): Maybe<V>;
-} = dualify(2, <V>(self: Maybe<V>, predicate: Predicate<V>) =>
+  <V>(predicate: Function.Predicate<V>): (self: Maybe<V>) => Maybe<V>;
+  <V>(self: Maybe<V>, predicate: Function.Predicate<V>): Maybe<V>;
+} = Macro.dualify(1, <V>(self: Maybe<V>, predicate: Function.Predicate<V>) =>
   isSome(self) ? (predicate(self.value) ? self : None()) : None()
 );
 
 export const peek: {
   <V>(fn: (value: V) => any): (self: Maybe<V>) => Maybe<V>;
   <V>(self: Maybe<V>, fn: (value: V) => any): Maybe<V>;
-} = dualify(2, <V>(self: Maybe<V>, fn: (value: V) => any) => {
+} = Macro.dualify(1, <V>(self: Maybe<V>, fn: (value: V) => any) => {
   isSome(self) ? fn(self.value) : null;
   return self;
 });
 
 export const is: {
-  <Type>(guard: Guard<Type>): (self: Unknown) => Maybe<Type>;
-  <Type>(self: Unknown, guard: Guard<Type>): Maybe<Type>;
-} = dualify(2, <Type>(self: Unknown, guard: Guard<Type>) =>
+  <Type>(guard: Function.Guard<Type>): (self: Unknown) => Maybe<Type>;
+  <Type>(self: Unknown, guard: Function.Guard<Type>): Maybe<Type>;
+} = Macro.dualify(1, <Type>(self: Unknown, guard: Function.Guard<Type>) =>
   isNone(self) ? None() : guard(self.value) ? Some(self.value) : None()
 );
 
 export const whenSome: {
   <V>(fn: (some: V) => any): (self: Maybe<V>) => Maybe<V>;
   <V>(self: Maybe<V>, fn: (some: V) => any): Maybe<V>;
-} = dualify(2, <V>(self: Maybe<V>, fn: (some: V) => any) => {
+} = Macro.dualify(1, <V>(self: Maybe<V>, fn: (some: V) => any) => {
   isSome(self) ? fn(self.value) : null;
   return self;
 });
@@ -388,7 +389,7 @@ export const whenSome: {
 export const whenNone: {
   <V>(fn: () => any): (self: Maybe<V>) => Maybe<V>;
   <V>(self: Maybe<V>, fn: () => any): Maybe<V>;
-} = dualify(2, <V>(self: Maybe<V>, fn: () => any) => {
+} = Macro.dualify(1, <V>(self: Maybe<V>, fn: () => any) => {
   isNone(self) ? fn() : null;
   return self;
 });
@@ -396,8 +397,8 @@ export const whenNone: {
 export const match: {
   <V>(branches: { some?: (value: V) => any; none?: () => any }): (self: Maybe<V>) => Maybe<V>;
   <V>(self: Maybe<V>, branches: { some?: (value: V) => any; none?: () => any }): Maybe<V>;
-} = dualify(
-  2,
+} = Macro.dualify(
+  1,
   <V>(self: Maybe<V>, branches: { some?: (value: V) => any; none?: () => any }) => {
     isSome(self) ? branches.some?.(self.value) : branches.none?.();
     return self;
@@ -410,8 +411,8 @@ export const collapse: {
     none: () => To;
   }): (self: Maybe<From>) => To;
   <From, To>(self: Maybe<From>, branches: { some: (value: From) => To; none: () => To }): To;
-} = dualify(
-  2,
+} = Macro.dualify(
+  1,
   <From, To>(self: Maybe<From>, branches: { some: (value: From) => To; none: () => To }) =>
     isSome(self) ? branches.some(self.value) : branches.none()
 );
@@ -419,7 +420,7 @@ export const collapse: {
 export const tryMap: {
   <From, To>(mapper: (some: From) => To): (self: Maybe<From>) => Maybe<To>;
   <From, To>(self: Maybe<From>, mapper: (some: From) => To): Maybe<To>;
-} = dualify(2, <From, To>(self: Maybe<From>, mapper: (some: From) => To) => {
+} = Macro.dualify(1, <From, To>(self: Maybe<From>, mapper: (some: From) => To) => {
   try {
     return isSome(self) ? Some(mapper(self.value)) : None();
   } catch {
@@ -430,23 +431,26 @@ export const tryMap: {
 export const property: {
   <R extends Record<any, any>, K extends keyof R>(key: K): (self: Maybe<R>) => Maybe<R[K]>;
   <R extends Record<any, any>, K extends keyof R>(self: Maybe<R>, key: K): Maybe<R[K]>;
-} = dualify(2, <R extends Record<any, any>, K extends keyof R>(self: Maybe<R>, key: K) => {
-  if (isNone(self)) return self;
-  if (!isObject(self.value) || !hasKey(self.value, key)) return None();
-  return Some(self.value[key]);
-});
+} = Macro.dualify(
+  1,
+  <R extends Record<any, any>, K extends keyof R>(self: Maybe<R>, key: K) => {
+    if (isNone(self)) return self;
+    if (!Object.isObject(self.value) || !Object.hasKey(self.value, key)) return None();
+    return Some(self.value[key]);
+  }
+);
 
 export const toResult: {
-  <V, E>(error: E): (self: Maybe<V>) => Result<V, E>;
-  <V, E>(self: Maybe<V>, error: E): Result<V, E>;
-  <V>(): (self: Maybe<V>) => Result<V, Nothing>;
-  <V>(self: Maybe<V>): Result<V, Nothing>;
-} = dualify(2, <V, E>(self: Maybe<V>, error?: E) => {
-  if (isNone(self)) return error ? Err(error) : Err();
-  return Ok(self.value);
+  <V, E>(error: E): (self: Maybe<V>) => Result.Result<V, E>;
+  <V, E>(self: Maybe<V>, error: E): Result.Result<V, E>;
+  <V>(): (self: Maybe<V>) => Result.Result<V, Nothing.Nothing>;
+  <V>(self: Maybe<V>): Result.Result<V, Nothing.Nothing>;
+} = Macro.dualify(1, <V, E>(self: Maybe<V>, error?: E) => {
+  if (isNone(self)) return error ? Result.Err(error) : Result.Err();
+  return Result.Ok(self.value);
 });
 
 export const parseJson: {
   (): (self: Maybe<string>) => Maybe<any>;
   (self: Maybe<string>): Maybe<any>;
-} = dualify(1, (self: Maybe<string>) => tryMap(self, JSON.parse));
+} = Macro.dualify(0, (self: Maybe<string>) => tryMap(self, JSON.parse));

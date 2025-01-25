@@ -1,12 +1,10 @@
-import { Array } from "..";
-import { isArray } from "../array";
-import * as Fault from "../fault";
-import { dualify } from "../function";
-import * as Macro from "../macro";
-import { keysOf } from "../object";
-import * as Result from "../result";
+import * as Array from "@/array";
+import * as Fault from "@/fault";
+import * as Macro from "@/macro";
+import * as Object from "@/object";
+import * as Result from "@/result";
 
-export const make = Number;
+export const Constructor = Number;
 
 export const isNumber = (thing: unknown): thing is number =>
   typeof thing === "number" && !Number.isNaN(thing);
@@ -25,7 +23,7 @@ export const isRange = (thing: unknown): thing is Range => {
 
   if (
     typeof thing === "object" &&
-    keysOf(thing).length === 2 &&
+    Object.keysOf(thing).length === 2 &&
     "min" in thing &&
     isNumber(thing.min) &&
     "max" in thing &&
@@ -47,7 +45,7 @@ export const isValidRange = (thing: unknown): thing is Range => {
 };
 
 export const resolveRange = (self: Range): Range.Object => {
-  if (isArray(self)) return { min: self[0], max: self[1] };
+  if (Array.isArray(self)) return { min: self[0], max: self[1] };
   return self;
 };
 
@@ -63,7 +61,7 @@ export namespace Clamp {
 export const unsafeClamp: {
   (value: number, range: Range): Clamp.Return<"unsafe">;
   (range: Range): (value: number) => Clamp.Return<"unsafe">;
-} = dualify(2, (value: number, range: Range): Clamp.Return<"unsafe"> => {
+} = Macro.dualify(1, (value: number, range: Range): Clamp.Return<"unsafe"> => {
   if (!isValidRange(range)) throw Error(JSON.stringify(range));
   const { min, max } = resolveRange(range);
   return value < min ? min : value > max ? max : value;
@@ -72,7 +70,7 @@ export const unsafeClamp: {
 export const safeClamp: {
   (value: number, range: Range): Clamp.Return<"safe">;
   (range: Range): (value: number) => Clamp.Return<"safe">;
-} = dualify(2, (value: number, range: Range): Clamp.Return<"safe"> => {
+} = Macro.dualify(1, (value: number, range: Range): Clamp.Return<"safe"> => {
   if (!isValidRange(range)) return Result.Err({ code: "invalid range" });
   const { min, max } = resolveRange(range);
   return Result.Ok(value < min ? min : value > max ? max : value);

@@ -19,14 +19,6 @@ describe("isEmpty [runtime]", () => {
     expect(isEmpty(mixedArray)).toBe(false);
     expect(isEmpty([])).toBe(true);
   });
-
-  it("should return a curried function when called without arguments", () => {
-    const isEmptyCurried = isEmpty();
-    expect(isEmptyCurried).toBeInstanceOf(Function);
-
-    expect(isEmptyCurried([1, 2, 3])).toBe(false);
-    expect(isEmptyCurried([])).toBe(true);
-  });
 });
 
 describe("isEmpty [types]", () => {

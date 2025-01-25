@@ -15,13 +15,6 @@ describe("isArray [runtime]", () => {
     expect(isArray(42)).toBe(false);
     expect(isArray("string")).toBe(false);
   });
-
-  it("should return a curried function when called without arguments", () => {
-    const isArrayCurried = isArray();
-    expect(isArrayCurried).toBeInstanceOf(Function);
-    expect(isArrayCurried([])).toBe(true);
-    expect(isArrayCurried({})).toBe(false);
-  });
 });
 
 describe("isArray [runtime]", () => {

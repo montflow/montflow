@@ -1,5 +1,3 @@
-import { dualify } from "../function";
-
 /**
  * Alternative object to represent an error or exception
  * @template Code type of the inner code
@@ -68,31 +66,19 @@ export const make = Create;
 
 /**
  * Type guard to check if an object is of type Fault
- * @param {unknown} thing the object to check
+ * @param {unknown} self the object to check
  * @returns boolean indicating if the object is of type Fault
  */
-export const isFault: {
-  (self: unknown): self is Fault<string>;
-  (): (self: unknown) => self is Fault<string>;
-} = dualify(
-  1,
-  (self: unknown): self is Fault<string> =>
-    typeof self === "object" &&
-    self !== null &&
-    "code" in self &&
-    typeof (self as any).code === "string"
-);
+export const isFault = (self: unknown): self is Fault<string> =>
+  typeof self === "object" &&
+  self !== null &&
+  "code" in self &&
+  typeof (self as any).code === "string";
 
 /**
  * Type guard to check if an object is of type Fault.WithReason
  * @param x the object to check
  * @returns boolean indicating if the object is of type Fault.WithReason
  */
-export const isFaultWithReason: {
-  (self: unknown): self is Fault.WithReason<string, unknown>;
-  (): (self: unknown) => self is Fault.WithReason<string, unknown>;
-} = dualify(
-  1,
-  (self: unknown): self is Fault.WithReason<string, unknown> =>
-    isFault(self) && "reason" in self
-);
+export const isFaultWithReason = (self: unknown): self is Fault.WithReason<string, unknown> =>
+  isFault(self) && "reason" in self;

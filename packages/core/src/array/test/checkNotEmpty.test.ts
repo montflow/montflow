@@ -18,16 +18,6 @@ describe("idk [runtime]", () => {
     expect(isNone(value)).toBe(true);
   });
 
-  it("should work with curried api", () => {
-    const initial = [1, 2, 3];
-    const fn = checkNotEmpty<number>();
-
-    const value = fn(initial);
-
-    expect(isSome(value)).toBe(true);
-    expect(value).toHaveProperty("value", initial);
-  });
-
   it("should work with different array types", () => {
     const strings = ["a", "b", "c"];
     const objects = [{ id: 1 }, { id: 2 }];
@@ -45,16 +35,6 @@ describe("idk [types]", () => {
 
     type Test = typeof value;
     type Expected = Maybe<NotEmpty<number>>;
-
-    expectTypeOf<Test>().toMatchTypeOf<Expected>();
-  });
-
-  it("should maintain type information in curried form", () => {
-    const checkStrings = checkNotEmpty<string>();
-    const value = checkStrings(["a", "b"]);
-
-    type Test = typeof value;
-    type Expected = Maybe<NotEmpty<string>>;
 
     expectTypeOf<Test>().toMatchTypeOf<Expected>();
   });

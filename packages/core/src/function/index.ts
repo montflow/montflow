@@ -3,8 +3,6 @@
  */
 export type Callable = (...args: any[]) => any;
 
-export type Evaluable<V> = V | (() => V);
-
 /**
  * Function that operates over `Input` to produce `Output`
  * @template Input input type

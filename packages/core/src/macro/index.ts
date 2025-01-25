@@ -1,4 +1,5 @@
-import { Callable, Evaluable, isCallable } from "../function";
+import * as Function from "@/function";
+import { Evaluable } from "@/misc";
 
 /**
  * Executes a function that takes no arguments and returns its result.
@@ -41,7 +42,7 @@ export const assertType = <Type>(_: unknown): _ is Type => true;
  * @returns {T} resolved value
  */
 export const evaluate = <T>(resolvable: Evaluable<T>): T =>
-  isCallable(resolvable) ? resolvable() : resolvable;
+  Function.isCallable(resolvable) ? resolvable() : resolvable;
 
 export const todo = (msg?: string) => panic(Error(msg));
 
@@ -81,7 +82,7 @@ export namespace Dualify {
  *
  * @copyright major credit to [`effect/Function.ts`](https://github.com/Effect-TS/effect/blob/main/packages/effect/src/Function.ts)
  */
-export const dualify = <Explicit extends Callable, Curried extends Callable>(
+export const dualify = <Explicit extends Function.Callable, Curried extends Function.Callable>(
   arity: number,
   body: Explicit,
   options?: Dualify.Options
@@ -140,12 +141,17 @@ export const dualify = <Explicit extends Callable, Curried extends Callable>(
     };
   }
 
-  return arity === 0
-    ? (((...args) =>
+  switch (arity) {
+    case 0: {
+      return ((...args) =>
         args.length !== 0 ? body(...args) : (self: unknown) => body(self)) as Explicit &
-        Curried)
-    : (((...args) =>
-        args.length >= arity
-          ? body(...args)
-          : (self: unknown) => body(self, ...args)) as Explicit & Curried);
+        Curried;
+    }
+
+    default: {
+      return ((...args) => {
+        return args.length > arity ? body(...args) : (self: unknown) => body(self, ...args);
+      }) as Explicit & Curried;
+    }
+  }
 };

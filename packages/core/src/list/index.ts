@@ -1,4 +1,4 @@
-import { isArray } from "../array";
+import * as Array from "@/array";
 
 /**
  * Represents a typed list extending the Array type with a discriminator.
@@ -57,7 +57,7 @@ export function List<T extends PropertyKey, V>(
     return Object.assign([], { kind: "list" }) as List<T>;
   }
 
-  if (isArray(iterable)) return FromArray(iterable);
+  if (Array.isArray(iterable)) return FromArray(iterable);
 
   if (iterable instanceof Set) return FromSet(iterable);
 

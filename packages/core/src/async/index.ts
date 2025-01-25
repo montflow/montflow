@@ -1,4 +1,4 @@
-import { dualify, isCallable, Nullary } from "../function";
+import * as Function from "@/function";
 
 /**
  * Returns a promise that resolves after a specified delay.
@@ -34,7 +34,7 @@ export function tick() {
  * @returns {Promise<T>} a promise that resolves to the result of the given promise, but only after at least the specified delay duration.
  */
 export async function withMinimumDuration<T>(
-  fn: Nullary.Async<T>,
+  fn: Function.Nullary.Async<T>,
   duration: number
 ): Promise<T> {
   const [result] = await Promise.all([fn(), delay(duration)]);
@@ -47,17 +47,11 @@ export async function withMinimumDuration<T>(
  * @param maybePromise The value to check.
  * @returns {boolean} `True` if the value is a Promise.
  */
-export const isPromise: {
-  (self: unknown): self is Promise<unknown>;
-  (): (self: unknown) => self is Promise<unknown>;
-} = dualify(
-  1,
-  (self: unknown): self is Promise<unknown> =>
-    self instanceof Promise ||
-    (self !== null &&
-      typeof self === "object" &&
-      "then" in self &&
-      isCallable(self.then) &&
-      "catch" in self &&
-      isCallable(self.catch))
-);
+export const isPromise = (self: unknown): self is Promise<unknown> =>
+  self instanceof Promise ||
+  (self !== null &&
+    typeof self === "object" &&
+    "then" in self &&
+    Function.isCallable(self.then) &&
+    "catch" in self &&
+    Function.isCallable(self.catch));

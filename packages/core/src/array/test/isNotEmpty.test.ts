@@ -19,14 +19,6 @@ describe("isNonEmpty [runtime]", () => {
     expect(isNotEmpty(mixedArray)).toBe(true);
   });
 
-  it("should return a curried function when called without arguments", () => {
-    const isNonEmptyCurried = isNotEmpty();
-    expect(isNonEmptyCurried).toBeInstanceOf(Function);
-
-    expect(isNonEmptyCurried([1, 2, 3])).toBe(true);
-    expect(isNonEmptyCurried([])).toBe(false);
-  });
-
   it("should maintain type narrowing", () => {
     const array: number[] = [1, 2, 3];
     if (isNotEmpty(array)) {

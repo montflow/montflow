@@ -1,7 +1,8 @@
-import { isArray, isEmpty } from "../array";
-import { isIterable } from "../iterable";
-import { Maybe, None, Some } from "../maybe";
-import { Range, resolveRange } from "../number";
+import * as Array from "@/array";
+import * as Iterable from "@/iterable";
+import * as Macro from "@/macro";
+import * as Maybe from "@/maybe";
+import * as Number from "@/number";
 
 /** Function that generates number between 0 (inclusive) and 1 (exclusive) */
 export type Generator = () => number;
@@ -9,7 +10,7 @@ export type Generator = () => number;
 export const uniform: Generator = Math.random;
 
 export namespace nextInt {
-  export type Options = { generator?: Generator; range?: Range };
+  export type Options = { generator?: Generator; range?: Number.Range };
 }
 export const nextInt = (options?: nextInt.Options): number => {
   const { generator, range } = {
@@ -18,7 +19,7 @@ export const nextInt = (options?: nextInt.Options): number => {
     ...options,
   } satisfies Required<nextInt.Options>;
 
-  const { min, max } = resolveRange(range);
+  const { min, max } = Number.resolveRange(range);
 
   if (min === max) {
     return min;
@@ -29,11 +30,11 @@ export const nextInt = (options?: nextInt.Options): number => {
   }
 
   const value = generator();
-  return Math.floor(value * (max - min + (1 - Number.EPSILON)) + min);
+  return Math.floor(value * (max - min + (1 - Number.Constructor.EPSILON)) + min);
 };
 
 export namespace nextFloat {
-  export type Options = { generator?: Generator; range?: Range };
+  export type Options = { generator?: Generator; range?: Number.Range };
 }
 
 export const nextFloat = (options?: nextFloat.Options): number => {
@@ -43,7 +44,7 @@ export const nextFloat = (options?: nextFloat.Options): number => {
     ...options,
   } satisfies Required<nextFloat.Options>;
 
-  const { min, max } = resolveRange(range);
+  const { min, max } = Number.resolveRange(range);
 
   if (min >= max) {
     throw new Error("Invalid range: min must be less than max");
@@ -54,26 +55,47 @@ export const nextFloat = (options?: nextFloat.Options): number => {
   return min + randomValue * (max - min);
 };
 
-export namespace nextPick {
+export namespace NextPick {
   export type Options = { generator?: Generator };
 }
 
-function _nextPick<T>(self: Iterable<T>, options?: nextPick.Options): Maybe<T> {
-  const items = isArray(self) ? (self as Array<T>) : Array.from<T>(self);
+// function _nextPick<T>(self: Iterable<T>, options?: nextPick.Options): Maybe.Maybe<T> {
+//   const items = Array.isArray(self) ? (self as Array<T>) : Array.Constructor.from<T>(self);
 
-  if (isEmpty(items)) return None();
+//   if (Array.isEmpty(items)) return Maybe.None();
 
-  const { generator } = { generator: uniform, ...options } satisfies Required<nextPick.Options>;
+//   const { generator } = { generator: uniform, ...options } satisfies Required<nextPick.Options>;
 
-  const index = nextInt({ generator, range: [0, items.length - 1] });
-  return Some(items[index]);
-}
+//   const index = nextInt({ generator, range: [0, items.length - 1] });
+//   return Maybe.Some(items[index]);
+// }
+
+// export const nextPick: {
+//   <T>(options?: nextPick.Options): (self: Iterable<T>) => Maybe.Maybe<T>;
+//   <T>(self: Iterable<T>, options?: nextPick.Options): Maybe.Maybe<T>;
+// } = (<T>(optionsOrSelf?: nextPick.Options | Iterable<T>, options?: nextPick.Options) => {
+//   if (optionsOrSelf === undefined || !Iterable.isIterable(optionsOrSelf))
+//     return (self: Iterable<T>) => _nextPick(self, optionsOrSelf);
+//   return _nextPick(optionsOrSelf, options);
+// }) as typeof nextPick;
 
 export const nextPick: {
-  <T>(options?: nextPick.Options): (self: Iterable<T>) => Maybe<T>;
-  <T>(self: Iterable<T>, options?: nextPick.Options): Maybe<T>;
-} = (<T>(optionsOrSelf?: nextPick.Options | Iterable<T>, options?: nextPick.Options) => {
-  if (optionsOrSelf === undefined || !isIterable(optionsOrSelf))
-    return (self: Iterable<T>) => _nextPick(self, optionsOrSelf);
-  return _nextPick(optionsOrSelf, options);
-}) as typeof nextPick;
+  <T>(self: Iterable<T>, options?: NextPick.Options): Maybe.Maybe<T>;
+  <T>(options?: NextPick.Options): (self: Iterable<T>) => Maybe.Maybe<T>;
+} = Macro.dualify(
+  0,
+  <T>(self: Iterable<T>, options?: NextPick.Options): Maybe.Maybe<T> => {
+    const items = Array.isArray(self) ? (self as Array<T>) : Array.Constructor.from<T>(self);
+
+    if (Array.isEmpty(items)) return Maybe.None();
+
+    const { generator } = {
+      generator: uniform,
+      ...options,
+    } satisfies Required<NextPick.Options>;
+
+    const index = nextInt({ generator, range: [0, items.length - 1] });
+    return Maybe.Some(items[index]);
+  },
+  { withTail: true, isSelf: Iterable.isIterable }
+);
