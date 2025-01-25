@@ -4,6 +4,7 @@
   "author": "Daniel Montilla",
   "description": "A collection of powerful, lightweight and performant typescript utilities.",
   "license": "MIT",
+  "private": false,
   "repository": {
     "type": "git",
     "url": "git+https://github.com/montflow/montflow.git"
@@ -14,88 +15,93 @@
   "bugs": {
     "url": "https://github.com/montflow/montflow/issues"
   },
+  "type": "module",
   "scripts": {
-    "build": "tsup",
+    "build": "pnpm build-esm && pnpm build-annotate && pnpm build-cjs",
+    "build-esm": "tsc -b tsconfig.build.json",
+    "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
+    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
     "dev": "tsup --watch",
     "test": "vitest"
   },
   "devDependencies": {
     "jsdom": "^25.0.1",
-    "tsup": "^8.1.0"
+    "@babel/cli": "^7.24.8",
+    "@babel/core": "^7.25.2",
+    "@babel/plugin-transform-export-namespace-from": "^7.24.7",
+    "@babel/plugin-transform-modules-commonjs": "^7.24.8",
+    "babel-plugin-annotate-pure-calls": "^0.5.0"
   },
-  "private": false,
-  "type": "module",
-  "main": "./dist/index.js",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "types": "./build/dts/index.d.ts",
+      "import": "./build/esm/index.js",
+      "require": "./build/cjs/index.js"
     },
     "./array": {
-      "types": "./dist/array/index.d.ts",
-      "import": "./dist/array/index.js",
-      "require": "./dist/array/index.cjs"
+      "types": "./build/dts/array/index.d.ts",
+      "import": "./build/esm/array/index.js",
+      "require": "./build/cjs/array/index.js"
     },
     "./async": {
-      "types": "./dist/async/index.d.ts",
-      "import": "./dist/async/index.js",
-      "require": "./dist/async/index.cjs"
+      "types": "./build/dts/async/index.d.ts",
+      "import": "./build/esm/async/index.js",
+      "require": "./build/cjs/async/index.js"
     },
     "./fault": {
-      "types": "./dist/fault/index.d.ts",
-      "import": "./dist/fault/index.js",
-      "require": "./dist/fault/index.cjs"
+      "types": "./build/dts/fault/index.d.ts",
+      "import": "./build/esm/fault/index.js",
+      "require": "./build/cjs/fault/index.js"
     },
     "./function": {
-      "types": "./dist/function/index.d.ts",
-      "import": "./dist/function/index.js",
-      "require": "./dist/function/index.cjs"
+      "types": "./build/dts/function/index.d.ts",
+      "import": "./build/esm/function/index.js",
+      "require": "./build/cjs/function/index.js"
     },
     "./iterable": {
-      "types": "./dist/iterable/index.d.ts",
-      "import": "./dist/iterable/index.js",
-      "require": "./dist/iterable/index.cjs"
+      "types": "./build/dts/iterable/index.d.ts",
+      "import": "./build/esm/iterable/index.js",
+      "require": "./build/cjs/iterable/index.js"
     },
     "./macro": {
-      "types": "./dist/macro/index.d.ts",
-      "import": "./dist/macro/index.js",
-      "require": "./dist/macro/index.cjs"
+      "types": "./build/dts/macro/index.d.ts",
+      "import": "./build/esm/macro/index.js",
+      "require": "./build/cjs/macro/index.js"
     },
     "./maybe": {
-      "types": "./dist/maybe/index.d.ts",
-      "import": "./dist/maybe/index.js",
-      "require": "./dist/maybe/index.cjs"
+      "types": "./build/dts/maybe/index.d.ts",
+      "import": "./build/esm/maybe/index.js",
+      "require": "./build/cjs/maybe/index.js"
     },
     "./nothing": {
-      "types": "./dist/nothing/index.d.ts",
-      "import": "./dist/nothing/index.js",
-      "require": "./dist/nothing/index.cjs"
+      "types": "./build/dts/nothing/index.d.ts",
+      "import": "./build/esm/nothing/index.js",
+      "require": "./build/cjs/nothing/index.js"
     },
     "./number": {
-      "types": "./dist/number/index.d.ts",
-      "import": "./dist/number/index.js",
-      "require": "./dist/number/index.cjs"
+      "types": "./build/dts/number/index.d.ts",
+      "import": "./build/esm/number/index.js",
+      "require": "./build/cjs/number/index.js"
     },
     "./object": {
-      "types": "./dist/object/index.d.ts",
-      "import": "./dist/object/index.js",
-      "require": "./dist/object/index.cjs"
+      "types": "./build/dts/object/index.d.ts",
+      "import": "./build/esm/object/index.js",
+      "require": "./build/cjs/object/index.js"
     },
     "./random": {
-      "types": "./dist/random/index.d.ts",
-      "import": "./dist/random/index.js",
-      "require": "./dist/random/index.cjs"
+      "types": "./build/dts/random/index.d.ts",
+      "import": "./build/esm/random/index.js",
+      "require": "./build/cjs/random/index.js"
     },
     "./result": {
-      "types": "./dist/result/index.d.ts",
-      "import": "./dist/result/index.js",
-      "require": "./dist/result/index.cjs"
+      "types": "./build/dts/result/index.d.ts",
+      "import": "./build/esm/result/index.js",
+      "require": "./build/cjs/result/index.js"
     },
     "./string": {
-      "types": "./dist/string/index.d.ts",
-      "import": "./dist/string/index.js",
-      "require": "./dist/string/index.cjs"
+      "types": "./build/dts/string/index.d.ts",
+      "import": "./build/esm/string/index.js",
+      "require": "./build/cjs/string/index.js"
     }
   },
   "files": [
