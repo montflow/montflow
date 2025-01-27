@@ -1,8 +1,8 @@
-import * as Array from "@/array";
-import * as Iterable from "@/iterable";
-import * as Macro from "@/macro";
-import * as Maybe from "@/maybe";
-import * as Number from "@/number";
+import * as Array from "../array/index.js";
+import * as Iterable from "../iterable/index.js";
+import * as Macro from "../macro/index.js";
+import * as Maybe from "../maybe/index.js";
+import * as Number from "../number/index.js";
 
 /** Function that generates number between 0 (inclusive) and 1 (exclusive) */
 export type Generator = () => number;

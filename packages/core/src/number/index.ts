@@ -1,8 +1,8 @@
-import * as Array from "@/array";
-import * as Fault from "@/fault";
-import * as Macro from "@/macro";
-import * as Object from "@/object";
-import * as Result from "@/result";
+import * as Array from "../array/index.js";
+import * as Fault from "../fault/index.js";
+import * as Macro from "../macro/index.js";
+import * as Object from "../object/index.js";
+import * as Result from "../result/index.js";
 
 export const Constructor = Number;
 

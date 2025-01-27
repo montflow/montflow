@@ -1,4 +1,4 @@
-import * as Array from "@/array";
+import * as Array from "../array/index.js";
 
 /**
  * Represents a typed list extending the Array type with a discriminator.

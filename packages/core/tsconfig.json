@@ -1,8 +1,7 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
+    "module": "NodeNext",
 
     "strict": true,
     "strictNullChecks": true,
@@ -11,12 +10,7 @@
     "noFallthroughCasesInSwitch": true,
 
     "isolatedModules": true,
-    "skipLibCheck": true,
-
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"]
-    }
+    "skipLibCheck": true
   },
   "include": ["./src/**/*"],
   "exclude": ["**/*.config.ts", "**/*.test.ts"]

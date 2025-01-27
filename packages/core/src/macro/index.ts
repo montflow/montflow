@@ -1,5 +1,5 @@
-import * as Function from "@/function";
-import { Evaluable } from "@/misc";
+import * as Function from "../function/index.js";
+import { Evaluable } from "../misc/index.js";
 
 /**
  * Executes a function that takes no arguments and returns its result.

@@ -1,4 +1,4 @@
-import * as Function from "@/function";
+import * as Function from "../function/index.js";
 
 /**
  * Returns a promise that resolves after a specified delay.

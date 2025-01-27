@@ -1,4 +1,4 @@
-import * as Macro from "@/macro";
+import * as Macro from "../macro/index.js";
 
 /**
  * Valid property object key types.

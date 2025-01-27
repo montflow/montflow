@@ -1,10 +1,10 @@
-import * as Function from "@/function";
-import * as Macro from "@/macro";
-import { Evaluable } from "@/misc";
-import * as Nothing from "@/nothing";
-import * as Number from "@/number";
-import * as Object from "@/object";
-import * as Result from "@/result";
+import * as Function from "../function/index.js";
+import * as Macro from "../macro/index.js";
+import { Evaluable } from "../misc/index.js";
+import * as Nothing from "../nothing/index.js";
+import * as Number from "../number/index.js";
+import * as Object from "../object/index.js";
+import * as Result from "../result/index.js";
 
 /**
  * Represents the presence of a value

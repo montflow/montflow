@@ -1,6 +1,6 @@
-import * as Function from "@/function";
-import * as Macro from "@/macro";
-import * as Maybe from "@/maybe";
+import * as Function from "../function/index.js";
+import * as Macro from "../macro/index.js";
+import * as Maybe from "../maybe/index.js";
 
 export const Constructor = Array;
 

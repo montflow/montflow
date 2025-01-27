@@ -1,5 +1,5 @@
-import * as Async from "@/async";
-import * as Function from "@/function";
+import * as Async from "../async/index.js";
+import * as Function from "../function/index.js";
 
 /**
  * takes `input` through a sequence of transformations
