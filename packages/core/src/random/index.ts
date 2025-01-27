@@ -59,26 +59,6 @@ export namespace NextPick {
   export type Options = { generator?: Generator };
 }
 
-// function _nextPick<T>(self: Iterable<T>, options?: nextPick.Options): Maybe.Maybe<T> {
-//   const items = Array.isArray(self) ? (self as Array<T>) : Array.Constructor.from<T>(self);
-
-//   if (Array.isEmpty(items)) return Maybe.None();
-
-//   const { generator } = { generator: uniform, ...options } satisfies Required<nextPick.Options>;
-
-//   const index = nextInt({ generator, range: [0, items.length - 1] });
-//   return Maybe.Some(items[index]);
-// }
-
-// export const nextPick: {
-//   <T>(options?: nextPick.Options): (self: Iterable<T>) => Maybe.Maybe<T>;
-//   <T>(self: Iterable<T>, options?: nextPick.Options): Maybe.Maybe<T>;
-// } = (<T>(optionsOrSelf?: nextPick.Options | Iterable<T>, options?: nextPick.Options) => {
-//   if (optionsOrSelf === undefined || !Iterable.isIterable(optionsOrSelf))
-//     return (self: Iterable<T>) => _nextPick(self, optionsOrSelf);
-//   return _nextPick(optionsOrSelf, options);
-// }) as typeof nextPick;
-
 export const nextPick: {
   <T>(self: Iterable<T>, options?: NextPick.Options): Maybe.Maybe<T>;
   <T>(options?: NextPick.Options): (self: Iterable<T>) => Maybe.Maybe<T>;

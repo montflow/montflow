@@ -104,7 +104,7 @@ export type Unfold<
  * @template V inner `Some` value type
  * @returns {Promise<Maybe<V>>}
  */
-export type Future<V> = Promise<Maybe<V>>;
+export type Async<V> = Promise<Maybe<V>>;
 
 /**
  * Creates empty `Some`
@@ -188,10 +188,10 @@ export function FromNullish<V>(value: V): Maybe<Exclude<V, null | undefined>> {
  * @constructor
  * @template V inner `Some` type
  * @param {Promise<V>} promise target promise
- * @returns {Future<V>} a future. `Some` if the promise resolved with expected value. `None` if it threw error/failed.
- * @see {@link Future}
+ * @returns {Async<V>} a future. `Some` if the promise resolved with expected value. `None` if it threw error/failed.
+ * @see {@link Async}
  */
-export async function FromPromise<V>(promise: Promise<V>): Future<V> {
+export async function FromPromise<V>(promise: Promise<V>): Async<V> {
   try {
     return Some(await promise);
   } catch (_) {
