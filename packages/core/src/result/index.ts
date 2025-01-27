@@ -1,8 +1,8 @@
-import { dualify, isFunction, Mapper, Nullary, Predicate } from "../function";
-import { evaluate, panic } from "../macro";
-import { Maybe, None, Some } from "../maybe";
-import { Create as CreateNothing, Nothing } from "../nothing";
-import { Decrement } from "../number";
+import * as Function from "../function/index.js";
+import * as Macro from "../macro/index.js";
+import * as Maybe from "../maybe/index.js";
+import * as Nothing from "../nothing/index.js";
+import * as Number from "../number/index.js";
 
 /**
  * Represents the successful outcome of operation
@@ -31,7 +31,7 @@ export const MAX_UNFOLD_DEPTH = 512;
  * Either `Ok<V>` or `Err<E>`
  * @template V type of some's inner value
  */
-export type Result<V = Nothing, E = Nothing> = Ok<V> | Err<E>;
+export type Result<V = Nothing.Nothing, E = Nothing.Nothing> = Ok<V> | Err<E>;
 
 /**
  * Generic `Result` type. Extends `any` other result
@@ -92,7 +92,7 @@ export type Unfold<
   ? Root
   : [Root] extends [Result<infer RootOk, infer RootErr>]
     ? [RootOk] extends [Result<infer NestedOk, infer NestedErr>]
-      ? Unfold<Result<NestedOk, NestedErr | RootErr>, Decrement<Limit>>
+      ? Unfold<Result<NestedOk, NestedErr | RootErr>, Number.Decrement<Limit>>
       : Root
     : never;
 
@@ -102,14 +102,14 @@ export type Unfold<
  * @template E inner `Err` error type. Defaults to `Nothing`
  * @returns {Promise<Result<V, E>>}
  */
-export type Async<V = Nothing, E = Nothing> = Promise<Result<V, E>>;
+export type Async<V = Nothing.Nothing, E = Nothing.Nothing> = Promise<Result<V, E>>;
 
 /**
  * Creates empty `Ok`
  * @constructor
  * @returns {Ok<Nothing>} empty `Ok`
  */
-export function Ok(): Ok<Nothing>;
+export function Ok(): Ok<Nothing.Nothing>;
 
 /**
  * Creates `Ok` w/ inner `value`
@@ -123,11 +123,11 @@ export function Ok<V>(value: V): Ok<V>;
 /**
  * @internal
  */
-export function Ok<V>(value?: V): Ok<V> | Ok<Nothing> {
+export function Ok<V>(value?: V): Ok<V> | Ok<Nothing.Nothing> {
   return {
     ok: true,
-    value: value !== undefined ? value : CreateNothing(),
-  } as Ok<V> | Ok<Nothing>;
+    value: value !== undefined ? value : Nothing.make(),
+  } as Ok<V> | Ok<Nothing.Nothing>;
 }
 
 /**
@@ -135,7 +135,7 @@ export function Ok<V>(value?: V): Ok<V> | Ok<Nothing> {
  * @constructor
  * @returns {Err<Nothing>} empty `Err`
  */
-export function Err(): Err<Nothing>;
+export function Err(): Err<Nothing.Nothing>;
 
 /**
  * Creates `Err` w/ inner `error`
@@ -149,11 +149,11 @@ export function Err<E>(error: E): Err<E>;
 /**
  * @internal
  */
-export function Err<E>(error?: E): Err<E> | Err<Nothing> {
+export function Err<E>(error?: E): Err<E> | Err<Nothing.Nothing> {
   return {
     ok: false,
-    error: error !== undefined ? error : CreateNothing(),
-  } as Err<E> | Err<Nothing>;
+    error: error !== undefined ? error : Nothing.make(),
+  } as Err<E> | Err<Nothing.Nothing>;
 }
 
 /**
@@ -162,7 +162,7 @@ export function Err<E>(error?: E): Err<E> | Err<Nothing> {
  * @param {"ok"} kind
  * @returns {Result<Nothing, Nothing>} `Result` of type `Ok<Nothing>`
  */
-export function Create(kind: "ok"): Result<Nothing, Nothing>;
+export function Create(kind: "ok"): Result<Nothing.Nothing, Nothing.Nothing>;
 
 /**
  * Creates `Ok` with type of `Result<V, Nothing>`
@@ -172,7 +172,7 @@ export function Create(kind: "ok"): Result<Nothing, Nothing>;
  * @param {V} value inner `Ok` value
  * @returns {Result<V, Nothing>} `Result` of type `Ok` with inner `value`
  */
-export function Create<V>(kind: "ok", value: V): Result<V, Nothing>;
+export function Create<V>(kind: "ok", value: V): Result<V, Nothing.Nothing>;
 
 /**
  * Creates `Ok` with type of `Result<V, E>`
@@ -183,7 +183,10 @@ export function Create<V>(kind: "ok", value: V): Result<V, Nothing>;
  * @param {V} value inner `Ok` value
  * @returns {Result<V, E>} `Result` of type `Ok` with inner `value`
  */
-export function Create<V = Nothing, E = Nothing>(kind: "ok", value: V): Result<V, E>;
+export function Create<V = Nothing.Nothing, E = Nothing.Nothing>(
+  kind: "ok",
+  value: V
+): Result<V, E>;
 
 /**
  * Creates `Err` with type of `Result<Nothing, Nothing>`
@@ -191,7 +194,7 @@ export function Create<V = Nothing, E = Nothing>(kind: "ok", value: V): Result<V
  * @param {"err"} kind
  * @returns {Result<Nothing, Nothing>} `Result` of type `Err<Nothing>`
  */
-export function Create(kind: "err"): Result<Nothing, Nothing>;
+export function Create(kind: "err"): Result<Nothing.Nothing, Nothing.Nothing>;
 
 /**
  * Creates `Err` with type of `Result<Nothing, E>`
@@ -201,7 +204,7 @@ export function Create(kind: "err"): Result<Nothing, Nothing>;
  * @param {E} error inner `Err` error
  * @returns {Result<Nothing, E>} `Result` of type `Err` with inner `error`
  */
-export function Create<E>(kind: "err", error: E): Result<Nothing, E>;
+export function Create<E>(kind: "err", error: E): Result<Nothing.Nothing, E>;
 
 /**
  * Creates `Err` with type of `Result<V, E>`
@@ -212,7 +215,10 @@ export function Create<E>(kind: "err", error: E): Result<Nothing, E>;
  * @param {E} error inner `Err` error
  * @returns {Result<V, E>} `Result` of type `Err` with inner `error`
  */
-export function Create<V = Nothing, E = Nothing>(kind: "err", error: E): Result<V, E>;
+export function Create<V = Nothing.Nothing, E = Nothing.Nothing>(
+  kind: "err",
+  error: E
+): Result<V, E>;
 
 /**
  * @internal
@@ -221,9 +227,9 @@ export function Create<ValueOrError, Error>(
   kind: "ok" | "err",
   valueOrError?: ValueOrError | Error
 ):
-  | Result<Nothing, Nothing>
-  | Result<ValueOrError, Nothing>
-  | Result<Nothing, ValueOrError>
+  | Result<Nothing.Nothing, Nothing.Nothing>
+  | Result<ValueOrError, Nothing.Nothing>
+  | Result<Nothing.Nothing, ValueOrError>
   | Result<ValueOrError, Error> {
   switch (true) {
     case kind === "err" && valueOrError !== undefined:
@@ -393,14 +399,14 @@ export function isResult(thing: unknown): thing is Any {
 export const unwrap: {
   <V>(): (self: Result<V, any>) => V;
   <V>(self: Result<V, any>): V;
-} = dualify(1, <V>(self: Result<V, any>) =>
-  isOk(self) ? self.value : panic(new Error("unwrap failed. Result is `Err`"))
+} = Macro.dualify(0, <V>(self: Result<V, any>) =>
+  isOk(self) ? self.value : Macro.panic(new Error("unwrap failed. Result is `Err`"))
 );
 
 export const peek: {
   <V, E>(fn: (ok: V) => any): (self: Result<V, E>) => Result<V, E>;
   <V, E>(self: Result<V, E>, fn: (ok: V) => any): Result<V, E>;
-} = dualify(2, <V, E>(self: Result<V, E>, fn: (ok: V) => any) => {
+} = Macro.dualify(1, <V, E>(self: Result<V, E>, fn: (ok: V) => any) => {
   if (isOk(self)) fn(self.value);
   return self;
 });
@@ -408,22 +414,22 @@ export const peek: {
 export const peekErr: {
   <V, E>(fn: (err: E) => any): (self: Result<V, E>) => Result<V, E>;
   <V, E>(self: Result<V, E>, fn: (err: E) => any): Result<V, E>;
-} = dualify(2, <V, E>(self: Result<V, E>, fn: (err: E) => any) => {
+} = Macro.dualify(1, <V, E>(self: Result<V, E>, fn: (err: E) => any) => {
   if (isErr(self)) fn(self.error);
   return self;
 });
 
 export const map: {
-  <V, E, To>(mapper: Mapper<V, To>): (self: Result<V, E>) => Result<To, E>;
-  <V, E, To>(self: Result<V, E>, mapper: Mapper<V, To>): Result<To, E>;
-} = dualify(2, <V, E, To>(self: Result<V, E>, mapper: Mapper<V, To>) =>
+  <V, E, To>(mapper: Function.Mapper<V, To>): (self: Result<V, E>) => Result<To, E>;
+  <V, E, To>(self: Result<V, E>, mapper: Function.Mapper<V, To>): Result<To, E>;
+} = Macro.dualify(1, <V, E, To>(self: Result<V, E>, mapper: Function.Mapper<V, To>) =>
   isOk(self) ? Ok(mapper(self.value)) : self
 );
 
 export const mapErr: {
   <V, E, To>(mapper: (error: E) => To): (self: Result<V, E>) => Result<V, To>;
   <V, E, To>(self: Result<V, E>, mapper: (error: E) => To): Result<V, To>;
-} = dualify(2, <V, E, To>(self: Result<V, E>, mapper: (error: E) => To) =>
+} = Macro.dualify(1, <V, E, To>(self: Result<V, E>, mapper: (error: E) => To) =>
   isErr(self) ? Err(mapper(self.error)) : self
 );
 
@@ -432,14 +438,14 @@ export const or: {
   <V, E>(self: Result<V, E>, fn: (error: E) => V): V;
   <V>(value: V): (self: Result<V, any>) => V;
   <V>(self: Result<V, any>, value: V): V;
-} = dualify(2, <V, E>(self: Result<V, E>, fnOrValue: ((error: E) => V) | V) =>
-  isOk(self) ? self.value : isFunction(fnOrValue) ? fnOrValue(self.error) : fnOrValue
+} = Macro.dualify(1, <V, E>(self: Result<V, E>, fnOrValue: ((error: E) => V) | V) =>
+  isOk(self) ? self.value : Function.isFunction(fnOrValue) ? fnOrValue(self.error) : fnOrValue
 );
 
 export const unfold: {
   <V, E>(): (self: Result<V, E>) => Unfold<Result<V, E>>;
   <V, E>(self: Result<V, E>): Unfold<Result<V, E>>;
-} = dualify(1, <V, E>(self: Result<V, E>) => {
+} = Macro.dualify(0, <V, E>(self: Result<V, E>) => {
   if (isErr(self)) return self as Unfold<Result<V, E>>;
   let inner = self.value;
 
@@ -455,7 +461,7 @@ export const unfold: {
 export const flatten: {
   <V, E>(): (self: Result<V, E>) => Flatten<Result<V, E>>;
   <V, E>(self: Result<V, E>): Flatten<Result<V, E>>;
-} = dualify(1, <V, E>(self: Result<V, E>) => {
+} = Macro.dualify(0, <V, E>(self: Result<V, E>) => {
   if (isErr(self) || !isResult(self.value) || isErr(self.value))
     return self as Flatten<Result<V, E>>;
   return self.value as Flatten<Result<V, E>>;
@@ -469,29 +475,45 @@ export const flatmap: {
     self: Result<V, E>,
     mapper: (ok: V) => Result<ToV, ToE>
   ): Result<ToV, E | ToE>;
-} = dualify(2, <V, E, ToV, ToE>(self: Result<V, E>, mapper: (ok: V) => Result<ToV, ToE>) =>
-  isOk(self) ? (mapper(self.value) as Result<ToV, E | ToE>) : self
+} = Macro.dualify(
+  1,
+  <V, E, ToV, ToE>(self: Result<V, E>, mapper: (ok: V) => Result<ToV, ToE>) =>
+    isOk(self) ? (mapper(self.value) as Result<ToV, E | ToE>) : self
 );
 
 export const check: {
-  <V, E>(predicate: Predicate<V>): (self: Result<V, E>) => Result<V, E | Nothing>;
-  <V, E>(self: Result<V, E>, predicate: Predicate<V>): Result<V, E | Nothing>;
+  <V, E>(
+    predicate: Function.Predicate<V>
+  ): (self: Result<V, E>) => Result<V, E | Nothing.Nothing>;
+  <V, E>(self: Result<V, E>, predicate: Function.Predicate<V>): Result<V, E | Nothing.Nothing>;
   <V, E, FailE>(
-    predicate: Predicate<V>,
-    fail: FailE | Nullary<FailE>
+    predicate: Function.Predicate<V>,
+    fail: FailE | Function.Nullary<FailE>
   ): (self: Result<V, E>) => Result<V, E | FailE>;
   <V, E, FailE>(
     self: Result<V, E>,
-    predicate: Predicate<V>,
-    fail: FailE | Nullary<FailE>
+    predicate: Function.Predicate<V>,
+    fail: FailE | Function.Nullary<FailE>
   ): Result<V, E | FailE>;
-} = dualify(
-  3,
-  <V, E, FailE>(self: Result<V, E>, predicate: Predicate<V>, fail?: FailE | Nullary<FailE>) =>
-    isOk(self) ? (predicate(self.value) ? self : fail ? Err(evaluate(fail)) : Err()) : self
+} = Macro.dualify(
+  2,
+  <V, E, FailE>(
+    self: Result<V, E>,
+    predicate: Function.Predicate<V>,
+    fail?: FailE | Function.Nullary<FailE>
+  ) =>
+    isOk(self)
+      ? predicate(self.value)
+        ? self
+        : fail
+          ? Err(Macro.evaluate(fail))
+          : Err()
+      : self
 );
 
 export const toMaybe: {
-  <V>(): (self: Result<V, any>) => Maybe<V>;
-  <V>(self: Result<V, any>): Maybe<V>;
-} = dualify(1, <V>(self: Result<V, any>) => (isOk(self) ? Some(self.value) : None()));
+  <V>(): (self: Result<V, any>) => Maybe.Maybe<V>;
+  <V>(self: Result<V, any>): Maybe.Maybe<V>;
+} = Macro.dualify(0, <V>(self: Result<V, any>) =>
+  isOk(self) ? Maybe.Some(self.value) : Maybe.None()
+);
