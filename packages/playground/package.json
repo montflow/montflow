@@ -5,9 +5,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "tsx watch src/main.ts",
     "test": "vitest"
   },
   "dependencies": {
-    "@montflow/core": "workspace:^"
+    "@montflow/core": "workspace:^",
+    "tsx": "^4.7.1"
   }
 }
