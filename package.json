@@ -13,7 +13,8 @@
     "reactive:test": "pnpm --filter @montflow/reactive run test",
     "reactive:build": "pnpm --filter @montflow/reactive run build",
     "reactive:dev": "pnpm --filter @montflow/reactive run dev",
-    "reactive:publish": "pnpm run reactive:build && pnpm --filter @montflow/reactive publish --access public --no-git-checks"
+    "reactive:publish": "pnpm run reactive:build && pnpm --filter @montflow/reactive publish --access public --no-git-checks",
+    "pb:dev": "pnpm --filer @montflow/prompt-builder run dev"
   },
   "dependencies": {
     "effect": "^3.11.5",
