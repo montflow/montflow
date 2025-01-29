@@ -1,5 +1,7 @@
 import * as Macro from "../macro/index.js";
 
+export type Optional<T, K extends keyof T> = Simplify<Omit<T, K> & Partial<Pick<T, K>>>;
+
 /**
  * Valid property object key types.
  */
