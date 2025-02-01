@@ -1,6 +1,6 @@
 {
   "name": "@montflow/core",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "author": "Daniel Montilla",
   "description": "A collection of powerful, lightweight and performant typescript utilities.",
   "license": "MIT",
