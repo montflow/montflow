@@ -35,6 +35,10 @@ export type Keys<Input extends Dictionary> = Input extends Dictionary<infer K, a
 export type Values<Input extends Dictionary> =
   Input extends Dictionary<PropertyKey, infer V> ? V : never;
 
+export type Entries<Input extends Dictionary> = {
+  [K in keyof Input]-?: [K, Input[K] & ({} | null | undefined)];
+}[keyof Input];
+
 export const isObject = (thing: unknown): thing is Object =>
   typeof thing === "object" && thing !== null;
 
@@ -53,18 +57,18 @@ export function hasKey<T extends Dictionary, K extends PropertyKey>(
 }
 
 export const values: {
-  <const A extends Dictionary>(): (input: A) => Array<Values<A>>;
-  <const A extends Dictionary>(input: A): Array<Values<A>>;
-} = Macro.dualify(0, <const A extends Dictionary>(input: A) => Object.values(input));
+  <const T extends Dictionary>(): (input: T) => Values<T>[];
+  <const T extends Dictionary>(input: T): Values<T>[];
+} = Macro.dualify(0, <const T extends Dictionary>(input: T) => Object.values(input));
 
 export const keys: {
-  <const A extends Dictionary>(): (input: A) => Array<Keys<A>>;
-  <const A extends Dictionary>(input: A): Array<Keys<A>>;
-} = Macro.dualify(0, <const A extends Dictionary>(input: A) => Object.keys(input));
+  <const T extends Dictionary>(): (input: T) => Keys<T>[];
+  <const T extends Dictionary>(input: T): Keys<T>[];
+} = Macro.dualify(0, <const T extends Dictionary>(input: T) => Object.keys(input));
 
 export const entries: {
-  <const A extends Dictionary>(): (input: A) => Array<[Keys<A>, Values<A>]>;
-  <const A extends Dictionary>(input: A): Array<[Keys<A>, Values<A>]>;
-} = Macro.dualify(0, <const A extends Dictionary>(input: A) => Object.entries(input));
+  <const T extends Dictionary>(): (input: T) => Entries<T>[];
+  <const T extends Dictionary>(input: T): Entries<T>[];
+} = Macro.dualify(0, <const T extends Dictionary>(input: T) => Object.entries(input));
 
 export type Simplify<T> = { [KeyType in keyof T]: T[KeyType] } & {};
