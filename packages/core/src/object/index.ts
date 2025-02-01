@@ -1,4 +1,5 @@
 import * as Macro from "../macro/index.js";
+import { Simplify } from "../misc/index.js";
 
 export type Optional<T, K extends keyof T> = Simplify<Omit<T, K> & Partial<Pick<T, K>>>;
 
@@ -70,5 +71,3 @@ export const entries: {
   <const T extends Dictionary>(): (input: T) => Entries<T>[];
   <const T extends Dictionary>(input: T): Entries<T>[];
 } = Macro.dualify(0, <const T extends Dictionary>(input: T) => Object.entries(input));
-
-export type Simplify<T> = { [KeyType in keyof T]: T[KeyType] } & {};
