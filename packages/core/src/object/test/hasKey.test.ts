@@ -22,6 +22,16 @@ describe("hasKey [runtime]", () => {
 
     expect(hasKey(obj, "b")).toBe(false);
   });
+
+  it("should work in curried form", () => {
+    const obj = { a: 1, b: "hello", c: true };
+
+    const hasKeyA = hasKey("a");
+    expect(hasKeyA(obj)).toBe(true);
+
+    const hasKeyD = hasKey("d");
+    expect(hasKeyD(obj)).toBe(false);
+  });
 });
 
 describe("hasKey [types]", () => {
@@ -80,6 +90,24 @@ describe("hasKey [types]", () => {
         type NestedExpected = string;
         expectTypeOf<NestedTest>().toMatchTypeOf<NestedExpected>();
       }
+    }
+  });
+
+  it("should narrow the type in curried form", () => {
+    const obj = { a: 1, b: "hello", c: true };
+
+    const hasKeyA = hasKey("a");
+    if (hasKeyA(obj)) {
+      type Test = typeof obj.a;
+      type Expected = number;
+      expectTypeOf<Test>().toMatchTypeOf<Expected>();
+    }
+
+    const hasKeyD = hasKey("d");
+    if (!hasKeyD(obj)) {
+      type Test = typeof obj;
+      type Expected = { a: number; b: string; c: boolean };
+      expectTypeOf<Test>().toMatchTypeOf<Expected>();
     }
   });
 });

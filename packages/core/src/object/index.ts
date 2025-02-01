@@ -43,19 +43,22 @@ export type Entries<Input extends Dictionary> = {
 export const isObject = (thing: unknown): thing is Object =>
   typeof thing === "object" && thing !== null;
 
-/**
- * Type guard that checks if an object has the specified key.
- * @template K extends PropertyKey key type
- * @param {object} obj object to check
- * @param {K} key key to check for
- * @returns {boolean} true if key exists on object
- */
-export function hasKey<T extends Dictionary, K extends PropertyKey>(
-  obj: T,
-  key: K
-): obj is T & { [P in K]: Exclude<T[P], undefined> } {
-  return key in obj && obj[key] !== undefined;
-}
+export const hasKey: {
+  <T extends Dictionary, K extends PropertyKey>(
+    self: T,
+    key: K
+  ): self is T & { [P in K]: Exclude<T[P], undefined> };
+  <T extends Dictionary, K extends PropertyKey>(
+    key: K
+  ): (self: T) => self is T & { [P in K]: Exclude<T[P], undefined> };
+} = Macro.dualify(
+  1,
+  <T extends Dictionary, K extends PropertyKey>(
+    self: T,
+    key: K
+  ): self is T & { [P in K]: Exclude<T[P], undefined> } =>
+    key in self && self[key] !== undefined
+);
 
 export const values: {
   <const T extends Dictionary>(): (input: T) => Values<T>[];
