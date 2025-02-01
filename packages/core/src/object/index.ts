@@ -1,20 +1,7 @@
 import * as Macro from "../macro/index.js";
-import { Simplify } from "../misc/index.js";
+import { Dictionary, Simplify } from "../misc/index.js";
 
 export type Optional<T, K extends keyof T> = Simplify<Omit<T, K> & Partial<Pick<T, K>>>;
-
-/**
- * Valid property object key types.
- */
-export type PropertyKey = keyof any;
-
-/**
- * Record type w/ default template params.
- * @template K extends PropertyKey key type. `PropertyKey` by default.
- * @template V value type `any` by default.
- * @see {@link PropertyKey}
- */
-export type Dictionary<K extends PropertyKey = PropertyKey, V = any> = { [P in K]?: V };
 
 /**
  * Extracts the value type for a given key from a dictionary.
