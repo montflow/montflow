@@ -20,21 +20,20 @@ export type Dictionary<K extends PropertyKey = PropertyKey, V = any> = { [P in K
  * @template {Dictionary} Input
  * @template K
  */
-export type ValueOf<Input extends Dictionary, K extends keyof Input> = Input[K];
+export type Value<Input extends Dictionary, K extends keyof Input> = Input[K];
 
 /**
  * Extracts the key type from a dictionary.
  * @template {Dictionary} Input
  */
-export type KeysOf<Input extends Dictionary> =
-  Input extends Dictionary<infer K, any> ? K : never;
+export type Keys<Input extends Dictionary> = Input extends Dictionary<infer K, any> ? K : never;
 
 /**
  * Extracts the value type from a dictionary.
- * @template {Dictionary} D
+ * @template {Dictionary} Input
  */
-export type ValuesOf<D extends Dictionary> =
-  D extends Dictionary<PropertyKey, infer V> ? V : never;
+export type Values<Input extends Dictionary> =
+  Input extends Dictionary<PropertyKey, infer V> ? V : never;
 
 export const isObject = (thing: unknown): thing is Object =>
   typeof thing === "object" && thing !== null;
@@ -53,19 +52,19 @@ export function hasKey<T extends Dictionary, K extends PropertyKey>(
   return key in obj && obj[key] !== undefined;
 }
 
-export const valuesOf: {
-  <const A extends Dictionary>(): (input: A) => Array<ValuesOf<A>>;
-  <const A extends Dictionary>(input: A): Array<ValuesOf<A>>;
+export const values: {
+  <const A extends Dictionary>(): (input: A) => Array<Values<A>>;
+  <const A extends Dictionary>(input: A): Array<Values<A>>;
 } = Macro.dualify(0, <const A extends Dictionary>(input: A) => Object.values(input));
 
-export const keysOf: {
-  <const A extends Dictionary>(): (input: A) => Array<KeysOf<A>>;
-  <const A extends Dictionary>(input: A): Array<KeysOf<A>>;
+export const keys: {
+  <const A extends Dictionary>(): (input: A) => Array<Keys<A>>;
+  <const A extends Dictionary>(input: A): Array<Keys<A>>;
 } = Macro.dualify(0, <const A extends Dictionary>(input: A) => Object.keys(input));
 
-export const entriesOf: {
-  <const A extends Dictionary>(): (input: A) => Array<[KeysOf<A>, ValuesOf<A>]>;
-  <const A extends Dictionary>(input: A): Array<[KeysOf<A>, ValuesOf<A>]>;
+export const entries: {
+  <const A extends Dictionary>(): (input: A) => Array<[Keys<A>, Values<A>]>;
+  <const A extends Dictionary>(input: A): Array<[Keys<A>, Values<A>]>;
 } = Macro.dualify(0, <const A extends Dictionary>(input: A) => Object.entries(input));
 
 export type Simplify<T> = { [KeyType in keyof T]: T[KeyType] } & {};

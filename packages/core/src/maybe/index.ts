@@ -235,7 +235,7 @@ export function isSome(thing: unknown): thing is Some<unknown>;
 export function isSome<V>(maybeOrThing: Maybe<V> | unknown): maybeOrThing is Some<V> {
   if (typeof maybeOrThing !== "object") return false;
   if (maybeOrThing === null) return false;
-  if (Object.keysOf(maybeOrThing).length !== 2) return false;
+  if (Object.keys(maybeOrThing).length !== 2) return false;
   if (
     !("some" in maybeOrThing && typeof maybeOrThing.some === "boolean") ||
     !("value" in maybeOrThing)
@@ -275,7 +275,7 @@ export function isNone(thing: unknown): thing is None;
 export function isNone<V>(maybeOrThing: Maybe<V> | unknown): maybeOrThing is None {
   if (typeof maybeOrThing !== "object") return false;
   if (maybeOrThing === null) return false;
-  if (Object.keysOf(maybeOrThing).length !== 1) return false;
+  if (Object.keys(maybeOrThing).length !== 1) return false;
   if (!("some" in maybeOrThing && typeof maybeOrThing.some === "boolean")) return false;
   return !maybeOrThing.some;
 }

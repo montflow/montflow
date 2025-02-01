@@ -23,7 +23,7 @@ export const isRange = (thing: unknown): thing is Range => {
 
   if (
     typeof thing === "object" &&
-    Object.keysOf(thing).length === 2 &&
+    Object.keys(thing).length === 2 &&
     "min" in thing &&
     isNumber(thing.min) &&
     "max" in thing &&
