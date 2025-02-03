@@ -4,18 +4,22 @@
   "author": "Daniel Montilla",
   "license": "MIT",
   "scripts": {
-    "build": "tsup",
+    "build": "pnpm build-esm && pnpm build-annotate && pnpm build-cjs",
+    "build-esm": "tsc -b tsconfig.build.json",
+    "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
+    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
     "test": "vitest"
   },
   "devDependencies": {
     "@montflow/core": "workspace:*",
-    "tsup": "^8.1.0",
-    "typescript": "^5.4.5",
-    "vite": "^5.2.10",
-    "vitest": "^1.5.2"
+    "@babel/cli": "^7.24.8",
+    "@babel/core": "^7.25.2",
+    "@babel/plugin-transform-export-namespace-from": "^7.24.7",
+    "@babel/plugin-transform-modules-commonjs": "^7.24.8",
+    "babel-plugin-annotate-pure-calls": "^0.5.0"
   },
   "peerDependencies": {
-    "@montflow/core": "*"
+    "@montflow/core": "^1.0.13"
   },
   "private": false,
   "type": "module",

@@ -1,6 +1,6 @@
 import { isArray } from "@montflow/core/array";
-import { register, unregister } from "../runtime";
-import { Snapshot, Source } from "../source";
+import { register, unregister } from "../runtime.js";
+import { Snapshot, Source } from "../source/index.js";
 
 export interface Watcher extends Disposable {
   dispose: () => void;

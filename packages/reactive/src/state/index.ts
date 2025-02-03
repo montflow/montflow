@@ -1,4 +1,4 @@
-import { trigger } from "../runtime";
+import { trigger } from "../runtime.js";
 
 /** @extends {Source<V>} */
 export type State<V> = { value: V } & (() => V);

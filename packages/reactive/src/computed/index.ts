@@ -1,7 +1,7 @@
-import { trigger } from "../runtime";
-import { Snapshot, Source } from "../source";
+import { trigger } from "../runtime.js";
+import { Snapshot, Source } from "../source/index.js";
 
-import * as Watcher from "../watcher";
+import * as Watcher from "../watcher/index.js";
 
 /** @extends {Readonly<Source<V>>} */
 export type Computed<V> = { readonly value: V } & (() => V);
