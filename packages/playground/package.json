@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@montflow/core": "workspace:^",
+    "@montflow/stlx": "workspace:^",
     "tsx": "^4.7.1"
   }
 }

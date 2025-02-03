@@ -13,7 +13,11 @@
     "reactive:test": "pnpm --filter @montflow/reactive run test",
     "reactive:build": "pnpm --filter @montflow/reactive run build",
     "reactive:dev": "pnpm --filter @montflow/reactive run dev",
-    "reactive:publish": "pnpm run reactive:build && pnpm --filter @montflow/reactive publish --access public --no-git-checks"
+    "reactive:publish": "pnpm run reactive:build && pnpm --filter @montflow/reactive publish --access public --no-git-checks",
+    "stlx:test": "pnpm --filter @montflow/stlx run test",
+    "stlx:build": "pnpm --filter @montflow/stlx run build",
+    "stlx:dev": "pnpm --filter @montflow/stlx run dev",
+    "stlx:publish": "pnpm run stlx:build && pnpm --filter @montflow/stlx publish --access public --no-git-checks"
   },
   "dependencies": {
     "effect": "^3.11.5",
