@@ -5,7 +5,6 @@
   "packageManager": "pnpm@9.0.0",
   "private": true,
   "scripts": {
-    "web:dev": "pnpm --filter @montflow/web run dev",
     "core:test": "pnpm --filter @montflow/core run test",
     "core:build": "pnpm --filter @montflow/core run build",
     "core:dev": "pnpm --filter @montflow/core run dev",
