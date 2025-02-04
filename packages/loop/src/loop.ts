@@ -1,6 +1,6 @@
-import { state as _, scoped } from "./internal";
-import { Loopable } from "./loopable";
-import type { Ticker } from "./types";
+import { state as _, scoped } from "./internal.js";
+import { Loopable } from "./loopable.js";
+import type { Ticker } from "./types.js";
 
 /**
  * Represents loop that manages multiple loopable objects

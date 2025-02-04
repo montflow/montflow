@@ -1,6 +1,6 @@
-import { state as _ } from "./internal";
-import { Loop } from "./loop";
-import type { Ticker } from "./types";
+import { state as _ } from "./internal.js";
+import { Loop } from "./loop.js";
+import type { Ticker } from "./types.js";
 
 /**
  * Represents an object that can be added to a `loop`

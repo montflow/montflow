@@ -1,6 +1,6 @@
-import { state as _ } from "./internal";
-import { Loop } from "./loop";
-import { Loopable } from "./loopable";
+import { state as _ } from "./internal.js";
+import { Loop } from "./loop.js";
+import { Loopable } from "./loopable.js";
 
 /**
  * Represents an interval that runs for a specified duration with an optional maximum iteration limit.

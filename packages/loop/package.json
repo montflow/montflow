@@ -15,33 +15,34 @@
     "url": "https://github.com/montflow/montflow/issues"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "pnpm build-esm && pnpm build-annotate && pnpm build-cjs",
+    "build-esm": "tsc -b tsconfig.build.json",
+    "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
+    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
     "test": "vitest"
   },
   "devDependencies": {
     "jsdom": "^25.0.1",
-    "tsup": "^8.1.0"
+    "@babel/cli": "^7.24.8",
+    "@babel/core": "^7.25.2",
+    "@babel/plugin-transform-export-namespace-from": "^7.24.7",
+    "@babel/plugin-transform-modules-commonjs": "^7.24.8",
+    "babel-plugin-annotate-pure-calls": "^0.5.0"
   },
   "private": false,
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "type": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
+      "types": "./build/dts/index.d.ts",
+      "import": "./build/esm/index.js",
+      "require": "./build/cjs/index.js"
     }
   },
   "files": [
-    "dist"
+    "build",
+    "src"
   ],
   "dependencies": {
-    "@montflow/core": "^1.0.8"
+    "@montflow/core": "^1.0.13"
   }
 }

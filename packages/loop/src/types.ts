@@ -1,5 +1,5 @@
-import type { Loop } from "./loop";
-import { Loopable } from "./loopable";
+import type { Loop } from "./loop.js";
+import { Loopable } from "./loopable.js";
 
 /**
  * Function called to process tick for loop

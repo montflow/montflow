@@ -1,6 +1,6 @@
-import { state as _ } from "./internal";
-import { Loop } from "./loop";
-import { Loopable } from "./loopable";
+import { state as _ } from "./internal.js";
+import { Loop } from "./loop.js";
+import { Loopable } from "./loopable.js";
 
 /**
  * Represents a timeout that executes a callback after a specified duration.
