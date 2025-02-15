@@ -1,3 +1,4 @@
+export * as Alias from "./alias/index.js";
 export * as Array from "./array/index.js";
 export * as Async from "./async/index.js";
 export * as Fault from "./fault/index.js";
