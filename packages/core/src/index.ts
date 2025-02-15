@@ -12,5 +12,4 @@ export * as Random from "./random/index.js";
 export * as Result from "./result/index.js";
 export * as String from "./string/index.js";
 
-export * from "./misc/index.js";
-export * from "./pipe/index.js";
+export * from "./common/index.js";

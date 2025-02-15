@@ -1,6 +1,6 @@
+import { Evaluable } from "../common/index.js";
 import * as Function from "../function/index.js";
 import * as Macro from "../macro/index.js";
-import { Evaluable } from "../misc/index.js";
 import * as Nothing from "../nothing/index.js";
 import * as Number from "../number/index.js";
 import * as Object from "../object/index.js";

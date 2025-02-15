@@ -1,5 +1,5 @@
+import { Dictionary, Simplify } from "../common/index.js";
 import * as Macro from "../macro/index.js";
-import { Dictionary, Simplify } from "../misc/index.js";
 
 export type Optional<T, K extends keyof T> = Simplify<Omit<T, K> & Partial<Pick<T, K>>>;
 

@@ -1,5 +1,5 @@
+import { Evaluable } from "../common/index.js";
 import * as Function from "../function/index.js";
-import { Evaluable } from "../misc/index.js";
 
 /**
  * Executes a function that takes no arguments and returns its result.
