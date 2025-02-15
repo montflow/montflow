@@ -9,6 +9,10 @@ import * as Function from "../function/index.js";
  */
 export const lambda = <T>(fn: () => T): T => fn();
 
+export const never = null as unknown as never;
+
+export const nothing = {} as unknown as void;
+
 /**
  * Throws the provided error and never returns.
  * @template E error kind
