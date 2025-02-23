@@ -71,9 +71,9 @@ export const safeClamp: {
   (value: number, range: Range): Clamp.Return<"safe">;
   (range: Range): (value: number) => Clamp.Return<"safe">;
 } = Macro.dualify(1, (value: number, range: Range): Clamp.Return<"safe"> => {
-  if (!isValidRange(range)) return Result.Err({ code: "invalid range" });
+  if (!isValidRange(range)) return Result.err({ code: "invalid range" });
   const { min, max } = resolveRange(range);
-  return Result.Ok(value < min ? min : value > max ? max : value);
+  return Result.ok(value < min ? min : value > max ? max : value);
 });
 
 export const clamp: {
