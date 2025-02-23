@@ -1,39 +1,37 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { Create, Err, isOk, Ok } from "..";
+import * as Result from "../index.js";
 
-describe("isOk [runtime]", () => {
+describe("Result.isOk [runtime]", () => {
   it("should return true when Ok is passed in", () => {
-    const ok = Ok();
-    const value = isOk(ok);
+    const ok = Result.ok();
 
-    expect(value).toBe(true);
+    expect(Result.isOk(ok)).toBe(true);
   });
 
   it("should return false when Err is passed in", () => {
-    const err = Err();
-    const value = isOk(err);
+    const err = Result.err();
 
-    expect(value).toBe(false);
+    expect(Result.isOk(err)).toBe(false);
   });
 });
 
-describe("isOk [types]", () => {
+describe("Result.isOk [types]", () => {
   it("should narrow type via control flow inference for result type", () => {
     type Value = number;
     type Error = { code: string };
 
-    const value = Create<Value, Error>("ok", 0xf);
+    const value = {} as Result.Result<Value, Error>;
 
-    if (isOk(value)) {
+    if (Result.isOk(value)) {
       type Test = typeof value;
-      type Expected = Ok<Value>;
+      type Expected = Result.Ok<Value>;
 
       expectTypeOf<Test>().toMatchTypeOf<Expected>();
     }
 
-    if (!isOk(value)) {
+    if (!Result.isOk(value)) {
       type Test = typeof value;
-      type Expected = Err<Error>;
+      type Expected = Result.Err<Error>;
 
       expectTypeOf<Test>().toMatchTypeOf<Expected>();
     }
@@ -42,14 +40,14 @@ describe("isOk [types]", () => {
   it("should narrow type via control flow inference for result unknown type", () => {
     const value: unknown = null;
 
-    if (isOk(value)) {
+    if (Result.isOk(value)) {
       type Test = typeof value;
-      type Expected = Ok<unknown>;
+      type Expected = Result.Ok<unknown>;
 
       expectTypeOf<Test>().toMatchTypeOf<Expected>();
     }
 
-    if (!isOk(value)) {
+    if (!Result.isOk(value)) {
       type Test = typeof value;
       type Expected = unknown;
 

@@ -1,15 +1,30 @@
+import { Effect, Either, Schema } from "effect";
+import { Sync } from "../common/types.js";
+
+import * as Alias from "../alias/index.js";
 import * as Function from "../function/index.js";
 import * as Macro from "../macro/index.js";
 import * as Maybe from "../maybe/index.js";
-import * as Nothing from "../nothing/index.js";
 import * as Number from "../number/index.js";
+
+export const OkSchema = Schema.Union(
+  Schema.Struct({ _tag: Schema.Literal("ok") }),
+  Schema.Struct({ _tag: Schema.Literal("ok"), value: Schema.Unknown })
+);
+
+export const ErrSchema = Schema.Union(
+  Schema.Struct({ _tag: Schema.Literal("err") }),
+  Schema.Struct({ _tag: Schema.Literal("err"), error: Schema.Unknown })
+);
+
+export const ResultSchema = Schema.Union(OkSchema, ErrSchema);
 
 /**
  * Represents the successful outcome of operation
  * @template V type of inner value
  */
-export type Ok<V> = {
-  readonly ok: true;
+export type Ok<out V> = {
+  readonly _tag: "ok";
   readonly value: V;
 };
 
@@ -17,26 +32,27 @@ export type Ok<V> = {
  * Represents the unsuccessful outcome of operation
  * @template E type of inner error
  */
-export type Err<E> = {
-  readonly ok: false;
+export type Err<out E> = {
+  readonly _tag: "err";
   readonly error: E;
 };
 
-/**
- * @internal
- */
 export const MAX_UNFOLD_DEPTH = 512;
 
 /**
  * Either `Ok<V>` or `Err<E>`
  * @template V type of some's inner value
  */
-export type Result<V = Nothing.Nothing, E = Nothing.Nothing> = Ok<V> | Err<E>;
+export type Result<V = never, E = never> = Ok<V> | Err<E>;
 
 /**
  * Generic `Result` type. Extends `any` other result
  */
 export type Any = Result<any, any>;
+
+export type Never = Result<never, never>;
+
+export type Unknown = Result<unknown, unknown>;
 
 /**
  * Extracts the inner `Ok` value type
@@ -96,216 +112,84 @@ export type Unfold<
       : Root
     : never;
 
-/**
- * Shorthand for `Promise` of a `Result`
- * @template V inner `Ok` value type. Defaults to `Nothing`
- * @template E inner `Err` error type. Defaults to `Nothing`
- * @returns {Promise<Result<V, E>>}
- */
-export type Async<V = Nothing.Nothing, E = Nothing.Nothing> = Promise<Result<V, E>>;
+export type Promise<V, E> = Alias.Promise<Result<V, E>>;
 
-/**
- * Creates empty `Ok`
- * @constructor
- * @returns {Ok<Nothing>} empty `Ok`
- */
-export function Ok(): Ok<Nothing.Nothing>;
+export function ok(): Ok<never>;
+export function ok<V = unknown>(value: V): Ok<V>;
 
-/**
- * Creates `Ok` w/ inner `value`
- * @constructor
- * @template V inner `value` type
- * @param {V} value
- * @returns {Some<V>} `Ok` with inner `value`
- */
-export function Ok<V>(value: V): Ok<V>;
-
-/**
- * @internal
- */
-export function Ok<V>(value?: V): Ok<V> | Ok<Nothing.Nothing> {
+/** @internal */
+export function ok<V>(): Ok<V> {
   return {
-    ok: true,
-    value: value !== undefined ? value : Nothing.make(),
-  } as Ok<V> | Ok<Nothing.Nothing>;
+    _tag: "ok",
+    value: arguments.length <= 0 ? Macro.never : arguments[0],
+  };
 }
 
-/**
- * Creates empty `Err`
- * @constructor
- * @returns {Err<Nothing>} empty `Err`
- */
-export function Err(): Err<Nothing.Nothing>;
+export function err(): Err<never>;
+export function err<E = unknown>(error: E): Err<E>;
 
-/**
- * Creates `Err` w/ inner `error`
- * @constructor
- * @template E inner `error` type
- * @param {E} error
- * @returns {Err<E>} `Err` with inner `error`
- */
-export function Err<E>(error: E): Err<E>;
-
-/**
- * @internal
- */
-export function Err<E>(error?: E): Err<E> | Err<Nothing.Nothing> {
+/** @internal */
+export function err<E>(): Err<E> {
   return {
-    ok: false,
-    error: error !== undefined ? error : Nothing.make(),
-  } as Err<E> | Err<Nothing.Nothing>;
+    _tag: "err",
+    error: arguments.length <= 0 ? Macro.never : arguments[0],
+  };
 }
 
-/**
- * Creates `Ok` with type of `Result<Nothing, Nothing>`
- * @constructor
- * @param {"ok"} kind
- * @returns {Result<Nothing, Nothing>} `Result` of type `Ok<Nothing>`
- */
-export function Create(kind: "ok"): Result<Nothing.Nothing, Nothing.Nothing>;
+export function of(tag: "ok"): Result<never, never>;
+export function of<V = unknown, E = unknown>(tag: "ok", value: V): Result<V, E>;
 
-/**
- * Creates `Ok` with type of `Result<V, Nothing>`
- * @constructor
- * @template V type of inner `Ok` value
- * @param {"ok"} kind
- * @param {V} value inner `Ok` value
- * @returns {Result<V, Nothing>} `Result` of type `Ok` with inner `value`
- */
-export function Create<V>(kind: "ok", value: V): Result<V, Nothing.Nothing>;
+export function of(tag: "err"): Result<never, never>;
+export function of<V = unknown, E = unknown>(tag: "err", error: E): Result<V, E>;
 
-/**
- * Creates `Ok` with type of `Result<V, E>`
- * @constructor
- * @template V type of inner `Ok` value
- * @template E type of inner `Err` error
- * @param {"ok"} kind
- * @param {V} value inner `Ok` value
- * @returns {Result<V, E>} `Result` of type `Ok` with inner `value`
- */
-export function Create<V = Nothing.Nothing, E = Nothing.Nothing>(
-  kind: "ok",
-  value: V
-): Result<V, E>;
-
-/**
- * Creates `Err` with type of `Result<Nothing, Nothing>`
- * @constructor
- * @param {"err"} kind
- * @returns {Result<Nothing, Nothing>} `Result` of type `Err<Nothing>`
- */
-export function Create(kind: "err"): Result<Nothing.Nothing, Nothing.Nothing>;
-
-/**
- * Creates `Err` with type of `Result<Nothing, E>`
- * @constructor
- * @template E type of inner `Err` error
- * @param {"err"} kind
- * @param {E} error inner `Err` error
- * @returns {Result<Nothing, E>} `Result` of type `Err` with inner `error`
- */
-export function Create<E>(kind: "err", error: E): Result<Nothing.Nothing, E>;
-
-/**
- * Creates `Err` with type of `Result<V, E>`
- * @constructor
- * @template V type of inner `Ok` value
- * @template E type of inner `Err` error
- * @param {"err"} kind
- * @param {E} error inner `Err` error
- * @returns {Result<V, E>} `Result` of type `Err` with inner `error`
- */
-export function Create<V = Nothing.Nothing, E = Nothing.Nothing>(
-  kind: "err",
-  error: E
-): Result<V, E>;
-
-/**
- * @internal
- */
-export function Create<ValueOrError, Error>(
-  kind: "ok" | "err",
-  valueOrError?: ValueOrError | Error
-):
-  | Result<Nothing.Nothing, Nothing.Nothing>
-  | Result<ValueOrError, Nothing.Nothing>
-  | Result<Nothing.Nothing, ValueOrError>
-  | Result<ValueOrError, Error> {
-  switch (true) {
-    case kind === "err" && valueOrError !== undefined:
-      // Err<E> => Result<Nothing, E> or Result<V, E>
-      return Err(valueOrError as Error);
-
-    case kind === "err" && valueOrError === undefined:
-      // Err<Nothing> => Result<Nothing, Nothing>
-      return Err();
-
-    case kind === "ok" && valueOrError !== undefined:
-      // Ok<V> => Result<V, Nothing> or Result<V, E>
-      return Ok(valueOrError as ValueOrError);
-
-    default:
-    case kind === "ok" && valueOrError === undefined:
-      // Ok<Nothing> => Result<Nothing, Nothing>
-      return Ok();
+/** @internal */
+export function of<T>(tag: "ok" | "err"): Ok<never> | Ok<T> | Err<never> | Err<T> {
+  if (tag === "ok") {
+    return arguments.length <= 1 ? ok() : ok(arguments[1]);
   }
+
+  return arguments.length <= 1 ? err() : err(arguments[1]);
 }
 
-export const make = Create;
+function try_<V>($try: Sync<V>): Result<V, never>;
+function try_<V>(options: {
+  readonly try: Sync<V>;
+  finally?: Function.Callback;
+}): Result<V, never>;
+function try_<V, E>(options: {
+  readonly try: Sync<V>;
+  readonly catch: (error: unknown) => E;
+  finally?: Function.Callback;
+}): Result<V, E>;
 
-/**
- * Converts procedure that could potentially throw into `Result`
- * @constructor
- * @template V inner `Ok` value type
- * @template E inner `Err` error type
- * @param {Procedure<V>} $try function that return `Ok` value but could potententially throw
- * @param {Procedure<V>} $catch called with unknown error if `$try` throws. Returns `Err` error
- * @returns {Result<V, E>} `Ok` if `$try` succeeds. `Err` if it throws error
- */
-export function FromTryCatch<V, E>($try: () => V, $catch: (error: unknown) => E): Result<V, E>;
+function try_<V, E>(
+  tryOrOptions:
+    | Sync<V>
+    | { readonly try: Sync<V>; finally?: Function.Callback }
+    | {
+        readonly try: Sync<V>;
+        readonly catch: (error: unknown) => E;
+        finally?: Function.Callback;
+      }
+): Result<V, E> {
+  const [$try, $catch, $finally] = Function.isCallable(tryOrOptions)
+    ? [tryOrOptions, undefined, undefined]
+    : [
+        tryOrOptions.try,
+        "catch" in tryOrOptions ? tryOrOptions.catch : undefined,
+        tryOrOptions.finally,
+      ];
 
-/**
- * Converts procedure that could potentially throw into `Result`
- * @constructor
- * @template V inner `Ok` value type
- * @param {Procedure<V>} $try function that return `Ok` value but could potententially throw
- * @returns {Result<V, unknown>} `Ok` if `$try` succeeds. `Err` if it throws error with unknown error
- */
-export function FromTryCatch<V>($try: () => V): Result<V, unknown>;
-
-/**
- * @internal
- */
-export function FromTryCatch<V, E>(
-  $try: () => V,
-  $catch?: (error: unknown) => E
-): Result<V, unknown> | Result<V, E> {
   try {
-    return Ok($try());
-  } catch (e) {
-    return $catch ? Err($catch(e)) : Err(e);
+    return ok($try());
+  } catch (error) {
+    return $catch ? err($catch(error)) : err();
+  } finally {
+    $finally?.();
   }
 }
 
-/**
- * Create `Ok` of type `Result<V, never>`
- * @template V inner `Ok` value type
- * @param value inner `Ok` value
- * @returns {Result<V, never>} result
- */
-export function OkOf<V>(value: V): Result<V, never> {
-  return Ok(value);
-}
-
-/**
- * Create `Err` of type `Result<never, E>`
- * @template E inner `Err` error type
- * @param value inner `Err` error
- * @returns {Result<never, E>} result
- */
-export function ErrOf<E>(error: E): Result<never, E> {
-  return Err(error);
-}
+export { try_ as try };
 
 /**
  * Checks if provided `Result` is `Ok`
@@ -326,16 +210,7 @@ export function isOk(thing: unknown): thing is Ok<unknown>;
  * @internal
  */
 export function isOk<V>(resultOrThing: Result<V, any> | unknown): resultOrThing is Ok<V> {
-  if (typeof resultOrThing !== "object") return false;
-  if (resultOrThing === null) return false;
-  if (Object.keys(resultOrThing).length !== 2) return false;
-  if (
-    !("ok" in resultOrThing && typeof resultOrThing.ok === "boolean") ||
-    !("value" in resultOrThing)
-  )
-    return false;
-
-  return resultOrThing.ok;
+  return Schema.is(OkSchema)(resultOrThing);
 }
 
 /**
@@ -362,20 +237,9 @@ export function isErr<E>(result: Result<any, E>): result is Err<E>;
  */
 export function isErr(thing: unknown): thing is Err<unknown>;
 
-/**
- * @internal
- */
+/** @internal */
 export function isErr<E>(resultOrThing: Result<any, E> | unknown): resultOrThing is Err<E> {
-  if (typeof resultOrThing !== "object") return false;
-  if (resultOrThing === null) return false;
-  if (Object.keys(resultOrThing).length !== 2) return false;
-  if (
-    !("ok" in resultOrThing && typeof resultOrThing.ok === "boolean") ||
-    !("error" in resultOrThing)
-  )
-    return false;
-
-  return !resultOrThing.ok;
+  return Schema.is(ErrSchema)(resultOrThing);
 }
 
 /**
@@ -392,7 +256,7 @@ export const notOk = isErr;
  * @param {unknown} thing data to be checked
  * @returns {boolean} `true` if thing is `Maybe`. Otherwise `false`
  */
-export function isResult(thing: unknown): thing is Any {
+export function isResult(thing: unknown): thing is Unknown {
   return isOk(thing) || isErr(thing);
 }
 
@@ -423,14 +287,14 @@ export const map: {
   <V, E, To>(mapper: Function.Mapper<V, To>): (self: Result<V, E>) => Result<To, E>;
   <V, E, To>(self: Result<V, E>, mapper: Function.Mapper<V, To>): Result<To, E>;
 } = Macro.dualify(1, <V, E, To>(self: Result<V, E>, mapper: Function.Mapper<V, To>) =>
-  isOk(self) ? Ok(mapper(self.value)) : self
+  isOk(self) ? ok(mapper(self.value)) : self
 );
 
 export const mapErr: {
   <V, E, To>(mapper: (error: E) => To): (self: Result<V, E>) => Result<V, To>;
   <V, E, To>(self: Result<V, E>, mapper: (error: E) => To): Result<V, To>;
 } = Macro.dualify(1, <V, E, To>(self: Result<V, E>, mapper: (error: E) => To) =>
-  isErr(self) ? Err(mapper(self.error)) : self
+  isErr(self) ? err(mapper(self.error)) : self
 );
 
 export const or: {
@@ -452,10 +316,10 @@ export const unfold: {
   for (let i = 0; i < MAX_UNFOLD_DEPTH; i++) {
     if (!isResult(inner)) break;
     if (isErr(inner)) return inner as Unfold<Result<V, E>>;
-    inner = inner.value;
+    inner = inner.value as V;
   }
 
-  return Ok(inner) as Unfold<Result<V, E>>;
+  return ok(inner) as Unfold<Result<V, E>>;
 });
 
 export const flatten: {
@@ -482,10 +346,8 @@ export const flatmap: {
 );
 
 export const check: {
-  <V, E>(
-    predicate: Function.Predicate<V>
-  ): (self: Result<V, E>) => Result<V, E | Nothing.Nothing>;
-  <V, E>(self: Result<V, E>, predicate: Function.Predicate<V>): Result<V, E | Nothing.Nothing>;
+  <V, E>(predicate: Function.Predicate<V>): (self: Result<V, E>) => Result<V, E | never>;
+  <V, E>(self: Result<V, E>, predicate: Function.Predicate<V>): Result<V, E | never>;
   <V, E, FailE>(
     predicate: Function.Predicate<V>,
     fail: FailE | Function.Nullary<FailE>
@@ -506,8 +368,8 @@ export const check: {
       ? predicate(self.value)
         ? self
         : fail
-          ? Err(Macro.evaluate(fail))
-          : Err()
+          ? err(Macro.evaluate(fail))
+          : err()
       : self
 );
 
@@ -517,3 +379,27 @@ export const toMaybe: {
 } = Macro.dualify(0, <V>(self: Result<V, any>) =>
   isOk(self) ? Maybe.Some(self.value) : Maybe.None()
 );
+
+export const toEffect = <V, E>(self: Result<V, E>): Effect.Effect<V, E> =>
+  isOk(self) ? Effect.succeed(self.value) : Effect.fail(self.error);
+
+export const toEither = <V, E>(self: Result<V, E>): Either.Either<V, E> =>
+  isOk(self) ? Either.right(self.value) : Either.left(self.error);
+
+export const expand = <A, E1, E2, R>(
+  self: Effect.Effect<Result<A, E1>, E2, R>
+): Effect.Effect<A, E1 | E2, R> =>
+  self.pipe(
+    Effect.flatMap(result =>
+      isOk(result) ? Effect.succeed(result.value) : Effect.fail(result.error)
+    )
+  );
+
+export const merge = <A, E>(self: Effect.Effect<A, E>): Effect.Effect<Result<A, E>> =>
+  self.pipe(
+    Effect.mapBoth({
+      onSuccess: v => ok(v),
+      onFailure: e => err(e),
+    }),
+    Effect.merge
+  );

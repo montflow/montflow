@@ -1,22 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { Create, or } from "..";
+import * as Result from "../index.js";
 
 describe("or [runtime]", () => {
   it("should return alternative value when input is Err w/ callback", () => {
     const alt: boolean = true;
     const f = () => alt;
-    const result = Create<typeof alt, string>("err", "my error");
+    const result = Result.of<typeof alt, string>("err", "my error");
 
-    const value = or(f)(result);
+    const value = Result.or(f)(result);
 
     expect(value).toBe(alt);
   });
 
   it("should return alternative value when input is Err w/ value", () => {
     const alt: boolean = true;
-    const result = Create<typeof alt, string>("err", "my error");
+    const result = Result.of<typeof alt, string>("err", "my error");
 
-    const value = or(alt)(result);
+    const value = Result.or(alt)(result);
 
     expect(value).toBe(alt);
   });
@@ -24,9 +24,9 @@ describe("or [runtime]", () => {
   it("should return inner Ok value when input is Ok", () => {
     const alt: string = "true";
     const inner: string = "false";
-    const result = Create<typeof alt, string>("ok", inner);
+    const result = Result.of<typeof alt, string>("ok", inner);
 
-    const value = or(alt)(result);
+    const value = Result.or(alt)(result);
 
     expect(value).toBe(inner);
   });
@@ -40,9 +40,9 @@ describe("or [runtime]", () => {
       return alt;
     };
 
-    const result = Create<typeof alt, typeof error>("err", error);
+    const result = Result.of<typeof alt, typeof error>("err", error);
 
-    const value = or(f)(result);
+    const value = Result.or(f)(result);
 
     expect(value).toBe(alt);
   });

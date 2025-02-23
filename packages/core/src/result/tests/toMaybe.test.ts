@@ -1,75 +1,75 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { Maybe, None, Some } from "../../maybe";
-import { Err, Ok, ValueOf, toMaybe } from "../../result";
+import * as Maybe from "../../maybe/index.js";
+import * as Result from "../index.js";
 
 describe("toMaybe [runtime]", () => {
   it("should return Some when input is Ok", () => {
     const inner: string = "value";
-    const result = Ok(inner);
+    const result = Result.ok(inner);
 
-    const maybe = toMaybe()(result);
+    const maybe = Result.toMaybe()(result);
 
-    expect(maybe).toEqual(Some(inner));
+    expect(maybe).toEqual(Maybe.Some(inner));
   });
 
   it("should return None when input is Err", () => {
     const error: string = "error";
-    const result = Err<string>(error);
+    const result = Result.err<string>(error);
 
-    const maybe = toMaybe()(result);
+    const maybe = Result.toMaybe()(result);
 
-    expect(maybe).toEqual(None());
+    expect(maybe).toEqual(Maybe.None());
   });
 
   it("should preserve the Ok value type in Some", () => {
     const inner: number = 42;
-    const result = Ok(inner);
+    const result = Result.ok(inner);
 
-    const maybe = toMaybe()(result);
+    const maybe = Result.toMaybe()(result);
 
-    expect(maybe).toEqual(Some(inner));
+    expect(maybe).toEqual(Maybe.Some(inner));
   });
 
   it("should return None regardless of Err value type", () => {
     const error: number = 404;
-    const result = Err<number>(error);
+    const result = Result.err<number>(error);
 
-    const maybe = toMaybe()(result);
+    const maybe = Result.toMaybe()(result);
 
-    expect(maybe).toEqual(None());
+    expect(maybe).toEqual(Maybe.None());
   });
 });
 
 describe("toMaybe [types]", () => {
   it("should correctly infer the Maybe type for Ok", () => {
-    const result = Ok("value");
+    const result = Result.ok("value");
 
-    const maybe = toMaybe<ValueOf<typeof result>>()(result);
+    const maybe = Result.toMaybe<Result.ValueOf<typeof result>>()(result);
 
     type Test = typeof maybe;
-    type Expected = Maybe<string>;
+    type Expected = Maybe.Maybe<string>;
 
     expectTypeOf<Test>().toMatchTypeOf<Expected>();
   });
 
   it("should correctly infer the Maybe type for Err", () => {
-    const result = Err<number>(404);
+    const result = Result.ok<number>(404);
 
-    const maybe = toMaybe<ValueOf<typeof result>>()(result);
+    const maybe = Result.toMaybe<Result.ValueOf<typeof result>>()(result);
 
     type Test = typeof maybe;
-    type Expected = Maybe<string>;
+    type Expected = Maybe.Maybe<number>;
 
     expectTypeOf<Test>().toMatchTypeOf<Expected>();
   });
 
   it("should correctly handle complex Ok types", () => {
-    const result = Ok({ foo: "bar", baz: 42 });
+    const result = Result.ok({ foo: "bar", baz: 42 });
 
-    const maybe = toMaybe<ValueOf<typeof result>>()(result);
+    const maybe = Result.toMaybe<Result.ValueOf<typeof result>>()(result);
 
     type Test = typeof maybe;
-    type Expected = Maybe<{ foo: string; baz: number }>;
+    type Expected = Maybe.Maybe<{ foo: string; baz: number }>;
 
     expectTypeOf<Test>().toMatchTypeOf<Expected>();
   });
