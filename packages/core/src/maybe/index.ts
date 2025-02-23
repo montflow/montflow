@@ -446,8 +446,8 @@ export const toResult: {
   <V>(): (self: Maybe<V>) => Result.Result<V, Nothing.Nothing>;
   <V>(self: Maybe<V>): Result.Result<V, Nothing.Nothing>;
 } = Macro.dualify(1, <V, E>(self: Maybe<V>, error?: E) => {
-  if (isNone(self)) return error ? Result.Err(error) : Result.Err();
-  return Result.Ok(self.value);
+  if (isNone(self)) return error ? Result.err(error) : Result.err();
+  return Result.ok(self.value);
 });
 
 export const parseJson: {
