@@ -11,7 +11,13 @@ export const lambda = <T>(fn: () => T): T => fn();
 
 export const never = null as unknown as never;
 
-export const nothing = {} as unknown as void;
+export const unknown = null as unknown;
+
+export { nothing } from "../nothing/index.js";
+
+const _void = { _tag: "void" } as unknown as void;
+
+export { _void as void };
 
 /**
  * Throws the provided error and never returns.
