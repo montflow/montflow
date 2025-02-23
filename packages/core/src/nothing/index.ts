@@ -1,34 +1,15 @@
-/**
- * Explicit empty type
- */
-export type Nothing = {
-  readonly nothing: true;
-};
+import { Schema } from "effect";
 
-/**
- * @internal
- */
-let _nothing: undefined | Nothing;
+export class Nothing {
+  readonly _tag = "nothing" as const;
+}
 
-/**
- * @constructor
- * @returns {Nothing} nothing instance
- */
-export const Create = (): Nothing =>
-  _nothing !== undefined ? _nothing : (_nothing = { nothing: true });
+export const NothingSchema = Schema.Struct({ _tag: Schema.Literal("nothing") });
 
-export const make = Create;
+export const nothing = new Nothing();
 
-/**
- * Checks if thing is instance of `Nothing`
- * @param {unknown} thing value to be checked
- * @returns {boolean} `true` thins is `Nothing`. Otherwise `false`
- */
+export const make = (): Nothing => nothing;
+
 export function isNothing(thing: unknown): thing is Nothing {
-  if (typeof thing !== "object") return false;
-  if (thing === null) return false;
-  if (Object.keys(thing).length !== 1) return false;
-  if (!("nothing" in thing && typeof thing.nothing === "boolean")) return false;
-
-  return thing.nothing;
+  return Schema.is(NothingSchema)(thing);
 }
