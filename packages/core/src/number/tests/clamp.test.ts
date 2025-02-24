@@ -50,34 +50,34 @@ describe("clamp [runtime]", () => {
     expect(() => clamp(7, invalidRange)).toThrow(Error);
   });
 
-  it("should return clamped value wrapped in Result.Ok in safe mode for value below tuple range", () => {
+  it("should return clamped value wrapped in Result.ok in safe mode for value below tuple range", () => {
     const range: Number.Range = [10, 20];
     const result = clamp(5, range, { mode: "safe" });
-    expect(result).toEqual(Result.Ok(10));
+    expect(result).toEqual(Result.ok(10));
   });
 
-  it("should return clamped value wrapped in Result.Ok in safe mode for value within tuple range", () => {
+  it("should return clamped value wrapped in Result.ok in safe mode for value within tuple range", () => {
     const range: Number.Range = [10, 20];
     const result = clamp(15, range, { mode: "safe" });
-    expect(result).toEqual(Result.Ok(15));
+    expect(result).toEqual(Result.ok(15));
   });
 
-  it("should return clamped value wrapped in Result.Ok in safe mode for value above tuple range", () => {
+  it("should return clamped value wrapped in Result.ok in safe mode for value above tuple range", () => {
     const range: Number.Range = [10, 20];
     const result = clamp(25, range, { mode: "safe" });
-    expect(result).toEqual(Result.Ok(20));
+    expect(result).toEqual(Result.ok(20));
   });
 
   it("should return Result.Err in safe mode for invalid tuple range", () => {
     const invalidRange: Number.Range = [20, 10];
     const result = clamp(15, invalidRange, { mode: "safe" });
-    expect(result).toEqual(Result.Err({ code: "invalid range" }));
+    expect(result).toEqual(Result.err({ code: "invalid range" }));
   });
 
   it("should return Result.Err in safe mode for invalid object range", () => {
     const invalidRange: Number.Range = { min: 10, max: 5 };
     const result = clamp(7, invalidRange, { mode: "safe" });
-    expect(result).toEqual(Result.Err({ code: "invalid range" }));
+    expect(result).toEqual(Result.err({ code: "invalid range" }));
   });
 
   it("should work with curried version in unsafe mode for value below range", () => {
@@ -91,13 +91,13 @@ describe("clamp [runtime]", () => {
     const range: Number.Range = [10, 20];
     const clamped = clamp(range, { mode: "safe" });
     const result = clamped(25);
-    expect(result).toEqual(Result.Ok(20));
+    expect(result).toEqual(Result.ok(20));
   });
 
   it("should work with curried version in safe mode for invalid range", () => {
     const invalidRange: Number.Range = [20, 10];
     const clamped = clamp(invalidRange, { mode: "safe" });
     const result = clamped(15);
-    expect(result).toEqual(Result.Err({ code: "invalid range" }));
+    expect(result).toEqual(Result.err({ code: "invalid range" }));
   });
 });

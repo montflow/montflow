@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { Some } from "..";
-import { Create } from "../../nothing";
+import * as Nothing from "../../nothing/index.js";
 
 describe("Some [runtime]", () => {
   it("should have true `some` property", () => {
@@ -12,7 +12,7 @@ describe("Some [runtime]", () => {
   it("should return an empty some when no argument is provided", () => {
     const value = Some();
 
-    expect(value).toHaveProperty("value", Create());
+    expect(value).toHaveProperty("value", Nothing.make());
   });
 
   it("should return a Some with inner value when argument is provided", () => {
@@ -28,7 +28,7 @@ describe("Some [types]", () => {
     const value = Some();
     type Test = typeof value;
 
-    expectTypeOf<Test>().toMatchTypeOf<Some<Nothing>>();
+    expectTypeOf<Test>().toMatchTypeOf<Some<Nothing.Nothing>>();
   });
 
   it("should be Some<Inner> when argument is provided", () => {

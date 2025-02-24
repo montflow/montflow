@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { is, isNone, isSome, Maybe, None, Some } from "..";
+import { pipe } from "../../common/pipe";
 import { isNumber } from "../../number";
-import { pipe } from "../../pipe";
 
 describe("is [runtime]", () => {
   it("should return original Maybe when Some and guard succeeds", () => {
