@@ -1,5 +1,4 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import * as Macro from "../../macro/index.js";
 import * as Result from "../index.js";
 
 describe("Result.Ok [runtime]", () => {
@@ -9,10 +8,10 @@ describe("Result.Ok [runtime]", () => {
     expect(value._tag).toBe("ok");
   });
 
-  it("should return an empty Ok when no argument is provided", () => {
+  it("should return an empty Ok without a value property when called without an argument", () => {
     const value = Result.ok();
 
-    expect(value).toHaveProperty("value", Macro.never);
+    expect(value).not.toHaveProperty("value");
   });
 
   it("should return a Ok with inner value when argument is provided", () => {

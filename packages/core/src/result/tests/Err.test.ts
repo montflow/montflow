@@ -1,5 +1,4 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import * as Macro from "../../macro/index.js";
 import * as Result from "../index.js";
 
 describe("Result.err [runtime]", () => {
@@ -13,19 +12,14 @@ describe("Result.err [runtime]", () => {
     expect(err._tag).toBe("err");
   });
 
-  it("should have error property when no argument is provided", () => {
+  it("should not have error property when no argument is provided", () => {
     const err = Result.err();
-    expect(err).toHaveProperty("error");
+    expect(err).not.toHaveProperty("error");
   });
 
   it("should have error property when argument is provided", () => {
     const err = Result.err("foo");
     expect(err).toHaveProperty("error");
-  });
-
-  it("should have error property with `never` when no argument provided", () => {
-    const err = Result.err();
-    expect(err).toHaveProperty("error", Macro.never);
   });
 
   it("should have error property with `inner` when argument is provided", () => {

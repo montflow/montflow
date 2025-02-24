@@ -118,32 +118,36 @@ export function ok(): Ok<never>;
 export function ok<V = unknown>(value: V): Ok<V>;
 
 /** @internal */
-export function ok<V>(): Ok<V> {
-  return {
-    _tag: "ok",
-    value: arguments.length <= 0 ? Macro.never : arguments[0],
-  };
+export function ok() {
+  return arguments.length <= 0
+    ? { _tag: "ok" }
+    : {
+        _tag: "ok",
+        value: arguments[0],
+      };
 }
 
 export function err(): Err<never>;
 export function err<E = unknown>(error: E): Err<E>;
 
 /** @internal */
-export function err<E>(): Err<E> {
-  return {
-    _tag: "err",
-    error: arguments.length <= 0 ? Macro.never : arguments[0],
-  };
+export function err() {
+  return arguments.length <= 0
+    ? { _tag: "err" }
+    : {
+        _tag: "err",
+        error: arguments[0],
+      };
 }
 
-export function of(tag: "ok"): Result<never, never>;
-export function of<V = unknown, E = unknown>(tag: "ok", value: V): Result<V, E>;
+export function make(tag: "ok"): Result<never, never>;
+export function make<V = unknown, E = unknown>(tag: "ok", value: V): Result<V, E>;
 
-export function of(tag: "err"): Result<never, never>;
-export function of<V = unknown, E = unknown>(tag: "err", error: E): Result<V, E>;
+export function make(tag: "err"): Result<never, never>;
+export function make<V = unknown, E = unknown>(tag: "err", error: E): Result<V, E>;
 
 /** @internal */
-export function of<T>(tag: "ok" | "err"): Ok<never> | Ok<T> | Err<never> | Err<T> {
+export function make<T>(tag: "ok" | "err"): Ok<never> | Ok<T> | Err<never> | Err<T> {
   if (tag === "ok") {
     return arguments.length <= 1 ? ok() : ok(arguments[1]);
   }
