@@ -6,6 +6,7 @@ const config = {
   bracketSpacing: true,
   bracketSameLine: false,
   arrowParens: "avoid",
+  experimentalTernaries: true,
 
   printWidth: 96,
   plugins: [
