@@ -18,3 +18,10 @@ export type PropertyKey = keyof any;
  * @see PropertyKey
  */
 export type Dictionary<K extends PropertyKey = PropertyKey, V = any> = { [P in K]?: V };
+
+export type Table<K extends PropertyKey = PropertyKey, V = any> = {
+  [P in K]: V;
+};
+
+export type Constructor = new (...args: any[]) => any;
+export type ConstructorOf<Of = {}> = new (...args: any[]) => Of;
