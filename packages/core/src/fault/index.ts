@@ -1,5 +1,6 @@
 import { Schema as S } from "effect";
 import { Table } from "../common/types.js";
+import * as Object from "../object/index.js";
 
 export type Tag = `${string}Fault`;
 
@@ -12,7 +13,7 @@ export type Base<TTag extends Tag> = {
 };
 
 export const BaseSchema = S.Struct({
-  _id: S.Literal("fault"),
+  _id: S.Literal(Id),
   _tag: S.String,
 });
 
@@ -24,15 +25,20 @@ export const Base = <TTag extends Tag>(tag: TTag) =>
 
 export type Extended<TTag extends Tag, TContext extends Table = {}> = Base<TTag> & TContext;
 
-export const ExtendedSchema = S.extend(BaseSchema, S.Record({ key: S.Any, value: S.Any }));
+export const ExtendedSchema = S.extend(
+  BaseSchema,
+  S.Record({ key: S.String, value: S.Any })
+).pipe(S.filter(obj => Object.keys(obj).length > 2));
 
 export const Extended = <const TTag extends Tag>(
   tag: TTag
-): new <TContext extends Table = {}>(context: TContext) => Extended<TTag, TContext> => {
+): new <TContext extends Table = never>(
+  context: TContext
+) => Object.IsEmpty<TContext> extends true ? Extended<TTag, TContext> : never => {
   return class _<TContext extends Table> extends Base(tag) {
     constructor(context: TContext) {
       super();
-      Object.assign(this, context);
+      Object.Constructor.assign(this, context);
     }
   } as any;
 };
@@ -56,11 +62,11 @@ export type ContextOf<F extends Any> =
 
 export const make: {
   <const TTag extends Tag>(tag: TTag): Fault<TTag>;
-  <const TTag extends Tag, const TContext extends Table>(
+  <const TTag extends Tag, TContext extends Table>(
     tag: TTag,
     context: TContext
   ): Fault<TTag, TContext>;
-} = function <const TTag extends Tag, const TContext extends Table>():
+} = function <const TTag extends Tag, TContext extends Table>():
   | Fault<TTag>
   | Fault<TTag, TContext> {
   if (arguments.length === 1) {
@@ -82,9 +88,8 @@ export const make: {
 
 export const isFault = (thing: unknown): thing is Fault<Tag> => S.is(Schema)(thing);
 
-export const isBaseFault = (thing: unknown): thing is Base<Tag> => S.is(BaseSchema)(thing);
+export const isBaseFault = (thing: unknown): thing is Base<Tag> =>
+  S.is(BaseSchema, { onExcessProperty: "error" })(thing);
 
 export const isExtendedFault = (thing: unknown): thing is Extended<Tag, Table> =>
   S.is(ExtendedSchema)(thing);
-
-export class Internal extends Extended("InteralFault")<{ reason?: unknown }> {}
