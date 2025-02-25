@@ -1,84 +1,90 @@
-/**
- * Alternative object to represent an error or exception
- * @template Code type of the inner code
- */
-export type Fault<Code extends string> = {
-  code: Code;
+import { Schema as S } from "effect";
+import { Table } from "../common/types.js";
+
+export type Tag = `${string}Fault`;
+
+export const Id = "fault" as const;
+export type Id = typeof Id;
+
+export type Base<TTag extends Tag> = {
+  _id: "fault";
+  _tag: TTag;
 };
 
-export namespace Fault {
-  /**
-   * Extension of `Fault` with annotatated reason
-   * @extends Fault
-   * @template Code type of the inner code
-   * @template Reason type of the reason for the fault
-   */
-  export type WithReason<Code extends string, Reason> = Fault<Code> & {
-    reason: Reason;
+export const BaseSchema = S.Struct({
+  _id: S.Literal("fault"),
+  _tag: S.String,
+});
+
+export const Base = <TTag extends Tag>(tag: TTag) =>
+  class implements Base<TTag> {
+    _id = "fault" as const;
+    _tag = tag;
   };
-}
 
-/**
- * @alias
- */
-export type WithReason<Code extends string, Reason> = Fault.WithReason<Code, Reason>;
+export type Extended<TTag extends Tag, TContext extends Table = {}> = Base<TTag> & TContext;
 
-/**
- * Generic any `Fault`. Either a regular fault or with reason.
- */
-export type Any = Fault<any> | Fault.WithReason<any, any>;
+export const ExtendedSchema = S.extend(BaseSchema, S.Record({ key: S.Any, value: S.Any }));
 
-/**
- * Utility type to extract code type of `Fault`
- * @template F fault type to extract the code from
- */
-export type CodeOf<F extends Any> = F extends Fault<infer Code> ? Code : never;
+export const Extended = <const TTag extends Tag>(
+  tag: TTag
+): new <TContext extends Table = {}>(context: TContext) => Extended<TTag, TContext> => {
+  return class _<TContext extends Table> extends Base(tag) {
+    constructor(context: TContext) {
+      super();
+      Object.assign(this, context);
+    }
+  } as any;
+};
 
-/**
- * Utility type to extract reason type of `Fault`
- * @template F fault type to extract the reason from
- */
-export type ReasonOf<F extends Any> =
-  F extends Fault.WithReason<any, infer Reason> ? Reason : never;
+export type Fault<TTag extends Tag, TContext extends Table = {}> =
+  | Base<TTag>
+  | Extended<TTag, TContext>;
 
-/**
- * Generates a union of provided faults
- * @template Faults array of fault types
- */
-export type Of<Faults extends Array<Any>> = {
-  [Index in keyof Faults]: Faults[Index] extends Fault.WithReason<any, any>
-    ? {
-        code: CodeOf<Faults[Index]>;
-        reason: ReasonOf<Faults[Index]>;
-      }
-    : Faults[Index] extends Fault<any>
-      ? {
-          code: CodeOf<Faults[Index]>;
-        }
-      : never;
-}[number];
+export const Schema = S.Union(BaseSchema, ExtendedSchema);
 
-export function Create<F extends Any>(fault: F): F {
-  return fault;
-}
+export type Any = Fault<Tag> | Fault<Tag, Record<any, any>>;
 
-export const make = Create;
+export type TagOf<F extends Any> = F extends Fault<infer Tag> ? Tag : never;
 
-/**
- * Type guard to check if an object is of type Fault
- * @param {unknown} self the object to check
- * @returns boolean indicating if the object is of type Fault
- */
-export const isFault = (self: unknown): self is Fault<string> =>
-  typeof self === "object" &&
-  self !== null &&
-  "code" in self &&
-  typeof (self as any).code === "string";
+export type ContextOf<F extends Any> =
+  F extends Fault<any, infer Context> ?
+    Context extends {} ?
+      never
+    : Context
+  : never;
 
-/**
- * Type guard to check if an object is of type Fault.WithReason
- * @param x the object to check
- * @returns boolean indicating if the object is of type Fault.WithReason
- */
-export const isFaultWithReason = (self: unknown): self is Fault.WithReason<string, unknown> =>
-  isFault(self) && "reason" in self;
+export const make: {
+  <const TTag extends Tag>(tag: TTag): Fault<TTag>;
+  <const TTag extends Tag, const TContext extends Table>(
+    tag: TTag,
+    context: TContext
+  ): Fault<TTag, TContext>;
+} = function <const TTag extends Tag, const TContext extends Table>():
+  | Fault<TTag>
+  | Fault<TTag, TContext> {
+  if (arguments.length === 1) {
+    const [_tag] = arguments;
+    return {
+      _id: "fault",
+      _tag,
+    };
+  }
+
+  const [_tag, context] = arguments;
+
+  return {
+    _id: "fault",
+    _tag,
+    ...context,
+  };
+};
+
+export const isFault = (thing: unknown): thing is Fault<Tag> => S.is(Schema)(thing);
+
+export const isBaseFault = (thing: unknown): thing is Base<Tag> => S.is(BaseSchema)(thing);
+
+export const isExtendedFault = (thing: unknown): thing is Extended<Tag, Table> =>
+  S.is(ExtendedSchema)(thing);
+
+export class Internal extends Extended("InteralFault")<{ reason?: unknown }> {}
