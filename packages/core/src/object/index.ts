@@ -1,6 +1,8 @@
 import { Dictionary, Simplify } from "../common/index.js";
 import * as Macro from "../macro/index.js";
 
+export const Constructor = Object;
+
 export type Optional<T, K extends keyof T> = Simplify<Omit<T, K> & Partial<Pick<T, K>>>;
 
 /**
@@ -15,6 +17,8 @@ export type Value<Input extends Dictionary, K extends keyof Input> = Input[K];
  * @template {Dictionary} Input
  */
 export type Keys<Input extends Dictionary> = Input extends Dictionary<infer K, any> ? K : never;
+
+export type IsEmpty<T> = keyof T extends never ? false : true;
 
 /**
  * Extracts the value type from a dictionary.
