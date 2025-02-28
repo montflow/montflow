@@ -1,48 +1,51 @@
 import { describe, expect, it } from "vitest";
-import { Create, isNone, isSome, MAX_UNFOLD_DEPTH, Maybe, None, Some, unfold } from "..";
+import * as Maybe from "../index.js";
 
 describe("unfold [runtime]", () => {
   it("should return the original Some when provided with Some of depth 1", () => {
     const inner = 0xfafa;
-    const some = Some(inner);
+    const some = Maybe.some(inner);
 
-    const value = unfold()(some);
+    const value = Maybe.unfold()(some);
 
-    expect(isSome(value)).toBe(true);
+    expect(Maybe.isSome(value)).toBe(true);
     expect(value).toHaveProperty("value", inner);
   });
 
   it("should return the unwraped maybe when provided with Some of depth n <= MAX_UNFOLD_DEPTH", () => {
     const inner = "inner";
     const run = (n: number) => {
-      let some: Maybe<any> = Some(inner);
+      let some: Maybe.Maybe<any> = Maybe.some(inner);
 
       for (let i = 0; i < n; i++) {
-        some = Some(some);
+        some = Maybe.some(some);
       }
 
-      const value = unfold()(some);
+      const value = Maybe.unfold()(some);
 
-      expect(isSome(value)).toBe(true);
+      expect(Maybe.isSome(value)).toBe(true);
       expect(value).toHaveProperty("value", inner);
     };
 
-    for (let i = 1; i <= MAX_UNFOLD_DEPTH; i++) run(i);
+    for (let i = 1; i <= Maybe.MAX_UNFOLD_DEPTH; i++) run(i);
   });
 
   it("should return the original None when provided with None", () => {
-    const none = None();
+    const none = Maybe.none();
 
-    const value = unfold()(none);
+    const value = Maybe.unfold()(none);
 
-    expect(isNone(value)).toBe(true);
+    expect(Maybe.isNone(value)).toBe(true);
   });
 
   it("should return None on nested maybe with inner None", () => {
-    const maybe = Create(Create(Create(Create(None()))));
+    const maybe = Maybe.make(
+      "some",
+      Maybe.make("some", Maybe.make("some", Maybe.make("some", Maybe.make("none"))))
+    );
 
-    const value = unfold()(maybe);
+    const value = Maybe.unfold()(maybe);
 
-    expect(isNone(value)).toBe(true);
+    expect(Maybe.isNone(value)).toBe(true);
   });
 });

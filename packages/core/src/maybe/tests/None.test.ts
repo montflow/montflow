@@ -1,26 +1,26 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { None } from "..";
+import * as Maybe from "../index.js";
 
-describe("None [runtime]", () => {
-  it("should have false `some` property", () => {
-    const value = None();
+describe("Maybe.none [runtime]", () => {
+  it(`should have _tag property with value "none"`, () => {
+    const none = Maybe.none();
 
-    expect(value.some).toBe(false);
+    expect(none).toHaveProperty("_tag", "none");
   });
 
   it("should be identical to other None instances", () => {
-    const a = None();
-    const b = None();
+    const a = Maybe.none();
+    const b = Maybe.none();
 
     expect(a).toBe(b);
   });
 });
 
-describe("None [types]", () => {
+describe("Maybe.none [types]", () => {
   it("should be None always", () => {
-    const value = None();
+    const value = Maybe.none();
     type Test = typeof value;
 
-    expectTypeOf<Test>().toMatchTypeOf<None>();
+    expectTypeOf<Test>().toMatchTypeOf<Maybe.None>();
   });
 });

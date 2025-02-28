@@ -1,38 +1,38 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { isMaybe, Maybe, None, Some } from "..";
+import * as Maybe from "../index.js";
 
-describe("isMaybe [runtime]", () => {
-  it("should return true when Some value is passed in", () => {
-    const some = Some();
-    const value = isMaybe(some);
+describe("Maybe.isMaybe [runtime]", () => {
+  it("should return true when Maybe.some value is passed in", () => {
+    const some = Maybe.some();
+    const value = Maybe.isMaybe(some);
 
     expect(value).toBe(true);
   });
 
-  it("should return true when None value is passed in", () => {
-    const none = None();
-    const value = isMaybe(none);
+  it("should return true when Maybe.none value is passed in", () => {
+    const none = Maybe.none();
+    const value = Maybe.isMaybe(none);
 
     expect(value).toBe(true);
   });
 
   it("should return false for an arbitrary object", () => {
     const maybe = { prop1: "hi", prop2: 10, prop3: true };
-    const value = isMaybe(maybe);
+    const value = Maybe.isMaybe(maybe);
 
     expect(value).toBe(false);
   });
 
   it("should return false for null", () => {
     const maybe = null;
-    const value = isMaybe(maybe);
+    const value = Maybe.isMaybe(maybe);
 
     expect(value).toBe(false);
   });
 
   it("should return false for undefined", () => {
     const maybe = undefined;
-    const value = isMaybe(maybe);
+    const value = Maybe.isMaybe(maybe);
 
     expect(value).toBe(false);
   });
@@ -42,11 +42,11 @@ describe("isMaybe [types]", () => {
   it("should narrow type via control flow inference", () => {
     const value: any = null;
 
-    if (isMaybe(value)) {
-      expectTypeOf<typeof value>().toMatchTypeOf<Maybe<any>>();
+    if (Maybe.isMaybe(value)) {
+      expectTypeOf<typeof value>().toMatchTypeOf<Maybe.Maybe<any>>();
     }
 
-    if (!isMaybe(value)) {
+    if (!Maybe.isMaybe(value)) {
       expectTypeOf<typeof value>().toMatchTypeOf<any>();
     }
   });

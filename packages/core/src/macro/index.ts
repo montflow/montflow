@@ -29,6 +29,10 @@ export const panic = <const E>(error: E): never => {
   throw error;
 };
 
+export const panicWith = <const T extends string>(msg: T): never => {
+  throw new Error(msg);
+};
+
 /**
  * Casts an unknown value to the specified type without runtime checks.
  * @template To target type to cast to

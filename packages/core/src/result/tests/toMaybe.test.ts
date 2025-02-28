@@ -9,7 +9,7 @@ describe("toMaybe [runtime]", () => {
 
     const maybe = Result.toMaybe()(result);
 
-    expect(maybe).toEqual(Maybe.Some(inner));
+    expect(maybe).toEqual(Maybe.some(inner));
   });
 
   it("should return None when input is Err", () => {
@@ -18,7 +18,7 @@ describe("toMaybe [runtime]", () => {
 
     const maybe = Result.toMaybe()(result);
 
-    expect(maybe).toEqual(Maybe.None());
+    expect(maybe).toEqual(Maybe.none());
   });
 
   it("should preserve the Ok value type in Some", () => {
@@ -27,7 +27,7 @@ describe("toMaybe [runtime]", () => {
 
     const maybe = Result.toMaybe()(result);
 
-    expect(maybe).toEqual(Maybe.Some(inner));
+    expect(maybe).toEqual(Maybe.some(inner));
   });
 
   it("should return None regardless of Err value type", () => {
@@ -36,7 +36,7 @@ describe("toMaybe [runtime]", () => {
 
     const maybe = Result.toMaybe()(result);
 
-    expect(maybe).toEqual(Maybe.None());
+    expect(maybe).toEqual(Maybe.none());
   });
 });
 

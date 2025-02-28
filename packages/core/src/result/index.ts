@@ -73,9 +73,10 @@ export type ErrorOf<TResult extends Any> = TResult extends Err<infer E> ? E : ne
  * @template Root input `Result` type to flatten
  * @returns `Result` flattened once. Root and nested `Err`s are combined (union) for resulting `Err` type
  */
-export type Flatten<Root extends Any> = [Root] extends [Result<infer RootOk, infer RootErr>]
-  ? [RootOk] extends [Result<infer NestedOk, infer NestedErr>]
-    ? Result<NestedOk, RootErr | NestedErr>
+export type Flatten<Root extends Any> =
+  [Root] extends [Result<infer RootOk, infer RootErr>] ?
+    [RootOk] extends [Result<infer NestedOk, infer NestedErr>] ?
+      Result<NestedOk, RootErr | NestedErr>
     : Root
   : never;
 
@@ -86,11 +87,10 @@ export type Flatten<Root extends Any> = [Root] extends [Result<infer RootOk, inf
  * @see {@link Result.Flatten}
  * @see {@link Result.Unfold}
  */
-export type InfiniteUnfold<Root extends Any> = [Root] extends [
-  Result<infer RootOk, infer RootErr>,
-]
-  ? [RootOk] extends [Result<infer NestedOk, infer NestedErr>]
-    ? InfiniteUnfold<Result<NestedOk, NestedErr | RootErr>>
+export type InfiniteUnfold<Root extends Any> =
+  [Root] extends [Result<infer RootOk, infer RootErr>] ?
+    [RootOk] extends [Result<infer NestedOk, infer NestedErr>] ?
+      InfiniteUnfold<Result<NestedOk, NestedErr | RootErr>>
     : Root
   : never;
 
@@ -101,16 +101,13 @@ export type InfiniteUnfold<Root extends Any> = [Root] extends [
  * @see {@link Result.InfiniteUnfold}
  * @see {@link Result.Flatten}
  */
-export type Unfold<
-  Root extends Any,
-  Limit extends number = typeof MAX_UNFOLD_DEPTH,
-> = Limit extends 0
-  ? Root
-  : [Root] extends [Result<infer RootOk, infer RootErr>]
-    ? [RootOk] extends [Result<infer NestedOk, infer NestedErr>]
-      ? Unfold<Result<NestedOk, NestedErr | RootErr>, Number.Decrement<Limit>>
-      : Root
-    : never;
+export type Unfold<Root extends Any, Limit extends number = typeof MAX_UNFOLD_DEPTH> =
+  Limit extends 0 ? Root
+  : [Root] extends [Result<infer RootOk, infer RootErr>] ?
+    [RootOk] extends [Result<infer NestedOk, infer NestedErr>] ?
+      Unfold<Result<NestedOk, NestedErr | RootErr>, Number.Decrement<Limit>>
+    : Root
+  : never;
 
 export type Promise<V, E> = Alias.Promise<Result<V, E>>;
 
@@ -119,8 +116,8 @@ export function ok<V = unknown>(value: V): Ok<V>;
 
 /** @internal */
 export function ok() {
-  return arguments.length <= 0
-    ? { _tag: "ok" }
+  return arguments.length <= 0 ?
+      { _tag: "ok" }
     : {
         _tag: "ok",
         value: arguments[0],
@@ -132,8 +129,8 @@ export function err<E = unknown>(error: E): Err<E>;
 
 /** @internal */
 export function err() {
-  return arguments.length <= 0
-    ? { _tag: "err" }
+  return arguments.length <= 0 ?
+      { _tag: "err" }
     : {
         _tag: "err",
         error: arguments[0],
@@ -176,8 +173,9 @@ function try_<V, E>(
         finally?: Function.Callback;
       }
 ): Result<V, E> {
-  const [$try, $catch, $finally] = Function.isCallable(tryOrOptions)
-    ? [tryOrOptions, undefined, undefined]
+  const [$try, $catch, $finally] =
+    Function.isCallable(tryOrOptions) ?
+      [tryOrOptions, undefined, undefined]
     : [
         tryOrOptions.try,
         "catch" in tryOrOptions ? tryOrOptions.catch : undefined,
@@ -307,7 +305,9 @@ export const or: {
   <V>(value: V): (self: Result<V, any>) => V;
   <V>(self: Result<V, any>, value: V): V;
 } = Macro.dualify(1, <V, E>(self: Result<V, E>, fnOrValue: ((error: E) => V) | V) =>
-  isOk(self) ? self.value : Function.isFunction(fnOrValue) ? fnOrValue(self.error) : fnOrValue
+  isOk(self) ? self.value
+  : Function.isFunction(fnOrValue) ? fnOrValue(self.error)
+  : fnOrValue
 );
 
 export const unfold: {
@@ -368,20 +368,18 @@ export const check: {
     predicate: Function.Predicate<V>,
     fail?: FailE | Function.Nullary<FailE>
   ) =>
-    isOk(self)
-      ? predicate(self.value)
-        ? self
-        : fail
-          ? err(Macro.evaluate(fail))
-          : err()
-      : self
+    isOk(self) ?
+      predicate(self.value) ? self
+      : fail ? err(Macro.evaluate(fail))
+      : err()
+    : self
 );
 
 export const toMaybe: {
   <V>(): (self: Result<V, any>) => Maybe.Maybe<V>;
   <V>(self: Result<V, any>): Maybe.Maybe<V>;
 } = Macro.dualify(0, <V>(self: Result<V, any>) =>
-  isOk(self) ? Maybe.Some(self.value) : Maybe.None()
+  isOk(self) ? Maybe.some(self.value) : Maybe.none()
 );
 
 export const toEffect = <V, E>(self: Result<V, E>): Effect.Effect<V, E> =>

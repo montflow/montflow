@@ -67,7 +67,7 @@ export const nextPick: {
   <T>(self: Iterable<T>, options?: NextPick.Options): Maybe.Maybe<T> => {
     const items = Array.isArray(self) ? (self as Array<T>) : Array.Constructor.from<T>(self);
 
-    if (Array.isEmpty(items)) return Maybe.None();
+    if (Array.isEmpty(items)) return Maybe.none();
 
     const { generator } = {
       generator: uniform,
@@ -75,7 +75,7 @@ export const nextPick: {
     } satisfies Required<NextPick.Options>;
 
     const index = nextInt({ generator, range: [0, items.length - 1] });
-    return Maybe.Some(items[index]);
+    return Maybe.some(items[index]);
   },
   { withTail: true, isSelf: Iterable.isIterable }
 );

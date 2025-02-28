@@ -1,42 +1,41 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { Some } from "..";
-import * as Nothing from "../../nothing/index.js";
+import * as Maybe from "../index.js";
 
-describe("Some [runtime]", () => {
-  it("should have true `some` property", () => {
-    const value = Some();
+describe("Maybe.some [runtime]", () => {
+  it(`should have _tag property with "some" value`, () => {
+    const value = Maybe.some();
 
-    expect(value.some).toBe(true);
+    expect(value).toHaveProperty("_tag", "some");
   });
 
-  it("should return an empty some when no argument is provided", () => {
-    const value = Some();
+  it("should return an empty some (no value property) when no argument is provided", () => {
+    const value = Maybe.some();
 
-    expect(value).toHaveProperty("value", Nothing.make());
+    expect(value).not.toHaveProperty("value");
   });
 
   it("should return a Some with inner value when argument is provided", () => {
     const inner = "test";
-    const value = Some(inner);
+    const value = Maybe.some(inner);
 
     expect(value).toHaveProperty("value", inner);
   });
 });
 
 describe("Some [types]", () => {
-  it("should be Some<Nothing> when no argument is provided", () => {
-    const value = Some();
+  it("should be Some<never> when no argument is provided", () => {
+    const value = Maybe.some();
     type Test = typeof value;
 
-    expectTypeOf<Test>().toMatchTypeOf<Some<Nothing.Nothing>>();
+    expectTypeOf<Test>().toMatchTypeOf<Maybe.Some<never>>();
   });
 
   it("should be Some<Inner> when argument is provided", () => {
     const inner: number = 10;
-    const value = Some(inner);
+    const value = Maybe.some(inner);
     type Inner = typeof inner;
     type Test = typeof value;
 
-    expectTypeOf<Test>().toMatchTypeOf<Some<Inner>>();
+    expectTypeOf<Test>().toMatchTypeOf<Maybe.Some<Inner>>();
   });
 });

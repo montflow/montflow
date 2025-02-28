@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { None, Some, unwrap } from "..";
+import * as Maybe from "../index.js";
 
-describe("unwrap", () => {
+describe("Maybe.unwrap", () => {
   it("should extract inner value of some when provided with Some instance", () => {
     const inner = 10;
-    const some = Some(inner);
+    const some = Maybe.some(inner);
 
-    const value = unwrap()(some);
+    const value = Maybe.unwrap()(some);
 
     expect(value).toBe(inner);
   });
 
-  it("should throw TakeError when provided with None instance", () => {
-    const none = None();
-    const callback = () => unwrap()(none);
+  it("should throw error when provided with None instance", () => {
+    const none = Maybe.none();
+    const callback = () => Maybe.unwrap()(none);
 
     expect(callback).toThrow(Error);
   });

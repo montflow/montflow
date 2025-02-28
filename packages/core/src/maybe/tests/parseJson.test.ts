@@ -1,28 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { isNone, isSome, None, parseJson, Some } from "..";
+import * as Maybe from "../index.js";
 
-describe("parseJson [runtime]", () => {
+describe("Maybe.parseJson [runtime]", () => {
   it("should return Some when input is Some with valid JSON", () => {
     const inner = '{"name":"Alice","age":30}';
-    const some = Some(inner);
-    const value = parseJson()(some);
+    const some = Maybe.some(inner);
+    const value = Maybe.parseJson()(some);
 
-    expect(isSome(value)).toBe(true);
-    if (isSome(value)) expect(value.value).toEqual({ name: "Alice", age: 30 });
+    expect(Maybe.isSome(value)).toBe(true);
+    if (Maybe.isSome(value)) expect(value.value).toEqual({ name: "Alice", age: 30 });
   });
 
   it("should return None when input is Some with invalid JSON", () => {
     const inner = '{"name":"Alice", age:30}';
-    const some = Some(inner);
-    const value = parseJson()(some);
+    const some = Maybe.some(inner);
+    const value = Maybe.parseJson()(some);
 
-    expect(isNone(value)).toBe(true);
+    expect(Maybe.isNone(value)).toBe(true);
   });
 
   it("should return None when input is None", () => {
-    const none = None();
-    const value = parseJson()(none);
+    const none = Maybe.none();
+    const value = Maybe.parseJson()(none);
 
-    expect(isNone(value)).toBe(true);
+    expect(Maybe.isNone(value)).toBe(true);
   });
 });

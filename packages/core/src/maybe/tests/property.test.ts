@@ -1,70 +1,70 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { isNone, isSome, Maybe, property, Some } from "..";
+import * as Maybe from "../index.js";
 
-describe("property [runtime]", () => {
+describe("Maybe.property [runtime]", () => {
   it("should return Some<Inner> if provided with matching key", () => {
     const key = "a";
     const obj = { [key]: 1 };
-    const maybe = Some(obj);
+    const maybe = Maybe.some(obj);
 
-    const value = property(key)(maybe);
+    const value = Maybe.property(key)(maybe);
 
-    expect(isSome(value)).toBe(true);
-    if (isSome(value)) expect(value.value).toBe(obj[key]);
+    expect(Maybe.isSome(value)).toBe(true);
+    expect(value).toHaveProperty("value", obj[key]);
   });
 
   it("should return None if provided with incorrect key", () => {
     const key = "a";
     const obj = { [key]: 1 };
-    const maybe = Some(obj);
+    const maybe = Maybe.some(obj);
 
-    const value = property("b")(maybe);
+    const value = Maybe.property("b")(maybe);
 
-    expect(isNone(value)).toBe(true);
+    expect(Maybe.isNone(value)).toBe(true);
   });
 });
 
 describe("property [types]", () => {
   it("should return Maybe<Inner> if matching correct key", () => {
     const inner = { prop1: "string", prop2: 0xf };
-    const maybe = Some(inner);
-    const value = property("prop1")(maybe);
+    const maybe = Maybe.some(inner);
+    const value = Maybe.property("prop1")(maybe);
 
     type Test = typeof value;
-    type Expected = Maybe<string>;
+    type Expected = Maybe.Maybe<string>;
 
     expectTypeOf<Test>().toMatchTypeOf<Expected>();
   });
 
   it("should return Maybe<unknown> if provided with non matching key", () => {
     const inner = { prop1: "string", prop2: 0xf };
-    const maybe = Some(inner);
-    const value = property("some other prop")(maybe);
+    const maybe = Maybe.some(inner);
+    const value = Maybe.property("some other prop")(maybe);
 
     type Test = typeof value;
-    type Expected = Maybe<unknown>;
+    type Expected = Maybe.Maybe<unknown>;
 
     expectTypeOf<Test>().toMatchTypeOf<Expected>();
   });
 
   it("should return Maybe<any> if input is generic object", () => {
     const inner: Record<PropertyKey, any> = { prop1: "string", prop2: 0xf };
-    const maybe = Some(inner);
-    const value = property("some other prop")(maybe);
+    const maybe = Maybe.some(inner);
+    const value = Maybe.property("some other prop")(maybe);
 
     type Test = typeof value;
-    type Expected = Maybe<any>;
+    type Expected = Maybe.Maybe<any>;
 
     expectTypeOf<Test>().toMatchTypeOf<Expected>();
   });
 
   it("should return Maybe<any> if input is any", () => {
     const inner: any = { prop1: "string", prop2: 0xf };
-    const maybe = Some(inner);
-    const value = property("some other prop")(maybe);
+    const maybe = Maybe.some(inner);
+    const value = Maybe.property("some other prop")(maybe);
 
     type Test = typeof value;
-    type Expected = Maybe<any>;
+    type Expected = Maybe.Maybe<any>;
 
     expectTypeOf<Test>().toMatchTypeOf<Expected>();
   });

@@ -1,39 +1,39 @@
 import { describe, expect, it } from "vitest";
-import { flatmap, isSome, Maybe, None, Some } from "..";
+import * as Maybe from "../index.js";
 
-describe("flatmap [runtime]", () => {
+describe("Maybe.flatmap [runtime]", () => {
   it("should return Some when input is Some and mapper returns Some", () => {
     const inner = 0;
-    const some = Some(inner);
-    const mapper = (x: number): Maybe<number> => Some(x);
-    const value = flatmap(mapper)(some);
+    const some = Maybe.some(inner);
+    const mapper = (x: number): Maybe.Maybe<number> => Maybe.some(x);
+    const value = Maybe.flatmap(mapper)(some);
 
-    expect(isSome(value)).toBe(true);
+    expect(Maybe.isSome(value)).toBe(true);
     expect(value).toHaveProperty("value", inner);
   });
 
   it("should return None when input is None and mapper returns None", () => {
-    const none = None();
-    const mapper = (_: number): Maybe<number> => None();
-    const value = flatmap(mapper)(none);
+    const none = Maybe.none();
+    const mapper = (_: number): Maybe.Maybe<number> => Maybe.none();
+    const value = Maybe.flatmap(mapper)(none);
 
-    expect(isSome(value)).toBe(false);
+    expect(Maybe.isSome(value)).toBe(false);
   });
 
   it("should return None when input is None and mapper returns Some", () => {
-    const none = None();
-    const mapper = (x: number): Maybe<number> => Some(x);
-    const value = flatmap(mapper)(none);
+    const none = Maybe.none();
+    const mapper = (x: number): Maybe.Maybe<number> => Maybe.some(x);
+    const value = Maybe.flatmap(mapper)(none);
 
-    expect(isSome(value)).toBe(false);
+    expect(Maybe.isSome(value)).toBe(false);
   });
 
   it("should return None when input is Some and mapper returns None", () => {
     const inner = 0;
-    const some = Some(inner);
-    const mapper = (_: number): Maybe<number> => None();
-    const value = flatmap(mapper)(some);
+    const some = Maybe.some(inner);
+    const mapper = (_: number): Maybe.Maybe<number> => Maybe.none();
+    const value = Maybe.flatmap(mapper)(some);
 
-    expect(isSome(value)).toBe(false);
+    expect(Maybe.isSome(value)).toBe(false);
   });
 });

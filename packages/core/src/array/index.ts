@@ -23,4 +23,4 @@ export const isNotEmpty = <T>(array: Array<T>): array is NotEmpty<T> => array.le
 export const isEmpty = <T>(array: T[]): array is Empty<T> => array.length === 0;
 
 export const checkNotEmpty = <T>(array: T[]): Maybe.Maybe<NotEmpty<T>> =>
-  isNotEmpty(array) ? Maybe.Some(array) : Maybe.None();
+  isNotEmpty(array) ? Maybe.some(array) : Maybe.none();
