@@ -1,103 +1,100 @@
+import { Effect, Exit } from "effect";
 import { describe, expect, it } from "vitest";
-import { clamp } from "..";
 import * as Number from "../../number";
-import * as Result from "../../result";
 
-describe("clamp [runtime]", () => {
-  it("should return clamped value in unsafe mode for value below tuple range", () => {
-    const range: Number.Range = [10, 20];
-    const result = clamp(5, range);
-    expect(result).toBe(10);
+describe("Number.clamp [runtime]", () => {
+  it("should correctly clamp value within the range", () => {
+    const value = 10;
+    const range = Number.range([5, 15]);
+    const expected = 10;
+
+    const program = Number.clamp(Effect.succeed(value), range);
+    const exit = Effect.runSyncExit(program);
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    expect(exit).toHaveProperty("value", expected);
   });
 
-  it("should return clamped value in unsafe mode for value within tuple range", () => {
-    const range: Number.Range = [10, 20];
-    const result = clamp(15, range);
-    expect(result).toBe(15);
+  it("should clamp value below the minimum to the minimum", () => {
+    const value = 3;
+    const range = Number.range([5, 15]);
+    const expected = 5;
+
+    const program = Number.clamp(Effect.succeed(value), range);
+    const exit = Effect.runSyncExit(program);
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    expect(exit).toHaveProperty("value", expected);
   });
 
-  it("should return clamped value in unsafe mode for value above tuple range", () => {
-    const range: Number.Range = [10, 20];
-    const result = clamp(25, range);
-    expect(result).toBe(20);
+  it("should clamp value above the maximum to the maximum", () => {
+    const value = 20;
+    const range = Number.range([5, 15]);
+    const expected = 15;
+
+    const program = Number.clamp(Effect.succeed(value), range);
+    const exit = Effect.runSyncExit(program);
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    expect(exit).toHaveProperty("value", expected);
   });
 
-  it("should return clamped value in unsafe mode for value below object range", () => {
-    const range: Number.Range = { min: -5, max: 5 };
-    const result = clamp(-10, range);
-    expect(result).toBe(-5);
+  it("should return an error for an invalid range", () => {
+    const value = 10;
+    const range = Number.range([15, 5]);
+
+    const program = Number.clamp(Effect.succeed(value), range);
+    const exit = Effect.runSyncExit(program);
+
+    expect(Exit.isFailure(exit)).toBe(true);
+
+    expect(exit).toHaveProperty("cause.error", new Number.InvalidRangeError());
   });
 
-  it("should return clamped value in unsafe mode for value within object range", () => {
-    const range: Number.Range = { min: -5, max: 5 };
-    const result = clamp(0, range);
-    expect(result).toBe(0);
+  it("should correctly clamp value using the curried version", () => {
+    const value = 10;
+    const range = Number.range([5, 15]);
+    const expected = 10;
+
+    const program = Effect.succeed(value).pipe(Number.clamp(range));
+    const exit = Effect.runSyncExit(program);
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    expect(exit).toHaveProperty("value", expected);
   });
 
-  it("should return clamped value in unsafe mode for value above object range", () => {
-    const range: Number.Range = { min: -5, max: 5 };
-    const result = clamp(10, range);
-    expect(result).toBe(5);
+  it("should clamp value below the minimum using the curried version", () => {
+    const value = 3;
+    const range = Number.range([5, 15]);
+    const expected = 5;
+
+    const program = Effect.succeed(value).pipe(Number.clamp(range));
+    const exit = Effect.runSyncExit(program);
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    expect(exit).toHaveProperty("value", expected);
   });
 
-  it("should throw error in unsafe mode for invalid tuple range", () => {
-    const invalidRange: Number.Range = [20, 10];
-    expect(() => clamp(15, invalidRange)).toThrow(Error);
+  it("should clamp value above the maximum using the curried version", () => {
+    const value = 20;
+    const range = Number.range([5, 15]);
+    const expected = 15;
+
+    const program = Effect.succeed(value).pipe(Number.clamp(range));
+    const exit = Effect.runSyncExit(program);
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    expect(exit).toHaveProperty("value", expected);
   });
 
-  it("should throw error in unsafe mode for invalid object range", () => {
-    const invalidRange: Number.Range = { min: 10, max: 5 };
-    expect(() => clamp(7, invalidRange)).toThrow(Error);
-  });
+  it("should return an error for an invalid range using the curried version", () => {
+    const value = 10;
+    const range = Number.range([15, 5]);
 
-  it("should return clamped value wrapped in Result.ok in safe mode for value below tuple range", () => {
-    const range: Number.Range = [10, 20];
-    const result = clamp(5, range, { mode: "safe" });
-    expect(result).toEqual(Result.ok(10));
-  });
+    const program = Effect.succeed(value).pipe(Number.clamp(range));
+    const exit = Effect.runSyncExit(program);
 
-  it("should return clamped value wrapped in Result.ok in safe mode for value within tuple range", () => {
-    const range: Number.Range = [10, 20];
-    const result = clamp(15, range, { mode: "safe" });
-    expect(result).toEqual(Result.ok(15));
-  });
-
-  it("should return clamped value wrapped in Result.ok in safe mode for value above tuple range", () => {
-    const range: Number.Range = [10, 20];
-    const result = clamp(25, range, { mode: "safe" });
-    expect(result).toEqual(Result.ok(20));
-  });
-
-  it("should return Result.Err in safe mode for invalid tuple range", () => {
-    const invalidRange: Number.Range = [20, 10];
-    const result = clamp(15, invalidRange, { mode: "safe" });
-    expect(result).toEqual(Result.err({ code: "invalid range" }));
-  });
-
-  it("should return Result.Err in safe mode for invalid object range", () => {
-    const invalidRange: Number.Range = { min: 10, max: 5 };
-    const result = clamp(7, invalidRange, { mode: "safe" });
-    expect(result).toEqual(Result.err({ code: "invalid range" }));
-  });
-
-  it("should work with curried version in unsafe mode for value below range", () => {
-    const range: Number.Range = [10, 20];
-    const clamped = clamp(range);
-    const result = clamped(5);
-    expect(result).toBe(10);
-  });
-
-  it("should work with curried version in safe mode for value above range", () => {
-    const range: Number.Range = [10, 20];
-    const clamped = clamp(range, { mode: "safe" });
-    const result = clamped(25);
-    expect(result).toEqual(Result.ok(20));
-  });
-
-  it("should work with curried version in safe mode for invalid range", () => {
-    const invalidRange: Number.Range = [20, 10];
-    const clamped = clamp(invalidRange, { mode: "safe" });
-    const result = clamped(15);
-    expect(result).toEqual(Result.err({ code: "invalid range" }));
+    expect(Exit.isFailure(exit)).toBe(true);
+    expect(exit).toHaveProperty("cause.error", new Number.InvalidRangeError());
   });
 });

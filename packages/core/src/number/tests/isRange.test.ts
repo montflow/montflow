@@ -8,11 +8,11 @@ describe("isRange [runtime]", () => {
 
     expect(result).toBe(true);
   });
-  it("should return true for invalid tuple range", () => {
+  it("should return false for invalid tuple range", () => {
     const range: Range = [10, -15];
     const result = isRange(range);
 
-    expect(result).toBe(true);
+    expect(result).toBe(false);
   });
 
   it("should return true for valid object range", () => {
@@ -22,11 +22,11 @@ describe("isRange [runtime]", () => {
     expect(result).toBe(true);
   });
 
-  it("should return true for invalid object range", () => {
+  it("should return false for invalid object range", () => {
     const range: Range = { min: 4, max: 2 };
     const result = isRange(range);
 
-    expect(result).toBe(true);
+    expect(result).toBe(false);
   });
 
   it("should return true for range with same min and max", () => {

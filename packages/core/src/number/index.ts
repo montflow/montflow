@@ -1,9 +1,8 @@
+import { Data, Effect, Schema } from "effect";
 import * as Array from "../array/index.js";
-import * as Fault from "../fault/index.js";
 import * as Macro from "../macro/index.js";
-import * as Object from "../object/index.js";
-import * as Result from "../result/index.js";
 
+/** @alias NumberConstructor */
 export const Constructor = Number;
 
 export const isNumber = (thing: unknown): thing is number =>
@@ -16,89 +15,73 @@ export namespace Range {
   export type Object = { min: number; max: number };
   export type Tuple = [min: number, max: number];
 }
+
 export type Range = Range.Object | Range.Tuple;
 
-export const isRange = (thing: unknown): thing is Range => {
-  if (thing === null) return false;
+export const RangeObjectSchema = Schema.Struct({
+  min: Schema.Number.pipe(Schema.nonNaN()),
+  max: Schema.Number.pipe(Schema.nonNaN()),
+});
 
-  if (
-    typeof thing === "object" &&
-    Object.keys(thing).length === 2 &&
-    "min" in thing &&
-    isNumber(thing.min) &&
-    "max" in thing &&
-    isNumber(thing.max)
+export const RangeTupleSchema = Schema.Tuple(
+  Schema.Number.pipe(Schema.nonNaN()),
+  Schema.Number.pipe(Schema.nonNaN())
+);
+
+export class InvalidRangeError extends Data.TaggedError("InvalidRangeError") {}
+
+export const RangeSchema = Schema.Union(RangeObjectSchema, RangeTupleSchema).pipe(
+  Schema.filter(
+    range => {
+      const { min, max } = {
+        min: "0" in range ? range[0] : range.min,
+        max: "1" in range ? range[1] : range.max,
+      };
+
+      if (min > max) {
+        return { message: "invalid_range", path: ["range"] };
+      }
+
+      return true;
+    },
+    { identifier: "RangeSchema" }
   )
-    return true;
+);
 
-  if (Array.isArrayOf(thing, isNumber) && thing.length === 2) return true;
-
-  return false;
-};
-
-export const isValidRange = (thing: unknown): thing is Range => {
-  if (!isRange(thing)) return false;
-
-  const { min, max } = resolveRange(thing);
-
-  return min <= max;
-};
+export const isRange = (thing: unknown): thing is Range =>
+  Schema.is(RangeSchema)(thing, { onExcessProperty: "error" });
 
 export const resolveRange = (self: Range): Range.Object => {
   if (Array.isArray(self)) return { min: self[0], max: self[1] };
   return self;
 };
 
-export namespace Clamp {
-  export type Mode = "unsafe" | "safe";
-  export type Options<TMode extends Mode = Mode> = { mode?: TMode };
-  export type Fault = Fault.Fault<"invalid range">;
-  export type Return<TMode extends Mode = Mode> = TMode extends "safe"
-    ? Result.Result<number, Fault>
-    : number;
-}
-
-export const unsafeClamp: {
-  (value: number, range: Range): Clamp.Return<"unsafe">;
-  (range: Range): (value: number) => Clamp.Return<"unsafe">;
-} = Macro.dualify(1, (value: number, range: Range): Clamp.Return<"unsafe"> => {
-  if (!isValidRange(range)) throw Error(JSON.stringify(range));
-  const { min, max } = resolveRange(range);
-  return value < min ? min : value > max ? max : value;
-});
-
-export const safeClamp: {
-  (value: number, range: Range): Clamp.Return<"safe">;
-  (range: Range): (value: number) => Clamp.Return<"safe">;
-} = Macro.dualify(1, (value: number, range: Range): Clamp.Return<"safe"> => {
-  if (!isValidRange(range)) return Result.err({ code: "invalid range" });
-  const { min, max } = resolveRange(range);
-  return Result.ok(value < min ? min : value > max ? max : value);
-});
+/** @constructor */
+export const range = (self: Range) => self;
 
 export const clamp: {
-  <const TMode extends Clamp.Mode = "unsafe">(
-    value: number,
-    range: Range,
-    options?: Clamp.Options<TMode>
-  ): Clamp.Return<TMode>;
+  <E, R>(
+    self: Effect.Effect<number, E, R>,
+    range: Range
+  ): Effect.Effect<number, E | InvalidRangeError, R>;
 
-  <const TMode extends Clamp.Mode = "unsafe">(
-    value: Range,
-    options?: Clamp.Options<TMode>
-  ): (value: number) => Clamp.Return<TMode>;
+  <E, R>(
+    range: Range
+  ): (self: Effect.Effect<number, E, R>) => Effect.Effect<number, E | InvalidRangeError, R>;
 } = Macro.dualify(
   1,
-  (value: number, range: Range, options?: Clamp.Options) => {
-    const { mode = "unsafe" } = options ?? {};
-    switch (mode) {
-      case "safe":
-        return safeClamp(value, range);
-      case "unsafe":
-        return unsafeClamp(value, range);
-    }
-  },
-  { withTail: true, isSelf: isNumber }
+  <E, R>(
+    self: Effect.Effect<number, E, R>,
+    range: Range
+  ): Effect.Effect<number, E | InvalidRangeError, R> =>
+    Effect.if(isRange(range), {
+      onTrue: () =>
+        Effect.map(self, n => {
+          const { min, max } = resolveRange(range);
+          return Math.min(Math.max(n, min), max);
+        }),
+      onFalse: () => new InvalidRangeError(),
+    })
 );
 
 /**
