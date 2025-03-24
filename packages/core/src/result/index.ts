@@ -7,7 +7,6 @@ import * as Function from "../function/index.js";
 import * as Macro from "../macro/index.js";
 import * as Maybe from "../maybe/index.js";
 import * as Number from "../number/index.js";
-import * as String from "../string/index.js";
 
 export const OkSchema = S.Union(
   S.Struct({ _tag: S.Literal("ok") }),
@@ -201,27 +200,8 @@ export const fault: {
     context: Fault.IsExtened<TFault> extends true ? Fault.ContextOf<TFault> : void
   ): Err<TFault>;
 } = function (): any {
-  if (String.isString(arguments[0])) {
-    const tag = arguments[0] as Fault.Tag;
-
-    if (arguments.length >= 2) {
-      const context = arguments[1];
-
-      return err(Fault.make(tag, context));
-    }
-
-    return err(Fault.make(tag));
-  }
-
-  const Construct = arguments[0];
-
-  if (arguments.length >= 2) {
-    const context = arguments[1];
-
-    return err(new Construct(context));
-  }
-
-  return err(new Construct());
+  // @ts-expect-error
+  return err(Fault.make(...arguments));
 };
 
 function try_<V>($try: Sync<V>): Result<V, never>;
