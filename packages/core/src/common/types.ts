@@ -25,3 +25,6 @@ export type Table<K extends PropertyKey = PropertyKey, V = any> = {
 
 export type Constructor = new (...args: any[]) => any;
 export type ConstructorOf<Of = {}> = new (...args: any[]) => Of;
+
+export type InstanceOf<TConstructor extends ConstructorOf<any>> =
+  TConstructor extends ConstructorOf<infer I> ? I : never;
