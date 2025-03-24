@@ -164,7 +164,7 @@ export const fault: {
    * const err = Result.fault("CustomFault")
    * //    ^? Result.Err<Fault.Base<"CustomFault">>
    */
-  <const TTag extends Fault.Tag>(tag: TTag): Err<Fault.Fault<TTag>>;
+  <const TTag extends Fault.Tag>(tag: TTag): Err<Fault.Base<TTag>>;
 
   /**
    * @constructor Create `Err` wrapped `Fault.Extended` from tag
@@ -175,7 +175,7 @@ export const fault: {
   <const TTag extends Fault.Tag, TContext extends Table>(
     tag: TTag,
     context: TContext
-  ): Err<Fault.Fault<TTag, TContext>>;
+  ): Err<Fault.Extended<TTag, TContext>>;
 
   /**
    * @constructor Create `Err` wrapped `Fault.Base` from constructor

@@ -65,10 +65,10 @@ describe("Result.fault [types]", () => {
   });
 
   it("should correctly infer Fault.Extended type when provided with custom tag and context", () => {
-    const result = Result.fault("CustomFault", { ctx: "" });
+    const result = Result.fault("CustomFault", { ctx: "(⌐■_■)" });
 
     type Test = typeof result;
-    type Expected = Result.Err<Fault.Extended<"CustomFault">>;
+    type Expected = Result.Err<Fault.Fault<"CustomFault", { ctx: string }>>;
 
     expectTypeOf<Test>().toMatchTypeOf<Expected>();
   });
