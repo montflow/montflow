@@ -1,58 +1,43 @@
 {
   "name": "@montflow/reactive",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "author": "Daniel Montilla",
   "license": "MIT",
+  "private": false,
   "scripts": {
     "build": "pnpm build-esm && pnpm build-annotate && pnpm build-cjs",
     "build-esm": "tsc -b tsconfig.build.json",
     "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
-    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
-    "test": "vitest"
+    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps"
   },
   "devDependencies": {
-    "@montflow/core": "workspace:*",
     "@babel/cli": "^7.24.8",
     "@babel/core": "^7.25.2",
     "@babel/plugin-transform-export-namespace-from": "^7.24.7",
     "@babel/plugin-transform-modules-commonjs": "^7.24.8",
+    "@montflow/core": "workspace:^",
     "babel-plugin-annotate-pure-calls": "^0.5.0"
   },
   "peerDependencies": {
-    "@montflow/core": "^1.0.13"
+    "@montflow/core": "workspace:^"
   },
-  "private": false,
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./build/cjs/index.js",
+  "module": "./build/esm/index.js",
+  "types": "./build/dts/index.d.ts",
   "exports": {
+    "./package.json": "./package.json",
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "types": "./build/dts/index.d.ts",
+      "import": "./build/esm/index.js",
+      "default": "./build/cjs/index.js"
     },
-    "./source": {
-      "types": "./dist/source/index.d.ts",
-      "import": "./dist/source/index.js",
-      "require": "./dist/source/index.cjs"
-    },
-    "./watcher": {
-      "types": "./dist/watcher/index.d.ts",
-      "import": "./dist/watcher/index.js",
-      "require": "./dist/watcher/index.cjs"
-    },
-    "./state": {
-      "types": "./dist/state/index.d.ts",
-      "import": "./dist/state/index.js",
-      "require": "./dist/state/index.cjs"
-    },
-    "./computed": {
-      "types": "./dist/computed/index.d.ts",
-      "import": "./dist/computed/index.js",
-      "require": "./dist/computed/index.cjs"
+    "./testing": {
+      "types": "./build/dts/testing/index.d.ts",
+      "import": "./build/esm/testing/index.js",
+      "default": "./build/cjs/testing/index.js"
     }
   },
   "files": [
-    "dist"
+    "build"
   ]
 }

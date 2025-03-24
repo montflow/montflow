@@ -1,4 +1,5 @@
-export * as Computed from "./computed/index.js";
-export * as Source from "./source/index.js";
-export * as State from "./state/index.js";
-export * as Watcher from "./watcher/index.js";
+export * as Computed from "./computed.js";
+export * as Source from "./source.js";
+export * as State from "./state.js";
+export * as Subscriber from "./subscriber.js";
+export * as Watcher from "./watcher.js";
