@@ -1,23 +1,25 @@
-import { Effect, Either, Schema } from "effect";
-import { Sync } from "../common/types.js";
+import { Effect, Either, Schema as S } from "effect";
+import { ConstructorOf, Sync, Table } from "../common/types.js";
 
 import * as Alias from "../alias/index.js";
+import * as Fault from "../fault/index.js";
 import * as Function from "../function/index.js";
 import * as Macro from "../macro/index.js";
 import * as Maybe from "../maybe/index.js";
 import * as Number from "../number/index.js";
+import * as String from "../string/index.js";
 
-export const OkSchema = Schema.Union(
-  Schema.Struct({ _tag: Schema.Literal("ok") }),
-  Schema.Struct({ _tag: Schema.Literal("ok"), value: Schema.Unknown })
+export const OkSchema = S.Union(
+  S.Struct({ _tag: S.Literal("ok") }),
+  S.Struct({ _tag: S.Literal("ok"), value: S.Unknown })
 );
 
-export const ErrSchema = Schema.Union(
-  Schema.Struct({ _tag: Schema.Literal("err") }),
-  Schema.Struct({ _tag: Schema.Literal("err"), error: Schema.Unknown })
+export const ErrSchema = S.Union(
+  S.Struct({ _tag: S.Literal("err") }),
+  S.Struct({ _tag: S.Literal("err"), error: S.Unknown })
 );
 
-export const ResultSchema = Schema.Union(OkSchema, ErrSchema);
+export const Schema = S.Union(OkSchema, ErrSchema);
 
 /**
  * Represents the successful outcome of operation
@@ -152,6 +154,76 @@ export function make<T>(tag: "ok" | "err"): Ok<never> | Ok<T> | Err<never> | Err
   return arguments.length <= 1 ? err() : err(arguments[1]);
 }
 
+/**
+ * @constructor Create `Err` wrapped faults
+ */
+export const fault: {
+  /**
+   * @constructor Create `Err` wrapped `Fault.Base` from tag
+   * @example
+   * const err = Result.fault("CustomFault")
+   * //    ^? Result.Err<Fault.Base<"CustomFault">>
+   */
+  <const TTag extends Fault.Tag>(tag: TTag): Err<Fault.Fault<TTag>>;
+
+  /**
+   * @constructor Create `Err` wrapped `Fault.Extended` from tag
+   * @example
+   * const err = Result.fault("CustomFault", { issues: [ "invalid_stuff" ]})
+   * //    ^? Result.Err<Fault.Extended<"CustomFault", { issues: string[] }>>
+   */
+  <const TTag extends Fault.Tag, TContext extends Table>(
+    tag: TTag,
+    context: TContext
+  ): Err<Fault.Fault<TTag, TContext>>;
+
+  /**
+   * @constructor Create `Err` wrapped `Fault.Base` from constructor
+   * @example
+   * class CustomFault extends Fault.Base("CustomFault") {}
+   * const err = Result.fault(CustomFault)
+   * //    ^? Result.Err<CustomFault>
+   */
+  <const TFault extends Fault.Base<Fault.Tag>>(
+    constructor: Fault.IsBase<TFault> extends true ? ConstructorOf<TFault> : never
+  ): Err<TFault>;
+
+  /**
+   * @constructor Create `Err` wrapped `Fault.Base` from constructor
+   * @example
+   * type Context = { code: number }
+   * class CustomFault extends Fault.Extended("CustomFault")<Context> {}
+   * const err = Result.fault(CustomFault, { code: 404 })
+   * //    ^? Result.Err<CustomFault>
+   */
+  <const TFault extends Fault.Extended<Fault.Tag, Table>>(
+    constructor: ConstructorOf<TFault>,
+    context: Fault.IsExtened<TFault> extends true ? Fault.ContextOf<TFault> : void
+  ): Err<TFault>;
+} = function (): any {
+  if (String.isString(arguments[0])) {
+    const tag = arguments[0] as Fault.Tag;
+
+    if (arguments.length >= 2) {
+      const context = arguments[1];
+
+      return err(Fault.make(tag, context));
+    }
+
+    return err(Fault.make(tag));
+  }
+
+  const Construct = arguments[0];
+
+  if (arguments.length >= 2) {
+    const context = arguments[1];
+
+    return err(new Construct(context));
+  }
+
+  return err(new Construct());
+};
+
 function try_<V>($try: Sync<V>): Result<V, never>;
 function try_<V>(options: {
   readonly try: Sync<V>;
@@ -212,7 +284,7 @@ export function isOk(thing: unknown): thing is Ok<unknown>;
  * @internal
  */
 export function isOk<V>(resultOrThing: Result<V, any> | unknown): resultOrThing is Ok<V> {
-  return Schema.is(OkSchema)(resultOrThing);
+  return S.is(OkSchema)(resultOrThing);
 }
 
 /**
@@ -241,7 +313,7 @@ export function isErr(thing: unknown): thing is Err<unknown>;
 
 /** @internal */
 export function isErr<E>(resultOrThing: Result<any, E> | unknown): resultOrThing is Err<E> {
-  return Schema.is(ErrSchema)(resultOrThing);
+  return S.is(ErrSchema)(resultOrThing);
 }
 
 /**
