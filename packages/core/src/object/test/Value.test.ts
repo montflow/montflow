@@ -1,13 +1,13 @@
 import { describe, expectTypeOf, it } from "vitest";
-import { Value } from "..";
+import * as Object from "../index.js";
 
-describe("Value [types]", () => {
+describe("Object.Value [types]", () => {
   it("should correctly infer specified value type", () => {
     type Input = { one: string; two: "2"; three: boolean };
 
-    type One = Value<Input, "one">;
-    type Two = Value<Input, "two">;
-    type Three = Value<Input, "three">;
+    type One = Object.Value<Input, "one">;
+    type Two = Object.Value<Input, "two">;
+    type Three = Object.Value<Input, "three">;
 
     expectTypeOf<One>().toMatchTypeOf<Input["one"]>;
     expectTypeOf<Two>().toMatchTypeOf<Input["two"]>;
@@ -18,13 +18,13 @@ describe("Value [types]", () => {
     type Input = { one: string; two: "2"; three: boolean };
 
     // @ts-expect-error
-    type Test = Value<Input, "four">;
+    type Test = Object.Value<Input, "four">;
   });
 
   it("should correctly infer type for generic objects", () => {
     type Input = Record<string, number>;
 
-    type Test = Value<Input, "any">;
+    type Test = Object.Value<Input, "any">;
     type Expected = number;
 
     expectTypeOf<Test>().toMatchTypeOf<Expected>();
