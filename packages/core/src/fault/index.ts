@@ -1,4 +1,4 @@
-import { Schema as S } from "effect";
+import { Effect, Schema as S } from "effect";
 
 import { ConstructorOf, Table } from "../common/types.js";
 import * as Object from "../object/index.js";
@@ -149,6 +149,57 @@ export const make: {
   }
 
   return new Constructor();
+};
+
+/**
+ * @constructor Create effectful faults from tag or constructors
+ */
+export const fail: {
+  /**
+   * @constructor Create error effect of `Fault.Base` from tag
+   * @example
+   * const program = Fault.fail("CustomFault")
+   * //    ^? Effect.Effect<never, Fault.Base<"CustomFault">>
+   */
+  <const TTag extends Tag>(tag: TTag): Effect.Effect<never, Base<TTag>>;
+
+  /**
+   * @constructor Create error effect of `Fault.Extended` from tag + context
+   * @example
+   * const program = Fault.fail("CustomFault", { code: 404 })
+   * //    ^? Effect.Effect<never, Fault.Extended<"CustomFault", { code: number }>>
+   */
+  <const TTag extends Tag, TContext extends Table>(
+    tag: TTag,
+    context: TContext
+  ): Effect.Effect<never, Extended<TTag, TContext>>;
+
+  /**
+   * @constructor Create error effect of `Fault.Base` from constructor
+   * @example
+   * class CustomFault extends Fault.Base("CustomFault") {}
+   * const program = Fault.fail(CustomFault)
+   * //    ^? Effect.Effect<never, CustomFault>
+   */
+  <const TFault extends Base<Tag>>(
+    constructor: IsBase<TFault> extends true ? ConstructorOf<TFault> : never
+  ): Effect.Effect<never, TFault>;
+
+  /**
+   * @constructor Create error effect of `Fault.Extended` from constructor
+   * @example
+   * type Context = { name: string }
+   * class CustomFault extends Fault.Extended("CustomFault")<Context> {}
+   * const program = Fault.fail(CustomFault, { name: "bob" })
+   * //    ^? Effect.Effect<never, CustomFault>
+   */
+  <const TFault extends Extended<Tag, Table>>(
+    constructor: ConstructorOf<TFault>,
+    context: IsExtened<TFault> extends true ? ContextOf<TFault> : void
+  ): Effect.Effect<never, TFault>;
+} = function () {
+  // @ts-expect-error
+  return Effect.fail(make(...arguments));
 };
 
 export const isFault = (thing: unknown): thing is Fault<Tag> => S.is(Schema)(thing);
