@@ -1,6 +1,8 @@
 import { Schema as S } from "effect";
-import { Table } from "../common/types.js";
+
+import { ConstructorOf, Table } from "../common/types.js";
 import * as Object from "../object/index.js";
+import * as String from "../string/index.js";
 
 export type Tag = `${string}Fault`;
 
@@ -17,12 +19,22 @@ export const BaseSchema = S.Struct({
   _tag: S.String,
 });
 
-export const Base = <TTag extends Tag>(tag: TTag) =>
+/**
+ * Factory for custom `Base` fault constructors.
+ *
+ * @template {TTag}
+ * @param {Tag} tag unique identifier for fault
+ * @returns {ConstructorOf<Base<TTag>>}
+ *
+ * @example
+ * class CustomFault extends Fault.Base("CustomFault") {}
+ * const fautlInstance = new CustomFault()
+ */
+export const Base = <TTag extends Tag>(tag: TTag): ConstructorOf<Base<TTag>> =>
   class implements Base<TTag> {
     _id = "fault" as const;
     _tag = tag;
   };
-
 export type Extended<TTag extends Tag, TContext extends Table = {}> = Base<TTag> & TContext;
 
 export const ExtendedSchema = S.extend(
@@ -30,6 +42,18 @@ export const ExtendedSchema = S.extend(
   S.Record({ key: S.String, value: S.Any })
 ).pipe(S.filter(obj => Object.keys(obj).length > 2));
 
+/**
+ * Factory for custom `Extended` fault constructors.
+ *
+ * @template {TTag}
+ * @template {TContext}
+ * @param {Tag} tag unique identifier for fault
+ * @returns {ConstructorOf<Extended<TTag, TContext>>}
+ *
+ * @example
+ * class CustomFault extends Fault.Extended("CustomFault")<{ meta: string }> {}
+ * const fautlInstance = new CustomFault({ meta: "⚠" })
+ */
 export const Extended = <const TTag extends Tag>(
   tag: TTag
 ): new <TContext extends Table = never>(
@@ -49,41 +73,82 @@ export type Fault<TTag extends Tag, TContext extends Table = {}> =
 
 export const Schema = S.Union(BaseSchema, ExtendedSchema);
 
-export type Any = Fault<Tag> | Fault<Tag, Record<any, any>>;
+export type Any = Fault<Tag> | Fault<Tag, Table>;
 
 export type TagOf<F extends Any> = F extends Fault<infer Tag> ? Tag : never;
 
-export type ContextOf<F extends Any> =
-  F extends Fault<any, infer Context> ?
-    Context extends {} ?
-      never
-    : Context
-  : never;
+export type ContextOf<F extends Extended<Tag, Table>> = Omit<F, "_id" | "_tag">;
 
+export type IsExtened<T extends Any> = Object.IsEmpty<ContextOf<T>>;
+export type IsBase<T extends Any> = IsExtened<T> extends true ? false : true;
+
+/**
+ * @constructor Create `Base` or `Extended` fault from tag or constructor.
+ */
 export const make: {
-  <const TTag extends Tag>(tag: TTag): Fault<TTag>;
+  /**
+   * @constructor Create `Base.Fault` from tag
+   * @example
+   * const fault = Fault.make("CustomFault")
+   * //    ^? Fault.Base<"CustomFault">
+   */
+  <const TTag extends Tag>(tag: TTag): Base<TTag>;
+
+  /**
+   * @constructor Create `Base.Extended` from tag + context
+   * @example
+   * const fault = Fault.make("CustomFault", { foo: "bar" })
+   * //    ^? Fault.Extended<"CustomFault", { foo: string }>
+   */
   <const TTag extends Tag, TContext extends Table>(
     tag: TTag,
     context: TContext
-  ): Fault<TTag, TContext>;
-} = function <const TTag extends Tag, TContext extends Table>():
-  | Fault<TTag>
-  | Fault<TTag, TContext> {
-  if (arguments.length === 1) {
-    const [_tag] = arguments;
-    return {
-      _id: "fault",
-      _tag,
+  ): Extended<TTag, TContext>;
+
+  /**
+   * @constructor Create `Base.Base` from constructor
+   * @example
+   * class CustomFault extends Fault.Base("CustomFault") {}
+   * const fault = Fault.make(CustomFault)
+   * //    ^? Fault.Extended<CustomFault>
+   */
+  <const TFault extends Base<Tag>>(
+    constructor: IsBase<TFault> extends true ? ConstructorOf<TFault> : never
+  ): TFault;
+
+  <const TFault extends Extended<Tag, Table>>(
+    constructor: ConstructorOf<TFault>,
+    context: IsExtened<TFault> extends true ? ContextOf<TFault> : void
+  ): TFault;
+} = function (): any {
+  if (String.isString(arguments[0])) {
+    const tag = arguments[0];
+
+    const fault = {
+      _id: Id,
+      _tag: tag,
     };
+
+    if (arguments.length >= 2) {
+      const context = arguments[1];
+      return {
+        ...fault,
+        ...context,
+      };
+    }
+
+    return fault;
   }
 
-  const [_tag, context] = arguments;
+  const Constructor = arguments[0];
 
-  return {
-    _id: "fault",
-    _tag,
-    ...context,
-  };
+  if (arguments.length >= 2) {
+    const context = arguments[1];
+
+    return new Constructor(context);
+  }
+
+  return new Constructor();
 };
 
 export const isFault = (thing: unknown): thing is Fault<Tag> => S.is(Schema)(thing);
