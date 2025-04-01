@@ -2,22 +2,25 @@
   "name": "@montflow/root",
   "author": "Daniel Montilla",
   "version": "0.0.0",
-  "packageManager": "pnpm@9.0.0",
   "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "core:test": "pnpm --filter @montflow/core run test",
-    "core:build": "pnpm --filter @montflow/core run build",
-    "core:dev": "pnpm --filter @montflow/core run dev",
-    "core:publish": "pnpm run core:build && pnpm --filter @montflow/core publish --access public --no-git-checks",
-    "loop:build": "pnpm --filter @montflow/loop run build",
-    "loop:dev": "pnpm --filter @montflow/loop run dev",
-    "loop:publish": "pnpm run loop:build && pnpm --filter @montflow/loop publish --access public --no-git-checks",
-    "reactive:build": "pnpm --filter @montflow/reactive run build",
-    "reactive:publish": "pnpm run reactive:build && pnpm --filter @montflow/reactive publish --access public --no-git-checks",
-    "stlx:test": "pnpm --filter @montflow/stlx run test",
-    "stlx:build": "pnpm --filter @montflow/stlx run build",
-    "stlx:dev": "pnpm --filter @montflow/stlx run dev",
-    "stlx:publish": "pnpm run stlx:build && pnpm --filter @montflow/stlx publish --access public --no-git-checks"
+    "core:test": "bun run --filter @montflow/core test",
+    "core:build": "bun run --filter @montflow/core build",
+    "core:dev": "bun run --filter @montflow/core dev",
+    "core:publish": "bun run core:build && bun run --filter @montflow/core publish --access public --no-git-checks",
+    "loop:build": "bun run --filter @montflow/loop build",
+    "loop:dev": "bun run --filter @montflow/loop dev",
+    "loop:publish": "bun run loop:build && bun run --filter @montflow/loop publish --access public --no-git-checks",
+    "reactive:build": "bun run --filter @montflow/reactive build",
+    "reactive:publish": "bun run reactive:build && bun run --filter @montflow/reactive publish --access public --no-git-checks",
+    "stlx:test": "bun run --filter @montflow/stlx test",
+    "stlx:build": "bun run --filter @montflow/stlx build",
+    "stlx:dev": "bun run --filter @montflow/stlx dev",
+    "stlx:publish": "bun run stlx:build && bun run --filter @montflow/stlx publish --access public --no-git-checks"
   },
   "dependencies": {
     "effect": "^3.11.5",
@@ -33,10 +36,5 @@
     "typescript": "^5.7.3",
     "vite": "^6.0.11",
     "vitest": "^3.0.4"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }
