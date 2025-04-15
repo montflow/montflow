@@ -449,7 +449,9 @@ export const expand = <A, E1, E2, R>(
     )
   );
 
-export const merge = <A, E>(self: Effect.Effect<A, E>): Effect.Effect<Result<A, E>> =>
+export const merge = <A, E, R>(
+  self: Effect.Effect<A, E, R>
+): Effect.Effect<Result<A, E>, never, R> =>
   self.pipe(
     Effect.mapBoth({
       onSuccess: v => ok(v),
