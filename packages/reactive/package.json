@@ -6,36 +6,23 @@
   "type": "module",
   "private": false,
   "scripts": {
-    "build": "pnpm build-esm && pnpm build-annotate && pnpm build-cjs",
-    "build-esm": "tsc -b tsconfig.build.json",
-    "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
-    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps"
+    "dev": "rollup -c -w",
+    "build": "rollup -c"
   },
   "devDependencies": {
-    "@babel/cli": "^7.24.8",
-    "@babel/core": "^7.25.2",
-    "@babel/plugin-transform-export-namespace-from": "^7.24.7",
-    "@babel/plugin-transform-modules-commonjs": "^7.24.8",
-    "@montflow/core": "workspace:^",
-    "babel-plugin-annotate-pure-calls": "^0.5.0"
+    "rollup": "^4.37.0",
+    "@rollup/plugin-typescript": "^12.1.2",
+    "rollup-plugin-cleandir": "^3.0.0"
   },
   "peerDependencies": {
     "@montflow/core": "workspace:^"
   },
-  "main": "./build/cjs/index.js",
-  "module": "./build/esm/index.js",
-  "types": "./build/dts/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
-      "types": "./build/dts/index.d.ts",
-      "import": "./build/esm/index.js",
-      "default": "./build/cjs/index.js"
-    },
-    "./testing": {
-      "types": "./build/dts/testing/index.d.ts",
-      "import": "./build/esm/testing/index.js",
-      "default": "./build/cjs/testing/index.js"
+      "types": "./build/index.d.ts",
+      "import": "./build/index.mjs",
+      "require": "./build/index.cjs"
     }
   },
   "files": [

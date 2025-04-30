@@ -1,6 +1,6 @@
 # @montflow/reactive ⚡
 
-Specification for reactive systems.
+An API specification for reactive systems.
 
 ## Install
 ```

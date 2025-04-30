@@ -1,18 +1,22 @@
-import { Array, Optional } from "@montflow/core";
-import * as Subscriber from "./subscriber.js";
+import type { Array, Optional } from "@montflow/core";
 
-export type Source<V> = {
+// #region Types
+
+export type Getter<V> = () => V;
+export type Setter<V> = (value: V) => V;
+export type Updater<V> = (update: (current: V) => V) => V;
+
+export interface Source<V> {
   readonly value: V;
-  get: () => V;
-} & Subscriber.Subscribable<V> &
-  (() => V);
+  readonly get: Getter<V>;
+  (): V;
+}
 
-export type Writable<V> = {
+export interface Writable<V> extends Source<V> {
   value: V;
-  get: () => V;
-  set: (value: V) => V;
-} & Subscriber.Subscribable<V> &
-  (() => V);
+  readonly set: Setter<V>;
+  readonly update: Updater<V>;
+}
 
 /** @alias {@link Source} */
 export type Readonly<V> = Source<V>;
@@ -52,3 +56,13 @@ export type ValuesOf<TValues extends Any[]> =
     [Source<V>, ...{ [K in keyof Rest]: Source<Rest[K]> }]
   : TValues extends [] ? []
   : never;
+
+// #endregion
+
+// #region Implementations
+
+export interface toReadonly {
+  <V>(source: Writable<V> | Readonly<V>): Readonly<V>;
+}
+
+// #endregion

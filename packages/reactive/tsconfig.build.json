@@ -1,9 +1,17 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "build/esm",
     "declaration": true,
-    "declarationDir": "build/dts"
+    "declarationDir": "build",
+    "outDir": "build",
+    "tsBuildInfoFile": ".tsbuildinfo/build.tsbuildinfo",
+    "sourceMap": true,
+    "declarationMap": true,
+    "removeComments": false,
+    "downlevelIteration": true,
+    "isolatedModules": true,
+    "esModuleInterop": false,
+    "emitDeclarationOnly": true,
+    "inlineSources": true
   }
 }
