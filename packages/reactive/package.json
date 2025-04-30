@@ -1,13 +1,14 @@
 {
   "name": "@montflow/reactive",
-  "version": "1.0.0",
+  "version": "1.0.0-alpha.0",
   "author": "Daniel Montilla",
   "license": "MIT",
   "type": "module",
   "private": false,
   "scripts": {
     "dev": "rollup -c -w",
-    "build": "rollup -c"
+    "build": "rollup -c",
+    "publish": "bun run build && bun publish --access public --no-git-checks"
   },
   "devDependencies": {
     "rollup": "^4.37.0",

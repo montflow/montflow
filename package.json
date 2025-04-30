@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "private": true,
   "workspaces": [
-    "packages/*",
-    "apps/*"
+    "packages/**/*",
+    "apps/*",
+    "sites/*"
   ],
   "scripts": {
     "core:test": "bun run --filter @montflow/core test",
@@ -16,14 +17,15 @@
     "loop:dev": "bun run --filter @montflow/loop dev",
     "loop:publish": "bun run loop:build && bun run --filter @montflow/loop publish --access public --no-git-checks",
     "reactive:build": "bun run --filter @montflow/reactive build",
-    "reactive:publish": "bun run reactive:build && bun run --filter @montflow/reactive publish --access public --no-git-checks",
+    "reactive:dev": "bun run --filter @montflow/reactive dev",
+    "reactive:publish": "bun run --filter @montflow/reactive publish",
     "stlx:test": "bun run --filter @montflow/stlx test",
     "stlx:build": "bun run --filter @montflow/stlx build",
     "stlx:dev": "bun run --filter @montflow/stlx dev",
     "stlx:publish": "bun run stlx:build && bun run --filter @montflow/stlx publish --access public --no-git-checks"
   },
   "dependencies": {
-    "effect": "^3.11.5",
+    "effect": "^3.14.15",
     "valibot": "^0.42.1"
   },
   "devDependencies": {
