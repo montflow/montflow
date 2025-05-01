@@ -19,6 +19,8 @@
     "reactive:build": "bun run --filter @montflow/reactive build",
     "reactive:dev": "bun run --filter @montflow/reactive dev",
     "reactive:publish": "bun run --filter @montflow/reactive publish",
+    "reactive-svelte:build": "bun run --filter @montflow/reactive-svelte build",
+    "reactive-svelte:publish": "bun run --filter @montflow/reactive-svelte publish",
     "stlx:test": "bun run --filter @montflow/stlx test",
     "stlx:build": "bun run --filter @montflow/stlx build",
     "stlx:dev": "bun run --filter @montflow/stlx dev",
