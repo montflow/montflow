@@ -1,6 +1,6 @@
 {
 	"name": "@montflow/reactive-svelte",
-	"version": "1.0.0-alpha.1",
+	"version": "1.0.0-alpha.2",
 	"scripts": {
 		"dev": "vite dev",
 		"build-app": "vite build && npm run prepack",
