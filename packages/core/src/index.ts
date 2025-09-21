@@ -3,6 +3,7 @@ export * from "./global/index.js";
 export * as Alias from "./alias/index.js";
 export * as Array from "./array/index.js";
 export * as Async from "./async/index.js";
+export * as Chain from "./chain/index.js";
 export * as Function from "./function/index.js";
 export * as Iterable from "./iterable/index.js";
 export * as Macro from "./macro/index.js";
