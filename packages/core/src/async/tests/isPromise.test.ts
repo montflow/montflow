@@ -1,64 +1,77 @@
-import { describe, expect, it } from "vitest";
-import { isPromise } from "..";
+import * as Vitest from "vitest";
 
-describe("isPromise [runtime]", () => {
-  it("should return true for a Promise instance", () => {
-    const promise = new Promise(resolve => resolve(true));
-    expect(isPromise(promise)).toBe(true);
+import * as Async from "../index.js";
+
+Vitest.describe("[runtime] Async.isPromise", () => {
+  Vitest.it("should be defined", () => {
+    Vitest.expect(Async.isPromise).toBeDefined();
   });
 
-  it("should return true for an object that mimics a Promise", () => {
+  Vitest.it("should return true for a Promise instance", () => {
+    const promise = new Promise(resolve => resolve(true));
+    Vitest.expect(Async.isPromise(promise)).toBe(true);
+  });
+
+  Vitest.it("should return true for an object that mimics a Promise", () => {
     const promiseLike = {
       then: () => {},
       catch: () => {},
     };
-    expect(isPromise(promiseLike)).toBe(true);
+    Vitest.expect(Async.isPromise(promiseLike)).toBe(true);
   });
 
-  it("should return false for a plain object", () => {
+  Vitest.it("should return false for a plain object", () => {
     const obj = { key: "value" };
-    expect(isPromise(obj)).toBe(false);
+    Vitest.expect(Async.isPromise(obj)).toBe(false);
   });
 
-  it("should return false for a function", () => {
+  Vitest.it("should return false for a function", () => {
     const func = () => {};
-    expect(isPromise(func)).toBe(false);
+    Vitest.expect(Async.isPromise(func)).toBe(false);
   });
 
-  it("should return false for null", () => {
-    expect(isPromise(null)).toBe(false);
+  Vitest.it("should return false for null", () => {
+    Vitest.expect(Async.isPromise(null)).toBe(false);
   });
 
-  it("should return false for undefined", () => {
-    expect(isPromise(undefined)).toBe(false);
+  Vitest.it("should return false for undefined", () => {
+    Vitest.expect(Async.isPromise(undefined)).toBe(false);
   });
 
-  it("should return false for a number", () => {
+  Vitest.it("should return false for a number", () => {
     const num = 42;
-    expect(isPromise(num)).toBe(false);
+    Vitest.expect(Async.isPromise(num)).toBe(false);
   });
 
-  it("should return false for a string", () => {
+  Vitest.it("should return false for a string", () => {
     const str = "test";
-    expect(isPromise(str)).toBe(false);
+    Vitest.expect(Async.isPromise(str)).toBe(false);
   });
 
-  it("should return true for a Promise resolved with a value", async () => {
+  Vitest.it("should return true for a Promise resolved with a value", async () => {
     const promise = Promise.resolve("test");
-    expect(isPromise(promise)).toBe(true);
+    Vitest.expect(Async.isPromise(promise)).toBe(true);
 
     const result = await promise;
-    expect(result).toBe("test");
+    Vitest.expect(result).toBe("test");
   });
 
-  it("should return true for a Promise rejected with a value", async () => {
+  Vitest.it("should return true for a Promise rejected with a value", async () => {
     const promise = Promise.reject(new Error("test"));
-    expect(isPromise(promise)).toBe(true);
+    Vitest.expect(Async.isPromise(promise)).toBe(true);
 
     try {
       await promise;
     } catch (error) {
-      expect((error as Error).message).toBe("test");
+      Vitest.expect((error as Error).message).toBe("test");
     }
+  });
+});
+
+Vitest.describe("[types] Async.isPromise", () => {
+  Vitest.it("should be defined", () => {
+    type Test = typeof Async.isPromise;
+
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
 });

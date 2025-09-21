@@ -1,36 +1,76 @@
+import { Schema as S } from "effect";
 import * as Alias from "../alias/index.js";
-import { Evaluable, Sync, Table } from "../common/index.js";
+import * as Async from "../async/index.js";
 import * as Function from "../function/index.js";
+import { Evaluable, Sync, Table } from "../global/index.js";
 import * as Macro from "../macro/index.js";
 import * as Nothing from "../nothing/index.js";
 import * as Number from "../number/index.js";
 import * as Object from "../object/index.js";
 import * as Result from "../result/index.js";
 
-import { Schema as S } from "effect";
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const SomeId = "some" as const;
 
+/**
+ * @todo documentation
+ */
+export type SomeId = typeof SomeId;
+
+/**
+ * @todo documentation
+ */
 export type Some<out V> = {
-  readonly _tag: "some";
+  readonly _id: SomeId;
   readonly value: V;
 };
 
-export const SomeSchema = S.Union(
-  S.Struct({ _tag: S.Literal("some") }),
-  S.Struct({ _tag: S.Literal("some"), value: S.Unknown })
-);
+/**
+ * @todo documentation
+ */
+export const SomeSchema = <TInner = unknown>(schema?: S.Schema<TInner>) =>
+  S.Struct({ _id: S.Literal(SomeId), value: schema ?? S.Unknown }).pipe(S.asSchema);
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const NoneId = "none" as const;
+
+/**
+ * @todo documentation
+ */
+export type NoneId = typeof NoneId;
+
+/**
+ * @todo documentation
+ */
 export type None = {
-  readonly _tag: "none";
+  readonly _id: NoneId;
 };
 
-export const NoneSchema = S.Struct({ _tag: S.Literal("none") });
+/**
+ * @todo documentation
+ */
+export const NoneSchema = S.Struct({ _id: S.Literal(NoneId) }).pipe(S.asSchema);
 
-export const Schema = S.Union(SomeSchema, NoneSchema);
-
+/**
+ * @todo documentation
+ */
 export type Maybe<V = never> = Some<V> | None;
 
 /**
+ * @todo documentation
+ */
+export const Schema = <TInner = unknown>(schema?: S.Schema<TInner>) =>
+  S.Union(SomeSchema(schema), NoneSchema).pipe(S.asSchema);
+
+/**
  * @internal
+ * @todo documentation
  */
 export const MAX_UNFOLD_DEPTH = 512;
 
@@ -50,53 +90,52 @@ export type Unknown = Maybe<unknown>;
 export type Never = Maybe<never>;
 
 /**
- * Extracts the inner `Some` value type
- * @template M input `Maybe` type
- * @returns inner `Some` value type
+ * Extracts the type of `V` from a `Maybe` type
+ * @template TMaybe input `Maybe` type
+ * @returns `V`'s type
  */
-export type SomeOf<M extends Any> = M extends Some<infer V> ? V : never;
+export type Value<TMaybe extends Any> = TMaybe extends Some<infer V> ? V : never;
 
 /**
  * Unwraps nested `Maybe` type once
- * @template Root input `Maybe` type to flatten
+ * @template TRoot input `Maybe` type to flatten
  * @returns `Maybe` flattened once
  */
-export type Flatten<Root extends Any> =
-  [Root] extends [Maybe<infer RootSome>] ?
-    [RootSome] extends [Maybe<infer NestedSome>] ?
-      Maybe<NestedSome>
-    : Root
+export type Flatten<TRoot extends Any> =
+  [TRoot] extends [Maybe<infer TValue>] ?
+    [TValue] extends [Maybe<infer TNested>] ?
+      Maybe<TNested>
+    : TRoot
   : never;
 
 /**
- * Recursively unwraps nested `Maybe` type **infinitely**. Not recommended for general use. Use simpler versions like `Flatten` or `Unfold`
- * @template Root `Maybe` type to unfold
+ * Recursively unwraps nested `Maybe` type **infinitely**. Not recommended for general use. Use computationally simpler versions like `Flatten` or `Unfold`
+ * @template TRoot `Maybe` type to unfold
  * @returns `Maybe` of depth 1
- * @see {@link make.Flatten}
- * @see {@link make.Unfold}
+ * @see {@link Flatten}
+ * @see {@link Unfold}
  */
-export type InfiniteUnfold<Root extends Any> =
-  [Root] extends [Maybe<infer RootSome>] ?
-    [RootSome] extends [Maybe<infer NestedSome>] ?
-      InfiniteUnfold<Maybe<NestedSome>>
-    : Root
+export type InfiniteUnfold<TRoot extends Any> =
+  [TRoot] extends [Maybe<infer TValue>] ?
+    [TValue] extends [Maybe<infer TNested>] ?
+      InfiniteUnfold<Maybe<TNested>>
+    : TRoot
   : never;
-``;
 
 /**
  * Recursively unwraps nested `Maybe` type up to `Limit`. For an **infinite** version checkout `Maybe.InfiniteUnfold` or simpler `Result.Flatten`
- * @template Root `Maybe` type to unfold
- * @template Limit maximun depth for unesting. Default `512`
+ * @template TRoot `Maybe` type to unfold
+ * @template TLimit maximun depth for unesting. Default `512`
  * @returns `Maybe` of depth 1 if depth ≤ `Limit`. Otherwise the unfolded result up to `Limit`
- * @see {@link Result.InfiniteUnfold}
- * @see {@link Result.Flatten}
+ * @see {@link InfiniteUnfold}
+ * @see {@link Flatten}
  */
-export type Unfold<Root extends Any, Limit extends number = typeof MAX_UNFOLD_DEPTH> =
-  Limit extends 0 ? Root
-  : [Root] extends [Maybe<infer RootSome>] ?
-    [RootSome] extends [Any] ?
-      Unfold<RootSome, Number.Decrement<Limit>>
-    : Root
+export type Unfold<TRoot extends Any, TLimit extends number = typeof MAX_UNFOLD_DEPTH> =
+  TLimit extends 0 ? TRoot
+  : [TRoot] extends [Maybe<infer TValue>] ?
+    [TValue] extends [Any] ?
+      Unfold<TValue, Number.Decrement<TLimit>>
+    : TRoot
   : never;
 
 /**
@@ -106,89 +145,76 @@ export type Unfold<Root extends Any, Limit extends number = typeof MAX_UNFOLD_DE
  */
 export type Promise<V> = Alias.Promise<Maybe<V>>;
 
+/**
+ * @constructor
+ * @todo documentation
+ * @todo testing
+ */
 export const some: {
   (): Some<never>;
   <V>(value: V): Some<V>;
-} = function (): any {
-  return arguments.length <= 0 ? { _tag: "some" } : { _tag: "some", value: arguments[0] };
-};
+} = Macro.cast(
+  <V = never>(value: V): Some<V> => ({
+    _id: SomeId,
+    value: value,
+  })
+);
 
 /**
- * @internal
- */
-let _none: undefined | None;
-
-export const none: {
-  (): None;
-} = () => (_none !== undefined ? _none : (_none = { _tag: "none" }));
-
-export const make: {
-  (tag: "some"): Maybe<never>;
-  <V>(tag: "some", value: V): Maybe<V>;
-  <V = never>(tag: "none"): Maybe<V>;
-} = function () {
-  const [tag] = arguments;
-
-  if (tag === "none") {
-    return none();
-  }
-
-  if (arguments.length >= 2) {
-    return some(arguments[1]);
-  }
-
-  return some();
-} as typeof make;
-
-/**
- * Converts nullish value into `Maybe`
  * @constructor
- * @template V value
- * @param {V} value
- * @returns {Maybe<Exclude<V, null | undefined>>} `Some` if `value` in non nullish. `None` otherwise
+ * @todo documentation
+ * @todo testing
  */
-export function fromNullish<V>(value: V): Maybe<Exclude<V, null | undefined>> {
-  if (value === null || value === undefined) return none();
-  return some(value as Exclude<V, null | undefined>);
-}
+export const none = Macro.singleton("@montflow/none", (): None => ({ _id: "none" }));
 
 /**
- * Converts `Promise` into `Future`.
  * @constructor
- * @template V inner `Some` type
- * @param {Promise<V>} promise target promise
- * @returns {Async<V>} a future. `Some` if the promise resolved with expected value. `None` if it threw error/failed.
- * @see {@link Async}
+ * @todo documentation
+ * @todo testing
  */
-export async function fromPromise<V>(promise: Alias.Promise<V>): Promise<V> {
-  try {
-    return some(await promise);
-  } catch (_) {
-    return none();
-  }
-}
+export const fromNullish = <V>(value: V): Maybe<NonNullable<V>> => Macro.todoImpl();
 
 /**
- * Converts procedure that could potentially throw into `Maybe`
  * @constructor
- * @template V inner type of possible `Some` value
- * @param {Procedure<V>} f that could throw
- * @returns {Maybe<V>} `Some` if procedure succeeds. `None` if it throws error
+ * @todo documentation
+ * @todo testing
  */
-export function _try<V>(f: Sync<V>): Maybe<V> {
-  try {
-    return some(f());
-  } catch (_) {
-    return none();
-  }
-}
+export const _try: { <V>(f: Sync<V>): Maybe<V> } = Macro.todoImpl;
 
 export { _try as try };
 
-export const isSome = (thing: unknown): thing is Some<unknown> => S.is(SomeSchema)(thing);
-export const isNone = (thing: unknown): thing is None => S.is(NoneSchema)(thing);
-export const isMaybe = (thing: unknown): thing is Maybe<unknown> => S.is(Schema)(thing);
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const tryPromise: {
+  <V>($try: Async.Lazy<V>): Maybe<V>;
+  <V>($try: Alias.Promise<V>): Maybe<V>;
+} = Macro.todoImpl;
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const isSome = (thing: unknown): thing is Some<unknown> => Macro.todoImpl();
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const isNone = (thing: unknown): thing is None => Macro.todoImpl();
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const isMaybe = (thing: unknown): thing is Maybe<unknown> =>
+  isSome(thing) || isNone(thing);
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const map: {
   <From, To>(mapper: Function.Mapper<From, To>): (self: Maybe<From>) => Maybe<To>;
   <From, To>(self: Maybe<From>, mapper: Function.Mapper<From, To>): Maybe<To>;
@@ -196,13 +222,28 @@ export const map: {
   isSome(self) ? some(mapper(self.value)) : none()
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export class UnwrapError extends Error {
+  constructor() {
+    super(`Maybe is "None". Unwrap operation failed`);
+  }
+}
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const unwrap: {
   <V>(): (self: Maybe<V>) => V;
-  <V>(self: Maybe<V>): V;
-} = Macro.dualify(0, <V>(self: Maybe<V>) =>
-  isSome(self) ? self.value : Macro.panicWith("Unwrap failed. Found `None` instance.")
-);
+} = Macro.todoImpl;
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const or: {
   <V>(value: Evaluable<V>): (self: Maybe<V>) => V;
   <V>(self: Maybe<V>, value: Evaluable<V>): V;
@@ -210,6 +251,10 @@ export const or: {
   isSome(self) ? self.value : Macro.evaluate(value)
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const orElse: {
   <V, Or>(value: Evaluable<Or>): (self: Maybe<V>) => Or;
   <V, Or>(self: Maybe<V>, value: Evaluable<Or>): Or;
@@ -217,10 +262,13 @@ export const orElse: {
   isSome(self) ? self.value : Macro.evaluate(value)
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const unfold: {
-  <V>(): (self: Maybe<V>) => Unfold<Maybe<V>>;
   <V>(self: Maybe<V>): Unfold<Maybe<V>>;
-} = Macro.dualify(0, <V>(self: Maybe<V>) => {
+} = <V>(self: Maybe<V>) => {
   if (isNone(self)) return self as Unfold<Maybe<V>>;
   let inner = self.value;
   for (let i = 0; i < MAX_UNFOLD_DEPTH; i++) {
@@ -229,17 +277,25 @@ export const unfold: {
     inner = inner.value as V;
   }
   return some(inner) as Unfold<Maybe<V>>;
-});
+};
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const flatten: {
-  <V>(): (self: Maybe<V>) => Flatten<Maybe<V>>;
   <V>(self: Maybe<V>): Flatten<Maybe<V>>;
-} = Macro.dualify(0, <V>(self: Maybe<V>) => {
-  if (isNone(self) || !isMaybe(self.value) || isNone(self.value))
+} = <V>(self: Maybe<V>) => {
+  if (isNone(self) || !isMaybe(self.value) || isNone(self.value)) {
     return self as Flatten<Maybe<V>>;
+  }
   return self.value as Flatten<Maybe<V>>;
-});
+};
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const flatmap: {
   <From, To>(mapper: Function.Mapper<From, Maybe<To>>): (self: Maybe<From>) => Maybe<To>;
   <From, To>(self: Maybe<From>, mapper: Function.Mapper<From, Maybe<To>>): Maybe<To>;
@@ -247,6 +303,10 @@ export const flatmap: {
   isSome(self) ? mapper(self.value) : none()
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const check: {
   <V>(predicate: Function.Predicate<V>): (self: Maybe<V>) => Maybe<V>;
   <V>(self: Maybe<V>, predicate: Function.Predicate<V>): Maybe<V>;
@@ -257,7 +317,11 @@ export const check: {
   : none()
 );
 
-export const peek: {
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const tap: {
   <V>(fn: (value: V) => any): (self: Maybe<V>) => Maybe<V>;
   <V>(self: Maybe<V>, fn: (value: V) => any): Maybe<V>;
 } = Macro.dualify(1, <V>(self: Maybe<V>, fn: (value: V) => any) => {
@@ -265,6 +329,10 @@ export const peek: {
   return self;
 });
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const is: {
   <Type>(guard: Function.Guard<Type>): (self: Unknown) => Maybe<Type>;
   <Type>(self: Unknown, guard: Function.Guard<Type>): Maybe<Type>;
@@ -274,15 +342,11 @@ export const is: {
   : none()
 );
 
-export const whenSome: {
-  <V>(fn: (some: V) => any): (self: Maybe<V>) => Maybe<V>;
-  <V>(self: Maybe<V>, fn: (some: V) => any): Maybe<V>;
-} = Macro.dualify(1, <V>(self: Maybe<V>, fn: (some: V) => any) => {
-  isSome(self) ? fn(self.value) : null;
-  return self;
-});
-
-export const whenNone: {
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const tapNone: {
   <V>(fn: () => any): (self: Maybe<V>) => Maybe<V>;
   <V>(self: Maybe<V>, fn: () => any): Maybe<V>;
 } = Macro.dualify(1, <V>(self: Maybe<V>, fn: () => any) => {
@@ -290,6 +354,10 @@ export const whenNone: {
   return self;
 });
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const match: {
   <V>(branches: { some?: (value: V) => any; none?: () => any }): (self: Maybe<V>) => Maybe<V>;
   <V>(self: Maybe<V>, branches: { some?: (value: V) => any; none?: () => any }): Maybe<V>;
@@ -301,6 +369,10 @@ export const match: {
   }
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const collapse: {
   <From, To>(branches: {
     some: (value: From) => To;
@@ -313,6 +385,10 @@ export const collapse: {
     isSome(self) ? branches.some(self.value) : branches.none()
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const tryMap: {
   <From, To>(mapper: (some: From) => To): (self: Maybe<From>) => Maybe<To>;
   <From, To>(self: Maybe<From>, mapper: (some: From) => To): Maybe<To>;
@@ -324,6 +400,10 @@ export const tryMap: {
   }
 });
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const property: {
   <R extends Table, K extends keyof R>(key: K): (self: Maybe<R>) => Maybe<R[K]>;
   <R extends Table, K extends keyof R>(self: Maybe<R>, key: K): Maybe<R[K]>;
@@ -333,6 +413,10 @@ export const property: {
   return some(self.value[key]);
 });
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const toResult: {
   <V, E>(error: E): (self: Maybe<V>) => Result.Result<V, E>;
   <V, E>(self: Maybe<V>, error: E): Result.Result<V, E>;
@@ -343,6 +427,10 @@ export const toResult: {
   return Result.ok(self.value);
 });
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const parseJson: {
   (): (self: Maybe<string>) => Maybe<any>;
   (self: Maybe<string>): Maybe<any>;

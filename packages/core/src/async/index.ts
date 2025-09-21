@@ -1,45 +1,65 @@
+import { Duration } from "effect";
+
 import * as Function from "../function/index.js";
+import { Evaluable } from "../global/index.js";
+import * as Macro from "../macro/index.js";
 
 /**
- * Returns a promise that resolves after a specified delay.
- * @param {number} ms the delay duration in milliseconds.
- * @returns {Promise<void>} A promise that resolves after the specified delay.
+ * A type that can be either a Promise or a synchronous value.
+ * @template T The type of the value
+ *
+ * @todo testing
  */
-export function delay(ms: number): Promise<void>;
+export type Maybe<T> = Promise<T> | T;
 
 /**
- * Returns a promise that resolves with a specified value after a specified delay.
- * @template V returned value
- * @param {number} ms The delay duration in milliseconds.
- * @param {V} value The value to be resolved after the delay.
- * @returns {Promise<V>} A promise that resolves with the specified value after the specified delay.
+ * A function that returns a Promise when called.
+ * @template T The type of the value the Promise resolves to
+ *
+ * @todo testing
  */
-export function delay<V>(ms: number, value: V): Promise<V>;
+export type Lazy<T> = () => Promise<T>;
 
-export function delay<V>(ms: number, value: V | undefined = undefined) {
-  return new Promise(resolve => setTimeout(() => resolve(value), ms));
-}
 /**
- * @todo
+ * Waits for a specified duration, optionally returning a value.
+ * @template V The type of the value to return
+ * @param duration The duration to wait
+ * @param value Optional value to return after waiting
+ * @returns A Promise that resolves after the specified duration
+ *
+ * @todo testing
  */
-export function tick() {
-  return delay(1);
-}
+export const wait: {
+  (duration: Duration.DurationInput): Promise<void>;
+  <V>(duration: Duration.DurationInput, value: Evaluable<V>): Promise<V>;
+} = <V = unknown>(duration: Duration.DurationInput, value?: Evaluable<V>): Promise<V> =>
+  new Promise(resolve =>
+    setTimeout(
+      () => (value ? resolve(Macro.evaluate(value)) : resolve(Macro.never)),
+      Duration.toMillis(duration)
+    )
+  );
+
+/**
+ * Waits for 1 millisecond (a single tick).
+ * @returns A Promise that resolves after 1 millisecond
+ *
+ * @todo testing
+ */
+export const tick = () => wait("1 millis");
 
 /**
  * Ensures that a given promise resolves after at least a specified duration.
- * @template T the type of the promise result.
- * @param {Nullary.Async} fn a function that returns a promise.
- * @param {number} duration the minimum delay duration in milliseconds.
- * @returns {Promise<T>} a promise that resolves to the result of the given promise, but only after at least the specified delay duration.
+ * @template T The type of the promise result
+ * @param fn A function that returns a promise
+ * @param duration The minimum delay duration
+ * @returns A promise that resolves to the result of the given promise, but only after at least the specified delay duration
+ *
+ * @todo implementation
  */
-export async function withMinimumDuration<T>(
-  fn: Function.Nullary.Async<T>,
-  duration: number
-): Promise<T> {
-  const [result] = await Promise.all([fn(), delay(duration)]);
-  return result;
-}
+export const withMinimumDuration: {
+  <T>(fn: Function.Nullary.Async<T>, duration: Duration.DurationInput): Promise<T>;
+} = Macro.todoImpl;
 
 /**
  * Type guard to check if a value is a `Promise`.
@@ -47,11 +67,11 @@ export async function withMinimumDuration<T>(
  * @param maybePromise The value to check.
  * @returns {boolean} `True` if the value is a Promise.
  */
-export const isPromise = (self: unknown): self is Promise<unknown> =>
-  self instanceof Promise ||
-  (self !== null &&
-    typeof self === "object" &&
-    "then" in self &&
-    Function.isCallable(self.then) &&
-    "catch" in self &&
-    Function.isCallable(self.catch));
+export const isPromise = (thing: unknown): thing is Promise<unknown> =>
+  thing instanceof Promise ||
+  (thing !== null &&
+    typeof thing === "object" &&
+    "then" in thing &&
+    Function.isCallable(thing.then) &&
+    "catch" in thing &&
+    Function.isCallable(thing.catch));

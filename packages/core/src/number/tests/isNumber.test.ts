@@ -1,40 +1,50 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
-import { isNumber } from "..";
+import * as Vitest from "vitest";
 
-describe("isNumber [runtime]", () => {
-  it("should return true for valid numbers", () => {
-    expect(isNumber(0)).toBe(true);
-    expect(isNumber(42)).toBe(true);
-    expect(isNumber(-1)).toBe(true);
-    expect(isNumber(3.14)).toBe(true);
-    expect(isNumber(Infinity)).toBe(true);
-    expect(isNumber(-Infinity)).toBe(true);
+import * as Number from "../index.js";
+
+Vitest.describe("[runtime] Number.isNumber", () => {
+  Vitest.it("should be defined", () => {
+    Vitest.expect(Number.isNumber).toBeDefined();
   });
 
-  it("should return false for NaN", () => {
-    expect(isNumber(NaN)).toBe(false);
+  Vitest.it("should return true for valid numbers", () => {
+    Vitest.expect(Number.isNumber(0)).toBe(true);
+    Vitest.expect(Number.isNumber(42)).toBe(true);
+    Vitest.expect(Number.isNumber(-1)).toBe(true);
+    Vitest.expect(Number.isNumber(3.14)).toBe(true);
+    Vitest.expect(Number.isNumber(Infinity)).toBe(true);
+    Vitest.expect(Number.isNumber(-Infinity)).toBe(true);
   });
 
-  it("should return false for non-numbers", () => {
-    expect(isNumber(null)).toBe(false);
-    expect(isNumber(undefined)).toBe(false);
-    expect(isNumber("42")).toBe(false);
-    expect(isNumber([])).toBe(false);
-    expect(isNumber({})).toBe(false);
-    expect(isNumber(true)).toBe(false);
-    expect(isNumber(BigInt(42))).toBe(false);
-    expect(isNumber(Symbol())).toBe(false);
+  Vitest.it("should return false for NaN", () => {
+    Vitest.expect(Number.isNumber(NaN)).toBe(false);
+  });
+
+  Vitest.it("should return false for non-numbers", () => {
+    Vitest.expect(Number.isNumber(null)).toBe(false);
+    Vitest.expect(Number.isNumber(undefined)).toBe(false);
+    Vitest.expect(Number.isNumber("42")).toBe(false);
+    Vitest.expect(Number.isNumber([])).toBe(false);
+    Vitest.expect(Number.isNumber({})).toBe(false);
+    Vitest.expect(Number.isNumber(true)).toBe(false);
+    Vitest.expect(Number.isNumber(BigInt(42))).toBe(false);
+    Vitest.expect(Number.isNumber(Symbol())).toBe(false);
   });
 });
 
-describe("isNumber [types]", () => {
-  it("should maintain type narrowing", () => {
+Vitest.describe("[types] Number.isNumber", () => {
+  Vitest.it("should be defined", () => {
+    type Test = typeof Number.isNumber;
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
+  });
+
+  Vitest.it("should maintain type narrowing", () => {
     const value = 42 as unknown;
 
-    if (isNumber(value)) {
+    if (Number.isNumber(value)) {
       type Test = typeof value;
       type Expect = number;
-      expectTypeOf<Test>().toMatchTypeOf<Expect>();
+      Vitest.expectTypeOf<Test>().toMatchTypeOf<Expect>();
     }
   });
 });

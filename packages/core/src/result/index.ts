@@ -1,43 +1,67 @@
-import { Effect, Either, Schema as S } from "effect";
-import { ConstructorOf, Sync, Table } from "../common/types.js";
+import { Schema as S } from "effect";
 
 import * as Alias from "../alias/index.js";
-import * as Fault from "../fault/index.js";
 import * as Function from "../function/index.js";
 import * as Macro from "../macro/index.js";
 import * as Maybe from "../maybe/index.js";
 import * as Number from "../number/index.js";
 
-export const OkSchema = S.Union(
-  S.Struct({ _tag: S.Literal("ok") }),
-  S.Struct({ _tag: S.Literal("ok"), value: S.Unknown })
-);
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const OkId = "ok" as const;
 
-export const ErrSchema = S.Union(
-  S.Struct({ _tag: S.Literal("err") }),
-  S.Struct({ _tag: S.Literal("err"), error: S.Unknown })
-);
-
-export const Schema = S.Union(OkSchema, ErrSchema);
+/**
+ * @todo documentation
+ */
+export type OkId = typeof OkId;
 
 /**
  * Represents the successful outcome of operation
  * @template V type of inner value
  */
 export type Ok<out V> = {
-  readonly _tag: "ok";
+  readonly _id: OkId;
   readonly value: V;
 };
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const ErrId = "err" as const;
+
+/**
+ * @todo documentation
+ */
+export type ErrId = typeof ErrId;
 
 /**
  * Represents the unsuccessful outcome of operation
  * @template E type of inner error
  */
 export type Err<out E> = {
-  readonly _tag: "err";
+  readonly _id: ErrId;
   readonly error: E;
 };
 
+/**
+ * @todo documentation
+ */
+export const OkSchema = <TInner = unknown>(schema?: S.Schema<TInner>) =>
+  S.Struct({ _id: S.Literal(OkId), value: schema ?? S.Unknown }).pipe(S.asSchema);
+
+/**
+ * @todo documentation
+ */
+export const ErrSchema = <TInner = unknown>(schema?: S.Schema<TInner>) =>
+  S.Struct({ _id: S.Literal(ErrId), error: schema ?? S.Unknown }).pipe(S.asSchema);
+
+/**
+ * @internal
+ * @todo documentation
+ */
 export const MAX_UNFOLD_DEPTH = 512;
 
 /**
@@ -45,6 +69,14 @@ export const MAX_UNFOLD_DEPTH = 512;
  * @template V type of some's inner value
  */
 export type Result<V = never, E = never> = Ok<V> | Err<E>;
+
+/**
+ * @todo documentation
+ */
+export const Schema = <TValue = unknown, TError = unknown>(
+  valueSchema?: S.Schema<TValue>,
+  errorSchema?: S.Schema<TError>
+) => S.Union(OkSchema(valueSchema), ErrSchema(errorSchema)).pipe(S.asSchema);
 
 /**
  * Generic `Result` type. Extends `any` other result
@@ -60,14 +92,14 @@ export type Unknown = Result<unknown, unknown>;
  * @template TResult input `Result` type
  * @returns inner `Ok` value type
  */
-export type ValueOf<TResult extends Any> = TResult extends Ok<infer V> ? V : never;
+export type Value<TResult extends Any> = TResult extends Ok<infer V> ? V : never;
 
 /**
  * Extracts the inner `Err` type
  * @template TResult any `Result`
  * @returns inner `Err` type
  */
-export type ErrorOf<TResult extends Any> = TResult extends Err<infer E> ? E : never;
+export type Error<TResult extends Any> = TResult extends Err<infer E> ? E : never;
 
 /**
  * Unwraps nested `Result` type once
@@ -87,6 +119,8 @@ export type Flatten<Root extends Any> =
  * @returns `Result` of depth 1. All `Err`'s are combined onto single union `Err`
  * @see {@link Result.Flatten}
  * @see {@link Result.Unfold}
+ *
+ * @todo testing
  */
 export type InfiniteUnfold<Root extends Any> =
   [Root] extends [Result<infer RootOk, infer RootErr>] ?
@@ -101,6 +135,8 @@ export type InfiniteUnfold<Root extends Any> =
  * @returns `Result` of depth 1 if depth ≤ `Limit`. Otherwise the unfolded result up to `Limit`
  * @see {@link Result.InfiniteUnfold}
  * @see {@link Result.Flatten}
+ *
+ * @todo testing
  */
 export type Unfold<Root extends Any, Limit extends number = typeof MAX_UNFOLD_DEPTH> =
   Limit extends 0 ? Root
@@ -112,215 +148,100 @@ export type Unfold<Root extends Any, Limit extends number = typeof MAX_UNFOLD_DE
 
 export type Promise<V, E> = Alias.Promise<Result<V, E>>;
 
-export function ok(): Ok<never>;
-export function ok<V = unknown>(value: V): Ok<V>;
-
-/** @internal */
-export function ok() {
-  return arguments.length <= 0 ?
-      { _tag: "ok" }
-    : {
-        _tag: "ok",
-        value: arguments[0],
-      };
-}
-
-export function err(): Err<never>;
-export function err<E = unknown>(error: E): Err<E>;
-
-/** @internal */
-export function err() {
-  return arguments.length <= 0 ?
-      { _tag: "err" }
-    : {
-        _tag: "err",
-        error: arguments[0],
-      };
-}
-
-export function make(tag: "ok"): Result<never, never>;
-export function make<V = unknown, E = unknown>(tag: "ok", value: V): Result<V, E>;
-
-export function make(tag: "err"): Result<never, never>;
-export function make<V = unknown, E = unknown>(tag: "err", error: E): Result<V, E>;
-
-/** @internal */
-export function make<T>(tag: "ok" | "err"): Ok<never> | Ok<T> | Err<never> | Err<T> {
-  if (tag === "ok") {
-    return arguments.length <= 1 ? ok() : ok(arguments[1]);
-  }
-
-  return arguments.length <= 1 ? err() : err(arguments[1]);
-}
+/**
+ * @constructor
+ *
+ * @todo documentation
+ * @todo testing
+ */
+export const ok: {
+  (): Ok<never>;
+  <V>(value: V): Ok<V>;
+} = Macro.cast(
+  <V = never>(value: V): Ok<V> => ({
+    _id: OkId,
+    value: value,
+  })
+);
 
 /**
- * @constructor Create `Err` wrapped faults
+ * @constructor
+ *
+ * @todo documentation
+ * @todo testing
  */
-export const fault: {
-  /**
-   * @constructor Create `Err` wrapped `Fault.Base` from tag
-   * @example
-   * const err = Result.fault("CustomFault")
-   * //    ^? Result.Err<Fault.Base<"CustomFault">>
-   */
-  <const TTag extends Fault.Tag>(tag: TTag): Err<Fault.Base<TTag>>;
+export const err: {
+  (): Err<never>;
+  <E>(error: E): Err<E>;
+} = Macro.cast(
+  <E = never>(error: E): Err<E> => ({
+    _id: ErrId,
+    error: error,
+  })
+);
 
-  /**
-   * @constructor Create `Err` wrapped `Fault.Extended` from tag
-   * @example
-   * const err = Result.fault("CustomFault", { issues: [ "invalid_stuff" ]})
-   * //    ^? Result.Err<Fault.Extended<"CustomFault", { issues: string[] }>>
-   */
-  <const TTag extends Fault.Tag, TContext extends Table>(
-    tag: TTag,
-    context: TContext
-  ): Err<Fault.Extended<TTag, TContext>>;
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const _try: {
+  <V>($try: () => V): Result<V, unknown>;
+  <V, E>(options: { try: () => V; catch: (error: unknown) => E }): Result<V, E>;
+} = Macro.todoImpl;
 
-  /**
-   * @constructor Create `Err` wrapped `Fault.Base` from constructor
-   * @example
-   * class CustomFault extends Fault.Base("CustomFault") {}
-   * const err = Result.fault(CustomFault)
-   * //    ^? Result.Err<CustomFault>
-   */
-  <const TFault extends Fault.Base<Fault.Tag>>(
-    constructor: Fault.IsBase<TFault> extends true ? ConstructorOf<TFault> : never
-  ): Err<TFault>;
+export { _try as try };
 
-  /**
-   * @constructor Create `Err` wrapped `Fault.Base` from constructor
-   * @example
-   * type Context = { code: number }
-   * class CustomFault extends Fault.Extended("CustomFault")<Context> {}
-   * const err = Result.fault(CustomFault, { code: 404 })
-   * //    ^? Result.Err<CustomFault>
-   */
-  <const TFault extends Fault.Extended<Fault.Tag, Table>>(
-    constructor: ConstructorOf<TFault>,
-    context: Fault.IsExtened<TFault> extends true ? Fault.ContextOf<TFault> : void
-  ): Err<TFault>;
-} = function (): any {
-  // @ts-expect-error
-  return err(Fault.make(...arguments));
-};
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const isOk: {
+  <V>(result: Result<V, any>): result is Ok<V>;
+  (thing: unknown): thing is Ok<unknown>;
+} = (thing: unknown): thing is Ok<unknown> => Macro.todoImpl();
 
-function try_<V>($try: Sync<V>): Result<V, never>;
-function try_<V>(options: {
-  readonly try: Sync<V>;
-  finally?: Function.Callback;
-}): Result<V, never>;
-function try_<V, E>(options: {
-  readonly try: Sync<V>;
-  readonly catch: (error: unknown) => E;
-  finally?: Function.Callback;
-}): Result<V, E>;
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const isErr: {
+  <E>(result: Result<any, E>): result is Err<E>;
+  (thing: unknown): thing is Err<unknown>;
+} = (thing: unknown): thing is Err<unknown> => Macro.todoImpl();
 
-function try_<V, E>(
-  tryOrOptions:
-    | Sync<V>
-    | { readonly try: Sync<V>; finally?: Function.Callback }
-    | {
-        readonly try: Sync<V>;
-        readonly catch: (error: unknown) => E;
-        finally?: Function.Callback;
-      }
-): Result<V, E> {
-  const [$try, $catch, $finally] =
-    Function.isCallable(tryOrOptions) ?
-      [tryOrOptions, undefined, undefined]
-    : [
-        tryOrOptions.try,
-        "catch" in tryOrOptions ? tryOrOptions.catch : undefined,
-        tryOrOptions.finally,
-      ];
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const isResult: {
+  (thing: unknown): thing is Result<any, any>;
+} = (thing: unknown): thing is Result<any, any> => Macro.todoImpl();
 
-  try {
-    return ok($try());
-  } catch (error) {
-    return $catch ? err($catch(error)) : err();
-  } finally {
-    $finally?.();
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export class UnwrapError extends Error {
+  constructor() {
+    super(`Result is "Err". Unwrap operation failed`);
   }
 }
 
-export { try_ as try };
-
 /**
- * Checks if provided `Result` is `Ok`
- * @template V inner `Ok` type
- * @param {Result<V, any>} result result to be checked
- * @returns {boolean} `true` if `Ok`. Otherwise `false`
+ * @todo documentation
+ * @todo testing
  */
-export function isOk<V>(result: Result<V, any>): result is Ok<V>;
-
-/**
- * Checks if thing is `Ok`
- * @param {unknown} thing result to be checked
- * @returns {boolean} `true` if `Ok`. Otherwise `false`
- */
-export function isOk(thing: unknown): thing is Ok<unknown>;
-
-/**
- * @internal
- */
-export function isOk<V>(resultOrThing: Result<V, any> | unknown): resultOrThing is Ok<V> {
-  return S.is(OkSchema)(resultOrThing);
-}
-
-/**
- * Alias for `isOk`
- * @template V inner `Ok` value type
- * @param {Result<V, any>} result result to be checked
- * @returns {boolean} `true` if `Ok`. Otherwise `false`
- * @see {@link isOk}
- */
-export const notErr = isOk;
-
-/**
- * Checks if provided `Result` is `Err`
- * @template E inner `Err` error type
- * @param {Result<any, E>} result result to be checked
- * @returns {boolean} `true` if `Err`. Otherwise `false`
- */
-export function isErr<E>(result: Result<any, E>): result is Err<E>;
-
-/**
- * Checks if thing is `Err`
- * @param {unknown} thing to be checked
- * @returns {boolean} `true` if `Err`. Otherwise `false`
- */
-export function isErr(thing: unknown): thing is Err<unknown>;
-
-/** @internal */
-export function isErr<E>(resultOrThing: Result<any, E> | unknown): resultOrThing is Err<E> {
-  return S.is(ErrSchema)(resultOrThing);
-}
-
-/**
- * Alias for `isErr`
- * @template E inner `Err` error type
- * @param {Result<any, E>} result result to be checked
- * @returns {boolean} `true` if `Err`. Otherwise- `false`
- * @see {@link isErr}
- */
-export const notOk = isErr;
-
-/**
- * Checks if provided `thing` is of type `Result`
- * @param {unknown} thing data to be checked
- * @returns {boolean} `true` if thing is `Maybe`. Otherwise `false`
- */
-export function isResult(thing: unknown): thing is Unknown {
-  return isOk(thing) || isErr(thing);
-}
-
 export const unwrap: {
   <V>(): (self: Result<V, any>) => V;
   <V>(self: Result<V, any>): V;
 } = Macro.dualify(0, <V>(self: Result<V, any>) =>
-  isOk(self) ? self.value : Macro.panic(new Error("unwrap failed. Result is `Err`"))
+  isOk(self) ? self.value : Macro.panic(new UnwrapError())
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const peek: {
   <V, E>(fn: (ok: V) => any): (self: Result<V, E>) => Result<V, E>;
   <V, E>(self: Result<V, E>, fn: (ok: V) => any): Result<V, E>;
@@ -329,6 +250,10 @@ export const peek: {
   return self;
 });
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const peekErr: {
   <V, E>(fn: (err: E) => any): (self: Result<V, E>) => Result<V, E>;
   <V, E>(self: Result<V, E>, fn: (err: E) => any): Result<V, E>;
@@ -337,6 +262,10 @@ export const peekErr: {
   return self;
 });
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const map: {
   <V, E, To>(mapper: Function.Mapper<V, To>): (self: Result<V, E>) => Result<To, E>;
   <V, E, To>(self: Result<V, E>, mapper: Function.Mapper<V, To>): Result<To, E>;
@@ -344,6 +273,10 @@ export const map: {
   isOk(self) ? ok(mapper(self.value)) : self
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const mapErr: {
   <V, E, To>(mapper: (error: E) => To): (self: Result<V, E>) => Result<V, To>;
   <V, E, To>(self: Result<V, E>, mapper: (error: E) => To): Result<V, To>;
@@ -351,6 +284,10 @@ export const mapErr: {
   isErr(self) ? err(mapper(self.error)) : self
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const or: {
   <V, E>(fn: (error: E) => V): (self: Result<V, E>) => V;
   <V, E>(self: Result<V, E>, fn: (error: E) => V): V;
@@ -362,6 +299,10 @@ export const or: {
   : fnOrValue
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const unfold: {
   <V, E>(): (self: Result<V, E>) => Unfold<Result<V, E>>;
   <V, E>(self: Result<V, E>): Unfold<Result<V, E>>;
@@ -378,6 +319,10 @@ export const unfold: {
   return ok(inner) as Unfold<Result<V, E>>;
 });
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const flatten: {
   <V, E>(): (self: Result<V, E>) => Flatten<Result<V, E>>;
   <V, E>(self: Result<V, E>): Flatten<Result<V, E>>;
@@ -387,6 +332,10 @@ export const flatten: {
   return self.value as Flatten<Result<V, E>>;
 });
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const flatmap: {
   <V, E, ToV, ToE>(
     mapper: (ok: V) => Result<ToV, ToE>
@@ -401,6 +350,10 @@ export const flatmap: {
     isOk(self) ? (mapper(self.value) as Result<ToV, E | ToE>) : self
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const check: {
   <V, E>(predicate: Function.Predicate<V>): (self: Result<V, E>) => Result<V, E | never>;
   <V, E>(self: Result<V, E>, predicate: Function.Predicate<V>): Result<V, E | never>;
@@ -427,35 +380,13 @@ export const check: {
     : self
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const toMaybe: {
   <V>(): (self: Result<V, any>) => Maybe.Maybe<V>;
   <V>(self: Result<V, any>): Maybe.Maybe<V>;
 } = Macro.dualify(0, <V>(self: Result<V, any>) =>
   isOk(self) ? Maybe.some(self.value) : Maybe.none()
 );
-
-export const toEffect = <V, E>(self: Result<V, E>): Effect.Effect<V, E> =>
-  isOk(self) ? Effect.succeed(self.value) : Effect.fail(self.error);
-
-export const toEither = <V, E>(self: Result<V, E>): Either.Either<V, E> =>
-  isOk(self) ? Either.right(self.value) : Either.left(self.error);
-
-export const expand = <A, E1, E2, R>(
-  self: Effect.Effect<Result<A, E1>, E2, R>
-): Effect.Effect<A, E1 | E2, R> =>
-  self.pipe(
-    Effect.flatMap(result =>
-      isOk(result) ? Effect.succeed(result.value) : Effect.fail(result.error)
-    )
-  );
-
-export const merge = <A, E, R>(
-  self: Effect.Effect<A, E, R>
-): Effect.Effect<Result<A, E>, never, R> =>
-  self.pipe(
-    Effect.mapBoth({
-      onSuccess: v => ok(v),
-      onFailure: e => err(e),
-    }),
-    Effect.merge
-  );

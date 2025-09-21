@@ -1,35 +1,64 @@
 import { Data, Effect, Schema } from "effect";
+
 import * as Array from "../array/index.js";
 import * as Macro from "../macro/index.js";
 
-/** @alias NumberConstructor */
+/**
+ * @todo documentation
+ */
 export const Constructor = Number;
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const isNumber = (thing: unknown): thing is number =>
   typeof thing === "number" && !Number.isNaN(thing);
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const isInt = (thing: unknown): thing is number =>
   isNumber(thing) && Number.isInteger(thing);
 
+/**
+ * @todo documentation
+ */
 export namespace Range {
   export type Object = { min: number; max: number };
   export type Tuple = [min: number, max: number];
 }
 
+/**
+ * @todo documentation
+ */
 export type Range = Range.Object | Range.Tuple;
 
+/**
+ * @todo documentation
+ */
 export const RangeObjectSchema = Schema.Struct({
   min: Schema.Number.pipe(Schema.nonNaN()),
   max: Schema.Number.pipe(Schema.nonNaN()),
 });
 
+/**
+ * @todo documentation
+ */
 export const RangeTupleSchema = Schema.Tuple(
   Schema.Number.pipe(Schema.nonNaN()),
   Schema.Number.pipe(Schema.nonNaN())
 );
 
+/**
+ * @todo documentation
+ */
 export class InvalidRangeError extends Data.TaggedError("InvalidRangeError") {}
 
+/**
+ * @todo documentation
+ */
 export const RangeSchema = Schema.Union(RangeObjectSchema, RangeTupleSchema).pipe(
   Schema.filter(
     range => {
@@ -48,17 +77,32 @@ export const RangeSchema = Schema.Union(RangeObjectSchema, RangeTupleSchema).pip
   )
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const isRange = (thing: unknown): thing is Range =>
   Schema.is(RangeSchema)(thing, { onExcessProperty: "error" });
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const resolveRange = (self: Range): Range.Object => {
   if (Array.isArray(self)) return { min: self[0], max: self[1] };
   return self;
 };
 
-/** @constructor */
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const range = (self: Range) => self;
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const clamp: {
   <E, R>(
     self: Effect.Effect<number, E, R>,

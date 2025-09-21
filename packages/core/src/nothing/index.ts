@@ -1,15 +1,30 @@
-import { Schema } from "effect";
+import { Schema as S } from "effect";
 
+import * as Macro from "../macro/index.js";
+
+/**
+ * @todo documentation
+ */
 export class Nothing {
-  readonly _tag = "nothing" as const;
+  readonly _id = "nothing" as const;
 }
 
-export const NothingSchema = Schema.Struct({ _tag: Schema.Literal("nothing") });
+/**
+ * @todo documentation
+ */
+export const Schema = S.Struct({ _id: S.Literal("nothing") });
 
-export const nothing = new Nothing();
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const make = Macro.singleton(
+  "@montflow/nothing",
+  (): Nothing => ({ _id: "nothing" as const })
+);
 
-export const make = (): Nothing => nothing;
-
-export function isNothing(thing: unknown): thing is Nothing {
-  return Schema.is(NothingSchema)(thing);
-}
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const isNothing = (thing: unknown): thing is Nothing => S.is(Schema)(thing);

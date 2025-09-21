@@ -1,78 +1,93 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
-import { Range, resolveRange } from "..";
+import * as Vitest from "vitest";
 
-describe("resolveRange [runtime]", () => {
-  it("should resolve array-style range", () => {
-    const range: Range = [1, 10];
+import * as Number from "../index.js";
+
+Vitest.describe("[runtime] Number.resolveRange", () => {
+  Vitest.it("should be defined", () => {
+    Vitest.expect(Number.resolveRange).toBeDefined();
+  });
+
+  Vitest.it("should resolve array-style range", () => {
+    const range: Number.Range = [1, 10];
     const expected = { min: 1, max: 10 };
 
-    const result = resolveRange(range);
+    const result = Number.resolveRange(range);
 
-    expect(result).toEqual(expected);
+    Vitest.expect(result).toEqual(expected);
   });
 
-  it("should pass through object-style range", () => {
-    const range: Range = { min: 1, max: 10 };
+  Vitest.it("should pass through object-style range", () => {
+    const range: Number.Range = { min: 1, max: 10 };
     const expected = { min: 1, max: 10 };
 
-    const result = resolveRange(range);
+    const result = Number.resolveRange(range);
 
-    expect(result).toEqual(expected);
+    Vitest.expect(result).toEqual(expected);
   });
 
-  it("should work with negative numbers", () => {
-    const arrayRange: Range = [-10, 5];
-    const objectRange: Range = { min: -10, max: 5 };
+  Vitest.it("should work with negative numbers", () => {
+    const arrayRange: Number.Range = [-10, 5];
+    const objectRange: Number.Range = { min: -10, max: 5 };
 
-    const arrayResult = resolveRange(arrayRange);
-    const objectResult = resolveRange(objectRange);
+    const arrayResult = Number.resolveRange(arrayRange);
+    const objectResult = Number.resolveRange(objectRange);
 
-    expect(arrayResult).toEqual(objectResult);
-    expect(arrayResult).toEqual({ min: -10, max: 5 });
+    Vitest.expect(arrayResult).toEqual(objectResult);
+    Vitest.expect(arrayResult).toEqual({ min: -10, max: 5 });
   });
 
-  it("should work with floating point numbers", () => {
-    const arrayRange: Range = [1.5, 10.75];
-    const objectRange: Range = { min: 1.5, max: 10.75 };
+  Vitest.it("should work with floating point numbers", () => {
+    const arrayRange: Number.Range = [1.5, 10.75];
+    const objectRange: Number.Range = { min: 1.5, max: 10.75 };
 
-    const arrayResult = resolveRange(arrayRange);
-    const objectResult = resolveRange(objectRange);
+    const arrayResult = Number.resolveRange(arrayRange);
+    const objectResult = Number.resolveRange(objectRange);
 
-    expect(arrayResult).toEqual(objectResult);
-    expect(arrayResult).toEqual({ min: 1.5, max: 10.75 });
+    Vitest.expect(arrayResult).toEqual(objectResult);
+    Vitest.expect(arrayResult).toEqual({ min: 1.5, max: 10.75 });
   });
 });
 
-describe("resolveRange [types]", () => {
-  it("should return object type for array input", () => {
-    const range: Range = [1, 10];
-    const result = resolveRange(range);
+Vitest.describe("[types] Number.resolveRange", () => {
+  Vitest.it("should be defined", () => {
+    type Test = typeof Number.resolveRange;
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
+  });
+
+  Vitest.it("should return object type for array input", () => {
+    const range: Number.Range = [1, 10];
+    const result = Number.resolveRange(range);
 
     type Result = typeof result;
     type Expected = { min: number; max: number };
 
-    expectTypeOf<Result>().toMatchTypeOf<Expected>();
+    Vitest.expectTypeOf<Result>().toMatchTypeOf<Expected>();
   });
 
-  it("should return object type for object input", () => {
-    const range: Range = { min: 1, max: 10 };
-    const result = resolveRange(range);
+  Vitest.it("should return object type for object input", () => {
+    const range: Number.Range = { min: 1, max: 10 };
+    const result = Number.resolveRange(range);
 
     type Result = typeof result;
     type Expected = { min: number; max: number };
 
-    expectTypeOf<Result>().toMatchTypeOf<Expected>();
+    Vitest.expectTypeOf<Result>().toMatchTypeOf<Expected>();
   });
 });
 
-describe("Range type", () => {
-  it("should allow array type assignment", () => {
-    const range: Range = [1, 10];
-    expectTypeOf<typeof range>().toMatchTypeOf<Range>();
+Vitest.describe("[types] Number.Range", () => {
+  Vitest.it("should be defined", () => {
+    type Test = Number.Range;
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
 
-  it("should allow object type assignment", () => {
-    const range: Range = { min: 1, max: 10 };
-    expectTypeOf<typeof range>().toMatchTypeOf<Range>();
+  Vitest.it("should allow array type assignment", () => {
+    const range: Number.Range = [1, 10];
+    Vitest.expectTypeOf<typeof range>().toMatchTypeOf<Number.Range>();
+  });
+
+  Vitest.it("should allow object type assignment", () => {
+    const range: Number.Range = { min: 1, max: 10 };
+    Vitest.expectTypeOf<typeof range>().toMatchTypeOf<Number.Range>();
   });
 });

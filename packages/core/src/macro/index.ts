@@ -1,65 +1,141 @@
-import { Evaluable } from "../common/index.js";
+import * as Constructor from "../constructor/index.js";
 import * as Function from "../function/index.js";
+import { Evaluable, Table } from "../global/index.js";
 
 /**
  * Executes a function that takes no arguments and returns its result.
  * @template T return type of the function
  * @param {() => T} fn function to execute
  * @returns {T} result of the function execution
+ * @todo testing
  */
 export const lambda = <T>(fn: () => T): T => fn();
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const never = null as unknown as never;
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const unknown = null as unknown;
-
-export { nothing } from "../nothing/index.js";
 
 const _void = { _tag: "void" } as unknown as void;
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export { _void as void };
 
 /**
- * Throws the provided error and never returns.
- * @template E error kind
- * @param {E} error error to throw
- * @throws {E} always throws the provided error
+ * @todo documentation
+ * @todo testing
  */
-export const panic = <const E>(error: E): never => {
-  throw error;
-};
+export const panic: {
+  <E>(error: E): never;
+  (message: string): never;
+} = <E>(errorOrMessage: E | string) => {
+  if (typeof errorOrMessage === "string") {
+    throw new Error(errorOrMessage);
+  }
 
-export const panicWith = <const T extends string>(msg: T): never => {
-  throw new Error(msg);
+  throw errorOrMessage;
 };
 
 /**
  * Casts an unknown value to the specified type without runtime checks.
  * @template To target type to cast to
  * @param {unknown} x value to cast
- * @returns {To} value cast to target type
+ * @returns {T} value cast to target type
  */
-export const cast = <To>(x: unknown): To => x as To;
-
-/**
- * Asserts that a value is of the specified type without runtime checks.
- * @template Type type to assert
- * @param {unknown} _ value to assert
- * @returns {boolean} always returns true
- */
-export const assertType = <Type>(_: unknown): _ is Type => true;
+export const cast = <T>(x: unknown): T => x as T;
 
 /**
  * Evaluates a value or function and returns the result.
  * @template T type of the value or function return
- * @param {T | (() => T)} resolvable value or function to evaluate
+ * @param {T | (() => T)} evaluable value or function to evaluate
  * @returns {T} resolved value
  */
-export const evaluate = <T>(resolvable: Evaluable<T>): T =>
-  Function.isCallable(resolvable) ? resolvable() : resolvable;
+export const evaluate = <T>(evaluable: Evaluable<T>): T =>
+  Function.isCallable(evaluable) ? evaluable() : evaluable;
 
-export const todo = (msg?: string) => panic(Error(msg));
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const todo = (message?: string) => panic(message ?? "todo");
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const todoImpl = () => todo("missing implementation");
+
+const _singletons: Table<string, Constructor.Any | Function.Maker.Any> = {};
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export class SingletonAlreadyExistsError extends Error {
+  constructor(id: string) {
+    super(`Singleton ${id} already exists`);
+  }
+}
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const singleton: {
+  <TConstructor extends Constructor.Any>(
+    id: string,
+    ctor: TConstructor,
+    ...args: Constructor.Args<TConstructor>
+  ): () => Constructor.Instance<TConstructor>;
+
+  <TMaker extends Function.Maker.Any>(
+    id: string,
+    ctor: TMaker,
+    ...args: Function.Maker.Args<TMaker>
+  ): () => Function.Maker.Instance<TMaker>;
+} = <TConstructor extends Constructor.Any | Function.Maker.Any>(
+  id: string,
+  ctor: TConstructor,
+  ...args: TConstructor extends Constructor.Any ? Constructor.Args<TConstructor>
+  : TConstructor extends Function.Maker.Any ? Function.Maker.Args<TConstructor>
+  : never
+) => {
+  if (_singletons[id]) {
+    throw panic(new SingletonAlreadyExistsError(id));
+  }
+
+  return () => {
+    if (_singletons[id]) {
+      return _singletons[id];
+    }
+
+    const instance =
+      Constructor.isConstructor(ctor) ? new ctor(...args)
+      : Function.isCallable(ctor) ? ctor(...args)
+      : void 0;
+
+    if (instance === void 0) {
+      // TODO: create a custom error
+      throw panic(new Error("Invalid singleton"));
+    }
+
+    return (_singletons[id] = instance);
+  };
+};
+
+/**
+ * @todo documentation
+ */
 export namespace Dualify {
   export type Options =
     | { withTail?: false }
@@ -67,10 +143,12 @@ export namespace Dualify {
 }
 
 /**
- * @exprimental
+ * @experimental
  *
  * Creates a function that can be used in both explicit and curried styles.
  *
+ * @template Explicit The explicit function type
+ * @template Curried The curried function type
  * @param arity The number of arguments (excluding `self` and `tail`) expected for the function.
  * @param body The explicit version of the function.
  * @param options Optional configuration:
@@ -78,6 +156,7 @@ export namespace Dualify {
  *   - `isSelf`: Predicate to determine if the first argument is the `self` reference.
  *
  * @returns A dual-style function supporting both explicit and curried usage.
+ * @todo testing
  *
  * @example
  * ```ts

@@ -1,43 +1,53 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
-import { isInt } from "..";
+import * as Vitest from "vitest";
 
-describe("isInt [runtime]", () => {
-  it("should return true for integers", () => {
-    expect(isInt(0)).toBe(true);
-    expect(isInt(42)).toBe(true);
-    expect(isInt(-1)).toBe(true);
-    expect(isInt(Number.MAX_SAFE_INTEGER)).toBe(true);
-    expect(isInt(Number.MIN_SAFE_INTEGER)).toBe(true);
+import * as Number from "../index.js";
+
+Vitest.describe("[runtime] Number.isInt", () => {
+  Vitest.it("should be defined", () => {
+    Vitest.expect(Number.isInt).toBeDefined();
   });
 
-  it("should return false for non-integer numbers", () => {
-    expect(isInt(3.14)).toBe(false);
-    expect(isInt(0.1)).toBe(false);
-    expect(isInt(-2.5)).toBe(false);
-    expect(isInt(Infinity)).toBe(false);
-    expect(isInt(-Infinity)).toBe(false);
-    expect(isInt(NaN)).toBe(false);
+  Vitest.it("should return true for integers", () => {
+    Vitest.expect(Number.isInt(0)).toBe(true);
+    Vitest.expect(Number.isInt(42)).toBe(true);
+    Vitest.expect(Number.isInt(-1)).toBe(true);
+    Vitest.expect(Number.isInt(Number.Constructor.MAX_SAFE_INTEGER)).toBe(true);
+    Vitest.expect(Number.isInt(Number.Constructor.MIN_SAFE_INTEGER)).toBe(true);
   });
 
-  it("should return false for non-numbers", () => {
-    expect(isInt(null)).toBe(false);
-    expect(isInt(undefined)).toBe(false);
-    expect(isInt("42")).toBe(false);
-    expect(isInt([])).toBe(false);
-    expect(isInt({})).toBe(false);
-    expect(isInt(true)).toBe(false);
-    expect(isInt(BigInt(42))).toBe(false);
+  Vitest.it("should return false for non-integer numbers", () => {
+    Vitest.expect(Number.isInt(3.14)).toBe(false);
+    Vitest.expect(Number.isInt(0.1)).toBe(false);
+    Vitest.expect(Number.isInt(-2.5)).toBe(false);
+    Vitest.expect(Number.isInt(Infinity)).toBe(false);
+    Vitest.expect(Number.isInt(-Infinity)).toBe(false);
+    Vitest.expect(Number.isInt(NaN)).toBe(false);
+  });
+
+  Vitest.it("should return false for non-numbers", () => {
+    Vitest.expect(Number.isInt(null)).toBe(false);
+    Vitest.expect(Number.isInt(undefined)).toBe(false);
+    Vitest.expect(Number.isInt("42")).toBe(false);
+    Vitest.expect(Number.isInt([])).toBe(false);
+    Vitest.expect(Number.isInt({})).toBe(false);
+    Vitest.expect(Number.isInt(true)).toBe(false);
+    Vitest.expect(Number.isInt(BigInt(42))).toBe(false);
   });
 });
 
-describe("isInt [types]", () => {
-  it("should maintain type narrowing", () => {
+Vitest.describe("[types] Number.isInt", () => {
+  Vitest.it("should be defined", () => {
+    type Test = typeof Number.isInt;
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
+  });
+
+  Vitest.it("should maintain type narrowing", () => {
     const value = 42 as unknown;
 
-    if (isInt(value)) {
+    if (Number.isInt(value)) {
       type Test = typeof value;
       type Expect = number;
-      expectTypeOf<Test>().toMatchTypeOf<Expect>();
+      Vitest.expectTypeOf<Test>().toMatchTypeOf<Expect>();
     }
   });
 });

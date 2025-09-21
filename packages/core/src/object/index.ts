@@ -1,8 +1,15 @@
-import { Simplify, Table } from "../common/index.js";
+import { Simplify, Table } from "../global/index.js";
+
 import * as Macro from "../macro/index.js";
 
+/**
+ * @todo documentation
+ */
 export const Constructor = Object;
 
+/**
+ * @todo documentation
+ */
 export type Optional<T, K extends keyof T> = Simplify<Omit<T, K> & Partial<Pick<T, K>>>;
 
 /**
@@ -18,6 +25,9 @@ export type Value<Input extends Table, K extends keyof Input> = Input[K];
  */
 export type Keys<Input extends Table> = Input extends Table<infer K, any> ? K : never;
 
+/**
+ * @todo documentation
+ */
 export type IsEmpty<T> = keyof T extends never ? false : true;
 
 /**
@@ -26,13 +36,24 @@ export type IsEmpty<T> = keyof T extends never ? false : true;
  */
 export type Values<Input extends Table> = Input extends Table<PropertyKey, infer V> ? V : never;
 
+/**
+ * @todo documentation
+ */
 export type Entries<Input extends Table> = {
   [K in keyof Input]-?: [K, Input[K]];
 }[keyof Input];
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const isObject = (thing: unknown): thing is Object =>
   typeof thing === "object" && thing !== null;
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const hasKey: {
   <T extends Table, K extends PropertyKey>(
     self: T,
@@ -50,9 +71,21 @@ export const hasKey: {
     key in self && self[key] !== undefined
 );
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const values = <const T extends Table>(input: T) => Object.values(input) as Values<T>[];
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const keys = <const T extends Table>(input: T) => Object.keys(input) as Keys<T>[];
 
+/**
+ * @todo documentation
+ * @todo testing
+ */
 export const entries = <const T extends Table>(input: T) =>
   Object.entries(input) as Entries<T>[];
