@@ -1,5 +1,3 @@
-import { Schema as S } from "effect";
-
 import * as Macro from "../macro/index.js";
 
 /**
@@ -8,11 +6,6 @@ import * as Macro from "../macro/index.js";
 export class Nothing {
   readonly _id = "nothing" as const;
 }
-
-/**
- * @todo documentation
- */
-export const Schema = S.Struct({ _id: S.Literal("nothing") });
 
 /**
  * @todo documentation
@@ -26,5 +19,6 @@ export const make = Macro.singleton(
 /**
  * @todo documentation
  * @todo testing
+ * @todo implementation
  */
-export const isNothing = (thing: unknown): thing is Nothing => S.is(Schema)(thing);
+export const isNothing = (thing: unknown): thing is Nothing => Macro.todoImpl();

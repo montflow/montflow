@@ -1,4 +1,3 @@
-import { Schema as S } from "effect";
 import * as Alias from "../alias/index.js";
 import * as Async from "../async/index.js";
 import * as Function from "../function/index.js";
@@ -30,12 +29,6 @@ export type Some<out V> = {
 
 /**
  * @todo documentation
- */
-export const SomeSchema = <TInner = unknown>(schema?: S.Schema<TInner>) =>
-  S.Struct({ _id: S.Literal(SomeId), value: schema ?? S.Unknown }).pipe(S.asSchema);
-
-/**
- * @todo documentation
  * @todo testing
  */
 export const NoneId = "none" as const;
@@ -55,18 +48,7 @@ export type None = {
 /**
  * @todo documentation
  */
-export const NoneSchema = S.Struct({ _id: S.Literal(NoneId) }).pipe(S.asSchema);
-
-/**
- * @todo documentation
- */
 export type Maybe<V = never> = Some<V> | None;
-
-/**
- * @todo documentation
- */
-export const Schema = <TInner = unknown>(schema?: S.Schema<TInner>) =>
-  S.Union(SomeSchema(schema), NoneSchema).pipe(S.asSchema);
 
 /**
  * @internal

@@ -1,5 +1,3 @@
-import { Data, Effect, Schema } from "effect";
-
 import * as Array from "../array/index.js";
 import * as Macro from "../macro/index.js";
 
@@ -37,52 +35,9 @@ export type Range = Range.Object | Range.Tuple;
 
 /**
  * @todo documentation
- */
-export const RangeObjectSchema = Schema.Struct({
-  min: Schema.Number.pipe(Schema.nonNaN()),
-  max: Schema.Number.pipe(Schema.nonNaN()),
-});
-
-/**
- * @todo documentation
- */
-export const RangeTupleSchema = Schema.Tuple(
-  Schema.Number.pipe(Schema.nonNaN()),
-  Schema.Number.pipe(Schema.nonNaN())
-);
-
-/**
- * @todo documentation
- */
-export class InvalidRangeError extends Data.TaggedError("InvalidRangeError") {}
-
-/**
- * @todo documentation
- */
-export const RangeSchema = Schema.Union(RangeObjectSchema, RangeTupleSchema).pipe(
-  Schema.filter(
-    range => {
-      const { min, max } = {
-        min: "0" in range ? range[0] : range.min,
-        max: "1" in range ? range[1] : range.max,
-      };
-
-      if (min > max) {
-        return { message: "invalid_range", path: ["range"] };
-      }
-
-      return true;
-    },
-    { identifier: "RangeSchema" }
-  )
-);
-
-/**
- * @todo documentation
  * @todo testing
  */
-export const isRange = (thing: unknown): thing is Range =>
-  Schema.is(RangeSchema)(thing, { onExcessProperty: "error" });
+export const isRange = (thing: unknown): thing is Range => Macro.todoImpl();
 
 /**
  * @todo documentation
@@ -102,31 +57,9 @@ export const range = (self: Range) => self;
 /**
  * @todo documentation
  * @todo testing
+ * @todo implementation
  */
-export const clamp: {
-  <E, R>(
-    self: Effect.Effect<number, E, R>,
-    range: Range
-  ): Effect.Effect<number, E | InvalidRangeError, R>;
-
-  <E, R>(
-    range: Range
-  ): (self: Effect.Effect<number, E, R>) => Effect.Effect<number, E | InvalidRangeError, R>;
-} = Macro.dualify(
-  1,
-  <E, R>(
-    self: Effect.Effect<number, E, R>,
-    range: Range
-  ): Effect.Effect<number, E | InvalidRangeError, R> =>
-    Effect.if(isRange(range), {
-      onTrue: () =>
-        Effect.map(self, n => {
-          const { min, max } = resolveRange(range);
-          return Math.min(Math.max(n, min), max);
-        }),
-      onFalse: () => new InvalidRangeError(),
-    })
-);
+export const clamp = (n: number, range: Range) => Macro.todoImpl();
 
 /**
  * Decrements given number type. Valid inputs inlcude 1 ≤ n ≤ 1024

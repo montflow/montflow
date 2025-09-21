@@ -1,5 +1,3 @@
-import { Duration } from "effect";
-
 import * as Function from "../function/index.js";
 import { Evaluable } from "../global/index.js";
 import * as Macro from "../macro/index.js";
@@ -21,23 +19,15 @@ export type Maybe<T> = Promise<T> | T;
 export type Lazy<T> = () => Promise<T>;
 
 /**
- * Waits for a specified duration, optionally returning a value.
- * @template V The type of the value to return
- * @param duration The duration to wait
- * @param value Optional value to return after waiting
- * @returns A Promise that resolves after the specified duration
- *
+ * @todo documentation
  * @todo testing
  */
 export const wait: {
-  (duration: Duration.DurationInput): Promise<void>;
-  <V>(duration: Duration.DurationInput, value: Evaluable<V>): Promise<V>;
-} = <V = unknown>(duration: Duration.DurationInput, value?: Evaluable<V>): Promise<V> =>
+  (millis: number): Promise<void>;
+  <V>(millis: number, value: Evaluable<V>): Promise<V>;
+} = <V = unknown>(millis: number, value?: Evaluable<V>): Promise<V> =>
   new Promise(resolve =>
-    setTimeout(
-      () => (value ? resolve(Macro.evaluate(value)) : resolve(Macro.never)),
-      Duration.toMillis(duration)
-    )
+    setTimeout(() => (value ? resolve(Macro.evaluate(value)) : resolve(Macro.never)), millis)
   );
 
 /**
@@ -46,7 +36,7 @@ export const wait: {
  *
  * @todo testing
  */
-export const tick = () => wait("1 millis");
+export const tick = () => wait(1);
 
 /**
  * Ensures that a given promise resolves after at least a specified duration.
@@ -58,7 +48,7 @@ export const tick = () => wait("1 millis");
  * @todo implementation
  */
 export const withMinimumDuration: {
-  <T>(fn: Function.Nullary.Async<T>, duration: Duration.DurationInput): Promise<T>;
+  <T>(fn: Function.Nullary.Async<T>, millis: number): Promise<T>;
 } = Macro.todoImpl;
 
 /**

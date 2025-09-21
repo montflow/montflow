@@ -1,5 +1,3 @@
-import { Schema as S } from "effect";
-
 import * as Alias from "../alias/index.js";
 import * as Function from "../function/index.js";
 import * as Macro from "../macro/index.js";
@@ -47,18 +45,6 @@ export type Err<out E> = {
 };
 
 /**
- * @todo documentation
- */
-export const OkSchema = <TInner = unknown>(schema?: S.Schema<TInner>) =>
-  S.Struct({ _id: S.Literal(OkId), value: schema ?? S.Unknown }).pipe(S.asSchema);
-
-/**
- * @todo documentation
- */
-export const ErrSchema = <TInner = unknown>(schema?: S.Schema<TInner>) =>
-  S.Struct({ _id: S.Literal(ErrId), error: schema ?? S.Unknown }).pipe(S.asSchema);
-
-/**
  * @internal
  * @todo documentation
  */
@@ -69,14 +55,6 @@ export const MAX_UNFOLD_DEPTH = 512;
  * @template V type of some's inner value
  */
 export type Result<V = never, E = never> = Ok<V> | Err<E>;
-
-/**
- * @todo documentation
- */
-export const Schema = <TValue = unknown, TError = unknown>(
-  valueSchema?: S.Schema<TValue>,
-  errorSchema?: S.Schema<TError>
-) => S.Union(OkSchema(valueSchema), ErrSchema(errorSchema)).pipe(S.asSchema);
 
 /**
  * Generic `Result` type. Extends `any` other result
