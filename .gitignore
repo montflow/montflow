@@ -12,6 +12,8 @@ rs_keyfile
 **/vite.config.js.timestamp-*
 **/vite.config.ts.timestamp-*
 
+**/.rollup.cache/
+
 # Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,macos,windows,obsidian,svelte,node
 # Edit at https://www.toptal.com/developers/gitignore?templates=visualstudiocode,macos,windows,obsidian,svelte,node
 

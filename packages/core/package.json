@@ -1,6 +1,6 @@
 {
   "name": "@montflow/core",
-  "version": "2.0.0-rc-.1",
+  "version": "3.0.0",
   "author": "Daniel Montilla",
   "description": "A collection of powerful, lightweight and performant typescript utilities.",
   "license": "MIT",
@@ -17,7 +17,7 @@
   },
   "type": "module",
   "scripts": {
-    "build": "pnpm build-esm && pnpm build-annotate && pnpm build-cjs",
+    "build": "bun build-esm && bun build-annotate && bun build-cjs",
     "build-esm": "tsc -b tsconfig.build.json",
     "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
     "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
@@ -40,71 +40,6 @@
       "types": "./build/dts/index.d.ts",
       "import": "./build/esm/index.js",
       "default": "./build/cjs/index.js"
-    },
-    "./array": {
-      "types": "./build/dts/array/index.d.ts",
-      "import": "./build/esm/array/index.js",
-      "default": "./build/cjs/array/index.js"
-    },
-    "./async": {
-      "types": "./build/dts/async/index.d.ts",
-      "import": "./build/esm/async/index.js",
-      "default": "./build/cjs/async/index.js"
-    },
-    "./fault": {
-      "types": "./build/dts/fault/index.d.ts",
-      "import": "./build/esm/fault/index.js",
-      "default": "./build/cjs/fault/index.js"
-    },
-    "./function": {
-      "types": "./build/dts/function/index.d.ts",
-      "import": "./build/esm/function/index.js",
-      "default": "./build/cjs/function/index.js"
-    },
-    "./iterable": {
-      "types": "./build/dts/iterable/index.d.ts",
-      "import": "./build/esm/iterable/index.js",
-      "default": "./build/cjs/iterable/index.js"
-    },
-    "./macro": {
-      "types": "./build/dts/macro/index.d.ts",
-      "import": "./build/esm/macro/index.js",
-      "default": "./build/cjs/macro/index.js"
-    },
-    "./maybe": {
-      "types": "./build/dts/maybe/index.d.ts",
-      "import": "./build/esm/maybe/index.js",
-      "default": "./build/cjs/maybe/index.js"
-    },
-    "./nothing": {
-      "types": "./build/dts/nothing/index.d.ts",
-      "import": "./build/esm/nothing/index.js",
-      "default": "./build/cjs/nothing/index.js"
-    },
-    "./number": {
-      "types": "./build/dts/number/index.d.ts",
-      "import": "./build/esm/number/index.js",
-      "default": "./build/cjs/number/index.js"
-    },
-    "./object": {
-      "types": "./build/dts/object/index.d.ts",
-      "import": "./build/esm/object/index.js",
-      "default": "./build/cjs/object/index.js"
-    },
-    "./random": {
-      "types": "./build/dts/random/index.d.ts",
-      "import": "./build/esm/random/index.js",
-      "default": "./build/cjs/random/index.js"
-    },
-    "./result": {
-      "types": "./build/dts/result/index.d.ts",
-      "import": "./build/esm/result/index.js",
-      "default": "./build/cjs/result/index.js"
-    },
-    "./string": {
-      "types": "./build/dts/string/index.d.ts",
-      "import": "./build/esm/string/index.js",
-      "default": "./build/cjs/string/index.js"
     }
   },
   "files": [
@@ -114,7 +49,6 @@
     "access": "public"
   },
   "dependencies": {
-    "@montflow/core": "^1.0.13",
     "effect": "^3.11.5"
   }
 }
