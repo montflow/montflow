@@ -1,0 +1,286 @@
+---
+globs: packages/core/src/*/tests/*.test.ts
+description: Core package test file structure and formatting guidelines
+---
+
+# Core Package Test File Structure Guidelines
+
+## File Location and Naming
+
+Test files must be located in the `tests/` directory within each module:
+- **Pattern**: `tests/[utilityName].test.ts`
+- **Example**: For utility `isCallable` in `Async` module, create `async/tests/isCallable.test.ts`
+
+## Import Structure
+
+```typescript
+import * as Vitest from "vitest";
+
+import * as ModuleName from "../index.js";
+```
+
+**Rules:**
+- Import Vitest first
+- Empty line separator
+- Import the module being tested using `* as ModuleName` pattern
+- Use `.js` extension for the module import
+
+## Test Suite Structure
+
+### For Synchronous Functions (Runtime + Type Tests)
+
+```typescript
+Vitest.describe("[runtime] ModuleName.utilityName", () => {
+  Vitest.it("should be defined", () => {
+    Vitest.expect(ModuleName.utilityName).toBeDefined();
+  });
+  
+  // Additional runtime behavior tests...
+});
+
+Vitest.describe("[types] ModuleName.utilityName", () => {
+  Vitest.it("should be defined", () => {
+    type Test = typeof ModuleName.utilityName;
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
+  });
+  
+  // Additional type tests...
+});
+```
+
+### For Asynchronous Functions (Runtime + Type Tests)
+
+```typescript
+Vitest.describe.concurrent("[runtime] ModuleName.asyncUtilityName", () => {
+  Vitest.it.concurrent("should be defined", () => {
+    Vitest.expect(ModuleName.asyncUtilityName).toBeDefined();
+  });
+  
+  // Additional async runtime behavior tests...
+});
+
+Vitest.describe("[types] ModuleName.asyncUtilityName", () => {
+  Vitest.it("should be defined", () => {
+    type Test = typeof ModuleName.asyncUtilityName;
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
+  });
+  
+  // Additional type tests...
+});
+```
+
+### For Types (Type Tests Only)
+
+```typescript
+Vitest.describe("[types] ModuleName.TypeName", () => {
+  Vitest.it("should be defined", () => {
+    type Test = ModuleName.TypeName<any>; // Adjust generics as needed
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
+  });
+  
+  // Additional type tests...
+});
+```
+
+## Test Requirements
+
+### Suite Naming
+- **Runtime tests**: `[runtime] ModuleName.utilityName`
+- **Type tests**: `[types] ModuleName.utilityName`
+
+### Test Organization
+- **Functions**: Must have both `[runtime]` and `[types]` test suites
+- **Types**: Must have only `[types]` test suite
+- **Constants**: Must have both `[runtime]` and `[types]` test suites
+
+### Vitest Usage
+- Use `Vitest.describe.concurrent` **ONLY** for async utilities that perform asynchronous operations
+- Use `Vitest.describe` for synchronous utilities and all type tests
+- Use `Vitest.it.concurrent` **ONLY** for individual test cases of async utilities
+- Use `Vitest.it` for synchronous utilities and all type test cases
+
+**Concurrency Rules:**
+- **Async utilities**: Use `.concurrent` for both `describe` and `it` in runtime tests
+- **Sync utilities**: Do NOT use `.concurrent` - use regular `describe` and `it`
+- **Type tests**: Never use `.concurrent` regardless of utility type
+
+## Basic Tests Definition
+
+**Basic tests** are the minimum required tests that verify a utility exists and is properly exported. These are considered insufficient for comprehensive testing but serve as a starting point.
+
+### For Functions/Methods/Constants
+Basic tests include both:
+1. **[runtime] "should be defined"** - Verifies the utility exists at runtime
+2. **[types] "should be defined"** - Verifies the utility has a proper type signature
+
+### For Types
+Basic tests include only:
+1. **[types] "should be defined"** - Verifies the type exists and can be used
+
+### Basic Test Templates
+
+#### Synchronous Functions/Methods/Constants Basic Tests
+```typescript
+Vitest.describe("[runtime] ModuleName.utilityName", () => {
+  Vitest.it("should be defined", () => {
+    Vitest.expect(ModuleName.utilityName).toBeDefined();
+  });
+});
+
+Vitest.describe("[types] ModuleName.utilityName", () => {
+  Vitest.it("should be defined", () => {
+    type Test = typeof ModuleName.utilityName;
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
+  });
+});
+```
+
+#### Asynchronous Functions/Methods Basic Tests
+```typescript
+Vitest.describe.concurrent("[runtime] ModuleName.asyncUtilityName", () => {
+  Vitest.it.concurrent("should be defined", () => {
+    Vitest.expect(ModuleName.asyncUtilityName).toBeDefined();
+  });
+});
+
+Vitest.describe("[types] ModuleName.asyncUtilityName", () => {
+  Vitest.it("should be defined", () => {
+    type Test = typeof ModuleName.asyncUtilityName;
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
+  });
+});
+```
+
+#### Types Basic Tests
+```typescript
+Vitest.describe("[types] ModuleName.TypeName", () => {
+  Vitest.it("should be defined", () => {
+    type Test = ModuleName.TypeName<any>; // Adjust generics as needed
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
+  });
+});
+```
+
+**Note**: Basic tests alone are insufficient and utilities should keep `@todo testing` annotations until comprehensive behavioral tests are added.
+
+## Running Tests
+
+The project uses Vitest for testing and Bun as the package manager. Tests can be run using the following commands:
+
+### Run All Tests
+```bash
+bun test
+```
+
+### Run Tests for a Specific File
+```bash
+bun test src/array/tests/isArray.test.ts
+```
+
+### Run Tests for a Specific Directory
+```bash
+bun test src/array/tests/
+```
+
+### Run Tests with Watch Mode
+```bash
+bun test --watch
+```
+
+### Run Tests with Coverage
+```bash
+bun test --coverage
+```
+
+### Run Tests Matching a Pattern
+```bash
+# Run all tests containing "Array" in the name
+bun test --grep "Array"
+
+# Run only runtime tests
+bun test --grep "\[runtime\]"
+
+# Run only type tests  
+bun test --grep "\[types\]"
+```
+
+### Run Tests for a Specific Module
+```bash
+# Run all tests in the array module
+bun test src/array/
+
+# Run all tests in the async module
+bun test src/async/
+```
+
+## Example Files
+
+### Function Test Example
+See [wait.test.ts](mdc:packages/core/src/async/tests/wait.test.ts) for a complete function test example.
+
+### Type Test Example
+```typescript
+import * as Vitest from "vitest";
+
+import * as Function from "../index.js";
+
+Vitest.describe("[types] Function.Predicate", () => {
+  Vitest.it("should be defined", () => {
+    type Test = Function.Predicate<string>;
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
+  });
+
+  Vitest.it("should accept input and return boolean", () => {
+    type Test = Function.Predicate<number>;
+    Vitest.expectTypeOf<Test>().toEqualTypeOf<(input: number) => boolean>();
+  });
+});
+```
+
+## File Structure Templates
+
+### Synchronous Utility Template
+
+```typescript
+import * as Vitest from "vitest";
+
+import * as ModuleName from "../index.js";
+
+// Runtime tests (for functions/constants only)
+Vitest.describe("[runtime] ModuleName.utilityName", () => {
+  Vitest.it("should be defined", () => {
+    Vitest.expect(ModuleName.utilityName).toBeDefined();
+  });
+});
+
+// Type tests (required for all utilities)
+Vitest.describe("[types] ModuleName.utilityName", () => {
+  Vitest.it("should be defined", () => {
+    type Test = typeof ModuleName.utilityName;
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
+  });
+});
+```
+
+### Asynchronous Utility Template
+
+```typescript
+import * as Vitest from "vitest";
+
+import * as ModuleName from "../index.js";
+
+// Runtime tests (for async functions/constants only)
+Vitest.describe.concurrent("[runtime] ModuleName.asyncUtilityName", () => {
+  Vitest.it.concurrent("should be defined", () => {
+    Vitest.expect(ModuleName.asyncUtilityName).toBeDefined();
+  });
+});
+
+// Type tests (required for all utilities)
+Vitest.describe("[types] ModuleName.asyncUtilityName", () => {
+  Vitest.it("should be defined", () => {
+    type Test = typeof ModuleName.asyncUtilityName;
+    Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
+  });
+});
+```
