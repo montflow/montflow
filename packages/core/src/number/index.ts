@@ -1,5 +1,4 @@
-import * as Array from "../array/index.js";
-import * as Macro from "../macro/index.js";
+import * as Range from "../range/index.js";
 
 /**
  * @todo documentation
@@ -22,44 +21,17 @@ export const isInt = (thing: unknown): thing is number =>
 
 /**
  * @todo documentation
- */
-export namespace Range {
-  export type Object = { min: number; max: number };
-  export type Tuple = [min: number, max: number];
-}
-
-/**
- * @todo documentation
- */
-export type Range = Range.Object | Range.Tuple;
-
-/**
- * @todo documentation
- * @todo testing
- */
-export const isRange = (thing: unknown): thing is Range => Macro.todoImpl();
-
-/**
- * @todo documentation
- * @todo testing
- */
-export const resolveRange = (self: Range): Range.Object => {
-  if (Array.isArray(self)) return { min: self[0], max: self[1] };
-  return self;
-};
-
-/**
- * @todo documentation
- * @todo testing
- */
-export const range = (self: Range) => self;
-
-/**
- * @todo documentation
  * @todo testing
  * @todo implementation
  */
-export const clamp = (n: number, range: Range) => Macro.todoImpl();
+export const clamp = (n: number, range: Range.Range) => {
+  const { min, max } = Range.toObject(range);
+
+  if (n < min) return min;
+  if (n > max) return max;
+
+  return n;
+};
 
 /**
  * Decrements given number type. Valid inputs inlcude 1 ≤ n ≤ 1024
