@@ -1,10 +1,31 @@
 import * as Vitest from "vitest";
 
+import { Evaluable } from "../../global/index.js";
 import * as Macro from "../index.js";
 
 Vitest.describe("[runtime] Macro.evaluate", () => {
   Vitest.it("should be defined", () => {
     Vitest.expect(Macro.evaluate).toBeDefined();
+  });
+
+  Vitest.it("should evaluate a value", () => {
+    const internal = 0x0;
+
+    const value: Evaluable<number> = internal;
+
+    const result = Macro.evaluate(value);
+
+    Vitest.expect(result).toBe(internal);
+  });
+
+  Vitest.it("should evaluate a function", () => {
+    const internal = 0x0;
+
+    const value: Evaluable<number> = () => internal;
+
+    const result = Macro.evaluate(value);
+
+    Vitest.expect(result).toBe(internal);
   });
 });
 

@@ -4,76 +4,25 @@ import { Evaluable, Table } from "../global/index.js";
 
 /**
  * Executes a function that takes no arguments and returns its result.
+ * Basically a nicer IIFE utility.
+ *
  * @template T return type of the function
- * @param {() => T} fn function to execute
+ * @param {Function.Nullary<T>} fn original function
  * @returns {T} result of the function execution
+ *
  * @todo testing
  */
-export const lambda = <T>(fn: () => T): T => fn();
-
-/**
- * @todo documentation
- * @todo testing
- */
-export const never = null as unknown as never;
-
-/**
- * @todo documentation
- * @todo testing
- */
-export const unknown = null as unknown;
-
-const _void = { _tag: "void" } as unknown as void;
-
-/**
- * @todo documentation
- * @todo testing
- */
-export { _void as void };
-
-/**
- * @todo documentation
- * @todo testing
- */
-export const panic: {
-  <E>(error: E): never;
-  (message: string): never;
-} = <E>(errorOrMessage: E | string) => {
-  if (typeof errorOrMessage === "string") {
-    throw new Error(errorOrMessage);
-  }
-
-  throw errorOrMessage;
-};
+export const lambda = <T>(fn: Function.Nullary<T>): T => fn();
 
 /**
  * Casts an unknown value to the specified type without runtime checks.
  * @template To target type to cast to
  * @param {unknown} x value to cast
  * @returns {T} value cast to target type
+ *
+ * @todo testing
  */
 export const cast = <T>(x: unknown): T => x as T;
-
-/**
- * Evaluates a value or function and returns the result.
- * @template T type of the value or function return
- * @param {T | (() => T)} evaluable value or function to evaluate
- * @returns {T} resolved value
- */
-export const evaluate = <T>(evaluable: Evaluable<T>): T =>
-  Function.isCallable(evaluable) ? evaluable() : evaluable;
-
-/**
- * @todo documentation
- * @todo testing
- */
-export const todo = (message?: string) => panic(message ?? "todo");
-
-/**
- * @todo documentation
- * @todo testing
- */
-export const todoImpl = () => todo("missing implementation");
 
 const _singletons: Table<string, Constructor.Any | Function.Maker.Any> = {};
 
@@ -132,6 +81,75 @@ export const singleton: {
     return (_singletons[id] = instance);
   };
 };
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const never = cast<never>(void 0);
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const unknown = cast<unknown>(void 0);
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const undefined = cast<undefined>(void 0);
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+const _void = cast<void>(void 0);
+
+export { _void as void };
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const panic: {
+  <E>(error: E): never;
+  (message: string): never;
+} = <E>(errorOrMessage: E | string) => {
+  if (typeof errorOrMessage === "string") {
+    throw new Error(errorOrMessage);
+  }
+
+  throw errorOrMessage;
+};
+
+/**
+ * Evaluates a value or function and returns the result.
+ *
+ * @template T type of the value or function return
+ * @param {Evaluable<T>} evaluable value or function to evaluate
+ * @returns {T} resolved value
+ */
+export const evaluate = <T>(evaluable: Evaluable<T>): T =>
+  Function.isCallable(evaluable) ? evaluable() : evaluable;
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const todo = (message?: string) => panic(message ?? "todo");
+
+/**
+ * @alias todo
+ * @see {@link todo}
+ */
+export const placeholder = todo;
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const todoImpl = () => todo("missing implementation");
 
 /**
  * @todo documentation

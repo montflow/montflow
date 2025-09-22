@@ -25,10 +25,10 @@ export type Lazy<T> = () => Promise<T>;
 export const wait: {
   (millis: number): Promise<void>;
   <V>(millis: number, value: Evaluable<V>): Promise<V>;
-} = <V = unknown>(millis: number, value?: Evaluable<V>): Promise<V> =>
-  new Promise(resolve =>
-    setTimeout(() => (value ? resolve(Macro.evaluate(value)) : resolve(Macro.never)), millis)
-  );
+} = Macro.cast(
+  <V>(millis: number, value?: Evaluable<V>) =>
+    new Promise(resolve => setTimeout(() => resolve(Macro.evaluate(value)), millis))
+);
 
 /**
  * Waits for 1 millisecond (a single tick).
@@ -38,18 +38,43 @@ export const wait: {
  */
 export const tick = () => wait(1);
 
-/**
- * Ensures that a given promise resolves after at least a specified duration.
- * @template T The type of the promise result
- * @param fn A function that returns a promise
- * @param duration The minimum delay duration
- * @returns A promise that resolves to the result of the given promise, but only after at least the specified delay duration
- *
- * @todo implementation
- */
 export const withMinimumDuration: {
-  <T>(fn: Function.Nullary.Async<T>, millis: number): Promise<T>;
-} = Macro.todoImpl;
+  /**
+   * Ensures that a given promise resolves after at least a specified duration.
+   * @template T The type of the promise result
+   * @param fn A function that returns a promise
+   * @param duration The minimum delay duration
+   * @returns A promise that resolves to the result of the given promise, but only after at least the specified delay duration
+   *
+   * @todo testing
+   */
+  <T>(millis: number, task: Evaluable<Promise<T>>): Promise<T>;
+
+  /**
+   * Runs multiple async tasks concurrently, ensuring the entire batch
+   * takes at least a specified duration to resolve.
+   * @param millis The minimum duration in milliseconds.
+   * @param tasks A list of Promises or functions that return a Promise.
+   * @returns A Promise that resolves with a tuple of the tasks' results.
+   *
+   * @todo testing
+   */
+  <const TTasks extends readonly Evaluable<Promise<any>>[]>(
+    millis: number,
+    ...tasks: TTasks
+  ): Promise<{
+    -readonly [P in keyof TTasks]: TTasks[P] extends Promise<infer T> ? T
+    : TTasks[P] extends () => Promise<infer T> ? T
+    : never;
+  }>;
+} = Macro.cast(async (millis: number, ...tasks: Evaluable<Promise<any>>[]) => {
+  const delayPromise = wait(millis);
+  const taskPromises = tasks.map(task => Macro.evaluate(task));
+
+  const [results] = await Promise.all([Promise.all(taskPromises), delayPromise]);
+
+  return tasks.length === 1 ? results[0] : results;
+});
 
 /**
  * Type guard to check if a value is a `Promise`.
