@@ -1,0 +1,142 @@
+---
+globs: packages/core/src/*/index.ts
+description: JSDoc documentation formatting standards and annotation order
+---
+
+# JSDoc Format Standards
+
+## Documentation Structure
+
+All JSDoc should begin with the description followed by an empty line, then the annotated spec in the specified order.
+
+### Required Order
+
+1. **Description** - Clear explanation of what the utility does
+2. **Empty line**
+3. **Annotations** in this exact order:
+   - `@[tag]` - Other tags like `@constructor`, `@deprecated`, etc.
+   - `@template` - Generic type parameters
+   - `@param` - Function parameters
+   - `@returns` - Return value description
+4. **Empty line** (if todos exist)
+5. **@todo annotations** - Always at the bottom
+
+### Basic Format
+
+```typescript
+/**
+ * Description of the utility
+ * 
+ * @template A description of single-letter input type
+ * @template TOutput description of multi-letter output type
+ * @param paramName description
+ * @returns description
+ * 
+ * @todo documentation
+ * @todo testing
+ */
+```
+
+## Template Parameter Documentation
+
+- Multi-letter template parameters must be prefixed with "T" (e.g., `<TInput>`, `<TOutput>`, `<TFrom>`, `<TTo>`)
+- Single-letter template parameters should NOT be prefixed with "T" (e.g., `<A>`, `<B>`, `<T>` itself)
+- All template parameters should be documented with `@template`
+
+```typescript
+/**
+ * Transforms input from one type to another
+ * 
+ * @template TInput The input type to transform from
+ * @template TOutput The output type to transform to
+ * @param input The value to transform
+ * @param mapper Function that performs the transformation
+ * @returns The transformed value
+ */
+export const transform = <TInput, TOutput>(input: TInput, mapper: (input: TInput) => TOutput): TOutput => {
+  return mapper(input);
+};
+```
+
+## Required Annotations
+
+Every exported utility must include appropriate `@todo` annotations:
+
+- `@todo documentation` - if proper documentation is missing
+- `@todo testing` - if comprehensive tests don't exist for this utility
+- `@todo implementation` - if using `Macro.todoImpl` placeholder or the implementation is missing
+
+### Testing Detection Logic
+
+For each exported utility, determine if comprehensive testing exists:
+- **Location**: `tests/[utilityName].test.ts` within the same module directory
+- **Example**: For utility `isCallable` in `function/index.ts`, look for `function/tests/isCallable.test.ts`
+
+**Rules for `@todo testing` annotation:**
+1. **No test file exists**: Always add `@todo testing`
+2. **Test file exists but only has basic tests**: Still add `@todo testing`
+3. **Comprehensive tests exist**: Remove `@todo testing`
+
+**Basic tests are considered insufficient:**
+- Only "should be defined" tests in `[runtime]` suite
+- Only "should be defined" tests in `[types]` suite
+- Missing behavioral/functional tests for the utility's actual purpose
+
+**Comprehensive tests include:**
+- Behavioral tests that verify the utility works as intended
+- Edge case testing
+- Multiple test scenarios beyond just existence verification
+
+## Todo Annotation Rules
+
+- Blank line before `@todo` annotations
+- `@todo` annotations always at the bottom of JSDoc
+- NO blank lines between `@todo` annotations
+
+```typescript
+/**
+ * Checks if a value is callable (function or object with call signature)
+ * 
+ * @param value The value to check
+ * @returns True if the value is callable, false otherwise
+ * 
+ * @todo documentation
+ * @todo testing
+ */
+```
+
+## Function Overload Documentation
+
+Each overload signature must have its own JSDoc block:
+
+```typescript
+export const processValue: {
+  /**
+   * Processes a string value by converting to uppercase
+   * 
+   * @param input The string to process
+   * @returns The uppercase string
+   */
+  (input: string): string;
+  
+  /**
+   * Processes a number value by doubling it
+   * 
+   * @param input The number to process
+   * @param multiplier Optional multiplier (defaults to 2)
+   * @returns The processed number
+   */
+  (input: number, multiplier?: number): number;
+  
+  /**
+   * Processes an array by returning the first element
+   * 
+   * @template T The array element type
+   * @param input The array to process
+   * @returns The first element or undefined
+   */
+  <T>(input: T[]): T | undefined;
+} = (input: any, multiplier: number = 2): any => {
+  // Implementation
+};
+```
