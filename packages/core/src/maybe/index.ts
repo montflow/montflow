@@ -1,5 +1,6 @@
 import * as Alias from "../alias/index.js";
 import * as Async from "../async/index.js";
+import * as Domain from "../domain/index.js";
 import * as Function from "../function/index.js";
 import { Evaluable, Sync, Table } from "../global/index.js";
 import * as Macro from "../macro/index.js";
@@ -10,20 +11,30 @@ import * as Result from "../result/index.js";
 
 /**
  * @todo documentation
- * @todo testing
  */
-export const SomeId = "some" as const;
+export const Id = "maybe" as const;
 
 /**
  * @todo documentation
  */
-export type SomeId = typeof SomeId;
+export type Id = typeof Id;
+
+/**
+ * @todo documentation
+ */
+export const SomeTag = "some" as const;
+
+/**
+ * @todo documentation
+ */
+export type SomeTag = typeof SomeTag;
 
 /**
  * @todo documentation
  */
 export type Some<out V> = {
-  readonly _id: SomeId;
+  readonly [Domain.Id]: Id;
+  readonly [Domain.Tag]: SomeTag;
   readonly value: V;
 };
 
@@ -31,18 +42,19 @@ export type Some<out V> = {
  * @todo documentation
  * @todo testing
  */
-export const NoneId = "none" as const;
+export const NoneTag = "none" as const;
 
 /**
  * @todo documentation
  */
-export type NoneId = typeof NoneId;
+export type NoneTag = typeof NoneTag;
 
 /**
  * @todo documentation
  */
 export type None = {
-  readonly _id: NoneId;
+  readonly [Domain.Id]: Id;
+  readonly [Domain.Tag]: NoneTag;
 };
 
 /**
@@ -137,7 +149,8 @@ export const some: {
   <V>(value: V): Some<V>;
 } = Macro.cast(
   <V = never>(value: V): Some<V> => ({
-    _id: SomeId,
+    [Domain.Id]: Id,
+    [Domain.Tag]: SomeTag,
     value: value,
   })
 );
@@ -147,21 +160,31 @@ export const some: {
  * @todo documentation
  * @todo testing
  */
-export const none = Macro.singleton("@montflow/none", (): None => ({ _id: "none" }));
+export const none = Macro.singleton(
+  "@montflow/none",
+  (): None => ({ [Domain.Id]: Id, [Domain.Tag]: NoneTag })
+);
 
 /**
  * @constructor
  * @todo documentation
  * @todo testing
  */
-export const fromNullish = <V>(value: V): Maybe<NonNullable<V>> => Macro.todoImpl();
+export const fromNullish = <V>(value: V): Maybe<NonNullable<V>> =>
+  value === null || value === undefined ? none() : some(value);
 
 /**
  * @constructor
  * @todo documentation
  * @todo testing
  */
-export const _try: { <V>(f: Sync<V>): Maybe<V> } = Macro.todoImpl;
+export const _try = <V>(f: Sync<V>): Maybe<V> => {
+  try {
+    return some(f());
+  } catch {
+    return none();
+  }
+};
 
 export { _try as try };
 
@@ -170,28 +193,45 @@ export { _try as try };
  * @todo testing
  */
 export const tryPromise: {
-  <V>($try: Async.Lazy<V>): Maybe<V>;
-  <V>($try: Alias.Promise<V>): Maybe<V>;
-} = Macro.todoImpl;
+  <V>($try: Async.Lazy<V>): Promise<V>;
+  <V>($try: Alias.Promise<V>): Promise<V>;
+} = async <V>($try: Async.Lazy<V> | Alias.Promise<V>): Promise<V> => {
+  try {
+    const value = Function.isCallable($try) ? await $try() : await $try;
+    return some(value);
+  } catch {
+    return none();
+  }
+};
 
 /**
  * @todo documentation
  * @todo testing
  */
-export const isSome = (thing: unknown): thing is Some<unknown> => Macro.todoImpl();
+export const isSome = (thing: unknown): thing is Some<unknown> =>
+  Object.isObject(thing) &&
+  Object.hasKeys(thing, [Domain.Id, Domain.Tag, "value"]) &&
+  Object.length(thing) === 3 &&
+  thing[Domain.Id] === Id &&
+  thing[Domain.Tag] === SomeTag;
 
 /**
  * @todo documentation
  * @todo testing
  */
-export const isNone = (thing: unknown): thing is None => Macro.todoImpl();
+export const isNone = (thing: unknown): thing is None =>
+  Object.isObject(thing) &&
+  Object.hasKeys(thing, [Domain.Id, Domain.Tag]) &&
+  Object.length(thing) === 2 &&
+  thing[Domain.Id] === Id &&
+  thing[Domain.Tag] === NoneTag;
 
 /**
  * @todo documentation
  * @todo testing
  */
 export const isMaybe = (thing: unknown): thing is Maybe<unknown> =>
-  isSome(thing) || isNone(thing);
+  isNone(thing) || isSome(thing);
 
 /**
  * @todo documentation
@@ -218,9 +258,10 @@ export class UnwrapError extends Error {
  * @todo documentation
  * @todo testing
  */
-export const unwrap: {
-  <V>(): (self: Maybe<V>) => V;
-} = Macro.todoImpl;
+export const unwrap = <V>(self: Maybe<V>): V => {
+  if (isNone(self)) throw new UnwrapError();
+  return self.value;
+};
 
 /**
  * @todo documentation

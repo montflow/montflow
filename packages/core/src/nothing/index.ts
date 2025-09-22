@@ -1,10 +1,12 @@
+import * as Domain from "../domain/index.js";
 import * as Macro from "../macro/index.js";
+import * as Object from "../object/index.js";
 
 /**
  * @todo documentation
  */
 export class Nothing {
-  readonly _id = "nothing" as const;
+  readonly [Domain.Id] = "nothing" as const;
 }
 
 /**
@@ -13,7 +15,7 @@ export class Nothing {
  */
 export const make = Macro.singleton(
   "@montflow/nothing",
-  (): Nothing => ({ _id: "nothing" as const })
+  (): Nothing => ({ [Domain.Id]: "nothing" as const })
 );
 
 /**
@@ -21,4 +23,8 @@ export const make = Macro.singleton(
  * @todo testing
  * @todo implementation
  */
-export const isNothing = (thing: unknown): thing is Nothing => Macro.todoImpl();
+export const isNothing = (thing: unknown): thing is Nothing =>
+  Object.isObject(thing) &&
+  Object.hasKeys(thing, [Domain.Id]) &&
+  Object.length(thing) === 1 &&
+  thing[Domain.Id] === ("nothing" as const);

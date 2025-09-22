@@ -57,3 +57,5 @@ export const isEmpty = <T>(array: T[]): array is Empty<T> => array.length === 0;
  */
 export const checkNotEmpty = <T>(array: T[]): Maybe.Maybe<NotEmpty<T>> =>
   isNotEmpty(array) ? Maybe.some(array) : Maybe.none();
+
+export const length = (array: unknown[]): number => array.length;

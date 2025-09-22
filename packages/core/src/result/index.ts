@@ -1,26 +1,33 @@
 import * as Alias from "../alias/index.js";
+import * as Domain from "../domain/index.js";
 import * as Function from "../function/index.js";
+import { Sync } from "../global/index.js";
 import * as Macro from "../macro/index.js";
 import * as Maybe from "../maybe/index.js";
 import * as Number from "../number/index.js";
+import * as Object from "../object/index.js";
+
+export const Id = "result" as const;
+export type Id = typeof Id;
 
 /**
  * @todo documentation
  * @todo testing
  */
-export const OkId = "ok" as const;
+export const OkTag = "ok" as const;
 
 /**
  * @todo documentation
  */
-export type OkId = typeof OkId;
+export type OkTag = typeof OkTag;
 
 /**
  * Represents the successful outcome of operation
  * @template V type of inner value
  */
 export type Ok<out V> = {
-  readonly _id: OkId;
+  readonly [Domain.Id]: Id;
+  readonly [Domain.Tag]: OkTag;
   readonly value: V;
 };
 
@@ -28,19 +35,20 @@ export type Ok<out V> = {
  * @todo documentation
  * @todo testing
  */
-export const ErrId = "err" as const;
+export const ErrTag = "err" as const;
 
 /**
  * @todo documentation
  */
-export type ErrId = typeof ErrId;
+export type ErrTag = typeof ErrTag;
 
 /**
  * Represents the unsuccessful outcome of operation
  * @template E type of inner error
  */
 export type Err<out E> = {
-  readonly _id: ErrId;
+  readonly [Domain.Id]: Id;
+  readonly [Domain.Tag]: ErrTag;
   readonly error: E;
 };
 
@@ -137,7 +145,8 @@ export const ok: {
   <V>(value: V): Ok<V>;
 } = Macro.cast(
   <V = never>(value: V): Ok<V> => ({
-    _id: OkId,
+    [Domain.Id]: Id,
+    [Domain.Tag]: OkTag,
     value: value,
   })
 );
@@ -153,7 +162,8 @@ export const err: {
   <E>(error: E): Err<E>;
 } = Macro.cast(
   <E = never>(error: E): Err<E> => ({
-    _id: ErrId,
+    [Domain.Id]: Id,
+    [Domain.Tag]: ErrTag,
     error: error,
   })
 );
@@ -163,9 +173,31 @@ export const err: {
  * @todo testing
  */
 export const _try: {
-  <V>($try: () => V): Result<V, unknown>;
-  <V, E>(options: { try: () => V; catch: (error: unknown) => E }): Result<V, E>;
-} = Macro.todoImpl;
+  <V>($try: Sync<V>): Result<V, unknown>;
+  <V, E>(branches: { try: () => V; catch: (error: unknown) => E }): Result<V, E>;
+} = Macro.cast(
+  <V, E = unknown>(
+    $tryOrBranches: Sync<V> | { try: Sync<V>; catch: (error: unknown) => E }
+  ): Result<V, E> => {
+    if (Function.isFunction($tryOrBranches)) {
+      const fn = $tryOrBranches;
+
+      try {
+        return ok(fn());
+      } catch (error) {
+        return err(error as E);
+      }
+    }
+
+    const branches = $tryOrBranches;
+
+    try {
+      return ok(branches.try());
+    } catch (error) {
+      return err(branches.catch(error));
+    }
+  }
+);
 
 export { _try as try };
 
@@ -176,7 +208,12 @@ export { _try as try };
 export const isOk: {
   <V>(result: Result<V, any>): result is Ok<V>;
   (thing: unknown): thing is Ok<unknown>;
-} = (thing: unknown): thing is Ok<unknown> => Macro.todoImpl();
+} = (thing: unknown): thing is Ok<unknown> =>
+  Object.isObject(thing) &&
+  Object.hasKeys(thing, [Domain.Id, Domain.Tag, "value"]) &&
+  Object.length(thing) === 3 &&
+  thing[Domain.Id] === Id &&
+  thing[Domain.Tag] === OkTag;
 
 /**
  * @todo documentation
@@ -185,7 +222,12 @@ export const isOk: {
 export const isErr: {
   <E>(result: Result<any, E>): result is Err<E>;
   (thing: unknown): thing is Err<unknown>;
-} = (thing: unknown): thing is Err<unknown> => Macro.todoImpl();
+} = (thing: unknown): thing is Err<unknown> =>
+  Object.isObject(thing) &&
+  Object.hasKeys(thing, [Domain.Id, Domain.Tag, "error"]) &&
+  Object.length(thing) === 3 &&
+  thing[Domain.Id] === Id &&
+  thing[Domain.Tag] === ErrTag;
 
 /**
  * @todo documentation
@@ -193,7 +235,7 @@ export const isErr: {
  */
 export const isResult: {
   (thing: unknown): thing is Result<any, any>;
-} = (thing: unknown): thing is Result<any, any> => Macro.todoImpl();
+} = (thing: unknown): thing is Result<any, any> => isErr(thing) || isOk(thing);
 
 /**
  * @todo documentation

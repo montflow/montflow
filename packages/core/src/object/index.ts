@@ -47,8 +47,14 @@ export type Entries<Input extends Table> = {
  * @todo documentation
  * @todo testing
  */
-export const isObject = (thing: unknown): thing is Object =>
+export const isObject = (thing: unknown): thing is object =>
   typeof thing === "object" && thing !== null;
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const isTable = (thing: unknown): thing is Table => isObject(thing);
 
 /**
  * @todo documentation
@@ -72,6 +78,34 @@ export const hasKey: {
 );
 
 /**
+ * Checks if an object has all the specified keys with non-undefined values
+ *
+ * @template T The object type to check
+ * @template K The keys to check for
+ * @param self The object to check
+ * @param keys Array of keys to verify exist
+ * @returns True if all keys exist with non-undefined values
+ *
+ * @todo testing
+ */
+export const hasKeys: {
+  <T extends Table, K extends PropertyKey>(
+    self: T,
+    keys: readonly K[]
+  ): self is T & { [P in K]: Exclude<T[P], undefined> };
+  <T extends Table, K extends PropertyKey>(
+    keys: readonly K[]
+  ): (self: T) => self is T & { [P in K]: Exclude<T[P], undefined> };
+} = Macro.dualify(
+  1,
+  <T extends Table, K extends PropertyKey>(
+    self: T,
+    keys: readonly K[]
+  ): self is T & { [P in K]: Exclude<T[P], undefined> } =>
+    keys.every(key => key in self && self[key] !== undefined)
+);
+
+/**
  * @todo documentation
  * @todo testing
  */
@@ -82,6 +116,12 @@ export const values = <const T extends Table>(input: T) => Object.values(input) 
  * @todo testing
  */
 export const keys = <const T extends Table>(input: T) => Object.keys(input) as Keys<T>[];
+
+/**
+ * @todo documentation
+ * @todo testing
+ */
+export const length = <const T extends Table>(input: T) => keys(input).length;
 
 /**
  * @todo documentation
