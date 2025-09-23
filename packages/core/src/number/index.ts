@@ -33,6 +33,20 @@ export const clamp = (n: number, range: Range.Range) => {
   return n;
 };
 
+export const isBetween = (
+  n: number,
+  range: Range.Range,
+  options: { inclusive?: boolean } = { inclusive: true }
+) => {
+  const { min, max } = Range.toObject(range);
+
+  if (options.inclusive) {
+    return n >= min && n <= max;
+  }
+
+  return n > min && n < max;
+};
+
 /**
  * Decrements given number type. Valid inputs inlcude 1 ≤ n ≤ 1024
  * @template N number to be decremented
