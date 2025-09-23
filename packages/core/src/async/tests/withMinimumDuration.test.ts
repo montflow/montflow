@@ -18,7 +18,7 @@ Vitest.describe.concurrent("[runtime] Async.withMinimumDuration", () => {
       };
 
       const start = Date.now();
-      const value = await Async.withMinimumDuration(fn, duration);
+      const value = await Async.withMinimumDuration(duration, fn);
       const end = Date.now();
       const elapsed = end - start;
 
@@ -38,7 +38,7 @@ Vitest.describe.concurrent("[runtime] Async.withMinimumDuration", () => {
       };
 
       const start = Date.now();
-      const value = await Async.withMinimumDuration(fn, duration);
+      const value = await Async.withMinimumDuration(duration, fn);
       const end = Date.now();
       const elapsed = end - start;
 
@@ -59,7 +59,7 @@ Vitest.describe.concurrent("[runtime] Async.withMinimumDuration", () => {
       };
 
       const start = Date.now();
-      const value = await Async.withMinimumDuration(fn, duration);
+      const value = await Async.withMinimumDuration(duration, fn);
       const end = Date.now();
       const elapsed = end - start;
 
@@ -76,7 +76,7 @@ Vitest.describe.concurrent("[runtime] Async.withMinimumDuration", () => {
       throw new Error(errorMessage);
     };
 
-    await Vitest.expect(Async.withMinimumDuration(fn, duration)).rejects.toThrow(errorMessage);
+    await Vitest.expect(Async.withMinimumDuration(duration, fn)).rejects.toThrow(errorMessage);
   });
 
   Vitest.it.concurrent(
@@ -88,7 +88,7 @@ Vitest.describe.concurrent("[runtime] Async.withMinimumDuration", () => {
       const fn = async () => expectedValue;
 
       const start = Date.now();
-      const value = await Async.withMinimumDuration(fn, duration);
+      const value = await Async.withMinimumDuration(duration, fn);
       const end = Date.now();
       const elapsed = end - start;
 
