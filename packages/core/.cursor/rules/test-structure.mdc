@@ -169,39 +169,29 @@ The project uses Vitest for testing and Bun as the package manager. Tests can be
 
 ### Run All Tests
 ```bash
-pnpm test
+pnpm test run
 ```
 
 ### Run Tests for a Specific File
 ```bash
-pnpm test src/array/tests/isArray.test.ts
+pnpm test run src/array/tests/isArray.test.ts
 ```
 
 ### Run Tests for a Specific Directory
 ```bash
-pnpm test src/array/tests/
-```
-
-### Run Tests with Watch Mode
-```bash
-pnpm test --watch
-```
-
-### Run Tests with Coverage
-```bash
-pnpm test --coverage
+pnpm test run src/array/tests/
 ```
 
 ### Run Tests Matching a Pattern
 ```bash
 # Run all tests containing "Array" in the name
-pnpm test --grep "Array"
+pnpm test run --grep "Array"
 
 # Run only runtime tests
-pnpm test --grep "\[runtime\]"
+pnpm test run --grep "\[runtime\]"
 
 # Run only type tests  
-pnpm test --grep "\[types\]"
+pnpm test run --grep "\[types\]"
 ```
 
 ### Run Tests for a Specific Module
