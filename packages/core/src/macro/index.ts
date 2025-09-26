@@ -1,6 +1,7 @@
 import * as Constructor from "../constructor/index.js";
 import * as Function from "../function/index.js";
 import { Evaluable, Table } from "../global/index.js";
+import * as String from "../string/index.js";
 
 /**
  * Executes a function that takes no arguments and returns its result.
@@ -156,7 +157,7 @@ export const panic: {
    */
   (message: string): never;
 } = <E>(errorOrMessage: E | string) => {
-  if (typeof errorOrMessage === "string") {
+  if (String.isString(errorOrMessage)) {
     throw new Error(errorOrMessage);
   }
 
@@ -315,5 +316,19 @@ export const dualify = <Explicit extends Function.Callable, Curried extends Func
         return args.length > arity ? body(...args) : (self: unknown) => body(self, ...args);
       }) as Explicit & Curried;
     }
+  }
+};
+
+/**
+ * Asserts a condition.
+ *
+ * @param condition The condition to assert
+ * @param error The error to throw if the condition is false
+ *
+ * @todo testing
+ */
+export const assert = (condition: Evaluable<boolean>, error?: Error | string) => {
+  if (!evaluate(condition)) {
+    throw panic(error ?? "Assertion failed");
   }
 };
