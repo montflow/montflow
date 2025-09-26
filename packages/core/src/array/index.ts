@@ -108,7 +108,11 @@ export const maybeGet: {
 } = Macro.dualify(
   1,
   <T>(self: Array<T>, index: number): Maybe.Maybe<T> =>
-    Number.isInt(index) && Number.isBetween(index, { min: 0, max: self.length - 1 }) ?
+    (
+      isNotEmpty(self) &&
+      Number.isInt(index) &&
+      Number.isBetween(index, { min: 0, max: self.length - 1 })
+    ) ?
       Maybe.some(self[index])
     : Maybe.none()
 );

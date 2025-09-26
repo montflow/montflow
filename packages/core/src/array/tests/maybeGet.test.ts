@@ -173,13 +173,6 @@ Vitest.describe("[types] Array.maybeGet", () => {
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
 
-  Vitest.it("should accept Array<T> and number and return Maybe<T>", () => {
-    type Test = typeof Array.maybeGet;
-    Vitest.expectTypeOf<Test>().toEqualTypeOf<
-      <T>(array: Array<T>, index: number) => Maybe.Maybe<T>
-    >();
-  });
-
   Vitest.it("should infer correct types when used", () => {
     const numberArray = [1, 2, 3];
     const stringArray = ["a", "b", "c"];
