@@ -89,7 +89,14 @@ export type Callback = () => void;
  *
  * @template TOutput the output type
  */
-export type Lazy = <TOutput>() => TOutput;
+export type Lazy<TOutput> = () => TOutput;
+
+/**
+ * Function that takes an input and returns nothing.
+ *
+ * @template TInput the input type
+ */
+export type Tapper<TInput> = Unary<TInput, void>;
 
 /**
  * Function that constructs a new instance of a type
