@@ -211,7 +211,7 @@ export const isOk: {
 } = (thing: unknown): thing is Ok<unknown> =>
   Object.isObject(thing) &&
   Object.hasKeys(thing, [Domain.Id, Domain.Tag, "value"]) &&
-  Object.length(thing) === 3 &&
+  Object.size(thing) === 3 &&
   thing[Domain.Id] === Id &&
   thing[Domain.Tag] === OkTag;
 
@@ -225,7 +225,7 @@ export const isErr: {
 } = (thing: unknown): thing is Err<unknown> =>
   Object.isObject(thing) &&
   Object.hasKeys(thing, [Domain.Id, Domain.Tag, "error"]) &&
-  Object.length(thing) === 3 &&
+  Object.size(thing) === 3 &&
   thing[Domain.Id] === Id &&
   thing[Domain.Tag] === ErrTag;
 

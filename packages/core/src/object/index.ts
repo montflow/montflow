@@ -1,63 +1,93 @@
 import { Simplify, Table } from "../global/index.js";
-
 import * as Macro from "../macro/index.js";
 
 /**
- * @todo documentation
+ * Alias for the native `Object` constructor.
  */
 export const Constructor = Object;
 
 /**
- * @todo documentation
+ * Utility type to make a property optional.
+ *
+ * @todo testing
  */
 export type Optional<T, K extends keyof T> = Simplify<Omit<T, K> & Partial<Pick<T, K>>>;
 
 /**
  * Extracts the value type for a given key from a dictionary.
- * @template {Table} Input
+ *
+ * @template {Table} TInput
  * @template K
  */
-export type Value<Input extends Table, K extends keyof Input> = Input[K];
+export type Value<TInput extends Table, K extends keyof TInput> = TInput[K];
 
 /**
  * Extracts the key type from a dictionary.
- * @template {Table} Input
+ *
+ * @template {Table} TInput
  */
-export type Keys<Input extends Table> = Input extends Table<infer K, any> ? K : never;
+export type Keys<TInput extends Table> = TInput extends Table<infer K, any> ? K : never;
 
 /**
- * @todo documentation
+ * Asserts if an object is empty.
+ *
+ * @template T The object type to check
+ *
+ * @todo testing
  */
 export type IsEmpty<T> = keyof T extends never ? false : true;
 
 /**
  * Extracts the value type from a dictionary.
- * @template {Table} Input
+ *
+ * @template {Table} TInput
+ *
+ * @todo testing
  */
-export type Values<Input extends Table> = Input extends Table<PropertyKey, infer V> ? V : never;
+export type Values<TInput extends Table> =
+  TInput extends Table<PropertyKey, infer V> ? V : never;
 
 /**
- * @todo documentation
+ * Extracts the entries type from a dictionary.
+ *
+ * @template {Table} TInput
+ *
+ * @todo testing
  */
-export type Entries<Input extends Table> = {
-  [K in keyof Input]-?: [K, Input[K]];
-}[keyof Input];
+export type Entries<TInput extends Table> = {
+  [K in keyof TInput]-?: [K, TInput[K]];
+}[keyof TInput];
 
 /**
- * @todo documentation
+ * Checks if a value is an object.
+ *
+ * @param thing The value to check
+ * @returns True if the value is an object
+ *
  * @todo testing
  */
 export const isObject = (thing: unknown): thing is object =>
   typeof thing === "object" && thing !== null;
 
 /**
- * @todo documentation
+ * Checks if a value is a table.
+ *
+ *
+ * @param thing The value to check
+ * @returns True if the value is a table
+ *
+ * @alias {@link isObject}
+ *
  * @todo testing
  */
 export const isTable = (thing: unknown): thing is Table => isObject(thing);
 
 /**
- * @todo documentation
+ * Checks if an object has a given key.
+ *
+ * @template T The object type to check
+ * @template K The key to check for
+ *
  * @todo testing
  */
 export const hasKey: {
@@ -106,25 +136,50 @@ export const hasKeys: {
 );
 
 /**
- * @todo documentation
+ * Returns possible values of a table.
+ *
+ * @template T The table type to get values from
+ * @param input The table to get values from
+ * @returns The values of the table
+ *
  * @todo testing
  */
 export const values = <const T extends Table>(input: T) => Object.values(input) as Values<T>[];
 
 /**
- * @todo documentation
+ * Returns possible keys of a table.
+ *
+ * @template T The table type to get keys from
+ * @param input The table to get keys from
+ * @returns The keys of the table
+ *
  * @todo testing
  */
 export const keys = <const T extends Table>(input: T) => Object.keys(input) as Keys<T>[];
 
 /**
- * @todo documentation
+ * Returns the size of a table. (how many keys are in the table)
+ *
+ * @template T The table type to get the size of
+ * @param input The table to get the size of
+ * @returns The size of the table
+ *
  * @todo testing
  */
-export const length = <const T extends Table>(input: T) => keys(input).length;
+export const size = <const T extends Table>(input: T) => keys(input).length;
 
 /**
- * @todo documentation
+ * Alias for {@link size}.
+ */
+export const length = size;
+
+/**
+ * Returns the entries of a table.
+ *
+ * @template T The table type to get the entries from
+ * @param input The table to get the entries from
+ * @returns The entries of the table
+ *
  * @todo testing
  */
 export const entries = <const T extends Table>(input: T) =>

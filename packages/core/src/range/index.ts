@@ -28,7 +28,7 @@ export type Range = Object | Tuple;
 export const isObject = (thing: unknown): thing is Object =>
   _Object.isObject(thing) &&
   _Object.hasKeys(thing, ["min", "max"]) &&
-  _Object.length(thing) === 2 &&
+  _Object.size(thing) === 2 &&
   Number.isNumber(thing.min) &&
   Number.isNumber(thing.max) &&
   thing.min <= thing.max;

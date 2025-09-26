@@ -37,5 +37,5 @@ export const make = Macro.singleton("@montflow/nothing", (): Nothing => ({ [Doma
 export const isNothing = (thing: unknown): thing is Nothing =>
   Object.isObject(thing) &&
   Object.hasKeys(thing, [Domain.Id]) &&
-  Object.length(thing) === 1 &&
+  Object.size(thing) === 1 &&
   thing[Domain.Id] === ("nothing" as const);

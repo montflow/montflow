@@ -288,7 +288,7 @@ export const tryPromise: {
 export const isSome = (thing: unknown): thing is Some<unknown> =>
   Object.isObject(thing) &&
   Object.hasKeys(thing, [Domain.Id, Domain.Tag, "value"]) &&
-  Object.length(thing) === 3 &&
+  Object.size(thing) === 3 &&
   thing[Domain.Id] === Id &&
   thing[Domain.Tag] === SomeTag;
 
@@ -303,7 +303,7 @@ export const isSome = (thing: unknown): thing is Some<unknown> =>
 export const isNone = (thing: unknown): thing is None =>
   Object.isObject(thing) &&
   Object.hasKeys(thing, [Domain.Id, Domain.Tag]) &&
-  Object.length(thing) === 2 &&
+  Object.size(thing) === 2 &&
   thing[Domain.Id] === Id &&
   thing[Domain.Tag] === NoneTag;
 
