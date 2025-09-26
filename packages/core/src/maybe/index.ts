@@ -170,7 +170,7 @@ export const some: {
   <V>(value?: V): Some<V | undefined> => ({
     [Domain.Id]: Id,
     [Domain.Tag]: SomeTag,
-    value: value ?? Macro.undefined,
+    value: value === Macro.undefined ? Macro.undefined : value,
   })
 );
 
