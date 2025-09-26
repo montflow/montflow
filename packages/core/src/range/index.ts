@@ -4,25 +4,26 @@ import * as Number from "../number/index.js";
 import * as _Object from "../object/index.js";
 
 /**
- * @todo documentation
- * @todo testing
+ * Object representation of a range.
  */
 export type Object = { readonly min: number; readonly max: number };
 
 /**
- * @todo documentation
- * @todo testing
+ * Tuple representation of a range.
  */
 export type Tuple = readonly [min: number, max: number];
 
 /**
- * @todo documentation
- * @todo testing
+ * Range type.
  */
 export type Range = Object | Tuple;
 
 /**
- * @todo documentation
+ * Checks if a value is an object representation of a range.
+ *
+ * @param thing The value to check
+ * @returns True if the value is an object representation of a range
+ *
  * @todo testing
  */
 export const isObject = (thing: unknown): thing is Object =>
@@ -34,7 +35,11 @@ export const isObject = (thing: unknown): thing is Object =>
   thing.min <= thing.max;
 
 /**
- * @todo documentation
+ * Checks if a value is a tuple representation of a range.
+ *
+ * @param thing The value to check
+ * @returns True if the value is a tuple representation of a range
+ *
  * @todo testing
  */
 export const isTuple = (thing: unknown): thing is Tuple =>
@@ -45,24 +50,39 @@ export const isTuple = (thing: unknown): thing is Tuple =>
   thing[0] <= thing[1];
 
 /**
- * @todo documentation
+ * Checks if a value is a range.
+ *
+ * @param thing The value to check
+ * @returns True if the value is a range
+ *
  * @todo testing
  */
 export const isRange = (thing: unknown): thing is Range => isObject(thing) || isTuple(thing);
 
 /**
- * @todo documentation
+ * Converts a range to an object representation.
+ *
+ * @param self The range to convert
+ * @returns The object representation of the range
+ *
  * @todo testing
  */
 export const toObject = (self: Range): Object =>
   isObject(self) ? self : { min: self[0], max: self[1] };
 
 /**
- * @todo documentation
+ * Converts a range to a tuple representation.
+ *
+ * @param self The range to convert
+ * @returns The tuple representation of the range
+ *
  * @todo testing
  */
 export const toTuple = (self: Range): Tuple => (isTuple(self) ? self : [self.min, self.max]);
 
+/**
+ * Error thrown when a range is invalid.
+ */
 export class InvalidRangeError extends Error {
   constructor(
     public readonly reason: "min_greater_than_max" | "min_not_a_number" | "max_not_a_number"
@@ -83,7 +103,14 @@ export class InvalidRangeError extends Error {
 }
 
 /**
- * @todo documentation
+ * Creates a range.
+ *
+ * @param min The minimum value of the range
+ * @param max The maximum value of the range
+ * @returns The range
+ * @throws {InvalidRangeError} If the range is invalid
+ * @see {@link InvalidRangeError}
+ *
  * @todo testing
  */
 export const make = (min: number, max: number): Range => {
@@ -94,25 +121,38 @@ export const make = (min: number, max: number): Range => {
 };
 
 /**
- * @todo documentation
- * @todo testing
+ * @constructor
+ *
+ * Identity function to construct range
  */
 export const of = (self: Range) => self;
 
 /**
- * @todo documentation
+ * Returns the minimum value of a range.
+ *
+ * @param self The range to get the minimum value of
+ * @returns The minimum value of the range
+ *
  * @todo testing
  */
-export const min = (self: Range): number => toObject(self).min;
+export const min = (self: Range): number => (isObject(self) ? self.min : self[0]);
 
 /**
- * @todo documentation
+ * Returns the maximum value of a range.
+ *
+ * @param self The range to get the maximum value of
+ * @returns The maximum value of the range
+ *
  * @todo testing
  */
-export const max = (self: Range): number => toObject(self).max;
+export const max = (self: Range): number => (isObject(self) ? self.max : self[1]);
 
 /**
- * @todo documentation
+ * Checks if a range is valid.
+ *
+ * @param self The range to check
+ * @returns True if the range is valid
+ *
  * @todo testing
  */
 export const isValid = (self: Range): boolean => {
