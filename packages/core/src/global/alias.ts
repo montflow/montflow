@@ -12,3 +12,8 @@ export type Yes = true;
  * @alias false
  */
 export type No = false;
+
+/**
+ * @alias never
+ */
+export type Never = never;
