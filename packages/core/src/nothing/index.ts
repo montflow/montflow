@@ -3,25 +3,36 @@ import * as Macro from "../macro/index.js";
 import * as Object from "../object/index.js";
 
 /**
- * @todo documentation
+ * Unique domain identifier for the Nothing algebraic data type.
  */
-export class Nothing {
-  readonly [Domain.Id] = "nothing" as const;
-}
+export const Id = "nothing" as const;
 
 /**
- * @todo documentation
- * @todo testing
+ * Unique domain identifier type for the Nothing algebraic data type.
  */
-export const make = Macro.singleton(
-  "@montflow/nothing",
-  (): Nothing => ({ [Domain.Id]: "nothing" as const })
-);
+export type Id = typeof Id;
 
 /**
- * @todo documentation
- * @todo testing
- * @todo implementation
+ * The `Nothing` variant represents the absence of a value.
+ */
+export type Nothing = {
+  readonly [Domain.Id]: Id;
+};
+
+/**
+ * @constructor
+ *
+ * Constructs a `Nothing` value.
+ *
+ * @returns A `Nothing` value
+ */
+export const make = Macro.singleton("@montflow/nothing", (): Nothing => ({ [Domain.Id]: Id }));
+
+/**
+ * Returns `true` if the given value is a `Nothing`.
+ *
+ * @param thing Unknown value
+ * @returns Type guard for `Nothing`
  */
 export const isNothing = (thing: unknown): thing is Nothing =>
   Object.isObject(thing) &&

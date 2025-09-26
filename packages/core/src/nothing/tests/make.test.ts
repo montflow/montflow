@@ -1,5 +1,6 @@
 import * as Vitest from "vitest";
 
+import * as Domain from "../../domain/index.js";
 import * as Nothing from "../index.js";
 
 Vitest.describe("[runtime] Nothing.make", () => {
@@ -7,10 +8,10 @@ Vitest.describe("[runtime] Nothing.make", () => {
     Vitest.expect(Nothing.make).toBeDefined();
   });
 
-  Vitest.it('should have property `_id` = "nothing"', () => {
+  Vitest.it('should have domain identifier "nothing"', () => {
     const value = Nothing.make();
 
-    Vitest.expect(value._id).toBe("nothing");
+    Vitest.expect(value[Domain.Id]).toBe(Nothing.Id);
   });
 });
 
