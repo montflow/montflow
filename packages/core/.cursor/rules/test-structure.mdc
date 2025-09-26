@@ -1,5 +1,5 @@
 ---
-globs: packages/core/src/*/tests/*.test.ts
+globs: packages/core/src/*/tests/*.test.ts,packages/core/src/*/tests/*.type.test.ts
 description: Core package test file structure and formatting guidelines
 ---
 
@@ -8,8 +8,12 @@ description: Core package test file structure and formatting guidelines
 ## File Location and Naming
 
 Test files must be located in the `tests/` directory within each module:
-- **Pattern**: `tests/[utilityName].test.ts`
-- **Example**: For utility `isCallable` in `Async` module, create `async/tests/isCallable.test.ts`
+- **Pattern for utilities**: `tests/[utilityName].test.ts`
+- **Pattern for types**: `tests/[TypeName].type.test.ts`
+- **Example for utility**: For utility `isCallable` in `Async` module, create `async/tests/isCallable.test.ts`
+- **Example for type**: For type `MyUtility` in `Function` module, create `function/tests/MyUtility.type.test.ts`
+
+**Note**: When utilities and types have the same name but different casing (e.g., `myUtility` function and `MyUtility` type), use the `.type.test.ts` suffix for type test files to avoid naming conflicts.
 
 ## Import Structure
 
@@ -209,6 +213,7 @@ pnpm test src/async/
 See [wait.test.ts](mdc:packages/core/src/async/tests/wait.test.ts) for a complete function test example.
 
 ### Type Test Example
+File: `function/tests/Predicate.type.test.ts`
 ```typescript
 import * as Vitest from "vitest";
 

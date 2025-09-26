@@ -39,7 +39,8 @@ src/
 ├── module-name/
 │   ├── index.ts          # Main module file
 │   └── tests/            # Test directory (if tests exist)
-│       ├── utility1.test.ts
-│       ├── utility2.test.ts
+│       ├── utility1.test.ts      # Function/constant tests
+│       ├── utility2.test.ts      # Function/constant tests
+│       ├── TypeName.type.test.ts  # Type tests
 │       └── ...
 ```
