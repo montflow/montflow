@@ -4,7 +4,7 @@ import * as Macro from "../index.js";
 
 Vitest.describe("[runtime] Macro.void", () => {
   Vitest.it("should be defined", () => {
-    Vitest.expect(Macro.void).toBeDefined();
+    Vitest.expect(Macro.void).toEqual(void 0);
   });
 });
 

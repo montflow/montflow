@@ -24,6 +24,7 @@ export const lambda = <T>(fn: Function.Nullary<T>): T => fn();
  */
 export const cast = <T>(x: unknown): T => x as T;
 
+/** @internal */
 const _singletons: Table<string, Constructor.Any | Function.Maker.Any> = {};
 
 /**
@@ -36,17 +37,39 @@ export class SingletonAlreadyExistsError extends Error {
   }
 }
 
-/**
- * @todo documentation
- * @todo testing
- */
 export const singleton: {
+  /**
+   * Creates a proxy constructor that allocates the a created
+   * instance only once. The instance is created when and if the
+   * returned function is ever invoked.
+   *
+   * @template TConstructor the constructor type
+   * @param id the id of the singleton. Must be unique project wide.
+   * @param ctor the constructor to create the singleton
+   * @param args the arguments to pass to the constructor
+   * @returns a function that returns the singleton instance
+   *
+   * @todo testing
+   */
   <TConstructor extends Constructor.Any>(
     id: string,
     ctor: TConstructor,
     ...args: Constructor.Args<TConstructor>
   ): () => Constructor.Instance<TConstructor>;
 
+  /**
+   * Creates a proxy constructor that allocates the a created
+   * instance only once. The instance is created when and if the
+   * returned function is ever invoked.
+   *
+   * @template TMaker the maker type
+   * @param id the id of the singleton. Must be unique project wide.
+   * @param ctor the maker to create the singleton
+   * @param args the arguments to pass to the maker
+   * @returns a function that returns the singleton instance
+   *
+   * @todo testing
+   */
   <TMaker extends Function.Maker.Any>(
     id: string,
     ctor: TMaker,
@@ -83,37 +106,54 @@ export const singleton: {
 };
 
 /**
- * @todo documentation
- * @todo testing
+ * Casts an unknown value to `never` without runtime checks.
+ * Internally it's just a `undefined` cast to `never`.
  */
 export const never = cast<never>(void 0);
 
 /**
- * @todo documentation
- * @todo testing
+ * Casts an unknown value to `unknown` without runtime checks.
+ * Internally it's just a `undefined` cast to `unknown`.
  */
 export const unknown = cast<unknown>(void 0);
 
 /**
- * @todo documentation
- * @todo testing
+ * Casts an unknown value to `undefined` without runtime checks.
+ * Internally it's just a `undefined` cast to `undefined`.
  */
 export const undefined = cast<undefined>(void 0);
 
 /**
- * @todo documentation
- * @todo testing
+ * Casts an unknown value to `void` without runtime checks.
+ * Internally it's just a `undefined` cast to `void`.
  */
 const _void = cast<void>(void 0);
 
 export { _void as void };
 
-/**
- * @todo documentation
- * @todo testing
- */
 export const panic: {
+  /**
+   * Throws an error or a message.
+   *
+   * @template E the error type
+   * @param error the error to throw
+   * @returns never
+   * @throws {E} the error
+   *
+   * @todo testing
+   */
   <E>(error: E): never;
+
+  /**
+   * Throws an error or a message.
+   *
+   * @template E the error type
+   * @param message the message to throw
+   * @returns never
+   * @throws {Error} with the message
+   *
+   * @todo testing
+   */
   (message: string): never;
 } = <E>(errorOrMessage: E | string) => {
   if (typeof errorOrMessage === "string") {
@@ -134,7 +174,12 @@ export const evaluate = <T>(evaluable: Evaluable<T>): T =>
   Function.isCallable(evaluable) ? evaluable() : evaluable;
 
 /**
- * @todo documentation
+ * Throws a `todo` error. Meant to be used as a development placeholder.
+ *
+ * @param message the message to throw
+ * @returns never
+ * @throws {Error} with the message
+ *
  * @todo testing
  */
 export const todo = (message?: string) => panic(message ?? "todo");
@@ -146,15 +191,21 @@ export const todo = (message?: string) => panic(message ?? "todo");
 export const placeholder = todo;
 
 /**
- * @todo documentation
- * @todo testing
+ * Throws a `todo` error. Meant to be used as
+ * a development placeholder for missing implementation.
+ *
+ * @param message the message to throw
+ * @returns never
+ * @throws {Error} with the message
  */
 export const todoImpl = () => todo("missing implementation");
 
-/**
- * @todo documentation
- */
 export namespace Dualify {
+  /**
+   * Dualify options.
+   *
+   * @see {@link dualify}
+   */
   export type Options =
     | { withTail?: false }
     | { withTail: true; isSelf: (self: unknown) => boolean };
