@@ -10,27 +10,29 @@ import * as Object from "../object/index.js";
 import * as Result from "../result/index.js";
 
 /**
- * @todo documentation
+ * Unique domain identifier for the Maybe algebraic data type.
  */
 export const Id = "maybe" as const;
 
 /**
- * @todo documentation
+ * Type of the unique domain identifier for the Maybe algebraic data type.
  */
 export type Id = typeof Id;
 
 /**
- * @todo documentation
+ * Tag used to discriminate the `Some` variant at runtime.
  */
 export const SomeTag = "some" as const;
 
 /**
- * @todo documentation
+ * Type of the `Some` discriminant tag.
  */
 export type SomeTag = typeof SomeTag;
 
 /**
- * @todo documentation
+ * The `Some` variant carries a present value of type `V`.
+ *
+ * @template V Value type carried by the `Some` variant
  */
 export type Some<out V> = {
   readonly [Domain.Id]: Id;
@@ -39,18 +41,17 @@ export type Some<out V> = {
 };
 
 /**
- * @todo documentation
- * @todo testing
+ * Tag used to discriminate the `None` variant at runtime.
  */
 export const NoneTag = "none" as const;
 
 /**
- * @todo documentation
+ * Type of the `None` discriminant tag.
  */
 export type NoneTag = typeof NoneTag;
 
 /**
- * @todo documentation
+ * The `None` variant represents the absence of a value.
  */
 export type None = {
   readonly [Domain.Id]: Id;
@@ -58,42 +59,47 @@ export type None = {
 };
 
 /**
- * @todo documentation
+ * A Maybe value that is either `Some<V>` (present) or `None` (absent).
+ *
+ * @template V Value type in the `Some` branch
  */
 export type Maybe<V = never> = Some<V> | None;
 
 /**
  * @internal
- * @todo documentation
+ * Maximum depth for `unfold` to prevent infinite recursion with cyclic or
+ * deeply nested structures.
  */
 export const MAX_UNFOLD_DEPTH = 512;
 
 /**
- * @alias Maybe<any> of any `V`
+ * Alias for a `Maybe<any>` value.
  */
 export type Any = Maybe<any>;
 
 /**
- * @alias Maybe<unknown> of unknown `V`
+ * Alias for a `Maybe<unknown>` value.
  */
 export type Unknown = Maybe<unknown>;
 
 /**
- * @alias Maybe<unknown> of never `V`
+ * Alias for a `Maybe<never>` value.
  */
 export type Never = Maybe<never>;
 
 /**
- * Extracts the type of `V` from a `Maybe` type
- * @template TMaybe input `Maybe` type
- * @returns `V`'s type
+ * Extracts the inner value type `V` from a `Maybe<V>`.
+ *
+ * @template TMaybe Input `Maybe` type
+ * @returns The extracted inner value type or `never` for `None`
  */
 export type Value<TMaybe extends Any> = TMaybe extends Some<infer V> ? V : never;
 
 /**
- * Unwraps nested `Maybe` type once
- * @template TRoot input `Maybe` type to flatten
- * @returns `Maybe` flattened once
+ * Unwraps one level of nesting from `Maybe<Maybe<V>>` to `Maybe<V>`.
+ *
+ * @template TRoot Input `Maybe` type to flatten
+ * @returns The flattened `Maybe` type
  */
 export type Flatten<TRoot extends Any> =
   [TRoot] extends [Maybe<infer TValue>] ?
@@ -103,9 +109,11 @@ export type Flatten<TRoot extends Any> =
   : never;
 
 /**
- * Recursively unwraps nested `Maybe` type **infinitely**. Not recommended for general use. Use computationally simpler versions like `Flatten` or `Unfold`
+ * Recursively unwraps nested `Maybe` types without limit.
+ * Not recommended for general use. Prefer `Flatten` or `Unfold`.
+ *
  * @template TRoot `Maybe` type to unfold
- * @returns `Maybe` of depth 1
+ * @returns A `Maybe` with a single level of nesting
  * @see {@link Flatten}
  * @see {@link Unfold}
  */
@@ -117,10 +125,14 @@ export type InfiniteUnfold<TRoot extends Any> =
   : never;
 
 /**
- * Recursively unwraps nested `Maybe` type up to `Limit`. For an **infinite** version checkout `Maybe.InfiniteUnfold` or simpler `Result.Flatten`
+ * Recursively unwraps nested `Maybe` types up to `TLimit` levels.
+ *
+ * For an infinite version use `Maybe.InfiniteUnfold`, or use `Flatten` for a
+ * single-level unwrap.
+ *
  * @template TRoot `Maybe` type to unfold
- * @template TLimit maximun depth for unesting. Default `512`
- * @returns `Maybe` of depth 1 if depth ≤ `Limit`. Otherwise the unfolded result up to `Limit`
+ * @template TLimit Maximum depth for unnesting. Default `512`
+ * @returns A `Maybe` with at most a single level of nesting
  * @see {@link InfiniteUnfold}
  * @see {@link Flatten}
  */
@@ -133,32 +145,41 @@ export type Unfold<TRoot extends Any, TLimit extends number = typeof MAX_UNFOLD_
   : never;
 
 /**
- * Shorthand for `Promise` of a `Maybe`
- * @template V inner `Some` value type
- * @returns {Promise<Maybe<V>>}
+ * Shorthand for a `Promise` that resolves to a `Maybe<V>`.
+ *
+ * @template V Inner `Some` value type
+ * @returns A promise of a `Maybe<V>`
  */
 export type Promise<V> = Alias.Promise<Maybe<V>>;
 
 /**
  * @constructor
- * @todo documentation
+ *
+ * Constructs a `Some` value, wrapping a present value.
+ *
+ * @template V Value type
+ * @param value The value to wrap
+ * @returns A `Some<V>`
+ *
  * @todo testing
  */
 export const some: {
   (): Some<never>;
   <V>(value: V): Some<V>;
 } = Macro.cast(
-  <V = never>(value: V): Some<V> => ({
+  <V>(value?: V): Some<V | undefined> => ({
     [Domain.Id]: Id,
     [Domain.Tag]: SomeTag,
-    value: value,
+    value: value ?? Macro.undefined,
   })
 );
 
 /**
  * @constructor
- * @todo documentation
- * @todo testing
+ *
+ * Constructs the `None` value representing absence.
+ *
+ * @returns A `None` value
  */
 export const none = Macro.singleton(
   "@montflow/none",
@@ -167,18 +188,64 @@ export const none = Macro.singleton(
 
 /**
  * @constructor
- * @todo documentation
- * @todo testing
+ *
+ * Converts a possibly nullish value into a `Maybe`.
+ * Returns `none()` if the input is `null` or `undefined`, otherwise `some(value)`.
+ *
+ * @template V Input value type
+ * @param value The value that may be nullish
+ * @returns `Maybe<NonNullable<V>>`
  */
 export const fromNullish = <V>(value: V): Maybe<NonNullable<V>> =>
   value === null || value === undefined ? none() : some(value);
 
 /**
- * @constructor
- * @todo documentation
+ * Returns `Some` with value when predicate result is true, otherwise `None`.
+ *
+ * @template V Input value type
+ * @param self The value to test
+ * @param predicate Predicate used to decide presence
+ * @returns `Maybe<V>`
+ *
  * @todo testing
  */
-export const _try = <V>(f: Sync<V>): Maybe<V> => {
+export const fromPredicate: {
+  <V>(self: V, predicate: Function.Predicate<V>): Maybe<V>;
+  <V>(predicate: Function.Predicate<V>): (value: V) => Maybe<V>;
+} = Macro.dualify(1, <V>(self: V, predicate: Function.Predicate<V>) =>
+  predicate(self) ? some(self) : none()
+);
+
+/**
+ * Returns `Some` with value when `condition` is true, otherwise `None`.
+ *
+ * @template V Input value type
+ * @param self The value to test
+ * @param condition Condition used to decide presence
+ * @returns `Maybe<V>`
+ *
+ * @todo testing
+ */
+export const _if: {
+  <V>(self: V, condition: Evaluable<boolean>): Maybe<V>;
+  <V>(condition: Evaluable<boolean>): (value: V) => Maybe<V>;
+} = Macro.dualify(1, <V>(self: V, condition: Evaluable<boolean>) =>
+  Macro.evaluate(condition) ? some(self) : none()
+);
+
+export { _if as if };
+
+/**
+ * Executes a function and captures exceptions as `None`.
+ * Returns `Some<V>` if the function succeeds, otherwise `None`.
+ *
+ * @template V Return type of the function
+ * @param f Function to execute
+ * @returns `Maybe<V>`
+ *
+ * @todo testing
+ */
+const _try = <V>(f: Sync<V>): Maybe<V> => {
   try {
     return some(f());
   } catch {
@@ -189,7 +256,13 @@ export const _try = <V>(f: Sync<V>): Maybe<V> => {
 export { _try as try };
 
 /**
- * @todo documentation
+ * Executes an async computation and converts it to a `Promise<Maybe<V>>`.
+ * Returns `some(value)` when resolved, otherwise `none()` if it rejects.
+ *
+ * @template V Resolved value type
+ * @param $try Lazy async function or promise to resolve
+ * @returns A promise resolving to `Maybe<V>`
+ *
  * @todo testing
  */
 export const tryPromise: {
@@ -205,7 +278,11 @@ export const tryPromise: {
 };
 
 /**
- * @todo documentation
+ * Returns `true` if the given value is a `Some` variant.
+ *
+ * @param thing Unknown value
+ * @returns Type guard for `Some<unknown>`
+ *
  * @todo testing
  */
 export const isSome = (thing: unknown): thing is Some<unknown> =>
@@ -216,7 +293,11 @@ export const isSome = (thing: unknown): thing is Some<unknown> =>
   thing[Domain.Tag] === SomeTag;
 
 /**
- * @todo documentation
+ * Returns `true` if the given value is a `None` variant.
+ *
+ * @param thing Unknown value
+ * @returns Type guard for `None`
+ *
  * @todo testing
  */
 export const isNone = (thing: unknown): thing is None =>
@@ -227,35 +308,55 @@ export const isNone = (thing: unknown): thing is None =>
   thing[Domain.Tag] === NoneTag;
 
 /**
- * @todo documentation
+ * Returns `true` if the given value is a `Maybe` (`Some` or `None`).
+ *
+ * @param thing Unknown value
+ * @returns Type guard for `Maybe<unknown>`
+ *
  * @todo testing
  */
 export const isMaybe = (thing: unknown): thing is Maybe<unknown> =>
   isNone(thing) || isSome(thing);
 
 /**
- * @todo documentation
+ * Transforms the inner value with `mapper` when `Some`; returns `None` otherwise.
+ *
+ * @template From Input value type
+ * @template To Output value type
+ * @param mapper Function applied to the `Some` value
+ * @param self `Maybe<TFrom>` to map
+ * @returns A function expecting a `Maybe<From>` and returning `Maybe<To>`
+ *
  * @todo testing
  */
 export const map: {
-  <From, To>(mapper: Function.Mapper<From, To>): (self: Maybe<From>) => Maybe<To>;
-  <From, To>(self: Maybe<From>, mapper: Function.Mapper<From, To>): Maybe<To>;
-} = Macro.dualify(1, <From, To>(self: Maybe<From>, mapper: Function.Mapper<From, To>) =>
+  <TFrom, TTo>(mapper: Function.Mapper<TFrom, TTo>): (self: Maybe<TFrom>) => Maybe<TTo>;
+  <TFrom, TTo>(self: Maybe<TFrom>, mapper: Function.Mapper<TFrom, TTo>): Maybe<TTo>;
+} = Macro.dualify(1, <TFrom, TTo>(self: Maybe<TFrom>, mapper: Function.Mapper<TFrom, TTo>) =>
   isSome(self) ? some(mapper(self.value)) : none()
 );
 
 /**
- * @todo documentation
+ * Error thrown when attempting to `unwrap` a `None` value.
+ *
  * @todo testing
  */
 export class UnwrapError extends Error {
+  [Domain.Tag] = "unwrap-error";
+
   constructor() {
     super(`Maybe is "None". Unwrap operation failed`);
   }
 }
 
 /**
- * @todo documentation
+ * Extracts the inner value from `Some`, or throws `UnwrapError` for `None`.
+ *
+ * @template V Value type
+ * @param self The `Maybe<V>` to unwrap
+ * @returns The inner value when `Some`
+ * @throws {UnwrapError} If `self` is `None`
+ *
  * @todo testing
  */
 export const unwrap = <V>(self: Maybe<V>): V => {
@@ -264,29 +365,33 @@ export const unwrap = <V>(self: Maybe<V>): V => {
 };
 
 /**
- * @todo documentation
- * @todo testing
- */
-export const or: {
-  <V>(value: Evaluable<V>): (self: Maybe<V>) => V;
-  <V>(self: Maybe<V>, value: Evaluable<V>): V;
-} = Macro.dualify(1, <V>(self: Maybe<V>, value: Evaluable<V>) =>
-  isSome(self) ? self.value : Macro.evaluate(value)
-);
-
-/**
- * @todo documentation
+ * When `Some`, returns the original value, otherwise returns the providedfallback value.
+ *
+ * @template V Some value type
+ * @template TOr Fallback type
+ * @param value Fallback value or thunk
+ * @param self `Maybe<V>` to collapse
+ * @returns A function that collapses a `Maybe<V>` to `Or`
+ *
  * @todo testing
  */
 export const orElse: {
-  <V, Or>(value: Evaluable<Or>): (self: Maybe<V>) => Or;
-  <V, Or>(self: Maybe<V>, value: Evaluable<Or>): Or;
-} = Macro.dualify(1, <V, Or>(self: Maybe<V>, value: Evaluable<Or>) =>
+  <V, TOr>(value: Evaluable<TOr>): (self: Maybe<V>) => TOr;
+  <V, TOr>(self: Maybe<V>, value: Evaluable<TOr>): TOr;
+} = Macro.dualify(1, <V, TOr>(self: Maybe<V>, value: Evaluable<TOr>) =>
   isSome(self) ? self.value : Macro.evaluate(value)
 );
 
 /**
- * @todo documentation
+ * Fully unfolds nested `Maybe` values until a non-`Maybe` is reached or
+ * until `MAX_UNFOLD_DEPTH` is hit.
+ *
+ * @template V Some value type
+ * @param self Possibly nested `Maybe`
+ * @returns `None` if any level is `None`, otherwise `Some<Innermost>`
+ *
+ * @see {@link MAX_UNFOLD_DEPTH}
+ *
  * @todo testing
  */
 export const unfold: {
@@ -303,12 +408,15 @@ export const unfold: {
 };
 
 /**
- * @todo documentation
+ * Flattens exactly one level from nested `Maybe`.
+ *
+ * @template V Some value type
+ * @param self A `Maybe` possibly containing another `Maybe`
+ * @returns Flattened `Maybe`
+ *
  * @todo testing
  */
-export const flatten: {
-  <V>(self: Maybe<V>): Flatten<Maybe<V>>;
-} = <V>(self: Maybe<V>) => {
+export const flatten = <V>(self: Maybe<V>): Flatten<Maybe<V>> => {
   if (isNone(self) || !isMaybe(self.value) || isNone(self.value)) {
     return self as Flatten<Maybe<V>>;
   }
@@ -316,21 +424,37 @@ export const flatten: {
 };
 
 /**
- * @todo documentation
+ * Maps and flattens given `Maybe` using the provided mapper.
+ *
+ * @template From Input value type
+ * @template To Output value type
+ * @param mapper Function mapping `From` to `Maybe<To>`
+ * @returns A function expecting a `Maybe<From>` and returning `Maybe<To>`
+ *
+ * @see {@link map}
+ * @see {@link flatten}
+ *
  * @todo testing
  */
 export const flatmap: {
-  <From, To>(mapper: Function.Mapper<From, Maybe<To>>): (self: Maybe<From>) => Maybe<To>;
-  <From, To>(self: Maybe<From>, mapper: Function.Mapper<From, Maybe<To>>): Maybe<To>;
-} = Macro.dualify(1, <From, To>(self: Maybe<From>, mapper: Function.Mapper<From, Maybe<To>>) =>
-  isSome(self) ? mapper(self.value) : none()
+  <TFrom, TTo>(mapper: Function.Mapper<TFrom, Maybe<TTo>>): (self: Maybe<TFrom>) => Maybe<TTo>;
+  <TFrom, TTo>(self: Maybe<TFrom>, mapper: Function.Mapper<TFrom, Maybe<TTo>>): Maybe<TTo>;
+} = Macro.dualify(
+  1,
+  <TFrom, TTo>(self: Maybe<TFrom>, mapper: Function.Mapper<TFrom, Maybe<TTo>>) =>
+    isSome(self) ? mapper(self.value) : none()
 );
 
 /**
- * @todo documentation
+ * If `Some` and predicate is true with value returns self (`Some<V>`), otherwise returns `None`.
+ *
+ * @template V Value type
+ * @param predicate Predicate applied to the `Some` value
+ * @returns A function that filters a `Maybe<V>`
+ *
  * @todo testing
  */
-export const check: {
+export const filter: {
   <V>(predicate: Function.Predicate<V>): (self: Maybe<V>) => Maybe<V>;
   <V>(self: Maybe<V>, predicate: Function.Predicate<V>): Maybe<V>;
 } = Macro.dualify(1, <V>(self: Maybe<V>, predicate: Function.Predicate<V>) =>
@@ -341,24 +465,59 @@ export const check: {
 );
 
 /**
- * @todo documentation
+ * Runs proivided tapper if `Some` with value. Otherwise it's skipped.
+ *
+ * @template V Value type
+ * @param tapper Function to run if `Some` with value
+ * @returns The original `Maybe<V>`
+ *
  * @todo testing
  */
 export const tap: {
-  <V>(fn: (value: V) => any): (self: Maybe<V>) => Maybe<V>;
-  <V>(self: Maybe<V>, fn: (value: V) => any): Maybe<V>;
-} = Macro.dualify(1, <V>(self: Maybe<V>, fn: (value: V) => any) => {
-  isSome(self) ? fn(self.value) : null;
+  <V>(tapper: Function.Tapper<V>): (self: Maybe<V>) => Maybe<V>;
+  <V>(self: Maybe<V>, tapper: Function.Tapper<V>): Maybe<V>;
+} = Macro.dualify(1, <V>(self: Maybe<V>, tapper: Function.Tapper<V>) => {
+  isSome(self) ? tapper(self.value) : null;
   return self;
 });
 
 /**
- * @todo documentation
+ * @alias {@link tap}
+ */
+export const whenSome = tap;
+
+/**
+ * Runs provided callback if `None`.
+ *
+ * @template V Value type
+ * @param tapper Function to run if `None`
+ * @returns The original `Maybe<V>`
+ *
+ * @todo testing
+ */
+export const tapNone: {
+  <V>(tapper: Function.Callback): (self: Maybe<V>) => Maybe<V>;
+  <V>(self: Maybe<V>, tapper: Function.Callback): Maybe<V>;
+} = Macro.dualify(1, <V>(self: Maybe<V>, fn: () => any) => {
+  isNone(self) ? fn() : null;
+  return self;
+});
+
+export const whenNone = tapNone;
+
+/**
+ * Narrows the inner value type using a type guard. Returns `Some` when the
+ * guard succeeds; `None` otherwise or when the receiver is `None`.
+ *
+ * @template Type The target narrowed type
+ * @param guard User-defined type guard for the value
+ * @returns A function that narrows a `Maybe<unknown>` to `Maybe<Type>`
+ *
  * @todo testing
  */
 export const is: {
-  <Type>(guard: Function.Guard<Type>): (self: Unknown) => Maybe<Type>;
-  <Type>(self: Unknown, guard: Function.Guard<Type>): Maybe<Type>;
+  <TType>(guard: Function.Guard<TType>): (self: Unknown) => Maybe<TType>;
+  <TType>(self: Unknown, guard: Function.Guard<TType>): Maybe<TType>;
 } = Macro.dualify(1, <Type>(self: Unknown, guard: Function.Guard<Type>) =>
   isNone(self) ? none()
   : guard(self.value) ? some(self.value)
@@ -366,19 +525,12 @@ export const is: {
 );
 
 /**
- * @todo documentation
- * @todo testing
- */
-export const tapNone: {
-  <V>(fn: () => any): (self: Maybe<V>) => Maybe<V>;
-  <V>(self: Maybe<V>, fn: () => any): Maybe<V>;
-} = Macro.dualify(1, <V>(self: Maybe<V>, fn: () => any) => {
-  isNone(self) ? fn() : null;
-  return self;
-});
-
-/**
- * @todo documentation
+ * Executes side-effect branches based on the variant and returns the original `Maybe`.
+ *
+ * @template V Value type
+ * @param branches Optional handlers for `some` and `none`
+ * @returns The original `Maybe<V>`
+ *
  * @todo testing
  */
 export const match: {
@@ -393,29 +545,19 @@ export const match: {
 );
 
 /**
- * @todo documentation
- * @todo testing
- */
-export const collapse: {
-  <From, To>(branches: {
-    some: (value: From) => To;
-    none: () => To;
-  }): (self: Maybe<From>) => To;
-  <From, To>(self: Maybe<From>, branches: { some: (value: From) => To; none: () => To }): To;
-} = Macro.dualify(
-  1,
-  <From, To>(self: Maybe<From>, branches: { some: (value: From) => To; none: () => To }) =>
-    isSome(self) ? branches.some(self.value) : branches.none()
-);
-
-/**
- * @todo documentation
+ * Applies a mapper that may throw; converts thrown errors into `None`.
+ *
+ * @template From Input value type
+ * @template To Output value type
+ * @param mapper Mapping function possibly throwing
+ * @returns A function mapping `Maybe<From>` to `Maybe<To>`
+ *
  * @todo testing
  */
 export const tryMap: {
-  <From, To>(mapper: (some: From) => To): (self: Maybe<From>) => Maybe<To>;
-  <From, To>(self: Maybe<From>, mapper: (some: From) => To): Maybe<To>;
-} = Macro.dualify(1, <From, To>(self: Maybe<From>, mapper: (some: From) => To) => {
+  <TFrom, TTo>(mapper: (some: TFrom) => TTo): (self: Maybe<TFrom>) => Maybe<TTo>;
+  <TFrom, TTo>(self: Maybe<TFrom>, mapper: (some: TFrom) => TTo): Maybe<TTo>;
+} = Macro.dualify(1, <TFrom, TTo>(self: Maybe<TFrom>, mapper: (some: TFrom) => TTo) => {
   try {
     return isSome(self) ? some(mapper(self.value)) : none();
   } catch {
@@ -424,7 +566,15 @@ export const tryMap: {
 });
 
 /**
- * @todo documentation
+ * Safely reads a property from an object inside a `Maybe`.
+ * Returns `Some(value[key])` when the receiver is `Some` and the property exists;
+ * otherwise returns `None`.
+ *
+ * @template R Object type
+ * @template K Key of `R`
+ * @param key The property to read
+ * @returns A function mapping `Maybe<R>` to `Maybe<R[K]>`
+ *
  * @todo testing
  */
 export const property: {
@@ -437,24 +587,41 @@ export const property: {
 });
 
 /**
- * @todo documentation
+ * Converts a `Maybe<V>` into a `Result<V, E>`.
+ * - When `Some`, returns `ok(value)`.
+ * - When `None`, returns `err(error)`; if `error` is omitted, uses `Nothing.Nothing`.
+ *
+ * @template V Success value type
+ * @template E Error type
+ * @param error Error value used for the `None` branch (optional)
+ * @returns A function mapping `Maybe<V>` to `Result<V, E | Nothing.Nothing>`
+ *
  * @todo testing
  */
 export const toResult: {
-  <V, E>(error: E): (self: Maybe<V>) => Result.Result<V, E>;
-  <V, E>(self: Maybe<V>, error: E): Result.Result<V, E>;
-  <V>(): (self: Maybe<V>) => Result.Result<V, Nothing.Nothing>;
+  <V, E>(self: Maybe<V>, error: Evaluable<E>): Result.Result<V, E>;
   <V>(self: Maybe<V>): Result.Result<V, Nothing.Nothing>;
-} = Macro.dualify(1, <V, E>(self: Maybe<V>, error?: E) => {
-  if (isNone(self)) return error ? Result.err(error) : Result.err();
-  return Result.ok(self.value);
-});
+  <V, E>(error: Evaluable<E>): (self: Maybe<V>) => Result.Result<V, E>;
+  <V>(): (self: Maybe<V>) => Result.Result<V, Nothing.Nothing>;
+} = Macro.dualify(
+  1,
+  <V, E>(
+    self: Maybe<V>,
+    error?: Evaluable<E>
+  ): Result.Result<V, Nothing.Nothing> | Result.Result<V, E> => {
+    if (isNone(self))
+      return error ? Result.err(Macro.evaluate(error)) : Result.err(Nothing.make());
+    return Result.ok(self.value);
+  }
+);
 
 /**
- * @todo documentation
+ * Parses a JSON string inside a `Maybe<string>` using `JSON.parse`.
+ * Behaves like `tryMap(JSON.parse)`.
+ *
+ * @param self `Maybe<string>` to parse
+ * @returns `Maybe<any>` with the parsed value or `None` on failure
+ *
  * @todo testing
  */
-export const parseJson: {
-  (): (self: Maybe<string>) => Maybe<any>;
-  (self: Maybe<string>): Maybe<any>;
-} = Macro.dualify(0, (self: Maybe<string>) => tryMap(self, JSON.parse));
+export const parseJson = (self: Maybe<string>) => tryMap(self, JSON.parse);
