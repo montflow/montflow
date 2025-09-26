@@ -1,51 +1,172 @@
+import * as Function from "../function/index.js";
+import * as Macro from "../macro/index.js";
 import * as Range from "../range/index.js";
 
 /**
- * @todo documentation
+ * Type alias for the native javascript number type.
  */
 export const Constructor = Number;
 
 /**
- * @todo documentation
- * @todo testing
+ * Checks if the given thing is a number. When NaN then false is returned.
+ *
+ * @param thing The thing to check.
+ * @returns True if the thing is a number, false otherwise.
  */
 export const isNumber = (thing: unknown): thing is number =>
   typeof thing === "number" && !Number.isNaN(thing);
 
 /**
- * @todo documentation
- * @todo testing
+ * Checks if the given thing is an integer.
+ *
+ * @param thing The thing to check.
+ * @returns True if the thing is an integer, false otherwise.
  */
 export const isInt = (thing: unknown): thing is number =>
   isNumber(thing) && Number.isInteger(thing);
 
 /**
- * @todo documentation
+ * Checks if the given thing is a float.
+ *
+ * @param thing The thing to check.
+ * @returns True if the thing is a float, false otherwise.
+ *
  * @todo testing
- * @todo implementation
  */
-export const clamp = (n: number, range: Range.Range) => {
+export const isFloat = (thing: unknown): thing is number =>
+  isNumber(thing) && !Number.isInteger(thing);
+
+/**
+ * Checks if the given number is positive.
+ *
+ * @param n The number to check.
+ * @returns True if the number is positive, false otherwise.
+ *
+ * @todo testing
+ */
+export const isPositive: Function.Predicate<number> = (n: number): boolean =>
+  isNumber(n) && n > 0;
+
+/**
+ * Checks if the given number is negative.
+ *
+ * @param n The number to check.
+ * @returns True if the number is negative, false otherwise.
+ *
+ * @todo testing
+ */
+export const isNegative: Function.Predicate<number> = (n: number): boolean =>
+  isNumber(n) && n < 0;
+
+/**
+ * Checks if the given number is non-negative.
+ *
+ * @param n The number to check.
+ * @returns True if the number is non-negative, false otherwise.
+ *
+ * @todo testing
+ */
+export const isNonNegative: Function.Predicate<number> = (n: number): boolean =>
+  isNumber(n) && n >= 0;
+
+/**
+ * Checks if the given number is non-positive.
+ *
+ * @param n The number to check.
+ * @returns True if the number is non-positive, false otherwise.
+ *
+ * @todo testing
+ */
+export const isNonPositive: Function.Predicate<number> = (n: number): boolean =>
+  isNumber(n) && n <= 0;
+
+/**
+ * Clamps the given number within the given range.
+ *
+ * @param n The number to clamp.
+ * @param range The range to clamp the number within.
+ * @returns The clamped number.
+ */
+export const clamp: {
+  (self: number, range: Range.Range): number;
+  (range: Range.Range): (self: number) => number;
+} = Macro.dualify(1, (n: number, range: Range.Range): number => {
   const { min, max } = Range.toObject(range);
 
   if (n < min) return min;
   if (n > max) return max;
 
   return n;
-};
+});
 
-export const isBetween = (
-  n: number,
-  range: Range.Range,
-  options: { inclusive?: boolean } = { inclusive: true }
-) => {
-  const { min, max } = Range.toObject(range);
+/**
+ * Checks if the given number is between the given range.
+ *
+ * @param self The number to check.
+ * @param range The range to check the number within.
+ * @param options The options to use.
+ * @param options.inclusive Controls boundary inclusion behavior:
+ *   - `true` (default): Include both boundaries (self >= min && self <= max)
+ *   - `false`: Exclude both boundaries (self > min && self < max)
+ *   - `{ min?: boolean; max?: boolean }`: Granular control over each boundary
+ *     - `min`: Whether to include the minimum boundary. Defaults to true.
+ *     - `max`: Whether to include the maximum boundary. Defaults to true.
+ * @returns True if the number is between the range, false otherwise.
+ *
+ * @example
+ * ```typescript
+ * // Non-curried usage
+ * isBetween(5, [1, 10]) // true (default inclusive)
+ * isBetween(1, [1, 10], { inclusive: false }) // false (exclusive)
+ * isBetween(1, [1, 10], { inclusive: { min: false, max: true } }) // false
+ *
+ * // Curried usage
+ * const isInRange = isBetween([1, 10]);
+ * isInRange(5) // true
+ *
+ * const isInRangeExclusive = isBetween([1, 10], { inclusive: false });
+ * isInRangeExclusive(1) // false
+ * ```
+ *
+ */
+export const isBetween: {
+  (
+    self: number,
+    range: Range.Range,
+    options?: { inclusive?: boolean | { min?: boolean; max?: boolean } }
+  ): boolean;
 
-  if (options.inclusive) {
-    return n >= min && n <= max;
-  }
+  (
+    range: Range.Range,
+    options?: { inclusive?: boolean | { min?: boolean; max?: boolean } }
+  ): (self: number) => boolean;
+} = Macro.dualify(
+  1,
+  (
+    self: number,
+    range: Range.Range,
+    options?: { inclusive?: boolean | { min?: boolean; max?: boolean } }
+  ): boolean => {
+    Macro.assert(Range.isValid(range));
+    const { min, max } = Range.toObject(range);
 
-  return n > min && n < max;
-};
+    const { inclusive } = options ?? { inclusive: true };
+
+    if (inclusive === true || inclusive === Macro.undefined) {
+      return self >= min && self <= max;
+    }
+
+    if (inclusive === false) {
+      return self > min && self < max;
+    }
+
+    return (
+      (inclusive.min === false ? self > min : self >= min) &&
+      (inclusive.max === false ? self < max : self <= max)
+    );
+  },
+  { withTail: true, isSelf: isNumber }
+);
 
 /**
  * Decrements given number type. Valid inputs inlcude 1 ≤ n ≤ 1024

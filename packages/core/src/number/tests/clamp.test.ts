@@ -1,4 +1,3 @@
-import { Effect, Exit } from "effect";
 import * as Vitest from "vitest";
 
 import * as Number from "../index.js";
@@ -7,99 +6,147 @@ Vitest.describe("[runtime] Number.clamp", () => {
   Vitest.it("should be defined", () => {
     Vitest.expect(Number.clamp).toBeDefined();
   });
-  Vitest.it("should correctly clamp value within the range", () => {
-    const value = 10;
-    const range = Number.range([5, 15]);
-    const expected = 10;
 
-    const program = Number.clamp(Effect.succeed(value), range);
-    const exit = Effect.runSyncExit(program);
+  Vitest.describe("non-curried usage", () => {
+    Vitest.it("should return the original number when within range", () => {
+      const result = Number.clamp(5, [1, 10]);
+      Vitest.expect(result).toBe(5);
+    });
 
-    Vitest.expect(Exit.isSuccess(exit)).toBe(true);
-    Vitest.expect(exit).toHaveProperty("value", expected);
+    Vitest.it("should clamp to minimum when below range", () => {
+      const result = Number.clamp(0, [1, 10]);
+      Vitest.expect(result).toBe(1);
+    });
+
+    Vitest.it("should clamp to maximum when above range", () => {
+      const result = Number.clamp(15, [1, 10]);
+      Vitest.expect(result).toBe(10);
+    });
+
+    Vitest.it("should return minimum when at minimum boundary", () => {
+      const result = Number.clamp(1, [1, 10]);
+      Vitest.expect(result).toBe(1);
+    });
+
+    Vitest.it("should return maximum when at maximum boundary", () => {
+      const result = Number.clamp(10, [1, 10]);
+      Vitest.expect(result).toBe(10);
+    });
+
+    Vitest.it("should work with negative numbers", () => {
+      Vitest.expect(Number.clamp(-15, [-10, 0])).toBe(-10);
+      Vitest.expect(Number.clamp(-5, [-10, 0])).toBe(-5);
+      Vitest.expect(Number.clamp(5, [-10, 0])).toBe(0);
+    });
+
+    Vitest.it("should work with decimal numbers", () => {
+      Vitest.expect(Number.clamp(0.5, [1.1, 3.9])).toBe(1.1);
+      Vitest.expect(Number.clamp(2.5, [1.1, 3.9])).toBe(2.5);
+      Vitest.expect(Number.clamp(4.5, [1.1, 3.9])).toBe(3.9);
+    });
+
+    Vitest.it("should work with very large numbers", () => {
+      const largeRange = [-Number.Constructor.MAX_VALUE, Number.Constructor.MAX_VALUE] as const;
+      Vitest.expect(Number.clamp(1000, largeRange)).toBe(1000);
+      Vitest.expect(Number.clamp(Number.Constructor.MAX_VALUE, largeRange)).toBe(
+        Number.Constructor.MAX_VALUE
+      );
+      Vitest.expect(Number.clamp(-Number.Constructor.MAX_VALUE, largeRange)).toBe(
+        -Number.Constructor.MAX_VALUE
+      );
+    });
+
+    Vitest.it("should work with very small ranges", () => {
+      const smallRange = [0.1, 0.2] as const;
+      Vitest.expect(Number.clamp(0.05, smallRange)).toBe(0.1);
+      Vitest.expect(Number.clamp(0.15, smallRange)).toBe(0.15);
+      Vitest.expect(Number.clamp(0.25, smallRange)).toBe(0.2);
+    });
   });
 
-  Vitest.it("should clamp value below the minimum to the minimum", () => {
-    const value = 3;
-    const range = Number.range([5, 15]);
-    const expected = 5;
+  Vitest.describe("curried usage", () => {
+    Vitest.it("should return a function when called with range only", () => {
+      const clampToRange = Number.clamp([1, 10]);
+      Vitest.expect(typeof clampToRange).toBe("function");
+    });
 
-    const program = Number.clamp(Effect.succeed(value), range);
-    const exit = Effect.runSyncExit(program);
+    Vitest.it("should work with curried function", () => {
+      const clampToRange = Number.clamp([1, 10]);
+      Vitest.expect(clampToRange(5)).toBe(5);
+      Vitest.expect(clampToRange(0)).toBe(1);
+      Vitest.expect(clampToRange(15)).toBe(10);
+      Vitest.expect(clampToRange(1)).toBe(1);
+      Vitest.expect(clampToRange(10)).toBe(10);
+    });
 
-    Vitest.expect(Exit.isSuccess(exit)).toBe(true);
-    Vitest.expect(exit).toHaveProperty("value", expected);
+    Vitest.it("should work with curried function and negative ranges", () => {
+      const clampToNegativeRange = Number.clamp([-10, -1]);
+      Vitest.expect(clampToNegativeRange(-15)).toBe(-10);
+      Vitest.expect(clampToNegativeRange(-5)).toBe(-5);
+      Vitest.expect(clampToNegativeRange(0)).toBe(-1);
+    });
+
+    Vitest.it("should work with curried function and decimal ranges", () => {
+      const clampToDecimalRange = Number.clamp([1.5, 2.5]);
+      Vitest.expect(clampToDecimalRange(1.0)).toBe(1.5);
+      Vitest.expect(clampToDecimalRange(2.0)).toBe(2.0);
+      Vitest.expect(clampToDecimalRange(3.0)).toBe(2.5);
+    });
   });
 
-  Vitest.it("should clamp value above the maximum to the maximum", () => {
-    const value = 20;
-    const range = Number.range([5, 15]);
-    const expected = 15;
+  Vitest.describe("edge cases", () => {
+    Vitest.it("should work with zero-width ranges", () => {
+      Vitest.expect(Number.clamp(5, [7, 7])).toBe(7);
+      Vitest.expect(Number.clamp(7, [7, 7])).toBe(7);
+      Vitest.expect(Number.clamp(3, [7, 7])).toBe(7);
+    });
 
-    const program = Number.clamp(Effect.succeed(value), range);
-    const exit = Effect.runSyncExit(program);
+    Vitest.it("should work with ranges containing zero", () => {
+      const zeroRange = [-5, 5] as const;
+      Vitest.expect(Number.clamp(-10, zeroRange)).toBe(-5);
+      Vitest.expect(Number.clamp(0, zeroRange)).toBe(0);
+      Vitest.expect(Number.clamp(10, zeroRange)).toBe(5);
+    });
 
-    Vitest.expect(Exit.isSuccess(exit)).toBe(true);
-    Vitest.expect(exit).toHaveProperty("value", expected);
+    Vitest.it("should work with ranges where min equals zero", () => {
+      const minZeroRange = [0, 10] as const;
+      Vitest.expect(Number.clamp(-5, minZeroRange)).toBe(0);
+      Vitest.expect(Number.clamp(0, minZeroRange)).toBe(0);
+      Vitest.expect(Number.clamp(5, minZeroRange)).toBe(5);
+      Vitest.expect(Number.clamp(15, minZeroRange)).toBe(10);
+    });
+
+    Vitest.it("should work with ranges where max equals zero", () => {
+      const maxZeroRange = [-10, 0] as const;
+      Vitest.expect(Number.clamp(-15, maxZeroRange)).toBe(-10);
+      Vitest.expect(Number.clamp(-5, maxZeroRange)).toBe(-5);
+      Vitest.expect(Number.clamp(0, maxZeroRange)).toBe(0);
+      Vitest.expect(Number.clamp(5, maxZeroRange)).toBe(0);
+    });
+
+    Vitest.it("should handle very small differences", () => {
+      const epsilon = Number.Constructor.EPSILON;
+      const tinyRange = [1, 1 + epsilon] as const;
+      Vitest.expect(Number.clamp(0.5, tinyRange)).toBe(1);
+      Vitest.expect(Number.clamp(1 + epsilon / 2, tinyRange)).toBe(1 + epsilon / 2);
+      Vitest.expect(Number.clamp(2, tinyRange)).toBe(1 + epsilon);
+    });
   });
 
-  Vitest.it("should return an error for an invalid range", () => {
-    const value = 10;
-    const range = Number.range([15, 5]);
+  Vitest.describe("range validation", () => {
+    Vitest.it("should work with object ranges", () => {
+      const objectRange = { min: 1, max: 10 };
+      Vitest.expect(Number.clamp(5, objectRange)).toBe(5);
+      Vitest.expect(Number.clamp(0, objectRange)).toBe(1);
+      Vitest.expect(Number.clamp(15, objectRange)).toBe(10);
+    });
 
-    const program = Number.clamp(Effect.succeed(value), range);
-    const exit = Effect.runSyncExit(program);
-
-    Vitest.expect(Exit.isFailure(exit)).toBe(true);
-
-    Vitest.expect(exit).toHaveProperty("cause.error", new Number.InvalidRangeError());
-  });
-
-  Vitest.it("should correctly clamp value using the curried version", () => {
-    const value = 10;
-    const range = Number.range([5, 15]);
-    const expected = 10;
-
-    const program = Effect.succeed(value).pipe(Number.clamp(range));
-    const exit = Effect.runSyncExit(program);
-
-    Vitest.expect(Exit.isSuccess(exit)).toBe(true);
-    Vitest.expect(exit).toHaveProperty("value", expected);
-  });
-
-  Vitest.it("should clamp value below the minimum using the curried version", () => {
-    const value = 3;
-    const range = Number.range([5, 15]);
-    const expected = 5;
-
-    const program = Effect.succeed(value).pipe(Number.clamp(range));
-    const exit = Effect.runSyncExit(program);
-
-    Vitest.expect(Exit.isSuccess(exit)).toBe(true);
-    Vitest.expect(exit).toHaveProperty("value", expected);
-  });
-
-  Vitest.it("should clamp value above the maximum using the curried version", () => {
-    const value = 20;
-    const range = Number.range([5, 15]);
-    const expected = 15;
-
-    const program = Effect.succeed(value).pipe(Number.clamp(range));
-    const exit = Effect.runSyncExit(program);
-
-    Vitest.expect(Exit.isSuccess(exit)).toBe(true);
-    Vitest.expect(exit).toHaveProperty("value", expected);
-  });
-
-  Vitest.it("should return an error for an invalid range using the curried version", () => {
-    const value = 10;
-    const range = Number.range([15, 5]);
-
-    const program = Effect.succeed(value).pipe(Number.clamp(range));
-    const exit = Effect.runSyncExit(program);
-
-    Vitest.expect(Exit.isFailure(exit)).toBe(true);
-    Vitest.expect(exit).toHaveProperty("cause.error", new Number.InvalidRangeError());
+    Vitest.it("should work with tuple ranges", () => {
+      const tupleRange = [1, 10] as const;
+      Vitest.expect(Number.clamp(5, tupleRange)).toBe(5);
+      Vitest.expect(Number.clamp(0, tupleRange)).toBe(1);
+      Vitest.expect(Number.clamp(15, tupleRange)).toBe(10);
+    });
   });
 });
 
@@ -107,5 +154,48 @@ Vitest.describe("[types] Number.clamp", () => {
   Vitest.it("should be defined", () => {
     type Test = typeof Number.clamp;
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
+  });
+
+  Vitest.it("should accept number and range in non-curried form", () => {
+    type Test = typeof Number.clamp;
+    Vitest.expectTypeOf<Test>().toMatchTypeOf<
+      (self: number, range: readonly [number, number]) => number
+    >();
+  });
+
+  Vitest.it("should accept range in curried form", () => {
+    type Test = typeof Number.clamp;
+    Vitest.expectTypeOf<Test>().toMatchTypeOf<
+      (range: readonly [number, number]) => (self: number) => number
+    >();
+  });
+
+  Vitest.it("should return number for non-curried usage", () => {
+    const result = Number.clamp(5, [1, 10]);
+    Vitest.expectTypeOf(result).toEqualTypeOf<number>();
+  });
+
+  Vitest.it("should return function for curried usage", () => {
+    const curriedFn = Number.clamp([1, 10]);
+    Vitest.expectTypeOf(curriedFn).toEqualTypeOf<(self: number) => number>();
+  });
+
+  Vitest.it("should accept both tuple and object ranges", () => {
+    // Tuple ranges
+    Number.clamp(5, [1, 10]);
+    Number.clamp([1, 10]);
+
+    // Object ranges
+    Number.clamp(5, { min: 1, max: 10 });
+    Number.clamp({ min: 1, max: 10 });
+  });
+
+  Vitest.it("should work with const assertions", () => {
+    const range = [1, 10] as const;
+    const result = Number.clamp(5, range);
+    Vitest.expectTypeOf(result).toEqualTypeOf<number>();
+
+    const curriedFn = Number.clamp(range);
+    Vitest.expectTypeOf(curriedFn).toEqualTypeOf<(self: number) => number>();
   });
 });
