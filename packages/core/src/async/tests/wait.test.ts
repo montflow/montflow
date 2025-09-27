@@ -1,6 +1,7 @@
 import * as Vitest from "vitest";
 
 import * as Async from "../index.js";
+import { expectElapsedTimeWithTolerance } from "./common.js";
 
 Vitest.describe.concurrent("[runtime] Async.wait", () => {
   Vitest.it.concurrent("should be defined", () => {
@@ -14,9 +15,7 @@ Vitest.describe.concurrent("[runtime] Async.wait", () => {
     const endTime = Date.now();
     const elapsed = endTime - startTime;
 
-    // Check that it waited long enough
-    Vitest.expect(elapsed).toBeGreaterThanOrEqual(delay);
-    // Check that it resolves to undefined when no value is passed
+    expectElapsedTimeWithTolerance(elapsed, delay);
     Vitest.expect(result).toBeUndefined();
   });
 

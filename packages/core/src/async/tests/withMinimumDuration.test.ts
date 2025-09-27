@@ -1,6 +1,7 @@
 import * as Vitest from "vitest";
 
 import * as Async from "../index.js";
+import { expectElapsedTimeWithTolerance } from "./common.js";
 
 Vitest.describe.concurrent("[runtime] Async.withMinimumDuration", () => {
   Vitest.it.concurrent("should be defined", () => {
@@ -23,7 +24,7 @@ Vitest.describe.concurrent("[runtime] Async.withMinimumDuration", () => {
       const elapsed = end - start;
 
       Vitest.expect(value).toBe(expectedValue);
-      Vitest.expect(elapsed).toBeGreaterThanOrEqual(duration);
+      expectElapsedTimeWithTolerance(elapsed, duration);
     }
   );
 
@@ -43,7 +44,7 @@ Vitest.describe.concurrent("[runtime] Async.withMinimumDuration", () => {
       const elapsed = end - start;
 
       Vitest.expect(value).toBe(expectedValue);
-      Vitest.expect(elapsed).toBeGreaterThanOrEqual(duration);
+      expectElapsedTimeWithTolerance(elapsed, duration);
     }
   );
 
@@ -64,7 +65,7 @@ Vitest.describe.concurrent("[runtime] Async.withMinimumDuration", () => {
       const elapsed = end - start;
 
       Vitest.expect(value).toBe(expectedValue);
-      Vitest.expect(elapsed).toBeGreaterThanOrEqual(300); // should match the longer delay from fn
+      expectElapsedTimeWithTolerance(elapsed, 300); // should match the longer delay from fn
     }
   );
 
@@ -93,7 +94,7 @@ Vitest.describe.concurrent("[runtime] Async.withMinimumDuration", () => {
       const elapsed = end - start;
 
       Vitest.expect(value).toBe(expectedValue);
-      Vitest.expect(elapsed).toBeGreaterThanOrEqual(duration);
+      expectElapsedTimeWithTolerance(elapsed, duration);
     }
   );
 });
