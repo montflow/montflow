@@ -2,7 +2,7 @@
   "name": "@montflow/core",
   "version": "3.0.0",
   "author": "Daniel Montilla",
-  "description": "A collection of powerful, lightweight and performant typescript utilities.",
+  "description": "A collection of typescript utilities",
   "license": "MIT",
   "private": false,
   "repository": {
