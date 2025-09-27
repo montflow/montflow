@@ -14,8 +14,8 @@ rs_keyfile
 
 **/.rollup.cache/
 
-# Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,macos,windows,obsidian,svelte,node
-# Edit at https://www.toptal.com/developers/gitignore?templates=visualstudiocode,macos,windows,obsidian,svelte,node
+# Created by https://www.toptal.com/developers/gitignore/api/node,macos,svelte,windows,obsidian,visualstudiocode,turbo
+# Edit at https://www.toptal.com/developers/gitignore?templates=node,macos,svelte,windows,obsidian,visualstudiocode,turbo
 
 ### macOS ###
 # General
@@ -201,6 +201,10 @@ dist
 .svelte-kit/
 package
 
+### Turbo ###
+# Turborepo task cache
+.turbo
+
 ### VisualStudioCode ###
 .vscode/*
 !.vscode/settings.json
@@ -246,4 +250,4 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,macos,windows,obsidian,svelte,node
+# End of https://www.toptal.com/developers/gitignore/api/node,macos,svelte,windows,obsidian,visualstudiocode,turbo
