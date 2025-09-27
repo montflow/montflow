@@ -164,3 +164,22 @@ export const isValid = (self: Range): boolean => {
 
   return true;
 };
+
+/**
+ * @constructor
+ *
+ * Creates a symmetric range around a given midpoint.
+ *
+ * @param midpoint The midpoint of the range
+ * @param margin The delta of the range
+ * @returns The symmetric range
+ *
+ * @throws {InvalidSymetricMarginError} If the margin is negative
+ * @see {@link InvalidSymetricMarginError}
+ *
+ * @todo testing
+ */
+export const symetric = (midpoint: number, margin: number): Range => {
+  if (Number.isNegative(margin)) throw new Error("Marging is negative");
+  return make(midpoint - margin, midpoint + margin);
+};
