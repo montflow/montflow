@@ -23,7 +23,7 @@
     "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.build.json",
-    "release": "pnpm build && pnpm publish --access public"
+    "release": "pnpm build && pnpm publish --access public --no-git-checks"
   },
   "devDependencies": {
     "@babel/cli": "^7.24.8",
