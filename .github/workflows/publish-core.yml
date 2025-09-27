@@ -34,6 +34,6 @@ jobs:
         run: pnpm run --filter @montflow/core test
 
       - name: Build and publish to npm
-        run: pnpm run --filter @montflow/core publish
+        run: pnpm run --filter @montflow/core release
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
