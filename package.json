@@ -8,12 +8,10 @@
     "core:test": "pnpm run --filter @montflow/core test",
     "core:build": "pnpm run --filter @montflow/core build",
     "core:dev": "pnpm run --filter @montflow/core dev",
-    "core:publish": "pnpm run --filter @montflow/core publish",
     "core:check": "pnpm run --filter @montflow/core check",
     "stlx:test": "pnpm run --filter @montflow/stlx test",
     "stlx:build": "pnpm run --filter @montflow/stlx build",
     "stlx:dev": "pnpm run --filter @montflow/stlx dev",
-    "stlx:publish": "pnpm run stlx:build && pnpm run --filter @montflow/stlx publish --access public --no-git-checks",
     "clean": "pnpm -r exec rimraf build .rollup.cache .tsbuildinfo .svelte-kit .vercel .turbo",
     "deep-clean": "pnpm clean && pnpm -r exec rimraf node_modules"
   },
