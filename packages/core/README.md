@@ -1,7 +1,5 @@
 # @montflow/core ⚙️
 
-A collection of powerful, lightweight, and performant TypeScript utilities.
-
 ## Install
 
 ```

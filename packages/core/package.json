@@ -1,6 +1,6 @@
 {
   "name": "@montflow/core",
-  "version": "3.0.0",
+  "version": "3.0.0-alpha.1",
   "author": "Daniel Montilla",
   "description": "A collection of typescript utilities",
   "license": "MIT",
@@ -21,8 +21,8 @@
     "build-esm": "tsc -b tsconfig.build.json",
     "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
     "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
-    "test": "vitest",
-    "check": "tsc --noEmit -p tsconfig.build.json"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.build.json"
   },
   "devDependencies": {
     "@babel/cli": "^7.24.8",
