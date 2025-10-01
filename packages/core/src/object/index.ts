@@ -184,3 +184,67 @@ export const length = size;
  */
 export const entries = <const T extends Table>(input: T) =>
   Object.entries(input) as Entries<T>[];
+
+/**
+ * Creates a new object with only the specified keys from the input object.
+ *
+ * @template TInput The input object type
+ * @template K The keys to pick from the input object
+ * @param self The object to pick keys from
+ * @param keys Array of keys to pick from the object
+ * @returns A new object containing only the specified keys
+ */
+export const pick: {
+  <TInput extends Record<PropertyKey, any>, K extends keyof TInput>(
+    self: TInput,
+    keys: readonly K[]
+  ): Pick<TInput, K>;
+  <TInput extends Record<PropertyKey, any>, K extends keyof TInput>(
+    keys: readonly K[]
+  ): (self: TInput) => Pick<TInput, K>;
+} = Macro.dualify(
+  1,
+  <TInput extends Record<PropertyKey, any>, K extends keyof TInput>(
+    self: TInput,
+    keys: readonly K[]
+  ): Pick<TInput, K> => {
+    const result = {} as Pick<TInput, K>;
+    for (const key of keys) {
+      if (key in self) {
+        result[key] = self[key];
+      }
+    }
+    return result;
+  }
+);
+
+/**
+ * Creates a new object with all keys except the specified ones from the input object.
+ *
+ * @template TInput The input object type
+ * @template K The keys to omit from the input object
+ * @param self The object to omit keys from
+ * @param keys Array of keys to omit from the object
+ * @returns A new object without the specified keys
+ */
+export const omit: {
+  <TInput extends Record<PropertyKey, any>, K extends keyof TInput>(
+    self: TInput,
+    keys: readonly K[]
+  ): Omit<TInput, K>;
+  <TInput extends Record<PropertyKey, any>, K extends keyof TInput>(
+    keys: readonly K[]
+  ): (self: TInput) => Omit<TInput, K>;
+} = Macro.dualify(
+  1,
+  <TInput extends Record<PropertyKey, any>, K extends keyof TInput>(
+    self: TInput,
+    keys: readonly K[]
+  ): Omit<TInput, K> => {
+    const result = { ...self } as Omit<TInput, K>;
+    for (const key of keys) {
+      delete (result as any)[key];
+    }
+    return result;
+  }
+);
