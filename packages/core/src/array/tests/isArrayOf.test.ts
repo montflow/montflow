@@ -1,7 +1,7 @@
 import * as Vitest from "vitest";
 
-import * as Numeric from "../../number/index.js";
-import * as String from "../../string/index.js";
+import * as Numeric from "../../numberic/index.js";
+import * as Text from "../../text/index.js";
 import * as Array from "../index.js";
 
 Vitest.describe("[runtime] Array.isArrayOf", () => {
@@ -11,19 +11,19 @@ Vitest.describe("[runtime] Array.isArrayOf", () => {
 
   Vitest.it("should return true for arrays where all elements satisfy the guard", () => {
     Vitest.expect(Array.isArrayOf([1, 2, 3], Numeric.isNumber)).toBe(true);
-    Vitest.expect(Array.isArrayOf(["a", "b", "c"], String.isString)).toBe(true);
+    Vitest.expect(Array.isArrayOf(["a", "b", "c"], Text.isString)).toBe(true);
   });
 
   Vitest.it("should return false for arrays where not all elements satisfy the guard", () => {
     Vitest.expect(Array.isArrayOf([1, "2", 3], Numeric.isNumber)).toBe(false);
-    Vitest.expect(Array.isArrayOf(["a", 42, "c"], String.isString)).toBe(false);
+    Vitest.expect(Array.isArrayOf(["a", 42, "c"], Text.isString)).toBe(false);
   });
 
   Vitest.it("should return false for non-array inputs", () => {
     Vitest.expect(Array.isArrayOf(42, Numeric.isNumber)).toBe(false);
-    Vitest.expect(Array.isArrayOf("string", String.isString)).toBe(false);
+    Vitest.expect(Array.isArrayOf("string", Text.isString)).toBe(false);
     Vitest.expect(Array.isArrayOf({}, Numeric.isNumber)).toBe(false);
-    Vitest.expect(Array.isArrayOf(null, String.isString)).toBe(false);
+    Vitest.expect(Array.isArrayOf(null, Text.isString)).toBe(false);
   });
 
   Vitest.it("should return a curried function when called with a guard", () => {

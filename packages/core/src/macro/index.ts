@@ -1,7 +1,7 @@
 import * as Constructor from "../constructor/index.js";
 import * as Function from "../function/index.js";
 import { Evaluable, Struct } from "../global/index.js";
-import * as String from "../string/index.js";
+import * as Text from "../text/index.js";
 
 /**
  * Executes a function that takes no arguments and returns its result.
@@ -157,7 +157,7 @@ export const panic: {
    */
   (message: string): never;
 } = <E>(errorOrMessage: E | string) => {
-  if (String.isString(errorOrMessage)) {
+  if (Text.isString(errorOrMessage)) {
     throw new Error(errorOrMessage);
   }
 

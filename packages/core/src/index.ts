@@ -13,5 +13,5 @@ export * as Nothing from "./nothing/index.js";
 export * as Number from "./numberic/index.js";
 export * as Range from "./range/index.js";
 export * as Result from "./result/index.js";
-export * as String from "./string/index.js";
 export * as Table from "./table/index.js";
+export * as String from "./text/index.js";

@@ -1,10 +1,10 @@
 import * as Vitest from "vitest";
 
-import * as String from "../index.js";
+import * as Text from "../index.js";
 
-Vitest.describe("[types] String.IsNotEmpty", () => {
+Vitest.describe("[types] Text.HasSpaces", () => {
   Vitest.it("should be defined", () => {
-    type Test = String.IsNotEmpty<any>;
+    type Test = Text.HasSpaces<any>;
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
 });
