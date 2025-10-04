@@ -1,10 +1,10 @@
 import * as Vitest from "vitest";
 
-import * as Object from "../index.js";
+import * as Table from "../index.js";
 
-Vitest.describe("[types] Object.Entries", () => {
+Vitest.describe("[types] Table.Optional", () => {
   Vitest.it("should be defined", () => {
-    type Test = Object.Entries<{ a: string; b: number }>;
+    type Test = Table.Optional<{ a: number; b: string }, "b">;
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
 });

@@ -1,7 +1,7 @@
 import * as Array from "../array/index.js";
 import * as Macro from "../macro/index.js";
 import * as Number from "../number/index.js";
-import * as _Object from "../object/index.js";
+import * as _Object from "../table/index.js";
 
 /**
  * Object representation of a range.

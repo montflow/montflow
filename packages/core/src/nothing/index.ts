@@ -1,6 +1,6 @@
 import * as Domain from "../domain/index.js";
 import * as Macro from "../macro/index.js";
-import * as Object from "../object/index.js";
+import * as Table from "../table/index.js";
 
 /**
  * Unique domain identifier for the Nothing algebraic data type.
@@ -35,7 +35,7 @@ export const make = Macro.singleton("@montflow/nothing", (): Nothing => ({ [Doma
  * @returns Type guard for `Nothing`
  */
 export const isNothing = (thing: unknown): thing is Nothing =>
-  Object.isObject(thing) &&
-  Object.hasKeys(thing, [Domain.Id]) &&
-  Object.size(thing) === 1 &&
+  Table.isObject(thing) &&
+  Table.hasKeys(thing, [Domain.Id]) &&
+  Table.size(thing) === 1 &&
   thing[Domain.Id] === ("nothing" as const);

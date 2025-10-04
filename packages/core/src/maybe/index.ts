@@ -2,12 +2,12 @@ import * as Alias from "../alias/index.js";
 import * as Async from "../async/index.js";
 import * as Domain from "../domain/index.js";
 import * as Function from "../function/index.js";
-import { Evaluable, Sync, Table } from "../global/index.js";
+import { Evaluable, Struct, Sync } from "../global/index.js";
 import * as Macro from "../macro/index.js";
 import * as Nothing from "../nothing/index.js";
 import * as Number from "../number/index.js";
-import * as Object from "../object/index.js";
 import * as Result from "../result/index.js";
+import * as Table from "../table/index.js";
 
 /**
  * Unique domain identifier for the Maybe algebraic data type.
@@ -286,9 +286,9 @@ export const tryPromise: {
  * @todo testing
  */
 export const isSome = (thing: unknown): thing is Some<unknown> =>
-  Object.isObject(thing) &&
-  Object.hasKeys(thing, [Domain.Id, Domain.Tag, "value"]) &&
-  Object.size(thing) === 3 &&
+  Table.isObject(thing) &&
+  Table.hasKeys(thing, [Domain.Id, Domain.Tag, "value"]) &&
+  Table.size(thing) === 3 &&
   thing[Domain.Id] === Id &&
   thing[Domain.Tag] === SomeTag;
 
@@ -301,9 +301,9 @@ export const isSome = (thing: unknown): thing is Some<unknown> =>
  * @todo testing
  */
 export const isNone = (thing: unknown): thing is None =>
-  Object.isObject(thing) &&
-  Object.hasKeys(thing, [Domain.Id, Domain.Tag]) &&
-  Object.size(thing) === 2 &&
+  Table.isObject(thing) &&
+  Table.hasKeys(thing, [Domain.Id, Domain.Tag]) &&
+  Table.size(thing) === 2 &&
   thing[Domain.Id] === Id &&
   thing[Domain.Tag] === NoneTag;
 
@@ -578,11 +578,11 @@ export const tryMap: {
  * @todo testing
  */
 export const property: {
-  <R extends Table, K extends keyof R>(key: K): (self: Maybe<R>) => Maybe<R[K]>;
-  <R extends Table, K extends keyof R>(self: Maybe<R>, key: K): Maybe<R[K]>;
-} = Macro.dualify(1, <R extends Table, K extends keyof R>(self: Maybe<R>, key: K) => {
+  <R extends Struct, K extends keyof R>(key: K): (self: Maybe<R>) => Maybe<R[K]>;
+  <R extends Struct, K extends keyof R>(self: Maybe<R>, key: K): Maybe<R[K]>;
+} = Macro.dualify(1, <R extends Struct, K extends keyof R>(self: Maybe<R>, key: K) => {
   if (isNone(self)) return self;
-  if (!Object.isObject(self.value) || !Object.hasKey(self.value, key)) return none();
+  if (!Table.isObject(self.value) || !Table.hasKey(self.value, key)) return none();
   return some(self.value[key]);
 });
 

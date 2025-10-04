@@ -5,7 +5,7 @@ import { Evaluable, Sync } from "../global/index.js";
 import * as Macro from "../macro/index.js";
 import * as Maybe from "../maybe/index.js";
 import * as Number from "../number/index.js";
-import * as Object from "../object/index.js";
+import * as Table from "../table/index.js";
 
 /**
  * Unique domain identifier for the Result algebraic data type.
@@ -262,9 +262,9 @@ export const isOk: {
   <V>(result: Result<V, any>): result is Ok<V>;
   (thing: unknown): thing is Ok<unknown>;
 } = (thing: unknown): thing is Ok<unknown> =>
-  Object.isObject(thing) &&
-  Object.hasKeys(thing, [Domain.Id, Domain.Tag, "value"]) &&
-  Object.size(thing) === 3 &&
+  Table.isObject(thing) &&
+  Table.hasKeys(thing, [Domain.Id, Domain.Tag, "value"]) &&
+  Table.size(thing) === 3 &&
   thing[Domain.Id] === Id &&
   thing[Domain.Tag] === OkTag;
 
@@ -281,9 +281,9 @@ export const isErr: {
   <E>(result: Result<any, E>): result is Err<E>;
   (thing: unknown): thing is Err<unknown>;
 } = (thing: unknown): thing is Err<unknown> =>
-  Object.isObject(thing) &&
-  Object.hasKeys(thing, [Domain.Id, Domain.Tag, "error"]) &&
-  Object.size(thing) === 3 &&
+  Table.isObject(thing) &&
+  Table.hasKeys(thing, [Domain.Id, Domain.Tag, "error"]) &&
+  Table.size(thing) === 3 &&
   thing[Domain.Id] === Id &&
   thing[Domain.Tag] === ErrTag;
 

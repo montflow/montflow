@@ -1,6 +1,6 @@
 import * as Constructor from "../constructor/index.js";
 import * as Function from "../function/index.js";
-import { Evaluable, Table } from "../global/index.js";
+import { Evaluable, Struct } from "../global/index.js";
 import * as String from "../string/index.js";
 
 /**
@@ -26,7 +26,7 @@ export const lambda = <T>(fn: Function.Nullary<T>): T => fn();
 export const cast = <T>(x: unknown): T => x as T;
 
 /** @internal */
-const _singletons: Table<string, Constructor.Any | Function.Maker.Any> = {};
+const _singletons: Struct<string, Constructor.Any | Function.Maker.Any> = {};
 
 /**
  * @todo documentation

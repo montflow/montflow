@@ -20,7 +20,7 @@ export type Dictionary<K extends PropertyKey = PropertyKey, V = any> = { [P in K
  * @template V The value type (default: `any`).
  * @see PropertyKey
  */
-export type Table<K extends PropertyKey = PropertyKey, V = any> = {
+export type Struct<K extends PropertyKey = PropertyKey, V = any> = {
   [P in K]: V;
 };
 
