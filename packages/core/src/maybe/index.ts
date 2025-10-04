@@ -5,7 +5,7 @@ import * as Function from "../function/index.js";
 import { Evaluable, Struct, Sync } from "../global/index.js";
 import * as Macro from "../macro/index.js";
 import * as Nothing from "../nothing/index.js";
-import * as Number from "../number/index.js";
+import * as Numeric from "../numberic/index.js";
 import * as Result from "../result/index.js";
 import * as Table from "../table/index.js";
 
@@ -140,7 +140,7 @@ export type Unfold<TRoot extends Any, TLimit extends number = typeof MAX_UNFOLD_
   TLimit extends 0 ? TRoot
   : [TRoot] extends [Maybe<infer TValue>] ?
     [TValue] extends [Any] ?
-      Unfold<TValue, Number.Decrement<TLimit>>
+      Unfold<TValue, Numeric.Decrement<TLimit>>
     : TRoot
   : never;
 

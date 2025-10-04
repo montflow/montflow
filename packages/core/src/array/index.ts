@@ -3,7 +3,7 @@ import * as Function from "../function/index.js";
 import { Evaluable, Missing } from "../global/index.js";
 import * as Macro from "../macro/index.js";
 import * as Maybe from "../maybe/index.js";
-import * as Number from "../number/index.js";
+import * as Numeric from "../numberic/index.js";
 
 /**
  * Type alias for the native javascript array type
@@ -110,8 +110,8 @@ export const maybeGet: {
   <T>(self: Array<T>, index: number): Maybe.Maybe<T> =>
     (
       isNotEmpty(self) &&
-      Number.isInt(index) &&
-      Number.isBetween(index, { min: 0, max: self.length - 1 })
+      Numeric.isInt(index) &&
+      Numeric.isBetween(index, { min: 0, max: self.length - 1 })
     ) ?
       Maybe.some(self[index])
     : Maybe.none()
@@ -198,7 +198,7 @@ export const lastIndex = (array: Any): number => array.length - 1;
  * @todo testing
  */
 export const maybeLastIndex = (array: Any): Maybe.Maybe<number> =>
-  Chain.make(array, lastIndex, Maybe.fromPredicate(Number.isNonNegative));
+  Chain.make(array, lastIndex, Maybe.fromPredicate(Numeric.isNonNegative));
 
 /**
  * Get the last element of an array.

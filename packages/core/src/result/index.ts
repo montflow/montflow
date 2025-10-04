@@ -4,7 +4,7 @@ import * as Function from "../function/index.js";
 import { Evaluable, Sync } from "../global/index.js";
 import * as Macro from "../macro/index.js";
 import * as Maybe from "../maybe/index.js";
-import * as Number from "../number/index.js";
+import * as Numeric from "../numberic/index.js";
 import * as Table from "../table/index.js";
 
 /**
@@ -152,7 +152,7 @@ export type Unfold<Root extends Any, Limit extends number = typeof MAX_UNFOLD_DE
   Limit extends 0 ? Root
   : [Root] extends [Result<infer RootOk, infer RootErr>] ?
     [RootOk] extends [Result<infer NestedOk, infer NestedErr>] ?
-      Unfold<Result<NestedOk, NestedErr | RootErr>, Number.Decrement<Limit>>
+      Unfold<Result<NestedOk, NestedErr | RootErr>, Numeric.Decrement<Limit>>
     : Root
   : never;
 

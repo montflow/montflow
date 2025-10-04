@@ -1,6 +1,6 @@
 import * as Array from "../array/index.js";
 import * as Macro from "../macro/index.js";
-import * as Number from "../number/index.js";
+import * as Numeric from "../numberic/index.js";
 import * as _Object from "../table/index.js";
 
 /**
@@ -30,8 +30,8 @@ export const isObject = (thing: unknown): thing is Object =>
   _Object.isObject(thing) &&
   _Object.hasKeys(thing, ["min", "max"]) &&
   _Object.size(thing) === 2 &&
-  Number.isNumber(thing.min) &&
-  Number.isNumber(thing.max) &&
+  Numeric.isNumber(thing.min) &&
+  Numeric.isNumber(thing.max) &&
   thing.min <= thing.max;
 
 /**
@@ -45,8 +45,8 @@ export const isObject = (thing: unknown): thing is Object =>
 export const isTuple = (thing: unknown): thing is Tuple =>
   Array.isArray(thing) &&
   Array.length(thing) === 2 &&
-  Number.isNumber(thing[0]) &&
-  Number.isNumber(thing[1]) &&
+  Numeric.isNumber(thing[0]) &&
+  Numeric.isNumber(thing[1]) &&
   thing[0] <= thing[1];
 
 /**
@@ -115,8 +115,8 @@ export class InvalidRangeError extends Error {
  */
 export const make = (min: number, max: number): Range => {
   if (min > max) throw new InvalidRangeError("min_greater_than_max");
-  if (!Number.isNumber(min)) throw new InvalidRangeError("min_not_a_number");
-  if (!Number.isNumber(max)) throw new InvalidRangeError("max_not_a_number");
+  if (!Numeric.isNumber(min)) throw new InvalidRangeError("min_not_a_number");
+  if (!Numeric.isNumber(max)) throw new InvalidRangeError("max_not_a_number");
   return { min, max };
 };
 
@@ -159,8 +159,8 @@ export const isValid = (self: Range): boolean => {
   const { min, max } = toObject(self);
 
   if (min > max) return false;
-  if (!Number.isNumber(min)) return false;
-  if (!Number.isNumber(max)) return false;
+  if (!Numeric.isNumber(min)) return false;
+  if (!Numeric.isNumber(max)) return false;
 
   return true;
 };
@@ -180,6 +180,6 @@ export const isValid = (self: Range): boolean => {
  * @todo testing
  */
 export const symetric = (midpoint: number, margin: number): Range => {
-  if (Number.isNegative(margin)) throw new Error("Marging is negative");
+  if (Numeric.isNegative(margin)) throw new Error("Marging is negative");
   return make(midpoint - margin, midpoint + margin);
 };

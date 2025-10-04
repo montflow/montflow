@@ -10,7 +10,7 @@ export * as Iterable from "./iterable/index.js";
 export * as Macro from "./macro/index.js";
 export * as Maybe from "./maybe/index.js";
 export * as Nothing from "./nothing/index.js";
-export * as Number from "./number/index.js";
+export * as Number from "./numberic/index.js";
 export * as Range from "./range/index.js";
 export * as Result from "./result/index.js";
 export * as String from "./string/index.js";

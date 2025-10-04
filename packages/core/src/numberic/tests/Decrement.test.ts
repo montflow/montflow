@@ -1,10 +1,10 @@
 import * as Vitest from "vitest";
 
-import * as Number from "../index.js";
+import * as Numeric from "../index.js";
 
-Vitest.describe("[types] Number.Decrement", () => {
+Vitest.describe("[types] Numeric.Decrement", () => {
   Vitest.it("should be defined", () => {
-    type Test = Number.Decrement<5>;
+    type Test = Numeric.Decrement<5>;
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
 });

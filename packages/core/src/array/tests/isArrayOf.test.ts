@@ -1,6 +1,6 @@
 import * as Vitest from "vitest";
 
-import * as Number from "../../number/index.js";
+import * as Numeric from "../../number/index.js";
 import * as String from "../../string/index.js";
 import * as Array from "../index.js";
 
@@ -10,24 +10,24 @@ Vitest.describe("[runtime] Array.isArrayOf", () => {
   });
 
   Vitest.it("should return true for arrays where all elements satisfy the guard", () => {
-    Vitest.expect(Array.isArrayOf([1, 2, 3], Number.isNumber)).toBe(true);
+    Vitest.expect(Array.isArrayOf([1, 2, 3], Numeric.isNumber)).toBe(true);
     Vitest.expect(Array.isArrayOf(["a", "b", "c"], String.isString)).toBe(true);
   });
 
   Vitest.it("should return false for arrays where not all elements satisfy the guard", () => {
-    Vitest.expect(Array.isArrayOf([1, "2", 3], Number.isNumber)).toBe(false);
+    Vitest.expect(Array.isArrayOf([1, "2", 3], Numeric.isNumber)).toBe(false);
     Vitest.expect(Array.isArrayOf(["a", 42, "c"], String.isString)).toBe(false);
   });
 
   Vitest.it("should return false for non-array inputs", () => {
-    Vitest.expect(Array.isArrayOf(42, Number.isNumber)).toBe(false);
+    Vitest.expect(Array.isArrayOf(42, Numeric.isNumber)).toBe(false);
     Vitest.expect(Array.isArrayOf("string", String.isString)).toBe(false);
-    Vitest.expect(Array.isArrayOf({}, Number.isNumber)).toBe(false);
+    Vitest.expect(Array.isArrayOf({}, Numeric.isNumber)).toBe(false);
     Vitest.expect(Array.isArrayOf(null, String.isString)).toBe(false);
   });
 
   Vitest.it("should return a curried function when called with a guard", () => {
-    const isArrayOfNumbers = Array.isArrayOf(Number.isNumber);
+    const isArrayOfNumbers = Array.isArrayOf(Numeric.isNumber);
     Vitest.expect(isArrayOfNumbers).toBeInstanceOf(Function);
 
     Vitest.expect(isArrayOfNumbers([1, 2, 3])).toBe(true);
@@ -36,7 +36,7 @@ Vitest.describe("[runtime] Array.isArrayOf", () => {
   });
 
   Vitest.it("should work with nested arrays and guards", () => {
-    const isNestedArrayOfNumbers = Array.isArrayOf(Array.isArrayOf(Number.isNumber));
+    const isNestedArrayOfNumbers = Array.isArrayOf(Array.isArrayOf(Numeric.isNumber));
     Vitest.expect(
       isNestedArrayOfNumbers([
         [1, 2],
