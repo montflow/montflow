@@ -19,7 +19,7 @@
   "scripts": {
     "build": "pnpm build-esm && pnpm build-annotate && pnpm build-cjs",
     "build-esm": "tsc -b tsconfig.build.json",
-    "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
+    "build-cjs": "babel build/esm --config-file ./babel.config.cjs.json --out-dir build/cjs --out-file-extension .cjs --source-maps",
     "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.build.json",
@@ -31,9 +31,10 @@
     "@babel/plugin-transform-export-namespace-from": "^7.24.7",
     "@babel/plugin-transform-modules-commonjs": "^7.24.8",
     "babel-plugin-annotate-pure-calls": "^0.5.0",
+    "babel-plugin-replace-import-extension": "^1.1.5",
     "jsdom": "^25.0.1"
   },
-  "main": "./build/cjs/index.js",
+  "main": "./build/cjs/index.cjs",
   "module": "./build/esm/index.js",
   "types": "./build/dts/index.d.ts",
   "exports": {
@@ -41,7 +42,7 @@
     ".": {
       "types": "./build/dts/index.d.ts",
       "import": "./build/esm/index.js",
-      "default": "./build/cjs/index.js"
+      "default": "./build/cjs/index.cjs"
     }
   },
   "files": [
