@@ -1,4 +1,4 @@
-import * as Array from "../array/index.js";
+import * as List from "../list/index.js";
 import * as Macro from "../macro/index.js";
 import * as Numeric from "../numberic/index.js";
 import * as _Object from "../table/index.js";
@@ -43,8 +43,8 @@ export const isObject = (thing: unknown): thing is Object =>
  * @todo testing
  */
 export const isTuple = (thing: unknown): thing is Tuple =>
-  Array.isArray(thing) &&
-  Array.length(thing) === 2 &&
+  List.isArray(thing) &&
+  List.length(thing) === 2 &&
   Numeric.isNumber(thing[0]) &&
   Numeric.isNumber(thing[1]) &&
   thing[0] <= thing[1];

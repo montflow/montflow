@@ -2,19 +2,19 @@ import * as Vitest from "vitest";
 
 import * as Domain from "../../domain/index.js";
 import * as Maybe from "../../maybe/index.js";
-import * as Array from "../index.js";
+import * as List from "../index.js";
 
-Vitest.describe.concurrent("[runtime] Array.maybeGet", () => {
+Vitest.describe.concurrent("[runtime] List.maybeGet", () => {
   Vitest.it.concurrent("should be defined", () => {
-    Vitest.expect(Array.maybeGet).toBeDefined();
+    Vitest.expect(List.maybeGet).toBeDefined();
   });
 
   Vitest.it.concurrent("should return Some with value for valid indices", () => {
     const arr = [1, 2, 3, 4, 5];
 
-    const result0 = Array.maybeGet(arr, 0);
-    const result2 = Array.maybeGet(arr, 2);
-    const result4 = Array.maybeGet(arr, 4);
+    const result0 = List.maybeGet(arr, 0);
+    const result2 = List.maybeGet(arr, 2);
+    const result4 = List.maybeGet(arr, 4);
 
     Vitest.expect(result0).toHaveProperty(Domain.Tag, "some");
     Vitest.expect(result0).toHaveProperty("value", 1);
@@ -29,24 +29,24 @@ Vitest.describe.concurrent("[runtime] Array.maybeGet", () => {
   Vitest.it.concurrent("should return None for negative indices", () => {
     const arr = [1, 2, 3];
 
-    const result = Array.maybeGet(arr, -1);
+    const result = List.maybeGet(arr, -1);
     Vitest.expect(result).toHaveProperty(Domain.Tag, "none");
   });
 
   Vitest.it.concurrent("should return None for indices beyond array length", () => {
     const arr = [1, 2, 3];
 
-    const result = Array.maybeGet(arr, 3);
+    const result = List.maybeGet(arr, 3);
     Vitest.expect(result).toHaveProperty(Domain.Tag, "none");
 
-    const result2 = Array.maybeGet(arr, 10);
+    const result2 = List.maybeGet(arr, 10);
     Vitest.expect(result2).toHaveProperty(Domain.Tag, "none");
   });
 
   Vitest.it.concurrent("should return None for empty arrays", () => {
     const arr: number[] = [];
 
-    const result = Array.maybeGet(arr, 0);
+    const result = List.maybeGet(arr, 0);
     Vitest.expect(result).toHaveProperty(Domain.Tag, "none");
   });
 
@@ -55,9 +55,9 @@ Vitest.describe.concurrent("[runtime] Array.maybeGet", () => {
     const objects = [{ id: 1 }, { id: 2 }];
     const booleans = [true, false, true];
 
-    const stringResult = Array.maybeGet(strings, 1);
-    const objectResult = Array.maybeGet(objects, 0);
-    const booleanResult = Array.maybeGet(booleans, 2);
+    const stringResult = List.maybeGet(strings, 1);
+    const objectResult = List.maybeGet(objects, 0);
+    const booleanResult = List.maybeGet(booleans, 2);
 
     Vitest.expect(stringResult).toHaveProperty(Domain.Tag, "some");
     Vitest.expect(stringResult).toHaveProperty("value", "world");
@@ -72,7 +72,7 @@ Vitest.describe.concurrent("[runtime] Array.maybeGet", () => {
   Vitest.it.concurrent("should handle arrays with undefined values", () => {
     const arr = [1, undefined, 3];
 
-    const result = Array.maybeGet(arr, 1);
+    const result = List.maybeGet(arr, 1);
     Vitest.expect(result).toHaveProperty(Domain.Tag, "some");
     Vitest.expect(result).toHaveProperty("value", undefined);
   });
@@ -80,7 +80,7 @@ Vitest.describe.concurrent("[runtime] Array.maybeGet", () => {
   Vitest.it.concurrent("should handle arrays with null values", () => {
     const arr = [1, null, 3];
 
-    const result = Array.maybeGet(arr, 1);
+    const result = List.maybeGet(arr, 1);
     Vitest.expect(result).toHaveProperty(Domain.Tag, "some");
     Vitest.expect(result).toHaveProperty("value", null);
   });
@@ -88,11 +88,11 @@ Vitest.describe.concurrent("[runtime] Array.maybeGet", () => {
   Vitest.it.concurrent("should return None for non-integer indices", () => {
     const arr = [1, 2, 3];
 
-    const result1 = Array.maybeGet(arr, 1.5);
-    const result2 = Array.maybeGet(arr, 2.7);
-    const result3 = Array.maybeGet(arr, NaN);
-    const result4 = Array.maybeGet(arr, Infinity);
-    const result5 = Array.maybeGet(arr, -Infinity);
+    const result1 = List.maybeGet(arr, 1.5);
+    const result2 = List.maybeGet(arr, 2.7);
+    const result3 = List.maybeGet(arr, NaN);
+    const result4 = List.maybeGet(arr, Infinity);
+    const result5 = List.maybeGet(arr, -Infinity);
 
     Vitest.expect(result1).toHaveProperty(Domain.Tag, "none");
     Vitest.expect(result2).toHaveProperty(Domain.Tag, "none");
@@ -105,9 +105,9 @@ Vitest.describe.concurrent("[runtime] Array.maybeGet", () => {
     const arr = [1, 2, 3];
 
     // These should work as they are integers
-    const result1 = Array.maybeGet(arr, 1.0);
-    const result2 = Array.maybeGet(arr, 2.0);
-    const result3 = Array.maybeGet(arr, 0.0);
+    const result1 = List.maybeGet(arr, 1.0);
+    const result2 = List.maybeGet(arr, 2.0);
+    const result3 = List.maybeGet(arr, 0.0);
 
     Vitest.expect(result1).toHaveProperty(Domain.Tag, "some");
     Vitest.expect(result1).toHaveProperty("value", 2);
@@ -123,8 +123,8 @@ Vitest.describe.concurrent("[runtime] Array.maybeGet", () => {
     const sparse = new globalThis.Array(5);
     sparse[2] = "value";
 
-    const result0 = Array.maybeGet(sparse, 0);
-    const result2 = Array.maybeGet(sparse, 2);
+    const result0 = List.maybeGet(sparse, 0);
+    const result2 = List.maybeGet(sparse, 2);
 
     Vitest.expect(result0).toHaveProperty(Domain.Tag, "some");
     Vitest.expect(result0).toHaveProperty("value", undefined);
@@ -137,10 +137,10 @@ Vitest.describe.concurrent("[runtime] Array.maybeGet", () => {
     const arr = [1, 2, 3];
 
     // Test exact boundary conditions
-    const resultAtLength = Array.maybeGet(arr, arr.length);
-    const resultAtNegativeOne = Array.maybeGet(arr, -1);
-    const resultAtZero = Array.maybeGet(arr, 0);
-    const resultAtLastIndex = Array.maybeGet(arr, arr.length - 1);
+    const resultAtLength = List.maybeGet(arr, arr.length);
+    const resultAtNegativeOne = List.maybeGet(arr, -1);
+    const resultAtZero = List.maybeGet(arr, 0);
+    const resultAtLastIndex = List.maybeGet(arr, arr.length - 1);
 
     Vitest.expect(resultAtLength).toHaveProperty(Domain.Tag, "none");
     Vitest.expect(resultAtNegativeOne).toHaveProperty(Domain.Tag, "none");
@@ -152,9 +152,9 @@ Vitest.describe.concurrent("[runtime] Array.maybeGet", () => {
     const arr = [1, 2, 3];
 
     // Should work with integer values passed as numbers
-    const result1 = Array.maybeGet(arr, 1);
-    const result2 = Array.maybeGet(arr, 0);
-    const result3 = Array.maybeGet(arr, 2);
+    const result1 = List.maybeGet(arr, 1);
+    const result2 = List.maybeGet(arr, 0);
+    const result3 = List.maybeGet(arr, 2);
 
     Vitest.expect(result1).toHaveProperty(Domain.Tag, "some");
     Vitest.expect(result1).toHaveProperty("value", 2);
@@ -167,9 +167,9 @@ Vitest.describe.concurrent("[runtime] Array.maybeGet", () => {
   });
 });
 
-Vitest.describe("[types] Array.maybeGet", () => {
+Vitest.describe("[types] List.maybeGet", () => {
   Vitest.it("should be defined", () => {
-    type Test = typeof Array.maybeGet;
+    type Test = typeof List.maybeGet;
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
 
@@ -178,9 +178,9 @@ Vitest.describe("[types] Array.maybeGet", () => {
     const stringArray = ["a", "b", "c"];
     const objectArray = [{ id: 1 }, { id: 2 }];
 
-    const numberResult = Array.maybeGet(numberArray, 0);
-    const stringResult = Array.maybeGet(stringArray, 1);
-    const objectResult = Array.maybeGet(objectArray, 0);
+    const numberResult = List.maybeGet(numberArray, 0);
+    const stringResult = List.maybeGet(stringArray, 1);
+    const objectResult = List.maybeGet(objectArray, 0);
 
     Vitest.expectTypeOf(numberResult).toEqualTypeOf<Maybe.Maybe<number>>();
     Vitest.expectTypeOf(stringResult).toEqualTypeOf<Maybe.Maybe<string>>();

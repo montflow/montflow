@@ -1,10 +1,10 @@
 import * as Vitest from "vitest";
 
-import * as Array from "../index.js";
+import * as List from "../index.js";
 
-Vitest.describe("[types] Array.NotEmpty", () => {
+Vitest.describe("[types] List.NotEmpty", () => {
   Vitest.it("should be defined", () => {
-    type Test = Array.NotEmpty<any>;
+    type Test = List.NotEmpty<any>;
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
 });

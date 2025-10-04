@@ -6,11 +6,6 @@ import * as Maybe from "../maybe/index.js";
 import * as Numeric from "../numberic/index.js";
 
 /**
- * Type alias for the native javascript array type
- */
-export const Constructor = Array;
-
-/**
  * Utility type for array with at least one element
  *
  * @template T The type of the elements in the array
