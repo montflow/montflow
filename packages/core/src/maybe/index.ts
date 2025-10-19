@@ -625,3 +625,35 @@ export const toResult: {
  * @todo testing
  */
 export const parseJson = (self: Maybe<string>) => tryMap(self, JSON.parse);
+
+/**
+ * Converts a `None` into a `null` or `Some` into value.
+ *
+ * @template V Value type
+ * @param {Maybe<V>} self  to convert
+ * @returns {V | null}
+ *
+ * @todo testing
+ */
+export const toNullable = <V>(self: Maybe<V>) => (isSome(self) ? self.value : Macro.null);
+
+/**
+ * Converts a `Maybe<V>` into a `undefined`.
+ *
+ * @template V Value type
+ * @param {Maybe<V>} self  to convert
+ * @returns {V | undefined}
+ *
+ * @todo testing
+ */
+export const toUndefined = <V>(self: Maybe<V>) => (isSome(self) ? self.value : Macro.undefined);
+
+/**
+ * Extracts the inner value from a `Some`.
+ *
+ * @param {Some<V>} self
+ * @returns {V}
+ *
+ * @todo testing
+ */
+export const value = <V>(self: Some<V>) => self.value;
