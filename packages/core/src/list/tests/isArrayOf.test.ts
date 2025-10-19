@@ -1,6 +1,6 @@
 import * as Vitest from "vitest";
 
-import * as Numeric from "../../numberic/index.js";
+import * as Numeric from "../../numeric/index.js";
 import * as Text from "../../text/index.js";
 import * as List from "../index.js";
 

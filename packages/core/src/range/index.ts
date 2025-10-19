@@ -1,6 +1,6 @@
 import * as List from "../list/index.js";
 import * as Macro from "../macro/index.js";
-import * as Numeric from "../numberic/index.js";
+import * as Numeric from "../numeric/index.js";
 import * as _Object from "../table/index.js";
 
 /**

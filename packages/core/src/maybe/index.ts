@@ -5,7 +5,7 @@ import * as Function from "../function/index.js";
 import { Evaluable, Struct, Sync } from "../global/index.js";
 import * as Macro from "../macro/index.js";
 import * as Nothing from "../nothing/index.js";
-import * as Numeric from "../numberic/index.js";
+import * as Numeric from "../numeric/index.js";
 import * as Result from "../result/index.js";
 import * as Table from "../table/index.js";
 

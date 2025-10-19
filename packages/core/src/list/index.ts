@@ -3,7 +3,7 @@ import * as Function from "../function/index.js";
 import { Evaluable, Missing } from "../global/index.js";
 import * as Macro from "../macro/index.js";
 import * as Maybe from "../maybe/index.js";
-import * as Numeric from "../numberic/index.js";
+import * as Numeric from "../numeric/index.js";
 
 /**
  * Utility type for array with at least one element

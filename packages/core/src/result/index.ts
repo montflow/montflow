@@ -4,7 +4,7 @@ import * as Function from "../function/index.js";
 import { Evaluable, Sync } from "../global/index.js";
 import * as Macro from "../macro/index.js";
 import * as Maybe from "../maybe/index.js";
-import * as Numeric from "../numberic/index.js";
+import * as Numeric from "../numeric/index.js";
 import * as Table from "../table/index.js";
 
 /**
