@@ -107,30 +107,41 @@ export const singleton: {
 };
 
 /**
- * Casts an unknown value to `never` without runtime checks.
- * Internally it's just a `undefined` cast to `never`.
+ * @alias never
+ *
+ * Value of type `never`. Just an `undefined` during runtime.
  */
 export const never = cast<never>(void 0);
 
 /**
- * Casts an unknown value to `unknown` without runtime checks.
- * Internally it's just a `undefined` cast to `unknown`.
+ * @alias unknown
+ *
+ * Value of type `unknown`. Just an `undefined` during runtime.
  */
 export const unknown = cast<unknown>(void 0);
 
 /**
- * Casts an unknown value to `undefined` without runtime checks.
- * Internally it's just a `undefined` cast to `undefined`.
+ * @alias undefined
+ *
+ * Value of type `undefined`. Just an `void 0` during runtime.
  */
 export const undefined = cast<undefined>(void 0);
 
 /**
- * Casts an unknown value to `void` without runtime checks.
- * Internally it's just a `undefined` cast to `void`.
+ * @alias void
+ *
+ * Value of type `void`. Just an `undefined` during runtime.
  */
 const _void = cast<void>(void 0);
 
 export { _void as void };
+
+/**
+ * @alias null
+ */
+const _null = null;
+
+export { _null as null };
 
 export const panic: {
   /**
