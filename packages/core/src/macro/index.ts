@@ -28,6 +28,9 @@ export const cast = <T>(x: unknown): T => x as T;
 /** @internal */
 const _singletons: Struct<string, Constructor.Any | Function.Maker.Any> = {};
 
+/** @internal */
+const _onces: Struct<string, { hasRun: boolean; result: any; fn: Function.Callable }> = {};
+
 /**
  * @todo documentation
  * @todo testing
@@ -35,6 +38,15 @@ const _singletons: Struct<string, Constructor.Any | Function.Maker.Any> = {};
 export class SingletonAlreadyExistsError extends Error {
   constructor(id: string) {
     super(`Singleton ${id} already exists`);
+  }
+}
+
+/**
+ * @todo documentation
+ */
+export class OnceAlreadyExistsError extends Error {
+  constructor(id: string) {
+    super(`Once function with id ${id} already exists`);
   }
 }
 
@@ -83,26 +95,77 @@ export const singleton: {
   : TConstructor extends Function.Maker.Any ? Function.Maker.Args<TConstructor>
   : never
 ) => {
-  if (_singletons[id]) {
+  if (_singletons[id] !== undefined) {
     throw panic(new SingletonAlreadyExistsError(id));
   }
 
+  _singletons[id] = ctor;
+
   return () => {
-    if (_singletons[id]) {
-      return _singletons[id];
+    const existing = _singletons[id];
+
+    // If the value is a constructor or function, instantiate it
+    if (Constructor.isConstructor(existing) || Function.isCallable(existing)) {
+      const instance =
+        Constructor.isConstructor(ctor) ? new ctor(...args)
+        : Function.isCallable(ctor) ? ctor(...args)
+        : void 0;
+
+      if (instance === void 0) {
+        // TODO: create a custom error
+        throw panic(new Error("Invalid singleton"));
+      }
+
+      return (_singletons[id] = instance);
     }
 
-    const instance =
-      Constructor.isConstructor(ctor) ? new ctor(...args)
-      : Function.isCallable(ctor) ? ctor(...args)
-      : void 0;
+    return existing;
+  };
+};
 
-    if (instance === void 0) {
-      // TODO: create a custom error
-      throw panic(new Error("Invalid singleton"));
+export const once: {
+  /**
+   * Creates a function that executes only on its first invocation.
+   * Subsequent calls return the cached result without re-executing.
+   *
+   * @template TFunction the function type (nullary)
+   * @param id the id of the once function. Must be unique project wide.
+   * @param fn the function to execute once
+   * @returns a function that executes only once
+   */
+  <TFunction extends Function.Nullary<any>>(
+    id: string,
+    fn: TFunction
+  ): () => ReturnType<TFunction>;
+
+  /**
+   * Creates a function that executes only on its first invocation with the provided arguments.
+   * Subsequent calls return the cached result without re-executing.
+   *
+   * @template TFunction the function type
+   * @param id the id of the once function. Must be unique project wide.
+   * @param fn the function to execute once
+   * @param args the arguments to pass to the function
+   * @returns a nullary function that executes only once
+   */
+  <TFunction extends Function.Callable>(
+    id: string,
+    fn: TFunction,
+    ...args: Parameters<TFunction>
+  ): () => ReturnType<TFunction>;
+} = <TFunction extends Function.Callable>(id: string, fn: TFunction, ...args: any[]): any => {
+  if (_onces[id]) {
+    throw panic(new OnceAlreadyExistsError(id));
+  }
+
+  _onces[id] = { hasRun: false, result: undefined, fn };
+
+  return () => {
+    if (!_onces[id].hasRun) {
+      _onces[id].result = _onces[id].fn(...args);
+      _onces[id].hasRun = true;
     }
-
-    return (_singletons[id] = instance);
+    return _onces[id].result;
   };
 };
 
