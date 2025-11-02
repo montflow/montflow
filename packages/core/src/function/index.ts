@@ -3,6 +3,13 @@
  */
 export type Callable = (...args: any[]) => any;
 
+export namespace Callable {
+  /**
+   * Generic function signature that returns promise
+   */
+  export type Async = (...args: any[]) => Promise<any>;
+}
+
 /**
  * Type alias for the native javascript function constructor
  */
