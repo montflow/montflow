@@ -1,6 +1,6 @@
 {
   "name": "@montflow/core",
-  "version": "3.0.0-alpha.7",
+  "version": "3.0.0-alpha.8",
   "author": "Daniel Montilla",
   "description": "A collection of typescript utilities",
   "license": "MIT",
