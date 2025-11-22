@@ -169,6 +169,54 @@ export const isBetween: {
 );
 
 /**
+ * Checks if the given number is a divisor of another number.
+ *
+ * @param self The number to check if it's a divisor.
+ * @param by The number to check if self divides into.
+ * @returns True if self is a divisor of by (by % self === 0), false otherwise.
+ *
+ * @example
+ * ```typescript
+ * // Non-curried usage
+ * isDivisor(3, 9) // true (3 divides into 9)
+ * isDivisor(4, 9) // false (4 doesn't divide into 9)
+ *
+ * // Curried usage
+ * const isDivisorOf12 = isDivisor(12);
+ * isDivisorOf12(3) // true (3 divides into 12)
+ * isDivisorOf12(5) // false (5 doesn't divide into 12)
+ * ```
+ */
+export const isDivisor: {
+  (self: number, by: number): boolean;
+  (by: number): (self: number) => boolean;
+} = Macro.dualify(1, (self: number, by: number): boolean => by % self === 0);
+
+/**
+ * Checks if the given number is a multiple of another number.
+ *
+ * @param self The number to check if it's a multiple.
+ * @param of The number to check if self is a multiple of.
+ * @returns True if self is a multiple of of (self % of === 0), false otherwise.
+ *
+ * @example
+ * ```typescript
+ * // Non-curried usage
+ * isMultiple(9, 3) // true (9 is a multiple of 3)
+ * isMultiple(9, 4) // false (9 is not a multiple of 4)
+ *
+ * // Curried usage
+ * const isMultipleOf3 = isMultiple(3);
+ * isMultipleOf3(9) // true (9 is a multiple of 3)
+ * isMultipleOf3(10) // false (10 is not a multiple of 3)
+ * ```
+ */
+export const isMultiple: {
+  (self: number, of: number): boolean;
+  (of: number): (self: number) => boolean;
+} = Macro.dualify(1, (self: number, of: number): boolean => self % of === 0);
+
+/**
  * Decrements given number type. Valid inputs inlcude 1 ≤ n ≤ 1024
  * @template N number to be decremented
  * @returns {number} N - 1.
