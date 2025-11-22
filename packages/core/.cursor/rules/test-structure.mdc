@@ -1,5 +1,5 @@
 ---
-globs: packages/core/src/*/tests/*.test.ts,packages/core/src/*/tests/*.type.test.ts
+filePattern: "**/test/**/*.{ts,tsx}"
 description: Core package test file structure and formatting guidelines
 ---
 

@@ -1,5 +1,5 @@
 ---
-globs: packages/core/src/*/index.ts
+filePattern: "**/*.{ts,tsx,js,jsx}"
 description: Function declaration standards and overload formatting
 ---
 

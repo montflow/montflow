@@ -1,5 +1,5 @@
 ---
-globs: packages/core/src/*/index.ts
+filePattern: "**/src/*/index.ts"
 description: Core package module structure and formatting guidelines
 ---
 
