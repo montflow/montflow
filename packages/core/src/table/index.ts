@@ -1,4 +1,5 @@
 import { Simplify, Struct } from "../global/index.js";
+import * as List from "../list/index.js";
 import * as Macro from "../macro/index.js";
 
 /**
@@ -243,3 +244,171 @@ export const omit: {
     return result;
   }
 );
+
+/**
+ * Generates a unique key given a struct. Always produces the same output for the same input.
+ *
+ * @param struct The struct to generate a key for
+ * @returns A deterministic string key representing the struct
+ * @throw {TypeError} If the input or its nested structures are not serializable
+ */
+export const keyefy = (struct: Struct): string => {
+  // Inline flattening logic to avoid deep type instantiation with Flatten<Struct>
+  const result: Record<string, unknown> = {};
+
+  const isPrimitive = (value: unknown): boolean =>
+    value === null ||
+    typeof value !== "object" ||
+    value instanceof Date ||
+    value instanceof Function;
+
+  const isNumericKey = (key: string): boolean => /^\d+$/.test(key);
+
+  const recurse = (obj: object, prefix: string): void => {
+    const isArrayLike = List.isArray(obj);
+
+    for (const [key, value] of Object.entries(obj)) {
+      // For arrays, only include numeric indices
+      if (isArrayLike && !isNumericKey(key)) {
+        continue;
+      }
+
+      const newKey = prefix ? `${prefix}.${key}` : key;
+
+      if (isPrimitive(value)) {
+        result[newKey] = value;
+      } else {
+        recurse(value as object, newKey);
+      }
+    }
+  };
+
+  recurse(struct, "");
+  const flattened = result;
+  const sortedKeys = Object.keys(flattened).sort();
+
+  const serializedEntries = sortedKeys.map(key => {
+    const value = flattened[key];
+
+    // Handle non-serializable values
+    if (typeof value === "symbol") {
+      throw new TypeError(`Cannot serialize symbol at key "${key}"`);
+    }
+    if (typeof value === "bigint") {
+      throw new TypeError(`Cannot serialize bigint at key "${key}"`);
+    }
+    if (typeof value === "function") {
+      throw new TypeError(`Cannot serialize function at key "${key}"`);
+    }
+
+    // Handle Date objects by converting to ISO string
+    if (value instanceof Date) {
+      return [key, value.toISOString()];
+    }
+
+    return [key, value];
+  });
+
+  try {
+    return JSON.stringify(Object.fromEntries(serializedEntries));
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw error;
+    }
+    throw new TypeError(
+      `Failed to serialize struct: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+};
+
+/**
+ * Gets the valid keys for a type, filtering out array/function methods.
+ */
+type ValidKeys<T> =
+  T extends readonly any[] ? keyof T & `${number}`
+  : T extends Function ? never
+  : keyof T & (string | number);
+
+/**
+ * Flattens a nested object type into a single-level object with dot-notation keys.
+ *
+ * @template T The object type to flatten
+ * @template TPrefix Internal prefix for recursion (do not provide)
+ *
+ * @example
+ * type Input = { a: 1, b: { x: 10, y: false }, c: [1, 2] };
+ * type Output = Flatten<Input>;
+ * // { a: 1, "b.x": 10, "b.y": false, "c.0": 1, "c.1": 2 }
+ *
+ * @todo testing
+ */
+export type Flatten<T, TPrefix extends string = ""> =
+  T extends string | number | boolean | null | undefined | symbol | bigint | Function | Date ?
+    {}
+  : Simplify<
+      {
+        [K in ValidKeys<T> as T[K] extends (
+          string | number | boolean | null | undefined | symbol | bigint | Function | Date
+        ) ?
+          TPrefix extends "" ?
+            `${K}`
+          : `${TPrefix}.${K}`
+        : never]: T[K];
+      } & ({
+        [K in ValidKeys<T>]: T[K] extends (
+          string | number | boolean | null | undefined | symbol | bigint | Function | Date
+        ) ?
+          {}
+        : Flatten<T[K], TPrefix extends "" ? `${K}` : `${TPrefix}.${K}`>;
+      }[ValidKeys<T>] extends infer U ?
+        (U extends any ? (k: U) => void : never) extends (k: infer I) => void ?
+          I
+        : never
+      : never)
+    >;
+
+/**
+ * Flattens a nested object into a single-level object with dot-notation keys.
+ *
+ * @template TObject The object type to flatten
+ * @param struct The object to flatten
+ * @returns A flattened object with dot-notation keys
+ *
+ * @example
+ * const obj = { a: 1, b: { x: 10 }, c: [1, 2] };
+ * const flat = flatten(obj);
+ * // { a: 1, "b.x": 10, "c.0": 1, "c.1": 2 }
+ */
+export const flatten = <const TObject extends object>(struct: TObject): Flatten<TObject> => {
+  const result: Record<string, unknown> = {};
+
+  const isPrimitive = (value: unknown): boolean =>
+    value === null ||
+    typeof value !== "object" ||
+    value instanceof Date ||
+    value instanceof Function;
+
+  const isNumericKey = (key: string): boolean => /^\d+$/.test(key);
+
+  const recurse = (obj: object, prefix: string): void => {
+    const isArrayLike = List.isArray(obj);
+
+    for (const [key, value] of Object.entries(obj)) {
+      // For arrays, only include numeric indices
+      if (isArrayLike && !isNumericKey(key)) {
+        continue;
+      }
+
+      const newKey = prefix ? `${prefix}.${key}` : key;
+
+      if (isPrimitive(value)) {
+        result[newKey] = value;
+      } else {
+        recurse(value as object, newKey);
+      }
+    }
+  };
+
+  recurse(struct, "");
+  return Macro.cast<Flatten<TObject>>(result);
+};
