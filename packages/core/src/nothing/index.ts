@@ -26,7 +26,10 @@ export type Nothing = {
  *
  * @returns A `Nothing` value
  */
-export const make = Macro.singleton("@montflow/nothing", (): Nothing => ({ [Domain.Id]: Id }));
+export const make = Macro.singleton(
+  "@montflow/nothing",
+  (): Nothing => ({ [Domain.Id]: Id })
+);
 
 /**
  * Returns `true` if the given value is a `Nothing`.
@@ -35,7 +38,7 @@ export const make = Macro.singleton("@montflow/nothing", (): Nothing => ({ [Doma
  * @returns Type guard for `Nothing`
  */
 export const isNothing = (thing: unknown): thing is Nothing =>
-  Table.isObject(thing) &&
-  Table.hasKeys(thing, [Domain.Id]) &&
-  Table.size(thing) === 1 &&
-  thing[Domain.Id] === ("nothing" as const);
+  Table.isObject(thing)
+  && Table.hasKeys(thing, [Domain.Id])
+  && Table.size(thing) === 1
+  && thing[Domain.Id] === ("nothing" as const);

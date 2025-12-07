@@ -51,12 +51,12 @@ Vitest.describe("[runtime] Numeric.clamp", () => {
         Numeric.Constructor.MAX_VALUE,
       ] as const;
       Vitest.expect(Numeric.clamp(1000, largeRange)).toBe(1000);
-      Vitest.expect(Numeric.clamp(Numeric.Constructor.MAX_VALUE, largeRange)).toBe(
-        Numeric.Constructor.MAX_VALUE
-      );
-      Vitest.expect(Numeric.clamp(-Numeric.Constructor.MAX_VALUE, largeRange)).toBe(
-        -Numeric.Constructor.MAX_VALUE
-      );
+      Vitest.expect(
+        Numeric.clamp(Numeric.Constructor.MAX_VALUE, largeRange)
+      ).toBe(Numeric.Constructor.MAX_VALUE);
+      Vitest.expect(
+        Numeric.clamp(-Numeric.Constructor.MAX_VALUE, largeRange)
+      ).toBe(-Numeric.Constructor.MAX_VALUE);
     });
 
     Vitest.it("should work with very small ranges", () => {
@@ -131,7 +131,9 @@ Vitest.describe("[runtime] Numeric.clamp", () => {
       const epsilon = Numeric.Constructor.EPSILON;
       const tinyRange = [1, 1 + epsilon] as const;
       Vitest.expect(Numeric.clamp(0.5, tinyRange)).toBe(1);
-      Vitest.expect(Numeric.clamp(1 + epsilon / 2, tinyRange)).toBe(1 + epsilon / 2);
+      Vitest.expect(Numeric.clamp(1 + epsilon / 2, tinyRange)).toBe(
+        1 + epsilon / 2
+      );
       Vitest.expect(Numeric.clamp(2, tinyRange)).toBe(1 + epsilon);
     });
   });

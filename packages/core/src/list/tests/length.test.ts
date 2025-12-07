@@ -11,11 +11,14 @@ Vitest.describe.concurrent("[runtime] List.length", () => {
     Vitest.expect(List.length([])).toBe(0);
   });
 
-  Vitest.it.concurrent("should return correct length for non-empty arrays", () => {
-    Vitest.expect(List.length([1])).toBe(1);
-    Vitest.expect(List.length([1, 2, 3])).toBe(3);
-    Vitest.expect(List.length(["a", "b", "c", "d", "e"])).toBe(5);
-  });
+  Vitest.it.concurrent(
+    "should return correct length for non-empty arrays",
+    () => {
+      Vitest.expect(List.length([1])).toBe(1);
+      Vitest.expect(List.length([1, 2, 3])).toBe(3);
+      Vitest.expect(List.length(["a", "b", "c", "d", "e"])).toBe(5);
+    }
+  );
 
   Vitest.it.concurrent("should work with arrays of different types", () => {
     const mixedArray = [1, "string", {}, [], true, null, undefined];
@@ -27,10 +30,13 @@ Vitest.describe.concurrent("[runtime] List.length", () => {
     Vitest.expect(List.length(sparseArray)).toBe(5);
   });
 
-  Vitest.it.concurrent("should work with arrays containing undefined values", () => {
-    const arrayWithUndefined = [undefined, undefined, undefined];
-    Vitest.expect(List.length(arrayWithUndefined)).toBe(3);
-  });
+  Vitest.it.concurrent(
+    "should work with arrays containing undefined values",
+    () => {
+      const arrayWithUndefined = [undefined, undefined, undefined];
+      Vitest.expect(List.length(arrayWithUndefined)).toBe(3);
+    }
+  );
 });
 
 Vitest.describe("[types] List.length", () => {

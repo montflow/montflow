@@ -1,7 +1,7 @@
 import * as Vitest from "vitest";
 
-import { PropertyKey } from "../../global/index.js";
 import * as Table from "../index.js";
+import { PropertyKey } from "../../global/index.js";
 
 Vitest.describe("[runtime] Table.omit", () => {
   Vitest.it("should be defined", () => {
@@ -119,8 +119,16 @@ Vitest.describe("[runtime] Table.omit", () => {
       const result1 = omitSensitiveData(user1);
       const result2 = omitSensitiveData(user2);
 
-      Vitest.expect(result1).toEqual({ id: 1, name: "John", email: "john@test.com" });
-      Vitest.expect(result2).toEqual({ id: 2, name: "Jane", email: "jane@test.com" });
+      Vitest.expect(result1).toEqual({
+        id: 1,
+        name: "John",
+        email: "john@test.com",
+      });
+      Vitest.expect(result2).toEqual({
+        id: 2,
+        name: "Jane",
+        email: "jane@test.com",
+      });
     });
 
     Vitest.it("should work with curried form - complex objects", () => {
@@ -154,9 +162,27 @@ Vitest.describe("[runtime] Table.omit", () => {
 
     Vitest.it("should work with curried form - functional composition", () => {
       const users = [
-        { id: 1, name: "Alice", password: "pass1", role: "admin", lastLogin: "2023-01-01" },
-        { id: 2, name: "Bob", password: "pass2", role: "user", lastLogin: "2023-01-02" },
-        { id: 3, name: "Charlie", password: "pass3", role: "user", lastLogin: "2023-01-03" },
+        {
+          id: 1,
+          name: "Alice",
+          password: "pass1",
+          role: "admin",
+          lastLogin: "2023-01-01",
+        },
+        {
+          id: 2,
+          name: "Bob",
+          password: "pass2",
+          role: "user",
+          lastLogin: "2023-01-02",
+        },
+        {
+          id: 3,
+          name: "Charlie",
+          password: "pass3",
+          role: "user",
+          lastLogin: "2023-01-03",
+        },
       ];
 
       const removeSecrets = Table.omit(["password", "lastLogin"] as const);
@@ -226,7 +252,7 @@ Vitest.describe("[types] Table.omit", () => {
 
     // This should be a type error - 'b' was omitted
     // @ts-expect-error - Property 'b' does not exist on type 'Omit<{ a: number; b: string; c: boolean; }, "b">'
-    const shouldError = result.b;
+    const _shouldError = result.b;
 
     // These should work fine
     const shouldWork1 = result.a;
@@ -240,7 +266,7 @@ Vitest.describe("[types] Table.omit", () => {
 
     // This should be a type error - 'd' doesn't exist in input
     // @ts-expect-error - Argument of type '"d"' is not assignable to parameter of type 'keyof { a: number; b: number; c: number; }'
-    const shouldError = Table.omit(input, ["b", "d"]);
+    const _shouldError = Table.omit(input, ["b", "d"]);
   });
 
   Vitest.it("should handle duplicate keys in type system", () => {
@@ -280,7 +306,7 @@ Vitest.describe("[types] Table.omit", () => {
 
     // This should be a type error
     // @ts-expect-error - Property 'password' does not exist on type 'Omit<User, "password">'
-    const shouldError = publicInfo.password;
+    const _shouldError = publicInfo.password;
   });
 
   Vitest.it("should demonstrate the original issue is fixed", () => {
@@ -290,7 +316,7 @@ Vitest.describe("[types] Table.omit", () => {
 
     // This should be a type error now
     // @ts-expect-error - Property 'b' does not exist on type 'Omit<{ a: number; b: string; c: boolean; }, "b">'
-    const t = b.b;
+    const _t = b.b;
 
     // But accessing existing properties should work
     const validAccess = b.a;

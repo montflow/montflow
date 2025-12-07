@@ -16,19 +16,19 @@ Vitest.describe("[runtime] Macro.once", () => {
         return "result";
       };
 
-      const operation = Macro.once("nullary-once", expensiveOperation);
+      const _operation = Macro.once("nullary-once", expensiveOperation);
 
       Vitest.expect(executionCount).toBe(0);
 
-      const result1 = operation();
+      const result1 = _operation();
       Vitest.expect(executionCount).toBe(1);
       Vitest.expect(result1).toBe("result");
 
-      const result2 = operation();
+      const result2 = _operation();
       Vitest.expect(executionCount).toBe(1);
       Vitest.expect(result2).toBe("result");
 
-      const result3 = operation();
+      const result3 = _operation();
       Vitest.expect(executionCount).toBe(1);
       Vitest.expect(result3).toBe("result");
     });
@@ -53,44 +53,53 @@ Vitest.describe("[runtime] Macro.once", () => {
         sideEffect++;
       };
 
-      const operation = Macro.once("nullary-void", doSomething);
+      const _operation = Macro.once("nullary-void", doSomething);
 
-      operation();
+      _operation();
       Vitest.expect(sideEffect).toBe(1);
 
-      operation();
+      _operation();
       Vitest.expect(sideEffect).toBe(1);
 
-      operation();
+      _operation();
       Vitest.expect(sideEffect).toBe(1);
     });
   });
 
   Vitest.describe("with functions with arguments", () => {
-    Vitest.it("should execute function only once with provided arguments", () => {
-      let executionCount = 0;
+    Vitest.it(
+      "should execute function only once with provided arguments",
+      () => {
+        let executionCount = 0;
 
-      const expensiveOperation = (a: number, b: string, c: boolean) => {
-        executionCount++;
-        return { a, b, c };
-      };
+        const expensiveOperation = (a: number, b: string, c: boolean) => {
+          executionCount++;
+          return { a, b, c };
+        };
 
-      const operation = Macro.once("with-args-once", expensiveOperation, 42, "test", true);
+        const operation = Macro.once(
+          "with-args-once",
+          expensiveOperation,
+          42,
+          "test",
+          true
+        );
 
-      Vitest.expect(executionCount).toBe(0);
+        Vitest.expect(executionCount).toBe(0);
 
-      const result1 = operation();
-      Vitest.expect(executionCount).toBe(1);
-      Vitest.expect(result1).toEqual({ a: 42, b: "test", c: true });
+        const result1 = operation();
+        Vitest.expect(executionCount).toBe(1);
+        Vitest.expect(result1).toEqual({ a: 42, b: "test", c: true });
 
-      const result2 = operation();
-      Vitest.expect(executionCount).toBe(1);
-      Vitest.expect(result2).toEqual({ a: 42, b: "test", c: true });
+        const result2 = operation();
+        Vitest.expect(executionCount).toBe(1);
+        Vitest.expect(result2).toEqual({ a: 42, b: "test", c: true });
 
-      const result3 = operation();
-      Vitest.expect(executionCount).toBe(1);
-      Vitest.expect(result3).toEqual({ a: 42, b: "test", c: true });
-    });
+        const result3 = operation();
+        Vitest.expect(executionCount).toBe(1);
+        Vitest.expect(result3).toEqual({ a: 42, b: "test", c: true });
+      }
+    );
 
     Vitest.it("should bind arguments at creation time", () => {
       const concat = (a: string, b: string, c: string) => a + b + c;
@@ -135,7 +144,12 @@ Vitest.describe("[runtime] Macro.once", () => {
       const config: Config = { host: "localhost", port: 3000 };
       const options: Options = { timeout: 5000, retries: 3 };
 
-      const getConnection = Macro.once("complex-args", createConnection, config, options);
+      const getConnection = Macro.once(
+        "complex-args",
+        createConnection,
+        config,
+        options
+      );
 
       const conn1 = getConnection();
       Vitest.expect(callCount).toBe(1);
@@ -154,16 +168,19 @@ Vitest.describe("[runtime] Macro.once", () => {
   });
 
   Vitest.describe("error handling", () => {
-    Vitest.it("should throw OnceAlreadyExistsError when registering duplicate id", () => {
-      const fn1 = () => "result1";
-      const fn2 = () => "result2";
+    Vitest.it(
+      "should throw OnceAlreadyExistsError when registering duplicate id",
+      () => {
+        const fn1 = () => "result1";
+        const fn2 = () => "result2";
 
-      Macro.once("duplicate-once-id", fn1);
+        Macro.once("duplicate-once-id", fn1);
 
-      Vitest.expect(() => {
-        Macro.once("duplicate-once-id", fn2);
-      }).toThrow(Macro.OnceAlreadyExistsError);
-    });
+        Vitest.expect(() => {
+          Macro.once("duplicate-once-id", fn2);
+        }).toThrow(Macro.OnceAlreadyExistsError);
+      }
+    );
 
     Vitest.it("should throw with correct error message", () => {
       const fn1 = () => "result";
@@ -270,9 +287,9 @@ Vitest.describe("[types] Macro.once", () => {
   Vitest.it("should correctly type nullary function", () => {
     const fn = () => 42;
 
-    const operation = Macro.once("type-nullary", fn);
+    const _operation = Macro.once("type-nullary", fn);
 
-    type OperationType = typeof operation;
+    type OperationType = typeof _operation;
     type Result = ReturnType<OperationType>;
 
     Vitest.expectTypeOf<OperationType>().toEqualTypeOf<() => number>();
@@ -282,12 +299,14 @@ Vitest.describe("[types] Macro.once", () => {
   Vitest.it("should correctly type function with arguments", () => {
     const fn = (a: number, b: string) => ({ a, b });
 
-    const operation = Macro.once("type-with-args", fn, 42, "test");
+    const _operation = Macro.once("type-with-args", fn, 42, "test");
 
-    type OperationType = typeof operation;
+    type OperationType = typeof _operation;
     type Result = ReturnType<OperationType>;
 
-    Vitest.expectTypeOf<OperationType>().toEqualTypeOf<() => { a: number; b: string }>();
+    Vitest.expectTypeOf<OperationType>().toEqualTypeOf<
+      () => { a: number; b: string }
+    >();
     Vitest.expectTypeOf<Result>().toEqualTypeOf<{ a: number; b: string }>();
   });
 
@@ -296,9 +315,9 @@ Vitest.describe("[types] Macro.once", () => {
       /* void */
     };
 
-    const operation = Macro.once("type-void", fn);
+    const _operation = Macro.once("type-void", fn);
 
-    type OperationType = typeof operation;
+    type OperationType = typeof _operation;
 
     Vitest.expectTypeOf<OperationType>().toEqualTypeOf<() => void>();
   });

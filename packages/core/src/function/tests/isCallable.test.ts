@@ -26,13 +26,13 @@ Vitest.describe("[runtime] Function.isCallable", () => {
   });
 
   Vitest.it("should return false for a promise", () => {
-    const promise = new Promise(resolve => resolve(true));
+    const promise = new Promise((resolve) => resolve(true));
 
     Vitest.expect(Function.isCallable(promise)).toBe(false);
   });
 
   Vitest.it("should return true for function that returns a promise", () => {
-    const promise = () => new Promise(resolve => resolve(true));
+    const promise = () => new Promise((resolve) => resolve(true));
 
     Vitest.expect(Function.isCallable(promise)).toBe(true);
   });

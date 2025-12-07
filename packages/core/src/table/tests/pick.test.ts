@@ -1,7 +1,7 @@
 import * as Vitest from "vitest";
 
-import { PropertyKey } from "../../global/index.js";
 import * as Table from "../index.js";
+import { PropertyKey } from "../../global/index.js";
 
 Vitest.describe("[runtime] Table.pick", () => {
   Vitest.it("should be defined", () => {
@@ -92,8 +92,18 @@ Vitest.describe("[runtime] Table.pick", () => {
     Vitest.it("should work with curried form - reusable picker", () => {
       const pickIdAndName = Table.pick(["id", "name"] as const);
 
-      const user1 = { id: 1, name: "John", email: "john@test.com", active: true };
-      const user2 = { id: 2, name: "Jane", email: "jane@test.com", active: false };
+      const user1 = {
+        id: 1,
+        name: "John",
+        email: "john@test.com",
+        active: true,
+      };
+      const user2 = {
+        id: 2,
+        name: "Jane",
+        email: "jane@test.com",
+        active: false,
+      };
 
       const result1 = pickIdAndName(user1);
       const result2 = pickIdAndName(user2);
@@ -158,7 +168,12 @@ Vitest.describe("[runtime] Table.pick", () => {
         },
       ];
 
-      const getPublicInfo = Table.pick(["id", "name", "price", "inStock"] as const);
+      const getPublicInfo = Table.pick([
+        "id",
+        "name",
+        "price",
+        "inStock",
+      ] as const);
       const publicProducts = products.map(getPublicInfo);
 
       Vitest.expect(publicProducts).toEqual([
@@ -217,7 +232,7 @@ Vitest.describe("[types] Table.pick", () => {
 
     // This should be a type error - 'b' was not picked
     // @ts-expect-error - Property 'b' does not exist on type 'Pick<{ a: number; b: string; c: boolean; }, "a" | "c">'
-    const shouldError = result.b;
+    const _shouldError = result.b;
 
     // This should work fine
     const shouldWork = result.a;
@@ -229,7 +244,7 @@ Vitest.describe("[types] Table.pick", () => {
 
     // This should be a type error - 'd' doesn't exist in input
     // @ts-expect-error - Argument of type '"d"' is not assignable to parameter of type 'keyof { a: number; b: number; c: number; }'
-    const shouldError = Table.pick(input, ["a", "d"]);
+    const _shouldError = Table.pick(input, ["a", "d"]);
   });
 
   Vitest.it("should handle duplicate keys in type system", () => {
@@ -258,10 +273,13 @@ Vitest.describe("[types] Table.pick", () => {
 
     const publicInfo = Table.pick(user, ["id", "name"]);
 
-    Vitest.expectTypeOf(publicInfo).toEqualTypeOf<{ id: number; name: string }>();
+    Vitest.expectTypeOf(publicInfo).toEqualTypeOf<{
+      id: number;
+      name: string;
+    }>();
 
     // This should be a type error
     // @ts-expect-error - Property 'email' does not exist on type 'Pick<User, "id" | "name">'
-    const shouldError = publicInfo.email;
+    const _shouldError = publicInfo.email;
   });
 });

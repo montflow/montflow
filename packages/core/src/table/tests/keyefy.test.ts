@@ -7,12 +7,15 @@ Vitest.describe("[runtime] Table.keyefy", () => {
     Vitest.expect(Table.keyefy).toBeDefined();
   });
 
-  Vitest.it("should return a string always for the same simple input struct", () => {
-    const struct = { a: 1, b: "hello", c: true };
-    const key = Table.keyefy(struct);
+  Vitest.it(
+    "should return a string always for the same simple input struct",
+    () => {
+      const struct = { a: 1, b: "hello", c: true };
+      const key = Table.keyefy(struct);
 
-    Vitest.expect(typeof key).toBe("string");
-  });
+      Vitest.expect(typeof key).toBe("string");
+    }
+  );
 
   Vitest.it("should return the same string for the same input always", () => {
     const struct = { a: 1, b: "hello", c: true };

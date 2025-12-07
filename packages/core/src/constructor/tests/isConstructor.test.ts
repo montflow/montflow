@@ -12,10 +12,13 @@ Vitest.describe("[runtime] Constructor.isConstructor", () => {
     Vitest.expect(Constructor.isConstructor(TestClass)).toBe(true);
   });
 
-  Vitest.it("should return true for function constructors with proper prototype", () => {
-    function TestFunction() {}
-    Vitest.expect(Constructor.isConstructor(TestFunction)).toBe(true);
-  });
+  Vitest.it(
+    "should return true for function constructors with proper prototype",
+    () => {
+      function TestFunction() {}
+      Vitest.expect(Constructor.isConstructor(TestFunction)).toBe(true);
+    }
+  );
 
   Vitest.it("should return true for built-in constructors", () => {
     Vitest.expect(Constructor.isConstructor(Array)).toBe(true);
@@ -33,19 +36,25 @@ Vitest.describe("[runtime] Constructor.isConstructor", () => {
     Vitest.expect(Constructor.isConstructor(arrowFunction)).toBe(false);
   });
 
-  Vitest.it("should return false for callable objects without proper prototype", () => {
-    // Create a callable object that doesn't have proper prototype structure
-    const callableObject = Object.assign(() => {}, {
-      prototype: undefined,
-    });
-    Vitest.expect(Constructor.isConstructor(callableObject)).toBe(false);
-  });
+  Vitest.it(
+    "should return false for callable objects without proper prototype",
+    () => {
+      // Create a callable object that doesn't have proper prototype structure
+      const callableObject = Object.assign(() => {}, {
+        prototype: undefined,
+      });
+      Vitest.expect(Constructor.isConstructor(callableObject)).toBe(false);
+    }
+  );
 
-  Vitest.it("should return false for functions with prototype but wrong constructor", () => {
-    const fn = function () {};
-    fn.prototype = { constructor: function () {} };
-    Vitest.expect(Constructor.isConstructor(fn)).toBe(false);
-  });
+  Vitest.it(
+    "should return false for functions with prototype but wrong constructor",
+    () => {
+      const fn = function () {};
+      fn.prototype = { constructor: function () {} };
+      Vitest.expect(Constructor.isConstructor(fn)).toBe(false);
+    }
+  );
 
   Vitest.it("should return false for non-callable values", () => {
     Vitest.expect(Constructor.isConstructor(null)).toBe(false);
@@ -70,7 +79,9 @@ Vitest.describe("[runtime] Constructor.isConstructor", () => {
 
   Vitest.it("should return false for async generator functions", () => {
     async function* asyncGeneratorFunction() {}
-    Vitest.expect(Constructor.isConstructor(asyncGeneratorFunction)).toBe(false);
+    Vitest.expect(Constructor.isConstructor(asyncGeneratorFunction)).toBe(
+      false
+    );
   });
 
   Vitest.it("should return false for bound functions", () => {
@@ -136,16 +147,23 @@ Vitest.describe("[types] Constructor.isConstructor", () => {
     const value: unknown = TestClass;
 
     if (Constructor.isConstructor<TestClass, [string]>(value)) {
-      Vitest.expectTypeOf(value).toEqualTypeOf<Constructor.Constructor<TestClass, [string]>>();
+      Vitest.expectTypeOf(value).toEqualTypeOf<
+        Constructor.Constructor<TestClass, [string]>
+      >();
     }
   });
 
-  Vitest.it("should preserve constructor type when passed known constructor", () => {
-    class TestClass {}
-    const ctor: Constructor.Constructor<TestClass, []> = TestClass;
+  Vitest.it(
+    "should preserve constructor type when passed known constructor",
+    () => {
+      class TestClass {}
+      const ctor: Constructor.Constructor<TestClass, []> = TestClass;
 
-    if (Constructor.isConstructor(ctor)) {
-      Vitest.expectTypeOf(ctor).toEqualTypeOf<Constructor.Constructor<TestClass, []>>();
+      if (Constructor.isConstructor(ctor)) {
+        Vitest.expectTypeOf(ctor).toEqualTypeOf<
+          Constructor.Constructor<TestClass, []>
+        >();
+      }
     }
-  });
+  );
 });

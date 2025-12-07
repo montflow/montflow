@@ -7,7 +7,7 @@
 export const capitalize = (str: string) =>
   str
     .split(" ")
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
 
 /**
@@ -18,7 +18,8 @@ export const capitalize = (str: string) =>
  *
  * @todo testing
  */
-export const isString = (thing: unknown): thing is string => typeof thing === "string";
+export const isString = (thing: unknown): thing is string =>
+  typeof thing === "string";
 
 /**
  * Utility type to assert if a string is empty.
@@ -48,7 +49,8 @@ export type IsNotEmpty<T extends string> = T extends "" ? false : true;
  *
  * @todo testing
  */
-export type HasSpaces<T extends string> = T extends `${infer _} ${infer _}` ? true : false;
+export type HasSpaces<T extends string> =
+  T extends `${infer _} ${infer _}` ? true : false;
 
 /**
  * Checks if a string is empty.

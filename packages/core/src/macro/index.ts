@@ -1,7 +1,7 @@
 import * as Constructor from "../constructor/index.js";
 import * as Function from "../function/index.js";
-import { Evaluable, Struct } from "../global/index.js";
 import * as Text from "../text/index.js";
+import { Evaluable, Struct } from "../global/index.js";
 
 /**
  * Executes a function that takes no arguments and returns its result.
@@ -29,7 +29,10 @@ export const cast = <T>(x: unknown): T => x as T;
 const _singletons: Struct<string, Constructor.Any | Function.Maker.Any> = {};
 
 /** @internal */
-const _onces: Struct<string, { hasRun: boolean; result: any; fn: Function.Callable }> = {};
+const _onces: Struct<
+  string,
+  { hasRun: boolean; result: any; fn: Function.Callable }
+> = {};
 
 /**
  * @todo documentation
@@ -153,7 +156,11 @@ export const once: {
     fn: TFunction,
     ...args: Parameters<TFunction>
   ): () => ReturnType<TFunction>;
-} = <TFunction extends Function.Callable>(id: string, fn: TFunction, ...args: any[]): any => {
+} = <TFunction extends Function.Callable>(
+  id: string,
+  fn: TFunction,
+  ...args: any[]
+): any => {
   if (_onces[id]) {
     throw panic(new OnceAlreadyExistsError(id));
   }
@@ -319,7 +326,10 @@ export namespace Dualify {
  *
  * @copyright major credit to [`effect/Function.ts`](https://github.com/Effect-TS/effect/blob/main/packages/effect/src/Function.ts)
  */
-export const dualify = <Explicit extends Function.Callable, Curried extends Function.Callable>(
+export const dualify = <
+  Explicit extends Function.Callable,
+  Curried extends Function.Callable,
+>(
   arity: number,
   body: Explicit,
   options?: Dualify.Options
@@ -364,7 +374,9 @@ export const dualify = <Explicit extends Function.Callable, Curried extends Func
 
         case arity + 1: {
           const first = args[0];
-          return opts.isSelf(first) ? body(...args) : (self: unknown) => body(self, ...args);
+          return opts.isSelf(first) ?
+              body(...args)
+            : (self: unknown) => body(self, ...args);
         }
 
         case arity + 2: {
@@ -381,13 +393,16 @@ export const dualify = <Explicit extends Function.Callable, Curried extends Func
   switch (arity) {
     case 0: {
       return ((...args) =>
-        args.length !== 0 ? body(...args) : (self: unknown) => body(self)) as Explicit &
-        Curried;
+        args.length !== 0 ?
+          body(...args)
+        : (self: unknown) => body(self)) as Explicit & Curried;
     }
 
     default: {
       return ((...args) => {
-        return args.length > arity ? body(...args) : (self: unknown) => body(self, ...args);
+        return args.length > arity ?
+            body(...args)
+          : (self: unknown) => body(self, ...args);
       }) as Explicit & Curried;
     }
   }
@@ -401,7 +416,10 @@ export const dualify = <Explicit extends Function.Callable, Curried extends Func
  *
  * @todo testing
  */
-export const assert = (condition: Evaluable<boolean>, error?: Error | string) => {
+export const assert = (
+  condition: Evaluable<boolean>,
+  error?: Error | string
+) => {
   if (!evaluate(condition)) {
     throw panic(error ?? "Assertion failed");
   }

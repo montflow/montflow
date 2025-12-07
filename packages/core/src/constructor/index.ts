@@ -86,7 +86,12 @@ export type Ternary<TInstance, A, B, C> = new (a: A, b: B, c: C) => TInstance;
  * @returns constructor signature with the given instance and argument types
  *
  */
-export type Quaternary<TInstance, A, B, C, D> = new (a: A, b: B, c: C, d: D) => TInstance;
+export type Quaternary<TInstance, A, B, C, D> = new (
+  a: A,
+  b: B,
+  c: C,
+  d: D
+) => TInstance;
 
 /**
  * Constructor that takes five arguments
@@ -99,7 +104,13 @@ export type Quaternary<TInstance, A, B, C, D> = new (a: A, b: B, c: C, d: D) => 
  * @template E fifth argument type
  * @returns constructor signature with the given instance and argument types
  */
-export type Quinary<TInstance, A, B, C, D, E> = new (a: A, b: B, c: C, d: D, e: E) => TInstance;
+export type Quinary<TInstance, A, B, C, D, E> = new (
+  a: A,
+  b: B,
+  c: C,
+  d: D,
+  e: E
+) => TInstance;
 
 /**
  * Constructor that takes six arguments
@@ -227,7 +238,7 @@ export const isConstructor: {
 } = (thing: unknown): thing is Constructor<unknown, readonly unknown[]> => {
   if (!Function.isCallable(thing)) return false;
 
-  if (thing.prototype && thing.prototype.constructor === thing) {
+  if (thing.prototype?.constructor === thing) {
     return true;
   }
 

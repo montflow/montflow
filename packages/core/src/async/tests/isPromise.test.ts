@@ -8,7 +8,7 @@ Vitest.describe("[runtime] Async.isPromise", () => {
   });
 
   Vitest.it("should return true for a Promise instance", () => {
-    const promise = new Promise(resolve => resolve(true));
+    const promise = new Promise((resolve) => resolve(true));
     Vitest.expect(Async.isPromise(promise)).toBe(true);
   });
 
@@ -48,24 +48,30 @@ Vitest.describe("[runtime] Async.isPromise", () => {
     Vitest.expect(Async.isPromise(str)).toBe(false);
   });
 
-  Vitest.it("should return true for a Promise resolved with a value", async () => {
-    const promise = Promise.resolve("test");
-    Vitest.expect(Async.isPromise(promise)).toBe(true);
+  Vitest.it(
+    "should return true for a Promise resolved with a value",
+    async () => {
+      const promise = Promise.resolve("test");
+      Vitest.expect(Async.isPromise(promise)).toBe(true);
 
-    const result = await promise;
-    Vitest.expect(result).toBe("test");
-  });
-
-  Vitest.it("should return true for a Promise rejected with a value", async () => {
-    const promise = Promise.reject(new Error("test"));
-    Vitest.expect(Async.isPromise(promise)).toBe(true);
-
-    try {
-      await promise;
-    } catch (error) {
-      Vitest.expect((error as Error).message).toBe("test");
+      const result = await promise;
+      Vitest.expect(result).toBe("test");
     }
-  });
+  );
+
+  Vitest.it(
+    "should return true for a Promise rejected with a value",
+    async () => {
+      const promise = Promise.reject(new Error("test"));
+      Vitest.expect(Async.isPromise(promise)).toBe(true);
+
+      try {
+        await promise;
+      } catch (error) {
+        Vitest.expect((error as Error).message).toBe("test");
+      }
+    }
+  );
 });
 
 Vitest.describe("[types] Async.isPromise", () => {

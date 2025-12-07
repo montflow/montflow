@@ -48,11 +48,14 @@ Vitest.describe("[runtime] Numeric.isMultiple", () => {
       Vitest.expect(Numeric.isMultiple(9, 2.5)).toBe(false);
     });
 
-    Vitest.it("should return false when of is zero and self is non-zero", () => {
-      Vitest.expect(Numeric.isMultiple(5, 0)).toBe(false);
-      Vitest.expect(Numeric.isMultiple(10, 0)).toBe(false);
-      Vitest.expect(Numeric.isMultiple(-3, 0)).toBe(false);
-    });
+    Vitest.it(
+      "should return false when of is zero and self is non-zero",
+      () => {
+        Vitest.expect(Numeric.isMultiple(5, 0)).toBe(false);
+        Vitest.expect(Numeric.isMultiple(10, 0)).toBe(false);
+        Vitest.expect(Numeric.isMultiple(-3, 0)).toBe(false);
+      }
+    );
   });
 
   Vitest.describe("curried usage", () => {
@@ -162,4 +165,3 @@ Vitest.describe("[types] Numeric.isMultiple", () => {
     Vitest.expectTypeOf(curriedFn).toEqualTypeOf<(self: number) => boolean>();
   });
 });
-

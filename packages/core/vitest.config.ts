@@ -6,10 +6,5 @@ export default defineConfig({
     globals: true,
     isolate: false,
     pool: "threads",
-    poolOptions: {
-      forks: {
-        isolate: false,
-      },
-    },
   },
 });

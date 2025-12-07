@@ -55,7 +55,7 @@ Vitest.describe.concurrent("[runtime] Async.withMinimumDuration", () => {
       const expectedValue = "delayed result";
 
       const fn = async () => {
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, 300));
         return expectedValue;
       };
 
@@ -69,16 +69,21 @@ Vitest.describe.concurrent("[runtime] Async.withMinimumDuration", () => {
     }
   );
 
-  Vitest.it.concurrent("should reject if the provided promise rejects", async () => {
-    const duration = 200;
-    const errorMessage = "error occurred";
+  Vitest.it.concurrent(
+    "should reject if the provided promise rejects",
+    async () => {
+      const duration = 200;
+      const errorMessage = "error occurred";
 
-    const fn = async () => {
-      throw new Error(errorMessage);
-    };
+      const fn = async () => {
+        throw new Error(errorMessage);
+      };
 
-    await Vitest.expect(Async.withMinimumDuration(duration, fn)).rejects.toThrow(errorMessage);
-  });
+      await Vitest.expect(
+        Async.withMinimumDuration(duration, fn)
+      ).rejects.toThrow(errorMessage);
+    }
+  );
 
   Vitest.it.concurrent(
     "should enforce the delay even when the promise resolves immediately",

@@ -39,13 +39,16 @@ Vitest.describe("[types] List.isArray", () => {
     }
   });
 
-  Vitest.it("should infer array item type as unknown if thing is unknown", () => {
-    const array: unknown = null;
+  Vitest.it(
+    "should infer array item type as unknown if thing is unknown",
+    () => {
+      const array: unknown = null;
 
-    if (List.isArray(array)) {
-      type Test = typeof array;
-      type Expected = Array<unknown>;
-      Vitest.expectTypeOf<Test>().toEqualTypeOf<Expected>();
+      if (List.isArray(array)) {
+        type Test = typeof array;
+        type Expected = Array<unknown>;
+        Vitest.expectTypeOf<Test>().toEqualTypeOf<Expected>();
+      }
     }
-  });
+  );
 });

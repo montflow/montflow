@@ -7,20 +7,28 @@ Vitest.describe("[runtime] Text.capitalize", () => {
     Vitest.expect(Text.capitalize).toBeDefined();
   });
 
-  Vitest.it("should capitalize the first letter of each word in a single word string", () => {
-    Vitest.expect(Text.capitalize("hello")).toBe("Hello");
-  });
+  Vitest.it(
+    "should capitalize the first letter of each word in a single word string",
+    () => {
+      Vitest.expect(Text.capitalize("hello")).toBe("Hello");
+    }
+  );
 
-  Vitest.it("should capitalize the first letter of each word in a multi-word string", () => {
-    Vitest.expect(Text.capitalize("hello world")).toBe("Hello World");
-  });
+  Vitest.it(
+    "should capitalize the first letter of each word in a multi-word string",
+    () => {
+      Vitest.expect(Text.capitalize("hello world")).toBe("Hello World");
+    }
+  );
 
   Vitest.it("should handle strings with mixed casing correctly", () => {
     Vitest.expect(Text.capitalize("hElLo WoRLd")).toBe("Hello World");
   });
 
   Vitest.it("should handle strings with extra spaces", () => {
-    Vitest.expect(Text.capitalize("   hello   world   ")).toBe("   Hello   World   ");
+    Vitest.expect(Text.capitalize("   hello   world   ")).toBe(
+      "   Hello   World   "
+    );
   });
 
   Vitest.it("should return an empty string if input is empty", () => {

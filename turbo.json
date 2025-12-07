@@ -2,10 +2,44 @@
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "test": {
-      "outputs": []
+      "cache": true,
+      "dependsOn": [
+        "^build"
+      ]
     },
-    "checktypes": {
-      "outputs": []
+    "ts:check": {
+      "cache": true,
+      "dependsOn": []
+    },
+    "typecheck": {
+      "cache": true,
+      "dependsOn": []
+    },
+    "format:check": {
+      "cache": true,
+      "dependsOn": []
+    },
+    "format:fix": {
+      "cache": false,
+      "dependsOn": []
+    },
+    "lint:check": {
+      "cache": true,
+      "dependsOn": []
+    },
+    "lint:fix": {
+      "cache": false,
+      "dependsOn": []
+    },
+    "build": {
+      "cache": true,
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "build/**",
+        "dist/**"
+      ]
     }
   }
 }

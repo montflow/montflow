@@ -595,6 +595,6 @@ export const make: {
   ): TOutput;
 } = (input: any, ...operators: Function.Callable[]): any => {
   let value = Function.isCallable(input) ? input() : input;
-  for (let procedure of operators) value = procedure(value);
+  for (const procedure of operators) value = procedure(value);
   return value;
 };

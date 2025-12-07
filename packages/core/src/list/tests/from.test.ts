@@ -47,7 +47,7 @@ Vitest.describe.concurrent("[runtime] List.from", () => {
   });
 
   Vitest.it.concurrent("should work with mapping function", () => {
-    const result = List.from([1, 2, 3], x => x * 2);
+    const result = List.from([1, 2, 3], (x) => x * 2);
     Vitest.expect(result).toEqual([2, 4, 6]);
   });
 

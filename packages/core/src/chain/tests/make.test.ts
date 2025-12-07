@@ -24,12 +24,15 @@ Vitest.describe("[runtime] Chain.make", () => {
     Vitest.expect(result).toBe(10);
   });
 
-  Vitest.it("should handle nullary input with one transformation operator", () => {
-    const getValue = () => 3;
-    const triple = (x: number) => x * 3;
-    const result = Chain.make(getValue, triple);
-    Vitest.expect(result).toBe(9);
-  });
+  Vitest.it(
+    "should handle nullary input with one transformation operator",
+    () => {
+      const getValue = () => 3;
+      const triple = (x: number) => x * 3;
+      const result = Chain.make(getValue, triple);
+      Vitest.expect(result).toBe(9);
+    }
+  );
 
   Vitest.it("should handle input with two transformation operators", () => {
     const double = (x: number) => x * 2;
@@ -300,13 +303,16 @@ Vitest.describe("[types] Chain.make", () => {
     Vitest.expectTypeOf(result).toEqualTypeOf<number>();
   });
 
-  Vitest.it("should infer correct return type for three transformations", () => {
-    const toString = (n: number): string => n.toString();
-    const getLength = (s: string): number => s.length;
-    const isEven = (n: number): boolean => n % 2 === 0;
-    const result = Chain.make(42, toString, getLength, isEven);
-    Vitest.expectTypeOf(result).toEqualTypeOf<boolean>();
-  });
+  Vitest.it(
+    "should infer correct return type for three transformations",
+    () => {
+      const toString = (n: number): string => n.toString();
+      const getLength = (s: string): number => s.length;
+      const isEven = (n: number): boolean => n % 2 === 0;
+      const result = Chain.make(42, toString, getLength, isEven);
+      Vitest.expectTypeOf(result).toEqualTypeOf<boolean>();
+    }
+  );
 
   Vitest.it("should infer correct return type for complex type chain", () => {
     const numbers: number[] = [1, 2, 3];

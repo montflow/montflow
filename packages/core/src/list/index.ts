@@ -1,9 +1,9 @@
 import * as Chain from "../chain/index.js";
 import * as Function from "../function/index.js";
-import { Evaluable, Missing } from "../global/index.js";
 import * as Macro from "../macro/index.js";
 import * as Maybe from "../maybe/index.js";
 import * as Numeric from "../numeric/index.js";
+import { Evaluable, Missing } from "../global/index.js";
 
 /**
  * Utility type for array with at least one element
@@ -15,7 +15,8 @@ export type NotEmpty<T> = [T, ...T[]];
 export namespace NotEmpty {
   export type Any = NotEmpty<any>;
 
-  export type Value<TArray extends Any> = TArray extends NotEmpty<infer T> ? T : never;
+  export type Value<TArray extends Any> =
+    TArray extends NotEmpty<infer T> ? T : never;
 }
 
 /**
@@ -23,7 +24,7 @@ export namespace NotEmpty {
  *
  * @template T The type of the elements in the array
  */
-export type Empty<T = unknown> = [];
+export type Empty<_T = unknown> = [];
 
 /**
  * Utility type for array with any type
@@ -45,7 +46,8 @@ export type Unknown = Array<unknown>;
  * @template TArray The type of the array
  * @returns The value type of the array
  */
-export type Values<TArray extends Any> = TArray extends Array<infer T> ? T : never;
+export type Values<TArray extends Any> =
+  TArray extends Array<infer T> ? T : never;
 
 /**
  * Utility function to check if a value is an array
@@ -53,7 +55,8 @@ export type Values<TArray extends Any> = TArray extends Array<infer T> ? T : nev
  * @param thing The value to check
  * @returns True if the value is an array, false otherwise
  */
-export const isArray = (thing: unknown): thing is Array<unknown> => Array.isArray(thing);
+export const isArray = (thing: unknown): thing is Array<unknown> =>
+  Array.isArray(thing);
 
 /**
  * Utility function to check if every value is an array of a specific type
@@ -77,7 +80,8 @@ export const isArrayOf: {
  * @param array The array to check
  * @returns True if the array is not empty, false otherwise
  */
-export const isNotEmpty = <T>(array: Array<T>): array is NotEmpty<T> => array.length > 0;
+export const isNotEmpty = <T>(array: Array<T>): array is NotEmpty<T> =>
+  array.length > 0;
 
 /**
  * Utility function to check if an array is empty
@@ -104,9 +108,9 @@ export const maybeGet: {
   1,
   <T>(self: Array<T>, index: number): Maybe.Maybe<T> =>
     (
-      isNotEmpty(self) &&
-      Numeric.isInt(index) &&
-      Numeric.isBetween(index, { min: 0, max: self.length - 1 })
+      isNotEmpty(self)
+      && Numeric.isInt(index)
+      && Numeric.isBetween(index, { min: 0, max: self.length - 1 })
     ) ?
       Maybe.some(self[index])
     : Maybe.none()
@@ -162,7 +166,8 @@ export const filled = <T>(length: number, value: Evaluable<T>): Array<T> =>
  */
 export const first = <TArray extends Any>(
   array: TArray
-): TArray extends NotEmpty.Any ? Values<TArray> : Values<TArray> | Missing => array[0];
+): TArray extends NotEmpty.Any ? Values<TArray> : Values<TArray> | Missing =>
+  array[0];
 
 /**
  * Checks if the first element of the array exists, if so Some<T> otherwise None
@@ -172,7 +177,8 @@ export const first = <TArray extends Any>(
  *
  * @todo testing
  */
-export const maybeFirst = <T>(array: Array<T>): Maybe.Maybe<T> => maybeGet(array, 0);
+export const maybeFirst = <T>(array: Array<T>): Maybe.Maybe<T> =>
+  maybeGet(array, 0);
 
 /**
  * Get the last index of an array
@@ -229,7 +235,8 @@ export const maybeLast = <T>(array: Array<T>): Maybe.Maybe<T> =>
  *
  * @todo testing
  */
-export const isLastIndex = (array: Any, index: number): boolean => index === array.length - 1;
+export const isLastIndex = (array: Any, index: number): boolean =>
+  index === array.length - 1;
 
 /**
  * Checks if the element is the last element of the array
@@ -246,7 +253,7 @@ export const isLast: {
 } = Macro.dualify(1, <T>(self: Array<T>, element: T): boolean =>
   Chain.make(
     maybeLast(self),
-    Maybe.map(last => last === element),
+    Maybe.map((last) => last === element),
     Maybe.orElse(false)
   )
 );

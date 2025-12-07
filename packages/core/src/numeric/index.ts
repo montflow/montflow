@@ -161,8 +161,8 @@ export const isBetween: {
     }
 
     return (
-      (inclusive.min === false ? self > min : self >= min) &&
-      (inclusive.max === false ? self < max : self <= max)
+      (inclusive.min === false ? self > min : self >= min)
+      && (inclusive.max === false ? self < max : self <= max)
     );
   },
   { withTail: true, isSelf: isNumber }

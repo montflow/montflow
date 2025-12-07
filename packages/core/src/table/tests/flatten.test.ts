@@ -105,16 +105,27 @@ Vitest.describe("[types] Table.flatten", () => {
     Vitest.expectTypeOf(result).toEqualTypeOf<{ a: 1; "b.x": 10 }>();
   });
 
-  Vitest.it("should produce correct types for objects with numeric keys", () => {
-    const obj = { a: 1, b: { 1: 10, 2: false } } as const;
-    const result = Table.flatten(obj);
-    Vitest.expectTypeOf(result).toEqualTypeOf<{ a: 1; "b.1": 10; "b.2": false }>();
-  });
+  Vitest.it(
+    "should produce correct types for objects with numeric keys",
+    () => {
+      const obj = { a: 1, b: { 1: 10, 2: false } } as const;
+      const result = Table.flatten(obj);
+      Vitest.expectTypeOf(result).toEqualTypeOf<{
+        a: 1;
+        "b.1": 10;
+        "b.2": false;
+      }>();
+    }
+  );
 
   Vitest.it("should produce correct types for arrays", () => {
     const obj = { c: [1, 2, 3] } as const;
     const result = Table.flatten(obj);
-    Vitest.expectTypeOf(result).toEqualTypeOf<{ "c.0": 1; "c.1": 2; "c.2": 3 }>();
+    Vitest.expectTypeOf(result).toEqualTypeOf<{
+      "c.0": 1;
+      "c.1": 2;
+      "c.2": 3;
+    }>();
   });
 
   Vitest.it("should produce correct types for mixed structures", () => {
@@ -144,13 +155,21 @@ Vitest.describe("[types] Table.Flatten", () => {
   Vitest.it("should flatten nested object types", () => {
     type Input = { a: 1; b: { x: 10; y: false } };
     type Output = Table.Flatten<Input>;
-    Vitest.expectTypeOf<Output>().toEqualTypeOf<{ a: 1; "b.x": 10; "b.y": false }>();
+    Vitest.expectTypeOf<Output>().toEqualTypeOf<{
+      a: 1;
+      "b.x": 10;
+      "b.y": false;
+    }>();
   });
 
   Vitest.it("should flatten tuple types with numeric indices", () => {
     type Input = { c: readonly [1, 2, 3] };
     type Output = Table.Flatten<Input>;
-    Vitest.expectTypeOf<Output>().toEqualTypeOf<{ "c.0": 1; "c.1": 2; "c.2": 3 }>();
+    Vitest.expectTypeOf<Output>().toEqualTypeOf<{
+      "c.0": 1;
+      "c.1": 2;
+      "c.2": 3;
+    }>();
   });
 
   Vitest.it("should exclude array methods from flattened types", () => {

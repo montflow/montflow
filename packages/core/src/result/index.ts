@@ -1,11 +1,11 @@
 import * as Alias from "../alias/index.js";
 import * as Domain from "../domain/index.js";
 import * as Function from "../function/index.js";
-import { Evaluable, Sync } from "../global/index.js";
 import * as Macro from "../macro/index.js";
 import * as Maybe from "../maybe/index.js";
 import * as Numeric from "../numeric/index.js";
 import * as Table from "../table/index.js";
+import { Evaluable, Sync } from "../global/index.js";
 
 /**
  * Unique domain identifier for the Result algebraic data type.
@@ -98,7 +98,8 @@ export type Unknown = Result<unknown, unknown>;
  * @template TResult input `Result` type
  * @returns inner `Ok` value type
  */
-export type Value<TResult extends Any> = TResult extends Ok<infer V> ? V : never;
+export type Value<TResult extends Any> =
+  TResult extends Ok<infer V> ? V : never;
 
 /**
  * Extracts the inner `Err` type
@@ -106,7 +107,8 @@ export type Value<TResult extends Any> = TResult extends Ok<infer V> ? V : never
  * @template TResult any `Result`
  * @returns inner `Err` type
  */
-export type Error<TResult extends Any> = TResult extends Err<infer E> ? E : never;
+export type Error<TResult extends Any> =
+  TResult extends Err<infer E> ? E : never;
 
 /**
  * Unwraps nested `Result` type once
@@ -148,7 +150,10 @@ export type InfiniteUnfold<Root extends Any> =
  *
  * @todo testing
  */
-export type Unfold<Root extends Any, Limit extends number = typeof MAX_UNFOLD_DEPTH> =
+export type Unfold<
+  Root extends Any,
+  Limit extends number = typeof MAX_UNFOLD_DEPTH,
+> =
   Limit extends 0 ? Root
   : [Root] extends [Result<infer RootOk, infer RootErr>] ?
     [RootOk] extends [Result<infer NestedOk, infer NestedErr>] ?
@@ -222,7 +227,10 @@ export const err: {
  */
 const _try: {
   <V>($try: Sync<V>): Result<V, unknown>;
-  <V, E>(branches: { try: () => V; catch: (error: unknown) => E }): Result<V, E>;
+  <V, E>(branches: {
+    try: () => V;
+    catch: (error: unknown) => E;
+  }): Result<V, E>;
 } = Macro.cast(
   <V, E = unknown>(
     $tryOrBranches: Sync<V> | { try: Sync<V>; catch: (error: unknown) => E }
@@ -262,11 +270,11 @@ export const isOk: {
   <V>(result: Result<V, any>): result is Ok<V>;
   (thing: unknown): thing is Ok<unknown>;
 } = (thing: unknown): thing is Ok<unknown> =>
-  Table.isObject(thing) &&
-  Table.hasKeys(thing, [Domain.Id, Domain.Tag, "value"]) &&
-  Table.size(thing) === 3 &&
-  thing[Domain.Id] === Id &&
-  thing[Domain.Tag] === OkTag;
+  Table.isObject(thing)
+  && Table.hasKeys(thing, [Domain.Id, Domain.Tag, "value"])
+  && Table.size(thing) === 3
+  && thing[Domain.Id] === Id
+  && thing[Domain.Tag] === OkTag;
 
 /**
  * Returns `true` if the given value is an `Err` variant.
@@ -281,11 +289,11 @@ export const isErr: {
   <E>(result: Result<any, E>): result is Err<E>;
   (thing: unknown): thing is Err<unknown>;
 } = (thing: unknown): thing is Err<unknown> =>
-  Table.isObject(thing) &&
-  Table.hasKeys(thing, [Domain.Id, Domain.Tag, "error"]) &&
-  Table.size(thing) === 3 &&
-  thing[Domain.Id] === Id &&
-  thing[Domain.Tag] === ErrTag;
+  Table.isObject(thing)
+  && Table.hasKeys(thing, [Domain.Id, Domain.Tag, "error"])
+  && Table.size(thing) === 3
+  && thing[Domain.Id] === Id
+  && thing[Domain.Tag] === ErrTag;
 
 /**
  * Returns `true` if the given value is a `Result` (`Ok` or `Err`).
@@ -370,10 +378,17 @@ export const tapErr: {
  * @todo testing
  */
 export const map: {
-  <V, E, TTo>(mapper: Function.Mapper<V, TTo>): (self: Result<V, E>) => Result<TTo, E>;
-  <V, E, TTo>(self: Result<V, E>, mapper: Function.Mapper<V, TTo>): Result<TTo, E>;
-} = Macro.dualify(1, <V, E, TTo>(self: Result<V, E>, mapper: Function.Mapper<V, TTo>) =>
-  isOk(self) ? ok(mapper(self.value)) : self
+  <V, E, TTo>(
+    mapper: Function.Mapper<V, TTo>
+  ): (self: Result<V, E>) => Result<TTo, E>;
+  <V, E, TTo>(
+    self: Result<V, E>,
+    mapper: Function.Mapper<V, TTo>
+  ): Result<TTo, E>;
+} = Macro.dualify(
+  1,
+  <V, E, TTo>(self: Result<V, E>, mapper: Function.Mapper<V, TTo>) =>
+    isOk(self) ? ok(mapper(self.value)) : self
 );
 
 /**
@@ -388,10 +403,14 @@ export const map: {
  * @todo testing
  */
 export const mapErr: {
-  <V, E, TTo>(mapper: (error: E) => TTo): (self: Result<V, E>) => Result<V, TTo>;
+  <V, E, TTo>(
+    mapper: (error: E) => TTo
+  ): (self: Result<V, E>) => Result<V, TTo>;
   <V, E, TTo>(self: Result<V, E>, mapper: (error: E) => TTo): Result<V, TTo>;
-} = Macro.dualify(1, <V, E, TTo>(self: Result<V, E>, mapper: (error: E) => TTo) =>
-  isErr(self) ? err(mapper(self.error)) : self
+} = Macro.dualify(
+  1,
+  <V, E, TTo>(self: Result<V, E>, mapper: (error: E) => TTo) =>
+    isErr(self) ? err(mapper(self.error)) : self
 );
 
 /**
@@ -409,10 +428,12 @@ export const orElse: {
   <V, E>(self: Result<V, E>, fn: (error: E) => V): V;
   <V>(value: V): (self: Result<V, any>) => V;
   <V>(self: Result<V, any>, value: V): V;
-} = Macro.dualify(1, <V, E>(self: Result<V, E>, fnOrValue: ((error: E) => V) | V) =>
-  isOk(self) ? self.value
-  : Function.isFunction(fnOrValue) ? fnOrValue(self.error)
-  : fnOrValue
+} = Macro.dualify(
+  1,
+  <V, E>(self: Result<V, E>, fnOrValue: ((error: E) => V) | V) =>
+    isOk(self) ? self.value
+    : Function.isFunction(fnOrValue) ? fnOrValue(self.error)
+    : fnOrValue
 );
 
 /**
@@ -488,8 +509,10 @@ export const flatmap: {
   ): Result<TToV, E | TToE>;
 } = Macro.dualify(
   1,
-  <V, E, TToV, TToE>(self: Result<V, E>, mapper: (ok: V) => Result<TToV, TToE>) =>
-    isOk(self) ? (mapper(self.value) as Result<TToV, E | TToE>) : self
+  <V, E, TToV, TToE>(
+    self: Result<V, E>,
+    mapper: (ok: V) => Result<TToV, TToE>
+  ) => (isOk(self) ? (mapper(self.value) as Result<TToV, E | TToE>) : self)
 );
 
 /**

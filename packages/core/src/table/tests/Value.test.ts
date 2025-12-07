@@ -20,12 +20,15 @@ Vitest.describe("[types] Table.Value", () => {
     Vitest.expectTypeOf<Three>().toMatchTypeOf<Input["three"]>();
   });
 
-  Vitest.it("should throw compiler error when provided with invalid property", () => {
-    type Input = { one: string; two: "2"; three: boolean };
+  Vitest.it(
+    "should throw compiler error when provided with invalid property",
+    () => {
+      type Input = { one: string; two: "2"; three: boolean };
 
-    // @ts-expect-error
-    type Test = Table.Value<Input, "four">;
-  });
+      // @ts-expect-error
+      type _Test = Table.Value<Input, "four">;
+    }
+  );
 
   Vitest.it("should correctly infer type for generic objects", () => {
     type Input = Record<string, number>;

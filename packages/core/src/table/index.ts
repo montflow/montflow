@@ -1,13 +1,15 @@
-import { Simplify, Struct } from "../global/index.js";
 import * as List from "../list/index.js";
 import * as Macro from "../macro/index.js";
+import { Simplify, Struct } from "../global/index.js";
 
 /**
  * Utility type to make a property optional.
  *
  * @todo testing
  */
-export type Optional<T, K extends keyof T> = Simplify<Omit<T, K> & Partial<Pick<T, K>>>;
+export type Optional<T, K extends keyof T> = Simplify<
+  Omit<T, K> & Partial<Pick<T, K>>
+>;
 
 /**
  * Extracts the value type for a given key from a dictionary.
@@ -22,7 +24,8 @@ export type Value<TInput extends Struct, K extends keyof TInput> = TInput[K];
  *
  * @template {Struct} TInput
  */
-export type Keys<TInput extends Struct> = TInput extends Struct<infer K, any> ? K : never;
+export type Keys<TInput extends Struct> =
+  TInput extends Struct<infer K, any> ? K : never;
 
 /**
  * Asserts if an object is empty.
@@ -128,7 +131,7 @@ export const hasKeys: {
     self: T,
     keys: readonly K[]
   ): self is T & { [P in K]: Exclude<T[P], undefined> } =>
-    keys.every(key => key in self && self[key] !== undefined)
+    keys.every((key) => key in self && self[key] !== undefined)
 );
 
 /**
@@ -140,7 +143,8 @@ export const hasKeys: {
  *
  * @todo testing
  */
-export const values = <const T extends Struct>(input: T) => Object.values(input) as Values<T>[];
+export const values = <const T extends Struct>(input: T) =>
+  Object.values(input) as Values<T>[];
 
 /**
  * Returns possible keys of a table.
@@ -151,7 +155,8 @@ export const values = <const T extends Struct>(input: T) => Object.values(input)
  *
  * @todo testing
  */
-export const keys = <const T extends Struct>(input: T) => Object.keys(input) as Keys<T>[];
+export const keys = <const T extends Struct>(input: T) =>
+  Object.keys(input) as Keys<T>[];
 
 /**
  * Returns the size of a table. (how many keys are in the table)
@@ -257,10 +262,10 @@ export const keyefy = (struct: Struct): string => {
   const result: Record<string, unknown> = {};
 
   const isPrimitive = (value: unknown): boolean =>
-    value === null ||
-    typeof value !== "object" ||
-    value instanceof Date ||
-    value instanceof Function;
+    value === null
+    || typeof value !== "object"
+    || value instanceof Date
+    || value instanceof Function;
 
   const isNumericKey = (key: string): boolean => /^\d+$/.test(key);
 
@@ -287,7 +292,7 @@ export const keyefy = (struct: Struct): string => {
   const flattened = result;
   const sortedKeys = Object.keys(flattened).sort();
 
-  const serializedEntries = sortedKeys.map(key => {
+  const serializedEntries = sortedKeys.map((key) => {
     const value = flattened[key];
 
     // Handle non-serializable values
@@ -343,12 +348,30 @@ type ValidKeys<T> =
  * @todo testing
  */
 export type Flatten<T, TPrefix extends string = ""> =
-  T extends string | number | boolean | null | undefined | symbol | bigint | Function | Date ?
+  T extends (
+    | string
+    | number
+    | boolean
+    | null
+    | undefined
+    | symbol
+    | bigint
+    | Function
+    | Date
+  ) ?
     {}
   : Simplify<
       {
         [K in ValidKeys<T> as T[K] extends (
-          string | number | boolean | null | undefined | symbol | bigint | Function | Date
+          | string
+          | number
+          | boolean
+          | null
+          | undefined
+          | symbol
+          | bigint
+          | Function
+          | Date
         ) ?
           TPrefix extends "" ?
             `${K}`
@@ -356,7 +379,15 @@ export type Flatten<T, TPrefix extends string = ""> =
         : never]: T[K];
       } & ({
         [K in ValidKeys<T>]: T[K] extends (
-          string | number | boolean | null | undefined | symbol | bigint | Function | Date
+          | string
+          | number
+          | boolean
+          | null
+          | undefined
+          | symbol
+          | bigint
+          | Function
+          | Date
         ) ?
           {}
         : Flatten<T[K], TPrefix extends "" ? `${K}` : `${TPrefix}.${K}`>;
@@ -379,14 +410,16 @@ export type Flatten<T, TPrefix extends string = ""> =
  * const flat = flatten(obj);
  * // { a: 1, "b.x": 10, "c.0": 1, "c.1": 2 }
  */
-export const flatten = <const TObject extends object>(struct: TObject): Flatten<TObject> => {
+export const flatten = <const TObject extends object>(
+  struct: TObject
+): Flatten<TObject> => {
   const result: Record<string, unknown> = {};
 
   const isPrimitive = (value: unknown): boolean =>
-    value === null ||
-    typeof value !== "object" ||
-    value instanceof Date ||
-    value instanceof Function;
+    value === null
+    || typeof value !== "object"
+    || value instanceof Date
+    || value instanceof Function;
 
   const isNumericKey = (key: string): boolean => /^\d+$/.test(key);
 

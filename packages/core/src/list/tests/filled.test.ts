@@ -7,11 +7,14 @@ Vitest.describe.concurrent("[runtime] List.filled", () => {
     Vitest.expect(List.filled).toBeDefined();
   });
 
-  Vitest.it.concurrent("should create array with specified length and static value", () => {
-    const result = List.filled(3, "hello");
-    Vitest.expect(result).toEqual(["hello", "hello", "hello"]);
-    Vitest.expect(result.length).toBe(3);
-  });
+  Vitest.it.concurrent(
+    "should create array with specified length and static value",
+    () => {
+      const result = List.filled(3, "hello");
+      Vitest.expect(result).toEqual(["hello", "hello", "hello"]);
+      Vitest.expect(result.length).toBe(3);
+    }
+  );
 
   Vitest.it.concurrent("should create empty array when length is 0", () => {
     const result = List.filled(0, "value");
@@ -39,22 +42,28 @@ Vitest.describe.concurrent("[runtime] List.filled", () => {
     Vitest.expect(typeof result[0]).toBe("number");
   });
 
-  Vitest.it.concurrent("should work with function values that return different types", () => {
-    let counter = 0;
-    const result = List.filled(3, () => ++counter);
+  Vitest.it.concurrent(
+    "should work with function values that return different types",
+    () => {
+      let counter = 0;
+      const result = List.filled(3, () => ++counter);
 
-    Vitest.expect(result).toEqual([1, 2, 3]);
-  });
+      Vitest.expect(result).toEqual([1, 2, 3]);
+    }
+  );
 
-  Vitest.it.concurrent("should work with function values returning objects", () => {
-    let id = 0;
-    const result = List.filled(2, () => ({ id: ++id, name: `item${id}` }));
+  Vitest.it.concurrent(
+    "should work with function values returning objects",
+    () => {
+      let id = 0;
+      const result = List.filled(2, () => ({ id: ++id, name: `item${id}` }));
 
-    Vitest.expect(result).toEqual([
-      { id: 1, name: "item1" },
-      { id: 2, name: "item2" },
-    ]);
-  });
+      Vitest.expect(result).toEqual([
+        { id: 1, name: "item1" },
+        { id: 2, name: "item2" },
+      ]);
+    }
+  );
 
   Vitest.it.concurrent("should handle null and undefined values", () => {
     const nullArray = List.filled(2, null);
@@ -76,7 +85,7 @@ Vitest.describe.concurrent("[runtime] List.filled", () => {
     const result = List.filled(1000, "x");
 
     Vitest.expect(result.length).toBe(1000);
-    Vitest.expect(result.every(item => item === "x")).toBe(true);
+    Vitest.expect(result.every((item) => item === "x")).toBe(true);
   });
 });
 

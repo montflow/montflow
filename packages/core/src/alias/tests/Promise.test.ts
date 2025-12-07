@@ -18,9 +18,15 @@ Vitest.describe("[types] Alias.Promise", () => {
     type NumberPromise = Alias.Promise<number>;
     type ObjectPromise = Alias.Promise<{ foo: string }>;
 
-    Vitest.expectTypeOf<StringPromise>().toEqualTypeOf<globalThis.Promise<string>>();
-    Vitest.expectTypeOf<NumberPromise>().toEqualTypeOf<globalThis.Promise<number>>();
-    Vitest.expectTypeOf<ObjectPromise>().toEqualTypeOf<globalThis.Promise<{ foo: string }>>();
+    Vitest.expectTypeOf<StringPromise>().toEqualTypeOf<
+      globalThis.Promise<string>
+    >();
+    Vitest.expectTypeOf<NumberPromise>().toEqualTypeOf<
+      globalThis.Promise<number>
+    >();
+    Vitest.expectTypeOf<ObjectPromise>().toEqualTypeOf<
+      globalThis.Promise<{ foo: string }>
+    >();
   });
 
   Vitest.it("should preserve Promise methods and properties", () => {

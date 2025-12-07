@@ -1,7 +1,7 @@
 import * as Vitest from "vitest";
 
-import { Evaluable } from "../../global/index.js";
 import * as Macro from "../index.js";
+import { Evaluable } from "../../global/index.js";
 
 Vitest.describe("[runtime] Macro.evaluate", () => {
   Vitest.it("should be defined", () => {

@@ -11,7 +11,9 @@ export type PropertyKey = keyof any;
  * @template V The value type (default: `any`).
  * @see PropertyKey
  */
-export type Dictionary<K extends PropertyKey = PropertyKey, V = any> = { [P in K]?: V };
+export type Dictionary<K extends PropertyKey = PropertyKey, V = any> = {
+  [P in K]?: V;
+};
 
 /**
  * A dictionary type with required keys of type `K` and values of type `V`.

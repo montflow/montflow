@@ -1,4 +1,4 @@
-import type * as Function from "../function/index.js";
+import type * as _Function from "../function/index.js";
 
 /**
  * @alias {@link Function.Lazy}

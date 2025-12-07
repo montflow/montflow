@@ -14,7 +14,9 @@ Vitest.describe("[runtime] Macro.OnceAlreadyExistsError", () => {
 
   Vitest.it("should have correct message", () => {
     const error = new Macro.OnceAlreadyExistsError("test-id");
-    Vitest.expect(error.message).toBe("Once function with id test-id already exists");
+    Vitest.expect(error.message).toBe(
+      "Once function with id test-id already exists"
+    );
   });
 });
 
@@ -24,4 +26,3 @@ Vitest.describe("[types] Macro.OnceAlreadyExistsError", () => {
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
 });
-

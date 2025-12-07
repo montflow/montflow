@@ -11,8 +11,12 @@ Vitest.describe("[runtime] Numeric.isInt", () => {
     Vitest.expect(Numeric.isInt(0)).toBe(true);
     Vitest.expect(Numeric.isInt(42)).toBe(true);
     Vitest.expect(Numeric.isInt(-1)).toBe(true);
-    Vitest.expect(Numeric.isInt(Numeric.Constructor.MAX_SAFE_INTEGER)).toBe(true);
-    Vitest.expect(Numeric.isInt(Numeric.Constructor.MIN_SAFE_INTEGER)).toBe(true);
+    Vitest.expect(Numeric.isInt(Numeric.Constructor.MAX_SAFE_INTEGER)).toBe(
+      true
+    );
+    Vitest.expect(Numeric.isInt(Numeric.Constructor.MIN_SAFE_INTEGER)).toBe(
+      true
+    );
   });
 
   Vitest.it("should return false for non-integer numbers", () => {

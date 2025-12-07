@@ -15,12 +15,15 @@ Vitest.describe("[runtime] Numeric.isDivisor", () => {
       Vitest.expect(Numeric.isDivisor(7, 49)).toBe(true);
     });
 
-    Vitest.it("should return false when self does not divide evenly into by", () => {
-      Vitest.expect(Numeric.isDivisor(4, 9)).toBe(false);
-      Vitest.expect(Numeric.isDivisor(3, 10)).toBe(false);
-      Vitest.expect(Numeric.isDivisor(6, 25)).toBe(false);
-      Vitest.expect(Numeric.isDivisor(8, 49)).toBe(false);
-    });
+    Vitest.it(
+      "should return false when self does not divide evenly into by",
+      () => {
+        Vitest.expect(Numeric.isDivisor(4, 9)).toBe(false);
+        Vitest.expect(Numeric.isDivisor(3, 10)).toBe(false);
+        Vitest.expect(Numeric.isDivisor(6, 25)).toBe(false);
+        Vitest.expect(Numeric.isDivisor(8, 49)).toBe(false);
+      }
+    );
 
     Vitest.it("should return true when self equals by", () => {
       Vitest.expect(Numeric.isDivisor(5, 5)).toBe(true);
@@ -48,11 +51,14 @@ Vitest.describe("[runtime] Numeric.isDivisor", () => {
       Vitest.expect(Numeric.isDivisor(2.5, 9)).toBe(false);
     });
 
-    Vitest.it("should return false when self is zero and by is non-zero", () => {
-      Vitest.expect(Numeric.isDivisor(0, 5)).toBe(false);
-      Vitest.expect(Numeric.isDivisor(0, 10)).toBe(false);
-      Vitest.expect(Numeric.isDivisor(0, -3)).toBe(false);
-    });
+    Vitest.it(
+      "should return false when self is zero and by is non-zero",
+      () => {
+        Vitest.expect(Numeric.isDivisor(0, 5)).toBe(false);
+        Vitest.expect(Numeric.isDivisor(0, 10)).toBe(false);
+        Vitest.expect(Numeric.isDivisor(0, -3)).toBe(false);
+      }
+    );
   });
 
   Vitest.describe("curried usage", () => {
@@ -162,4 +168,3 @@ Vitest.describe("[types] Numeric.isDivisor", () => {
     Vitest.expectTypeOf(curriedFn).toEqualTypeOf<(self: number) => boolean>();
   });
 });
-

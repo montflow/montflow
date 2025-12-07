@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import * as Macro from "..";
 import { Mapper } from "../../function";
 
@@ -29,9 +30,11 @@ describe("Macro.dualify [runtime]", () => {
       const operator: {
         (self: number, fn: Mapper<number, number>): number;
         (fn: Mapper<number, number>): (self: number) => number;
-      } = Macro.dualify(1, (self: number, fn: Mapper<number, number>) => fn(self));
+      } = Macro.dualify(1, (self: number, fn: Mapper<number, number>) =>
+        fn(self)
+      );
 
-      const mapper: Mapper<number, number> = x => x * 2;
+      const mapper: Mapper<number, number> = (x) => x * 2;
       const input = 10;
       const expected = mapper(input);
 
@@ -49,15 +52,23 @@ describe("Macro.dualify [runtime]", () => {
 
     it("should correctly handle 2 arity (with no tail)", () => {
       const operator: {
-        (self: number, f: Mapper<number, number>, g: Mapper<number, number>): number;
-        (f: Mapper<number, number>, g: Mapper<number, number>): (self: number) => number;
+        (
+          self: number,
+          f: Mapper<number, number>,
+          g: Mapper<number, number>
+        ): number;
+        (
+          f: Mapper<number, number>,
+          g: Mapper<number, number>
+        ): (self: number) => number;
       } = Macro.dualify(
         2,
-        (self: number, f: Mapper<number, number>, g: Mapper<number, number>) => g(f(self))
+        (self: number, f: Mapper<number, number>, g: Mapper<number, number>) =>
+          g(f(self))
       );
 
-      const f: Mapper<number, number> = x => x + 5;
-      const g: Mapper<number, number> = y => y * 2;
+      const f: Mapper<number, number> = (x) => x + 5;
+      const g: Mapper<number, number> = (y) => y * 2;
 
       const input = 4;
       const expected = g(f(input));
@@ -120,7 +131,7 @@ describe("Macro.dualify [runtime]", () => {
         { withTail: true, isSelf }
       );
 
-      const mapper: Mapper<number, number> = x => x * 2;
+      const mapper: Mapper<number, number> = (x) => x * 2;
       const input = 10;
       const tail = "apply";
       const expected = mapper(input);
@@ -152,15 +163,20 @@ describe("Macro.dualify [runtime]", () => {
         ): (self: number) => number;
       } = Macro.dualify(
         2,
-        (self: number, f: Mapper<number, number>, g: Mapper<number, number>, tail: string) => {
+        (
+          self: number,
+          f: Mapper<number, number>,
+          g: Mapper<number, number>,
+          tail: string
+        ) => {
           if (tail === "compose") return g(f(self));
           return self;
         },
         { withTail: true, isSelf }
       );
 
-      const f: Mapper<number, number> = x => x + 5;
-      const g: Mapper<number, number> = y => y * 2;
+      const f: Mapper<number, number> = (x) => x + 5;
+      const g: Mapper<number, number> = (y) => y * 2;
       const input = 4;
       const tail = "compose";
       const expected = g(f(input));

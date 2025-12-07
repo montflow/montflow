@@ -35,7 +35,9 @@ export namespace Operator {
    * @template TInput input type
    * @template TOutput expected output type
    */
-  export type Async<TInput, TOutput = TInput> = (input: TInput) => Promise<TOutput>;
+  export type Async<TInput, TOutput = TInput> = (
+    input: TInput
+  ) => Promise<TOutput>;
 }
 
 /**
@@ -111,7 +113,9 @@ export type Tapper<TInput> = Unary<TInput, void>;
  * @template TInstance the instance type
  * @template TArgs the arguments type
  */
-export type Maker<TInstance, TArgs extends readonly any[]> = (...args: TArgs) => TInstance;
+export type Maker<TInstance, TArgs extends readonly any[]> = (
+  ...args: TArgs
+) => TInstance;
 
 export namespace Maker {
   /**

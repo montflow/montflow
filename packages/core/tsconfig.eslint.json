@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "allowJs": true
+  },
+  "include": [
+    "./src/**/*",
+    "./**/*.test.ts",
+    "./**/*.config.*",
+    "./**/*.config.js",
+    "./.prettierrc.*",
+    "./eslint.config.*",
+    "./vitest.config.*"
+  ],
+  "exclude": ["build/**", "node_modules/**"]
+}
