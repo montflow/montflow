@@ -1,7 +1,8 @@
 ---
 name: using-git-worktrees
 description: Use starting feature work needs isolation from current workspace or before executing implementation plans - ensures isolated workspace exists via native tools or git worktree fallback
-version: 1.2.0
+id: f0a3ce02dd486fc5
+version: 1.3.0
 dependencies:
   - executing-skills
 groups:

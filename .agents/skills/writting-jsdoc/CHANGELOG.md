@@ -1,16 +1,5 @@
-# Changelog
-
-## [1.0.1] - 2026-07-09
+## [1.1.0] - 2026-07-24
 
 ### Added
 
-- Added `executing-skills` as required dependency in frontmatter
-- Added prerequisite alert after "When To Use" referencing executing-skills
-
-## [1.0.0] - 2026-07-08
-
-### Added
-
-- Initial release of writting-jsdoc
-- JSDoc annotation generation for TypeScript functions, methods, interfaces, types, and classes
-- Core rules enforcement (no type annotations, @description first, concise style)
+- Added required `id` field to frontmatter

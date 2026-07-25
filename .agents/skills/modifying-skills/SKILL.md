@@ -1,8 +1,9 @@
 ---
 name: modifying-skills
 description: Modifies, updates, extends, or audits existing skills in .agents/skills/. Use when the user wants to edit an existing skill, add content to a skill, audit a skill for quality, or update skill metadata.
+id: cb9ed8fd8e9b253a
 author: Daniel
-version: 1.0.2
+version: 1.1.0
 license: MIT
 groups:
   - skills

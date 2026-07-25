@@ -1,8 +1,9 @@
 ---
 name: applying-solid
 description: Reviews object-oriented code against all 5 SOLID principles, detecting violations and suggesting corrections. Use when designing new classes/modules or refactoring existing ones.
+id: e940c20f60e797b6
 author: Daniel Montilla
-version: 1.0.1
+version: 1.1.0
 license: MIT
 dependencies:
   - executing-skills

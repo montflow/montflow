@@ -1,8 +1,9 @@
 ---
 name: leaving-it-cleaner
 description: Prompts incremental code hygiene improvements whenever touching a file. Use during any edit, bugfix, or feature work — leave the campground cleaner than before.
+id: 091c24672a97b057
 author: Daniel Montilla
-version: 1.0.1
+version: 1.1.0
 license: MIT
 dependencies:
   - executing-skills

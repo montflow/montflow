@@ -1,8 +1,9 @@
 ---
 name: addressing-adversarial-review
 description: Resolves findings in an adversarial-review report file by applying fixes, incrementing a per-finding attempt counter, and appending to the shared Discussion thread — coordinating with the reviewer across fix→re-review loops. Use after adversarial-review has written a review file at `.agents/reviews/<name>/<code>.md` and the user wants to address its findings.
+id: ad1f945c1a0624a3
 author: Daniel Montilla
-version: 1.0.0
+version: 1.1.0
 license: MIT
 dependencies:
   - executing-skills

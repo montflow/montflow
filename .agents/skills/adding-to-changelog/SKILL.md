@@ -1,8 +1,9 @@
 ---
 name: adding-to-changelog
 description: Adds brief, compressed changelog entries following Keep a Changelog + SemVer. Creates CHANGELOG.md if missing. Handles unreleased, new version, or last-version targets. Compresses entries via caveman-compression. Outputs ADHD-friendly format. Use when user asks to update, add to, or maintain a CHANGELOG.md.
+id: 698329d5f0e855f4
 author: Daniel Montilla
-version: 1.0.0
+version: 1.1.0
 license: MIT
 dependencies:
   - executing-skills

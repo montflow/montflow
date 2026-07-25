@@ -1,8 +1,9 @@
 ---
 name: creating-effect-services
 description: Scaffolds Effect v4 services with ServiceMap.Service pattern. Use when creating a new service in packages/*/src/services/.
+id: 8a7c50b11c6c17df
 author: Daniel Montilla
-version: 1.0.1
+version: 1.1.0
 dependencies:
   - executing-skills
   - creating-typescript-modules

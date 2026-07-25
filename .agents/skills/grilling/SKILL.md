@@ -1,8 +1,9 @@
 ---
 name: grilling
 description: Grill the user relentlessly about a plan or design. Use when the user wants to stress-test a plan before building, or uses any 'grill' trigger phrases.
+id: a93398a427265102
 author: Matt Pocock
-version: 1.0.0
+version: 1.1.0
 groups:
   - planning
 ---

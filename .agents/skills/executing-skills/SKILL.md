@@ -1,8 +1,9 @@
 ---
 name: executing-skills
 description: Loads, executes, and verifies skills from .agents/skills/. Use when the user's request matches an existing skill's description or when instructed to use a specific skill.
+id: 4a214a52249a2ba9
 author: Daniel Montilla
-version: 1.0.0
+version: 1.1.0
 license: MIT
 groups:
   - skills

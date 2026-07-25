@@ -1,8 +1,9 @@
 ---
 name: adversarial-review-feature-spec
 description: Audits feature specifications (FEATURE.md, TASK.md, MEMORY.md, GATES.md) for completeness, correctness, and consistency and writes the report to a file under `.agents/reviews/`. Use when reviewing a feature spec during or after authoring. Pair with addressing-adversarial-review to resolve findings across fix→re-review loops. For code/PR/diff reviews, see adversarial-review.
+id: e675df1f0e8d82a2
 author: Daniel Montilla
-version: 2.0.0
+version: 2.1.0
 license: MIT
 dependencies:
   - adversarial-review

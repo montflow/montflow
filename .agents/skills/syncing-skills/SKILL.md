@@ -1,8 +1,9 @@
 ---
 name: syncing-skills
 description: Syncs skills from this repo into a target project's .agents/skills/. Manages fresh syncs and updates with version comparison, changelog preservation, and parallel subagent orchestration. Use when the user wants to sync, update, or upgrade skills to another project.
+id: 2eb6346337a80569
 author: Daniel Montilla
-version: 2.0.0
+version: 2.1.0
 license: MIT
 dependencies:
   - executing-skills

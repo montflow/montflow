@@ -1,8 +1,9 @@
 ---
 name: setup-typescript-package
 description: Scaffolds TypeScript monorepo packages and services with consistent tooling, tsdown bundling, linting, formatting, and typechecking. Use when setting up a new package or service in a monorepo.
+id: 6f46456868d6a664
 author: Daniel Montilla
-version: 1.0.1
+version: 1.1.0
 license: MIT
 dependencies:
   - executing-skills

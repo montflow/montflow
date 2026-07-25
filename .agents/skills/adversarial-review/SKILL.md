@@ -1,8 +1,9 @@
 ---
 name: adversarial-review
 description: Performs a hostile, bug-hunting code review that assumes the author made mistakes. Surfaces possible bugs, edge cases, security holes, missed refactors, missing tests, and documentation gaps, and writes the report to a file under `.agents/reviews/`. Use when reviewing code, PRs, or diffs before merge. Pair with addressing-adversarial-review to resolve findings across fix→re-review loops. For feature-spec auditing, see adversarial-review-feature-spec.
+id: 714e99f0430c9637
 author: Daniel Montilla
-version: 3.0.0
+version: 3.1.0
 license: MIT
 dependencies:
   - executing-skills

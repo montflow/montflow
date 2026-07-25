@@ -1,8 +1,9 @@
 ---
 name: authoring-rules
 description: Creates and maintains agent rules and system prompts. Use when the user wants to create, improve, or audit agent rules, system prompts, or context files.
+id: 6d908225e321916f
 author: Daniel Montilla
-version: 1.0.1
+version: 1.1.0
 license: MIT
 dependencies:
   - executing-skills

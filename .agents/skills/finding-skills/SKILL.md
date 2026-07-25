@@ -1,8 +1,9 @@
 ---
 name: finding-skills
 description: Discovers and surfaces available skills matching user requests. Use when the user asks "what skills do you have", "how do I do X", or wants to find a skill for a specific task.
+id: ed431fe5f6f7a06b
 author: Daniel Montilla
-version: 1.0.1
+version: 1.1.0
 license: MIT
 dependencies:
   - executing-skills

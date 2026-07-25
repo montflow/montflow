@@ -1,8 +1,9 @@
 ---
 name: effect-v4
 description: Opinionated guide for building production TypeScript applications with Effect v4. Use when implementing Effect workflows, services, layers, schemas, configuration, schedules, caches, streams, HTTP clients, or tests.
+id: 2cbd8dc04db51c18
 author: Kit Langton <kit@kitlangton.com>
-version: 1.0.0
+version: 1.1.0
 license: MIT
 dependencies:
   - executing-skills

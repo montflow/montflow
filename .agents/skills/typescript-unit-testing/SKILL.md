@@ -1,8 +1,9 @@
 ---
 name: typescript-unit-testing
 description: TypeScript-specific test infrastructure, directory structure, Vitest configuration, and test-running validation. Depends on unit-testing for language-agnostic fundamentals. Use when setting up tests in a TypeScript monorepo.
+id: c56ff98212899a0d
 author: Daniel Montilla
-version: 1.2.0
+version: 1.3.0
 license: MIT
 groups:
   - testing

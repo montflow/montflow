@@ -1,8 +1,9 @@
 ---
 name: unit-testing
 description: Language-agnostic test quality fundamentals. Probes whether tests test real behavior or just mocks, evaluates test structure, and identifies missing coverage. Use when writing or reviewing tests in any language.
+id: 8a481f053eb630ca
 author: Daniel Montilla
-version: 1.0.0
+version: 1.1.0
 license: MIT
 groups:
   - testing

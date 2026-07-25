@@ -1,8 +1,9 @@
 ---
 name: i-have-adhd
 description: Shapes output for a reader with ADHD — leads with the next action, numbers multi-step work, restates state across turns, suppresses tangents, gives specific time estimates, makes wins visible. Use when the user has ADHD or wants direct, action-oriented responses without preamble.
+id: 903eb21976831dfc
 author: ayghri
-version: 1.0.0
+version: 1.1.0
 dependencies:
   - executing-skills
 groups:

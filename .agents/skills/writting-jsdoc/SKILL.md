@@ -1,8 +1,9 @@
 ---
 name: writting-jsdoc
 description: Generates concise JSDoc annotations for TypeScript functions, methods, interfaces, and classes. Use when the user asks to add, improve, or generate JSDoc documentation for TypeScript code.
+id: bf5631ed38f491b1
 author: Daniel Montilla
-version: 1.0.1
+version: 1.1.0
 dependencies:
   - executing-skills
 groups:

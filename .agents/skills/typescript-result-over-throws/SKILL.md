@@ -1,8 +1,9 @@
 ---
 name: typescript-result-over-throws
 description: Enforces a Result-over-throws error-handling convention for TypeScript functions — prefer returning a typed `Result` from @montflow/core over throwing exceptions. Use when writing, reviewing, or refactoring TypeScript functions that can fail, and want guidance on modeling errors as values rather than exceptions.
+id: 9f190fba46881cce
 author: Daniel
-version: 1.0.0
+version: 1.1.0
 license: MIT
 groups:
   - typescript

@@ -1,8 +1,9 @@
 ---
 name: executing-feature-spec
 description: Executes feature spec tasks — orchestrates by type (exploratory, execution, planning, interruptor, defect, review) with human-in-the-loop phase interruptions, independent-subagent adversarial reviews, and flat defect resolution. Reads feature state to determine active phase and resumes or begins execution accordingly.
+id: 29c259e62e9928f5
 author: Daniel Montilla
-version: 1.4.0
+version: 1.5.0
 license: MIT
 groups:
   - skills

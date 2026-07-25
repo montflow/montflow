@@ -1,8 +1,9 @@
 ---
 name: finding-references
 description: Finds, explores, and reports on third-party reference source code cloned into the project. Use when the user wants to examine reference code, find a specific reference package, or understand available reference dependencies.
+id: e0b85938c06a1fe9
 author: Daniel Montilla
-version: 2.1.0
+version: 2.2.0
 license: MIT
 dependencies:
   - executing-skills

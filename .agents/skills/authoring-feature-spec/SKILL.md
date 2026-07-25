@@ -1,8 +1,9 @@
 ---
 name: authoring-feature-spec
 description: Authors a phased feature specification with typed tasks and validation gates. Use when user wants to spec a new feature or rewrite an existing plan in the current workspace.
+id: 1bd32d6bfbe202f4
 author: Daniel Montilla
-version: 3.3.0
+version: 3.4.0
 license: MIT
 dependencies:
   - adversarial-review

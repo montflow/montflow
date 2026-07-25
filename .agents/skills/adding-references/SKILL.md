@@ -1,8 +1,9 @@
 ---
 name: adding-references
 description: Adds and manages third-party reference source code as cloned git repositories. Use when the user wants to add reference source code for local reading or analysis.
+id: e85e16a365fa6115
 author: Daniel Montilla
-version: 2.1.0
+version: 2.2.0
 license: MIT
 dependencies:
   - executing-skills

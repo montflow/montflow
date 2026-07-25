@@ -1,8 +1,9 @@
 ---
 name: typescript-conventions
 description: Index of TypeScript-specific skills in this project — lists short descriptions and paths. Use when deciding which TypeScript skill applies, or as a reference map of available TS tooling.
+id: 19088d58133341e3
 author: Daniel Montilla
-version: 1.0.1
+version: 1.1.0
 license: MIT
 groups:
   - typescript

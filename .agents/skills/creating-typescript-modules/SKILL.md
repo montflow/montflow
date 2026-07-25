@@ -1,8 +1,9 @@
 ---
 name: creating-typescript-modules
 description: Creates tree-shakable TypeScript modules with namespace-style exports. Use when the user wants to scaffold a new reusable module package.
+id: eddcf8fa1555535a
 author: Daniel Montilla
-version: 1.0.1
+version: 1.1.0
 license: MIT
 dependencies:
   - executing-skills

@@ -1,8 +1,9 @@
 ---
 name: simplifying-code
 description: Audits code for over-engineering, unnecessary abstraction, and complexity. Suggests simpler alternatives. Use when a solution feels bloated or during code review.
+id: 0c5e2d8cbfef3a65
 author: Daniel Montilla
-version: 1.0.1
+version: 1.1.0
 license: MIT
 groups:
   - conventions

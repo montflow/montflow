@@ -1,8 +1,9 @@
 ---
 name: caveman-reasoning
 description: Makes the model apply caveman-compression to its own internal reasoning/thinking traces while solving problems — strips stop words and grammatical scaffolding from thoughts but emits a normal uncompressed final answer. Use on any multi-step, planning, debugging, analysis, or design task where internal reasoning is needed before the final output.
+id: ac8af137ebda6af4
 author: Daniel Montilla
-version: 1.0.0
+version: 1.1.0
 license: MIT
 dependencies:
   - executing-skills

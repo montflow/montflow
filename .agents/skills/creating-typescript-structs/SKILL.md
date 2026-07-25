@@ -1,8 +1,9 @@
 ---
 name: creating-typescript-structs
 description: Creates branded struct modules with validation, blueprint, and brand utilities in the structs folder. Use when creating a new branded type in packages/*/src/structs/.
+id: 85949992ca0d93e8
 author: Daniel Montilla
-version: 1.0.1
+version: 1.1.0
 dependencies:
   - executing-skills
   - creating-typescript-modules

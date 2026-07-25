@@ -1,8 +1,9 @@
 ---
 name: planning-git-commits
 description: Creates a commit plan with conventional commits based on file paths. Use when the user wants to push or commit changes to git.
+id: 508488c5515645f2
 author: Daniel Montilla
-version: 1.1.0
+version: 1.2.0
 license: MIT
 dependencies:
   - executing-skills

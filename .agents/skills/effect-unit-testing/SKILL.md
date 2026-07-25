@@ -1,8 +1,9 @@
 ---
 name: effect-unit-testing
 description: Effect-specific testing patterns and infrastructure for Effect v4 monorepo packages. Depends on unit-testing and typescript-unit-testing for fundamentals and TS infrastructure. Use when testing Effect services, layers, streams, or schedules.
+id: 9448fed6cfb5845e
 author: Daniel Montilla
-version: 1.2.0
+version: 1.3.0
 license: MIT
 groups:
   - effect

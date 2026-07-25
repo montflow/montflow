@@ -1,11 +1,5 @@
-# Changelog
-
-## [1.0.0] - 2026-07-22
+## [1.1.0] - 2026-07-24
 
 ### Added
 
-- Initial release
-- Language-agnostic test quality fundamentals
-- Test quality probing pipeline
-- Test structure verification principles
-- Coverage gap identification guidance
+- Added required `id` field to frontmatter

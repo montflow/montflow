@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.4.0] - 2026-07-24
+
+### Added
+
+- Added required `id` field to frontmatter
+
 ## [3.3.0] - 2026-07-18
 
 ### Added

@@ -1,8 +1,9 @@
 ---
 name: caveman-compression
 description: Aggressively removes stop words and grammatical scaffolding while preserving meaning. Use when user asks to compress, shorten, simplify, or caveman-style reduce text.
+id: f14987d309411fea
 author: Daniel Montilla
-version: 1.1.0
+version: 1.2.0
 license: MIT
 dependencies:
   - executing-skills

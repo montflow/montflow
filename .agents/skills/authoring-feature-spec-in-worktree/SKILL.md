@@ -1,8 +1,9 @@
 ---
 name: authoring-feature-spec-in-worktree
 description: Authors a phased feature specification with workspace isolation via git worktrees. Wraps authoring-feature-spec with worktree creation, initialization, and relocation. Use when user wants to spec a new feature with an isolated git worktree.
+id: 81d26538004b0249
 author: Daniel Montilla
-version: 1.0.2
+version: 1.1.0
 license: MIT
 dependencies:
   - authoring-feature-spec
