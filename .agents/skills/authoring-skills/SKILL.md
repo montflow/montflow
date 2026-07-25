@@ -1,8 +1,9 @@
 ---
 name: authoring-skills
 description: Guides the creation, formatting, and refinement of Skills. Use when the user wants to write a new Skill, convert documentation into a Skill, or audit an existing Skill.
+id: b186a4a0ab10373c
 author: Daniel Montilla
-version: 1.1.2
+version: 1.2.0
 license: MIT
 dependencies:
   - executing-skills
@@ -49,6 +50,7 @@ Write the YAML frontmatter. All fields below are required:
 | ------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
 | `name`        | 1–64 chars, lowercase alphanumeric + single hyphens only. Must match directory name. Regex: `^[a-z0-9]+(-[a-z0-9]+)*$` | Unique identifier                |
 | `description` | 1–1024 chars, third person, include when to use                                                                        | Helps agent decide when to apply |
+| `id`          | Exactly 16 lowercase hex chars. Generated via `SCRIPTS/generate-skill-id.sh`                                           | Immutable unique ID for cross-referencing |
 | `author`      | Name of person or team maintaining the skill                                                                           | Attribution and ownership        |
 | `version`     | [SemVer](https://semver.org) string, starting at `1.0.0`                                                               | Track changes over time          |
 
@@ -70,10 +72,19 @@ Include trigger terms users would naturally say.
 ---
 name: skill-name
 description: What this skill does and when to use it
+id: a1b2c3d4e5f6a7b8
 author: Your Name
 version: 1.0.0
 ---
 ```
+
+Generate the `id` by running:
+
+```bash
+SCRIPTS/generate-skill-id.sh
+```
+
+This outputs a 16-character hex string. Paste it into the `id` field. The ID is **immutable** — once set, never change it, as other skills may reference this ID.
 
 ### Create CHANGELOG.md
 

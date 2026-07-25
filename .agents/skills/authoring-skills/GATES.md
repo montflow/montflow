@@ -15,8 +15,9 @@
 - [ ] `name` follows the pattern: lowercase alphanumeric + single hyphens, 1–64 chars
 - [ ] `description` is third person and includes when to use
 - [ ] `author` is present
+- [ ] `id` is present and is exactly 16 lowercase hex characters (regex: `^[0-9a-f]{16}$`)
 - [ ] `version` is present, starts at `1.0.0`, follows SemVer
-- [ ] No unknown or extra fields in frontmatter
+- [ ] No unknown or extra fields in frontmatter (known: `name`, `description`, `id`, `author`, `version`, `license`, `dependencies`, `groups`)
 
 ## Phase 3: Content Quality
 

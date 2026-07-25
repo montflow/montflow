@@ -1,6 +1,7 @@
 ---
 name: [gerund-action-name]
 description: [Third-person description of what it does and WHEN to use it. Max 1024 chars.]
+id: [16-char hex — run SCRIPTS/generate-skill-id.sh to generate]
 author: [Your Name or Team]
 version: 1.0.0
 dependencies:

@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.0] - 2026-07-24
+
+### Added
+
+- Added required `id` field to frontmatter — 16-char hex, generated via `SCRIPTS/generate-skill-id.sh`
+- Created `SCRIPTS/generate-skill-id.sh` for generating unique skill IDs
+- Updated template SKILL.md with `id` placeholder
+- Updated GATES.md to validate `id` field
+
 ## [1.1.2] - 2026-07-14
 
 ### Changed
