@@ -10,11 +10,12 @@
  *   1. Summary at EOF, no `z` in body (the canonical F15 case).
  *   2. Summary at EOF, body containing a `z` (must not truncate at the `z`).
  *   3. Summary followed by another `## ` heading (e.g. `## Reviewer Verdict`).
- *   4. No Summary block at all (returns null → loop keeps iterating).
+ *   4. No Summary block at all (returns none → loop keeps iterating).
  */
 
 import { test, expect } from 'vitest';
-import { parseSummaryText, isAllTerminal } from '../parse-summary.js';
+import { Option } from 'effect';
+import { parseSummaryText, isAllTerminal } from '../parse-summary';
 
 const fixtureAllTerminalNoZ = `# Adversarial Review: x
 
@@ -77,40 +78,43 @@ const fixtureNoSummary = `# Adversarial Review: x
 `;
 
 test('parseSummaryText: Summary at EOF with no z in body returns full counts (F15 canonical case)', () => {
-  const s = parseSummaryText(fixtureAllTerminalNoZ);
-  expect(s).toBeTruthy();
-  expect(s.open).toBe(0);
-  expect(s.inReview).toBe(0);
-  expect(s.resolved).toBe(1);
-  expect(s.wontFix).toBe(0);
-  expect(s.escalated).toBe(0);
-  expect(isAllTerminal(s)).toBe(true);
+  const summary = parseSummaryText(fixtureAllTerminalNoZ);
+  expect(Option.isSome(summary)).toBe(true);
+  if (Option.isNone(summary)) return;
+  expect(summary.value.open).toBe(0);
+  expect(summary.value.inReview).toBe(0);
+  expect(summary.value.resolved).toBe(1);
+  expect(summary.value.wontFix).toBe(0);
+  expect(summary.value.escalated).toBe(0);
+  expect(isAllTerminal(summary)).toBe(true);
 });
 
 test('parseSummaryText: body containing z is not truncated at the z (F15 secondary failure mode)', () => {
-  const s = parseSummaryText(fixtureAllTerminalWithZ);
-  expect(s).toBeTruthy();
-  expect(s.open).toBe(0);
-  expect(s.inReview).toBe(0);
-  expect(s.resolved).toBe(2);
-  expect(s.wontFix).toBe(0);
-  expect(s.escalated).toBe(0);
-  expect(isAllTerminal(s)).toBe(true);
+  const summary = parseSummaryText(fixtureAllTerminalWithZ);
+  expect(Option.isSome(summary)).toBe(true);
+  if (Option.isNone(summary)) return;
+  expect(summary.value.open).toBe(0);
+  expect(summary.value.inReview).toBe(0);
+  expect(summary.value.resolved).toBe(2);
+  expect(summary.value.wontFix).toBe(0);
+  expect(summary.value.escalated).toBe(0);
+  expect(isAllTerminal(summary)).toBe(true);
 });
 
 test('parseSummaryText: Summary followed by ## Reviewer Verdict stops at the next heading', () => {
-  const s = parseSummaryText(fixtureSummaryThenVerdict);
-  expect(s).toBeTruthy();
-  expect(s.open).toBe(1);
-  expect(s.inReview).toBe(0);
-  expect(s.resolved).toBe(13);
-  expect(s.wontFix).toBe(1);
-  expect(s.escalated).toBe(0);
-  expect(isAllTerminal(s)).toBe(false);
+  const summary = parseSummaryText(fixtureSummaryThenVerdict);
+  expect(Option.isSome(summary)).toBe(true);
+  if (Option.isNone(summary)) return;
+  expect(summary.value.open).toBe(1);
+  expect(summary.value.inReview).toBe(0);
+  expect(summary.value.resolved).toBe(13);
+  expect(summary.value.wontFix).toBe(1);
+  expect(summary.value.escalated).toBe(0);
+  expect(isAllTerminal(summary)).toBe(false);
 });
 
-test('parseSummaryText: missing Summary returns null → isAllTerminal false (defensive)', () => {
-  const s = parseSummaryText(fixtureNoSummary);
-  expect(s).toBeNull();
-  expect(isAllTerminal(s)).toBe(false);
+test('parseSummaryText: missing Summary returns none → isAllTerminal false (defensive)', () => {
+  const summary = parseSummaryText(fixtureNoSummary);
+  expect(Option.isNone(summary)).toBe(true);
+  expect(isAllTerminal(summary)).toBe(false);
 });

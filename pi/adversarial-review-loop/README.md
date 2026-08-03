@@ -1,158 +1,174 @@
 # @montflow/adversarial-review-loop
 
-A Pi extension that runs an automated **adversarial review loop** on your codebase. Two agents collaborate in a cycle — reviewer and fixer — communicating through a shared review report file using the **adversarial-review v3 per-finding protocol** (`Status` / `Attempts` / `### Discussion`).
+A Pi extension that runs an automated **adversarial review loop** on your codebase. A **code orchestrator** (not an LLM) drives the cycle: configurable reviewers → (optional supervisor aggregate | hybrid reconciliator) → fixer. Agents write findings/fixes only — they never decide continue/stop/deadlock.
 
-In **standalone mode** (default), the review file lives at `.agents/reviews/<name>/<code>.md`. In **feature-spec mode** (`--feature-spec --spec-name <name>`), the review file lives inside the review task's directory as `REVIEW.md` (e.g., `.agents/features/<name>/A/A099-review-phase/REVIEW.md`).
+Skills ship **inside this package** under `skills/`. The target project does not need to install them.
 
-> **Skill compatibility**: targets `adversarial-review` v3.0.0 (reviewer) and `addressing-adversarial-review` v1.0.0 (fixer). Both skills MUST be present at `.agents/skills/adversarial-review/SKILL.md` and `.agents/skills/addressing-adversarial-review/SKILL.md`.
+In **standalone mode** (default), the review file lives at `.agents/reviews/<name>/<code>.md` with loop state beside it in `.agents/reviews/<name>/<code>/`. In **feature-spec mode** (`--feature-spec --spec-name <name>`), the review file lives inside the review task's directory as `REVIEW.md`.
+
+## Pass + Supervisor
+
+See **[DESIGN-pass-supervisor.md](./DESIGN-pass-supervisor.md)** for the full design.
+
+- **Default:** single `generic` reviewer — **no supervisor** (same as before).
+- **Multi-reviewer** (`--reviewers=security,quality,…`): one persistent **supervisor** per loop briefs specialists, then aggregates scratch into the canonical review.
+- Specialists are **codebase read-only** (`read` / `grep` / `glob` + `write` for scratch).
+- CLI roster flag remains `--reviewers`. Supervisor mode: `--supervisor-mode=on-multi|always|never` (default `on-multi`).
+
+## Bundled skills
+
+| Path | Role |
+|---|---|
+| `skills/adversarial-review/` | Reviewer behavior + report format |
+| `skills/adversarial-review-supervisor/` | Multi-reviewer brief + aggregate |
+| `skills/addressing-adversarial-review/` | Fixer triage / fix / Discussion protocol |
+| `skills/adversarial-review-reconcile/` | Fallback reconciliator when supervisor is `never` |
+| `skills/feature-spec/` | Feature directory layout reference |
+
+Agents spawn with `noSkills: true` and `read` these files by absolute path (`skill-paths.ts`).
 
 ## How it works
 
-The loop is an orchestration shell around the two skills. It does **not** implement review or fix logic itself — it spawns agents that load and follow the skill files as their governing pipeline. The extension owns only three things: skill availability, the cycle/escalation bookkeeping, and the shared file on disk.
-
 ```mermaid
 flowchart TD
-    A["/adversarial-review-loop"] --> B["Skill check<br/>verify adversarial-review +<br/>addressing-adversarial-review present"]
-    B --> RF["resolveReviewFile<br/>reuse highest &lt;code&gt; (re-review)<br/>or +1 / 001 (fresh)"]
-    RF --> R["REVIEWER (heavy, persistent)<br/>Cycle 1: fresh review (Step 8)<br/>Cycle ≥2: re-review (Step 9)"]
-    R --> P["parseSummary(## Summary)"]
-    P --> T{"all terminal?<br/>Open=In Review=<br/>Escalated=0"}
-    T -->|yes| E["DONE"]
-    T -->|only Escalated| H["ESCALATE TO HUMAN"]
-    T -->|no| F["FIXER (cheap, per-cycle)<br/>Loads addressing-adversarial-review,<br/>triages by Status, applies fixes,<br/>runs real typecheck/lint/tests"]
-    F --> G["FIXER updates per-finding:<br/>Attempts++, Status→In Review,<br/>appends [Fixer] turn"]
-    G --> X{"max loops or<br/>2 consecutive failures?"}
-    X -->|yes| H
-    X -->|no| R
+    A["/adversarial-review-loop"] --> B["SkillGate"]
+    B --> C["ResolveContext + config + loop-state"]
+    C --> D{"Open or In Review?"}
+    D -->|no / all-terminal resume| Done["DONE"]
+    D -->|yes| E["Fresh reviewers (roster)"]
+    E --> F["Programmatic merge"]
+    F --> G{"Conflicts + mode=on-conflict?"}
+    G -->|yes| H["LLM reconciliator"]
+    G -->|no| I["Canonical REVIEW"]
+    H --> I
+    I --> J["Deadlock detection"]
+    J --> K{"terminal?"}
+    K -->|fixer| L["Fresh fixer"]
+    L --> D
+    K -->|done/escalated| End["STOP"]
 ```
 
-The reviewer agent is **persistent** (same context across cycles, created once in `createPersistentAgent`) so it remembers prior findings. The fixer agent is **single-use** per cycle (`runAgent`) — a fresh context each pass. Both are spawned with `noSkills: true`; they reference the skill files as *data dependencies* by path and read them fresh every run, so skill updates propagate without a code change (see `runner.js` `createSession`).
+**Default roster:** a single `generic` reviewer. No LLM reconciliator runs unless there are conflicts (hybrid) — and with one reviewer there are none.
 
-## Skills → extension alignment
+## Configuration
 
-The extension is a thin driver. Every substantive rule lives in the skills; the code wires the skills together and enforces the protocol's termination/escalation rules.
+### Default (no flags)
 
-| Concern | Owner | Where |
-|---|---|---|
-| What to hunt, how to write findings, re-review scoping | `adversarial-review` v3 | SKILL.md Steps 1–9, GATES.md Phase 0–4 |
-| How to triage, fix, verify, escalate, format-write | `addressing-adversarial-review` v1 | SKILL.md Steps 1–6, "Fixer↔Reviewer Contract" |
-| Skill presence gate | extension | `index.js:verifySkill` |
-| `<name>/<code>.md` resolution (fresh vs re-review) | extension (mirrors skill Step 0) | `index.js:resolveReviewFile` |
-| Cycle loop, max-loops, consecutive-failure abort | extension | `index.js:handler` while-loop |
-| Termination detection (all-terminal parse) | extension | `parse-summary.js:isAllTerminal` |
-| Reviewer persistence / fixer freshness, skill-as-data | extension | `runner.js` |
-| Per-role prompts + tool grants | extension | `agents.js:REVIEWER_SYSTEM`, `FIXER_SYSTEM`, `TOOLS` |
+Equivalent to:
 
-The protocol's hard role boundaries (who may touch `Attempts`, `Iteration`, `Status`, `### Discussion`) are enforced by the **skills' contract**, not by the extension — the extension only reads `## Summary` to decide stop/continue. See the "Communication via the report file" section for the field-level contract.
-
-## Agents
-
-| Role | Model tier | Tools | Persistence | Job |
-|---|---|---|---|---|
-| **Reviewer** | Heavy (default: `deepseek-v4-pro`) | read, edit, write, grep, glob | Persistent across cycles | Loads `adversarial-review/SKILL.md`. Cycle 1: writes a fresh review file (Step 8) with per-finding `Status: Open`, `Attempts: 0`, empty `### Discussion`. Cycle ≥2: executes Step 9 re-review — reads only the current review file, verifies each `In Review` finding against the actual code (never trusting `[Fixer]` turns as evidence), confirms (`Resolved`) or rejects (`Open`), hunts Steps 2–7 for regressions, bumps `Iteration`, and overwrites the file in place. |
-| **Fixer** | Cheap (default: `deepseek-v4-flash-free`) | read, edit, write, bash, grep, glob | Fresh each cycle | Loads `addressing-adversarial-review/SKILL.md`. Triages by Status. For each `Open` finding: ceiling-checks `Attempts >= Max Attempts` (escalates), applies a minimal fix, increments `Attempts`, verifies with the repo's real checks, sets `Status: In Review` (or leaves `Open` on failure), appends a `[Fixer]` turn to the finding's `### Discussion`, and overwrites the file. `Won't Fix` / `Escalated` do not consume an attempt. |
-
-The reviewer — not the fixer — is the verifier under the skill protocol. The fixer performs *local* verification (typecheck/lint/tests pass) before flipping a finding to `In Review`; the reviewer then confirms the fix in the code on the next cycle. This matches the two-role contract in `adversarial-review` Step 9 and `addressing-adversarial-review` §"The Fixer↔Reviewer Contract".
-
-## Communication via the report file
-
-Reviewer and fixer never talk directly. They coordinate through the shared review file. The field-level ownership is the skill protocol's "Fixer↔Reviewer Contract" — the extension treats the file as opaque and only parses `## Summary`.
-
-```mermaid
-flowchart LR
-    subgraph disk["On Disk — single file, overwritten in place"]
-        FILE["Standalone: `.agents/reviews/&lt;name&gt;/&lt;code&gt;.md`<br/>Feature-spec: `<task-dir>/REVIEW.md`<br/>per-finding: ID, Status, Attempts, ### Discussion"]
-    end
-    REV["REVIEWER<br/>writes findings / re-reviews"] -->|overwrite| FILE
-    FILE -->|read + overwrite| FIX["FIXER<br/>applies fixes, updates per-finding fields"]
+```json
+{
+  "supervisor": {
+    "model": "deepseek-v4-pro",
+    "mode": "on-multi"
+  },
+  "reviewers": [
+    {
+      "id": "generic",
+      "model": "deepseek-v4-pro",
+      "skill": "adversarial-review",
+      "objective": "full adversarial audit"
+    }
+  ],
+  "reconciliator": {
+    "model": "deepseek-v4-pro",
+    "mode": "on-conflict"
+  },
+  "fixer": { "model": "deepseek-v4-flash-free" },
+  "maxLoops": 5,
+  "deadlock": { "flipThreshold": 2, "action": "escalate" }
+}
 ```
 
-- The reviewer overwrites the file in place — same `<code>` across all cycles of one review session (see Step 0 of `adversarial-review`). A fresh `<code>` is only allocated when `--fresh=true` or the directory is empty. `resolveReviewFile` mirrors this: reuse the highest numeric `<code>` for a re-review, else `+1` / `001`.
-- The fixer reads the file, applies fixes, and overwrites it with updated `Attempts` / `Status` / `[Fixer]` Discussion turns. `Iteration` and every reviewer-authored field are never touched by the fixer.
-- The `[Fixer]` turns are *unverified assertions* — the reviewer re-derives correctness from the code on the next cycle.
+### Built-in reviewer ids
 
-**Role boundaries (per the contract):**
+`generic` · `security` · `quality` · `technical` (`quality` variant whose objective also covers security — not a true alias) · `guidelines` · `style` · `linguist`
 
-| Field | Reviewer | Fixer |
+```
+/adversarial-review-loop --reviewers=security,quality,linguist
+/adversarial-review-loop --config=./review-loop.json
+/adversarial-review-loop --reviewer-model=deepseek-v4-pro --fixer-model=deepseek-v4-flash-free
+/adversarial-review-loop --supervisor-mode=never
+```
+
+Per-agent models come from the config (or builtins). **Models never steer the loop** — the orchestrator parses `## Summary` + `loop-state.json` to decide continue/stop/deadlock.
+
+## Session policy
+
+| Role | Session |
+|---|---|
+| Orchestrator (code) | Resumed via `loop-state.json` |
+| Supervisor | **One persistent session per loop** (multi-reviewer / `always`) |
+| Reviewers | **Fresh every cycle** |
+| Reconciliator | Fresh per call (only when supervisor is `never`) |
+| Fixer | Fresh every cycle |
+
+## On-disk layout (standalone)
+
+```text
+.agents/reviews/<name>/
+  001.md                 # canonical review (fixer + humans)
+  001/
+    loop-state.json      # orchestrator memory (resume)
+    scratch/<id>.md      # multi-reviewer cycle scratch
+```
+
+## Deadlock detection
+
+Programmatic (not LLM):
+
+- Status oscillation (`In Review` → `Open`) past `flipThreshold`
+- Suggestion/patch-hash A → B → A at the same fingerprint
+- Multiple open findings at the same location with contradictory suggestions
+
+Action: mark finding(s) `Escalated` with an `[Orchestrator]` Discussion turn.
+
+## Widget
+
+Uses Pi `ctx.ui.setWidget` (interactive TUI / RPC). Shows cycle, per-reviewer status, reconcile mode, fixer status, and summary counts. Cleared on terminal. No-op in print/JSON mode.
+
+## Flags
+
+| Flag | Default | Description |
 |---|---|---|
-| `Attempts` | NEVER touch | increments by 1 per attempt |
-| `Status` | `Open` (initial/reject), `Resolved` (verify) | `In Review`, `Won't Fix`, `Escalated` |
-| `[Reviewer]` Discussion turns | appends only | NEVER edit/delete |
-| `[Fixer]`/`[Human]` Discussion turns | NEVER edit/delete | appends only |
-| `Iteration` | increments on re-review | NEVER touch |
-| Severity / Location / Problem / Impact / Suggestion | writes initially | NEVER edit |
-
-There is **no** `## Fixer Notes` section and **no** `STATUS: FIXED/FAILED/PASS/FAIL` line — those v2 conventions were removed in adversarial-review v3.0.0. The loop detects termination by parsing the file's `## Summary` block (see `parse-summary.js`): when `Open`, `In Review`, and `Escalated` counts are all zero, every finding is terminal and the loop stops (`isAllTerminal`).
+| `--reviewer-model` | `deepseek-v4-pro` | Override model for all selected reviewers |
+| `--fixer-model` | `deepseek-v4-flash-free` | Fixer model |
+| `--depth` / `--max-loops` | `5` | Maximum review cycles |
+| `--dir` / `--target-dir` | current dir | Directory to review |
+| `--name` | `adversarial` | `<name>` segment of `.agents/reviews/<name>/` |
+| `--fresh` | `false` | Allocate a new `<code>` instead of reusing |
+| `--reviewers` | `generic` | Comma-separated builtin reviewer ids |
+| `--supervisor-model` | reviewer default | Supervisor model override |
+| `--supervisor-mode` | `on-multi` | `on-multi` \| `always` \| `never` |
+| `--config` | _(none)_ | JSON config file path |
+| `--feature-spec` | `false` | Enable feature-spec mode |
+| `--spec-name` | _(optional)_ | Feature name under `.agents/features/` |
 
 ## Installation
-
-Add to your Pi project's `package.json`:
 
 ```json
 {
   "pi": {
-    "extensions": ["path/to/adversarial-review-loop/index.js"]
+    "extensions": ["path/to/adversarial-review-loop/index.ts"]
   }
 }
 ```
 
-Requires `@earendil-works/pi-coding-agent` as a peer dependency. The target project must have both skills installed:
-
-- `.agents/skills/adversarial-review/SKILL.md` (v3.0.0)
-- `.agents/skills/addressing-adversarial-review/SKILL.md` (v1.0.0)
-
-## Usage
-
-```
-/adversarial-review-loop --depth=5 --reviewer-model=deepseek-v4-pro --fixer-model=deepseek-v4-flash-free
-```
-
-### Flags
-
-| Flag | Default | Description |
-|---|---|---|
-| `--reviewer-model` | `deepseek-v4-pro` | Heavy model for the reviewer agent |
-| `--fixer-model` | `deepseek-v4-flash-free` | Cheap model for the fixer agent |
-| `--depth` / `--max-loops` | `5` | Maximum review cycles before escalation |
-| `--dir` / `--target-dir` | current dir | Directory to review |
-| `--name` | `adversarial` | `<name>` segment of `.agents/reviews/<name>/<code>.md` (standalone mode) |
-| `--fresh` | `false` | Allocate a new `<code>` instead of reusing the highest existing (forces a fresh review even when files exist) |
-| `--feature-spec` | `false` | Enable feature-spec mode: reads the active phase from `.agents/features/<spec-name>/`, writes the review to `<task-dir>/REVIEW.md`, creates remediation tasks, and updates `FEATURE.md` |
-| `--spec-name` | _(required with `--feature-spec`)_ | Feature name — locates `.agents/features/<spec-name>/` |
-
-In standalone mode, adversarial-review v3.0.0 requires the review to be written to `.agents/reviews/<name>/<code>.md`. In feature-spec mode, the review lives inside the review task's directory as `REVIEW.md` — the same location that `executing-feature-spec` expects for its independent-subagent review output.
-
-## Cycle logic
-
-```mermaid
-flowchart TD
-    START["CYCLE N"] --> R["1. REVIEWER audits code<br/>(fresh: Step 8 / re-review: Step 9)"]
-    R --> SUM{"## Summary: all terminal?"}
-    SUM -->|yes| DONE["DONE"]
-    SUM -->|no| ESC{"Only Escalated remain?"}
-    ESC -->|yes| HUMAN["ESCALATE TO HUMAN"]
-    ESC -->|no| F["2. FIXER triages by Status,<br/>applies fixes, verifies,<br/>updates per-finding fields"]
-    F --> MAX{"Max loops or<br/>2 consecutive failures?"}
-    MAX -->|no| START
-    MAX -->|yes| HUMAN
-```
-
-**Consecutive-failure handling:** each agent tracks its own `reviewerConsecutiveFailures` / `fixerConsecutiveFailures` counter independently. After 2 consecutive failures by a given agent, *that* agent's branch aborts the loop and escalates to the human (`MAX_CONSECUTIVE_FAILURES = 2`). A successful run by an agent resets only its own counter.
-
-**Escalation:**
-- If the fixer hits `Attempts >= Max Attempts` on a finding, that finding is set to `Escalated` in the file and surfaces in the next reviewer cycle (the loop stops when only `Escalated` findings remain — they need human input). `Max Attempts` comes from the file's Review Metadata (default 3 per the skill).
-- If either agent errors 2 consecutive cycles, the loop aborts and escalates to the human.
-- When `max-loops` is reached without all findings terminal, the loop stops with a warning and points to the review file.
+Requires `@earendil-works/pi-coding-agent` as a peer dependency. TypeScript loaded by Pi's jiti loader — no build step. Runtime side effects use Effect v4 + `@effect/platform-node`.
 
 ## Module map
 
 | File | Responsibility |
 |---|---|
-| `index.js` | Extension entry. Parses flags, gates on skill presence, resolves the review file (standalone: `.agents/reviews/`, feature-spec: `<task-dir>/REVIEW.md`), runs the cycle loop, parses `## Summary` for termination, and handles escalation. |
-| `runner.js` | Agent plumbing over `@earendil-works/pi-coding-agent`. `runAgent` (single-use, fixer), `createPersistentAgent` (reviewer), `createSession` (spawns with `noSkills: true` so agents load skills as data). |
-| `agents.js` | System prompts (`REVIEWER_SYSTEM`, `FIXER_SYSTEM`) and per-role tool grants (`TOOLS`). |
-| `parse-summary.js` | Pure `## Summary` parser (`parseSummaryText`) + `isAllTerminal`. Isolated for unit testing (regression for finding F15). |
-| `resolve-review-file.js` | Extracted review file path resolution for standalone mode. Unit-tested independently. |
-| `verify-skill.js` | Extracted skill version checking (`extractVersion`, `majorGte`, `verifySkill`). Unit-tested independently. |
-| `feature-spec.js` | Feature-spec mode: loads specs, finds active phases, creates remediation tasks, updates `FEATURE.md` task tables, tracks review loop counters. |
-| `test/` | Unit tests for all modules. |
+| `index.ts` | Pi command entry + flag parsing |
+| `config.ts` | Default/builtin roster + config resolve |
+| `graph.ts` | State machine (orchestrator) |
+| `loop-state.ts` | Resumable orchestrator memory |
+| `merge.ts` | Programmatic multi-reviewer merge |
+| `deadlock.ts` | Oscillation / thrash detection |
+| `widget.ts` | Pi `setWidget` rendering |
+| `findings.ts` | Finding parse/render helpers |
+| `agents.ts` | Per-role system prompts + tools |
+| `runner.ts` | Fresh agent sessions |
+| `skills/` | Bundled role skills |
+| `test/` | Unit tests |
