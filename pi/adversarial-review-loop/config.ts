@@ -15,7 +15,9 @@ export type ReconcileMode = 'on-conflict' | 'always' | 'never';
  * - `always` — even for a single generic reviewer
  * - `never` — use legacy programmatic merge + reconciliator
  */
-export type SupervisorMode = 'on-multi' | 'always' | 'never';
+export const SUPERVISOR_MODES = ['on-multi', 'always', 'never'] as const;
+
+export type SupervisorMode = (typeof SUPERVISOR_MODES)[number];
 
 export interface ReviewerProfile {
   readonly id: string;
@@ -415,10 +417,8 @@ const parseReconcileMode = (value: unknown): ReconcileMode | undefined => {
  * @param {unknown} value Raw mode value
  * @returns The mode, or undefined when absent/invalid
  */
-export const parseSupervisorMode = (value: unknown): SupervisorMode | undefined => {
-  if (value === 'on-multi' || value === 'always' || value === 'never') return value;
-  return undefined;
-};
+export const parseSupervisorMode = (value: unknown): SupervisorMode | undefined =>
+  SUPERVISOR_MODES.find((mode) => mode === value);
 
 /**
  * Pure config resolution against an optional already-loaded file object.
