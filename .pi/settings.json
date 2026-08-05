@@ -1,0 +1,6 @@
+{
+  "packages": [
+    "../pi/profiles",
+    "../pi/adversarial-review-loop"
+  ]
+}
