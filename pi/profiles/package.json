@@ -1,0 +1,38 @@
+{
+  "name": "@montflow/profiles",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pi extension: named agent profiles (model, skills, instructions) stored in .agents/profiles/",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "bin": {
+    "profiles": "./cli.ts"
+  },
+  "scripts": {
+    "lint": "echo 'No linter configured'",
+    "fmt": "echo 'No formatter configured'",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "cli": "node ./cli.ts"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "^0.74.0",
+    "@earendil-works/pi-coding-agent": "^0.74.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "^0.74.0",
+    "@earendil-works/pi-coding-agent": "^0.74.0",
+    "@types/node": "^26.1.2",
+    "typescript": "^5.5.0",
+    "vitest": "^3.2.0"
+  },
+  "dependencies": {
+    "@effect/platform-node": "^4.0.0-beta.102",
+    "effect": "^4.0.0-beta.102"
+  }
+}
