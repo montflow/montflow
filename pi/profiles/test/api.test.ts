@@ -22,7 +22,6 @@ const makeProject = (): string => {
       description: 'You are a senior code reviewer focused on security.',
       model: 'anthropic/claude-sonnet-4-5',
       skills: ['adversarial-review'],
-      purpose: 'Catch bugs before they ship.',
       instructions: 'Review diffs aggressively.',
       checklist: ['No security holes'],
     }),

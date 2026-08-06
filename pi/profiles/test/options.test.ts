@@ -80,31 +80,6 @@ test('tryParseOptions captures errors without throwing', () => {
   expect(bad.err).toBeInstanceOf(Error);
 });
 
-test('--defer wraps the target command', () => {
-  const command = parse('--new --defer');
-  expect(command.kind).toBe('defer');
-  if (command.kind !== 'defer') return;
-  expect(command.target?.kind).toBe('new');
-
-  const list = parse('--list --defer');
-  expect(list).toEqual({ kind: 'defer', target: { kind: 'list' } });
-
-  const modify = parse('--modify code-reviewer --defer');
-  expect(modify).toEqual({ kind: 'defer', target: { kind: 'edit', name: 'code-reviewer' } });
-});
-
-test('--defer alone has no target (operation picked in the TUI)', () => {
-  expect(parse('--defer')).toEqual({ kind: 'defer', target: undefined });
-});
-
-test('--defer keeps --new prefills in the target', () => {
-  const command = parse('--new --defer --name foo --description bar');
-  expect(command.kind).toBe('defer');
-  if (command.kind !== 'defer' || command.target?.kind !== 'new') return;
-  expect(command.target.fields.name).toBe('foo');
-  expect(command.target.fields.description).toBe('bar');
-});
-
 test('USAGE mentions the four store actions and the API', () => {
   expect(USAGE).toContain('/profiles');
   expect(USAGE).toContain('--new');

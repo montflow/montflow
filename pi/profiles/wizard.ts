@@ -1,17 +1,14 @@
-import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
-import {
-  buildDeferPrompt,
-  copyDeferPromptToClipboard,
-  writeDeferPromptToTemp,
-  type DeferContext,
-} from './defer.ts';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { join } from 'node:path';
 import * as Model from './model.ts';
-import type { ProfilesCommand } from './options.ts';
-import { readTemplateSync } from './paths.ts';
+import { PACKAGE_ROOT, readTemplateSync } from './paths.ts';
 import { runStore } from './runtime.ts';
 import * as Skills from './skills.ts';
 import * as Store from './store.ts';
 
+
+/** Absolute path to the standalone CLI the agent runs in agentic mode. */
+const CLI_PATH = join(PACKAGE_ROOT, 'cli.ts');
 
 /** Prefilled fields for the create wizard (from CLI flags). */
 export interface CreatePrefill {
@@ -19,7 +16,6 @@ export interface CreatePrefill {
   readonly description?: string;
   readonly model?: string;
   readonly skills?: readonly string[];
-  readonly purpose?: string;
   readonly instructions?: string;
   readonly checklist?: readonly string[];
 }
@@ -108,10 +104,147 @@ const viewInEditor = async (ctx: ExtensionContext, title: string, content: strin
   return edited === undefined ? null : edited;
 };
 
-/** Interactive "create profile" flow. Returns the created profile, or null when cancelled. */
+/**
+ * Shared tail of both create flows: render to the template, preview in the
+ * editor (user may edit anything, including the name/skills in frontmatter),
+ * confirm, and save. Returns the saved profile, or null when cancelled.
+ */
+const previewAndSaveProfile = async (ctx: ExtensionContext, profile: Model.Profile): Promise<Model.Profile | null> => {
+  const markdown = Model.renderProfileFromTemplate(readTemplateSync(), profile);
+
+  const preview = await viewInEditor(ctx, `Preview: .agents/profiles/${profile.name}/PROFILE.md`, markdown);
+  if (preview === null) {
+    ctx.ui.notify('Cancelled.', 'info');
+    return null;
+  }
+
+  const finalProfile = Model.parseProfile(preview, profile.name);
+  const save = await ctx.ui.confirm('Save profile', `Save ${finalProfile.name}?`);
+  if (!save) return null;
+
+  await runStore(Store.writeProfileFile(ctx.cwd, finalProfile.name, Model.serializeProfile(finalProfile)));
+  await warnUnknownSkills(ctx, finalProfile.skills);
+  ctx.ui.notify(`Profile created: .agents/profiles/${finalProfile.name}/PROFILE.md`, 'info');
+  return finalProfile;
+};
+
+/**
+ * Builds the user message handed to the agent in agentic mode: the user's
+ * simple prompt plus exactly how to finish — ask when anything is unclear,
+ * show the resolved profile and get approval, then run the standalone
+ * profiles CLI with the resolved fields.
+ */
+const buildAgenticPrompt = async (prompt: string, ctx: ExtensionContext): Promise<string> => {
+  const [profiles, skillInfos] = await Promise.all([
+    runStore(Store.listProfiles(ctx.cwd)),
+    runStore(Skills.listSkills(ctx.cwd)),
+  ]);
+  const skills = skillInfos.map((skill) => skill.name);
+
+  return [
+    'Create a new agent profile for this request:',
+    '',
+    prompt,
+    '',
+    'An agent profile is stored at `.agents/profiles/<name>/PROFILE.md` and is data only:',
+    '- name: lowercase-hyphen slug (required, matches the directory)',
+    '- description: one line — who the agent is and what it does (required)',
+    '- model: preferred model as provider/model-id (optional)',
+    '- skills: names from the available skills list below (optional)',
+    '- instructions: custom system-prompt behavior (optional)',
+    '- checklist: verification items (optional)',
+    '',
+    'If anything is unclear, vague, or missing, ask me BEFORE creating anything — do not guess or invent details.',
+    '',
+    'Once everything is resolved, do this in order:',
+    '',
+    '1. Show me the exact profile you are about to create (the full PROFILE.md content, or at minimum the complete command with every field filled in).',
+    '2. Ask for my approval.',
+    '3. Only after I approve, create the profile by running the profiles CLI:',
+    '',
+    '```bash',
+    `node ${CLI_PATH} --new \\`,
+    '  --name <lowercase-hyphen-slug> \\',
+    '  --description "<one-line description of the agent: its role and what it does>" \\',
+    '  [--model <provider>/<model-id>] \\',
+    '  [--skills a,b,c] \\',
+    '  [--instructions "<custom system-prompt behavior>"] \\',
+    '  [--checklist "item1|item2"]',
+    '```',
+    '',
+    `Available skills: ${skills.length === 0 ? 'none' : skills.join(', ')}`,
+    `Existing profiles: ${profiles.length === 0 ? 'none' : profiles.join(', ')}`,
+    '',
+    `If the name already exists, add --force to overwrite — but tell me and ask before overwriting. After creating, verify with \`node ${CLI_PATH} --show <name>\`.`,
+  ].join('\n');
+};
+
+/**
+ * Interactive "create profile" flow. Returns the created profile, or null
+ * when cancelled (in agentic mode the profile is created by the agent in a
+ * follow-up turn, so this returns null after the handoff).
+ */
 export const runCreateWizard = async (
   ctx: ExtensionContext,
+  pi: ExtensionAPI,
   prefill: CreatePrefill = { skills: [] },
+): Promise<Model.Profile | null> => {
+  // CLI prefills (e.g. `--new --name foo`) mean the user already started
+  // typing values: go straight to the manual flow with those prefills.
+  if (prefill.name === undefined && prefill.description === undefined) {
+    const mode = await ctx.ui.select('How do you want to create this profile?', [
+      'Agentic — describe it; the agent asks what it needs and creates it via the CLI',
+      'Manual — step-by-step: name, description, model, skills, instructions, checklist',
+    ]);
+    if (mode === undefined) return null;
+    if (mode.startsWith('Agentic')) {
+      return runAgenticWizard(ctx, pi);
+    }
+  }
+  return runManualWizard(ctx, prefill);
+};
+
+/**
+ * Agentic mode: the user gives a simple prompt, which is handed to the main
+ * agent as a user message. The agent asks for anything it needs, then runs
+ * the standalone profiles CLI with the resolved fields.
+ */
+const runAgenticWizard = async (ctx: ExtensionContext, pi: ExtensionAPI): Promise<Model.Profile | null> => {
+  const prompt = await ctx.ui.input(
+    'Describe the profile you want (who it is, what it does, how it should behave):',
+    '',
+  );
+  if (prompt === undefined) return null;
+  const promptText = prompt.trim();
+  if (promptText === '') {
+    ctx.ui.notify('Cancelled: describe the profile you want.', 'info');
+    return null;
+  }
+
+  if (!ctx.isIdle()) {
+    ctx.ui.notify('The agent is busy — try again when it finishes.', 'warning');
+    return null;
+  }
+
+  const message = await buildAgenticPrompt(promptText, ctx);
+  try {
+    pi.sendUserMessage(message);
+  } catch (error) {
+    ctx.ui.notify(
+      `Could not hand off to the agent: ${error instanceof Error ? error.message : String(error)}`,
+      'error',
+    );
+    return null;
+  }
+
+  ctx.ui.notify('Handed off to the agent — it will ask for anything it needs, then create the profile.', 'info');
+  return null;
+};
+
+/** Manual mode: step-by-step field collection (no agentic help). */
+const runManualWizard = async (
+  ctx: ExtensionContext,
+  prefill: CreatePrefill,
 ): Promise<Model.Profile | null> => {
   const name = await askName(ctx, prefill.name ?? '');
   if (name === null) return null;
@@ -124,7 +257,10 @@ export const runCreateWizard = async (
 
   const description = clean(
     prefill.description ??
-      (await ctx.ui.input('Role description (one line, e.g. "You are a code reviewer..."):', '')),
+      (await ctx.ui.input(
+        'Description (one line — who the agent is and what it does, e.g. "You are a code reviewer..."):',
+        '',
+      )),
   );
   if (description === '') {
     ctx.ui.notify('Cancelled: description is required.', 'info');
@@ -145,13 +281,6 @@ export const runCreateWizard = async (
           )
         : [];
 
-  const prefilledPurpose = clean(prefill.purpose ?? '');
-  let purpose = prefilledPurpose;
-  if (purpose === '') {
-    const edited = await viewInEditor(ctx, 'Purpose — why this profile exists (what job does the agent do?)', '');
-    purpose = edited ?? '';
-  }
-
   const prefilledInstructions = clean(prefill.instructions ?? '');
   let instructions = prefilledInstructions;
   if (instructions === '') {
@@ -164,23 +293,8 @@ export const runCreateWizard = async (
       ? [...prefill.checklist]
       : await collectChecklist(ctx);
 
-  const profile: Model.Profile = { name, description, model, skills, purpose, instructions, checklist };
-  const markdown = Model.renderProfileFromTemplate(readTemplateSync(), profile);
-
-  const preview = await viewInEditor(ctx, `Preview: .agents/profiles/${name}/PROFILE.md`, markdown);
-  if (preview === null) {
-    ctx.ui.notify('Cancelled.', 'info');
-    return null;
-  }
-
-  const finalProfile = Model.parseProfile(preview, name);
-  const save = await ctx.ui.confirm('Save profile', `Save ${finalProfile.name}?`);
-  if (!save) return null;
-
-  await runStore(Store.writeProfileFile(ctx.cwd, finalProfile.name, Model.serializeProfile(finalProfile)));
-  await warnUnknownSkills(ctx, finalProfile.skills);
-  ctx.ui.notify(`Profile created: .agents/profiles/${finalProfile.name}/PROFILE.md`, 'info');
-  return finalProfile;
+  const profile: Model.Profile = { name, description, model, skills, instructions, checklist };
+  return previewAndSaveProfile(ctx, profile);
 };
 
 /** Interactive "modify profile" flow. Returns true when saved. */
@@ -240,101 +354,4 @@ export const warnUnknownSkills = async (ctx: ExtensionContext, skills: readonly 
   if (missing.length > 0) {
     ctx.ui.notify(`Unknown skills in profile: ${missing.join(', ')} (not found in .agents/skills/)`, 'warning');
   }
-};
-
-// ─── Defer (clipboard handoff to another agent) ──────────────────────
-
-/** Builds a `new` command with no prefilled fields. */
-const emptyNewCommand = (): Extract<ProfilesCommand, { readonly kind: 'new' }> => ({
-  kind: 'new',
-  fields: {
-    name: undefined,
-    description: undefined,
-    model: undefined,
-    skills: [],
-    purpose: undefined,
-    instructions: undefined,
-    instructionsFile: undefined,
-    checklist: [],
-  },
-  force: false,
-});
-
-/** Gathers project context (profiles + skills) for a defer prompt. */
-const gatherDeferContext = async (ctx: ExtensionContext): Promise<DeferContext> => {
-  const [profiles, skillInfos] = await Promise.all([
-    runStore(Store.listProfiles(ctx.cwd)),
-    runStore(Skills.listSkills(ctx.cwd)),
-  ]);
-  return { cwd: ctx.cwd, profiles, skills: skillInfos.map((skill) => skill.name) };
-};
-
-/** Maps a defer-submenu operation to its target command (undefined = cancelled). */
-const deferTargetForOperation = async (
-  ctx: ExtensionContext,
-  operation: string,
-): Promise<ProfilesCommand | undefined> => {
-  switch (operation) {
-    case 'new':
-      return emptyNewCommand();
-    case 'list':
-      return { kind: 'list' };
-    case 'modify': {
-      const name = await pickProfile(ctx, 'Modify which profile?');
-      return name === null ? undefined : { kind: 'edit', name };
-    }
-    case 'delete': {
-      const name = await pickProfile(ctx, 'Delete which profile?');
-      return name === null ? undefined : { kind: 'delete', name, force: true };
-    }
-    default:
-      return undefined;
-  }
-};
-
-/**
- * Builds a defer prompt for a target command and surfaces it for copying:
- * 1. prints it to stdout in non-TUI modes only (print/JSON — raw stdout
- *    writes corrupt the TUI layout, so never there),
- * 2. writes it to a temp file (always — reliable manual-copy path),
- * 3. best-effort copies it to the system clipboard,
- * 4. on clipboard failure in the TUI, opens a read-only editor preview.
- */
-export const runDeferFlow = async (ctx: ExtensionContext, target: ProfilesCommand | undefined): Promise<void> => {
-  const prompt = buildDeferPrompt(target, await gatherDeferContext(ctx));
-
-  // Safe stdout output only: print mode / JSON mode. The TUI owns the
-  // terminal in raw mode; writing to stdout there breaks its layout.
-  if (!ctx.hasUI) {
-    console.log(`\n${prompt}\n`);
-  }
-
-  let filePath: string | undefined;
-  try {
-    filePath = await writeDeferPromptToTemp(prompt);
-  } catch {
-    // Temp write is best-effort.
-  }
-
-  try {
-    await copyDeferPromptToClipboard(prompt);
-    ctx.ui.notify(`Defer prompt copied to clipboard${filePath !== undefined ? ` (also at ${filePath})` : ''}.`, 'info');
-  } catch (error) {
-    ctx.ui.notify(`Clipboard unavailable: ${error instanceof Error ? error.message : String(error)}`, 'warning');
-    if (filePath !== undefined) {
-      ctx.ui.notify(`Defer prompt written to ${filePath} — open or cat it to copy manually.`, 'info');
-    }
-    if (ctx.hasUI) {
-      await ctx.ui.editor('Defer prompt (handoff to another agent)', prompt);
-    }
-  }
-};
-
-/** Interactive defer picker: choose the operation, then copy the handoff prompt. */
-export const runDeferWizard = async (ctx: ExtensionContext): Promise<void> => {
-  const operation = await ctx.ui.select('Defer which action?', ['new', 'modify', 'delete', 'list']);
-  if (operation === undefined) return;
-  const target = await deferTargetForOperation(ctx, operation);
-  if (target === undefined) return;
-  await runDeferFlow(ctx, target);
 };

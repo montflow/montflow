@@ -8,21 +8,23 @@ import { USAGE, tryParseOptions, type NewProfileFields, type ProfilesCommand } f
 import { readTemplateSync } from './paths.ts';
 import { runStore } from './runtime.ts';
 import * as Store from './store.ts';
-import { runCreateWizard, runDeferFlow, runDeferWizard, runEditWizard, warnUnknownSkills } from './wizard.ts';
+import { runCreateWizard, runEditWizard, warnUnknownSkills } from './wizard.ts';
 import { runMainMenu } from './menu.ts';
 
 /**
  * Pi extension: a pure profile store.
  *
  * Profiles live at `.agents/profiles/<name>/PROFILE.md` (structure defined by
- * the bundled TEMPLATE.md). A profile is data — a role description, purpose,
- * custom instructions, a review checklist, a preferred model, and a list of
- * skills — nothing more.
+ * the bundled TEMPLATE.md). A profile is data — a one-line description (role
+ * and what it does), custom instructions, a review checklist, a preferred
+ * model, and a list of skills — nothing more.
  *
  * This extension NEVER executes anything: no activation, no model switching,
  * no prompt injection, no skill loading. It only creates/modifies/deletes/lists
  * profiles, and serves profile context to OTHER extensions over the event bus
- * (`profiles:get` / `profiles:list`, see api.ts).
+ * (`profiles:get` / `profiles:list`, see api.ts). In agentic create mode the
+ * request is handed to the main agent as a user message; the agent resolves
+ * the fields with the user and runs the standalone CLI itself.
  *
  * - Interactive: `/profiles` → menu (new | modify | delete | list)
  * - CLI: `/profiles --new --name ... --description ...` (also `node cli.ts`)
@@ -63,7 +65,7 @@ export default function profilesExtension(pi: ExtensionAPI): void {
         return;
       case 'menu':
         if (ctx.hasUI) {
-          await runMainMenu(ctx);
+          await runMainMenu(ctx, pi);
         } else {
           ctx.ui.notify('Run /profiles inside the TUI for the interactive menu (new | modify | delete | list).', 'info');
         }
@@ -126,21 +128,6 @@ export default function profilesExtension(pi: ExtensionAPI): void {
         await handleNew(ctx, command.fields, command.force);
         return;
       }
-      case 'defer': {
-        if (command.target === undefined) {
-          if (ctx.hasUI) {
-            await runDeferWizard(ctx);
-          } else {
-            ctx.ui.notify(
-              'Usage: /profiles --defer [--new | --list | --modify <name> | --delete <name>]',
-              'error',
-            );
-          }
-          return;
-        }
-        await runDeferFlow(ctx, command.target);
-        return;
-      }
     }
   };
 
@@ -154,12 +141,11 @@ export default function profilesExtension(pi: ExtensionAPI): void {
 
     // Interactive fallback: any missing field runs the wizard with prefills.
     if (!complete && ctx.hasUI) {
-      const profile = await runCreateWizard(ctx, {
+      const profile = await runCreateWizard(ctx, pi, {
         name: fields.name,
         description: fields.description,
         model: fields.model,
         skills: fields.skills,
-        purpose: fields.purpose,
         instructions: fields.instructions,
         checklist: fields.checklist,
       });
@@ -206,7 +192,6 @@ export default function profilesExtension(pi: ExtensionAPI): void {
       description: fields.description ?? '',
       model: fields.model ?? '',
       skills: fields.skills,
-      purpose: fields.purpose ?? '',
       instructions,
       checklist: fields.checklist,
     });

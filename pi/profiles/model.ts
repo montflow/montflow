@@ -4,19 +4,19 @@ import { Schema } from 'effect';
  * A named agent profile. Stored as `.agents/profiles/<name>/PROFILE.md`.
  *
  * Frontmatter holds machine-readable metadata (name, preferred model, skills);
- * the body holds the human-readable definition (purpose, instructions, review checklist).
+ * the body holds the human-readable definition (instructions, review checklist).
+ * The one-line `description` is the single concept describing the agent — its
+ * role and what it does (the job). There is no separate purpose field.
  */
 export interface Profile {
   /** Slug name — matches the profile directory. */
   readonly name: string;
-  /** One-line role description ("You are a code reviewer..."). */
+  /** One-line description of the agent — its role and what it does. */
   readonly description: string;
   /** Preferred model as `provider/model-id`, or '' when unset. */
   readonly model: string;
   /** Skill names (SKILL.md frontmatter `name:`) this profile must load. */
   readonly skills: readonly string[];
-  /** Why this profile exists. */
-  readonly purpose: string;
   /** Custom system-prompt instructions. */
   readonly instructions: string;
   /** Items a reviewer must verify. */
@@ -29,7 +29,6 @@ export const ProfileSchema = Schema.Struct({
   description: Schema.NonEmptyString,
   model: Schema.optionalKey(Schema.String),
   skills: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)),
-  purpose: Schema.optionalKey(Schema.String),
   instructions: Schema.optionalKey(Schema.String),
   checklist: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)),
 });
@@ -40,7 +39,6 @@ export interface ProfileFieldsInput {
   readonly description: string;
   readonly model?: string;
   readonly skills?: readonly string[];
-  readonly purpose?: string;
   readonly instructions?: string;
   readonly checklist?: readonly string[];
 }
@@ -57,7 +55,6 @@ export const validateProfileFields = (input: ProfileFieldsInput): Profile | unde
       description: decoded.description,
       model: decoded.model ?? '',
       skills: decoded.skills ?? [],
-      purpose: decoded.purpose ?? '',
       instructions: decoded.instructions ?? '',
       checklist: decoded.checklist ?? [],
     };
@@ -173,6 +170,7 @@ const asString = (value: unknown): string => (typeof value === 'string' ? value.
 
 interface ParsedBody {
   readonly title: string;
+  /** Kept for legacy files: a `## Purpose` section feeds the description fallback. */
   readonly purpose: string;
   readonly instructions: string;
   readonly checklist: string[];
@@ -234,10 +232,12 @@ export const parseProfile = (markdown: string, fallbackName: string): Profile =>
 
   return {
     name: asString(fields['name']) !== '' ? asString(fields['name']) : fallbackName,
+    // Legacy profiles carry the job description in a `## Purpose` body section;
+    // it feeds the description fallback so the single description concept still
+    // covers role + job for files created before the merge.
     description: asString(fields['description']) || body.purpose.slice(0, 120),
     model: asString(fields['model']),
     skills: asStringArray(fields['skills']),
-    purpose: asString(fields['purpose']) || body.purpose,
     instructions: asString(fields['instructions']) || body.instructions,
     checklist: body.checklist.length > 0 ? body.checklist : asStringArray(fields['checklist']),
   };
@@ -260,10 +260,6 @@ export const serializeProfile = (profile: Profile): string => {
   lines.push(FRONTMATTER_DELIMITER);
   lines.push('');
   lines.push(`# ${titleFromName(profile.name)}`);
-  lines.push('');
-  lines.push('## Purpose');
-  lines.push('');
-  lines.push(profile.purpose.trim());
   lines.push('');
   lines.push('## Instructions');
   lines.push('');
@@ -305,11 +301,10 @@ export const renderProfileFromTemplate = (template: string, profile: Profile): s
   // Simple string placeholders.
   output = output.replaceAll('<profile-name>', profile.name);
   output = output.replaceAll('# <Profile Name>', `# ${titleFromName(profile.name)}`);
-  output = output.replaceAll('<Why this profile exists. The job the agent does, and the outcome it drives toward.>', profile.purpose.trim());
   output = output.replaceAll('<Custom system-prompt instructions. How the agent should behave, what to focus on, what to avoid.>', profile.instructions.trim());
 
   // Description placeholder line.
-  const descriptionLine = /^[ \t]*description:.*<one-line role description[^>]*>.*$/m;
+  const descriptionLine = /^[ \t]*description:.*<one-line description[^>]*>.*$/m;
   if (descriptionLine.test(output)) {
     output = output.replace(descriptionLine, `description: ${escapeScalar(profile.description)}`);
   }

@@ -17,7 +17,6 @@ const sampleProfile = {
   description: 'You are a senior code reviewer focused on security.',
   model: 'anthropic/claude-sonnet-4-5',
   skills: ['adversarial-review', 'unit-testing'],
-  purpose: 'Catch bugs before they ship.',
   instructions: 'Review diffs aggressively. Assume the author made mistakes.',
   checklist: ['No security holes', 'Tests updated'],
 };
@@ -56,7 +55,6 @@ test('serialize then parse round-trips a minimal profile', () => {
     description: 'Bare profile.',
     model: '',
     skills: [] as string[],
-    purpose: '',
     instructions: '',
     checklist: [] as string[],
   };
@@ -90,10 +88,6 @@ test('parseProfile reads checklist items and body sections', () => {
     '',
     '# Reviewer',
     '',
-    '## Purpose',
-    '',
-    'Find the bugs.',
-    '',
     '## Instructions',
     '',
     'Be strict.',
@@ -105,10 +99,33 @@ test('parseProfile reads checklist items and body sections', () => {
   ].join('\n');
 
   const parsed = parseProfile(markdown, 'fallback');
-  expect(parsed.purpose).toBe('Find the bugs.');
+  expect(parsed.description).toBe('d');
   expect(parsed.instructions).toBe('Be strict.');
   expect(parsed.checklist).toEqual(['Check auth', 'Check errors']);
   expect(parsed.skills).toEqual(['one', 'two']);
+  expect(parsed).not.toHaveProperty('purpose');
+});
+
+test('parseProfile folds a legacy ## Purpose section into the description when description is missing', () => {
+  const markdown = [
+    '---',
+    'name: legacy',
+    '---',
+    '',
+    '# Legacy',
+    '',
+    '## Purpose',
+    '',
+    'Find the bugs before they ship.',
+    '',
+    '## Instructions',
+    '',
+    'Be strict.',
+  ].join('\n');
+
+  const parsed = parseProfile(markdown, 'legacy');
+  expect(parsed.description).toBe('Find the bugs before they ship.');
+  expect(parsed.instructions).toBe('Be strict.');
 });
 
 // ─── frontmatter / body parsers ──────────────────────────────────────
@@ -140,17 +157,13 @@ test('parseBody extracts sections even with loose content', () => {
 const TEMPLATE = [
   '---',
   'name: <profile-name>',
-  'description: <one-line role description, e.g. "You are a code reviewer...">',
+  'description: <one-line description of the agent: its role and what it does>',
   'model: <provider>/<model-id>',
   'skills:',
   '  - <skill-name>',
   '---',
   '',
   '# <Profile Name>',
-  '',
-  '## Purpose',
-  '',
-  '<Why this profile exists. The job the agent does, and the outcome it drives toward.>',
   '',
   '## Instructions',
   '',
@@ -168,7 +181,6 @@ test('renderProfileFromTemplate fills all placeholders', () => {
   expect(rendered).toContain('  - adversarial-review');
   expect(rendered).toContain('  - unit-testing');
   expect(rendered).toContain('# Code Reviewer');
-  expect(rendered).toContain('Catch bugs before they ship.');
   expect(rendered).toContain('Review diffs aggressively.');
   expect(rendered).toContain('- [ ] No security holes');
   expect(rendered).not.toContain('<skill-name>');
@@ -186,7 +198,6 @@ test('renderProfileFromTemplate drops list placeholders when empty', () => {
     description: 'Bare.',
     model: '',
     skills: [],
-    purpose: '',
     instructions: '',
     checklist: [],
   });

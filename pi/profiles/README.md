@@ -1,10 +1,10 @@
 # @montflow/profiles
 
-A Pi extension that is a **pure profile store**. A profile is data — a role description, purpose, custom instructions, a review checklist, a preferred model, and a list of skills — nothing more.
+A Pi extension that is a **pure profile store**. A profile is data — a one-line description (the agent's role and what it does), custom instructions, a review checklist, a preferred model, and a list of skills — nothing more.
 
 Profiles live at `.agents/profiles/<name>/PROFILE.md`; the canonical structure is defined by the bundled **TEMPLATE.md** (copied into `.agents/profiles/TEMPLATE.md` on first use).
 
-**This extension never executes anything.** No activation, no model switching, no prompt injection, no skill loading. It only creates / modifies / deletes / lists profiles, and serves profile context to **other extensions** over the event bus (see [Getting profile context](#getting-profile-context)).
+**This extension never executes anything.** No activation, no model switching, no prompt injection, no skill loading. It only creates / modifies / deletes / lists profiles, and serves profile context to **other extensions** over the event bus (see [Getting profile context](#getting-profile-context)). The one exception: in **agentic** create mode the extension hands your prompt to the main agent as a user message — the agent (not this extension) resolves the fields and runs the standalone CLI itself.
 
 Built with **TypeScript + Effect v4** (`effect@beta`): file access, validation, and error handling run through Effect services (`FileSystem` / `Path` / `Schema`), and the standalone CLI runs via `NodeRuntime.runMain`.
 
@@ -14,39 +14,14 @@ Built with **TypeScript + Effect v4** (`effect@beta`): file access, validation, 
 
 `/profiles` opens a **TUI menu**:
 
-- **New profile** — wizard: name → description → preferred model → skills multi-select → purpose → instructions → review checklist → preview in the editor → save
+- **New profile** — pick **agentic** or **manual**:
+  - *Agentic* — you give a simple prompt ("a security-focused code reviewer for our auth service"). The request is handed to the main agent, which asks you for anything unclear or vague, shows you the resolved profile, and only creates it after you approve — by running the standalone CLI with the resolved values.
+  - *Manual* — step-by-step form: name → description → preferred model → skills multi-select → instructions → review checklist → preview in the editor → save.
 - **Modify profile** — pick a profile, edit its raw PROFILE.md in the editor, save
 - **Delete profile** — pick a profile, confirm, remove
 - **List profiles** — pick a profile to view its content (read-only)
-- **Defer to CLI** — pick an action (new | modify | delete | list) and copy a **handoff prompt** to the clipboard for another agent
 
-### Defer (handoff to another agent)
-
-`--defer` turns any operation into a **handoff prompt** for another agent instead of running it. The prompt tells the receiving agent exactly how to perform the operation with the standalone CLI (full command template, required vs optional flags, current project context: existing profiles + available skills, and prefills you passed as hints). Paste it into another pi session — that agent fills in the arguments, replies with the exact command, and runs it.
-
-Every defer run surfaces the prompt three ways:
-
-1. **Printed to stdout in non-TUI modes only** (print/JSON) — raw stdout writes corrupt the TUI layout, so inside the TUI nothing is printed to stdout.
-2. **Written to a temp file** (`/tmp/profiles-defer-<ts>.md`) — `cat` or open it; the path is notified. This is the reliable manual-copy path, including in the TUI.
-3. **Best-effort system clipboard** — `copyToClipboard` (native addon → pbcopy/clip/wl-copy/xclip/xsel → OSC 52). On failure in the TUI, the prompt also opens in the editor as a preview.
-
-```bash
-/profiles --new --defer                        # prompt: "create a profile" (picks args itself)
-/profiles --new --defer --name security-auditor # prompt with the name hinted
-/profiles then Defer > new                      # same, via the menu
-/profiles --defer                               # menu: pick which action to defer
-```
-
-The receiving agent's reply looks like:
-
-```bash
-node /path/to/pi/profiles/cli.ts --new \
-  --name security-auditor \
-  --description "Audit auth flows for regressions." \
-  --skills "adversarial-review,unit-testing"
-```
-
-Standalone CLI prints the prompt instead of copying it: `node pi/profiles/cli.ts --new --defer`.
+Agentic mode is TUI-only: it needs the main agent loop to take over.
 
 ### CLI mode
 
@@ -69,10 +44,9 @@ node pi/profiles/cli.ts --new --name code-reviewer --description="You are a code
 | `--delete <name>` | Delete a profile (`--force` skips the confirm) |
 | `--template` | Show TEMPLATE.md |
 | `--new` | Create a profile (see below) |
-| `--defer` | Copy a handoff prompt to the clipboard instead of running (combine with any operation) |
 | `--help` | Usage |
 
-`--new` accepts `--name`, `--description`, `--model provider/model-id`, `--skills a,b,c`, `--purpose`, `--instructions`, `--instructions-file <path>`, `--checklist "a|b"`, and `--force` (overwrite). Quoted values work in both space and `--flag=value` forms. Missing fields fall back to the interactive wizard when a UI is available.
+`--new` accepts `--name`, `--description`, `--model provider/model-id`, `--skills a,b,c`, `--instructions`, `--instructions-file <path>`, `--checklist "a|b"`, and `--force` (overwrite). Quoted values work in both space and `--flag=value` forms. Missing fields fall back to the interactive wizard when a UI is available.
 
 ## Profile structure
 
@@ -92,10 +66,6 @@ skills:
 
 # Code Reviewer
 
-## Purpose
-
-Catch bugs before they ship.
-
 ## Instructions
 
 Review diffs aggressively. Assume the author made mistakes.
@@ -107,7 +77,9 @@ Review diffs aggressively. Assume the author made mistakes.
 ```
 
 - **Frontmatter** holds machine-readable metadata: `name`, `description`, optional `model`, and `skills` (canonical skill names from each `SKILL.md`'s frontmatter).
-- **Body** holds the human-readable definition: `## Purpose`, `## Instructions` (custom system prompt), and `## Review Checklist` (items a reviewer must verify).
+- **Body** holds the human-readable definition: `## Instructions` (custom system prompt) and `## Review Checklist` (items a reviewer must verify).
+
+The `description` is the **single** description concept — it covers both who the agent is (its role) and what it does (the job), in one line. There is no separate purpose field. Legacy files created with a `## Purpose` section still parse: the purpose text folds into `description` when the frontmatter description is missing.
 
 The fields are **data only** — other extensions decide what to do with them.
 
@@ -180,7 +152,7 @@ The interactive surfaces need a real TUI session:
 
 1. `cd <project> && pi` (approve the trust prompt if asked)
 2. `/profiles` → the four-item menu (new | modify | delete | list)
-3. `/profiles --new` with no flags → the create wizard runs directly
+3. `/profiles --new` with no flags → the create wizard runs directly (agentic | manual choice first)
 4. `/profiles --show <name>` → read-only view in the editor
 
 Non-interactive sanity checks (no TUI needed):
@@ -206,13 +178,12 @@ The standalone CLI runs on plain Node 24 (native TypeScript type stripping) — 
 
 | Module | Role |
 |---|---|
-| `index.ts` | Pi extension entry: `/profiles` command dispatch (new/modify/delete/list/show/defer) |
+| `index.ts` | Pi extension entry: `/profiles` command dispatch (new/modify/delete/list/show) |
 | `api.ts` | Inter-extension API: typed event-bus protocol (`profiles:get` / `profiles:list`), client helpers + server registration |
 | `options.ts` | Flag parsing (quoted values, `--flag=value` + `--flag value`, bare booleans) into a tagged `ProfilesCommand` union |
-| `defer.ts` | Defer mode: builds the handoff prompt for another agent (per-operation templates + project context) |
 | `model.ts` | `Profile` shape, Effect `Schema` validation, frontmatter/body parse + serialize, TEMPLATE placeholder rendering |
 | `store.ts` | Effect `FileSystem`/`Path` CRUD for profiles |
 | `skills.ts` | Discovers `.agents/skills/*/SKILL.md` (name + description from frontmatter) for the authoring wizard |
-| `wizard.ts` / `menu.ts` | Interactive flows on Pi's `ctx.ui` (dialogs, editor, SelectList) |
+| `wizard.ts` / `menu.ts` | Interactive flows on Pi's `ctx.ui` (dialogs, editor, SelectList); agentic create hands the prompt to the main agent via `pi.sendUserMessage` |
 | `runtime.ts` | `runStore`: runs `FileSystem | Path` effects with `NodeServices.layer` |
 | `cli.ts` | Standalone CLI via `NodeRuntime.runMain` |

@@ -14,7 +14,6 @@ export interface NewProfileFields {
   readonly description?: string;
   readonly model?: string;
   readonly skills: readonly string[];
-  readonly purpose?: string;
   readonly instructions?: string;
   readonly instructionsFile?: string;
   readonly checklist: readonly string[];
@@ -28,22 +27,20 @@ export type ProfilesCommand =
   | { readonly kind: 'show'; readonly name: string }
   | { readonly kind: 'edit'; readonly name: string }
   | { readonly kind: 'delete'; readonly name: string; readonly force: boolean }
-  | { readonly kind: 'new'; readonly fields: NewProfileFields; readonly force: boolean }
-  | { readonly kind: 'defer'; readonly target: ProfilesCommand | undefined };
+  | { readonly kind: 'new'; readonly fields: NewProfileFields; readonly force: boolean };
 
 export const USAGE = [
   'Usage:',
-  '  /profiles                     interactive menu (new | modify | delete | list | defer)',
+  '  /profiles                     interactive menu (new | modify | delete | list)',
   '  /profiles --list              list profiles',
   '  /profiles --show <name>       show a profile',
   '  /profiles --modify <name>     modify a profile (alias: --edit)',
   '  /profiles --delete <name>     delete a profile (--force skips confirm)',
   '  /profiles --template          show the PROFILE.md template',
   '  /profiles --new [--name <slug>] [--description <text>] [--model <provider/model>]',
-  '            [--skills a,b,c] [--purpose <text>] [--instructions <text>]',
+  '            [--skills a,b,c] [--instructions <text>]',
+  '  /profiles --new               no args: interactive wizard (manual or agentic)',
   '            [--instructions-file <path>] [--checklist "a|b"] [--force]',
-  '  /profiles --defer             copy a handoff prompt to the clipboard instead of running',
-  '            (combine with --new/--list/--modify/--delete, or alone in the TUI to pick)',
   '  /profiles --help              this help',
   '',
   'This extension only stores profiles. It never activates, executes, or injects',
@@ -58,7 +55,6 @@ const BOOLEAN_FLAGS = new Set([
   'template',
   'help',
   'force',
-  'defer',
 ]);
 
 const VALUE_FLAGS = new Set([
@@ -70,7 +66,6 @@ const VALUE_FLAGS = new Set([
   'description',
   'model',
   'skills',
-  'purpose',
   'instructions',
   'instructions-file',
   'checklist',
@@ -243,7 +238,6 @@ export const parseOptionsFromTokens = (tokens: readonly string[]): ProfilesComma
         description: map['description'],
         model: map['model'],
         skills: splitList(map['skills'], /,/),
-        purpose: map['purpose'],
         instructions: map['instructions'],
         instructionsFile: map['instructions-file'],
         checklist: splitList(map['checklist'], /\|/),
@@ -255,10 +249,6 @@ export const parseOptionsFromTokens = (tokens: readonly string[]): ProfilesComma
       resolved = { kind: 'menu' };
   }
 
-  // `--defer` replaces execution with a clipboard handoff prompt for another agent.
-  if (isBare(flags, 'defer')) {
-    return { kind: 'defer', target: resolved.kind === 'menu' ? undefined : resolved };
-  }
   return resolved;
 };
 
@@ -285,4 +275,3 @@ export const tryParseOptionsFromTokens = (tokens: readonly string[]): ParsedOpti
     return { ok: false, err: error };
   }
 };
-

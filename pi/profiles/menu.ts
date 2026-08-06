@@ -1,12 +1,12 @@
-import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { DynamicBorder } from '@earendil-works/pi-coding-agent';
 import { Container, type SelectItem, SelectList, Text } from '@earendil-works/pi-tui';
 import { runStore } from './runtime.ts';
 import * as Store from './store.ts';
-import { runCreateWizard, runDeferWizard, runDeleteWizard, runEditWizard, runShowWizard } from './wizard.ts';
+import { runCreateWizard, runDeleteWizard, runEditWizard, runShowWizard } from './wizard.ts';
 
-/** Main interactive menu — a pure profile store: new | modify | delete | list | defer. */
-export const runMainMenu = async (ctx: ExtensionContext): Promise<void> => {
+/** Main interactive menu — a pure profile store: new | modify | delete | list. */
+export const runMainMenu = async (ctx: ExtensionContext, pi: ExtensionAPI): Promise<void> => {
   const items = await buildMenuItems(ctx);
 
   const choice = await ctx.ui.custom<string | null>((tui, theme, _keybindings, done) => {
@@ -42,7 +42,7 @@ export const runMainMenu = async (ctx: ExtensionContext): Promise<void> => {
 
   switch (choice) {
     case 'new': {
-      const profile = await runCreateWizard(ctx);
+      const profile = await runCreateWizard(ctx, pi);
       if (profile !== null) {
         ctx.ui.notify(`Profile created: .agents/profiles/${profile.name}/PROFILE.md`, 'info');
       }
@@ -57,15 +57,12 @@ export const runMainMenu = async (ctx: ExtensionContext): Promise<void> => {
     case 'list':
       await runShowWizard(ctx);
       break;
-    case 'defer':
-      await runDeferWizard(ctx);
-      break;
     default:
       break;
   }
 };
 
-/** Builds the four menu items (labels + one-line descriptions). */
+/** Builds the menu items (labels + one-line descriptions). */
 const buildMenuItems = async (ctx: ExtensionContext): Promise<SelectItem[]> => {
   const names = await runStore(Store.listProfiles(ctx.cwd));
 
@@ -73,7 +70,7 @@ const buildMenuItems = async (ctx: ExtensionContext): Promise<SelectItem[]> => {
     {
       value: 'new',
       label: 'New profile',
-      description: 'Wizard: name, description, model, skills, purpose, instructions, checklist',
+      description: 'Agentic (describe it — the agent resolves + creates via CLI) or manual (step-by-step form)',
     },
     {
       value: 'modify',
@@ -89,11 +86,6 @@ const buildMenuItems = async (ctx: ExtensionContext): Promise<SelectItem[]> => {
       value: 'list',
       label: 'List profiles',
       description: `${names.length} profile(s) — view one`,
-    },
-    {
-      value: 'defer',
-      label: 'Defer to CLI',
-      description: 'Copy a handoff prompt for another agent (new | modify | delete | list)',
     },
   ];
 };

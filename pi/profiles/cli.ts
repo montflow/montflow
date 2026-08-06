@@ -14,7 +14,6 @@
  */
 import { Effect } from 'effect';
 import { NodeRuntime } from '@effect/platform-node';
-import { buildDeferPrompt, type DeferContext } from './defer.ts';
 import * as Model from './model.ts';
 import { USAGE, tryParseOptionsFromTokens, type ProfilesCommand } from './options.ts';
 import { readTemplateSync } from './paths.ts';
@@ -78,7 +77,6 @@ const run = (command: ProfilesCommand): Effect.Effect<void, Error, never> =>
           description: fields.description,
           model: fields.model ?? '',
           skills: fields.skills,
-          purpose: fields.purpose ?? '',
           instructions: fields.instructions ?? '',
           checklist: fields.checklist,
         });
@@ -89,20 +87,6 @@ const run = (command: ProfilesCommand): Effect.Effect<void, Error, never> =>
         const markdown = Model.renderProfileFromTemplate(readTemplateSync(), profile);
         yield* Effect.tryPromise(() => runStore(Store.writeProfileFile(cwd, name, markdown)));
         console.log(`Profile created: .agents/profiles/${name}/PROFILE.md`);
-        return;
-      }
-      case 'defer': {
-        // Build and print the handoff prompt (no clipboard side effects in the CLI).
-        const [profiles, skillInfos] = yield* Effect.all([
-          Effect.tryPromise(() => runStore(Store.listProfiles(cwd))),
-          Effect.tryPromise(() => runStore(Skills.listSkills(cwd))),
-        ]);
-        const context: DeferContext = {
-          cwd,
-          profiles,
-          skills: skillInfos.map((skill) => skill.name),
-        };
-        console.log(buildDeferPrompt(command.target, context));
         return;
       }
       case 'menu':
