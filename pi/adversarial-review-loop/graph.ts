@@ -82,6 +82,12 @@ export interface LoopOptions {
   readonly featureSpec: boolean;
   readonly specName: string;
   readonly config: LoopConfig;
+  /** Human-readable scope description injected into reviewer tasks (interactive mode). */
+  readonly reviewScope?: string;
+  /** Files/directories in scope (when known from interactive setup). */
+  readonly scopeFiles?: readonly string[];
+  /** Absolute path to a materialized diff file (git-unstaged scope). */
+  readonly scopeDiffPath?: string;
 }
 
 export interface Ui extends WidgetUi {
@@ -425,13 +431,17 @@ const resolveCtx: GraphNode = (ctx) =>
     const supervisorLabel = usesSupervisor(config)
       ? `supervisor=${config.supervisor.mode}`
       : 'supervisor=skipped';
+    const scopeLabel =
+      opts.reviewScope !== undefined && opts.reviewScope.trim() !== ''
+        ? ` scope="${opts.reviewScope.trim().slice(0, 80)}"`
+        : '';
     yield* setStatus(ui, '● starting');
     yield* notify(
       ui,
       `[adversarial-review-loop] file=${resolvedReviewFile} reReview=${reReview} ` +
         `reviewers=${rosterLabel} fixer=${config.fixerModel} ` +
         `depth=${config.maxLoops} dir=${opts.targetDir} ${supervisorLabel} ` +
-        `reconcile=${config.reconciliator.mode}`,
+        `reconcile=${config.reconciliator.mode}${scopeLabel}`,
       'info',
     );
 
@@ -460,6 +470,29 @@ const resolveCtx: GraphNode = (ctx) =>
   });
 
 /**
+ * Builds the scope clause for reviewer tasks: materialized diff path, explicit
+ * file list, and/or a free-form scope description. Empty when no scope is set
+ * (flag-driven runs keep reviewing the whole target directory).
+ * @param {LoopOptions} opts Loop options
+ * @returns The scope clause text
+ */
+export const buildScopeClause = (opts: LoopOptions): string => {
+  const parts: string[] = [];
+  if (opts.scopeDiffPath !== undefined && opts.scopeDiffPath !== '') {
+    parts.push(
+      `Read the diff at ${opts.scopeDiffPath} — review ONLY the changes it contains, not the whole codebase.`,
+    );
+  }
+  if (opts.scopeFiles !== undefined && opts.scopeFiles.length > 0) {
+    parts.push(`Scope — focus on these files/directories: ${opts.scopeFiles.join(', ')}.`);
+  }
+  if (opts.reviewScope !== undefined && opts.reviewScope.trim() !== '') {
+    parts.push(`Scope — ${opts.reviewScope.trim()}`);
+  }
+  return parts.join(' ');
+};
+
+/**
  * Builds the reviewer task prompt for a profile.
  * @param {GraphCtx} ctx The current graph context
  * @param {ReviewerProfile} profile Reviewer profile
@@ -480,11 +513,13 @@ const buildReviewerTask = (
     briefFile !== undefined
       ? `Read the supervisor brief at ${briefFile} and obey your assignment for id=${profile.id}. `
       : '';
+  const scopeClause = buildScopeClause(opts);
 
   if (cycle === 1 && !reReview) {
     return (
       `Perform a thorough adversarial review of ${opts.targetDir}. ` +
       briefClause +
+      (scopeClause !== '' ? `${scopeClause} ` : '') +
       `Your objective: ${objective}. ` +
       `Load and follow the adversarial-review skill at ${skillPath}; ` +
       `write the report to ${outputPath} using its standard file structure. ` +
@@ -500,6 +535,7 @@ const buildReviewerTask = (
     `Re-review the existing review file at ${reviewFile} by executing ` +
     `Step 9 of the adversarial-review skill at ${skillPath}. ` +
     briefClause +
+    (scopeClause !== '' ? `${scopeClause} ` : '') +
     `Your objective: ${objective}. ` +
     `Write your updated report to ${outputPath} (may equal the canonical file). ` +
     'You are read-only on application source — write only the review markdown. ' +
@@ -600,10 +636,12 @@ const buildSupervisorBriefTask = (
         `skill=${profile.skillPath} scratch=${passScratchPath(ctx.reviewFile!, cycle, profile.id)}`,
     )
     .join('\n');
+  const scopeClause = buildScopeClause(ctx.opts);
 
   return (
     `BRIEF TURN (cycle ${cycle}).\n` +
     `Target directory: ${ctx.opts.targetDir}\n` +
+    (scopeClause !== '' ? `Scope: ${scopeClause}\n` : '') +
     `Canonical review file: ${ctx.reviewFile}\n` +
     `Re-review: ${ctx.reReview || cycle > 1 ? 'yes' : 'no'}\n` +
     `Write the pass brief to: ${briefFile}\n` +
