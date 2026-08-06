@@ -2,6 +2,7 @@
 
 > Status: **in progress** — decisions locked; implementation underway.
 > Scope: refactor of the review half of `@montflow/adversarial-review-loop`.
+> Note: since this doc was written the extension became **interactive-only** — the CLI roster flag (`--reviewers`) no longer exists; rosters are built in the TUI wizard from profiles.
 
 ## Locked decisions
 

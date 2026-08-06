@@ -4,16 +4,52 @@ A Pi extension that runs an automated **adversarial review loop** on your codeba
 
 Skills ship **inside this package** under `skills/`. The target project does not need to install them.
 
-In **standalone mode** (default), the review file lives at `.agents/reviews/<name>/<code>.md` with loop state beside it in `.agents/reviews/<name>/<code>/`. In **feature-spec mode** (`--feature-spec --spec-name <name>`), the review file lives inside the review task's directory as `REVIEW.md`.
+In **standalone mode** (default), the review file lives at `.agents/reviews/<name>/<code>.md` with loop state beside it in `.agents/reviews/<name>/<code>/`. Feature-spec mode (review file as `REVIEW.md` inside a feature's review task) exists in the graph but is **not reachable from the interactive wizard yet** — wire it into the action menu to re-enable.
+
+> **Interactive-only** — this extension is no longer a CLI. `/adversarial-review-loop` always opens the TUI wizard below; there are no flags to pass.
+
+## Interactive wizard
+
+Running `/adversarial-review-loop` (in the TUI) opens an interactive setup wizard:
+
+1. **Action menu** — currently **New review** (resume / history entries plug in later).
+2. **Scope** — two options:
+   - **Git unstaged changes** (tracked + untracked; the diff is materialized next to the review file so reviewers read exactly what changed).
+   - **Pick…** — type space-separated files/directories, a free-form focus prompt, or `.` for the whole directory. Paths that exist become the file scope; any other text becomes the focus prompt.
+3. **Reviewer roster** — starts with a single built-in `generic` reviewer (no profile needed). `+ Add reviewer` lists the **profiles stored in the current repo** (`.agents/profiles/`, via the `@montflow/profiles` extension) with their descriptions — type to search. Each added reviewer gets a **model** pick (prefilled with the profile's preferred model). Change/remove reviewers freely.
+4. **Settings** — edit **max loops**, **fixer model**, **supervisor mode/model**, **reconcile mode**, and **deadlock flip threshold** before running.
+5. **Run** — the confirmed scope + roster + settings become the loop options and the loop starts immediately.
+
+```
+/adversarial-review-loop                  # interactive wizard (TUI only)
+```
+
+## Reviewers are profiles
+
+This extension **requires the `@montflow/profiles` extension** whenever the roster is built from profiles (interactive mode, or a profile reviewer id that is not a builtin). Profiles live at `.agents/profiles/<name>/PROFILE.md` and are read over Pi's shared event bus (`profiles:get` / `profiles:list`) — no code coupling between the two extensions.
+
+The profile contributes the reviewer's **id/label**, **preferred model**, and its **description / instructions / review checklist become the reviewer's objective lens**. The bundled `adversarial-review` skill is always the behavioral skill.
+
+The only roster entry that does **not** require profiles is the built-in `generic` reviewer (the default). The other builtin ids (`security`, `quality`, …) remain available through the wizard's profile list only if a profile of that name exists — add builtins to a roster by creating matching profiles.
+
+### Install the profiles extension
+
+```bash
+mkdir -p .pi/extensions
+ln -s <pi>/pi/profiles .pi/extensions/profiles
+# or globally: ln -s <pi>/pi/profiles ~/.pi/agent/extensions/profiles
+```
+
+Then `/reload`. When profiles is missing and you try to add a profile reviewer (or resolve a profile id in the roster), you get a clear install hint instead of a silent failure.
 
 ## Pass + Supervisor
 
 See **[DESIGN-pass-supervisor.md](./DESIGN-pass-supervisor.md)** for the full design.
 
 - **Default:** single `generic` reviewer — **no supervisor** (same as before).
-- **Multi-reviewer** (`--reviewers=security,quality,…`): one persistent **supervisor** per loop briefs specialists, then aggregates scratch into the canonical review.
+- **Multi-reviewer** (add profiles in the wizard): one persistent **supervisor** per loop briefs specialists, then aggregates scratch into the canonical review.
 - Specialists are **codebase read-only** (`read` / `grep` / `glob` + `write` for scratch).
-- CLI roster flag remains `--reviewers`. Supervisor mode: `--supervisor-mode=on-multi|always|never` (default `on-multi`).
+- Supervisor mode (`on-multi` default) is editable in the wizard's **Settings** step.
 
 ## Bundled skills
 
@@ -52,7 +88,7 @@ flowchart TD
 
 ## Configuration
 
-### Default (no flags)
+### Defaults (editable in the wizard's Settings step)
 
 Equivalent to:
 
@@ -80,18 +116,13 @@ Equivalent to:
 }
 ```
 
+The wizard edits `maxLoops`, `fixer.model`, `supervisor.mode` + `model`, `reconciliator.mode`, and `deadlock.flipThreshold` interactively.
+
 ### Built-in reviewer ids
 
 `generic` · `security` · `quality` · `technical` (`quality` variant whose objective also covers security — not a true alias) · `guidelines` · `style` · `linguist`
 
-```
-/adversarial-review-loop --reviewers=security,quality,linguist
-/adversarial-review-loop --config=./review-loop.json
-/adversarial-review-loop --reviewer-model=deepseek-v4-pro --fixer-model=deepseek-v4-flash-free
-/adversarial-review-loop --supervisor-mode=never
-```
-
-Per-agent models come from the config (or builtins). **Models never steer the loop** — the orchestrator parses `## Summary` + `loop-state.json` to decide continue/stop/deadlock.
+Builtin ids are used to seed the **default `generic` roster entry** and are referenced by the profiles extension (`PROFILE.md` skills) rather than through CLI flags. Reviewer rosters are built in the wizard from stored profiles.
 
 ## Session policy
 
@@ -110,6 +141,7 @@ Per-agent models come from the config (or builtins). **Models never steer the lo
   001.md                 # canonical review (fixer + humans)
   001/
     loop-state.json      # orchestrator memory (resume)
+    scope.diff           # materialized git unstaged diff (git-unstaged scope)
     scratch/<id>.md      # multi-reviewer cycle scratch
 ```
 
@@ -127,23 +159,6 @@ Action: mark finding(s) `Escalated` with an `[Orchestrator]` Discussion turn.
 
 Uses Pi `ctx.ui.setWidget` (interactive TUI / RPC). Shows cycle, per-reviewer status, reconcile mode, fixer status, and summary counts. Cleared on terminal. No-op in print/JSON mode.
 
-## Flags
-
-| Flag | Default | Description |
-|---|---|---|
-| `--reviewer-model` | `deepseek-v4-pro` | Override model for all selected reviewers |
-| `--fixer-model` | `deepseek-v4-flash-free` | Fixer model |
-| `--depth` / `--max-loops` | `5` | Maximum review cycles |
-| `--dir` / `--target-dir` | current dir | Directory to review |
-| `--name` | `adversarial` | `<name>` segment of `.agents/reviews/<name>/` |
-| `--fresh` | `false` | Allocate a new `<code>` instead of reusing |
-| `--reviewers` | `generic` | Comma-separated builtin reviewer ids |
-| `--supervisor-model` | reviewer default | Supervisor model override |
-| `--supervisor-mode` | `on-multi` | `on-multi` \| `always` \| `never` |
-| `--config` | _(none)_ | JSON config file path |
-| `--feature-spec` | `false` | Enable feature-spec mode |
-| `--spec-name` | _(optional)_ | Feature name under `.agents/features/` |
-
 ## Installation
 
 ```json
@@ -160,8 +175,10 @@ Requires `@earendil-works/pi-coding-agent` as a peer dependency. TypeScript load
 
 | File | Responsibility |
 |---|---|
-| `index.ts` | Pi command entry + flag parsing |
-| `config.ts` | Default/builtin roster + config resolve |
+| `index.ts` | Pi command entry — always opens the interactive wizard (no CLI flags) |
+| `interactive.ts` | Interactive setup wizard (action menu + scope picker + roster builder + settings editor) |
+| `profiles-client.ts` | `@montflow/profiles` event-bus client + profile→reviewer mapping |
+| `config.ts` | Defaults, builtin reviewer catalog, roster helpers |
 | `graph.ts` | State machine (orchestrator) |
 | `loop-state.ts` | Resumable orchestrator memory |
 | `merge.ts` | Programmatic multi-reviewer merge |
@@ -170,5 +187,6 @@ Requires `@earendil-works/pi-coding-agent` as a peer dependency. TypeScript load
 | `findings.ts` | Finding parse/render helpers |
 | `agents.ts` | Per-role system prompts + tools |
 | `runner.ts` | Fresh agent sessions |
+| `git.ts` | Git branch + working-tree diff helpers |
 | `skills/` | Bundled role skills |
 | `test/` | Unit tests |
