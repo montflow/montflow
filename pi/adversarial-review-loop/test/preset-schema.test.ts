@@ -38,6 +38,42 @@ test('preset schema: round-trips a stored reference-based config', () => {
   expect(decoded.config.reviewers).toHaveLength(2);
 });
 
+test('preset schema: round-trips fallback model chains for every role', () => {
+  const preset = {
+    version: 1 as const,
+    name: 'fallbacks',
+    config: {
+      reviewers: [
+        {
+          type: 'builtin' as const,
+          id: 'generic',
+          model: 'primary-rev',
+          fallbackModels: ['fb-rev-1', 'fb-rev-2'],
+        },
+        { type: 'profile' as const, name: 'auditor', model: 'auditor-rev' },
+      ],
+      supervisor: {
+        model: 'primary-sup',
+        fallbackModels: ['fb-sup-1'],
+      },
+      fixerModel: 'primary-fixer',
+      fixerFallbackModels: ['fb-fixer-1', 'fb-fixer-2'],
+      maxLoops: 2,
+      maxCycles: 3,
+      deadlock: { flipThreshold: 2, action: 'escalate' as const },
+    },
+  };
+  const decoded = decode(encode(preset)) as ReviewPresetDecoded;
+  expect(decoded.config.reviewers[0]?.fallbackModels).toEqual(['fb-rev-1', 'fb-rev-2']);
+  expect(decoded.config.reviewers[1]?.fallbackModels).toBeUndefined();
+  expect(decoded.config.supervisor.fallbackModels).toEqual(['fb-sup-1']);
+  expect(decoded.config.fixerFallbackModels).toEqual(['fb-fixer-1', 'fb-fixer-2']);
+  // A config without fallbacks still decodes (all optional).
+  const plain = decode(encode({ version: 1 as const, name: 'plain', config: storedConfig() })) as ReviewPresetDecoded;
+  expect(plain.config.fixerFallbackModels).toBeUndefined();
+  expect(plain.config.supervisor.fallbackModels).toBeUndefined();
+});
+
 test('preset schema: encoded JSON is compact references — no expanded profile data', () => {
   const json = encode({ version: 1 as const, name: 'demo', config: storedConfig() });
   expect(json).not.toContain('objective');

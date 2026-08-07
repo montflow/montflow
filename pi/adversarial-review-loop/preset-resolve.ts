@@ -49,6 +49,7 @@ export const resolveReviewerRef = async (
       id: builtin.id,
       label: builtin.label,
       model,
+      fallbackModels: ref.fallbackModels,
       skillPath: builtin.skillPath,
       objective: builtin.objective,
     });
@@ -70,7 +71,7 @@ export const resolveReviewerRef = async (
     );
     return null;
   }
-  return profileToReviewerProfile(result.profile, ref.model);
+  return profileToReviewerProfile(result.profile, ref.model, ref.fallbackModels);
 };
 
 /**
@@ -95,8 +96,13 @@ export const resolvePresetConfig = async (
   }
   return {
     reviewers,
-    supervisor: { model: stored.supervisor.model, skillPath: SUPERVISOR_SKILL_PATH },
+    supervisor: {
+      model: stored.supervisor.model,
+      skillPath: SUPERVISOR_SKILL_PATH,
+      fallbackModels: stored.supervisor.fallbackModels,
+    },
     fixerModel: stored.fixerModel,
+    fixerFallbackModels: stored.fixerFallbackModels,
     // Legacy presets predate the loop/cycle split: their maxLoops meant
     // review cycles, so it becomes the per-loop cycle cap with the default
     // loop count (mirrors normalizeStoredConfig in loop-state.ts).

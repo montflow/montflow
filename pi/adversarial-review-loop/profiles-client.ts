@@ -211,11 +211,13 @@ export const objectiveFromProfile = (profile: Profile): string => {
 export const profileToReviewerProfile = (
   profile: Profile,
   model?: string,
+  fallbackModels?: readonly string[],
 ): ReviewerProfile =>
   makeReviewerProfile({
     id: profile.name,
     label: titleFromProfileName(profile.name),
     model: pickModel(profile, model),
+    fallbackModels,
     skillPath: REVIEWER_SKILL_PATH,
     objective:
       objectiveFromProfile(profile) || `adversarial review focused on ${profile.name}`,

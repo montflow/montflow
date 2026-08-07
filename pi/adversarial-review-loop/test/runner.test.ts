@@ -2,10 +2,17 @@ import { test, expect, vi } from 'vitest';
 import { Effect } from 'effect';
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 import {
+  AgentRunError,
   agentError,
+  classifyFailure,
   reportTool,
   resolveModelObject,
+  retryPrompt,
+  runAgentResilient,
   runOneTurn,
+  type AgentRunOptions,
+  type AgentRunResult,
+  type PersistentAgent,
   type SessionModel,
 } from '../runner';
 
@@ -90,6 +97,76 @@ test('reportTool: no callback → no-op', () => {
   expect(() =>
     reportTool(undefined, { type: 'tool_execution_start', toolName: 'read' } as never),
   ).not.toThrow();
+});
+
+// ─── runOneTurn live stream deltas ────────────────────────────────────
+
+test('runOneTurn: forwards text_delta and thinking_delta to onDelta', async () => {
+  const deltas: Array<[string, string]> = [];
+  const session = {
+    subscribe: vi.fn((listener: (event: unknown) => void) => {
+      // Emit a normal turn: one text chunk, a thinking chunk, then the
+      // final message_end (the extracted assistant text).
+      listener({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', delta: 'Hello ' },
+      });
+      listener({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'thinking_delta', delta: 'hmm…' },
+      });
+      listener({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', delta: 'world' },
+      });
+      listener({
+        type: 'message_end',
+        message: { role: 'assistant', content: 'Hello world' },
+      });
+      return () => undefined;
+    }),
+    prompt: vi.fn(() => Promise.resolve()),
+    abort: vi.fn(() => Promise.resolve()),
+    agent: { waitForIdle: vi.fn(() => Promise.resolve()) },
+  } as unknown as AgentSession;
+
+  const onDelta = vi.fn((delta: string, kind: string) => {
+    deltas.push([delta, kind]);
+  });
+  const result = await Effect.runPromise(
+    runOneTurn(session, 'task', 'test-model', 1000, undefined, onDelta),
+  );
+
+  expect(result.error).toBeUndefined();
+  expect(result.text).toBe('Hello world');
+  // Only the text/thinking deltas are forwarded — never tool or end events.
+  expect(onDelta).toHaveBeenCalledTimes(3);
+  expect(onDelta).toHaveBeenNthCalledWith(1, 'Hello ', 'text');
+  expect(onDelta).toHaveBeenNthCalledWith(2, 'hmm…', 'thinking');
+  expect(onDelta).toHaveBeenNthCalledWith(3, 'world', 'text');
+});
+
+test('runOneTurn: no onDelta → message deltas are silently ignored', async () => {
+  const session = {
+    subscribe: vi.fn((listener: (event: unknown) => void) => {
+      listener({
+        type: 'message_update',
+        assistantMessageEvent: { type: 'text_delta', delta: 'ignored' },
+      });
+      listener({
+        type: 'message_end',
+        message: { role: 'assistant', content: 'done' },
+      });
+      return () => undefined;
+    }),
+    prompt: vi.fn(() => Promise.resolve()),
+    abort: vi.fn(() => Promise.resolve()),
+    agent: { waitForIdle: vi.fn(() => Promise.resolve()) },
+  } as unknown as AgentSession;
+
+  const result = await Effect.runPromise(runOneTurn(session, 'task', 'test-model', 1000));
+  expect(result.error).toBeUndefined();
+  expect(result.text).toBe('done');
 });
 
 // ─── runOneTurn timeout aborts the in-flight generation ────────────────
@@ -187,8 +264,209 @@ test('runOneTurn: still marks timedOut when the provider ignores the abort signa
   } as unknown as AgentSession;
 
   const result = await Effect.runPromise(
-    runOneTurn(session, 'slow task', 'test-model', 50, undefined, 20),
+    runOneTurn(session, 'slow task', 'test-model', 50, undefined, undefined, 20),
   );
   expect(result.timedOut).toBe(true);
   expect(result.error).toContain('timed out after 50ms');
+});
+
+// ─── classifyFailure ─────────────────────────────────────────────────
+
+test('classifyFailure: rate limit / overload / network messages are transient', () => {
+  expect(classifyFailure('Error: 429 Too Many Requests — rate limit exceeded')).toBe('transient');
+  expect(classifyFailure('anthropic: overloaded_error: 529')).toBe('transient');
+  expect(classifyFailure('503 Service Unavailable')).toBe('transient');
+  expect(classifyFailure('ECONNRESET: socket hang up')).toBe('transient');
+  expect(classifyFailure('Request timed out')).toBe('transient');
+  expect(classifyFailure('quota exceeded')).toBe('transient');
+  expect(classifyFailure('temporarily unavailable')).toBe('transient');
+});
+
+test('classifyFailure: auth / bad-request / unknown-model messages are permanent', () => {
+  expect(classifyFailure('401 Unauthorized — invalid API key')).toBe('permanent');
+  expect(classifyFailure('400 Bad Request: unsupported parameter')).toBe('permanent');
+  expect(classifyFailure("Model 'foo/bar' is not available")).toBe('permanent');
+  expect(classifyFailure('No API key found for undefined.')).toBe('permanent');
+});
+
+test('classifyFailure: a timed-out flag is always transient', () => {
+  expect(classifyFailure('any message', true)).toBe('transient');
+  expect(classifyFailure('permanent-looking message', true)).toBe('transient');
+});
+
+// ─── retryPrompt ─────────────────────────────────────────────────────
+
+/** A fake persistent agent prompt. */
+const fakePrompt = (
+  behavior: (attempt: number) => Effect.Effect<AgentRunResult>,
+): PersistentAgent['prompt'] => {
+  let attempt = 0;
+  return (_task, _timeoutMs, _onTool, _onDelta) => {
+    const current = attempt++;
+    return behavior(current);
+  };
+};
+
+test('retryPrompt: retries transient failures with backoff then succeeds', async () => {
+  const calls: string[] = [];
+  const prompt = retryPrompt(
+    fakePrompt((attempt) => {
+      calls.push(`attempt-${attempt}`);
+      if (attempt < 2) {
+        return Effect.succeed({ text: '', error: '429 rate limit exceeded' });
+      }
+      return Effect.succeed({ text: 'ok', error: undefined });
+    }),
+    1000,
+    { maxRetries: 3, baseDelayMs: 1 },
+  );
+  const result = await Effect.runPromise(prompt('task'));
+  expect(result.error).toBeUndefined();
+  expect(result.text).toBe('ok');
+  // Two transient failures were retried (with sleeps), the third attempt won.
+  expect(calls).toEqual(['attempt-0', 'attempt-1', 'attempt-2']);
+});
+
+test('retryPrompt: returns immediately on a timed-out turn (session is poisoned)', async () => {
+  const prompt = retryPrompt(
+    fakePrompt(() =>
+      Effect.succeed({ text: '', error: 'timed out after 1000ms', timedOut: true }),
+    ),
+    1000,
+    { maxRetries: 3, baseDelayMs: 1 },
+  );
+  const result = await Effect.runPromise(prompt('task'));
+  expect(result.timedOut).toBe(true);
+  expect(result.error).toContain('timed out');
+});
+
+test('retryPrompt: returns immediately on a permanent failure', async () => {
+  const prompt = retryPrompt(
+    fakePrompt(() => Effect.succeed({ text: '', error: '401 Unauthorized' })),
+    1000,
+    { maxRetries: 3, baseDelayMs: 1 },
+  );
+  const result = await Effect.runPromise(prompt('task'));
+  expect(result.error).toBe('401 Unauthorized');
+});
+
+test('retryPrompt: maxRetries 0 does not retry', async () => {
+  const prompt = retryPrompt(
+    fakePrompt(() => Effect.succeed({ text: '', error: '429 rate limit' })),
+    1000,
+    { maxRetries: 0, baseDelayMs: 1 },
+  );
+  const result = await Effect.runPromise(prompt('task'));
+  expect(result.error).toBe('429 rate limit');
+});
+
+// ─── runAgentResilient ───────────────────────────────────────────────
+
+test('runAgentResilient: retries transient failures on the same model, then falls back', async () => {
+  const calls: string[] = [];
+  const base = (options: AgentRunOptions) => {
+    calls.push(options.model);
+    // Primary always rate-limits; the fallback model succeeds.
+    return options.model === 'primary'
+      ? Effect.succeed({ text: '', error: '529 overloaded' })
+      : Effect.succeed({ text: 'fixed', error: undefined });
+  };
+  const result = await Effect.runPromise(
+    runAgentResilient(
+      base,
+      ['primary', 'fallback-1'],
+      (model) => ({ model, systemPrompt: '', task: 't', tools: [], cwd: '/tmp' }),
+      1000,
+      { maxRetries: 2, baseDelayMs: 1 },
+    ),
+  );
+  expect(result.error).toBeUndefined();
+  expect(result.text).toBe('fixed');
+  // primary: initial attempt + 2 transient retries exhausted → fallback-1 wins.
+  expect(calls).toEqual(['primary', 'primary', 'primary', 'fallback-1']);
+});
+
+test('runAgentResilient: all models failed → aggregated error naming every model', async () => {
+  const result = await Effect.runPromise(
+    runAgentResilient(
+      (options: AgentRunOptions) =>
+        Effect.succeed({
+          text: '',
+          error: `${options.model} exploded`,
+        }),
+      ['primary', 'fallback-1', 'fallback-2'],
+      (model) => ({ model, systemPrompt: '', task: 't', tools: [], cwd: '/tmp' }),
+      1000,
+      { maxRetries: 0, baseDelayMs: 1 },
+    ),
+  );
+  expect(result.error).toContain('All 3 model(s) failed');
+  expect(result.error).toContain('primary: primary exploded');
+  expect(result.error).toContain('fallback-1: fallback-1 exploded');
+  expect(result.error).toContain('fallback-2: fallback-2 exploded');
+});
+
+test('runAgentResilient: permanent failure skips retries and falls back immediately', async () => {
+  const calls: string[] = [];
+  const base = (options: AgentRunOptions) => {
+    calls.push(options.model);
+    return options.model === 'primary'
+      ? Effect.succeed({ text: '', error: '401 Unauthorized' })
+      : Effect.succeed({ text: 'ok', error: undefined });
+  };
+  const result = await Effect.runPromise(
+    runAgentResilient(
+      base,
+      ['primary', 'fallback-1'],
+      (model) => ({ model, systemPrompt: '', task: 't', tools: [], cwd: '/tmp' }),
+      1000,
+      { maxRetries: 5, baseDelayMs: 1 },
+    ),
+  );
+  expect(result.text).toBe('ok');
+  // No retries for the permanent 401: exactly one primary call.
+  expect(calls).toEqual(['primary', 'fallback-1']);
+});
+
+test('runAgentResilient: session-creation failure (error channel) falls back to the next model', async () => {
+  const result = await Effect.runPromise(
+    runAgentResilient(
+      (options: AgentRunOptions) =>
+        options.model === 'primary'
+          ? Effect.fail(new AgentRunError({ message: 'Failed to create agent session (model: primary): 429 rate limit' }))
+          : Effect.succeed({ text: 'ok', error: undefined }),
+      ['primary', 'fallback-1'],
+      (model) => ({ model, systemPrompt: '', task: 't', tools: [], cwd: '/tmp' }),
+      1000,
+      { maxRetries: 1, baseDelayMs: 1 },
+    ),
+  );
+  expect(result.error).toBeUndefined();
+  expect(result.text).toBe('ok');
+});
+
+test('runAgentResilient: empty model chain returns a clear failure', async () => {
+  const result = await Effect.runPromise(
+    runAgentResilient(
+      () => Effect.succeed({ text: 'ok', error: undefined }),
+      [],
+      (model) => ({ model, systemPrompt: '', task: 't', tools: [], cwd: '/tmp' }),
+      1000,
+    ),
+  );
+  expect(result.error).toBe('No models configured for this agent role');
+});
+
+test('runAgentResilient: timedOut flag of the last failure is preserved', async () => {
+  const result = await Effect.runPromise(
+    runAgentResilient(
+      () =>
+        Effect.succeed({ text: '', error: 'timed out after 1000ms', timedOut: true }),
+      ['primary'],
+      (model) => ({ model, systemPrompt: '', task: 't', tools: [], cwd: '/tmp' }),
+      1000,
+      { maxRetries: 0, baseDelayMs: 1 },
+    ),
+  );
+  expect(result.timedOut).toBe(true);
 });

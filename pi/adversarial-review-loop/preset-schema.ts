@@ -43,11 +43,15 @@ export const ReviewerRefSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
   /** Model override; omitted = default/preferred model. */
   model: Schema.optional(Schema.String),
+  /** Optional ordered fallback models tried after `model` fails. */
+  fallbackModels: Schema.optional(Schema.Array(Schema.String)),
 });
 
 /** Supervisor reference: the model only — the skill path is always the bundled one. */
 export const PresetSupervisorSchema = Schema.Struct({
   model: Schema.String,
+  /** Optional ordered fallback models tried after `model` fails. */
+  fallbackModels: Schema.optional(Schema.Array(Schema.String)),
 });
 
 /** JSON shape of the deadlock config. */
@@ -61,6 +65,8 @@ export const PresetLoopConfigSchema = Schema.Struct({
   reviewers: Schema.Array(ReviewerRefSchema),
   supervisor: PresetSupervisorSchema,
   fixerModel: Schema.String,
+  /** Optional ordered fallback models tried after `fixerModel` fails. */
+  fixerFallbackModels: Schema.optional(Schema.Array(Schema.String)),
   /** Number of independent reviewer loops. */
   maxLoops: Schema.Number,
   /** Optional for legacy presets; resolution defaults to the legacy maxLoops as the per-loop cycle cap. */

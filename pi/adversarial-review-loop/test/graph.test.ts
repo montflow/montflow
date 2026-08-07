@@ -1,8 +1,11 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeAll } from 'vitest';
 import fs from 'node:fs';
+import os from 'node:os';
+import net from 'node:net';
 import path from 'node:path';
 import { Effect, Option } from 'effect';
 import {
+  buildScopeClause,
   transitionAfterReview,
   transitionAfterFixer,
   runGraph,
@@ -14,6 +17,12 @@ import { SkillVerificationError } from '../verify-skill';
 import { defaultLoopConfig } from '../config';
 import { emptyLoopState, saveLoopState } from '../loop-state';
 import { runEffect, withProjectRoot, type TempDir } from './helpers';
+
+// Hermetic: a dev shell inside herdr exports HERDR_ENV — graph tests must not
+// emit pane.report_agent messages to the user's real herdr socket.
+beforeAll(() => {
+  delete process.env.HERDR_ENV;
+});
 
 test('statusLine: formats loop/cycle/phase/status', () => {
   expect(statusLine(0, 3, 1, 5, 'reviewer', 'running')).toBe(
@@ -58,6 +67,30 @@ test('transitionAfterFixer: under the per-loop cycle cap → same reviewers re-r
 
 test('transitionAfterFixer: at the cycle cap → cycleMax decision', () => {
   expect(transitionAfterFixer({ cycle: 5, maxCycles: 5 })).toBe('cycleMax');
+});
+
+test('buildScopeClause: includes the user directive', () => {
+  const opts = optsWithConfig({
+    directive: 'audit only the file-signing flow in src/crypto/',
+  });
+  expect(buildScopeClause(opts)).toContain(
+    'USER DIRECTIVE — audit only the file-signing flow in src/crypto/',
+  );
+});
+
+test('buildScopeClause: empty directive is omitted', () => {
+  expect(buildScopeClause(optsWithConfig({ directive: '   ' }))).toBe('');
+});
+
+test('buildScopeClause: directive mode does not repeat the directive as Scope', () => {
+  // Directive mode sets reviewScope == directive (see optsFromConfig) — the
+  // clause must not emit the text twice.
+  const directive = 'check the import feature';
+  const clause = buildScopeClause(
+    optsWithConfig({ directive, reviewScope: directive }),
+  );
+  expect(clause).toBe(`USER DIRECTIVE — ${directive}`);
+  expect(clause.split('check the import feature')).toHaveLength(2);
 });
 
 /**
@@ -337,7 +370,19 @@ test('runGraph: a Summary claiming Open: 0 does not false-terminate done while a
       runGraph(testCtx(dir, ui, { maxLoops: 1, maxCycles: 1, fresh: true }), {
         verifySkill: () => Effect.succeed(undefined),
         runAgent: (options) => {
+          // The fixer completes properly (writes its updated block — the
+          // finding stays Open, so the recomputed Summary still shows it):
+          // this test is about the Summary miscount, not fixer failures.
           fixerTasks.push(options.task);
+          const scratch = options.task.match(/scratch file at (\S+\.md)/)?.[1];
+          const id = options.task.match(/\b(F\d+)\b/)?.[1];
+          if (scratch !== undefined && id !== undefined) {
+            fs.mkdirSync(path.dirname(scratch), { recursive: true });
+            fs.writeFileSync(
+              scratch,
+              `#### ${id} — Not fixed yet\n- **Severity**: Major\n- **Location**: \`src/a.ts\`\n- **Problem**: x.\n- **Impact**: y.\n- **Suggestion**: z.\n- **Status**: Open\n- **Attempts**: 1\n- **First Seen**: 1\n\n### Discussion\n`,
+            );
+          }
           return Effect.succeed({ text: 'ok', error: undefined });
         },
         createPersistentAgent: () => Effect.succeed(fakeAgentFor(reviewFile, reviewBody, [])),
@@ -813,25 +858,595 @@ test('runGraph: a fixer that produces no scratch block notifies per-finding (F20
       }),
     );
 
-    // The fixer was dispatched for the open finding…
-    expect(fixerTasks).toHaveLength(1);
+    // The fixer was re-dispatched until its attempt budget ran out (initial +
+    // MAX_FIXER_DISPATCH_ATTEMPTS-1 re-dispatches)…
+    expect(fixerTasks).toHaveLength(3);
     expect(fixerTasks[0]).toContain('F1');
-    // …but produced no scratch block, so the divergence is notified per-finding
-    // (naming the finding and its expected scratch path) instead of a silent null.
+    // …each failure is notified per-finding with the SPECIFIC reason +
+    // expected scratch path instead of a silent null…
     expect(ui.notify).toHaveBeenCalledWith(
-      expect.stringContaining('Fixer for F1 produced no scratch block'),
+      expect.stringContaining('Fixer for F1: finished but wrote no scratch block'),
       'warning',
     );
     expect(ui.notify).toHaveBeenCalledWith(
       expect.stringContaining('passes/1/1/fixes/F1.md'),
       'warning',
     );
-    // A single null does not escalate (threshold is MAX_CONSECUTIVE_FAILURES=2)…
-    expect(result.terminal).toBe('maxLoops');
+    // …the failures were re-dispatched with hand-off context (not resumed)…
+    expect(ui.notify).toHaveBeenCalledWith(
+      expect.stringContaining('Re-dispatching 1 failed fixer(s) (F1)'),
+      'info',
+    );
+    // The failure reason is recorded next to the scratch (fixes/F1.error.json)
+    // so a resume can hand it to the re-dispatched fixer as context.
+    expect(fs.existsSync(path.join(dir.tmp, '.agents/reviews/adversarial/001/passes/1/1/fixes/F1.error.json'))).toBe(true);
+    // A finding that still produced no block after every attempt escalates to
+    // a human — the phase NEVER resumes with a failed finding.
+    expect(result.terminal).toBe('failed');
+    expect(ui.notify).toHaveBeenCalledWith(
+      expect.stringContaining('Fixer phase failed: F1 could not be fixed after 3 attempt(s)'),
+      'error',
+    );
     // …and the unrecorded fix is NOT merged into the canonical: F1 stays Open.
     const final = fs.readFileSync(reviewFile, 'utf8');
     expect(final).toContain('Status**: Open');
     expect(final).not.toContain('Status**: In Review');
+  }));
+
+test('runGraph: resume at the fixer phase recovers valid scratch checkpoints without re-dispatch', () =>
+  withReviewDir(async (dir, reviewFile) => {
+    // A previous pass finished reviewing (phase 'reviewed') but died during
+    // the fixer merge. The fixer's valid scratch block survives on disk; the
+    // resume must merge it without re-dispatching a fixer agent.
+    const canonical = `# Review
+
+## Review Metadata
+- **Max Attempts**: 3
+
+## Findings
+
+#### F1 — Bug one
+- **Severity**: Major
+- **Location**: \`src/a.ts\`
+- **Problem**: Wrong thing.
+- **Impact**: Breaks.
+- **Suggestion**: Fix it.
+- **Status**: Open
+- **Attempts**: 0
+- **First Seen**: 1
+
+### Discussion
+
+## Summary
+- **Open**: 1
+- **In Review**: 0
+- **Escalated**: 0
+- **Resolved**: 0
+- **Won't Fix**: 0
+`;
+    fs.writeFileSync(reviewFile, canonical);
+
+    // Locked-in config + phase 'reviewed' → resume routes straight to fixer.
+    const config = { ...defaultLoopConfig(), maxLoops: 1, maxCycles: 1 };
+    const state = {
+      ...emptyLoopState(['generic']),
+      loop: 0,
+      cycle: 1,
+      config,
+      phase: 'reviewed' as const,
+    };
+    fs.mkdirSync(path.join(dir.tmp, '.agents/reviews/adversarial/001'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir.tmp, '.agents/reviews/adversarial/001/loop-state.json'),
+      JSON.stringify(state, null, 2),
+    );
+
+    // The interrupted fixer DID write its updated block (Status: In Review).
+    const scratchDir = path.join(dir.tmp, '.agents/reviews/adversarial/001/passes/1/1/fixes');
+    fs.mkdirSync(scratchDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(scratchDir, 'F1.md'),
+      `#### F1 — Bug one\n- **Severity**: Major\n- **Location**: \`src/a.ts\`\n- **Problem**: Wrong thing.\n- **Impact**: Breaks.\n- **Suggestion**: Fix it.\n- **Status**: In Review\n- **Attempts**: 1\n- **First Seen**: 1\n\n### Discussion\n\n- [Fixer] Fixed it.\n`,
+    );
+
+    const { ui } = mockUi();
+    const fixerTasks: string[] = [];
+    const reviewerPrompts: string[] = [];
+    const result = await runEffect(
+      runGraph(
+        testCtx(dir, ui, { maxLoops: 1, maxCycles: 1, fresh: false, reviewFile, config }),
+        {
+          verifySkill: () => Effect.succeed(undefined),
+          runAgent: (options) => {
+            fixerTasks.push(options.task);
+            return Effect.succeed({ text: 'ok', error: undefined });
+          },
+          createPersistentAgent: () =>
+            Effect.succeed(fakeAgentFor(reviewFile, canonical, reviewerPrompts)),
+        },
+      ),
+    );
+
+    // The checkpoint was merged without re-dispatching a fixer…
+    expect(fixerTasks).toHaveLength(0);
+    expect(ui.notify).toHaveBeenCalledWith(
+      expect.stringContaining('Recovered 1 fixer checkpoint(s) (F1)'),
+      'info',
+    );
+    // …the reviewers were not re-run (resume jumped straight into the fixer)…
+    expect(reviewerPrompts).toHaveLength(0);
+    // …and the canonical reflects the recovered block.
+    const final = fs.readFileSync(reviewFile, 'utf8');
+    expect(final).toContain('Status**: In Review');
+    // maxCycles=1 headless → the per-loop cycle cap.
+    expect(result.terminal).toBe('maxLoops');
+  }));
+
+test('runGraph: resume at the fixer phase re-dispatches failed findings with prior failure context', () =>
+  withReviewDir(async (dir, reviewFile) => {
+    // phase 'reviewed' + a stub scratch (no Status field) + a failure record:
+    // the stub must NOT be recovered (it would clobber the canonical); the
+    // finding is re-dispatched with the prior failure reason + partial scratch
+    // as hand-off context.
+    const canonical = `# Review
+
+## Review Metadata
+- **Max Attempts**: 3
+
+## Findings
+
+#### F1 — Bug one
+- **Severity**: Major
+- **Location**: \`src/a.ts\`
+- **Problem**: Wrong thing.
+- **Impact**: Breaks.
+- **Suggestion**: Fix it.
+- **Status**: Open
+- **Attempts**: 0
+- **First Seen**: 1
+
+### Discussion
+
+## Summary
+- **Open**: 1
+- **In Review**: 0
+- **Escalated**: 0
+- **Resolved**: 0
+- **Won't Fix**: 0
+`;
+    fs.writeFileSync(reviewFile, canonical);
+
+    const config = { ...defaultLoopConfig(), maxLoops: 1, maxCycles: 1 };
+    const state = {
+      ...emptyLoopState(['generic']),
+      loop: 0,
+      cycle: 1,
+      config,
+      phase: 'reviewed' as const,
+    };
+    fs.mkdirSync(path.join(dir.tmp, '.agents/reviews/adversarial/001'), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir.tmp, '.agents/reviews/adversarial/001/loop-state.json'),
+      JSON.stringify(state, null, 2),
+    );
+
+    // A prior fixer attempt failed: failure record + partial scratch survive.
+    const fixesDir = path.join(dir.tmp, '.agents/reviews/adversarial/001/passes/1/1/fixes');
+    fs.mkdirSync(fixesDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(fixesDir, 'F1.error.json'),
+      JSON.stringify({
+        findingId: 'F1',
+        loop: 1,
+        cycle: 1,
+        kind: 'timeout',
+        reason: 'm — Agent run timed out after 900000ms',
+        at: 'x',
+      }),
+    );
+    fs.writeFileSync(path.join(fixesDir, 'F1.md'), '#### F1 — partial write\n');
+
+    const { ui } = mockUi();
+    const fixerTasks: string[] = [];
+    const result = await runEffect(
+      runGraph(
+        testCtx(dir, ui, { maxLoops: 1, maxCycles: 1, fresh: false, reviewFile, config }),
+        {
+          verifySkill: () => Effect.succeed(undefined),
+          runAgent: (options) => {
+            fixerTasks.push(options.task);
+            return Effect.succeed({ text: 'ok', error: undefined });
+          },
+          createPersistentAgent: () => Effect.succeed(fakeAgentFor(reviewFile, canonical, [])),
+        },
+      ),
+    );
+
+    // The finding was re-dispatched until the attempt budget ran out (the
+    // stub was NOT recovered)…
+    expect(fixerTasks).toHaveLength(3);
+    // The FIRST dispatch carries the pre-seeded failure record (the original
+    // timeout) + partial scratch as hand-off context…
+    expect(fixerTasks[0]).toContain('Prior attempt note');
+    expect(fixerTasks[0]).toContain('Agent run timed out after');
+    expect(fixerTasks[0]).toContain('Prior scratch content');
+    // …and every later re-dispatch carries the LATEST attempt's failure
+    // (the record is overwritten per attempt: scratch-unparseable).
+    expect(fixerTasks[1]).toContain('Prior attempt note');
+    expect(fixerTasks[1]).toContain('scratch-unparseable');
+    expect(fixerTasks[2]).toContain('Prior attempt note');
+    // It failed again (the stub is not a valid block) → per-finding warning…
+    expect(ui.notify).toHaveBeenCalledWith(
+      expect.stringContaining('Fixer for F1: scratch at'),
+      'warning',
+    );
+    // …and after every attempt escalates to a human — never resumes.
+    expect(result.terminal).toBe('failed');
+    expect(ui.notify).toHaveBeenCalledWith(
+      expect.stringContaining('Fixer phase failed: F1 could not be fixed after 3 attempt(s)'),
+      'error',
+    );
+    // The canonical was NOT clobbered by the stub: F1 stays Open.
+    const final = fs.readFileSync(reviewFile, 'utf8');
+    expect(final).toContain('Status**: Open');
+  }));
+
+test('runGraph: two consecutive fully-failed fixer waves escalate to human with per-finding reasons', () =>
+  withReviewDir(async (dir, reviewFile) => {
+    // F1+F2 share a file (sequential waves), F3 is another file. Both waves
+    // fully fail → 2 consecutive wave failures → escalate. A single failing
+    // finding in one wave must NOT count as a strike per finding (F20).
+    const canonical = `# Review
+
+## Review Metadata
+- **Max Attempts**: 3
+
+## Findings
+
+#### F1 — Bug one
+- **Severity**: Major
+- **Location**: \`src/a.ts\`
+- **Problem**: Wrong thing.
+- **Impact**: Breaks.
+- **Suggestion**: Fix it.
+- **Status**: Open
+- **Attempts**: 0
+- **First Seen**: 1
+
+### Discussion
+
+#### F2 — Bug two
+- **Severity**: Major
+- **Location**: \`src/a.ts\`
+- **Problem**: Other thing.
+- **Impact**: Breaks.
+- **Suggestion**: Fix it.
+- **Status**: Open
+- **Attempts**: 0
+- **First Seen**: 1
+
+### Discussion
+
+#### F3 — Bug three
+- **Severity**: Minor
+- **Location**: \`src/b.ts\`
+- **Problem**: Another thing.
+- **Impact**: Meh.
+- **Suggestion**: Fix it.
+- **Status**: Open
+- **Attempts**: 0
+- **First Seen**: 1
+
+### Discussion
+
+## Summary
+- **Open**: 3
+- **In Review**: 0
+- **Escalated**: 0
+- **Resolved**: 0
+- **Won't Fix**: 0
+`;
+
+    const { ui } = mockUi();
+    const fixerTasks: string[] = [];
+    const result = await runEffect(
+      runGraph(testCtx(dir, ui, { maxLoops: 1, maxCycles: 1, fresh: true }), {
+        verifySkill: () => Effect.succeed(undefined),
+        runAgent: (options) => {
+          // Fixer runs but never writes its scratch block — every finding fails.
+          fixerTasks.push(options.task);
+          return Effect.succeed({ text: 'ok', error: undefined });
+        },
+        createPersistentAgent: () => Effect.succeed(fakeAgentFor(reviewFile, canonical, [])),
+      }),
+    );
+
+    // Wave 1 is [F1, F3]; each finding is re-dispatched through its full
+    // attempt budget before the phase can proceed — 2 findings × 3 attempts.
+    expect(fixerTasks).toHaveLength(6);
+    // Per-finding warnings fire for ALL failed findings, not just the first.
+    expect(ui.notify).toHaveBeenCalledWith(
+      expect.stringContaining('Fixer for F3: finished but wrote no scratch block'),
+      'warning',
+    );
+    // Findings that still produced no block after every attempt escalate — the
+    // phase NEVER resumes with a failed finding (F2's wave never even runs).
+    expect(ui.notify).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'Fixer phase failed: F1, F3 could not be fixed after 3 attempt(s) across all configured models',
+      ),
+      'error',
+    );
+    expect(result.terminal).toBe('failed');
+    // Every failed finding got a failure record next to its scratch.
+    for (const id of ['F1', 'F3']) {
+      expect(
+        fs.existsSync(
+          path.join(dir.tmp, '.agents/reviews/adversarial/001/passes/1/1/fixes', `${id}.error.json`),
+        ),
+      ).toBe(true);
+    }
+  }));
+
+test('runGraph: a rate-limited fixer falls back to the configured fallback model', () =>
+  withReviewDir(async (dir, reviewFile) => {
+    // The fixer's primary model is rate-limited; the fallback model must be
+    // tried and its valid scratch merged. NO_RETRY avoids backoff sleeps.
+    const canonical = `# Review
+
+## Review Metadata
+- **Max Attempts**: 3
+
+## Findings
+
+#### F1 — Bug one
+- **Severity**: Major
+- **Location**: \`src/a.ts\`
+- **Problem**: Wrong thing.
+- **Impact**: Breaks.
+- **Suggestion**: Fix it.
+- **Status**: Open
+- **Attempts**: 0
+- **First Seen**: 1
+
+### Discussion
+
+## Summary
+- **Open**: 1
+- **In Review**: 0
+- **Escalated**: 0
+- **Resolved**: 0
+- **Won't Fix**: 0
+`;
+    const config = {
+      ...defaultLoopConfig(),
+      maxLoops: 1,
+      maxCycles: 1,
+      fixerModel: 'fixer-primary',
+      fixerFallbackModels: ['fixer-fallback'],
+    };
+    const { ui } = mockUi();
+    const fixerModels: string[] = [];
+    const result = await runEffect(
+      runGraph(testCtx(dir, ui, { maxLoops: 1, maxCycles: 1, fresh: true, config }), {
+        verifySkill: () => Effect.succeed(undefined),
+        retryPolicy: { maxRetries: 0, baseDelayMs: 0 },
+        runAgent: (options) => {
+          fixerModels.push(options.model);
+          if (options.model === 'fixer-primary') {
+            return Effect.succeed({ text: '', error: '429 Too Many Requests — rate limit' });
+          }
+          // Fallback: fix the finding by writing its updated block.
+          const scratch = options.task.match(/scratch file at (\S+\.md)/)?.[1];
+          const id = options.task.match(/\b(F\d+)\b/)?.[1];
+          if (scratch !== undefined && id !== undefined) {
+            fs.mkdirSync(path.dirname(scratch), { recursive: true });
+            fs.writeFileSync(
+              scratch,
+              `#### ${id} — Fixed\n- **Severity**: Major\n- **Location**: \`src/a.ts\`\n- **Problem**: x.\n- **Impact**: y.\n- **Suggestion**: z.\n- **Status**: In Review\n- **Attempts**: 1\n- **First Seen**: 1\n\n### Discussion\n`,
+            );
+          }
+          return Effect.succeed({ text: 'ok', error: undefined });
+        },
+        createPersistentAgent: () => Effect.succeed(fakeAgentFor(reviewFile, canonical, [])),
+      }),
+    );
+
+    // Both models were tried, in order: primary then fallback.
+    expect(fixerModels).toEqual(['fixer-primary', 'fixer-fallback']);
+    // The fallback's scratch was merged — the finding is In Review, not Open.
+    const final = fs.readFileSync(reviewFile, 'utf8');
+    expect(final).toContain('Status**: In Review');
+    expect(final).not.toContain('Status**: Open');
+    expect(result.terminal).toBe('maxLoops');
+  }));
+
+test('runGraph: a failing reviewer is retried IN-PASS with its fallback model', () =>
+  withReviewDir(async (dir, reviewFile) => {
+    // The reviewer's primary model fails (rate limit); the reviewer must
+    // complete before the pass may proceed, so it is retried IN-PASS: the
+    // session is dropped and recreated with the fallback model, which writes
+    // the scratch → aggregate runs → consensus → done. No full pass retry.
+    const allTerminal = `# Review\n\n## Summary\n- **Open**: 0\n- **In Review**: 0\n- **Escalated**: 0\n- **Resolved**: 1\n- **Won't Fix**: 0\n`;
+    const config = {
+      ...defaultLoopConfig(),
+      maxLoops: 1,
+      reviewers: [
+        {
+          ...defaultLoopConfig().reviewers[0]!,
+          model: 'reviewer-primary',
+          fallbackModels: ['reviewer-fallback'],
+        },
+      ],
+    };
+    const { ui } = mockUi();
+    const createdModels: string[] = [];
+    const result = await runEffect(
+      runGraph(testCtx(dir, ui, { maxLoops: 1, fresh: true, config }), {
+        verifySkill: () => Effect.succeed(undefined),
+        retryPolicy: { maxRetries: 0, baseDelayMs: 0 },
+        createPersistentAgent: (options) => {
+          createdModels.push(options.model);
+          return Effect.succeed({
+            prompt: (task: string) => {
+              const brief = task.match(/Write the pass brief to: (\S+)/)?.[1];
+              if (brief !== undefined) {
+                fs.mkdirSync(path.dirname(brief), { recursive: true });
+                fs.writeFileSync(brief, '# Pass brief\n');
+                return Effect.succeed({ text: 'ok', error: undefined });
+              }
+              if (task.includes('AGGREGATE TURN')) {
+                fs.writeFileSync(reviewFile, allTerminal);
+                return Effect.succeed({ text: 'ok', error: undefined });
+              }
+              // Reviewer turn: primary rate-limits, fallback writes scratch.
+              if (options.model === 'reviewer-primary') {
+                return Effect.succeed({ text: '', error: '429 Too Many Requests' });
+              }
+              const output = reviewerOutputPath(task);
+              if (output !== undefined) {
+                fs.mkdirSync(path.dirname(output), { recursive: true });
+                fs.writeFileSync(output, '# Scratch\n');
+              }
+              return Effect.succeed({ text: 'ok', error: undefined });
+            },
+            dispose: () => Effect.succeed(undefined),
+          });
+        },
+      }),
+    );
+
+    // The reviewer was recreated with the fallback model after the primary
+    // failed — both within the SAME pass (no pass-level retry needed).
+    expect(createdModels).toContain('reviewer-primary');
+    expect(createdModels).toContain('reviewer-fallback');
+    expect(result.terminal).toBe('done');
+  }));
+
+test('runGraph: a failing supervisor is recreated with its fallback model on the retry pass', () =>
+  withReviewDir(async (dir, reviewFile) => {
+    // The supervisor's primary model fails the brief turn (rate limit); the
+    // pass retries and ensureSupervisor recreates with the fallback model,
+    // which completes the review → consensus → done.
+    const allTerminal = `# Review\n\n## Summary\n- **Open**: 0\n- **In Review**: 0\n- **Escalated**: 0\n- **Resolved**: 1\n- **Won't Fix**: 0\n`;
+    const config = {
+      ...defaultLoopConfig(),
+      maxLoops: 1,
+      supervisor: {
+        ...defaultLoopConfig().supervisor,
+        model: 'supervisor-primary',
+        fallbackModels: ['supervisor-fallback'],
+      },
+    };
+    const { ui } = mockUi();
+    const createdModels: string[] = [];
+    const result = await runEffect(
+      runGraph(testCtx(dir, ui, { maxLoops: 1, fresh: true, config }), {
+        verifySkill: () => Effect.succeed(undefined),
+        retryPolicy: { maxRetries: 0, baseDelayMs: 0 },
+        createPersistentAgent: (options) => {
+          createdModels.push(options.model);
+          return Effect.succeed({
+            prompt: (task: string) => {
+              const brief = task.match(/Write the pass brief to: (\S+)/)?.[1];
+              if (brief !== undefined) {
+                // Primary model fails the brief turn (rate limit); fallback
+                // writes the brief.
+                if (options.model === 'supervisor-primary') {
+                  return Effect.succeed({ text: '', error: '529 overloaded' });
+                }
+                fs.mkdirSync(path.dirname(brief), { recursive: true });
+                fs.writeFileSync(brief, '# Pass brief\n');
+                return Effect.succeed({ text: 'ok', error: undefined });
+              }
+              if (task.includes('AGGREGATE TURN')) {
+                fs.writeFileSync(reviewFile, allTerminal);
+                return Effect.succeed({ text: 'ok', error: undefined });
+              }
+              const output = reviewerOutputPath(task);
+              if (output !== undefined) {
+                fs.mkdirSync(path.dirname(output), { recursive: true });
+                fs.writeFileSync(output, '# Scratch\n');
+              }
+              return Effect.succeed({ text: 'ok', error: undefined });
+            },
+            dispose: () => Effect.succeed(undefined),
+          });
+        },
+      }),
+    );
+
+    // The supervisor was recreated with the fallback model after the primary
+    // failed the brief turn.
+    expect(createdModels).toContain('supervisor-primary');
+    expect(createdModels).toContain('supervisor-fallback');
+    expect(result.terminal).toBe('done');
+  }));
+
+test('runGraph: a reviewer that never completes fails the pass — no resume with a missing reviewer', () =>
+  withReviewDir(async (dir, reviewFile) => {
+    // Reviewer A succeeds, reviewer B fails EVERY in-pass attempt (no
+    // fallbacks). The pass must NOT resume to the supervisor aggregate with a
+    // missing reviewer: it counts as a failed pass, retries, and escalates
+    // after consecutive failures.
+    const allTerminal = `# Review\n\n## Summary\n- **Open**: 0\n- **In Review**: 0\n- **Escalated**: 0\n- **Resolved**: 1\n- **Won't Fix**: 0\n`;
+    const base = defaultLoopConfig();
+    const config = {
+      ...base,
+      maxLoops: 1,
+      reviewers: [
+        { ...base.reviewers[0]!, id: 'good', label: 'Good', model: 'good-model' },
+        { ...base.reviewers[0]!, id: 'bad', label: 'Bad', model: 'bad-model' },
+      ],
+    };
+    const { ui } = mockUi();
+    let aggregateRuns = 0;
+    const result = await runEffect(
+      runGraph(testCtx(dir, ui, { maxLoops: 1, fresh: true, config }), {
+        verifySkill: () => Effect.succeed(undefined),
+        retryPolicy: { maxRetries: 0, baseDelayMs: 0 },
+        createPersistentAgent: (options) =>
+          Effect.succeed({
+            prompt: (task: string) => {
+              const brief = task.match(/Write the pass brief to: (\S+)/)?.[1];
+              if (brief !== undefined) {
+                fs.mkdirSync(path.dirname(brief), { recursive: true });
+                fs.writeFileSync(brief, '# Pass brief\n');
+                return Effect.succeed({ text: 'ok', error: undefined });
+              }
+              if (task.includes('AGGREGATE TURN')) {
+                aggregateRuns++;
+                fs.writeFileSync(reviewFile, allTerminal);
+                return Effect.succeed({ text: 'ok', error: undefined });
+              }
+              // Reviewer turn: good writes its scratch, bad always fails.
+              if (options.model === 'bad-model') {
+                return Effect.succeed({ text: '', error: '400 Bad Request' });
+              }
+              const output = reviewerOutputPath(task);
+              if (output !== undefined) {
+                fs.mkdirSync(path.dirname(output), { recursive: true });
+                fs.writeFileSync(output, '# Scratch\n');
+              }
+              return Effect.succeed({ text: 'ok', error: undefined });
+            },
+            dispose: () => Effect.succeed(undefined),
+          }),
+      }),
+    );
+
+    // The bad reviewer was retried in-pass (MAX_REVIEWER_ATTEMPTS per pass)
+    // and the pass failed — the aggregate NEVER ran with a missing reviewer.
+    expect(ui.notify).toHaveBeenCalledWith(
+      expect.stringContaining('Reviewer bad failed after 3 attempt(s)'),
+      'error',
+    );
+    expect(aggregateRuns).toBe(0);
+    expect(result.terminal).toBe('failed');
+    expect(ui.notify).toHaveBeenCalledWith(
+      'Reviewer failed 2 consecutive times. Escalating to human.',
+      'error',
+    );
   }));
 
 test('runGraph: a pre-aborted signal stops before any agent runs', () =>
@@ -1179,4 +1794,234 @@ test('runGraph: resuming an all-terminal review at an earlier loop advances to t
     const statePath = path.join(dir.tmp, '.agents/reviews/adversarial/001/loop-state.json');
     const state = JSON.parse(fs.readFileSync(statePath, 'utf8')) as { loop?: number };
     expect(state.loop).toBe(2);
+  }));
+
+test('runGraph: the supervisor brief carries the user directive as authoritative intent', () =>
+  withReviewDir(async (dir, reviewFile) => {
+    const allTerminal = `# Review\n\n## Summary\n- **Open**: 0\n- **In Review**: 0\n- **Escalated**: 0\n- **Resolved**: 1\n- **Won't Fix**: 0\n`;
+    const { ui } = mockUi();
+    const prompts: string[] = [];
+    const result = await runEffect(
+      runGraph(
+        testCtx(dir, ui, {
+          maxLoops: 1,
+          fresh: true,
+          directive: 'check the import feature',
+        }),
+        {
+          verifySkill: () => Effect.succeed(undefined),
+          createPersistentAgent: () =>
+            Effect.succeed(fakeAgentFor(reviewFile, allTerminal, prompts)),
+        },
+      ),
+    );
+
+    expect(result.terminal).toBe('done');
+    // The brief turn (and only the brief turn) receives the directive as the
+    // pass's authoritative intent, plus the locate-the-code instruction.
+    const briefTask = prompts.find((task) => task.includes('BRIEF TURN'));
+    expect(briefTask).toBeDefined();
+    expect(briefTask).toContain(
+      'USER DIRECTIVE — the authoritative intent for this pass: check the import feature',
+    );
+    expect(briefTask).toContain('treat it as authoritative');
+    expect(briefTask).toContain('locate it yourself with read/grep/glob');
+  }));
+
+/**
+ * Fake persistent agent that emits live text deltas on every prompt (via the
+ * prompt's onDelta callback) before dispatching on task content.
+ */
+const streamingAgent = (
+  reviewFile: string,
+  canonical: string,
+  prompts: string[],
+): {
+  prompt: (
+    task: string,
+    _timeoutMs?: number,
+    _onTool?: unknown,
+    onDelta?: (delta: string, kind: 'text' | 'thinking') => void,
+  ) => Effect.Effect<{ text: string; error: string | undefined; timedOut?: boolean }>;
+  dispose: () => Effect.Effect<void>;
+} => ({
+  prompt: (task: string, _timeoutMs?: number, _onTool?: unknown, onDelta?) => {
+    prompts.push(task);
+    onDelta?.('streaming ', 'text');
+    onDelta?.('reply', 'text');
+    const brief = task.match(/Write the pass brief to: (\S+)/)?.[1];
+    if (brief !== undefined) {
+      fs.mkdirSync(path.dirname(brief), { recursive: true });
+      fs.writeFileSync(brief, '# Pass brief — cycle\n\nScope: review src/.\n');
+      return Effect.succeed({ text: 'ok', error: undefined });
+    }
+    if (task.includes('AGGREGATE TURN')) {
+      fs.writeFileSync(reviewFile, canonical);
+      return Effect.succeed({ text: 'ok', error: undefined });
+    }
+    const output = reviewerOutputPath(task);
+    if (output !== undefined) {
+      fs.mkdirSync(path.dirname(output), { recursive: true });
+      fs.writeFileSync(output, '# Scratch\n');
+    }
+    return Effect.succeed({ text: 'ok', error: undefined });
+  },
+  dispose: () => Effect.succeed(undefined),
+});
+
+test('runGraph: agent text deltas land in the shared stream store', () =>
+  withReviewDir(async (dir, reviewFile) => {
+    const allTerminal = `# Review\n\n## Summary\n- **Open**: 0\n- **In Review**: 0\n- **Escalated**: 0\n- **Resolved**: 1\n- **Won't Fix**: 0\n`;
+    const { ui } = mockUi();
+    const prompts: string[] = [];
+
+    const result = await runEffect(
+      runGraph(testCtx(dir, ui, { maxLoops: 1, fresh: true }), {
+        verifySkill: () => Effect.succeed(undefined),
+        createPersistentAgent: () =>
+          Effect.succeed(streamingAgent(reviewFile, allTerminal, prompts)),
+      }),
+    );
+
+    expect(result.terminal).toBe('done');
+    // The supervisor was prompted twice (brief + aggregate) and the reviewer
+    // once — every turn's deltas were appended to the shared store.
+    expect(result.streams?.get('supervisor')?.text).toBe('streaming replystreaming reply');
+    expect(result.streams?.get('reviewer:generic')?.text).toBe('streaming reply');
+  }));
+
+test('runGraph: fixer node publishes per-fixer rows, schedule diagram, and live tools', () =>
+  withReviewDir(async (dir, reviewFile) => {
+    // F1 + F2 in different files → same wave; F3 in F1's file → wave 2.
+    const canonical = `# Review
+
+## Review Metadata
+- **Max Attempts**: 3
+
+## Findings
+
+#### F1 — Bug one
+- **Severity**: Major
+- **Location**: \`src/a.ts\`
+- **Problem**: Wrong thing.
+- **Impact**: Breaks.
+- **Suggestion**: Fix it.
+- **Status**: Open
+- **Attempts**: 0
+- **First Seen**: 1
+
+### Discussion
+
+#### F2 — Bug two
+- **Severity**: Minor
+- **Location**: \`src/b.ts\`
+- **Problem**: Other thing.
+- **Impact**: Meh.
+- **Suggestion**: Fix it.
+- **Status**: Open
+- **Attempts**: 0
+- **First Seen**: 1
+
+### Discussion
+
+#### F3 — Bug three
+- **Severity**: Minor
+- **Location**: \`src/a.ts\`
+- **Problem**: Third thing.
+- **Impact**: Meh.
+- **Suggestion**: Fix it.
+- **Status**: Open
+- **Attempts**: 0
+- **First Seen**: 1
+
+### Discussion
+
+## Summary
+- **Open**: 3
+- **In Review**: 0
+- **Escalated**: 0
+- **Resolved**: 0
+- **Won't Fix**: 0
+`;
+
+    const { ui } = mockUi();
+    const result = await runEffect(
+      runGraph(testCtx(dir, ui, { maxLoops: 1, maxCycles: 1, fresh: true }), {
+        verifySkill: () => Effect.succeed(undefined),
+        runAgent: (options, _timeoutMs) => {
+          // Simulate live tool activity per fixer, then write the scratch block.
+          options.onTool?.({ kind: 'start', tool: 'read' });
+          const scratch = options.task.match(/scratch file at (\S+\.md)/)?.[1];
+          const id = options.task.match(/\b(F\d+)\b/)?.[1];
+          if (scratch !== undefined && id !== undefined) {
+            fs.mkdirSync(path.dirname(scratch), { recursive: true });
+            fs.writeFileSync(
+              scratch,
+              `#### ${id} — Fixed\n- **Severity**: Major\n- **Location**: \`src/x.ts\`\n- **Problem**: x.\n- **Impact**: y.\n- **Suggestion**: z.\n- **Status**: In Review\n- **Attempts**: 1\n- **First Seen**: 1\n\n### Discussion\n`,
+            );
+          }
+          return Effect.succeed({ text: 'ok', error: undefined });
+        },
+        createPersistentAgent: () => Effect.succeed(fakeAgentFor(reviewFile, canonical, [])),
+      }),
+    );
+
+    expect(result.terminal).toBe('maxLoops'); // maxCycles=1, headless
+    const widget = result.widget;
+    expect(widget?.fixerSchedule).toEqual([['F1', 'F2'], ['F3']]);
+    expect(widget?.fixerWave).toBe(2);
+    // Every finding was fixed → all rows done (queued/running only during waves).
+    expect(widget?.fixers?.map((row) => row.id)).toEqual(['F1', 'F2', 'F3']);
+    expect(widget?.fixers?.every((row) => row.status === 'done')).toBe(true);
+    // Live per-fixer tools were recorded during the runs.
+    expect(widget?.fixerActivity?.getTool('F1')).toBe('read');
+    expect(widget?.fixerActivity?.getTool('F2')).toBe('read');
+    expect(widget?.fixerActivity?.getTool('F3')).toBe('read');
+  }));
+
+test('runGraph: reports working → idle to herdr when running inside a herdr pane', () =>
+  withReviewDir(async (dir, reviewFile) => {
+    // A fake herdr server: collects pane.report_agent requests and acks them.
+    const socketPath = path.join(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'herdr-graph-')),
+      'herdr.sock',
+    );
+    const received: Array<{ params: Record<string, unknown> }> = [];
+    const server = net.createServer((socket) => {
+      socket.on('data', (data) => {
+        for (const line of data.toString().split('\n')) {
+          if (line.trim() !== '') received.push(JSON.parse(line));
+        }
+        socket.write('{"ok":true}\n');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+
+    process.env.HERDR_ENV = '1';
+    process.env.HERDR_SOCKET_PATH = socketPath;
+    process.env.HERDR_PANE_ID = 'w24:p2';
+    try {
+      const { ui } = mockUi();
+      await runEffect(
+        runGraph(testCtx(dir, ui, { maxLoops: 1, fresh: true }), {
+          verifySkill: () => Effect.succeed(undefined),
+          createPersistentAgent: () =>
+            Effect.succeed(fakeAgentFor(reviewFile, '# Review\n', [])),
+        }),
+      );
+    } finally {
+      delete process.env.HERDR_ENV;
+      delete process.env.HERDR_SOCKET_PATH;
+      delete process.env.HERDR_PANE_ID;
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      fs.rmSync(path.dirname(socketPath), { recursive: true, force: true });
+    }
+
+    // The pane saw `working` for the whole run and `idle` exactly at the end.
+    const states = received.map((request) => request.params.state);
+    expect(states[0]).toBe('working');
+    expect(states[states.length - 1]).toBe('idle');
+    expect(states.filter((state) => state === 'idle')).toHaveLength(1);
+    // The working report carries the loop/phase detail.
+    expect(String(received[0]?.params.message)).toContain('[loop 1/1');
   }));

@@ -10,11 +10,58 @@ import {
   type AgentSessionEvent,
   type CreateAgentSessionOptions,
 } from '@earendil-works/pi-coding-agent';
+import type { StreamKind } from './stream';
 
 /** Agent session creation failure (prompt-turn failures are reported via AgentRunResult). */
 export class AgentRunError extends Data.TaggedError('AgentRunError')<{
   readonly message: string;
 }> {}
+
+/** Failure classification for retry/fallback decisions. */
+export type FailureKind = 'transient' | 'permanent';
+
+/**
+ * Classifies an agent failure message as transient (rate limits, provider
+ * overload, network blips — worth retrying / falling back) or permanent
+ * (auth, bad request, unknown model — retrying will not help). Timeouts are
+ * always transient.
+ * @param {string} message The failure message
+ * @param {boolean} [timedOut] True when the turn was cut short by the timeout
+ * @returns The failure kind
+ */
+export const classifyFailure = (message: string, timedOut?: boolean): FailureKind => {
+  if (timedOut === true) return 'transient';
+  const text = message.toLowerCase();
+  const transient =
+    /\b(rate\s?limit|too many requests|quota|throttl|retry after|overloaded|temporarily|temporary|busy)\b/.test(
+      text,
+    ) ||
+    /\b(429|5\d\d|529|internal server error|bad gateway|service unavailable)\b/.test(
+      text,
+    ) ||
+    /\b(econnreset|econnrefused|etimedout|socket|connection|network|timed out|timeout|upstream)\b/.test(
+      text,
+    );
+  return transient ? 'transient' : 'permanent';
+};
+
+/**
+ * Retry policy for agent turns: transient failures (rate limits, provider
+ * overload, network blips) are retried on the same model with exponential
+ * backoff before the caller falls back to the next model in the chain.
+ */
+export interface RetryPolicy {
+  /** Max transient retries per model before falling back (0 = no retries). */
+  readonly maxRetries: number;
+  /** Base exponential backoff delay (ms); doubles after each retry. */
+  readonly baseDelayMs: number;
+}
+
+/** Default retry policy: 2 transient retries with 2s → 4s backoff. */
+export const DEFAULT_RETRY_POLICY: RetryPolicy = { maxRetries: 2, baseDelayMs: 2000 };
+
+/** No retries — for tests and callers that handle failures themselves. */
+export const NO_RETRY: RetryPolicy = { maxRetries: 0, baseDelayMs: 0 };
 
 export interface AgentRunResult {
   readonly text: string;
@@ -36,6 +83,9 @@ export interface ToolActivity {
   readonly tool: string;
 }
 
+/** Live token-delta callback kind: visible text vs. hidden thinking. */
+export type { StreamKind } from './stream';
+
 export interface AgentSessionOptions {
   readonly model: string;
   readonly systemPrompt: string;
@@ -46,6 +96,12 @@ export interface AgentSessionOptions {
    * widget). Fired from the agent event subscription; must not throw.
    */
   readonly onTool?: (activity: ToolActivity) => void;
+  /**
+   * Optional live token-delta callback (streaming text/thinking chunks from
+   * `message_update` events). Fired from the agent event subscription; must
+   * not throw.
+   */
+  readonly onDelta?: (delta: string, kind: StreamKind) => void;
 }
 
 export interface AgentRunOptions extends AgentSessionOptions {
@@ -57,6 +113,7 @@ export interface PersistentAgent {
     task: string,
     timeoutMs?: number,
     onTool?: (activity: ToolActivity) => void,
+    onDelta?: (delta: string, kind: StreamKind) => void,
   ) => Effect.Effect<AgentRunResult>;
   readonly dispose: () => Effect.Effect<void>;
 }
@@ -219,6 +276,7 @@ export const runOneTurn = (
   modelLabel: string,
   timeoutMs: number = 600000,
   onTool?: (activity: ToolActivity) => void,
+  onDelta?: (delta: string, kind: StreamKind) => void,
   abortGraceMs: number = ABORT_GRACE_MS,
 ): Effect.Effect<AgentRunResult> =>
   Effect.gen(function* () {
@@ -228,6 +286,11 @@ export const runOneTurn = (
         events.push(event);
         if (event.type === 'tool_execution_start' || event.type === 'tool_execution_end') {
           reportTool(onTool, event);
+        } else if (event.type === 'message_update') {
+          // Live streaming: forward text/thinking token deltas to the UI.
+          const streamEvent = event.assistantMessageEvent;
+          if (streamEvent.type === 'text_delta') onDelta?.(streamEvent.delta, 'text');
+          else if (streamEvent.type === 'thinking_delta') onDelta?.(streamEvent.delta, 'thinking');
         }
       }),
     );
@@ -298,12 +361,88 @@ export const runAgent = (
 ): Effect.Effect<AgentRunResult, AgentRunError> =>
   Effect.scoped(
     Effect.gen(function* () {
-      const session = yield* Effect.acquireRelease(createSession(options), (session) =>
-        Effect.sync(() => session.dispose()),
+      const session = yield* Effect.acquireRelease(createSession(options), (acquired) =>
+        Effect.sync(() => acquired.dispose()),
       );
-      return yield* runOneTurn(session, options.task, options.model, timeoutMs, options.onTool);
+      return yield* runOneTurn(
+        session,
+        options.task,
+        options.model,
+        timeoutMs,
+        options.onTool,
+        options.onDelta,
+      );
     }),
   );
+
+/**
+ * Runs a single-use agent across an ordered chain of models with per-model
+ * transient retries (the retry/fallback policy for rate limits, provider
+ * overloads, and network blips). Each model is tried up to `maxRetries`
+ * transient retries (exponential backoff) before falling back to the next
+ * model; permanent failures skip straight to the next model. The first clean
+ * success wins. When every attempt fails, returns a synthesized
+ * {@link AgentRunResult} whose error aggregates ALL failures (which model
+ * failed with what), so callers can report exactly why. `timedOut` reflects
+ * the last failure (a timeout poisons a session, but single-use runs create a
+ * fresh session per call, so retrying is always safe).
+ * @param {(options: AgentRunOptions, timeoutMs?: number) => Effect.Effect<AgentRunResult, AgentRunError>} base The single-use runner (e.g. {@link runAgent})
+ * @param {readonly string[]} models Ordered model chain: primary first, then fallbacks
+ * @param {(model: string) => AgentRunOptions} buildOptions Builds the run options for a model
+ * @param {number} timeoutMs Turn timeout
+ * @param {RetryPolicy} [policy] Retry policy (default {@link DEFAULT_RETRY_POLICY})
+ * @returns The first successful result, or an aggregated failure result
+ */
+export const runAgentResilient = (
+  base: (
+    options: AgentRunOptions,
+    timeoutMs?: number,
+  ) => Effect.Effect<AgentRunResult, AgentRunError>,
+  models: readonly string[],
+  buildOptions: (model: string) => AgentRunOptions,
+  timeoutMs: number,
+  policy: RetryPolicy = DEFAULT_RETRY_POLICY,
+): Effect.Effect<AgentRunResult, AgentRunError> =>
+  Effect.gen(function* () {
+    if (models.length === 0) {
+      return { text: '', error: 'No models configured for this agent role' };
+    }
+    const failures: string[] = [];
+    let lastTimedOut = false;
+    for (const model of models) {
+      let delay = policy.baseDelayMs;
+      for (let attempt = 0; ; attempt++) {
+        const outcome = yield* Effect.result(base(buildOptions(model), timeoutMs));
+        if (Result.isFailure(outcome)) {
+          // Session creation / model resolution / auth failure.
+          const message = outcome.failure.message;
+          failures.push(`${model}: ${message}`);
+          if (attempt >= policy.maxRetries || classifyFailure(message) === 'permanent') break;
+          yield* Effect.sleep(Duration.millis(delay));
+          delay *= 2;
+          continue;
+        }
+        const result = outcome.success;
+        if (result.error === undefined) return result;
+        failures.push(`${model}: ${result.error}`);
+        lastTimedOut = result.timedOut === true;
+        if (
+          result.timedOut === true ||
+          attempt >= policy.maxRetries ||
+          classifyFailure(result.error) === 'permanent'
+        ) {
+          break;
+        }
+        yield* Effect.sleep(Duration.millis(delay));
+        delay *= 2;
+      }
+    }
+    return {
+      text: '',
+      error: `All ${models.length} model(s) failed: ${failures.join(' | ')}`,
+      timedOut: lastTimedOut,
+    };
+  });
 
 /**
  * Creates an agent session that persists across multiple prompts.
@@ -319,10 +458,47 @@ export const createPersistentAgent = (
   defaultTimeoutMs?: number,
 ): Effect.Effect<PersistentAgent, AgentRunError> =>
   Effect.map(createSession(options), (session) => ({
-    prompt: (task, timeoutMs, onTool) =>
-      runOneTurn(session, task, options.model, timeoutMs ?? defaultTimeoutMs, onTool),
+    prompt: (task, timeoutMs, onTool, onDelta) =>
+      runOneTurn(
+        session,
+        task,
+        options.model,
+        timeoutMs ?? defaultTimeoutMs,
+        onTool ?? options.onTool,
+        onDelta ?? options.onDelta,
+      ),
     dispose: () => Effect.sync(() => session.dispose()),
   }));
+
+/**
+ * Wraps a persistent agent's prompt with a transient-retry policy: rate
+ * limits / provider overloads / network blips are retried on the SAME session
+ * with exponential backoff (the session is idle after a rejected turn, so
+ * re-prompting is safe). Timed-out turns are NOT retried — the generation may
+ * still be running on the session (abort is best-effort), so the caller must
+ * dispose the session instead. Permanent failures are returned immediately.
+ * @param {PersistentAgent['prompt']} prompt The agent's prompt function
+ * @param {number} defaultTimeoutMs Default turn timeout
+ * @param {RetryPolicy} [policy] Retry policy (default {@link DEFAULT_RETRY_POLICY})
+ * @returns The wrapped prompt
+ */
+export const retryPrompt = (
+  prompt: PersistentAgent['prompt'],
+  defaultTimeoutMs: number,
+  policy: RetryPolicy = DEFAULT_RETRY_POLICY,
+): PersistentAgent['prompt'] =>
+  (task, timeoutMs, onTool, onDelta) =>
+    Effect.gen(function* () {
+      let delay = policy.baseDelayMs;
+      for (let attempt = 0; ; attempt++) {
+        const result = yield* prompt(task, timeoutMs ?? defaultTimeoutMs, onTool, onDelta);
+        if (result.error === undefined || result.timedOut === true) return result;
+        if (attempt >= policy.maxRetries) return result;
+        if (classifyFailure(result.error) === 'permanent') return result;
+        yield* Effect.sleep(Duration.millis(delay));
+        delay *= 2;
+      }
+    });
 
 /**
  * Creates an agent session with skill auto-loading intentionally disabled

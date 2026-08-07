@@ -53,6 +53,13 @@ export interface LoopState {
    * which fall back to a preset pick on resume.
    */
   readonly config?: LoopConfig;
+  /**
+   * Last completed orchestrator phase within the current loop+cycle. Saved by
+   * the review node ('reviewed') and the fixer node ('fixed'). A resume with
+   * phase 'reviewed' jumps straight into the fixer phase instead of re-running
+   * the reviewers (which would re-review already-fixed findings).
+   */
+  readonly phase?: 'reviewed' | 'fixed';
 }
 
 /**
@@ -183,6 +190,24 @@ export const fixerScratchPath = (
 ): string => nodePath.join(passDir(reviewFile, loop, cycle), 'fixes', `${findingId}.md`);
 
 /**
+ * Absolute path to a fixer's per-finding failure record (JSON), written next
+ * to the scratch file when a fixer attempt fails. Preserved across crashes /
+ * resumes so the next fixer attempt can pick up partial work with full
+ * context, and so a human can see why a fixer produced no scratch block.
+ * @param {string} reviewFile Absolute path to the canonical review file
+ * @param {number} loop Loop number
+ * @param {number} cycle Cycle number
+ * @param {string} findingId Finding id (F1, F2, …)
+ * @returns The fixer failure record path
+ */
+export const fixerErrorPath = (
+  reviewFile: string,
+  loop: number,
+  cycle: number,
+  findingId: string,
+): string => nodePath.join(passDir(reviewFile, loop, cycle), 'fixes', `${findingId}.error.json`);
+
+/**
  * Fingerprints a finding for deadlock / dedupe tracking.
  * @param {string} location Finding location
  * @param {string} problem Finding problem text
@@ -291,6 +316,10 @@ export const loadLoopState = (
         config: isStoredConfig(record.config)
           ? normalizeStoredConfig(record.config)
           : undefined,
+        phase:
+          record.phase === 'reviewed' || record.phase === 'fixed'
+            ? record.phase
+            : undefined,
       };
     } catch {
       return emptyLoopState(roster);

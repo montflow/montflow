@@ -7,6 +7,8 @@ export interface ReviewerProfile {
   readonly id: string;
   readonly label: string;
   readonly model: string;
+  /** Optional ordered fallback models tried after `model` fails (rate limits, overloads). */
+  readonly fallbackModels?: readonly string[];
   readonly skillPath: string;
   /** Specialist objective / focus lens for this reviewer. */
   readonly objective: string;
@@ -19,6 +21,8 @@ export interface ReviewerProfile {
 export interface SupervisorConfig {
   readonly model: string;
   readonly skillPath: string;
+  /** Optional ordered fallback models tried after `model` fails. */
+  readonly fallbackModels?: readonly string[];
 }
 
 export interface DeadlockConfig {
@@ -30,6 +34,8 @@ export interface LoopConfig {
   readonly reviewers: readonly ReviewerProfile[];
   readonly supervisor: SupervisorConfig;
   readonly fixerModel: string;
+  /** Optional ordered fallback models tried after `fixerModel` fails. */
+  readonly fixerFallbackModels?: readonly string[];
   /** How many independent reviewer **loops** to run (each spawns a fresh set of reviewers). */
   readonly maxLoops: number;
   /** Max **cycles** per loop — the same reviewers re-review the updated code up to this many times. */
@@ -74,10 +80,12 @@ export const makeReviewerProfile = (input: {
   readonly model: string;
   readonly skillPath: string;
   readonly objective: string;
+  readonly fallbackModels?: readonly string[];
 }): ReviewerProfile => ({
   id: input.id,
   label: input.label,
   model: input.model,
+  fallbackModels: input.fallbackModels,
   skillPath: input.skillPath,
   objective: input.objective,
   focus: input.objective,
