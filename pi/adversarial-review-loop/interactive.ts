@@ -45,6 +45,7 @@ import {
   type PresetError,
 } from './preset-store';
 import { resolveReviewFile } from './resolve-review-file';
+import { SUPERVISOR_SKILL_PATH } from './skill-paths';
 import {
   isProfilesExtensionLoaded,
   listProfilesWithDetails,
@@ -80,7 +81,7 @@ import {
  */
 
 /** How the user scoped this review run. */
-export type ScopeMode = 'git-unstaged' | 'files' | 'directory';
+export type ScopeMode = 'git-unstaged' | 'files' | 'directory' | 'directive';
 
 /** The scope of a review run: what the reviewers should look at. */
 export interface ReviewScope {
@@ -91,6 +92,12 @@ export interface ReviewScope {
   readonly files: readonly string[];
   /** Absolute path to a materialized diff file (git-unstaged mode). */
   readonly diffPath?: string;
+  /**
+   * Free-form user directive for the supervisor (mode 'directive'): what the
+   * user actually wants reviewed — a feature, a method, a flow. The supervisor
+   * locates the relevant code itself and scopes the specialists to it.
+   */
+  readonly directive?: string;
 }
 
 /** Top-level action chosen from the setup menu. */
@@ -125,7 +132,11 @@ export interface ReviewSettings {
   readonly maxLoops: number;
   readonly maxCycles: number;
   readonly fixerModel: string;
+  /** Ordered fallback models tried after the fixer model fails (empty = none). */
+  readonly fixerFallbackModels: readonly string[];
   readonly supervisorModel: string;
+  /** Ordered fallback models tried after the supervisor model fails (empty = none). */
+  readonly supervisorFallbackModels: readonly string[];
   readonly deadlockFlipThreshold: number;
   readonly agentConcurrency: number;
 }
@@ -150,7 +161,9 @@ export const defaultSettings = (): ReviewSettings => {
     maxLoops: base.maxLoops,
     maxCycles: base.maxCycles,
     fixerModel: base.fixerModel,
+    fixerFallbackModels: base.fixerFallbackModels ?? [],
     supervisorModel: base.supervisor.model,
+    supervisorFallbackModels: base.supervisor.fallbackModels ?? [],
     deadlockFlipThreshold: base.deadlock.flipThreshold,
     agentConcurrency: base.agentConcurrency,
   };
@@ -182,7 +195,9 @@ export const settingsMenuItems = (
   `Max loops (independent reviewer sets) [${settings.maxLoops}]`,
   `Max cycles (per loop)            [${settings.maxCycles}]`,
   `Fixer model                      [${settings.fixerModel}]`,
+  `Fixer fallback models            [${settings.fixerFallbackModels.join(', ') || 'none'}]`,
   `Supervisor model                 [${settings.supervisorModel}]`,
+  `Supervisor fallback models       [${settings.supervisorFallbackModels.join(', ') || 'none'}]`,
   `Deadlock flip threshold          [${settings.deadlockFlipThreshold}]`,
   `Fixer concurrency (parallel)     [${settings.agentConcurrency}]`,
   doneLabel,
@@ -329,6 +344,7 @@ const pickScope = async (ctx: ExtensionContext): Promise<StepResult<ReviewScope>
     const pick = await ctx.ui.select('What should be reviewed?', [
       'Git unstaged changes (tracked + untracked)',
       'Pick — files/directories or a focus prompt',
+      'Directive — describe what to review (supervisor finds the code)',
       '← Back',
     ]);
 
@@ -356,6 +372,23 @@ const pickScope = async (ctx: ExtensionContext): Promise<StepResult<ReviewScope>
             `${changes.files.join(', ')}. Do not audit the whole codebase.`,
           files: changes.files,
         },
+      };
+    }
+
+    if (pick === 'Directive — describe what to review (supervisor finds the code)') {
+      const input = await ctx.ui.editor(
+        'Describe what to review — a feature, a method, a flow… the supervisor finds the relevant code:',
+        '',
+      );
+      if (input === undefined) return { status: 'cancel' };
+      const trimmed = input.trim();
+      if (trimmed === '') {
+        ctx.ui.notify('No directive given.', 'warning');
+        continue;
+      }
+      return {
+        status: 'ok',
+        value: { mode: 'directive', scope: trimmed, files: [], directive: trimmed },
       };
     }
 
@@ -492,6 +525,7 @@ const buildRoster = async (
     const menuOptions: string[] = [
       '+ Add reviewer (profile)',
       '~ Change model of a reviewer',
+      '~ Fallback models of a reviewer',
     ];
     // Removing the last reviewer would leave an empty roster — hide the option.
     if (roster.length > 1) menuOptions.push('− Remove reviewer');
@@ -520,6 +554,10 @@ const buildRoster = async (
     }
     if (pick === '~ Change model of a reviewer') {
       await changeReviewerModel(ctx, roster);
+      continue;
+    }
+    if (pick === '~ Fallback models of a reviewer') {
+      await changeReviewerFallbacks(ctx, roster);
       continue;
     }
     if (pick === '− Remove reviewer') {
@@ -615,6 +653,49 @@ const pickModelForProfile = async (
 };
 
 /**
+ * Edits an ordered fallback-model list: add models (deduped) or clear the
+ * whole list. `← Back` commits the current list; `undefined` (dismiss) also
+ * commits (keeps whatever was edited so far). Returns null only when the
+ * user confirms cancel.
+ * @param {ExtensionContext} ctx The command context
+ * @param {string} title Menu title
+ * @param {readonly string[]} initial The current list
+ * @returns The edited list, or null on cancel
+ */
+const editFallbackModels = async (
+  ctx: ExtensionContext,
+  title: string,
+  initial: readonly string[],
+): Promise<readonly string[] | null> => {
+  const list = [...initial];
+  for (;;) {
+    const summary = list.length > 0 ? list.join(', ') : 'none';
+    const options = [
+      '+ Add a fallback model',
+      ...(list.length > 0 ? ['− Clear fallback models'] : []),
+      '← Back',
+    ];
+    const pick = await ctx.ui.select(`${title} [${summary}]`, options);
+    if (pick === undefined || pick === '← Back') return list;
+    if (pick === '+ Add a fallback model') {
+      const model = await pickModel(ctx, 'Fallback model (provider/model-id):');
+      if (model === null) continue;
+      if (list.includes(model)) {
+        ctx.ui.notify(`${model} is already in the fallback list.`, 'warning');
+        continue;
+      }
+      list.push(model);
+      ctx.ui.notify(`Fallback added → ${model}`, 'info');
+      continue;
+    }
+    if (pick === '− Clear fallback models') {
+      list.length = 0;
+      continue;
+    }
+  }
+};
+
+/**
  * Changes the model of one roster member.
  * @param {ExtensionContext} ctx The command context
  * @param {RosterEntry[]} roster The current roster (mutable)
@@ -648,6 +729,40 @@ const changeReviewerModel = async (
 };
 
 /**
+ * Edits the fallback-model chain of one roster member.
+ * @param {ExtensionContext} ctx The command context
+ * @param {RosterEntry[]} roster The current roster (mutable)
+ * @returns Nothing
+ */
+const changeReviewerFallbacks = async (
+  ctx: ExtensionContext,
+  roster: RosterEntry[],
+): Promise<void> => {
+  const labels = roster.map((entry) => `${entry.reviewer.label} (${entry.reviewer.model})`);
+  const target = await ctx.ui.select('Fallback models of which reviewer?', labels);
+  const index = target === undefined ? -1 : labels.indexOf(target);
+  if (index < 0) return;
+  const entry = roster[index];
+  if (entry === undefined) return;
+
+  const fallbacks = await editFallbackModels(
+    ctx,
+    `Fallback models for '${entry.reviewer.label}' (tried after ${entry.reviewer.model} fails)`,
+    entry.reviewer.fallbackModels ?? [],
+  );
+  if (fallbacks === null) return;
+
+  roster[index] = {
+    ...entry,
+    reviewer: { ...entry.reviewer, fallbackModels: fallbacks },
+  };
+  ctx.ui.notify(
+    `${entry.reviewer.label} fallbacks → ${fallbacks.join(', ') || 'none'}`,
+    'info',
+  );
+};
+
+/**
  * Step 4: edit the loop settings (max loops, fixer model, supervisor model,
  * deadlock threshold). "← Back" returns to the roster step. Loops until the
  * user finishes. The confirm entry is flow-specific via `doneLabel`.
@@ -665,7 +780,9 @@ const editSettings = async (
     maxLoops: number;
     maxCycles: number;
     fixerModel: string;
+    fixerFallbackModels: readonly string[];
     supervisorModel: string;
+    supervisorFallbackModels: readonly string[];
     deadlockFlipThreshold: number;
     agentConcurrency: number;
   } = { ...initial };
@@ -731,6 +848,28 @@ const editSettings = async (
       ctx.ui.notify(`Supervisor model → ${model}`, 'info');
       continue;
     }
+    if (pick.startsWith('Fixer fallback models')) {
+      const fallbacks = await editFallbackModels(
+        ctx,
+        'Fixer fallback models (tried in order after the fixer model fails)',
+        current.fixerFallbackModels,
+      );
+      if (fallbacks === null) continue;
+      current.fixerFallbackModels = fallbacks;
+      ctx.ui.notify(`Fixer fallback models → ${fallbacks.join(', ') || 'none'}`, 'info');
+      continue;
+    }
+    if (pick.startsWith('Supervisor fallback models')) {
+      const fallbacks = await editFallbackModels(
+        ctx,
+        'Supervisor fallback models (tried in order after the supervisor model fails)',
+        current.supervisorFallbackModels,
+      );
+      if (fallbacks === null) continue;
+      current.supervisorFallbackModels = fallbacks;
+      ctx.ui.notify(`Supervisor fallback models → ${fallbacks.join(', ') || 'none'}`, 'info');
+      continue;
+    }
     if (pick.startsWith('Deadlock flip threshold')) {
       const value = await ctx.ui.input(
         'Deadlock flip threshold (status flips before escalation):',
@@ -768,7 +907,9 @@ const editSettings = async (
           maxLoops: current.maxLoops,
           maxCycles: current.maxCycles,
           fixerModel: current.fixerModel,
+          fixerFallbackModels: current.fixerFallbackModels,
           supervisorModel: current.supervisorModel,
+          supervisorFallbackModels: current.supervisorFallbackModels,
           deadlockFlipThreshold: current.deadlockFlipThreshold,
           agentConcurrency: current.agentConcurrency,
         },
@@ -936,15 +1077,20 @@ const presetSummary = (config: PresetLoopConfigDecoded): string => {
  * @returns The stored reference
  */
 const reviewerToStoredRef = (entry: RosterEntry): ReviewerRefDecoded => {
+  const fallbackModels =
+    entry.reviewer.fallbackModels !== undefined && entry.reviewer.fallbackModels.length > 0
+      ? entry.reviewer.fallbackModels
+      : undefined;
   if (entry.source === 'builtin') {
     return {
       type: 'builtin',
       id: entry.reviewer.id,
       model:
         entry.reviewer.model === DEFAULT_REVIEWER_MODEL ? undefined : entry.reviewer.model,
+      fallbackModels,
     };
   }
-  return { type: 'profile', name: entry.reviewer.id, model: entry.reviewer.model };
+  return { type: 'profile', name: entry.reviewer.id, model: entry.reviewer.model, fallbackModels };
 };
 
 /**
@@ -961,13 +1107,69 @@ const storedConfigFrom = (
   const base = defaultLoopConfig();
   return {
     reviewers: roster.map((entry) => reviewerToStoredRef(entry)),
-    supervisor: { model: settings.supervisorModel },
+    supervisor: {
+      model: settings.supervisorModel,
+      fallbackModels:
+        settings.supervisorFallbackModels.length > 0
+          ? settings.supervisorFallbackModels
+          : undefined,
+    },
     fixerModel: settings.fixerModel,
+    fixerFallbackModels:
+      settings.fixerFallbackModels.length > 0 ? settings.fixerFallbackModels : undefined,
     maxLoops: settings.maxLoops,
     maxCycles: settings.maxCycles,
     agentConcurrency: settings.agentConcurrency,
     deadlock: { ...base.deadlock, flipThreshold: settings.deadlockFlipThreshold },
   };
+};
+
+/**
+ * Builds a runtime {@link LoopConfig} from a confirmed roster + settings —
+ * the shape stored in a review's loop-state snapshot (expanded reviewers,
+ * not preset references). Used by the resume-time "modify config" flow.
+ * @param {RosterEntry[]} roster The confirmed roster
+ * @param {ReviewSettings} settings The confirmed settings
+ * @returns The runtime loop config
+ */
+const loopConfigFrom = (roster: RosterEntry[], settings: ReviewSettings): LoopConfig => ({
+  reviewers: roster.map((entry) => entry.reviewer),
+  supervisor: {
+    model: settings.supervisorModel,
+    skillPath: SUPERVISOR_SKILL_PATH,
+    fallbackModels:
+      settings.supervisorFallbackModels.length > 0
+        ? settings.supervisorFallbackModels
+        : undefined,
+  },
+  fixerModel: settings.fixerModel,
+  fixerFallbackModels:
+    settings.fixerFallbackModels.length > 0 ? settings.fixerFallbackModels : undefined,
+  maxLoops: settings.maxLoops,
+  maxCycles: settings.maxCycles,
+  agentConcurrency: settings.agentConcurrency,
+  deadlock: { flipThreshold: settings.deadlockFlipThreshold, action: 'escalate' },
+});
+
+/**
+ * Overwrites the config snapshot inside a review's loop-state.json, keeping
+ * everything else (loop/cycle/phase/findings) untouched. The modified config
+ * is what later resumes use — the review runs with the new roster/settings.
+ * @param {string} reviewFile Canonical review file path
+ * @param {LoopConfig} config The new runtime config
+ * @returns True when the snapshot was updated
+ */
+const saveReviewConfig = (reviewFile: string, config: LoopConfig): boolean => {
+  try {
+    const statePath = loopStatePath(reviewFile);
+    if (!fs.existsSync(statePath)) return false;
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8')) as Record<string, unknown>;
+    state.config = config;
+    fs.writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 /**
@@ -1105,7 +1307,7 @@ const listReviews = (cwd: string): readonly ReviewEntry[] => {
       reviewers: readStoredConfig(file)?.reviewers.map((reviewer) => reviewer.id) ?? [],
     });
   }
-  return entries.sort((left, right) => right.code - left.code);
+  return entries.toSorted((left, right) => right.code - left.code);
 };
 
 /** Loop/cycle counters persisted in loop-state.json (0 when absent). */
@@ -1182,6 +1384,56 @@ const pickReview = async (ctx: ExtensionContext): Promise<ReviewEntry | null> =>
  * @param {ExtensionContext} ctx The command context
  * @returns The flow outcome
  */
+/**
+ * "Modify config before resuming": re-edit the roster + settings seeded from
+ * the review's locked-in config snapshot, then write the updated config back
+ * into the review's loop-state.json. The review resumes with the new config
+ * (e.g. fallback models per agent) — later resumes keep using the snapshot.
+ * @param {ExtensionAPI} pi The Pi extension API
+ * @param {ExtensionContext} ctx The command context
+ * @param {string} reviewFile Canonical review file path
+ * @param {LoopConfig} config The review's current locked config
+ * @returns The modified config, or null when cancelled/backed out
+ */
+const modifyReviewConfig = async (
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+  reviewFile: string,
+  config: LoopConfig,
+): Promise<LoopConfig | null> => {
+  let roster: RosterEntry[] | null = null;
+  for (;;) {
+    if (roster === null) {
+      const step = await buildRoster(pi, ctx, rosterFromConfig(config));
+      if (step.status === 'cancel') return null;
+      if (step.status === 'back') return null; // back from roster → resume menu
+      roster = step.value;
+      continue;
+    }
+
+    const step = await editSettings(ctx, settingsFromConfig(config), '✓ Done — resume review');
+    if (step.status === 'cancel') return null;
+    if (step.status === 'back') {
+      roster = null; // → re-build roster
+      continue;
+    }
+
+    const next = loopConfigFrom(roster, step.value);
+    if (!saveReviewConfig(reviewFile, next)) {
+      ctx.ui.notify(
+        `[adversarial-review-loop] Could not write the updated config to ${loopStatePath(reviewFile)}.`,
+        'error',
+      );
+      return null;
+    }
+    ctx.ui.notify(
+      '[adversarial-review-loop] Review config updated (roster, models, fallback chains) — resuming with it.',
+      'info',
+    );
+    return next;
+  }
+};
+
 const runResumeFlow = async (
   pi: ExtensionAPI,
   ctx: ExtensionContext,
@@ -1191,6 +1443,16 @@ const runResumeFlow = async (
 
   const stored = readStoredConfig(review.file);
   if (stored !== undefined) {
+    const choice = await ctx.ui.select(
+      `Resume '${path.basename(review.file)}' — use the locked-in config or modify it first?`,
+      ['Resume with current config', 'Modify config before resuming', '← Back'],
+    );
+    if (choice === undefined || choice === '← Back') return { status: 'back' };
+    if (choice === 'Modify config before resuming') {
+      const modified = await modifyReviewConfig(pi, ctx, review.file, stored);
+      if (modified === null) return { status: 'back' }; // → action menu
+      return { status: 'run', opts: optsForResume(ctx, modified, review.file) };
+    }
     return { status: 'run', opts: optsForResume(ctx, stored, review.file) };
   }
 
@@ -1424,6 +1686,10 @@ const pickPreset = async (ctx: ExtensionContext): Promise<string | null> => {
   return selectWithSearch(ctx, 'Choose a preset', items);
 };
 
+/** True when a raw keypress is a printable character (for type-to-filter dialogs). */
+const isPrintable = (data: string): boolean =>
+  data.length === 1 && data >= ' ' && data !== '\x7f' && data !== '\n' && data !== '\r';
+
 /**
  * Searchable select dialog (SelectList with incremental type-to-filter),
  * following the profiles extension's custom-component pattern. When
@@ -1468,8 +1734,6 @@ export const selectWithSearch = async (
     container.addChild(new DynamicBorder((s: string) => theme.fg('accent', s)));
 
     let query = '';
-    const isPrintable = (data: string): boolean =>
-      data.length === 1 && data >= ' ' && data !== '\x7f' && data !== '\n' && data !== '\r';
 
     return {
       render: (w) => container.render(w),
@@ -1600,7 +1864,9 @@ const settingsFromConfig = (config: LoopConfig): ReviewSettings => ({
   maxLoops: config.maxLoops,
   maxCycles: config.maxCycles,
   fixerModel: config.fixerModel,
+  fixerFallbackModels: config.fixerFallbackModels ?? [],
   supervisorModel: config.supervisor.model,
+  supervisorFallbackModels: config.supervisor.fallbackModels ?? [],
   deadlockFlipThreshold: config.deadlock.flipThreshold,
   agentConcurrency: config.agentConcurrency,
 });
@@ -1630,6 +1896,7 @@ const optsFromConfig = (
   reviewScope: scope.scope,
   scopeFiles: scope.files,
   scopeDiffPath: scope.diffPath,
+  directive: scope.directive,
 });
 
 /**

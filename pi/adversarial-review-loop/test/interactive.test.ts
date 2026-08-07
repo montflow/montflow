@@ -35,6 +35,12 @@ const makeCwd = (): string => {
 
 const dir = makeCwd();
 
+/** Seeds a minimal preset file into a fresh temp cwd. */
+const seedPreset = (d: string): void => {
+  fs.mkdirSync(path.join(d, '.agents/review-presets'), { recursive: true });
+  fs.writeFileSync(path.join(d, '.agents/review-presets/x.json'), '{}');
+};
+
 // F14: the module-level temp dir is shared by every test in this file (they
 // seed presets/reviews into it), so it must be cleaned up after the suite —
 // otherwise each run leaks an `arl-interactive-*` directory under os.tmpdir().
@@ -113,13 +119,20 @@ test('settingsMenuItems: shows current values and the done action', () => {
   expect(items.some((item) => item.startsWith('Max loops'))).toBe(true);
   expect(items.some((item) => item.startsWith('Max cycles'))).toBe(true);
   expect(items.some((item) => item.startsWith('Fixer model'))).toBe(true);
+  expect(items.some((item) => item.startsWith('Fixer fallback models'))).toBe(true);
   expect(items.some((item) => item.startsWith('Supervisor model'))).toBe(true);
+  expect(items.some((item) => item.startsWith('Supervisor fallback models'))).toBe(true);
   expect(items.some((item) => item.startsWith('Deadlock flip threshold'))).toBe(true);
   expect(items.some((item) => item.startsWith('Fixer concurrency'))).toBe(true);
   expect(items[items.length - 1]).toBe('✓ Done — start review');
   expect(items[0]).toContain(String(settings.maxLoops));
   expect(items[1]).toContain(String(settings.maxCycles));
   expect(settings.agentConcurrency).toBe(5);
+  // Fallback lists default to empty ("none") and render in the menu.
+  expect(settings.fixerFallbackModels).toEqual([]);
+  expect(settings.supervisorFallbackModels).toEqual([]);
+  expect(items.some((item) => item.startsWith('Fixer fallback models') && item.includes('none'))).toBe(true);
+  expect(items.some((item) => item.startsWith('Supervisor fallback models') && item.includes('none'))).toBe(true);
 });
 
 // ─── buildScopeClause ────────────────────────────────────────────────
@@ -586,11 +599,6 @@ test('action menu: Resume review appears only when reviews exist', async () => {
     return options;
   };
 
-  const seedPreset = (d: string): void => {
-    fs.mkdirSync(path.join(d, '.agents/review-presets'), { recursive: true });
-    fs.writeFileSync(path.join(d, '.agents/review-presets/x.json'), '{}');
-  };
-
   // No presets, no reviews → only Preset.
   expect(await recordMenu(() => {})).toEqual(['Preset']);
   // A preset but no reviews → New review + Preset (no Resume).
@@ -646,7 +654,7 @@ test('resume flow: uses the review locked-in config (no preset pick)', async () 
   );
 
   const { ui } = makeUi({
-    selects: ['Resume review'],
+    selects: ['Resume review', 'Resume with current config'],
     // Only the review pick uses a custom dialog — the config comes from the
     // review's snapshot, so NO preset picker runs (a preset pick here would
     // exhaust the custom queue and fail the test).
@@ -665,6 +673,78 @@ test('resume flow: uses the review locked-in config (no preset pick)', async () 
   expect(setup.opts.config.supervisor.model).toBe('sup-model');
   expect(setup.opts.config.fixerModel).toBe('fix-model');
   expect(setup.opts.config.maxLoops).toBe(7);
+});
+
+test('resume flow: modify config before resuming — fallback models persist into the review snapshot', async () => {
+  // Seed a review with a locked config snapshot, then modify it on resume:
+  // add a fallback model chain to the reviewer. The modified config must
+  // (a) drive the resumed run and (b) be written back into loop-state.json.
+  const reviewDir = path.join(dir, '.agents/reviews/adversarial');
+  fs.mkdirSync(reviewDir, { recursive: true });
+  const reviewFile = path.join(reviewDir, '003.md');
+  fs.writeFileSync(
+    reviewFile,
+    `# Review\n\n## Summary\n- **Open**: 1\n- **In Review**: 0\n- **Escalated**: 0\n- **Resolved**: 0\n- **Won't Fix**: 0\n`,
+  );
+  const stateDir = path.join(reviewDir, '003');
+  fs.mkdirSync(stateDir, { recursive: true });
+  const lockedConfig = {
+    reviewers: [
+      { id: 'generic', label: 'Generic', model: 'locked-model', skillPath: '/s', objective: 'o', focus: 'o' },
+    ],
+    supervisor: { model: 'sup-model', skillPath: '/s2' },
+    fixerModel: 'fix-model',
+    maxLoops: 7,
+    deadlock: { flipThreshold: 2, action: 'escalate' },
+  };
+  fs.writeFileSync(
+    path.join(stateDir, 'loop-state.json'),
+    JSON.stringify({
+      version: 1,
+      cycle: 2,
+      roster: ['generic'],
+      findings: {},
+      conflicts: [],
+      deadlocks: [],
+      config: lockedConfig,
+    }),
+  );
+
+  const { ui } = makeUi({
+    selects: [
+      'Resume review',
+      'Modify config before resuming',
+      // Roster editor: add a fallback chain to the reviewer, then done.
+      '~ Fallback models of a reviewer',
+      'Generic (locked-model)',
+      '+ Add a fallback model',
+      '← Back',
+      '✓ Done — choose settings',
+      // Settings editor: done (settings unchanged).
+      '✓ Done — resume review',
+    ],
+    // Review pick + the model pick for the fallback chain.
+    customs: ['003.md', 'anthropic/claude-sonnet-4-5'],
+    inputs: [],
+  });
+
+  const setup = await runInteractiveSetup(fakePi(createEventBus()), makeCtx(dir, ui));
+  expect(setup).not.toBeNull();
+  if (setup === null) return;
+
+  // The review resumes with the MODIFIED config: the reviewer now has a
+  // fallback model chain, everything else stays locked.
+  expect(setup.opts.fresh).toBe(false);
+  expect(setup.opts.reviewFile).toBe(reviewFile);
+  expect(setup.opts.config.reviewers[0]?.model).toBe('locked-model');
+  expect(setup.opts.config.reviewers[0]?.fallbackModels).toEqual(['anthropic/claude-sonnet-4-5']);
+  expect(setup.opts.config.fixerModel).toBe('fix-model');
+  expect(setup.opts.config.maxLoops).toBe(7);
+  // The snapshot in loop-state.json was updated — later resumes keep it.
+  const state = JSON.parse(fs.readFileSync(path.join(stateDir, 'loop-state.json'), 'utf8')) as {
+    config?: { reviewers?: Array<{ fallbackModels?: string[] }> };
+  };
+  expect(state.config?.reviewers?.[0]?.fallbackModels).toEqual(['anthropic/claude-sonnet-4-5']);
 });
 
 test('resume flow: legacy review without config snapshot falls back to a preset', async () => {
