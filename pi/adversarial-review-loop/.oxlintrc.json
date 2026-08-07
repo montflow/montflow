@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn"
+  },
+  "rules": {
+    // Sequential TUI wizard dialogs and test setups must await one at a time.
+    "eslint/no-await-in-loop": "off",
+    // Effect's tagged union fields are `_tag`/`_id` by convention.
+    "eslint/no-underscore-dangle": "off",
+    // The codebase is immutable-style: spread-in-map on small readonly rows is intentional.
+    "oxc/no-map-spread": "off"
+  },
+  "ignorePatterns": ["node_modules/", "dist/"],
+  "env": {
+    "builtin": true
+  }
+}

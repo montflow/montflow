@@ -113,8 +113,8 @@ test('resolveReviewFile: rejects path-traversal and invalid review names', () =>
 const withNodePath = <A>(f: (path: Path) => A): Promise<A> =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const path = yield* Path;
-      return f(path);
+      const pathService = yield* Path;
+      return f(pathService);
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 

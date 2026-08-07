@@ -34,7 +34,7 @@ const resolveRealOrLexical = (path: Path, p: string): string => {
   let current = p;
   for (;;) {
     try {
-      return path.join(realpathSync(current), ...suffix.reverse());
+      return path.join(realpathSync(current), ...suffix.toReversed());
     } catch {
       const parent = path.dirname(current);
       if (parent === current) return p; // reached the fs root — give up

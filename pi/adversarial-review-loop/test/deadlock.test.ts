@@ -148,7 +148,7 @@ test('applyDeadlockDetection: bumps only the ## Summary counts, not quoted count
   expect(summarySection).toContain('- **Open**: 0');
   expect(summarySection).toContain('- **Escalated**: 1');
   // …while quoted count lines inside finding text are left verbatim.
-  expect(update.markdown).toContain('e.g. \`- **Open**: 3\` and \`- **Escalated**: 5\`');
+  expect(update.markdown).toContain('e.g. `- **Open**: 3` and `- **Escalated**: 5`');
 });
 
 test('applyDeadlockDetection: escalating a block missing its Status line does not corrupt the neighbor (F4)', () => {

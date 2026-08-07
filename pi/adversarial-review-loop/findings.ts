@@ -67,14 +67,14 @@ export const splitFindingBlocks = (content: string): readonly string[] => {
   // (F17 regression guard).
   let fenceCount = 0;
   for (let i = 0; i < lines.length; i++) {
-    if (/^```/.test((lines[i] ?? '').trimStart())) {
+    if ((lines[i] ?? '').trimStart().startsWith('```')) {
       fenceCount++;
     }
   }
   const hasUnclosedFence = fenceCount % 2 === 1;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? '';
-    if (/^```/.test(line.trimStart())) inFence = !inFence;
+    if (line.trimStart().startsWith('```')) inFence = !inFence;
     // Recovery: a finding header preceded by a blank line is a block boundary
     // while a fence is open ONLY when the document has an unclosed fence (odd
     // marker count) — the open region may be the never-closed one, whether it
@@ -243,7 +243,7 @@ export const buildFixerSchedule = (
   // Within each file group, most severe first (the skill fixes in severity
   // order within a related cluster).
   const sortedGroups = [...groups.values()].map((group) =>
-    [...group].sort((left, right) => severityRank(left.severity) - severityRank(right.severity)),
+    group.toSorted((left, right) => severityRank(left.severity) - severityRank(right.severity)),
   );
   // Finding i of a group goes to wave i → same-file findings never share a
   // wave; wave count = the largest file group.

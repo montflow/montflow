@@ -67,6 +67,21 @@ const escalateFindingInMarkdown = (
 };
 
 /**
+ * Bumps one Summary count line by `delta` (never below 0).
+ * @param {string} label Summary line label (e.g. `Escalated`)
+ * @param {number} delta Count adjustment
+ * @returns A text transform for the summary line
+ */
+const bump = (label: string, delta: number): ((text: string) => string) => (text) =>
+  text.replace(
+    new RegExp(`(- \\*\\*${label}\\*\\*:\\s*)(\\d+)`),
+    (_match, prefix: string, digits: string) => {
+      const next = Math.max(0, parseInt(digits, 10) + delta);
+      return `${prefix}${next}`;
+    },
+  );
+
+/**
  * Bumps Summary Escalated/Open/In Review counts after deadlock escalations.
  * @param {string} markdown Review markdown
  * @param {number} newlyEscalated Count of findings newly escalated
@@ -74,15 +89,6 @@ const escalateFindingInMarkdown = (
  */
 const adjustSummaryAfterDeadlocks = (markdown: string, newlyEscalated: number): string => {
   if (newlyEscalated <= 0) return markdown;
-
-  const bump = (label: string, delta: number): ((text: string) => string) => (text) =>
-    text.replace(
-      new RegExp(`(- \\*\\*${label}\\*\\*:\\s*)(\\d+)`),
-      (_match, prefix: string, digits: string) => {
-        const next = Math.max(0, parseInt(digits, 10) + delta);
-        return `${prefix}${next}`;
-      },
-    );
 
   // Anchor every count edit to the `## Summary` section: a document-wide
   // replace would bump the first `- **Open**:`/`- **Escalated**:` line found

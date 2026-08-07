@@ -30,7 +30,7 @@ const finding = (id: string, location: string, severity = 'Minor'): FindingBlock
 test('buildFixerSchedule: unrelated findings share a wave (parallel)', () => {
   const schedule = buildFixerSchedule([finding('F1', 'src/a.ts'), finding('F2', 'src/b.ts')]);
   expect(schedule).toHaveLength(1);
-  expect(schedule[0]?.map((f) => f.id).sort()).toEqual(['F1', 'F2']);
+  expect(schedule[0]?.map((f) => f.id).toSorted()).toEqual(['F1', 'F2']);
 });
 
 test('buildFixerSchedule: same-location findings are sequential, others parallel', () => {
@@ -42,7 +42,7 @@ test('buildFixerSchedule: same-location findings are sequential, others parallel
   expect(schedule).toHaveLength(2);
   // Wave 0: the most severe finding of loc a + the loc b finding (parallel).
   // Wave 1: the remaining same-location finding (sequential).
-  expect(schedule[0]?.map((f) => f.id).sort()).toEqual(['F1', 'F3']);
+  expect(schedule[0]?.map((f) => f.id).toSorted()).toEqual(['F1', 'F3']);
   expect(schedule[1]?.map((f) => f.id)).toEqual(['F2']);
 });
 
@@ -65,7 +65,7 @@ test('buildFixerSchedule: different lines of the same file serialize (no concurr
   expect(schedule).toHaveLength(2);
   // Wave 0: one of the src/a.ts findings + the src/b.ts finding (parallel).
   // Wave 1: the remaining src/a.ts finding (sequential).
-  expect(schedule[0]?.map((f) => f.id).sort()).toEqual(['F1', 'F3']);
+  expect(schedule[0]?.map((f) => f.id).toSorted()).toEqual(['F1', 'F3']);
   expect(schedule[1]?.map((f) => f.id)).toEqual(['F2']);
 });
 
@@ -167,7 +167,7 @@ test('splitFindingBlocks: an unclosed fence before a finding does not swallow it
 
 test('parseFindingBlocks: an unclosed fence before F2 does not hide it', () => {
   const findings = parseFindingBlocks(unclosedFenceDoc);
-  expect(findings.map((f) => f.id).sort()).toEqual(['F1', 'F2']);
+  expect(findings.map((f) => f.id).toSorted()).toEqual(['F1', 'F2']);
   const f2 = findings.find((f) => f.id === 'F2');
   expect(f2?.status).toBe('Open');
   expect(f2?.location).toBe('src/b.ts');
@@ -234,7 +234,7 @@ test('splitFindingBlocks: blank-preceded header inside a balanced fence is not a
 
 test('parseFindingBlocks: a quoted finding inside a balanced fence is not reified and the next finding still parses', () => {
   const findings = parseFindingBlocks(balancedFenceQuotingFinding);
-  expect(findings.map((f) => f.id).sort()).toEqual(['F1', 'F2']);
+  expect(findings.map((f) => f.id).toSorted()).toEqual(['F1', 'F2']);
   // countStatuses sees only the two real findings — the phantom is not
   // counted as Open.
   expect(countStatuses(findings).open).toBe(2);
@@ -343,7 +343,7 @@ test('splitFindingBlocks: a finding between an unclosed opener and a later balan
 
 test('parseFindingBlocks: F2 between an unclosed opener and a later balanced pair still parses (F19)', () => {
   const findings = parseFindingBlocks(unclosedOpenerWithLaterPairDoc);
-  expect(findings.map((f) => f.id).sort()).toEqual(['F1', 'F2', 'F3']);
+  expect(findings.map((f) => f.id).toSorted()).toEqual(['F1', 'F2', 'F3']);
   const f2 = findings.find((f) => f.id === 'F2');
   expect(f2?.status).toBe('Open');
   expect(f2?.location).toBe('src/b.ts');

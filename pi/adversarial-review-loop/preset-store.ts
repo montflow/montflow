@@ -77,7 +77,7 @@ export const listPresets = (
       .filter((entry) => entry.endsWith(PRESET_EXT))
       .map((entry) => entry.slice(0, -PRESET_EXT.length))
       .filter(isValidPresetName)
-      .sort();
+      .toSorted();
   });
 
 /**

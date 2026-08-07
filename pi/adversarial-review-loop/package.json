@@ -10,7 +10,8 @@
     ]
   },
   "scripts": {
-    "lint": "echo 'No linter configured'",
+    "lint": "oxlint .",
+    "lint:check": "oxlint --deny-warnings .",
     "fmt": "echo 'No formatter configured'",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -26,8 +27,9 @@
     "@earendil-works/pi-coding-agent": "^0.84.0",
     "@earendil-works/pi-tui": "^0.84.0",
     "@types/node": "^26.1.2",
-    "typescript": "^5.5.0",
-    "vitest": "^3.2.0"
+    "oxlint": "^1.77.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@effect/platform-node": "^4.0.0-beta.102",
