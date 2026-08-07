@@ -11,6 +11,7 @@ import {
   supervisorStatusLabel,
   type LoopWidgetState,
 } from '../widget';
+import { StreamStore, FixerActivityStore } from '../stream';
 
 /** Sample state used across render tests. */
 const sampleState = (): LoopWidgetState => ({
@@ -225,4 +226,152 @@ test('renderLoopWidget: decision banner when waiting on the user', () => {
   const joined = lines.join('\n');
   expect(joined).toContain('waiting on you');
   expect(lines[0]).toContain('cycle-max decision');
+});
+
+// ─── Focused stream view ─────────────────────────────────────────────
+
+test('renderLoopWidget: focused view shows the agent stream tail + hint', () => {
+  const streams = new StreamStore();
+  streams.append('reviewer:generic', 'reviewer generic', 'text', 'Scanning src/auth.ts…\nFound a leak');
+  const lines = renderLoopWidget({
+    ...sampleState(),
+    focused: 'reviewer:generic',
+    streams,
+    tool: 'reviewer generic — read',
+  });
+  const joined = lines.join('\n');
+  // Header + focused agent + stream tail + return hint.
+  expect(lines[0]).toContain('loop 2/3');
+  expect(joined).toContain('reviewer generic');
+  expect(joined).toContain('Scanning src/auth.ts…');
+  expect(joined).toContain('Found a leak');
+  expect(joined).toContain('/adversarial-review-loop-focus off');
+  expect(joined).toContain('reviewer generic — read'); // tool line stays
+  // The roster is replaced — no reviewer rows in the focused view.
+  expect(joined).not.toContain('waiting on reviewers');
+});
+
+test('renderLoopWidget: focused view falls back to thinking when no text yet', () => {
+  const streams = new StreamStore();
+  streams.append('supervisor', 'supervisor', 'thinking', 'mapping the roster…');
+  const lines = renderLoopWidget({
+    ...sampleState(),
+    focused: 'supervisor',
+    streams,
+  });
+  const joined = lines.join('\n');
+  expect(joined).toContain('supervisor');
+  expect(joined).toContain('mapping the roster…');
+  expect(joined).toContain('thinking');
+});
+
+test('renderLoopWidget: focused view with no stream yet shows a placeholder', () => {
+  const lines = renderLoopWidget({
+    ...sampleState(),
+    focused: 'fixer:F1',
+    streams: new StreamStore(),
+  });
+  const joined = lines.join('\n');
+  expect(joined).toContain('fixer:F1 — no stream yet');
+  expect(joined).toContain('/adversarial-review-loop-focus off');
+});
+
+test('renderLoopWidget: focused view truncates long unbroken token runs', () => {
+  const streams = new StreamStore();
+  streams.append('reviewer:generic', 'reviewer generic', 'text', 'x'.repeat(500));
+  const lines = renderLoopWidget({
+    ...sampleState(),
+    focused: 'reviewer:generic',
+    streams,
+  });
+  const streamLine = lines.find((line) => line.includes('…')) ?? '';
+  expect(streamLine.length).toBeLessThan(130);
+  expect(streamLine.startsWith('…')).toBe(true);
+});
+
+// ─── Fixer rows + schedule diagram ───────────────────────────────────
+
+test('renderLoopWidget: fixer phase shows per-fixer rows + wave schedule diagram', () => {
+  const activity = new FixerActivityStore();
+  activity.setTool('F2', 'read');
+  activity.setTool('F3', 'grep');
+  const lines = renderLoopWidget({
+    ...sampleState(),
+    fixer: 'running',
+    fixerConcurrency: 2,
+    fixerDetail: 'wave 2/3 · fixed 1/5',
+    fixers: [
+      { id: 'F1', status: 'done' },
+      { id: 'F2', status: 'running' },
+      { id: 'F3', status: 'running' },
+      { id: 'F4', status: 'queued' },
+      { id: 'F5', status: 'queued' },
+    ],
+    fixerSchedule: [['F1'], ['F2', 'F3'], ['F4', 'F5']],
+    fixerWave: 2,
+    fixerActivity: activity,
+    phase: 'fixer:wave 2',
+  });
+  const joined = lines.join('\n');
+
+  // Schedule diagram: done wave checked, current wave highlighted, later plain.
+  expect(joined).toContain('✓[F1]');
+  expect(joined).toContain('▶[F2 F3]');
+  expect(joined).toContain('[F4 F5]');
+
+  // Current-wave rows only (done F1 collapses into `fixed 1/5`).
+  expect(joined).toContain('◉ F2 — read');
+  expect(joined).toContain('◉ F3 — grep');
+  expect(joined).toContain('○ F4');
+  expect(joined).not.toContain('● F1'); // done rows are not listed
+  expect(joined).toContain('wave 2/3');
+  expect(joined).toContain('2 concurrent');
+});
+
+test('renderLoopWidget: fixer rows hidden when the fixer phase is not running', () => {
+  const lines = renderLoopWidget({
+    ...sampleState(),
+    fixer: 'waiting',
+    fixers: [{ id: 'F1', status: 'queued' }],
+    fixerSchedule: [['F1']],
+    fixerWave: 1,
+  });
+  const joined = lines.join('\n');
+  expect(joined).not.toContain('▶[');
+  expect(joined).not.toContain('◉ F1');
+});
+
+test('renderLoopWidget: fixer row cap collapses overflow with +N more', () => {
+  const rows = Array.from({ length: 8 }, (_v, index) => ({
+    id: `F${index + 1}`,
+    status: 'queued' as const,
+  }));
+  const lines = renderLoopWidget({
+    ...sampleState(),
+    fixer: 'running',
+    fixers: rows,
+    fixerSchedule: [rows.map((row) => row.id)],
+    fixerWave: 1,
+  });
+  const joined = lines.join('\n');
+  expect(joined).toContain('+3 more'); // 8 rows − 5 shown
+});
+
+test('renderLoopWidget: roster view shows the inspect keybind hints', () => {
+  const joined = renderLoopWidget(sampleState()).join('\n');
+  // Both inspect actions are always discoverable in the widget.
+  expect(joined).toContain('ctrl+shift+f — inspect agent stream');
+  expect(joined).toContain('ctrl+shift+i — inspect issues table');
+});
+
+test('renderLoopWidget: focused view also shows the inspect keybind hints', () => {
+  const streams = new StreamStore();
+  streams.append('reviewer:generic', 'reviewer generic', 'text', 'Scanning…');
+  const joined = renderLoopWidget({
+    ...sampleState(),
+    focused: 'reviewer:generic',
+    streams,
+  }).join('\n');
+  expect(joined).toContain('ctrl+shift+f — inspect agent stream');
+  expect(joined).toContain('ctrl+shift+i — inspect issues table');
 });

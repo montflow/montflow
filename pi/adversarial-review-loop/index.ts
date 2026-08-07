@@ -1,7 +1,13 @@
 import { Effect } from 'effect';
 import { NodeServices } from '@effect/platform-node';
 import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
-import { runGraph } from './graph';
+import {
+  activeStreamAgents,
+  focusAgentStream,
+  getActiveLoop,
+  runGraph,
+} from './graph';
+import { openFindingsBrowser } from './findings-browser';
 import { runInteractiveSetup } from './interactive';
 
 export { getCurrentGitBranch } from './git';
@@ -44,6 +50,32 @@ export default function adversarialReviewLoopExtension(pi: ExtensionAPI): void {
     },
   });
 
+  pi.registerShortcut('ctrl+shift+f', {
+    description: 'Inspect a running agent: focus the loop widget on its live stream ' +
+      '(adversarial-review-loop)',
+    handler: async (ctx) => {
+      if (getActiveLoop() === undefined) {
+        ctx.ui.notify('No adversarial review loop is currently running.', 'info');
+        return;
+      }
+      await openAgentFocusPicker(ctx);
+    },
+  });
+
+  pi.registerShortcut('ctrl+shift+i', {
+    description:
+      'Inspect issues (adversarial-review-loop): open the findings table — id · ' +
+      'severity · title with status, attempts, fixer, and description',
+    handler: async (ctx) => {
+      const reviewFile = getActiveLoop()?.reviewFile;
+      if (reviewFile === undefined) {
+        ctx.ui.notify('No adversarial review loop is currently running.', 'info');
+        return;
+      }
+      await openFindingsBrowser(ctx, reviewFile);
+    },
+  });
+
   pi.registerCommand('adversarial-review-loop-stop', {
     description:
       'Gracefully stop the running adversarial review loop — it stops after the ' +
@@ -61,7 +93,87 @@ export default function adversarialReviewLoopExtension(pi: ExtensionAPI): void {
       );
     },
   });
+
+  pi.registerCommand('adversarial-review-loop-focus', {
+    description:
+      'Inspect one running agent\'s live stream — ' +
+      '/adversarial-review-loop-focus [agent|off] (no arg opens the interactive ' +
+      'picker; off returns to the roster view).',
+    handler: async (args, ctx) => {
+      const handle = getActiveLoop();
+      if (handle === undefined) {
+        ctx.ui.notify('No adversarial review loop is currently running.', 'info');
+        return;
+      }
+      const arg = (args ?? '').trim().toLowerCase();
+      if (arg === 'off' || arg === 'none' || arg === 'roster') {
+        focusAgentStream(undefined);
+        ctx.ui.notify('[adversarial-review-loop] Widget back to the roster view.', 'info');
+        return;
+      }
+      if (arg !== '') {
+        const known = activeStreamAgents().some((agent) => agent.key === arg);
+        if (!known) {
+          ctx.ui.notify(`[adversarial-review-loop] No active agent stream '${arg}'.`, 'warning');
+          return;
+        }
+        focusAgentStream(arg);
+        ctx.ui.notify(`[adversarial-review-loop] Inspecting ${arg}.`, 'info');
+        return;
+      }
+      await openAgentFocusPicker(ctx);
+    },
+  });
+
+  pi.registerCommand('adversarial-review-loop-findings', {
+    description:
+      'Inspect issues: open the interactive findings table for the running review — ' +
+      'id · severity · title, with each finding\'s status, attempts, fixer (live tool), ' +
+      'location, problem, impact, suggestion, and discussion. Type to filter, ↑↓ to ' +
+      'navigate (detail pane updates live), enter/esc to close. Same as the ctrl+shift+i ' +
+      'shortcut.',
+    handler: async (_args, ctx) => {
+      const reviewFile = getActiveLoop()?.reviewFile;
+      if (reviewFile === undefined) {
+        ctx.ui.notify('No adversarial review loop is currently running.', 'info');
+        return;
+      }
+      await openFindingsBrowser(ctx, reviewFile);
+    },
+  });
 }
+
+/**
+ * Opens the interactive agent picker: lists the agents that have produced
+ * stream output so far and focuses the widget on the chosen one (or returns
+ * to the roster view). Shared by the `/adversarial-review-loop-focus` command
+ * (no arg) and the `ctrl+shift+f` shortcut.
+ * @param {object} ctx A UI context with select + notify
+ * @returns Nothing
+ */
+const openAgentFocusPicker = async (ctx: {
+  readonly ui: Pick<ExtensionCommandContext['ui'], 'select' | 'notify'>;
+}): Promise<void> => {
+  const agents = activeStreamAgents();
+  if (agents.length === 0) {
+    ctx.ui.notify('[adversarial-review-loop] No agents are streaming yet.', 'info');
+    return;
+  }
+  const pick = await ctx.ui.select(
+    'Inspect which agent? (widget shows its live stream)',
+    [...agents.map((agent) => `${agent.key} — ${agent.label}`), '— back to roster view'],
+  );
+  if (pick === undefined) return;
+  if (pick === '— back to roster view') {
+    focusAgentStream(undefined);
+    return;
+  }
+  const key = pick.split(' — ')[0] ?? '';
+  if (key !== '') {
+    focusAgentStream(key);
+    ctx.ui.notify(`[adversarial-review-loop] Inspecting ${key}.`, 'info');
+  }
+};
 
 /**
  * Interactive mode: run the setup wizard, then the loop. Cancelled setups

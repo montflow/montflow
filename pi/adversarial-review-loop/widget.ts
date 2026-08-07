@@ -1,5 +1,6 @@
 import type { ExtensionUIContext, Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
 import type { SummaryCounts } from './parse-summary';
+import type { FixerActivityStore, StreamStore } from './stream';
 import { Option } from 'effect';
 
 export type ReviewerRunStatus = 'pending' | 'running' | 'done' | 'error' | 'skipped';
@@ -19,6 +20,15 @@ export type SupervisorWidgetStatus =
   | 'done';
 
 export type FixerWidgetStatus = 'waiting' | 'running' | 'done' | 'skipped';
+
+/** Per-fixer row status while the fixer phase runs. */
+export type FixerRunStatus = 'queued' | 'running' | 'done' | 'error';
+
+/** One fixer's row: finding id + status (live tool comes from the activity store). */
+export interface FixerWidgetRow {
+  readonly id: string;
+  readonly status: FixerRunStatus;
+}
 
 export interface LoopWidgetState {
   /** 0-based current loop (independent reviewer set). */
@@ -50,6 +60,24 @@ export interface LoopWidgetState {
   readonly reviewerConcurrency?: number;
   /** Epoch ms when the current phase started (drives the live elapsed timer). */
   readonly phaseStartedAt?: number;
+  /**
+   * Agent key whose live stream the widget shows (`supervisor`, `reviewer:<id>`,
+   * `fixer:<findingId>`). Undefined = the roster view.
+   */
+  readonly focused?: string;
+  /**
+   * Live agent-stream store — the same mutable reference across renders, so
+   * the 1s re-render timer shows fresh deltas without re-pushing the widget.
+   */
+  readonly streams?: StreamStore;
+  /** Live per-fixer tool store (same mutable reference across renders). */
+  readonly fixerActivity?: FixerActivityStore;
+  /** Per-fixer rows while the fixer phase runs (finding id → status). */
+  readonly fixers?: readonly FixerWidgetRow[];
+  /** Fixer wave schedule: waves of finding ids, e.g. `[['F1','F2'],['F3']]`. */
+  readonly fixerSchedule?: readonly (readonly string[])[];
+  /** 1-based current wave index (undefined before the first wave). */
+  readonly fixerWave?: number;
 }
 
 export interface WidgetUi {
@@ -80,12 +108,14 @@ const bold = (theme: Theme | undefined, text: string): string =>
 
 /** Theme color for a status. */
 const statusColor = (
-  status: ReviewerRunStatus | FixerWidgetStatus | SupervisorWidgetStatus,
+  status: ReviewerRunStatus | FixerWidgetStatus | FixerRunStatus | SupervisorWidgetStatus,
 ): ThemeColor => {
   if (status === 'running') return 'warning';
   if (status === 'done') return 'success';
   if (status === 'error') return 'error';
-  if (status === 'skipped' || status === 'idle' || status === 'waiting') return 'muted';
+  if (status === 'skipped' || status === 'idle' || status === 'waiting' || status === 'queued') {
+    return 'muted';
+  }
   return 'warning'; // active supervisor phases (briefing / dispatch / aggregating)
 };
 
@@ -188,6 +218,23 @@ export const phaseLabel = (phase: string): string => {
 /** Spinner frames shown while the loop is active (1s per frame via the widget timer). */
 const SPINNER_FRAMES = ['◐', '◓', '◑', '◒'] as const;
 
+/**
+ * Keybind hints — always visible in both the roster and focused views so the
+ * inspect actions stay discoverable: `inspect agent` (drill into one agent's
+ * live stream) and `inspect issues` (the findings table).
+ * @param {Theme | undefined} theme Current theme
+ * @param {string[]} lines Widget lines to append to
+ * @returns Nothing
+ */
+const renderKeysHints = (theme: Theme | undefined, lines: string[]): void => {
+  lines.push(
+    paint(theme, 'muted', 'keys'.padEnd(ROLE_WIDTH)) +
+      paint(theme, 'dim', 'ctrl+shift+f — inspect agent stream'),
+    paint(theme, 'muted', 'keys'.padEnd(ROLE_WIDTH)) +
+      paint(theme, 'dim', 'ctrl+shift+i — inspect issues table'),
+  );
+};
+
 /** The spinner frame for the current time. */
 const spinnerFrame = (now: number): string =>
   SPINNER_FRAMES[Math.floor(now / 1000) % SPINNER_FRAMES.length] ?? '◐';
@@ -208,16 +255,144 @@ export const formatElapsed = (now: number, startedAt: number): string => {
 };
 
 /**
+ * Tail of a stream for the widget: the last `lines` lines, each truncated to
+ * `maxLine` chars (token streams can be one long unbroken run). A leading
+ * `…` marks elided earlier content.
+ * @param {string} text Stream text
+ * @param {number} [lines] Max lines to show
+ * @param {number} [maxLine] Max chars per line
+ * @returns The tail lines
+ */
+const streamTail = (text: string, lines: number = 10, maxLine: number = 120): readonly string[] => {
+  const parts = text.split('\n');
+  const tail = parts.slice(-lines).map((line) =>
+    line.length > maxLine ? `…${line.slice(-(maxLine - 1))}` : line,
+  );
+  if (parts.length > lines) tail.unshift('…');
+  return tail;
+};
+
+/**
+ * Focused view: one agent's live stream in place of the roster. Header + tool
+ * line stay, so you still see the phase/elapsed and what the agent is doing.
+ * @param {LoopWidgetState} state Widget state (focused + streams set)
+ * @param {Theme} [theme] Current theme
+ * @param {number} now Current epoch ms
+ * @returns Widget lines
+ */
+const renderFocusedStream = (
+  state: LoopWidgetState,
+  theme: Theme | undefined,
+  now: number,
+): string[] => {
+  const lines: string[] = [];
+  const elapsed =
+    state.phaseStartedAt === undefined
+      ? ''
+      : paint(theme, 'dim', `  · ${formatElapsed(now, state.phaseStartedAt)}`);
+  lines.push(
+    bold(theme, paint(theme, 'accent', 'adversarial-review-loop')) +
+      paint(theme, 'dim', `  loop ${state.loop + 1}/${state.maxLoops}`) +
+      paint(theme, 'dim', `  · cycle ${state.cycle + 1}/${state.maxCycles}`) +
+      paint(theme, 'accent', `  · ${spinnerFrame(now)} ${phaseLabel(state.phase)}`) +
+      elapsed,
+  );
+
+  const key = state.focused;
+  if (key === undefined) {
+    lines.push(paint(theme, 'muted', 'focus'.padEnd(ROLE_WIDTH)) + paint(theme, 'dim', 'idle'));
+    renderKeysHints(theme, lines);
+    return lines;
+  }
+  const stream = state.streams?.get(key);
+  if (stream === undefined) {
+    lines.push(
+      paint(theme, 'muted', 'focus'.padEnd(ROLE_WIDTH)) +
+        paint(theme, 'warning', `${key} — no stream yet`),
+    );
+    lines.push(
+      paint(theme, 'muted', 'focus'.padEnd(ROLE_WIDTH)) +
+        paint(theme, 'dim', '/adversarial-review-loop-focus off — back to roster'),
+    );
+    renderKeysHints(theme, lines);
+    return lines;
+  }
+
+  // Prefer visible text; fall back to thinking when only thinking has streamed.
+  const body = stream.text !== '' ? stream.text : stream.thinking;
+  const mode =
+    stream.text !== '' ? (stream.thinking !== '' ? 'text + thinking' : 'streaming') : 'thinking';
+  lines.push(
+    paint(theme, 'muted', 'focus'.padEnd(ROLE_WIDTH)) +
+      paint(theme, 'accent', stream.label) +
+      paint(theme, 'dim', `  · ${mode}`),
+  );
+  if (state.tool !== undefined) {
+    lines.push(paint(theme, 'muted', 'now'.padEnd(ROLE_WIDTH)) + paint(theme, 'dim', state.tool));
+  }
+  for (const line of streamTail(body)) {
+    lines.push(paint(theme, 'dim', line));
+  }
+  lines.push(
+    paint(theme, 'muted', 'focus'.padEnd(ROLE_WIDTH)) +
+      paint(theme, 'dim', '/adversarial-review-loop-focus off — back to roster'),
+  );
+  renderKeysHints(theme, lines);
+  return lines;
+};
+
+/** Max per-fixer rows shown in the widget (done rows collapse into `fixed N/M`). */
+const MAX_FIXER_ROWS = 5;
+
+/** Status glyph for a fixer row. */
+const fixerGlyph = (status: FixerRunStatus): string => {
+  if (status === 'done') return '●';
+  if (status === 'running') return '◉';
+  if (status === 'error') return '✗';
+  return '○'; // queued
+};
+
+/**
+ * Renders the fixer wave schedule as a small diagram, e.g.
+ * `✓[F1 F2] ▶[F3] [F4 F5]` — done waves checked/dim, the current wave
+ * highlighted with `▶`, later waves plain.
+ * @param {readonly (readonly string[])[]} schedule Waves of finding ids
+ * @param {number | undefined} currentWave 1-based current wave index
+ * @param {Theme | undefined} theme Current theme
+ * @returns The diagram line
+ */
+const renderFixerSchedule = (
+  schedule: readonly (readonly string[])[],
+  currentWave: number | undefined,
+  theme: Theme | undefined,
+): string =>
+  schedule
+    .map((wave, index) => {
+      const label = `[${wave.join(' ')}]`;
+      const waveNumber = index + 1;
+      if (currentWave === undefined || waveNumber === currentWave) {
+        return paint(theme, 'warning', `▶${label}`);
+      }
+      if (waveNumber < currentWave) return paint(theme, 'dim', `✓${label}`);
+      return paint(theme, 'muted', label);
+    })
+    .join(' ');
+
+/**
  * Renders loop widget lines for Pi's setWidget API. Summary-first so the
  * most useful information survives Pi's widget line limit with large rosters.
  * The header carries the loop/cycle progress and a live elapsed timer for the
- * current phase.
+ * current phase. When `state.focused` is set, the roster is replaced by that
+ * agent's live stream (see {@link renderFocusedStream}).
  * @param {LoopWidgetState} state Current loop visualization state
  * @param {Theme} [theme] Current theme (colors applied when present)
  * @param {number} [now] Current epoch ms (for the elapsed timer)
  * @returns Widget lines
  */
 export const renderLoopWidget = (state: LoopWidgetState, theme?: Theme, now: number = Date.now()): string[] => {
+  if (state.focused !== undefined) {
+    return renderFocusedStream(state, theme, now);
+  }
   const lines: string[] = [];
 
   // Header: title, loop/cycle progress, current phase, elapsed since the phase started.
@@ -313,10 +488,42 @@ export const renderLoopWidget = (state: LoopWidgetState, theme?: Theme, now: num
       paint(theme, 'dim', fixerDetail),
   );
 
+  // Fixer wave schedule diagram + per-fixer rows (only while fixers run).
+  if (state.fixer === 'running' && state.fixers !== undefined) {
+    if (state.fixerSchedule !== undefined && state.fixerSchedule.length > 0) {
+      lines.push(
+        paint(theme, 'muted', 'waves'.padEnd(ROLE_WIDTH)) +
+          renderFixerSchedule(state.fixerSchedule, state.fixerWave, theme),
+      );
+    }
+    // Current-wave rows (running + queued), each with its live tool; done rows
+    // collapse into the `fixed N/M` detail line above.
+    const visible = state.fixers.filter(
+      (row) => row.status === 'running' || row.status === 'queued',
+    );
+    for (const row of visible.slice(0, MAX_FIXER_ROWS)) {
+      const tool = state.fixerActivity?.getTool(row.id);
+      const glyph = paint(theme, statusColor(row.status), fixerGlyph(row.status));
+      lines.push(
+        paint(theme, 'muted', ''.padEnd(ROLE_WIDTH)) +
+          `${glyph} ${row.id}${tool !== undefined ? paint(theme, 'dim', ` — ${tool}`) : ''}`,
+      );
+    }
+    if (visible.length > MAX_FIXER_ROWS) {
+      lines.push(
+        paint(theme, 'muted', ''.padEnd(ROLE_WIDTH)) +
+          paint(theme, 'dim', `+${visible.length - MAX_FIXER_ROWS} more`),
+      );
+    }
+  }
+
   // Live tool activity (dim, transient — cleared at the next phase transition).
   if (state.tool !== undefined) {
     lines.push(paint(theme, 'muted', 'now'.padEnd(ROLE_WIDTH)) + paint(theme, 'dim', state.tool));
   }
+
+  // Keybind hints — the inspect actions, always visible.
+  renderKeysHints(theme, lines);
 
   return lines;
 };
