@@ -1,0 +1,1 @@
+{"version":1,"name":"generic","config":{"reviewers":[{"type":"profile","name":"generic-adversarial-reviewer","model":"opencode-go/deepseek-v4-flash"}],"supervisor":{"model":"opencode-go/deepseek-v4-flash"},"fixerModel":"opencode-go/deepseek-v4-flash","maxLoops":5,"deadlock":{"flipThreshold":2,"action":"escalate"}}}

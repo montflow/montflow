@@ -1,8 +1,4 @@
-import {
-  FIXER_SKILL_PATH,
-  RECONCILIATOR_SKILL_PATH,
-  SUPERVISOR_SKILL_PATH,
-} from './skill-paths';
+import { FIXER_SKILL_PATH, SUPERVISOR_SKILL_PATH } from './skill-paths';
 import type { ReviewerProfile } from './config';
 
 /**
@@ -101,35 +97,16 @@ export const FIXER_SYSTEM = [
 ].join('\n');
 
 /**
- * Reconciliator merges conflicting specialist findings into one canonical report.
- * Invoked only when supervisor is off (`mode=never`) and hybrid merge finds conflicts.
- */
-export const RECONCILIATOR_SYSTEM = [
-  'You are a reconciliator for multi-reviewer adversarial reviews.',
-  'Load and follow the reconciliator skill at',
-  `${RECONCILIATOR_SKILL_PATH}.`,
-  '',
-  'You receive a provisionally merged canonical review plus a conflict list.',
-  'Resolve conflicts by deduplicating, ranking severity, and preserving provenance',
-  '(`Source` field / Discussion notes). Output ONE canonical review file at the',
-  'path given in the task, using the adversarial-review Standard File Structure.',
-  'Preserve terminal findings (Resolved / Won\'t Fix / Escalated) unless a conflict',
-  'explicitly requires clarifying them. Do NOT invent unrelated new findings.',
-  'Do NOT decide loop continue/stop — write the reconciled file only.',
-].join('\n');
-
-/**
  * Allowed tools per agent role.
- * Specialists are codebase-read-only (write scratch/canonical markdown only).
+ * Specialists are codebase-read-only (write scratch markdown only); the
+ * supervisor may edit its brief/canonical artifacts.
  */
 export const TOOLS: {
   readonly reviewer: readonly string[];
   readonly supervisor: readonly string[];
   readonly fixer: readonly string[];
-  readonly reconciliator: readonly string[];
 } = {
   reviewer: ['read', 'grep', 'glob', 'write'],
   supervisor: ['read', 'grep', 'glob', 'write', 'edit'],
   fixer: ['read', 'edit', 'write', 'bash', 'grep', 'glob'],
-  reconciliator: ['read', 'edit', 'write'],
 };

@@ -3,6 +3,12 @@ import nodePath from 'node:path';
 import { Effect } from 'effect';
 import { FileSystem } from 'effect/FileSystem';
 import { Path } from 'effect/Path';
+import type { PlatformError } from 'effect/PlatformError';
+import {
+  DEFAULT_MAX_CYCLES,
+  DEFAULT_MAX_LOOPS,
+  type LoopConfig,
+} from './config';
 
 export interface FindingTransition {
   readonly cycle: number;
@@ -29,13 +35,61 @@ export interface LoopConflict {
 }
 
 export interface LoopState {
-  readonly version: 1;
+  readonly version: 2;
+  /** 0-based index of the current loop (independent reviewer set). */
+  readonly loop: number;
+  /**
+   * Last completed cycle within the current loop (1-based; 0 = none yet). The
+   * next cycle to run is `cycle + 1`.
+   */
   readonly cycle: number;
   readonly roster: readonly string[];
   readonly findings: Readonly<Record<string, TrackedFinding>>;
   readonly conflicts: readonly LoopConflict[];
   readonly deadlocks: readonly string[];
+  /**
+   * The resolved loop config the review started with ("locked in" snapshot).
+   * Present for reviews started after this feature; absent for legacy states,
+   * which fall back to a preset pick on resume.
+   */
+  readonly config?: LoopConfig;
 }
+
+/**
+ * Light structural check that a parsed value looks like a stored loop config
+ * (written by us — no deep schema validation needed).
+ * @param {unknown} value The parsed value
+ * @returns True when it plausibly is a loop config
+ */
+export const isStoredConfig = (value: unknown): value is LoopConfig => {
+  if (typeof value !== 'object' || value === null) return false;
+  const config = value as Partial<LoopConfig>;
+  return (
+    Array.isArray(config.reviewers) &&
+    typeof config.supervisor?.model === 'string' &&
+    typeof config.supervisor?.skillPath === 'string' &&
+    typeof config.fixerModel === 'string' &&
+    typeof config.maxLoops === 'number' &&
+    typeof config.deadlock?.flipThreshold === 'number'
+  );
+};
+
+/**
+ * Normalizes a stored loop config into the current runtime shape. Legacy
+ * configs predating the loop/cycle split stored `maxLoops` meaning review
+ * **cycles**; they are migrated to `maxLoops` = default loop count with their
+ * old value as the per-loop cycle cap.
+ * @param {LoopConfig} config The stored config
+ * @returns The normalized config
+ */
+export const normalizeStoredConfig = (config: LoopConfig): LoopConfig =>
+  config.maxCycles !== undefined && config.maxCycles > 0
+    ? config
+    : {
+        ...config,
+        maxLoops: DEFAULT_MAX_LOOPS,
+        maxCycles: config.maxLoops > 0 ? config.maxLoops : DEFAULT_MAX_CYCLES,
+      };
 
 /**
  * Creates an empty loop-state document.
@@ -43,7 +97,8 @@ export interface LoopState {
  * @returns A fresh loop state
  */
 export const emptyLoopState = (roster: readonly string[]): LoopState => ({
-  version: 1,
+  version: 2,
+  loop: 0,
   cycle: 0,
   roster: [...roster],
   findings: {},
@@ -53,13 +108,12 @@ export const emptyLoopState = (roster: readonly string[]): LoopState => ({
 
 /**
  * Derives the state directory for a canonical review file.
- * Flat `001.md` → sibling dir `001/`; `…/REVIEW.md` → its parent directory.
+ * Flat `001.md` → sibling dir `001/`.
  * @param {string} reviewFile Absolute path to the canonical review file
  * @returns The absolute state directory path
  */
 export const stateDirForReviewFile = (reviewFile: string): string => {
   const basename = nodePath.basename(reviewFile);
-  if (basename === 'REVIEW.md') return nodePath.dirname(reviewFile);
   if (basename.endsWith('.md')) {
     const code = basename.slice(0, -'.md'.length);
     return nodePath.join(nodePath.dirname(reviewFile), code);
@@ -76,44 +130,57 @@ export const loopStatePath = (reviewFile: string): string =>
   nodePath.join(stateDirForReviewFile(reviewFile), 'loop-state.json');
 
 /**
- * Absolute path to a reviewer's scratch file for this cycle (legacy flat layout).
+ * Absolute directory for a pass within a loop+cycle: `passes/<loop>/<cycle>/`.
  * @param {string} reviewFile Absolute path to the canonical review file
- * @param {string} reviewerId Reviewer profile id
- * @returns The scratch markdown path
- */
-export const scratchPath = (reviewFile: string, reviewerId: string): string =>
-  nodePath.join(stateDirForReviewFile(reviewFile), 'scratch', `${reviewerId}.md`);
-
-/**
- * Absolute directory for a pass within a cycle.
- * @param {string} reviewFile Absolute path to the canonical review file
- * @param {number} cycle Cycle / pass number (1-based)
+ * @param {number} loop Loop number (1-based)
+ * @param {number} cycle Cycle number within the loop (1-based)
  * @returns The pass directory path
  */
-export const passDir = (reviewFile: string, cycle: number): string =>
-  nodePath.join(stateDirForReviewFile(reviewFile), 'passes', String(cycle));
+export const passDir = (reviewFile: string, loop: number, cycle: number): string =>
+  nodePath.join(stateDirForReviewFile(reviewFile), 'passes', String(loop), String(cycle));
 
 /**
- * Absolute path to the supervisor brief for a cycle.
+ * Absolute path to the supervisor brief for a loop+cycle.
  * @param {string} reviewFile Absolute path to the canonical review file
- * @param {number} cycle Cycle / pass number
+ * @param {number} loop Loop number
+ * @param {number} cycle Cycle number
  * @returns The brief.md path
  */
-export const briefPath = (reviewFile: string, cycle: number): string =>
-  nodePath.join(passDir(reviewFile, cycle), 'brief.md');
+export const briefPath = (reviewFile: string, loop: number, cycle: number): string =>
+  nodePath.join(passDir(reviewFile, loop, cycle), 'brief.md');
 
 /**
  * Absolute path to a specialist scratch file under the pass directory.
  * @param {string} reviewFile Absolute path to the canonical review file
- * @param {number} cycle Cycle / pass number
+ * @param {number} loop Loop number
+ * @param {number} cycle Cycle number
  * @param {string} reviewerId Reviewer profile id
  * @returns The pass-scoped scratch markdown path
  */
 export const passScratchPath = (
   reviewFile: string,
+  loop: number,
   cycle: number,
   reviewerId: string,
-): string => nodePath.join(passDir(reviewFile, cycle), 'scratch', `${reviewerId}.md`);
+): string =>
+  nodePath.join(passDir(reviewFile, loop, cycle), 'scratch', `${reviewerId}.md`);
+
+/**
+ * Absolute path to a fixer's per-finding scratch file (the fixer writes its
+ * updated finding block here instead of the shared review file, so parallel
+ * fixers never race; the orchestrator merges these after each wave).
+ * @param {string} reviewFile Absolute path to the canonical review file
+ * @param {number} loop Loop number
+ * @param {number} cycle Cycle number
+ * @param {string} findingId Finding id (F1, F2, …)
+ * @returns The fixer scratch path
+ */
+export const fixerScratchPath = (
+  reviewFile: string,
+  loop: number,
+  cycle: number,
+  findingId: string,
+): string => nodePath.join(passDir(reviewFile, loop, cycle), 'fixes', `${findingId}.md`);
 
 /**
  * Fingerprints a finding for deadlock / dedupe tracking.
@@ -162,19 +229,21 @@ export const ensureStateDirs = (
   });
 
 /**
- * Ensures pass + pass-scratch directories exist for a cycle.
+ * Ensures pass + pass-scratch directories exist for a loop+cycle.
  * @param {string} reviewFile Absolute path to the canonical review file
- * @param {number} cycle Cycle / pass number
+ * @param {number} loop Loop number
+ * @param {number} cycle Cycle number
  * @returns An effect creating the directories
  */
 export const ensurePassDirs = (
   reviewFile: string,
+  loop: number,
   cycle: number,
 ): Effect.Effect<void, never, FileSystem | Path> =>
   Effect.gen(function* () {
     yield* ensureStateDirs(reviewFile);
     const fileSystem = yield* FileSystem;
-    const scratch = nodePath.join(passDir(reviewFile, cycle), 'scratch');
+    const scratch = nodePath.join(passDir(reviewFile, loop, cycle), 'scratch');
     yield* fileSystem.makeDirectory(scratch, { recursive: true }).pipe(
       Effect.orElseSucceed(() => undefined),
     );
@@ -182,6 +251,7 @@ export const ensurePassDirs = (
 
 /**
  * Loads loop-state.json, or returns empty state when missing/unreadable.
+ * Version 1 states (pre loop/cycle split) are migrated: `loop` defaults to 0.
  * @param {string} reviewFile Absolute path to the canonical review file
  * @param {readonly string[]} roster Reviewer ids (used when creating empty state)
  * @returns The loaded or empty loop state
@@ -204,10 +274,12 @@ export const loadLoopState = (
     try {
       const parsed: unknown = JSON.parse(text);
       if (typeof parsed !== 'object' || parsed === null) return emptyLoopState(roster);
-      const record = parsed as Partial<LoopState>;
-      if (record.version !== 1) return emptyLoopState(roster);
+      const version = (parsed as { version?: unknown }).version;
+      if (version !== 1 && version !== 2) return emptyLoopState(roster);
+      const record = parsed as Partial<LoopState> & { version?: unknown };
       return {
-        version: 1,
+        version: 2,
+        loop: typeof record.loop === 'number' ? record.loop : 0,
         cycle: typeof record.cycle === 'number' ? record.cycle : 0,
         roster: Array.isArray(record.roster) ? record.roster.map(String) : [...roster],
         findings:
@@ -216,6 +288,9 @@ export const loadLoopState = (
             : {},
         conflicts: Array.isArray(record.conflicts) ? record.conflicts : [],
         deadlocks: Array.isArray(record.deadlocks) ? record.deadlocks.map(String) : [],
+        config: isStoredConfig(record.config)
+          ? normalizeStoredConfig(record.config)
+          : undefined,
       };
     } catch {
       return emptyLoopState(roster);
@@ -231,11 +306,12 @@ export const loadLoopState = (
 export const saveLoopState = (
   reviewFile: string,
   state: LoopState,
-): Effect.Effect<void, never, FileSystem | Path> =>
+): Effect.Effect<void, PlatformError, FileSystem | Path> =>
   Effect.gen(function* () {
     yield* ensureStateDirs(reviewFile);
     const fileSystem = yield* FileSystem;
-    yield* fileSystem
-      .writeFileString(loopStatePath(reviewFile), `${JSON.stringify(state, null, 2)}\n`)
-      .pipe(Effect.orElseSucceed(() => undefined));
+    yield* fileSystem.writeFileString(
+      loopStatePath(reviewFile),
+      `${JSON.stringify(state, null, 2)}\n`,
+    );
   });

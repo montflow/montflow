@@ -6,7 +6,7 @@ import {
   skillPath,
   SKILLS_ROOT,
 } from './skill-paths';
-import { usesSupervisor, type LoopConfig } from './config';
+import type { LoopConfig } from './config';
 
 /** Skill verification failure — missing bundled skills or version floor not met. */
 export class SkillVerificationError extends Data.TaggedError('SkillVerificationError')<{
@@ -126,10 +126,9 @@ export const verifySkill = (
 
 /**
  * Verifies every skill the resolved config can dispatch: the core reviewer +
- * fixer skills (with version floors), plus each reviewer's effective
- * skillPath, the supervisor skill (when the supervisor runs), and the
- * reconciliator skill (when reconciliator mode is not 'never'). Extra paths
- * are existence-checked only — version floors apply to the two core skills.
+ * fixer skills (with version floors), each reviewer's effective skillPath,
+ * and the always-on supervisor skill. Extra paths are existence-checked only
+ * — version floors apply to the two core skills.
  * @param {LoopConfig} config The resolved loop configuration
  * @returns An effect that fails with SkillVerificationError when any required skill is missing
  */
@@ -142,8 +141,7 @@ export const verifyLoopSkills = (
 
     const extra = new Set<string>();
     for (const profile of config.reviewers) extra.add(profile.skillPath);
-    if (usesSupervisor(config)) extra.add(config.supervisor.skillPath);
-    if (config.reconciliator.mode !== 'never') extra.add(config.reconciliator.skillPath);
+    extra.add(config.supervisor.skillPath);
     extra.delete(REVIEWER_SKILL_PATH);
     extra.delete(FIXER_SKILL_PATH);
     extra.delete('');

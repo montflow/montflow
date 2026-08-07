@@ -37,7 +37,17 @@ export const severityRank = (severity: string): number =>
  * Splits review markdown into finding blocks at `#### F<n> —` headers.
  * Fence-aware: headers quoted inside fenced code blocks (e.g. an example
  * finding inside a Discussion turn) are NOT treated as block boundaries, so
- * they cannot reify as phantom findings.
+ * they cannot reify as phantom findings. Recovery: when the document has an
+ * unclosed fence (odd fence-marker count), a header preceded by a blank line
+ * is a boundary even while a fence is open — a single unclosed ``` (a common
+ * LLM markdown defect) cannot swallow the findings around it, and the fence
+ * state is reset at that boundary. An odd count is ambiguous: the never-closed
+ * region may be the one opened by the FIRST marker (an orphaned opener
+ * mid-document followed by a later balanced pair) or the one opened by the
+ * LAST marker (tail case); the recovery therefore treats any open fence as
+ * potentially unclosed. A document whose fences are all balanced (even count)
+ * keeps its phantom protection: a blank-preceded header inside a real fence
+ * is a quoted example and stays invisible.
  * @param {string} content Full markdown contents
  * @returns Raw text blocks (leading non-finding preamble included as block 0)
  */
@@ -45,10 +55,42 @@ export const splitFindingBlocks = (content: string): readonly string[] => {
   const blocks: string[] = [];
   let current: string[] = [];
   let inFence = false;
-  for (const line of content.split('\n')) {
+  const lines = content.split('\n');
+  // Fence markers pair up (opener at odd ordinal, closer at even ordinal).
+  // An odd total count means some region is never closed, but which one is
+  // ambiguous: it could be the region opened by the FIRST marker (an orphaned
+  // opener mid-document followed by a later balanced pair — F19) or the one
+  // opened by the LAST marker (tail case — F17). The split below therefore
+  // treats any open fence as potentially unclosed in an odd-count document.
+  // A document with an even count has only balanced fences, which are real:
+  // quoted headers inside them must stay invisible even when blank-preceded
+  // (F17 regression guard).
+  let fenceCount = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^```/.test((lines[i] ?? '').trimStart())) {
+      fenceCount++;
+    }
+  }
+  const hasUnclosedFence = fenceCount % 2 === 1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
     if (/^```/.test(line.trimStart())) inFence = !inFence;
-    const isHeader = !inFence && /^#### F\d+\s+(?:—|--|-)/.test(line);
+    // Recovery: a finding header preceded by a blank line is a block boundary
+    // while a fence is open ONLY when the document has an unclosed fence (odd
+    // marker count) — the open region may be the never-closed one, whether it
+    // is the tail region (F17) or a region opened mid-document (F19), and the
+    // ambiguity is accepted. Resetting the fence at such a boundary restores
+    // the document's fence state for the rest of the split. In a fully
+    // balanced document (even count) a blank-preceded header inside a fence
+    // is a quoted example and must not become a boundary.
+    const precededByBlank =
+      current.length === 0 || (current[current.length - 1] ?? '').trim() === '';
+    const inUnclosedFence = hasUnclosedFence;
+    const isHeader =
+      /^#### F\d+\s+(?:—|--|-)/.test(line) &&
+      (inFence ? precededByBlank && inUnclosedFence : true);
     if (isHeader) {
+      inFence = false;
       if (current.length > 0) blocks.push(current.join('\n'));
       current = [line];
       continue;
@@ -78,18 +120,35 @@ export const parseFindingBlocks = (
     const title = idMatch?.[2];
     if (id === undefined || title === undefined) continue;
 
+    // Field extraction is confined to the finding head (everything before
+    // `### Discussion`) so quoted field lines inside Discussion turns cannot
+    // shadow the real fields. Status/Attempts are anchored to the fixed field
+    // order (Status is always followed by Attempts, Attempts by First Seen) so
+    // quoted `- **Status**:` text inside Problem/Suggestion (F16) never wins
+    // the parse.
+    const head = block.split(/\n### Discussion\b/)[0] ?? block;
+
     const field = (label: string): string => {
-      const match = block.match(new RegExp(`- \\*\\*${label}\\*\\*: (.+)$`, 'm'));
+      const match = head.match(new RegExp(`- \\*\\*${label}\\*\\*: (.+)$`, 'm'));
       return match?.[1]?.trim() ?? '';
     };
 
-    const problemMatch = block.match(
+    // Anchored variant: the field line must be followed by the next field in
+    // the canonical block order, so mid-text quotes cannot shadow the real one.
+    const fieldBefore = (label: string, next: string): string => {
+      const match = head.match(
+        new RegExp(`- \\*\\*${label}\\*\\*: ([^\\n]+)(?=\\n- \\*\\*${next}\\*\\*:)`, 'm'),
+      );
+      return match?.[1]?.trim() ?? '';
+    };
+
+    const problemMatch = head.match(
       /- \*\*Problem\*\*: ([\s\S]+?)(?:\n- \*\*Impact\*\*)/m,
     );
-    const impactMatch = block.match(
+    const impactMatch = head.match(
       /- \*\*Impact\*\*: ([\s\S]+?)(?:\n- \*\*Suggestion\*\*)/m,
     );
-    const suggestionMatch = block.match(
+    const suggestionMatch = head.match(
       /- \*\*Suggestion\*\*: ([\s\S]+?)(?:\n- \*\*Status\*\*)/m,
     );
     const discussionMatch = block.match(/### Discussion\s*\n([\s\S]*?)(?=^#### |\n## |$(?![\s\S]))/m);
@@ -110,8 +169,8 @@ export const parseFindingBlocks = (
       problem: problemMatch?.[1]?.trim() ?? title.trim(),
       impact: impactMatch?.[1]?.trim() ?? '',
       suggestion: suggestionMatch?.[1]?.trim() ?? '',
-      status: field('Status') || 'Open',
-      attempts: field('Attempts') || '0',
+      status: fieldBefore('Status', 'Attempts') || field('Status') || 'Open',
+      attempts: fieldBefore('Attempts', 'First Seen') || field('Attempts') || '0',
       firstSeen: field('First Seen') || '1',
       discussion: discussionMatch?.[1]?.trim() ?? '',
       raw: block.trim(),
@@ -120,37 +179,6 @@ export const parseFindingBlocks = (
   }
 
   return findings;
-};
-
-/**
- * Renders a single finding block in the canonical report format.
- * @param {FindingBlock} finding Finding to render
- * @param {string} id The finding's stable id (F1, F2, …)
- * @returns Markdown for the finding
- */
-export const renderFindingBlock = (finding: FindingBlock, id: string): string => {
-  const sources =
-    finding.sourceReviewers.length > 0
-      ? `\n- **Source**: ${finding.sourceReviewers.join(', ')}`
-      : '';
-  const discussion =
-    finding.discussion.trim() === ''
-      ? '### Discussion\n<!-- Threaded log. Each turn prefixed with the role tag. -->'
-      : `### Discussion\n${finding.discussion.trim()}`;
-
-  return [
-    `#### ${id} — ${finding.title}`,
-    `- **Severity**: ${finding.severity}`,
-    `- **Location**: \`${finding.location}\`${sources}`,
-    `- **Problem**: ${finding.problem}`,
-    `- **Impact**: ${finding.impact || '(see problem)'}`,
-    `- **Suggestion**: ${finding.suggestion || '(see problem)'}`,
-    `- **Status**: ${finding.status}`,
-    `- **Attempts**: ${finding.attempts}`,
-    `- **First Seen**: ${finding.firstSeen}`,
-    '',
-    discussion,
-  ].join('\n');
 };
 
 export interface SummaryCountsLike {
@@ -180,90 +208,91 @@ export const countStatuses = (findings: readonly FindingBlock[]): SummaryCountsL
 };
 
 /**
- * Rebuilds a canonical review document from merged findings.
- * Finding ids are STABLE: each block keeps its own id (assigned by the merge
- * from the existing canonical where possible); next-free ids are only handed
- * out for blocks with missing or duplicate ids. Reviewer-owned metadata
- * (Iteration / Review Type) is carried forward from the existing canonical
- * instead of being rewound to the in-memory cycle.
- * @param {object} input Metadata + findings
- * @returns Full markdown document
+ * Extracts the file portion of a finding's location string (`src/a.ts:10`
+ * → `src/a.ts`, `src/a.ts:10:20` → `src/a.ts`, `C:\\dir\\a.ts:10` →
+ * `C:\\dir\\a.ts`). Windows drive letters are safe because the drive colon
+ * is not followed by a digit, whereas a `:line`/`:line:col` suffix is.
+ * @param {string} location Finding location string
+ * @returns The file path the finding edits
  */
-export const buildCanonicalReview = (input: {
-  readonly target: string;
-  readonly reviewFile: string;
-  readonly iteration: number;
-  readonly findings: readonly FindingBlock[];
-  readonly coverageNote?: string;
-  readonly existingIteration?: number;
-}): string => {
-  const { target, reviewFile, findings, coverageNote, existingIteration } = input;
-  const iteration = Math.max(
-    existingIteration !== undefined ? existingIteration + 1 : 1,
-    input.iteration,
-  );
-  const bySeverity = new Map<string, FindingBlock[]>();
+export const locationFile = (location: string): string => {
+  const match = location.match(/^(.+?):\d/);
+  return (match?.[1] ?? location).trim();
+};
+
+/**
+ * Builds the fixer schedule from the actionable (Open) findings: a list of
+ * **waves**. Findings in the same file are related (their fixes overlap —
+ * concurrent fixers editing the same file race on read-modify-write) and are
+ * assigned to distinct waves — run sequentially. Findings in different files
+ * are unrelated and share a wave — run in parallel. Within a file group,
+ * fixes apply in severity order.
+ * @param {readonly FindingBlock[]} findings Actionable findings
+ * @returns The waves; each wave runs in parallel, waves run sequentially
+ */
+export const buildFixerSchedule = (
+  findings: readonly FindingBlock[],
+): readonly (readonly FindingBlock[])[] => {
+  const groups = new Map<string, FindingBlock[]>();
   for (const finding of findings) {
-    const list = bySeverity.get(finding.severity) ?? [];
-    list.push(finding);
-    bySeverity.set(finding.severity, list);
+    const file = locationFile(finding.location);
+    const group = groups.get(file) ?? [];
+    group.push(finding);
+    groups.set(file, group);
   }
-
-  // Stable ids: keep each finding's id; assign next-free ids only to blocks
-  // with a missing/invalid/duplicate id (merge pre-assigns, so this is a
-  // defensive fallback).
-  const usedIds = new Set<string>();
-  let nextFreeId = 1;
-  const resolveId = (preferred: string): string => {
-    if (/^F\d+$/.test(preferred) && !usedIds.has(preferred)) {
-      usedIds.add(preferred);
-      return preferred;
-    }
-    while (usedIds.has(`F${nextFreeId}`)) nextFreeId++;
-    const id = `F${nextFreeId++}`;
-    usedIds.add(id);
-    return id;
-  };
-
-  const remapped: { severity: string; markdown: string }[] = [];
-  const summaryFindings: FindingBlock[] = [];
-  const severitySections = [...bySeverity.entries()].sort(
-    ([left], [right]) => severityRank(left) - severityRank(right),
+  // Within each file group, most severe first (the skill fixes in severity
+  // order within a related cluster).
+  const sortedGroups = [...groups.values()].map((group) =>
+    [...group].sort((left, right) => severityRank(left.severity) - severityRank(right.severity)),
   );
-  for (const [severity, group] of severitySections) {
-    const parts: string[] = [];
-    for (const finding of group) {
-      const id = resolveId(finding.id);
-      summaryFindings.push({ ...finding, id });
-      parts.push(renderFindingBlock(finding, id));
-    }
-    remapped.push({
-      severity,
-      markdown: `### ${severity}\n\n${parts.join('\n\n')}`,
+  // Finding i of a group goes to wave i → same-file findings never share a
+  // wave; wave count = the largest file group.
+  const waveCount = Math.max(0, ...sortedGroups.map((group) => group.length));
+  const waves: FindingBlock[][] = Array.from({ length: waveCount }, () => []);
+  for (const group of sortedGroups) {
+    group.forEach((finding, index) => {
+      waves[index]?.push(finding);
     });
   }
+  return waves;
+};
 
-  const counts = countStatuses(summaryFindings);
-  const findingsBody =
-    remapped.length === 0
-      ? 'No defects found.\n\nCoverage: ' + (coverageNote ?? 'full adversarial audit')
-      : remapped.map((section) => section.markdown).join('\n\n');
+/**
+ * Replaces one finding's block in a canonical review document with an updated
+ * block, matched by its id (`#### F<n> …`), preserving everything else.
+ * @param {string} canonical The review document
+ * @param {string} updatedBlock The updated finding block (must carry the id)
+ * @returns The merged document (unchanged when the id is missing/unknown)
+ */
+export const mergeFindingBlock = (canonical: string, updatedBlock: string): string => {
+  const idMatch = updatedBlock.match(/^#### (F\d+)\s+(?:—|--|-)/m);
+  const id = idMatch?.[1];
+  if (id === undefined) return canonical;
+  const blocks = [...splitFindingBlocks(canonical)];
+  const index = blocks.findIndex((block) => block.startsWith(`#### ${id} `));
+  if (index < 0) return canonical;
+  blocks[index] = updatedBlock.trimEnd();
+  return blocks.join('\n');
+};
 
-  return [
-    `# Adversarial Review`,
-    '',
-    `## Review Metadata`,
-    `- **Target**: ${target}`,
-    `- **Review Type**: ${existingIteration !== undefined || iteration > 1 ? 'Re-review' : 'Initial'}`,
-    `- **Review File**: ${reviewFile}`,
-    `- **Iteration**: ${iteration}`,
-    `- **Max Attempts**: 3`,
-    '',
-    `## Findings`,
-    '',
-    findingsBody,
-    '',
-    `## Summary`,
+/** Matches the `## Summary` section (from the header to the next `##` or EOF). */
+export const SUMMARY_SECTION_RE = /^## Summary\s*$([\s\S]*?)(?=^##\s|$(?![\s\S]))/m;
+
+/**
+ * Recomputes and rewrites the `## Summary` counts section from the given
+ * findings, preserving the rest of the document. Appends the section when the
+ * document has none.
+ * @param {string} canonical The review document
+ * @param {readonly FindingBlock[]} findings Findings to count
+ * @returns The document with an up-to-date summary section
+ */
+export const updateSummarySection = (
+  canonical: string,
+  findings: readonly FindingBlock[],
+): string => {
+  const counts = countStatuses(findings);
+  const summary = [
+    '## Summary',
     `- **Open**: ${counts.open}`,
     `- **In Review**: ${counts.inReview}`,
     `- **Escalated**: ${counts.escalated}`,
@@ -271,4 +300,7 @@ export const buildCanonicalReview = (input: {
     `- **Won't Fix**: ${counts.wontFix}`,
     '',
   ].join('\n');
+  return SUMMARY_SECTION_RE.test(canonical)
+    ? canonical.replace(SUMMARY_SECTION_RE, summary)
+    : `${canonical.trimEnd()}\n\n${summary}`;
 };

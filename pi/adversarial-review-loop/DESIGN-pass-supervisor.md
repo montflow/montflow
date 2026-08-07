@@ -1,30 +1,25 @@
-# Design: Pass + Supervisor Reviewers
+# Design: Pass + Always-On Supervisor
 
-> Status: **in progress** — decisions locked; implementation underway.
-> Scope: refactor of the review half of `@montflow/adversarial-review-loop`.
-> Note: since this doc was written the extension became **interactive-only** — the CLI roster flag (`--reviewers`) no longer exists; rosters are built in the TUI wizard from profiles.
+> Status: **implemented**. The review half of every cycle is a supervisor-driven pass: supervisor brief → roster reviewers (scratch) → supervisor aggregate → canonical review. The supervisor is **always on** — there is no mode toggle, no single-reviewer shortcut, and no programmatic merge. Aggregation is always agent-driven.
 
 ## Locked decisions
 
-1. **Default has no supervisor.** Roster `[generic]` only — one reviewer does everything (today’s path). Supervisor activates for multi-reviewer rosters (`supervisor.mode = on-multi`).
-2. **One supervisor session per loop.** Persistent across cycles; each cycle the orchestrator prompts it (brief, then aggregate) with fresh instructions. Specialists stay fresh every pass.
-3. **Specialists are read-only on the codebase.** Tools: `read` / `grep` / `glob` (+ `write` for scratch only). Prefer Pi search tools (rg-backed `grep`) with fallbacks; no code-mutating tools.
+1. **Supervisor is always on.** Every cycle, for every roster size (including the default single `generic` reviewer), the supervisor runs a brief turn and an aggregate turn.
+2. **One supervisor session per loop.** Persistent across the loop's cycles; each cycle the orchestrator prompts it (brief, then aggregate) with fresh instructions. Reviewers are **persistent per loop too** — the same sessions re-review the updated code across cycles (with their context); a new loop spawns a fresh independent set (sessions + supervisor disposed and recreated).
+3. **Reviewers are read-only on the codebase.** Tools: `read` / `grep` / `glob` (+ `write` for scratch only). Prefer Pi search tools (rg-backed `grep`) with fallbacks; no code-mutating tools.
 4. **Supervisor may author/resolve findings** during aggregate — join duplicates, resolve conflicts, fill clear gaps — not only normalize scratch.
-5. **CLI keeps `--reviewers`** for the specialist roster.
+5. **Aggregation is never programmatic.** The supervisor owns the canonical file. If the aggregate turn fails (error or empty canonical), the orchestrator retries the pass and escalates after consecutive failures — it never falls back to a code merge.
+6. **No reconciliator, no merge module.** The old hybrid programmatic-merge + LLM reconciliator path is removed.
 
 ## Motivation
 
-Today the extension already supports a **roster of peer reviewers** (default: one `generic`) whose scratch reports are merged programmatically, with an optional LLM reconciliator on conflicts. That model has gaps:
+Peer-reviewer scratch reports used to be merged programmatically with an optional LLM reconciliator on conflicts. That model had gaps:
 
-1. **No shared briefing.** Specialists each invent their own scope from a static `focus` string. Nothing decides *what* is in bounds for this run (paths, surfaces, prior findings, out-of-scope areas).
-2. **Aggregation is mechanical.** Fingerprint/location merge + conflict reconcile does not reason about coverage gaps, overlapping severity, or whether specialists answered the brief.
-3. **"Pass" is informal.** Agents and docs say "pass" casually; the only first-class unit is the outer **cycle** (review → fixer → re-review).
+1. **No shared briefing.** Reviewers each invented their own scope from a static `focus` string.
+2. **Aggregation was mechanical.** Fingerprint/location merge could not reason about coverage gaps, overlapping severity, or whether reviewers answered the brief.
+3. **Mode confusion.** `on-multi` / `always` / `never` toggles made the default path ambiguous and let the loop run without an agent owning the canonical file.
 
-This design introduces:
-
-- A first-class **pass**
-- An LLM **supervisor** that scopes work and aggregates results
-- User-selected **specialist reviewers** (skills/objectives), defaulting to a single global generic reviewer
+Now a single **supervisor LLM** scopes each pass and aggregates the roster's scratch into one canonical review, every cycle.
 
 The **code orchestrator** remains the loop controller (continue / stop / deadlock / maxLoops). Agents still never decide whether another cycle runs.
 
@@ -34,14 +29,15 @@ The **code orchestrator** remains the loop controller (continue / stop / deadloc
 
 | Term | Meaning |
 |---|---|
-| **Cycle** | One outer loop iteration: *review pass → (optional) fixer → next cycle*. Unchanged conceptually; still counted by `maxLoops` / `loop-state.cycle`. |
-| **Pass** | The review half of a cycle: supervisor brief → specialists → supervisor aggregate → canonical `REVIEW`. One pass per cycle in v1. |
+| **Loop** | One round of review by a **fresh set of independent reviewers**. Counted by `maxLoops` / `loop-state.loop`. On consensus the orchestrator advances to the next loop; at the loop cap the user can add a new loop. |
+| **Cycle** | One pass within a loop: *review pass → fixer → next cycle*, re-reviewed by the **same reviewers**. Counted by `maxCycles` / `loop-state.cycle`. Hitting the cycle cap without consensus pauses for a user decision (increase cycles / next loop / stop). |
+| **Pass** | The review half of a cycle: supervisor brief → reviewers → supervisor aggregate → canonical review. One pass per cycle. |
 | **Orchestrator** | Non-LLM code in `graph.ts`. Owns terminals, deadlines, widget, resume, fixer dispatch. |
-| **Supervisor** | LLM agent. Owns *what* to review, *boundaries*, per-specialist scope packets, and aggregation into one canonical report. |
-| **Specialist (reviewer)** | LLM agent with a skill/objective lens (security, quality, linguist, generic, …). Writes scratch findings only; does not own the canonical file. |
-| **Roster** | User-selected set of specialist ids for this run. Decided by the user (CLI / config), not by the supervisor. |
-| **Brief** | Supervisor artifact describing target, in-scope / out-of-scope, and per-specialist instructions for this pass. |
-| **Canonical review** | The single report the fixer and humans read (today’s `001.md` / `REVIEW.md`). |
+| **Supervisor** | LLM agent. Owns *what* to review, *boundaries*, per-reviewer scope packets, and aggregation into one canonical report. |
+| **Reviewer** | LLM agent with a skill/objective lens (security, quality, linguist, generic, …). Writes scratch findings only; does not own the canonical file. |
+| **Roster** | User-selected set of reviewer ids for this run (built in the TUI wizard from profiles). Decided by the user, not by the supervisor. |
+| **Brief** | Supervisor artifact describing target, in-scope / out-of-scope, and per-reviewer instructions for this pass. |
+| **Canonical review** | The single report the fixer and humans read (`.agents/reviews/<name>/<code>.md`). |
 
 ---
 
@@ -56,64 +52,42 @@ Keeps deciding:
 - deadlock detection and `[Orchestrator]` Discussion turns
 - widget / status / resume via `loop-state.json`
 
-Does **not** invent review scope. After a pass completes, it parses `## Summary` as today.
+Does **not** invent review scope. After a pass completes, it parses `## Summary` as before.
 
-### Supervisor (LLM) — new
+### Supervisor (LLM) — always on
 
 Responsible for:
 
 1. **Scope.** From target dir / existing review / re-review state, decide what requires attention this pass and what is explicitly out of bounds.
-2. **Briefing.** Emit a structured brief the orchestrator hands to each specialist (global context + that specialist’s slice).
-3. **Aggregation.** After specialists finish, read scratch reports + brief, produce **one** canonical review (dedupe, severity, provenance, coverage notes).
+2. **Briefing.** Emit a structured brief the orchestrator hands to each reviewer (global context + that reviewer's slice).
+3. **Aggregation.** After reviewers finish, read scratch reports + brief, produce **one** canonical review (dedupe, severity, provenance, coverage notes).
 
 Not responsible for:
 
-- choosing which specialist *types* are loaded (user/config)
+- choosing which reviewer *types* are loaded (user/config)
 - deciding continue/stop/deadlock
 - applying code fixes
 
-When the roster is a **single `generic`** specialist (default), the supervisor does **not** run — the generic reviewer writes the canonical file directly (see [Single-reviewer mode](#single-reviewer-mode)).
-
-### Specialists (LLM) — evolved reviewers
+### Reviewers (LLM) — fresh every cycle
 
 User-selected. Each profile has:
 
 - `id` / `label`
 - `model`
-- `skill` / `skillPath` (may differ per specialist — not only a focus string on the shared adversarial-review skill)
-- `objective` (replaces / subsumes today’s `focus`)
+- `skillPath`
+- `objective`
 
 They:
 
 - receive the supervisor brief + their scope packet
-- write **scratch only** (`scratch/<id>.md`)
+- write **scratch only** (`passes/<cycle>/scratch/<id>.md`)
 - stamp `Source: <id>`
 - do **not** overwrite the canonical review
 - do **not** decide loop control
 
-Built-in examples (planned catalog; exact set TBD):
-
-| id | Objective (sketch) |
-|---|---|
-| `generic` | Full adversarial audit (default sole roster member) |
-| `security` | Auth, injection, secrets, trust boundaries, unsafe defaults |
-| `quality` | Correctness, architecture, concurrency, error handling |
-| `guidelines` | Project rules (SOLID, Result-over-throws, nesting, type safety) |
-| `style` | Naming, JSDoc, formatting consistency |
-| `linguist` | Wording clarity in user-facing copy / docs / API names |
-
-Existing builtins `technical` / `guidelines` / `style` map onto this catalog; `security` and `linguist` are additive. Custom profiles remain via `--config`.
-
 ### Fixer — unchanged
 
-Still consumes the canonical review only. Unaware of passes/supervisor except through Discussion provenance if the supervisor notes sources.
-
-### Reconciliator — subsumed
-
-Supervisor aggregation **replaces** the hybrid programmatic-merge + LLM reconciliator path for multi-specialist passes.
-
-- Programmatic merge may remain as a **fallback** or pre-pass for fingerprint conflicts, but the supervisor is the authority on the canonical file.
-- `reconciliator` config becomes optional/deprecated (migration note below).
+Still consumes the canonical review only, fresh every cycle. Unaware of passes/supervisor except through Discussion provenance if the supervisor notes sources.
 
 ---
 
@@ -123,13 +97,13 @@ Supervisor aggregation **replaces** the hybrid programmatic-merge + LLM reconcil
 flowchart TD
     O["Orchestrator: start cycle N"] --> S1["Supervisor: draft brief"]
     S1 --> B["Brief artifact on disk"]
-    B --> R1["Specialist A scratch"]
-    B --> R2["Specialist B scratch"]
-    B --> R3["Specialist … scratch"]
+    B --> R1["Reviewer A scratch"]
+    B --> R2["Reviewer B scratch"]
+    B --> R3["Reviewer … scratch"]
     R1 --> S2["Supervisor: aggregate"]
     R2 --> S2
     R3 --> S2
-    S2 --> C["Canonical REVIEW.md"]
+    S2 --> C["Canonical review"]
     C --> D["Orchestrator: deadlock + Summary"]
     D --> F{"terminal?"}
     F -->|fixer| X["Fresh fixer"]
@@ -145,56 +119,29 @@ Supervisor reads:
 - roster (ids + objectives + skill paths) — **provided by orchestrator, not chosen**
 - loop metadata (cycle, open finding ids)
 
-Supervisor writes a brief file (proposed path):
+Supervisor writes a brief file at:
 
 ```text
 .agents/reviews/<name>/<code>/passes/<cycle>/brief.md
 ```
 
-Suggested brief structure:
+### Phase 2 — Reviewers
 
-```markdown
-# Pass brief — cycle <N>
+Orchestrator spawns each roster member **fresh**:
 
-## Target
-…
+- system prompt = reviewer role + objective + skill path
+- task = absolute paths to brief, scratch output, target dir
+- tools: `read` / `grep` / `glob` (+ `write` for scratch)
 
-## In scope
-…
-
-## Out of scope
-…
-
-## Re-review constraints
-- Non-terminal findings only: …
-- Do not trust [Fixer] turns as evidence
-
-## Specialist assignments
-### <id>
-- Objective: …
-- Scope: …
-- Skill: <absolute path>
-```
-
-### Phase 2 — Specialists
-
-Orchestrator spawns each roster member **fresh** (same session policy as today):
-
-- system prompt = specialist role + objective + skill path
-- task = absolute paths to brief, assignment slice, scratch output, target dir
-- tools: `read` / `edit` / `write` (and optionally `grep` / `glob` if specialists need search — open question)
-
-Scratch path (aligned with today, nested under pass):
+Scratch path:
 
 ```text
 …/passes/<cycle>/scratch/<id>.md
 ```
 
-(Legacy `…/scratch/<id>.md` can be kept as a symlink or write-through during migration.)
-
 ### Phase 3 — Aggregate
 
-Supervisor reads brief + all scratch reports (+ existing canonical for terminal preservation) and writes the **canonical** review at the resolved review file path.
+Supervisor reads brief + all scratch reports (+ existing canonical for terminal preservation) and writes the **canonical** review.
 
 Aggregation duties:
 
@@ -203,23 +150,19 @@ Aggregation duties:
 - preserve terminal findings from prior canonical unless explicitly reopened by protocol
 - note coverage: what was checked, what was skipped (from brief out-of-scope)
 - bump `Iteration`, refresh `## Summary`
-- append `[Supervisor]` Discussion turns when merging/dropping specialist items (optional but useful)
+- append `[Supervisor]` Discussion turns when merging/dropping reviewer items (optional but useful)
 
-Orchestrator then runs deadlock detection and transitions as today.
+Orchestrator then runs deadlock detection and transitions as before.
 
----
+### Failure handling
 
-## Single-reviewer mode
-
-**Default roster:** `[generic]` only.
-
-With `supervisor.mode = on-multi` (default), skip the supervisor entirely: the generic reviewer writes straight to the canonical file (unchanged behavior). Opt into `always` only when you want a supervisor brief/aggregate even for one reviewer.
+- **Brief fails:** retry the pass, counting toward consecutive failures; escalate after the threshold.
+- **One reviewer fails:** the orchestrator still aggregates with available scratch (the supervisor notes missing coverage) so the fixer can work on found `Open` items.
+- **Aggregate fails:** never fall back to a programmatic merge — retry the pass; escalate after consecutive failures.
 
 ---
 
-## Configuration (planned)
-
-### Default (no flags)
+## Configuration (default)
 
 Equivalent to:
 
@@ -227,8 +170,7 @@ Equivalent to:
 {
   "supervisor": {
     "model": "deepseek-v4-pro",
-    "skill": "adversarial-review-supervisor",
-    "mode": "on-multi"
+    "skill": "adversarial-review-supervisor"
   },
   "reviewers": [
     {
@@ -244,30 +186,11 @@ Equivalent to:
 }
 ```
 
-Notes:
-
-- `objective` is preferred; `focus` remains an accepted alias.
-- `reconciliator` kept as fallback when `supervisor.mode = never`.
-- Roster selected by user via `--reviewers` / config.
-
-```bash
-/adversarial-review-loop --reviewers=security,quality,linguist
-/adversarial-review-loop --config=./review-loop.json
-```
-
-### Flags
-
-| Flag | Default | Description |
-|---|---|---|
-| `--reviewers` | `generic` | Comma-separated specialist ids |
-| `--supervisor-model` | reviewer default | Supervisor model override |
-| `--supervisor-mode` | `on-multi` | `on-multi` \| `always` \| `never` |
-| `--reviewer-model` | … | Override all specialists |
-| *(existing)* | … | `--fixer-model`, `--max-loops`, `--dir`, `--name`, `--fresh`, `--feature-spec`, … |
+The wizard edits `maxLoops`, `fixer.model`, `supervisor.model`, and `deadlock.flipThreshold` interactively. There is no supervisor-mode or reconcile setting — the supervisor is always on.
 
 ---
 
-## On-disk layout (standalone, planned)
+## On-disk layout (standalone)
 
 ```text
 .agents/reviews/<name>/
@@ -276,16 +199,13 @@ Notes:
     loop-state.json           # + pass metadata (roster, last brief path)
     passes/
       1/
-        brief.md              # supervisor → specialists
+        brief.md              # supervisor → reviewers
         scratch/
           security.md
           quality.md
-        aggregate-notes.md    # optional supervisor working notes
       2/
         …
 ```
-
-Feature-spec mode: same `passes/` tree beside `REVIEW.md` (task directory), canonical remains `REVIEW.md`.
 
 ---
 
@@ -295,73 +215,25 @@ Feature-spec mode: same `passes/` tree beside `REVIEW.md` (task directory), cano
 |---|---|
 | Orchestrator (code) | Resumed via `loop-state.json` |
 | Supervisor | **One persistent session per loop** — brief + aggregate prompts each cycle; disposed when the loop ends |
-| Specialists | **Fresh every pass** |
+| Reviewers | **Fresh every cycle** |
 | Fixer | Fresh every cycle |
 
 ---
 
-## Bundled skills (planned)
+## Bundled skills
 
 | Path | Role |
 |---|---|
-| `skills/adversarial-review-supervisor/` | **New** — brief + aggregate protocol |
-| `skills/adversarial-review/` | Specialist finding format (mostly unchanged; add “scratch only / obey brief”) |
+| `skills/adversarial-review-supervisor/` | Brief + aggregate protocol |
+| `skills/adversarial-review/` | Reviewer finding format (scratch only / obey brief) |
 | `skills/addressing-adversarial-review/` | Fixer (unchanged) |
-| `skills/adversarial-review-reconcile/` | **Deprecated** — keep until supervisor aggregate lands, then remove or thin-wrap |
-| `skills/feature-spec/` | Unchanged reference |
-
-Specialist-specific skills (optional later): e.g. `adversarial-review-security/` that wraps the shared report format with a security checklist. v1 can keep one report skill + distinct `objective` strings.
 
 ---
 
-## Module impact (implementation later)
-
-| File | Change |
-|---|---|
-| `README.md` | Document pass / supervisor / roster (after code lands) |
-| `config.ts` | `supervisor` block; `objective`; deprecate `reconciliator`; expand builtins |
-| `agents.ts` | `buildSupervisorSystem`, specialist prompts take brief paths; drop/gate reconciliator prompt |
-| `graph.ts` | Replace peer-reviewer node with pass phases: brief → specialists → aggregate |
-| `loop-state.ts` | Pass paths; track brief path / pass number (= cycle in v1) |
-| `merge.ts` | Demote to helper / delete once supervisor owns aggregate |
-| `widget.ts` | Show supervisor phase + specialist rows |
-| `skill-paths.ts` | Supervisor skill path |
-| `test/*` | Pass lifecycle, single-generic, multi-roster, brief/aggregate failures |
-
----
-
-## Failure & edge cases (design constraints)
-
-- **Supervisor brief fails:** fail the pass (count toward reviewer consecutive failures) or retry; do not run specialists without a brief when `mode=always`.
-- **One specialist fails:** orchestrator may still aggregate with available scratch + `[Supervisor]` note on missing coverage; or fail the pass — prefer **aggregate with gap note** so fixer can still work on found Open items.
-- **Aggregate fails:** do not leave specialists’ scratch as canonical; retry aggregate or escalate to human.
-- **Empty roster:** invalid config (same as today).
-- **Re-review:** brief must list non-terminal findings and forbid trusting `[Fixer]` turns; specialists verify those first, then hunt regressions in-scope.
-- **Deadlock:** still programmatic on the canonical file after aggregate.
-
----
-
-## Migration
-
-1. Ship supervisor skill + pass graph behind default roster `[generic]`.
-2. Accept legacy `focus` and `reconciliator` keys; warn once.
-3. Map old builtins: `technical` → `quality` (alias), keep `guidelines` / `style`.
-4. Remove reconciliator path once aggregate tests match prior multi-reviewer guarantees.
-5. Update README “How it works” diagram to the pass flowchart above.
-
----
-
-## Remaining open questions
-
-1. **Parallel specialists:** v1 sequential (like today) vs parallel spawn when the runner supports it.
-2. **Specialist-specific skills** beyond shared `adversarial-review` + objective strings — defer until catalog stabilizes.
-
----
-
-## Non-goals (v1)
+## Non-goals
 
 - Supervisor choosing the roster dynamically
 - Multiple passes per cycle
-- Replacing the code orchestrator with an LLM “meta-supervisor”
+- Replacing the code orchestrator with an LLM "meta-supervisor"
 - Changing fixer protocol or finding Status machine
 - Human-in-the-loop brief approval (nice follow-up)

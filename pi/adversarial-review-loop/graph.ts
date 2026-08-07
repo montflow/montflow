@@ -1,11 +1,11 @@
-import { Console, Effect, Option, Result } from 'effect';
+import { dirname } from 'node:path';
+import { Effect, Option, Result } from 'effect';
 import { FileSystem } from 'effect/FileSystem';
 import { Path } from 'effect/Path';
 import type { PlatformError } from 'effect/PlatformError';
 import {
   buildReviewerSystem,
   FIXER_SYSTEM,
-  RECONCILIATOR_SYSTEM,
   SUPERVISOR_SYSTEM,
   TOOLS,
 } from './agents';
@@ -15,48 +15,44 @@ import {
   type AgentRunError,
   type AgentRunResult,
   type PersistentAgent,
+  type ToolActivity,
 } from './runner';
 import { parseSummary, isAllTerminal, type SummaryCounts } from './parse-summary';
-import { resolveReviewFile } from './resolve-review-file';
+import {
+  isWithinReviews,
+  resolveReviewFile,
+  ReviewPathError,
+} from './resolve-review-file';
 import { verifyLoopSkills, type SkillVerificationError } from './verify-skill';
 import { FIXER_SKILL_PATH } from './skill-paths';
-import {
-  loadFeatureSpec,
-  findActivePhase,
-  getReviewLoopCounter,
-  updateReviewLoopCounter,
-  extractFindings,
-  createRemediationTasks,
-  updateFeatureTaskTable,
-  executeRemediations,
-  type ActivePhase,
-  type FeatureSpec,
-  type FeatureSpecError,
-  type FeatureSpecValidationError,
-} from './feature-spec';
 import type { LoopConfig, ReviewerProfile } from './config';
-import { defaultLoopConfig, usesSupervisor } from './config';
+import { defaultLoopConfig, DEFAULT_AGENT_CONCURRENCY } from './config';
 import {
   briefPath,
   ensurePassDirs,
   ensureStateDirs,
+  fixerScratchPath,
   loadLoopState,
   passScratchPath,
   saveLoopState,
-  scratchPath,
   type LoopState,
 } from './loop-state';
-import { mergeScratchReports, passthroughMerge, type ScratchReport } from './merge';
 import { applyDeadlockDetection } from './deadlock';
-import { parseFindingBlocks } from './findings';
+import {
+  buildFixerSchedule,
+  countStatuses,
+  mergeFindingBlock,
+  parseFindingBlocks,
+  updateSummarySection,
+  type FindingBlock,
+} from './findings';
 import {
   clearLoopWidget,
+  phaseLabel,
   setLoopWidget,
   type FixerWidgetStatus,
   type LoopWidgetState,
-  type ReconcileWidgetStatus,
   type ReviewerWidgetRow,
-  type SupervisorWidgetStatus,
   type WidgetUi,
 } from './widget';
 
@@ -64,23 +60,20 @@ export const MAX_CONSECUTIVE_FAILURES = 2;
 
 export const REVIEWER_TIMEOUT = 900000;
 
-export const FIXER_TIMEOUT = 600000;
-
-export const RECONCILIATOR_TIMEOUT = 600000;
+/** Per-finding fixer turn budget: one finding + its verification per turn. */
+export const FIXER_TIMEOUT = 300000;
 
 export const SUPERVISOR_TIMEOUT = 600000;
-
-export const MAX_REVIEW_LOOP_ITERATIONS = 5;
 
 export interface LoopOptions {
   readonly reviewerModel: string;
   readonly fixerModel: string;
   readonly maxLoops: number;
+  /** Cycles per loop (0-based cap; when config is present, config.maxCycles wins). */
+  readonly maxCycles?: number;
   readonly targetDir: string;
   readonly reviewName: string;
   readonly fresh: boolean;
-  readonly featureSpec: boolean;
-  readonly specName: string;
   readonly config: LoopConfig;
   /** Human-readable scope description injected into reviewer tasks (interactive mode). */
   readonly reviewScope?: string;
@@ -88,6 +81,11 @@ export interface LoopOptions {
   readonly scopeFiles?: readonly string[];
   /** Absolute path to a materialized diff file (git-unstaged scope). */
   readonly scopeDiffPath?: string;
+  /**
+   * Absolute path to an existing review to resume (overrides resolveReviewFile;
+   * implies `fresh: false` semantics — re-review in place).
+   */
+  readonly reviewFile?: string;
 }
 
 export interface Ui extends WidgetUi {
@@ -95,23 +93,19 @@ export interface Ui extends WidgetUi {
   readonly notify: (message: string, level: 'info' | 'warning' | 'error') => void;
 }
 
-export interface FeatureSpecCtx {
-  readonly spec: FeatureSpec;
-  readonly phase: ActivePhase;
-}
-
-export type Terminal = 'done' | 'failed' | 'escalated' | 'maxLoops' | 'reviewCap';
+export type Terminal = 'done' | 'failed' | 'escalated' | 'maxLoops' | 'stopped';
 
 export interface GraphCtx {
   readonly opts: LoopOptions;
   readonly cwd: string;
   readonly ui: Ui;
-  readonly validateFeatureSpecFromBranch: (
-    cwd: string,
-  ) => Effect.Effect<string, FeatureSpecValidationError, FileSystem | Path>;
+  /** Abort signal for graceful stop requests (checked between steps). */
+  readonly signal?: AbortSignal;
   readonly reviewFile?: string;
   readonly reReview?: boolean;
-  readonly featureSpecCtx?: FeatureSpecCtx | null;
+  /** 0-based index of the current loop (independent reviewer set). */
+  readonly loop?: number;
+  /** 0-based index of the current cycle within the current loop. */
   readonly cycle?: number;
   readonly reviewerConsecutiveFailures?: number;
   readonly fixerConsecutiveFailures?: number;
@@ -119,7 +113,7 @@ export interface GraphCtx {
   readonly terminal?: Terminal;
   readonly loopState?: LoopState;
   readonly widget?: LoopWidgetState;
-  /** Persistent supervisor session for the whole loop (multi-reviewer / always mode). */
+  /** Persistent supervisor session for the whole loop (brief + aggregate). */
   readonly supervisor?: PersistentAgent;
   /**
    * Mutable holder updated eagerly at supervisor creation, so the session
@@ -127,6 +121,20 @@ export interface GraphCtx {
    * new ctx (with `supervisor` set) is returned.
    */
   readonly supervisorHolder?: { current?: PersistentAgent };
+  /**
+   * Persistent reviewer sessions for the CURRENT loop — the same reviewers
+   * re-review the updated code across cycles within a loop (with their
+   * context). Replaced by a fresh set when the loop advances.
+   */
+  readonly reviewerSessions?: Readonly<Record<string, PersistentAgent>>;
+  /** The loop index the reviewer sessions belong to (stale ⇒ recreate). */
+  readonly reviewerSessionLoop?: number;
+  /**
+   * Per-reviewer mutable holders updated eagerly at session creation, so
+   * sessions stay reachable for disposal even when a defect escapes a node
+   * before the new ctx is returned.
+   */
+  readonly reviewerHolders?: Record<string, { current?: PersistentAgent }>;
 }
 
 export interface NodeResult {
@@ -135,18 +143,18 @@ export interface NodeResult {
 }
 
 /** Errors that can escape a graph node into runGraph's top-level handler. */
-type NodeError =
-  | SkillVerificationError
-  | FeatureSpecError
-  | FeatureSpecValidationError
-  | AgentRunError
-  | PlatformError;
+type NodeError = SkillVerificationError | AgentRunError | PlatformError | ReviewPathError;
 
 export interface GraphDeps {
   readonly verifySkill?: () => Effect.Effect<void, SkillVerificationError, FileSystem>;
   readonly runAgent?: typeof runAgent;
   readonly createPersistentAgent?: typeof createPersistentAgent;
-  readonly executeRemediations?: typeof executeRemediations;
+  /**
+   * Asks the user a question mid-run (cycle-max decision point). Returns the
+   * chosen option, or null on cancel. Absent (headless/tests) ⇒ the loop
+   * terminates `maxLoops` instead of prompting.
+   */
+  readonly askUser?: (question: string, options: readonly string[]) => Promise<string | null>;
 }
 
 type GraphNode = (
@@ -155,6 +163,25 @@ type GraphNode = (
 ) => Effect.Effect<NodeResult, NodeError, FileSystem | Path>;
 
 const STATUS_KEY = 'adversarial-review-loop';
+
+/**
+ * True when the loop has been asked to stop (abort signal fired).
+ * @param {GraphCtx} ctx The graph context
+ * @returns True when a stop was requested
+ */
+const stopRequested = (ctx: GraphCtx): boolean => ctx.signal?.aborted ?? false;
+
+/**
+ * Graceful stop outcome: notify, clear the status, and terminate the loop.
+ * @param {GraphCtx} ctx The graph context
+ * @returns A node result terminating the graph
+ */
+const stopResult = (ctx: GraphCtx): Effect.Effect<NodeResult, never, FileSystem | Path> =>
+  Effect.gen(function* () {
+    yield* notify(ctx.ui, '[adversarial-review-loop] Stopped by user request.', 'warning');
+    yield* setStatus(ctx.ui, undefined);
+    return { next: null, ctx: { ...ctx, terminal: 'stopped' as const } };
+  });
 
 /**
  * Emits a Pi UI notification as an effect.
@@ -176,30 +203,44 @@ const notify = (
  * @returns An effect performing the status update
  */
 const setStatus = (ui: Ui, text: string | undefined): Effect.Effect<void> =>
-  Effect.sync(() => ui.setStatus(STATUS_KEY, text));
+  Effect.sync(() =>
+    ui.setStatus(
+      STATUS_KEY,
+      // Color the footer status when the theme is available (TUI runs).
+      text === undefined || ui.theme === undefined ? text : ui.theme.fg('accent', text),
+    ),
+  );
 
 /**
  * Builds a status line for the Pi UI.
- * @param {number} cycle Current cycle
- * @param {number} total Max cycles
- * @param {string} phase Current phase label
+ * @param {number} loop Current loop (0-based; displayed 1-based)
+ * @param {number} maxLoops Total loops
+ * @param {number} cycle Current cycle number (1-based, the cycle being run/fixed)
+ * @param {number} maxCycles Max cycles per loop
+ * @param {string} phase Current phase
  * @param {string} status Current status label
  * @returns The formatted status line
  */
-export const statusLine = (cycle: number, total: number, phase: string, status: string): string =>
-  `● adversarial-review-loop [${cycle}/${total}] ${phase}: ${status}`;
+export const statusLine = (
+  loop: number,
+  maxLoops: number,
+  cycle: number,
+  maxCycles: number,
+  phase: string,
+  status: string,
+): string =>
+  `● adversarial-review-loop [loop ${loop + 1}/${maxLoops} · cycle ${cycle}/${maxCycles}] ${phaseLabel(phase)}: ${status}`;
 
 /**
  * Pure transition after a successful reviewer turn + summary parse.
- * @param {{ summary: Option.Option<SummaryCounts>, featureSpec: boolean }} input Review outcome
+ * @param {{ summary: Option.Option<SummaryCounts> }} input Review outcome
  * @returns The next transition name
  */
 export const transitionAfterReview = (input: {
   readonly summary: Option.Option<SummaryCounts>;
-  readonly featureSpec: boolean;
-}): 'done' | 'escalated' | 'featureRemediate' | 'fixer' => {
-  const { summary, featureSpec } = input;
-  if (isAllTerminal(summary)) return 'done';
+}): 'consensus' | 'escalated' | 'fixer' => {
+  const { summary } = input;
+  if (isAllTerminal(summary)) return 'consensus';
   if (
     Option.isSome(summary) &&
     summary.value.open === 0 &&
@@ -208,19 +249,20 @@ export const transitionAfterReview = (input: {
   ) {
     return 'escalated';
   }
-  if (featureSpec) return 'featureRemediate';
   return 'fixer';
 };
 
 /**
- * Pure transition after a fixer turn.
- * @param {{ cycle: number, maxLoops: number }} input Loop counters
+ * Pure transition after a fixer turn: the same reviewers re-review the
+ * updated code until the per-loop cycle cap; beyond it the orchestrator asks
+ * the user (increase cycles / next loop / add a loop / stop).
+ * @param {{ cycle: number, maxCycles: number }} input Loop counters
  * @returns The next transition name
  */
 export const transitionAfterFixer = (input: {
   readonly cycle: number;
-  readonly maxLoops: number;
-}): 'review' | 'maxLoops' => (input.cycle < input.maxLoops ? 'review' : 'maxLoops');
+  readonly maxCycles: number;
+}): 'review' | 'cycleMax' => (input.cycle < input.maxCycles ? 'review' : 'cycleMax');
 
 /**
  * Reads a file's mtime in milliseconds, or none when the file is missing/unreadable.
@@ -278,12 +320,15 @@ const withWidget = (
   patch: Partial<LoopWidgetState> & { readonly phase?: string },
 ): GraphCtx => {
   const config = configOf(ctx.opts);
+  const loop = ctx.loop ?? 0;
+  const cycle = ctx.cycle ?? 0;
   const base: LoopWidgetState = ctx.widget ?? {
-    cycle: ctx.cycle ?? 0,
+    loop,
     maxLoops: config.maxLoops,
-    supervisor: usesSupervisor(config) ? 'idle' : 'skipped',
+    cycle,
+    maxCycles: config.maxCycles,
+    supervisor: 'idle',
     reviewers: initialReviewerRows(config.reviewers),
-    reconcile: 'idle',
     fixer: 'waiting',
     summary: ctx.summary ?? Option.none(),
     deadlocks: ctx.loopState?.deadlocks.length ?? 0,
@@ -291,21 +336,40 @@ const withWidget = (
   };
   const widget: LoopWidgetState = {
     ...base,
-    cycle: patch.cycle ?? base.cycle,
+    loop: patch.loop ?? base.loop,
     maxLoops: patch.maxLoops ?? base.maxLoops,
+    cycle: patch.cycle ?? base.cycle,
+    maxCycles: patch.maxCycles ?? base.maxCycles,
     supervisor: patch.supervisor ?? base.supervisor,
     supervisorDetail: patch.supervisorDetail ?? base.supervisorDetail,
     reviewers: patch.reviewers ?? base.reviewers,
-    reconcile: patch.reconcile ?? base.reconcile,
-    reconcileDetail: patch.reconcileDetail ?? base.reconcileDetail,
     fixer: patch.fixer ?? base.fixer,
     summary: patch.summary ?? base.summary,
     deadlocks: patch.deadlocks ?? base.deadlocks,
     phase: patch.phase ?? base.phase,
+    loopStatus: patch.loopStatus ?? base.loopStatus,
+    decision: patch.decision ?? base.decision,
+    // Each phase transition clears the transient live-tool line and restarts
+    // the elapsed timer.
+    tool: patch.tool,
+    phaseStartedAt: Date.now(),
   };
   setLoopWidget(ctx.ui, widget);
   return { ...ctx, widget };
 };
+
+/**
+ * Builds a tool-activity callback that live-updates the widget's "now" line
+ * while an agent runs (tool starts only — the next phase transition clears it).
+ * @param {GraphCtx} ctx The current graph context (reads the latest widget)
+ * @param {string} label Agent label, e.g. `reviewer generic`
+ * @returns The tool-activity callback
+ */
+const toolProgress = (ctx: GraphCtx, label: string): ((activity: ToolActivity) => void) =>
+  (activity) => {
+    if (activity.kind !== 'start' || ctx.widget === undefined) return;
+    setLoopWidget(ctx.ui, { ...ctx.widget, tool: `${label} — ${activity.tool}` });
+  };
 
 /**
  * Skill gate: verify every skill the resolved config can dispatch exists
@@ -328,65 +392,30 @@ const skillGate: GraphNode = (ctx, deps) =>
   });
 
 /**
- * Resolve review file path and optional feature-spec context.
+ * Resolve the canonical review file path (and re-review flag).
  */
 const resolveCtx: GraphNode = (ctx) =>
   Effect.gen(function* () {
     const { opts, cwd, ui } = ctx;
     const config = configOf(opts);
-    let featureSpecCtx: FeatureSpecCtx | null = null;
+    const path = yield* Path;
 
-    if (opts.featureSpec) {
-      let specName = opts.specName;
-      if (specName === '') {
-        const validation = yield* Effect.result(ctx.validateFeatureSpecFromBranch(cwd));
-        if (Result.isFailure(validation)) {
-          yield* notify(ui, validation.failure.message, 'error');
-          return { next: null, ctx: { ...ctx, terminal: 'failed' as const } };
-        }
-        specName = validation.success;
-        yield* notify(
-          ui,
-          `[adversarial-review-loop] Detected feature from branch: feat/${specName}`,
-          'info',
-        );
-      }
-
-      const loadResult = yield* Effect.result(loadFeatureSpec(cwd, specName));
-      if (Result.isFailure(loadResult)) {
-        yield* notify(ui, loadResult.failure.message, 'error');
-        return { next: null, ctx: { ...ctx, terminal: 'failed' as const } };
-      }
-
-      const spec = loadResult.success;
-      const activePhase = yield* findActivePhase(spec, spec.lockedPhases);
-      if (activePhase === null) {
-        yield* notify(
-          ui,
-          `[adversarial-review-loop] No active phase found for feature '${specName}'. All phases may be complete or locked.`,
-          'warning',
-        );
-        return { next: null, ctx: { ...ctx, terminal: 'failed' as const } };
-      }
-      if (activePhase.reviewTask === null) {
-        yield* notify(
-          ui,
-          `[adversarial-review-loop] Active phase ${activePhase.phase} has no review task. Cannot run feature-spec mode.`,
-          'error',
-        );
-        return { next: null, ctx: { ...ctx, terminal: 'failed' as const } };
-      }
-      featureSpecCtx = { spec, phase: activePhase };
-      yield* notify(
-        ui,
-        `[adversarial-review-loop] Feature-spec mode: '${specName}', active phase=${activePhase.phase}, review task=${activePhase.reviewTask.id}`,
-        'info',
+    // Both input channels are validated so review markdown, loop-state.json,
+    // and pass scratch files can never be written outside `.agents/reviews/`:
+    // `reviewName` is checked by resolveReviewFile (isValidPresetName), and
+    // `opts.reviewFile` is resolved and asserted to stay under the reviews root.
+    const candidate =
+      opts.reviewFile !== undefined
+        ? opts.reviewFile
+        : yield* resolveReviewFile(cwd, opts.reviewName, opts.fresh);
+    if (!isWithinReviews(path, cwd, candidate)) {
+      return yield* Effect.fail(
+        new ReviewPathError({
+          message: `Review file escapes .agents/reviews/: ${candidate}`,
+        }),
       );
     }
-
-    const resolvedReviewFile =
-      featureSpecCtx?.phase.reviewTask?.reviewFile ??
-      (yield* resolveReviewFile(cwd, opts.reviewName, opts.fresh));
+    const resolvedReviewFile = path.resolve(candidate);
 
     yield* ensureStateDirs(resolvedReviewFile);
 
@@ -396,41 +425,74 @@ const resolveCtx: GraphNode = (ctx) =>
       .pipe(Effect.orElseSucceed(() => false));
     const reReview = reviewFileExists && !opts.fresh;
 
-    const loopState = yield* loadLoopState(
+    let loopState = yield* loadLoopState(
       resolvedReviewFile,
       config.reviewers.map((profile) => profile.id),
     );
 
-    // Programmatic early exit: resumed all-terminal file needs no agent calls.
+    // Lock the config into loop-state: fresh runs and legacy states (no
+    // snapshot) persist the resolved config so a later resume reuses exactly
+    // what this review started with — never a newer/edited preset. The loaded
+    // state is updated in place so later saves (review/fixer nodes) keep it.
+    if (loopState.config === undefined) {
+      const withConfig = { ...loopState, config };
+      yield* saveLoopState(resolvedReviewFile, withConfig);
+      loopState = withConfig;
+    }
+
+    // Programmatic early exit: resumed all-terminal file needs no agent calls
+    // ONLY when no further loops remain. The on-disk Summary is agent-written
+    // and can be miscounted (e.g. an `Open: 0` line while an Open finding block
+    // is present), which would falsely terminate a resumed run. Recompute the
+    // counts from the actual finding blocks instead of trusting the Summary. A
+    // missing/unreadable file must not look all-terminal, so it keeps iterating
+    // (mirrors parseSummary's defensive `None`).
     if (reReview) {
-      const existingSummary = yield* parseSummary(resolvedReviewFile);
+      const existingText = yield* fileSystem
+        .readFileString(resolvedReviewFile, 'utf8')
+        .pipe(Effect.orElseSucceed(() => null));
+      const existingSummary =
+        existingText === null
+          ? Option.none<SummaryCounts>()
+          : Option.some(countStatuses(parseFindingBlocks(existingText)));
       if (isAllTerminal(existingSummary)) {
-        yield* notify(
-          ui,
-          '[adversarial-review-loop] Existing review is already all-terminal — nothing to do.',
-          'info',
-        );
-        yield* setStatus(ui, '● adversarial-review-loop DONE');
-        clearLoopWidget(ui);
-        return {
-          next: null,
-          ctx: {
-            ...ctx,
-            reviewFile: resolvedReviewFile,
-            reReview,
-            featureSpecCtx,
-            loopState,
-            summary: existingSummary,
-            terminal: 'done' as const,
-          },
-        };
+        const loop = loopState.loop ?? 0;
+        if (loop + 1 < config.maxLoops) {
+          // Consensus was reached in the last cycle of an earlier loop — the
+          // run stopped before advancing. Resume by spawning the next loop's
+          // fresh reviewers instead of declaring victory early.
+          const advancedState = { ...loopState, loop: loop + 1, cycle: 0 };
+          yield* saveLoopState(resolvedReviewFile, advancedState);
+          yield* notify(
+            ui,
+            `[adversarial-review-loop] Loop ${loop + 1} reached consensus — resuming at loop ${loop + 2} with fresh reviewers.`,
+            'info',
+          );
+          loopState = advancedState;
+        } else {
+          yield* notify(
+            ui,
+            '[adversarial-review-loop] Existing review is already all-terminal — nothing to do.',
+            'info',
+          );
+          yield* setStatus(ui, '● adversarial-review-loop DONE');
+          clearLoopWidget(ui);
+          return {
+            next: null,
+            ctx: {
+              ...ctx,
+              reviewFile: resolvedReviewFile,
+              reReview,
+              loopState,
+              summary: existingSummary,
+              terminal: 'done' as const,
+            },
+          };
+        }
       }
     }
 
     const rosterLabel = config.reviewers.map((profile) => profile.id).join(',');
-    const supervisorLabel = usesSupervisor(config)
-      ? `supervisor=${config.supervisor.mode}`
-      : 'supervisor=skipped';
     const scopeLabel =
       opts.reviewScope !== undefined && opts.reviewScope.trim() !== ''
         ? ` scope="${opts.reviewScope.trim().slice(0, 80)}"`
@@ -440,30 +502,37 @@ const resolveCtx: GraphNode = (ctx) =>
       ui,
       `[adversarial-review-loop] file=${resolvedReviewFile} reReview=${reReview} ` +
         `reviewers=${rosterLabel} fixer=${config.fixerModel} ` +
-        `depth=${config.maxLoops} dir=${opts.targetDir} ${supervisorLabel} ` +
-        `reconcile=${config.reconciliator.mode}${scopeLabel}`,
+        `loops=${config.maxLoops} cycles/loop=${config.maxCycles} dir=${opts.targetDir} supervisor=always${scopeLabel}`,
       'info',
     );
 
+    const loop = loopState.loop ?? 0;
     let nextCtx: GraphCtx = {
       ...ctx,
       reviewFile: resolvedReviewFile,
       reReview,
-      featureSpecCtx,
-      cycle: 0,
+      // Resumed runs continue the loop/cycle counts from loop-state instead
+      // of restarting (fresh runs have empty state → loop 0, cycle 0).
+      loop,
+      cycle: loopState.cycle,
       reviewerConsecutiveFailures: 0,
       fixerConsecutiveFailures: 0,
       loopState,
+      reviewerHolders: Object.fromEntries(
+        config.reviewers.map((profile) => [profile.id, {}]),
+      ),
     };
     nextCtx = withWidget(nextCtx, {
-      cycle: 0,
+      loop,
       maxLoops: config.maxLoops,
-      supervisor: usesSupervisor(config) ? 'idle' : 'skipped',
+      cycle: loopState.cycle,
+      maxCycles: config.maxCycles,
+      supervisor: 'idle',
       reviewers: initialReviewerRows(config.reviewers),
-      reconcile: 'idle',
       fixer: 'waiting',
       phase: 'starting',
       deadlocks: loopState.deadlocks.length,
+      loopStatus: 'running',
     });
 
     return { next: 'review', ctx: nextCtx };
@@ -506,7 +575,7 @@ const buildReviewerTask = (
   outputPath: string,
   briefFile?: string,
 ): string => {
-  const { opts, reviewFile, reReview, cycle = 0 } = ctx;
+  const { opts, reviewFile, reReview, loop = 0, cycle = 0 } = ctx;
   const skillPath = profile.skillPath;
   const objective = profile.objective;
   const briefClause =
@@ -514,8 +583,15 @@ const buildReviewerTask = (
       ? `Read the supervisor brief at ${briefFile} and obey your assignment for id=${profile.id}. `
       : '';
   const scopeClause = buildScopeClause(opts);
+  // Cycle 1 of a later loop is a FRESH independent reviewer set auditing the
+  // accumulated canonical — they must verify earlier loops' resolutions too.
+  const freshLoopSet = loop > 0 && cycle === 1;
 
-  if (cycle === 1 && !reReview) {
+  // Full fresh report only on the very first cycle of the first loop (or a
+  // fresh resume that restarts it). Every later cycle — including cycle 1 of
+  // later loops with their fresh reviewer set — re-reviews the canonical
+  // file: verify prior resolutions against the code and hunt for regressions.
+  if (cycle === 1 && loop === 0 && !reReview) {
     return (
       `Perform a thorough adversarial review of ${opts.targetDir}. ` +
       briefClause +
@@ -536,8 +612,14 @@ const buildReviewerTask = (
     `Step 9 of the adversarial-review skill at ${skillPath}. ` +
     briefClause +
     (scopeClause !== '' ? `${scopeClause} ` : '') +
+    (freshLoopSet
+      ? 'You are a fresh independent reviewer set. Spot-check Resolved and Won\'t Fix findings ' +
+        'from earlier loops against the actual code too — reopen with a [Reviewer] turn when the ' +
+        'resolution is wrong or incomplete. '
+      : '') +
     `Your objective: ${objective}. ` +
-    `Write your updated report to ${outputPath} (may equal the canonical file). ` +
+    `Write your updated report to ${outputPath} — always your own scratch path, ` +
+    'never the canonical review file. ' +
     'You are read-only on application source — write only the review markdown. ' +
     'Read the canonical review file; scope to non-terminal findings (Open, In Review, Escalated ' +
     'only if a [Human] turn resolved the escalation); verify each In Review finding ' +
@@ -549,40 +631,28 @@ const buildReviewerTask = (
 };
 
 /**
- * Runs one fresh reviewer agent (never persisted across cycles).
+ * Runs one reviewer turn on a persistent per-loop session: the same reviewer
+ * re-reviews the updated code across cycles within a loop (carrying its
+ * context). Never a fresh session per cycle.
  * @param {GraphCtx} ctx Graph context
- * @param {GraphDeps} deps Injectable deps
  * @param {ReviewerProfile} profile Reviewer profile
  * @param {string} outputPath Output path for this reviewer
  * @param {string | undefined} [briefFile] Optional supervisor brief path
+ * @param {PersistentAgent} session The reviewer's persistent session
  * @returns Agent run result
  */
-const runFreshReviewer = (
+const runReviewer = (
   ctx: GraphCtx,
-  deps: GraphDeps,
   profile: ReviewerProfile,
   outputPath: string,
-  briefFile?: string,
+  briefFile: string | undefined,
+  session: PersistentAgent,
 ): Effect.Effect<AgentRunResult, never> =>
-  Effect.gen(function* () {
-    const run = deps.runAgent ?? runAgent;
-    const task = buildReviewerTask(ctx, profile, outputPath, briefFile);
-    const outcome = yield* Effect.result(
-      run(
-        {
-          model: profile.model,
-          systemPrompt: buildReviewerSystem(profile),
-          task,
-          tools: TOOLS.reviewer,
-          cwd: ctx.cwd,
-        },
-        REVIEWER_TIMEOUT,
-      ),
-    );
-    return Result.isFailure(outcome)
-      ? { text: '', error: outcome.failure.message }
-      : outcome.success;
-  });
+  session.prompt(
+    buildReviewerTask(ctx, profile, outputPath, briefFile),
+    REVIEWER_TIMEOUT,
+    toolProgress(ctx, `reviewer ${profile.id}`),
+  );
 
 /**
  * Ensures a persistent supervisor agent exists on the graph context.
@@ -616,10 +686,168 @@ const ensureSupervisor = (
   });
 
 /**
+ * Disposes a timed-out supervisor and clears it from the context so the next
+ * `ensureSupervisor` recreates a fresh session. A timed-out turn may still be
+ * running on the old session (the abort signal is best-effort — providers can
+ * ignore it), so re-prompting it would fail with pi's "Agent is already
+ * processing a prompt" busy error or interleave two event streams. Dispose
+ * and recreate before retrying (F5).
+ * @param {GraphCtx} ctx Context carrying the supervisor to drop
+ * @returns Context without the supervisor
+ */
+const dropTimedOutSupervisor = (ctx: GraphCtx): Effect.Effect<GraphCtx, never> =>
+  Effect.gen(function* () {
+    const supervisor = ctx.supervisor;
+    if (supervisor === undefined) return ctx;
+    yield* supervisor.dispose().pipe(Effect.ignore);
+    if (ctx.supervisorHolder !== undefined) {
+      ctx.supervisorHolder.current = undefined;
+    }
+    return { ...ctx, supervisor: undefined };
+  });
+
+/**
+ * Ensures persistent reviewer sessions exist for the CURRENT loop. Sessions
+ * are created once per loop and reused across its cycles (the same reviewers
+ * re-review the updated code with their context). When the loop index
+ * changed (or no sessions exist), stale sessions are disposed and a fresh
+ * independent set is created — that is the loop boundary.
+ * @param {GraphCtx} ctx Graph context
+ * @param {GraphDeps} deps Injectable deps
+ * @param {LoopConfig} config Loop config
+ * @returns Context with reviewer sessions attached
+ */
+const ensureReviewers = (
+  ctx: GraphCtx,
+  deps: GraphDeps,
+  config: LoopConfig,
+): Effect.Effect<GraphCtx, AgentRunError> =>
+  Effect.gen(function* () {
+    const loop = ctx.loop ?? 0;
+    if (ctx.reviewerSessions !== undefined && ctx.reviewerSessionLoop === loop) {
+      return ctx;
+    }
+    // Stale sessions (previous loop, or a first creation that partially
+    // failed) must be disposed before spawning the new set.
+    const stale = Object.values(ctx.reviewerSessions ?? {});
+    for (const session of stale) yield* session.dispose().pipe(Effect.ignore);
+    for (const holder of Object.values(ctx.reviewerHolders ?? {})) {
+      holder.current = undefined;
+    }
+
+    const create = deps.createPersistentAgent ?? createPersistentAgent;
+    const sessions: Record<string, PersistentAgent> = {};
+    for (const profile of config.reviewers) {
+      const session = yield* create(
+        {
+          model: profile.model,
+          systemPrompt: buildReviewerSystem(profile),
+          tools: TOOLS.reviewer,
+          cwd: ctx.cwd,
+        },
+        REVIEWER_TIMEOUT,
+      );
+      sessions[profile.id] = session;
+      // Register eagerly: if a defect escapes before the new ctx is returned,
+      // runGraph's ensuring can still dispose via the holders.
+      const holder = ctx.reviewerHolders?.[profile.id];
+      if (holder !== undefined) holder.current = session;
+    }
+    return { ...ctx, reviewerSessions: sessions, reviewerSessionLoop: loop };
+  });
+
+/**
+ * Disposes one reviewer's session (a timed-out/errored turn poisons the
+ * session — the generation may still be running, so re-prompting it would hit
+ * pi's "already processing a prompt" busy error). Removes it from the session
+ * map so the retry pass recreates a fresh one via {@link ensureReviewers}.
+ * @param {GraphCtx} ctx Context carrying the sessions
+ * @param {string} reviewerId Reviewer profile id to drop
+ * @returns Context without that reviewer's session
+ */
+const dropReviewerSession = (
+  ctx: GraphCtx,
+  reviewerId: string,
+): Effect.Effect<GraphCtx, never> =>
+  Effect.gen(function* () {
+    const session = ctx.reviewerSessions?.[reviewerId];
+    if (session !== undefined) yield* session.dispose().pipe(Effect.ignore);
+    const holder = ctx.reviewerHolders?.[reviewerId];
+    if (holder !== undefined) holder.current = undefined;
+    const sessions = { ...ctx.reviewerSessions };
+    delete sessions[reviewerId];
+    return { ...ctx, reviewerSessions: sessions };
+  });
+
+/**
+ * Advances to the next loop: persists the new loop/cycle counters, disposes
+ * the current loop's supervisor + reviewer sessions (the next loop spawns a
+ * fresh independent set), and notifies. The review node then recreates
+ * everything on its next pass.
+ * @param {GraphCtx} ctx Graph context
+ * @param {LoopConfig} config Loop config
+ * @returns Context positioned at the next loop with sessions disposed
+ */
+const advanceLoop = (
+  ctx: GraphCtx,
+  config: LoopConfig,
+): Effect.Effect<GraphCtx, PlatformError, FileSystem | Path> =>
+  Effect.gen(function* () {
+    const reviewFile = ctx.reviewFile;
+    if (reviewFile !== undefined && ctx.loopState !== undefined) {
+      const loop = (ctx.loop ?? 0) + 1;
+      const state = { ...ctx.loopState, loop, cycle: 0 };
+      yield* saveLoopState(reviewFile, state);
+
+      // Dispose the loop's sessions — fresh independent reviewers next.
+      for (const session of Object.values(ctx.reviewerSessions ?? {})) {
+        yield* session.dispose().pipe(Effect.ignore);
+      }
+      for (const holder of Object.values(ctx.reviewerHolders ?? {})) {
+        holder.current = undefined;
+      }
+      if (ctx.supervisor !== undefined) {
+        yield* ctx.supervisor.dispose().pipe(Effect.ignore);
+        if (ctx.supervisorHolder !== undefined) ctx.supervisorHolder.current = undefined;
+      }
+
+      yield* notify(
+        ctx.ui,
+        `[adversarial-review-loop] Loop ${loop + 1}/${config.maxLoops} — spawning a fresh set of independent reviewers.`,
+        'info',
+      );
+
+      const nextCtx: GraphCtx = {
+        ...ctx,
+        loop,
+        cycle: 0,
+        loopState: state,
+        reviewerSessions: undefined,
+        reviewerSessionLoop: undefined,
+        supervisor: undefined,
+      };
+      return withWidget(nextCtx, {
+        loop,
+        maxLoops: config.maxLoops,
+        cycle: 0,
+        maxCycles: config.maxCycles,
+        supervisor: 'idle',
+        reviewers: initialReviewerRows(config.reviewers),
+        fixer: 'waiting',
+        phase: 'loop:advance',
+        loopStatus: 'running',
+        decision: undefined,
+      });
+    }
+    return ctx;
+  });
+
+/**
  * Builds the supervisor brief-turn task.
  * @param {GraphCtx} ctx Graph context
  * @param {LoopConfig} config Loop config
  * @param {string} briefFile Brief output path
+ * @param {number} loop Loop number
  * @param {number} cycle Cycle number
  * @returns Task prompt
  */
@@ -627,23 +855,24 @@ const buildSupervisorBriefTask = (
   ctx: GraphCtx,
   config: LoopConfig,
   briefFile: string,
+  loop: number,
   cycle: number,
 ): string => {
   const rosterBlock = config.reviewers
     .map(
       (profile) =>
         `- id=${profile.id} label=${profile.label} objective=${profile.objective} ` +
-        `skill=${profile.skillPath} scratch=${passScratchPath(ctx.reviewFile!, cycle, profile.id)}`,
+        `skill=${profile.skillPath} scratch=${passScratchPath(ctx.reviewFile!, loop, cycle, profile.id)}`,
     )
     .join('\n');
   const scopeClause = buildScopeClause(ctx.opts);
 
   return (
-    `BRIEF TURN (cycle ${cycle}).\n` +
+    `BRIEF TURN (loop ${loop}, cycle ${cycle}).\n` +
     `Target directory: ${ctx.opts.targetDir}\n` +
     (scopeClause !== '' ? `Scope: ${scopeClause}\n` : '') +
     `Canonical review file: ${ctx.reviewFile}\n` +
-    `Re-review: ${ctx.reReview || cycle > 1 ? 'yes' : 'no'}\n` +
+    `Re-review: ${ctx.reReview || cycle > 1 || loop > 1 ? 'yes' : 'no'}\n` +
     `Write the pass brief to: ${briefFile}\n` +
     `Roster (user-selected — do not add/remove):\n${rosterBlock}\n` +
     'Follow the supervisor skill Turn A. Do not write the canonical review yet.'
@@ -655,6 +884,7 @@ const buildSupervisorBriefTask = (
  * @param {GraphCtx} ctx Graph context
  * @param {LoopConfig} config Loop config
  * @param {string} briefFile Brief path
+ * @param {number} loop Loop number
  * @param {number} cycle Cycle number
  * @param {readonly string[]} scratchFiles Scratch paths that exist
  * @returns Task prompt
@@ -663,11 +893,12 @@ const buildSupervisorAggregateTask = (
   ctx: GraphCtx,
   config: LoopConfig,
   briefFile: string,
+  loop: number,
   cycle: number,
   scratchFiles: readonly string[],
 ): string =>
   (
-    `AGGREGATE TURN (cycle ${cycle}).\n` +
+    `AGGREGATE TURN (loop ${loop}, cycle ${cycle}).\n` +
     `Brief: ${briefFile}\n` +
     `Scratch reports:\n${scratchFiles.map((path) => `- ${path}`).join('\n')}\n` +
     `Canonical review (overwrite): ${ctx.reviewFile}\n` +
@@ -679,7 +910,9 @@ const buildSupervisorAggregateTask = (
   );
 
 /**
- * Fan-out reviewers → (supervisor aggregate | programmatic merge) → deadlock check.
+ * Review pass: supervisor brief → roster reviewers (scratch) → supervisor
+ * aggregate → canonical review → deadlock check. Aggregation is always
+ * agent-driven — the supervisor owns the canonical file.
  */
 const review: GraphNode = (ctx, deps) =>
   Effect.gen(function* () {
@@ -691,167 +924,215 @@ const review: GraphNode = (ctx, deps) =>
 
     const config = configOf(opts);
     const fileSystem = yield* FileSystem;
+    const loop = ctx.loop ?? 0;
     const cycle = (ctx.cycle ?? 0) + 1;
-    const supervised = usesSupervisor(config);
-    let runningCtx: GraphCtx = { ...ctx, cycle };
-    const supervisorStatus: SupervisorWidgetStatus = supervised ? 'idle' : 'skipped';
+    let runningCtx: GraphCtx = { ...ctx, loop, cycle };
 
     runningCtx = withWidget(runningCtx, {
-      cycle,
+      loop,
       maxLoops: config.maxLoops,
-      supervisor: supervisorStatus,
+      cycle: cycle - 1,
+      maxCycles: config.maxCycles,
+      supervisor: 'idle',
       reviewers: initialReviewerRows(config.reviewers),
-      reconcile: 'idle',
       fixer: 'waiting',
-      phase: supervised ? 'supervisor:brief' : 'reviewers',
+      phase: 'supervisor:brief',
       deadlocks: runningCtx.loopState?.deadlocks.length ?? 0,
+      loopStatus: 'running',
+      decision: undefined,
     });
 
     yield* setStatus(
       ui,
-      statusLine(cycle, config.maxLoops, supervised ? 'supervisor' : 'reviewers', 'running'),
+      statusLine(loop, config.maxLoops, cycle, config.maxCycles, 'supervisor', 'running'),
     );
-    yield* Console.log(
-      `\n[adversarial-review-loop] Cycle ${cycle}/${config.maxLoops} — ` +
-        (supervised ? 'Supervisor pass + ' : '') +
-        `Reviewers [${config.reviewers.map((profile) => profile.id).join(', ')}] ` +
-        (cycle === 1 && !ctx.reReview ? '(fresh review)' : '(re-review)'),
-    );
+
+    // Spawn the loop's persistent reviewer sessions (fresh set per loop; the
+    // same reviewers re-review across this loop's cycles with their context).
+    const reviewersEnsured = yield* Effect.result(ensureReviewers(runningCtx, deps, config));
+    if (Result.isFailure(reviewersEnsured)) {
+      yield* notify(
+        ui,
+        `Reviewer session create failed: ${reviewersEnsured.failure.message}`,
+        'error',
+      );
+      clearLoopWidget(ui);
+      return {
+        next: null,
+        ctx: { ...runningCtx, terminal: 'failed' as const },
+      };
+    }
+    runningCtx = reviewersEnsured.success;
 
     yield* ensureStateDirs(reviewFile);
+    yield* ensurePassDirs(reviewFile, loop + 1, cycle);
+    const briefFile = briefPath(reviewFile, loop + 1, cycle);
 
-    let briefFile: string | undefined;
-    if (supervised) {
-      yield* ensurePassDirs(reviewFile, cycle);
-      briefFile = briefPath(reviewFile, cycle);
+    const ensured = yield* Effect.result(ensureSupervisor(runningCtx, deps, config));
+    if (Result.isFailure(ensured)) {
+      yield* notify(ui, `Supervisor create failed: ${ensured.failure.message}`, 'error');
+      clearLoopWidget(ui);
+      return {
+        next: null,
+        ctx: { ...runningCtx, terminal: 'failed' as const },
+      };
+    }
+    runningCtx = ensured.success;
 
-      const ensured = yield* Effect.result(ensureSupervisor(runningCtx, deps, config));
-      if (Result.isFailure(ensured)) {
-        yield* notify(ui, `Supervisor create failed: ${ensured.failure.message}`, 'error');
+    runningCtx = withWidget(runningCtx, {
+      supervisor: 'briefing',
+      phase: 'supervisor:brief',
+    });
+    yield* setStatus(
+      ui,
+      statusLine(loop, config.maxLoops, cycle, config.maxCycles, 'supervisor:brief', 'running'),
+    );
+
+    const briefSupervisor = runningCtx.supervisor;
+    if (briefSupervisor === undefined) {
+      yield* notify(ui, 'Supervisor session missing after create', 'error');
+      clearLoopWidget(ui);
+      return { next: null, ctx: { ...runningCtx, terminal: 'failed' as const } };
+    }
+
+    const preBrief = yield* mtimeMs(fileSystem, briefFile);
+    const briefResult = yield* briefSupervisor.prompt(
+      buildSupervisorBriefTask(runningCtx, config, briefFile, loop + 1, cycle),
+      SUPERVISOR_TIMEOUT,
+      toolProgress(runningCtx, 'supervisor brief'),
+    );
+    const postBrief = yield* mtimeMs(fileSystem, briefFile);
+    // The brief must exist and be non-empty before reviewers fan out — a
+    // supervisor that finishes without error but never writes the brief (or
+    // errors after a partial write) must not dispatch unbriefed reviewers.
+    const briefContent = yield* fileSystem
+      .readFileString(briefFile, 'utf8')
+      .pipe(Effect.orElseSucceed(() => ''));
+    const briefMissing = briefContent.trim() === '';
+    // A timed-out turn marks the session as poisoned: the generation may
+    // still be running (abort is best-effort), so retrying on the same
+    // session would hit pi's "already processing a prompt" busy error.
+    const briefTimedOut = briefResult.timedOut === true;
+    if (
+      briefTimedOut ||
+      (briefResult.error !== undefined && !fileAdvanced(postBrief, preBrief)) ||
+      briefMissing
+    ) {
+      yield* notify(
+        ui,
+        briefTimedOut
+          ? `Supervisor brief timed out after ${SUPERVISOR_TIMEOUT}ms — retrying the review pass with a fresh session.`
+          : briefMissing && briefResult.error === undefined
+            ? 'Supervisor brief missing or empty after brief turn — refusing to fan out reviewers without scope.'
+            : `Supervisor brief error: ${briefResult.error ?? 'brief file empty or missing'}`,
+        'error',
+      );
+      const failures = (runningCtx.reviewerConsecutiveFailures ?? 0) + 1;
+      if (failures >= MAX_CONSECUTIVE_FAILURES) {
         clearLoopWidget(ui);
         return {
           next: null,
-          ctx: { ...runningCtx, terminal: 'failed' as const },
+          ctx: {
+            ...runningCtx,
+            reviewerConsecutiveFailures: failures,
+            terminal: 'failed' as const,
+          },
         };
       }
-      runningCtx = ensured.success;
-
-      runningCtx = withWidget(runningCtx, {
-        supervisor: 'briefing',
-        phase: 'supervisor:brief',
-      });
-      yield* setStatus(ui, statusLine(cycle, config.maxLoops, 'supervisor:brief', 'running'));
-
-      const briefSupervisor = runningCtx.supervisor;
-      if (briefSupervisor === undefined) {
-        yield* notify(ui, 'Supervisor session missing after create', 'error');
-        clearLoopWidget(ui);
-        return { next: null, ctx: { ...runningCtx, terminal: 'failed' as const } };
-      }
-
-      const preBrief = yield* mtimeMs(fileSystem, briefFile);
-      const briefResult = yield* briefSupervisor.prompt(
-        buildSupervisorBriefTask(runningCtx, config, briefFile, cycle),
-        SUPERVISOR_TIMEOUT,
-      );
-      const postBrief = yield* mtimeMs(fileSystem, briefFile);
-      // The brief must exist and be non-empty before specialists fan out —
-      // a supervisor that finishes without error but never writes the brief
-      // (or errors after a partial write) must not dispatch unbriefed
-      // specialists (DESIGN-pass-supervisor.md: "do not run specialists
-      // without a brief when mode=always").
-      const briefContent = yield* fileSystem
-        .readFileString(briefFile, 'utf8')
-        .pipe(Effect.orElseSucceed(() => ''));
-      const briefMissing = briefContent.trim() === '';
-      if ((briefResult.error !== undefined && !fileAdvanced(postBrief, preBrief)) || briefMissing) {
-        yield* notify(
-          ui,
-          briefMissing && briefResult.error === undefined
-            ? 'Supervisor brief missing or empty after brief turn — refusing to fan out specialists without scope.'
-            : `Supervisor brief error: ${briefResult.error ?? 'brief file empty or missing'}`,
-          'error',
-        );
-        const failures = (runningCtx.reviewerConsecutiveFailures ?? 0) + 1;
-        if (failures >= MAX_CONSECUTIVE_FAILURES) {
-          clearLoopWidget(ui);
-          return {
-            next: null,
-            ctx: {
-              ...runningCtx,
-              reviewerConsecutiveFailures: failures,
-              terminal: 'failed' as const,
-            },
-          };
-        }
-        return {
-          next: 'review',
-          ctx: { ...runningCtx, reviewerConsecutiveFailures: failures },
-        };
-      }
-
-      runningCtx = withWidget(runningCtx, {
-        supervisor: 'waiting-specialists',
-        phase: 'reviewers',
-      });
+      // Never re-prompt a session whose generation may still be running:
+      // dispose it and let the retry recreate a fresh supervisor.
+      const retryCtx = briefTimedOut
+        ? yield* dropTimedOutSupervisor(runningCtx)
+        : runningCtx;
+      return {
+        next: 'review',
+        ctx: { ...retryCtx, reviewerConsecutiveFailures: failures },
+      };
     }
 
-    const singleReviewer = !supervised && config.reviewers.length === 1;
-    const reports: ScratchReport[] = [];
-    let reviewerRows = initialReviewerRows(config.reviewers);
+    runningCtx = withWidget(runningCtx, {
+      supervisor: 'waiting-specialists',
+      phase: 'reviewers',
+    });
+
+    // ── Reviewer fan-out ──────────────────────────────────────────────
+    // Reviewers are independent (codebase read-only; each writes only its own
+    // scratch file), so they run in PARALLEL, capped by agentConcurrency.
+    // They are PERSISTENT within the loop — the same session re-reviews the
+    // updated code next cycle, carrying its context.
+    const concurrency = config.agentConcurrency ?? DEFAULT_AGENT_CONCURRENCY;
+    let reviewerRows: ReviewerWidgetRow[] = initialReviewerRows(config.reviewers).map((row) => ({
+      ...row,
+      status: 'running' as const,
+    }));
+    runningCtx = withWidget(runningCtx, {
+      reviewers: reviewerRows,
+      phase: 'reviewers',
+      reviewerConcurrency: Math.min(config.reviewers.length, concurrency),
+    });
+    yield* setStatus(
+      ui,
+      statusLine(loop, config.maxLoops, cycle, config.maxCycles, 'reviewers', 'running'),
+    );
+
+    const preMtimes: Option.Option<number>[] = [];
+    for (const profile of config.reviewers) {
+      preMtimes.push(
+        yield* mtimeMs(fileSystem, passScratchPath(reviewFile, loop + 1, cycle, profile.id)),
+      );
+    }
+
+    const reviewerOutcomes = yield* Effect.forEach(
+      config.reviewers,
+      (profile) => {
+        const session = runningCtx.reviewerSessions?.[profile.id];
+        if (session === undefined) {
+          return Effect.succeed({ text: '', error: `no session for ${profile.id}` });
+        }
+        return runReviewer(
+          runningCtx,
+          profile,
+          passScratchPath(reviewFile, loop + 1, cycle, profile.id),
+          briefFile,
+          session,
+        );
+      },
+      { concurrency },
+    );
+
     let anySuccess = false;
     let failures = runningCtx.reviewerConsecutiveFailures ?? 0;
     const scratchFiles: string[] = [];
-
+    reviewerRows = initialReviewerRows(config.reviewers);
     for (const [index, profile] of config.reviewers.entries()) {
-      const outputPath = supervised
-        ? passScratchPath(reviewFile, cycle, profile.id)
-        : singleReviewer
-          ? reviewFile
-          : scratchPath(reviewFile, profile.id);
-      reviewerRows = reviewerRows.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, status: 'running' as const } : row,
-      );
-      runningCtx = withWidget(runningCtx, {
-        reviewers: reviewerRows,
-        phase: `reviewer:${profile.id}`,
-      });
-      yield* setStatus(
-        ui,
-        statusLine(cycle, config.maxLoops, `reviewer:${profile.id}`, 'running'),
-      );
-
-      const preMtime = yield* mtimeMs(fileSystem, outputPath);
-      const result = yield* runFreshReviewer(
-        runningCtx,
-        deps,
-        profile,
-        outputPath,
-        briefFile,
-      );
+      const outputPath = passScratchPath(reviewFile, loop + 1, cycle, profile.id);
+      const result = reviewerOutcomes[index] ?? { text: '', error: 'no result' };
       const postMtime = yield* mtimeMs(fileSystem, outputPath);
-      const wrote = fileAdvanced(postMtime, preMtime);
+      const wrote = fileAdvanced(postMtime, preMtimes[index] ?? Option.none());
 
       if (result.error !== undefined && !wrote) {
         yield* notify(ui, `Reviewer ${profile.id} error: ${result.error}`, 'error');
         reviewerRows = reviewerRows.map((row, rowIndex) =>
           rowIndex === index ? { ...row, status: 'error' as const } : row,
         );
-        runningCtx = withWidget(runningCtx, { reviewers: reviewerRows });
+        // A failed/timeout turn may have left the persistent session poisoned
+        // (the generation could still be running — re-prompting it would hit
+        // pi's busy error). Drop it so the retry pass recreates a fresh one.
+        runningCtx = yield* dropReviewerSession(runningCtx, profile.id);
         continue;
       }
 
-      if (result.error !== undefined && wrote) {
-        yield* Console.log(
-          `[adversarial-review-loop] Reviewer ${profile.id} reported error but file updated — assuming success.`,
-        );
+      // (error but wrote → treat as success, as before)
+      // A TIMED-OUT turn poisons the session even when it wrote: the
+      // generation may still be running, so never re-prompt that session.
+      if (result.timedOut === true) {
+        runningCtx = yield* dropReviewerSession(runningCtx, profile.id);
       }
 
       const content = yield* fileSystem
         .readFileString(outputPath, 'utf8')
         .pipe(Effect.orElseSucceed(() => ''));
       const findingCount = parseFindingBlocks(content).length;
-      reports.push({ reviewerId: profile.id, content });
       scratchFiles.push(outputPath);
       anySuccess = true;
       reviewerRows = reviewerRows.map((row, rowIndex) =>
@@ -859,8 +1140,8 @@ const review: GraphNode = (ctx, deps) =>
           ? { ...row, status: 'done' as const, findingCount }
           : row,
       );
-      runningCtx = withWidget(runningCtx, { reviewers: reviewerRows });
     }
+    runningCtx = withWidget(runningCtx, { reviewers: reviewerRows });
 
     if (!anySuccess) {
       failures += 1;
@@ -887,164 +1168,79 @@ const review: GraphNode = (ctx, deps) =>
       };
     }
 
-    // ── Aggregate / merge ──
-    let canonicalMarkdown: string;
-    let reconcile: ReconcileWidgetStatus = 'programmatic';
-    let reconcileDetail: string | undefined;
-
+    // ── Supervisor aggregate (always agent-driven, never programmatic) ──
+    let canonicalMarkdown: string = '';
     const supervisorAgent = runningCtx.supervisor;
-    if (supervised && briefFile !== undefined && supervisorAgent !== undefined) {
+    if (supervisorAgent !== undefined) {
       runningCtx = withWidget(runningCtx, {
         supervisor: 'aggregating',
-        reconcile: 'skipped',
-        reconcileDetail: 'supervisor aggregate',
         phase: 'supervisor:aggregate',
       });
       yield* setStatus(
         ui,
-        statusLine(cycle, config.maxLoops, 'supervisor:aggregate', 'running'),
-      );
-      yield* Console.log(
-        `[adversarial-review-loop] Cycle ${cycle}/${config.maxLoops} — Supervisor aggregate`,
+        statusLine(loop, config.maxLoops, cycle, config.maxCycles, 'supervisor:aggregate', 'running'),
       );
 
       const preAgg = yield* mtimeMs(fileSystem, reviewFile);
       const aggResult = yield* supervisorAgent.prompt(
-        buildSupervisorAggregateTask(runningCtx, config, briefFile, cycle, scratchFiles),
+        buildSupervisorAggregateTask(runningCtx, config, briefFile, loop + 1, cycle, scratchFiles),
         SUPERVISOR_TIMEOUT,
+        toolProgress(runningCtx, 'supervisor aggregate'),
       );
       const postAgg = yield* mtimeMs(fileSystem, reviewFile);
       canonicalMarkdown = yield* fileSystem
         .readFileString(reviewFile, 'utf8')
         .pipe(Effect.orElseSucceed(() => ''));
 
+      // A timed-out aggregate may still be running on the session (abort is
+      // best-effort) — treat it as a failed pass and retry on a fresh session
+      // rather than re-prompting a possibly-busy agent.
+      const aggTimedOut = aggResult.timedOut === true;
       if (
+        aggTimedOut ||
         (aggResult.error !== undefined && !fileAdvanced(postAgg, preAgg)) ||
         canonicalMarkdown.trim() === ''
       ) {
+        // Aggregation is agent-driven — never fall back to a programmatic
+        // merge. Retry the pass; escalate after consecutive failures.
         yield* notify(
           ui,
-          `Supervisor aggregate failed (${aggResult.error ?? 'empty canonical'}) — falling back to programmatic merge.`,
-          'warning',
+          aggTimedOut
+            ? `Supervisor aggregate timed out after ${SUPERVISOR_TIMEOUT}ms — retrying the review pass with a fresh session.`
+            : `Supervisor aggregate failed (${aggResult.error ?? 'empty canonical'}) — retrying the review pass.`,
+          'error',
         );
-        const existingCanonical = yield* fileSystem
-          .readFileString(reviewFile, 'utf8')
-          .pipe(Effect.orElseSucceed(() => ''));
-        const merged = mergeScratchReports({
-          reports,
-          target: opts.targetDir,
-          reviewFile,
-          iteration: cycle,
-          existingCanonical: ctx.reReview || cycle > 1 ? existingCanonical : undefined,
-        });
-        canonicalMarkdown = merged.canonicalMarkdown;
-        reconcile = 'done';
-        reconcileDetail = 'supervisor failed; programmatic fallback';
-      } else {
-        reconcile = 'skipped';
-        reconcileDetail = 'supervisor aggregate';
+        const aggFailures = (runningCtx.reviewerConsecutiveFailures ?? 0) + 1;
+        if (aggFailures >= MAX_CONSECUTIVE_FAILURES) {
+          clearLoopWidget(ui);
+          return {
+            next: null,
+            ctx: {
+              ...runningCtx,
+              reviewerConsecutiveFailures: aggFailures,
+              terminal: 'failed' as const,
+            },
+          };
+        }
+        // Never re-prompt a session whose generation may still be running:
+        // dispose it and let the retry recreate a fresh supervisor.
+        const retryCtx = aggTimedOut
+          ? yield* dropTimedOutSupervisor(runningCtx)
+          : runningCtx;
+        return {
+          next: 'review',
+          ctx: { ...retryCtx, reviewerConsecutiveFailures: aggFailures },
+        };
       }
+
       runningCtx = withWidget(runningCtx, {
         supervisor: 'done',
-        reconcile,
-        reconcileDetail,
-        phase: 'merge',
-      });
-    } else if (singleReviewer) {
-      const only = reports[0]?.content ?? '';
-      canonicalMarkdown = passthroughMerge(only).canonicalMarkdown;
-      reconcile = 'skipped';
-      reconcileDetail = 'single reviewer';
-      runningCtx = withWidget(runningCtx, {
-        supervisor: 'skipped',
-        reconcile,
-        reconcileDetail,
         phase: 'merge',
       });
     } else {
-      runningCtx = withWidget(runningCtx, {
-        supervisor: 'skipped',
-        reconcile: 'programmatic',
-        phase: 'merge',
-      });
-      const existingCanonical = yield* fileSystem
-        .readFileString(reviewFile, 'utf8')
-        .pipe(Effect.orElseSucceed(() => ''));
-      const merged = mergeScratchReports({
-        reports,
-        target: opts.targetDir,
-        reviewFile,
-        iteration: cycle,
-        existingCanonical: ctx.reReview || cycle > 1 ? existingCanonical : undefined,
-      });
-      canonicalMarkdown = merged.canonicalMarkdown;
-      reconcileDetail = merged.hadConflicts
-        ? `${merged.conflicts.length} conflict(s)`
-        : 'no conflicts';
-
-      const needsLlm =
-        merged.hadConflicts &&
-        (config.reconciliator.mode === 'on-conflict' || config.reconciliator.mode === 'always');
-      const alwaysLlm = config.reconciliator.mode === 'always';
-
-      if (needsLlm || alwaysLlm) {
-        yield* fileSystem
-          .writeFileString(reviewFile, canonicalMarkdown)
-          .pipe(Effect.orElseSucceed(() => undefined));
-        runningCtx = withWidget(runningCtx, {
-          reconcile: 'llm',
-          reconcileDetail,
-          phase: 'reconciliator',
-        });
-        yield* setStatus(ui, statusLine(cycle, config.maxLoops, 'reconciliator', 'running'));
-        yield* Console.log(
-          `[adversarial-review-loop] Cycle ${cycle}/${config.maxLoops} — LLM reconciliator (${reconcileDetail})`,
-        );
-
-        const conflictNotes = merged.conflicts
-          .map(
-            (conflict) =>
-              `- ${conflict.fingerprint}: ${conflict.reason} (${conflict.findings.map((finding) => finding.id).join(', ')})`,
-          )
-          .join('\n');
-        const run = deps.runAgent ?? runAgent;
-        const preReconcileMtime = yield* mtimeMs(fileSystem, reviewFile);
-        const reconcileOutcome = yield* Effect.result(
-          run(
-            {
-              model: config.reconciliator.model,
-              systemPrompt: RECONCILIATOR_SYSTEM,
-              task:
-                `Reconcile the canonical review at ${reviewFile}. ` +
-                `Conflicts:\n${conflictNotes || '(mode=always — polish the merge)'}\n` +
-                'Overwrite the canonical file in place with one coherent report.',
-              tools: TOOLS.reconciliator,
-              cwd: ctx.cwd,
-            },
-            RECONCILIATOR_TIMEOUT,
-          ),
-        );
-        const postReconcileMtime = yield* mtimeMs(fileSystem, reviewFile);
-        if (
-          Result.isFailure(reconcileOutcome) &&
-          !fileAdvanced(postReconcileMtime, preReconcileMtime)
-        ) {
-          yield* notify(
-            ui,
-            `Reconciliator error: ${reconcileOutcome.failure.message} — keeping programmatic merge.`,
-            'warning',
-          );
-        }
-        canonicalMarkdown = yield* fileSystem
-          .readFileString(reviewFile, 'utf8')
-          .pipe(Effect.orElseSucceed(() => canonicalMarkdown));
-        reconcile = 'done';
-        reconcileDetail = `${reconcileDetail}; llm`;
-      } else {
-        reconcile = 'done';
-        reconcileDetail = `${reconcileDetail}; programmatic only`;
-      }
-      runningCtx = withWidget(runningCtx, { reconcile, reconcileDetail, phase: 'merge' });
+      yield* notify(ui, 'Internal error: supervisor missing for aggregate', 'error');
+      clearLoopWidget(ui);
+      return { next: null, ctx: { ...runningCtx, terminal: 'failed' as const } };
     }
 
     // ── Deadlock detection (programmatic) ──
@@ -1076,7 +1272,15 @@ const review: GraphNode = (ctx, deps) =>
       );
     }
 
-    const summary = yield* parseSummary(reviewFile);
+    // The agent-written Summary must NOT drive the transition: LLMs miscount
+    // statuses, so a Summary claiming `Open: 0` while an Open finding block
+    // remains would falsely terminate the loop. Recompute the counts from the
+    // actual finding blocks (mirroring the fixer node) and rewrite the
+    // Summary section so the on-disk file matches the blocks.
+    const findings = parseFindingBlocks(canonicalMarkdown);
+    canonicalMarkdown = updateSummarySection(canonicalMarkdown, findings);
+    yield* fileSystem.writeFileString(reviewFile, canonicalMarkdown);
+    const summary = Option.some(countStatuses(findings));
     let nextCtx: GraphCtx = {
       ...runningCtx,
       summary,
@@ -1084,29 +1288,35 @@ const review: GraphNode = (ctx, deps) =>
       loopState: deadlockResult.state,
     };
     nextCtx = withWidget(nextCtx, {
-      reconcile,
-      reconcileDetail,
       summary,
       deadlocks: deadlockResult.state.deadlocks.length,
       phase: 'reviewed',
       fixer: 'waiting' as FixerWidgetStatus,
     });
 
-    const transition = transitionAfterReview({
-      summary,
-      featureSpec: nextCtx.featureSpecCtx != null,
-    });
+    const transition = transitionAfterReview({ summary });
 
-    if (transition === 'done') {
-      yield* Console.log(
-        `[adversarial-review-loop] Reviewer: all findings terminal ` +
-          `(Resolved=${Option.getOrElse(summary, () => undefined)?.resolved}, ` +
-          `Won't Fix=${Option.getOrElse(summary, () => undefined)?.wontFix}). Closing loop.`,
-      );
+    if (transition === 'consensus') {
+      // The loop's reviewers agree there are no actionable issues — advance
+      // to the next loop's fresh independent reviewers, or finish when all
+      // configured loops are done.
+      if (loop + 1 < config.maxLoops) {
+        nextCtx = withWidget(nextCtx, {
+          loopStatus: 'consensus',
+          phase: 'consensus',
+        });
+        yield* notify(
+          ui,
+          `[adversarial-review-loop] Loop ${loop + 1} consensus — all findings resolved or dismissed. Advancing to loop ${loop + 2} with fresh reviewers.`,
+          'info',
+        );
+        const advanced = yield* advanceLoop(nextCtx, config);
+        return { next: 'review', ctx: advanced };
+      }
       yield* setStatus(ui, '● adversarial-review-loop DONE');
       yield* notify(
         ui,
-        '[adversarial-review-loop] Completed: all findings resolved or dismissed.',
+        '[adversarial-review-loop] Completed: all loops reached consensus — all findings resolved or dismissed.',
         'info',
       );
       clearLoopWidget(ui);
@@ -1114,9 +1324,6 @@ const review: GraphNode = (ctx, deps) =>
     }
 
     if (transition === 'escalated') {
-      yield* Console.log(
-        '[adversarial-review-loop] Only Escalated findings remain — surfacing to human.',
-      );
       yield* notify(
         ui,
         `[adversarial-review-loop] ${Option.getOrElse(summary, () => undefined)?.escalated} escalated finding(s) need human input. Review file: ${reviewFile}`,
@@ -1131,325 +1338,209 @@ const review: GraphNode = (ctx, deps) =>
   });
 
 /**
- * Feature-spec remediation branch.
- */
-const featureRemediate: GraphNode = (ctx, deps) =>
-  Effect.gen(function* () {
-    const { opts, ui, reviewFile, featureSpecCtx, cycle = 0 } = ctx;
-    if (featureSpecCtx?.phase.reviewTask == null || reviewFile === undefined) {
-      return { next: 'fixer', ctx };
-    }
-
-    const config = configOf(opts);
-    const reviewTask = featureSpecCtx.phase.reviewTask;
-    const path = yield* Path;
-
-    const reviewLoopIteration = yield* getReviewLoopCounter(reviewTask.memoryPath);
-    if (reviewLoopIteration >= MAX_REVIEW_LOOP_ITERATIONS) {
-      yield* notify(
-        ui,
-        `[adversarial-review-loop] Review loop cap reached: on-disk MEMORY.md iteration=${reviewLoopIteration} ` +
-          `(>= ${MAX_REVIEW_LOOP_ITERATIONS}), in-memory cycle=${cycle}, --max-loops=${config.maxLoops}. ` +
-          `Halting feature-spec mode with unresolved findings.`,
-        'error',
-      );
-      yield* setStatus(ui, '● adversarial-review-loop REVIEW CAP REACHED');
-      clearLoopWidget(ui);
-      return { next: null, ctx: { ...ctx, terminal: 'reviewCap' as const } };
-    }
-
-    const allFindings = yield* extractFindings(reviewFile);
-    const acceptedFindings = allFindings.filter((finding) => finding.status === 'Open');
-
-    if (acceptedFindings.length === 0) {
-      const summary = yield* parseSummary(reviewFile);
-      const transition = transitionAfterReview({ summary, featureSpec: true });
-      if (transition === 'done' || transition === 'escalated') {
-        yield* updateReviewLoopCounter(reviewTask.memoryPath, reviewLoopIteration + 1, 0, 0);
-        yield* Console.log(
-          `[adversarial-review-loop] Feature-spec: iteration ${reviewLoopIteration + 1} found no actionable findings. Terminal: ${transition}.`,
-        );
-        yield* setStatus(
-          ui,
-          transition === 'done'
-            ? '● adversarial-review-loop DONE'
-            : '● adversarial-review-loop ESCALATED',
-        );
-        clearLoopWidget(ui);
-        return { next: null, ctx: { ...ctx, summary, terminal: transition } };
-      }
-      const inReviewOnly =
-        Option.isSome(summary) &&
-        summary.value.open === 0 &&
-        summary.value.inReview > 0;
-      if (inReviewOnly) {
-        yield* Console.log(
-          `[adversarial-review-loop] Feature-spec: ${summary.value.inReview} finding(s) In Review — returning to reviewer for verification.`,
-        );
-        if (cycle >= config.maxLoops) {
-          yield* setStatus(ui, undefined);
-          yield* notify(
-            ui,
-            `[adversarial-review-loop] Max loops (${config.maxLoops}) reached. Review file: ${reviewFile}`,
-            'warning',
-          );
-          clearLoopWidget(ui);
-          return { next: null, ctx: { ...ctx, summary, terminal: 'maxLoops' as const } };
-        }
-        return { next: 'review', ctx: { ...ctx, summary, reviewerConsecutiveFailures: 0 } };
-      }
-      yield* updateReviewLoopCounter(reviewTask.memoryPath, reviewLoopIteration + 1, 0, 0);
-      yield* notify(
-        ui,
-        `[adversarial-review-loop] Feature-spec: Summary still claims non-terminal work but no Open findings were extractable. Closing to avoid an infinite loop. Review file: ${reviewFile}`,
-        'warning',
-      );
-      yield* setStatus(ui, '● adversarial-review-loop DONE');
-      clearLoopWidget(ui);
-      return { next: null, ctx: { ...ctx, summary, terminal: 'done' as const } };
-    }
-
-    const refreshedPhase = yield* findActivePhase(
-      featureSpecCtx.spec,
-      featureSpecCtx.spec.lockedPhases,
-    );
-    const phaseLetter = refreshedPhase?.phase ?? featureSpecCtx.phase.phase;
-    const highestTaskId =
-      refreshedPhase?.highestTaskId ?? featureSpecCtx.phase.highestTaskId;
-
-    const fileSystem = yield* FileSystem;
-    const phaseDir = path.join(featureSpecCtx.spec.featureDir, phaseLetter);
-    const phaseEntries = yield* fileSystem
-      .readDirectory(phaseDir)
-      .pipe(Effect.orElseSucceed((): readonly string[] => []));
-    const pendingFindings: typeof acceptedFindings = [];
-    for (const finding of acceptedFindings) {
-      const suffix = `remediate-${finding.id.toLowerCase()}`;
-      const alreadyExists = phaseEntries.some(
-        (entry) => entry === suffix || entry.endsWith(`-${suffix}`),
-      );
-      if (!alreadyExists) pendingFindings.push(finding);
-    }
-
-    if (pendingFindings.length === 0) {
-      yield* Console.log(
-        `[adversarial-review-loop] Feature-spec: remediation dirs already exist for ${acceptedFindings.length} finding(s); re-running fixer without creating new tasks.`,
-      );
-      yield* setStatus(
-        ui,
-        statusLine(cycle, config.maxLoops, 'fixer-remediation', `re-fixing ${acceptedFindings.length} tasks`),
-      );
-      const existingRun = yield* runFeatureRemediationFixer(ctx, deps, reviewFile);
-      if (existingRun.terminal !== undefined) {
-        clearLoopWidget(ui);
-        return { next: null, ctx: existingRun.ctx };
-      }
-      yield* updateReviewLoopCounter(reviewTask.memoryPath, reviewLoopIteration + 1, 0, 0);
-      return {
-        next: 'review',
-        ctx: {
-          ...existingRun.ctx,
-          featureSpecCtx: refreshedPhase
-            ? { spec: featureSpecCtx.spec, phase: { ...refreshedPhase, phase: phaseLetter } }
-            : { ...featureSpecCtx, phase: { ...featureSpecCtx.phase, phase: phaseLetter } },
-          reviewerConsecutiveFailures: 0,
-        },
-      };
-    }
-
-    const { taskIds } = yield* createRemediationTasks(
-      pendingFindings,
-      phaseLetter,
-      highestTaskId,
-      reviewTask.id,
-      featureSpecCtx.spec.featureDir,
-      reviewFile,
-    );
-
-    const featureMdPath = path.join(featureSpecCtx.spec.featureDir, 'FEATURE.md');
-    const newTasks = taskIds.flatMap((id, index) => {
-      const finding = pendingFindings[index];
-      return finding === undefined ? [] : [{ id, name: `remediate-${finding.id.toLowerCase()}` }];
-    });
-    yield* updateFeatureTaskTable(featureMdPath, newTasks);
-
-    yield* updateReviewLoopCounter(
-      reviewTask.memoryPath,
-      reviewLoopIteration + 1,
-      pendingFindings.length,
-      taskIds.length,
-    );
-
-    yield* Console.log(
-      `[adversarial-review-loop] Feature-spec: created ${taskIds.length} remediation task(s) for ${pendingFindings.length} finding(s). Task IDs: ${taskIds.join(', ')}`,
-    );
-
-    yield* setStatus(
-      ui,
-      statusLine(cycle, config.maxLoops, 'fixer-remediation', `remediating ${taskIds.length} tasks`),
-    );
-    yield* Console.log(
-      `[adversarial-review-loop] Cycle ${cycle}/${config.maxLoops} — Fixer remediating ${taskIds.length} finding(s)`,
-    );
-
-    const createdRun = yield* runFeatureRemediationFixer(ctx, deps, reviewFile);
-    if (createdRun.terminal !== undefined) {
-      clearLoopWidget(ui);
-      return { next: null, ctx: createdRun.ctx };
-    }
-
-    const lastTaskId = taskIds[taskIds.length - 1] ?? highestTaskId;
-    const updatedPhase = {
-      ...(refreshedPhase ?? featureSpecCtx.phase),
-      phase: phaseLetter,
-      highestTaskId: lastTaskId,
-    };
-
-    return {
-      next: 'review',
-      ctx: {
-        ...createdRun.ctx,
-        featureSpecCtx: { spec: featureSpecCtx.spec, phase: updatedPhase },
-      },
-    };
-  });
-
-/**
- * Runs the feature-spec fixer once and applies consecutive-failure / maxLoops
- * guards.
- * @param {GraphCtx} ctx The current graph context
- * @param {GraphDeps} deps Injectable dependencies
- * @param {string} reviewFile Absolute path to the review file
- * @returns Updated ctx plus an optional terminal reason
- */
-const runFeatureRemediationFixer = (
-  ctx: GraphCtx,
-  deps: GraphDeps,
-  reviewFile: string,
-): Effect.Effect<
-  { readonly ctx: GraphCtx; readonly terminal: Terminal | undefined },
-  never
-> =>
-  Effect.gen(function* () {
-    const { opts, ui, cycle = 0 } = ctx;
-    const config = configOf(opts);
-    const remediate = deps.executeRemediations ?? executeRemediations;
-    const remediation = yield* Effect.result(
-      remediate(opts.targetDir, reviewFile, ctx.cwd, config.fixerModel),
-    );
-    const remediationResult = Result.isFailure(remediation)
-      ? { success: 0, failed: 1 }
-      : remediation.success;
-
-    let fixerConsecutiveFailures = ctx.fixerConsecutiveFailures ?? 0;
-    if (remediationResult.failed > 0) {
-      fixerConsecutiveFailures++;
-      if (fixerConsecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        yield* notify(
-          ui,
-          `Fixer failed ${fixerConsecutiveFailures} consecutive times during remediation. Escalating to human.`,
-          'error',
-        );
-        yield* setStatus(ui, '● adversarial-review-loop FAILED');
-        return {
-          ctx: { ...ctx, fixerConsecutiveFailures, terminal: 'failed' as const },
-          terminal: 'failed' as const,
-        };
-      }
-    } else {
-      fixerConsecutiveFailures = 0;
-    }
-
-    if (cycle >= config.maxLoops) {
-      yield* setStatus(ui, undefined);
-      yield* notify(
-        ui,
-        `[adversarial-review-loop] Max loops (${config.maxLoops}) reached. Review file: ${reviewFile}`,
-        'warning',
-      );
-      return {
-        ctx: { ...ctx, fixerConsecutiveFailures, terminal: 'maxLoops' as const },
-        terminal: 'maxLoops' as const,
-      };
-    }
-
-    return {
-      ctx: { ...ctx, fixerConsecutiveFailures },
-      terminal: undefined,
-    };
-  });
-
-/**
  * Builds the fixer task prompt.
  * @param {GraphCtx} ctx The current graph context
  * @returns The fixer task prompt
  */
-const buildFixerTask = (ctx: GraphCtx): string => {
-  const { opts, reviewFile } = ctx;
+/**
+ * Builds a fixer task scoped to ONE finding. Fixers run in schedule waves
+ * (parallel for unrelated findings), so the task is emphatic that the agent
+ * writes ONLY its updated finding block to its scratch file — never the
+ * shared review file, which other parallel fixers also read/write.
+ * @param {GraphCtx} ctx The current graph context
+ * @param {FindingBlock} finding The finding to resolve
+ * @param {number} index 1-based index within the actionable findings
+ * @param {number} total Total actionable findings
+ * @param {string} scratchPath Where the agent must write its updated block
+ * @returns The fixer task prompt
+ */
+const buildFindingFixerTask = (
+  ctx: GraphCtx,
+  finding: FindingBlock,
+  index: number,
+  total: number,
+  scratchPath: string,
+): string => {
+  const { reviewFile } = ctx;
   return (
-    `Resolve the findings in the review file at ${reviewFile}. ` +
-    `Load and follow the addressing-adversarial-review skill at ${FIXER_SKILL_PATH} ` +
-    'as your governing pipeline: triage findings by Status, enforce the per-finding ' +
-    'Attempts ceiling (Max Attempts from Review Metadata, default 3), apply minimal ' +
-    'fixes in severity order to the code under ' +
-    `${opts.targetDir}, verify with the repo real checks (typecheck/lint/tests), ` +
-    'increment Attempts per attempt, set Status to In Review after local verification ' +
-    'passes (or leave Open on failure), append [Fixer] turns to each finding\'s ' +
-    '### Discussion thread, and overwrite the review file in place. ' +
-    'Do NOT touch Iteration or any reviewer-authored field. Escalate findings at the ceiling. ' +
-    'Do not decide whether another review cycle should run.'
+    `Resolve finding ${finding.id} (${index}/${total}) in the review file at ${reviewFile}. ` +
+    `Load and follow the addressing-adversarial-review skill at ${FIXER_SKILL_PATH} as your ` +
+    `governing pipeline, but act on ONLY this finding. Other fixers are fixing other findings ` +
+    `IN PARALLEL, so do NOT modify the review file — write your result to your own scratch file:\n\n` +
+    `- ID: ${finding.id} — ${finding.title}\n` +
+    `- Location: ${finding.location}\n` +
+    `- Problem: ${finding.problem}\n` +
+    `- Impact: ${finding.impact || '(see problem)'}\n` +
+    `- Suggestion: ${finding.suggestion || '(see problem)'}\n` +
+    `- Status: ${finding.status} · Attempts: ${finding.attempts}\n` +
+    `- Discussion:\n${finding.discussion || '(none yet)'}\n\n` +
+    'Steps:\n' +
+    '1. Read the review file to see this finding\'s current block and Review Metadata (Max Attempts).\n' +
+    '2. Triage per the skill: apply the minimal fix at the Location, increment Attempts, verify ' +
+    "with the repo real checks (typecheck/lint/tests); or mark Won't Fix with a rationale turn; " +
+    'or escalate at the Attempts ceiling.\n' +
+    `3. Write the COMPLETE updated finding block for ${finding.id} — preserving its Severity, ` +
+    'Location, Source, Problem, Impact, Suggestion and every prior Discussion turn verbatim, ' +
+    'with the new ' +
+    'Status/Attempts and your appended [Fixer] turn — to the scratch file at ' +
+    `${scratchPath}.\n` +
+    '4. Do NOT modify the review file or any other finding. Do not decide whether another ' +
+    'review cycle should run.'
   );
 };
 
 /**
- * Standalone fixer turn node (fresh agent every cycle).
+ * Runs one fixer agent for a finding: fixes the code, writes the updated
+ * finding block to the finding's scratch file, and returns that block (or
+ * null when the run failed / the scratch is missing or malformed).
+ * @param {GraphCtx} ctx The current graph context
+ * @param {GraphDeps} deps Injectable deps
+ * @param {FindingBlock} finding The finding to resolve
+ * @param {number} index 1-based index within the actionable findings
+ * @param {number} total Total actionable findings
+ * @param {string} reviewFile Canonical review path
+ * @param {number} loop Current loop
+ * @param {number} cycle Current cycle
+ * @returns The updated finding block, or null on failure
+ */
+const runFindingFixer = (
+  ctx: GraphCtx,
+  deps: GraphDeps,
+  finding: FindingBlock,
+  index: number,
+  total: number,
+  reviewFile: string,
+  loop: number,
+  cycle: number,
+): Effect.Effect<string | null, PlatformError, FileSystem | Path> =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem;
+    const run = deps.runAgent ?? runAgent;
+    const scratchPath = fixerScratchPath(reviewFile, loop + 1, cycle, finding.id);
+    // NOT best-effort: a swallowed mkdir failure would make the fixer's scratch
+    // write fail invisibly and the loop would record a confusing "fixer
+    // failure" for a finding that never ran. Fail the node instead.
+    yield* fileSystem.makeDirectory(dirname(scratchPath), { recursive: true });
+
+    const task = buildFindingFixerTask(ctx, finding, index, total, scratchPath);
+    const outcome = yield* Effect.result(
+      run(
+        {
+          model: configOf(ctx.opts).fixerModel,
+          systemPrompt: FIXER_SYSTEM,
+          task,
+          tools: TOOLS.fixer,
+          cwd: ctx.cwd,
+          onTool: toolProgress(ctx, `fixer ${finding.id}`),
+        },
+        FIXER_TIMEOUT,
+      ),
+    );
+    if (Result.isFailure(outcome)) return null;
+
+    // The scratch must parse as exactly this finding's updated block.
+    const scratch = yield* fileSystem
+      .readFileString(scratchPath, 'utf8')
+      .pipe(Effect.orElseSucceed(() => ''));
+    const parsed = parseFindingBlocks(scratch);
+    const block = parsed[0];
+    if (block === undefined || block.id !== finding.id) return null;
+    return block.raw;
+  });
+
+/**
+ * Fixer phase: the orchestrator builds a schedule from the Open findings
+ * (same-location findings are related → sequential waves; different locations
+ * share a wave → parallel), runs each wave's fixers concurrently, and merges
+ * their per-finding scratch blocks into the canonical review file. Findings
+ * with Status 'In Review' await the reviewer's verdict and are left alone
+ * (per the addressing skill's triage). After every wave the summary is
+ * refreshed and the loop transitions: back to the same reviewers for the next
+ * cycle, or to the cycle-max decision point when the per-loop cap is hit.
  */
 const fixer: GraphNode = (ctx, deps) =>
   Effect.gen(function* () {
-    const { opts, ui, reviewFile, cycle = 0 } = ctx;
+    const { opts, ui, reviewFile } = ctx;
     if (reviewFile === undefined) {
       yield* notify(ui, 'Internal error: reviewFile not resolved', 'error');
       return { next: null, ctx: { ...ctx, terminal: 'failed' as const } };
     }
 
     const config = configOf(opts);
+    const loop = ctx.loop ?? 0;
+    const cycle = ctx.cycle ?? 0;
     const fileSystem = yield* FileSystem;
-
-    let runningCtx = withWidget(ctx, { fixer: 'running', phase: 'fixer' });
-    yield* setStatus(ui, statusLine(cycle, config.maxLoops, 'fixer', 'running'));
-    yield* Console.log(`[adversarial-review-loop] Cycle ${cycle}/${config.maxLoops} — Fixer`);
-
-    const fixerTask = buildFixerTask(runningCtx);
-    const preFixMtime = yield* mtimeMs(fileSystem, reviewFile);
-    const run = deps.runAgent ?? runAgent;
-
-    const fixOutcome = yield* Effect.result(
-      run(
-        {
-          model: config.fixerModel,
-          systemPrompt: FIXER_SYSTEM,
-          task: fixerTask,
-          tools: TOOLS.fixer,
-          cwd: ctx.cwd,
-        },
-        FIXER_TIMEOUT,
-      ),
-    );
-    const fixResult = Result.isFailure(fixOutcome)
-      ? { text: '', error: fixOutcome.failure.message }
-      : fixOutcome.success;
-
     let fixerConsecutiveFailures = ctx.fixerConsecutiveFailures ?? 0;
 
-    if (fixResult.error !== undefined) {
-      const postFixMtime = yield* mtimeMs(fileSystem, reviewFile);
-      if (fileAdvanced(postFixMtime, preFixMtime)) {
-        yield* Console.log(
-          '[adversarial-review-loop] Fixer reported error but review file was updated — assuming success.',
+    let canonical = yield* fileSystem
+      .readFileString(reviewFile, 'utf8')
+      .pipe(Effect.orElseSucceed(() => ''));
+    const actionable = parseFindingBlocks(canonical).filter(
+      (finding) => finding.status === 'Open',
+    );
+    const schedule = buildFixerSchedule(actionable);
+
+    let runningCtx = withWidget(ctx, { fixer: 'waiting', phase: 'fixer' });
+    yield* setStatus(
+      ui,
+      statusLine(loop, config.maxLoops, cycle, config.maxCycles, 'fixer', 'running'),
+    );
+
+    let fixed = 0;
+    const concurrency = config.agentConcurrency ?? DEFAULT_AGENT_CONCURRENCY;
+    for (const [waveIndex, wave] of schedule.entries()) {
+      // Graceful stop checkpoint: between waves.
+      if (stopRequested(runningCtx)) return yield* stopResult(runningCtx);
+
+      const phase = `fixer:wave ${waveIndex + 1}`;
+      runningCtx = withWidget(runningCtx, {
+        fixer: 'running',
+        phase,
+        fixerDetail: `wave ${waveIndex + 1}/${schedule.length} · fixed ${fixed}/${actionable.length}`,
+        // The actual parallelism: the wave's size capped by the setting.
+        fixerConcurrency: Math.min(wave.length, concurrency),
+      });
+      yield* setStatus(ui, statusLine(loop, config.maxLoops, cycle, config.maxCycles, phase, 'running'));
+
+      // Run the wave's fixers in parallel (capped by agentConcurrency); each
+      // returns its updated finding block.
+      const outcomes = yield* Effect.forEach(
+        wave,
+        (finding, findingIndex) =>
+          runFindingFixer(
+            runningCtx,
+            deps,
+            finding,
+            fixed + findingIndex + 1,
+            actionable.length,
+            reviewFile,
+            loop + 1,
+            cycle,
+          ),
+        { concurrency },
+      );
+
+      // Merge successful blocks into the canonical; track consecutive failures.
+      // A null outcome is a VISIBLE divergence, never a silent no-op (F20):
+      // the fixer agent failed, or it ran but produced no (or a malformed /
+      // wrong-id) scratch block. In the latter case any code fix it made on
+      // disk is unrecorded and unverified, so we notify per-finding instead of
+      // letting the canonical/loop-state silently diverge from the tree.
+      let waveFixed = 0;
+      for (const [index, finding] of wave.entries()) {
+        const block = outcomes[index] ?? null;
+        if (block !== null) {
+          canonical = mergeFindingBlock(canonical, block);
+          waveFixed++;
+          fixerConsecutiveFailures = 0;
+          continue;
+        }
+        yield* notify(
+          ui,
+          `Fixer for ${finding.id} produced no scratch block (expected ${fixerScratchPath(reviewFile, loop + 1, cycle, finding.id)}). ` +
+            'Any code fix it made is unrecorded and unverified — inspect the tree and re-dispatch or fix manually.',
+          'warning',
         );
-        fixerConsecutiveFailures = 0;
-      } else {
-        yield* notify(ui, `Fixer error: ${fixResult.error}`, 'error');
         fixerConsecutiveFailures++;
         if (fixerConsecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
           yield* notify(
@@ -1464,55 +1555,155 @@ const fixer: GraphNode = (ctx, deps) =>
             ctx: { ...runningCtx, fixerConsecutiveFailures, terminal: 'failed' as const },
           };
         }
-        return { next: 'review', ctx: { ...runningCtx, fixerConsecutiveFailures } };
       }
+      fixed += waveFixed;
+
+      // Persist the merged canonical so the next wave's fixers read fresh state.
+      // NOT best-effort: a swallowed write failure would make the next wave's
+      // fixers read a stale on-disk file and the loop would merge on top of
+      // diverged state. A failure here fails the node (runGraph marks 'failed').
+      yield* fileSystem.writeFileString(reviewFile, canonical);
     }
 
-    fixerConsecutiveFailures = 0;
+    // Refresh the summary counts from the merged findings and transition.
+    canonical = updateSummarySection(canonical, parseFindingBlocks(canonical));
+    // NOT best-effort: postFix is computed by re-parsing this file, so a
+    // swallowed write failure would transition on stale pre-merge counts.
+    yield* fileSystem.writeFileString(reviewFile, canonical);
 
     const postFix = yield* parseSummary(reviewFile);
-    if (isAllTerminal(postFix)) {
-      yield* Console.log(
-        '[adversarial-review-loop] Fixer advanced all findings to terminal status.',
-      );
-    }
-
     runningCtx = withWidget(
       { ...runningCtx, summary: postFix },
       { fixer: 'done', summary: postFix, phase: 'fixed' },
     );
 
-    const next = transitionAfterFixer({ cycle, maxLoops: config.maxLoops });
-    if (next === 'maxLoops') {
-      yield* setStatus(ui, undefined);
-      yield* notify(
-        ui,
-        `[adversarial-review-loop] Max loops (${config.maxLoops}) reached. Review file: ${reviewFile}`,
-        'warning',
-      );
-      clearLoopWidget(ui);
-      return {
-        next: null,
-        ctx: { ...runningCtx, fixerConsecutiveFailures, terminal: 'maxLoops' as const },
-      };
+    const next = transitionAfterFixer({ cycle, maxCycles: config.maxCycles });
+    if (next === 'cycleMax') {
+      // Same reviewers hit the per-loop cycle cap without consensus — the
+      // cycleMaxDecision node asks the user (increase cycles / next loop / add
+      // a loop / stop). Headless runs terminate 'maxLoops' there.
+      return { next: 'cycleMaxDecision', ctx: { ...runningCtx, fixerConsecutiveFailures } };
     }
 
     return { next: 'review', ctx: { ...runningCtx, fixerConsecutiveFailures } };
+  });
+
+/**
+ * Cycle-max decision point: the current loop reached its per-loop cycle cap
+ * without consensus (unresolved findings remain). The user chooses to raise
+ * the cycle cap and keep the same reviewers, advance to the next loop (fresh
+ * independent reviewers; "Add a new loop" when already at the loop cap), or
+ * stop. Without an `askUser` implementation (headless/tests) the loop
+ * terminates `maxLoops`.
+ */
+const cycleMaxDecision: GraphNode = (ctx, deps) =>
+  Effect.gen(function* () {
+    const config = configOf(ctx.opts);
+    const loop = ctx.loop ?? 0;
+    const cycle = ctx.cycle ?? 0;
+    const summary = ctx.summary ?? Option.none();
+    const open = Option.isSome(summary) ? summary.value.open : 0;
+    const inReview = Option.isSome(summary) ? summary.value.inReview : 0;
+    const escalated = Option.isSome(summary) ? summary.value.escalated : 0;
+    const atLoopMax = loop + 1 >= config.maxLoops;
+    const options: readonly string[] = atLoopMax
+      ? ['Increase cycle max', 'Add a new loop', 'Stop']
+      : ['Increase cycle max', 'Resume to NEXT loop', 'Stop'];
+
+    if (deps.askUser === undefined) {
+      yield* notify(
+        ctx.ui,
+        `[adversarial-review-loop] Loop ${loop + 1} reached the cycle cap (${config.maxCycles}) without consensus — ` +
+          `open ${open} · in-review ${inReview} · escalated ${escalated}. Review file: ${ctx.reviewFile}`,
+        'warning',
+      );
+      yield* setStatus(ctx.ui, '● adversarial-review-loop MAX LOOPS');
+      clearLoopWidget(ctx.ui);
+      return { next: null, ctx: { ...ctx, terminal: 'maxLoops' as const } };
+    }
+
+    withWidget(ctx, {
+      loopStatus: 'decision',
+      decision: `cycle ${cycle}/${config.maxCycles} reached — waiting on you`,
+      phase: 'decision',
+    });
+    yield* setStatus(
+      ctx.ui,
+      statusLine(loop, config.maxLoops, cycle, config.maxCycles, 'decision', 'waiting on user'),
+    );
+
+    const question =
+      `Loop ${loop + 1}/${config.maxLoops} reached cycle ${cycle}/${config.maxCycles} without consensus ` +
+      `(open ${open} · in-review ${inReview} · escalated ${escalated}). What next?`;
+    const askUser = deps.askUser;
+    const choice = yield* Effect.promise(() => askUser(question, options));
+
+    if (choice === 'Increase cycle max') {
+      const maxCycles = config.maxCycles + 1;
+      const newConfig = { ...config, maxCycles };
+      const state = ctx.loopState !== undefined ? { ...ctx.loopState, config: newConfig } : ctx.loopState;
+      if (ctx.reviewFile !== undefined && state !== undefined) {
+        yield* saveLoopState(ctx.reviewFile, state);
+      }
+      yield* notify(
+        ctx.ui,
+        `[adversarial-review-loop] Cycle cap raised to ${maxCycles} — continuing loop ${loop + 1} with the same reviewers.`,
+        'info',
+      );
+      return {
+        next: 'review',
+        ctx: {
+          ...ctx,
+          loopState: state,
+          opts: { ...ctx.opts, config: newConfig },
+        },
+      };
+    }
+
+    if (choice === 'Resume to NEXT loop' || choice === 'Add a new loop') {
+      let effectiveCtx = ctx;
+      if (choice === 'Add a new loop') {
+        const newConfig = { ...config, maxLoops: config.maxLoops + 1 };
+        const state =
+          ctx.loopState !== undefined ? { ...ctx.loopState, config: newConfig } : ctx.loopState;
+        if (ctx.reviewFile !== undefined && state !== undefined) {
+          yield* saveLoopState(ctx.reviewFile, state);
+        }
+        yield* notify(
+          ctx.ui,
+          `[adversarial-review-loop] Added a new loop — max loops is now ${newConfig.maxLoops}.`,
+          'info',
+        );
+        effectiveCtx = {
+          ...ctx,
+          loopState: state,
+          opts: { ...ctx.opts, config: newConfig },
+        };
+      }
+      const advanced = yield* advanceLoop(effectiveCtx, configOf(effectiveCtx.opts));
+      return { next: 'review', ctx: advanced };
+    }
+
+    // Stop (or Esc — null means cancel).
+    yield* notify(ctx.ui, '[adversarial-review-loop] Stopped by user decision.', 'info');
+    yield* setStatus(ctx.ui, undefined);
+    clearLoopWidget(ctx.ui);
+    return { next: null, ctx: { ...ctx, terminal: 'stopped' as const } };
   });
 
 const NODES: Record<string, GraphNode> = {
   skillGate,
   resolveCtx,
   review,
-  featureRemediate,
   fixer,
+  cycleMaxDecision,
 };
 
 /**
  * Runs the adversarial-review-loop state machine until a terminal node.
  * Node errors that escape fine-grained handling are caught here: the user is
  * notified and the loop terminates as failed. Reviewers are fresh each cycle.
- * Supervisor (when used) is one persistent session for the whole loop and is
+ * The supervisor is one persistent session for the whole loop and is
  * disposed when the graph exits.
  * @param {GraphCtx} initialCtx The initial graph context
  * @param {GraphDeps} [deps] Injectable dependencies (testing)
@@ -1541,8 +1732,12 @@ export const runGraph = (
           ...ctx.opts,
           config: {
             ...fallback,
-            fixerModel: ctx.opts.fixerModel,
+            // Keep the default when the caller omitted fixerModel — an
+            // unguarded undefined here would later surface as a confusing
+            // "Cannot read properties of undefined" model-resolution error.
+            fixerModel: ctx.opts.fixerModel ?? fallback.fixerModel,
             maxLoops: ctx.opts.maxLoops,
+            maxCycles: ctx.opts.maxCycles ?? fallback.maxCycles,
             reviewers: [{ ...generic, model: ctx.opts.reviewerModel }],
           },
         },
@@ -1557,6 +1752,12 @@ export const runGraph = (
 
     const loop = Effect.gen(function* () {
       while (next !== null) {
+        // Graceful stop checkpoint: between nodes/cycles.
+        if (stopRequested(ctx)) {
+          const stopped = yield* stopResult(ctx);
+          return stopped.ctx;
+        }
+
         const nodeName = next;
         const node = NODES[nodeName];
         if (node === undefined) {
@@ -1595,6 +1796,17 @@ export const runGraph = (
           const supervisor = ctx.supervisorHolder?.current ?? ctx.supervisor;
           if (supervisor !== undefined) {
             yield* supervisor.dispose();
+          }
+          // Dispose every persistent per-loop reviewer session (the current
+          // loop's set, plus any stale ones registered in holders).
+          const reviewerSessions = Object.values(ctx.reviewerSessions ?? {});
+          for (const session of reviewerSessions) {
+            yield* session.dispose().pipe(Effect.ignore);
+          }
+          for (const holder of Object.values(ctx.reviewerHolders ?? {})) {
+            if (holder.current !== undefined) {
+              yield* holder.current.dispose().pipe(Effect.ignore);
+            }
           }
         }),
       ),

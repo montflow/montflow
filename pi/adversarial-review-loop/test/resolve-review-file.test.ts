@@ -1,8 +1,11 @@
 import { test, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveReviewFile } from '../resolve-review-file';
-import { runEffect, withProjectRoot, type TempDir } from './helpers';
+import { Effect, Result } from 'effect';
+import { Path } from 'effect/Path';
+import { NodeServices } from '@effect/platform-node';
+import { isWithinReviews, resolveReviewFile, ReviewPathError } from '../resolve-review-file';
+import { runEffect, runResult, withProjectRoot, type TempDir } from './helpers';
 
 /**
  * Creates a temp directory, runs the async callback, then cleans up.
@@ -84,4 +87,93 @@ test('resolveReviewFile: fresh with no matching nums falls back to 001', () =>
     // No .md files have numeric codes → nums.length === 0 → returns 001.md even with fresh
     const result = await runEffect(resolveReviewFile(tmp, 'myreview', true));
     expect(result).toMatch(/\.agents\/reviews\/myreview\/001\.md$/);
+  }));
+
+test('resolveReviewFile: rejects path-traversal and invalid review names', () =>
+  withTempDir(async ({ tmp }) => {
+    for (const bad of ['../escape', 'a/b', 'a b', '.hidden', '', '..', 'a\\b']) {
+      const result = await runResult(resolveReviewFile(tmp, bad, false));
+      expect(Result.isFailure(result)).toBe(true);
+      if (Result.isFailure(result)) {
+        expect(result.failure).toBeInstanceOf(ReviewPathError);
+        expect(result.failure.message).toContain('Invalid review name');
+      }
+      // Nothing may be created outside the reviews root.
+      expect(fs.existsSync(path.join(tmp, 'escape'))).toBe(false);
+      expect(fs.existsSync(path.join(tmp, 'b'))).toBe(false);
+    }
+  }));
+
+/**
+ * Runs a callback with the real Node `Path` service (as used by the
+ * production runtime and the graph tests).
+ * @param {(path: Path) => A} f The callback
+ * @returns A promise resolving to the callback's result
+ */
+const withNodePath = <A>(f: (path: Path) => A): Promise<A> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const path = yield* Path;
+      return f(path);
+    }).pipe(Effect.provide(NodeServices.layer)),
+  );
+
+test('resolveReviewFile: accepts safe names only', () =>
+  withTempDir(async ({ tmp }) => {
+    for (const good of ['adversarial', 'security-audit', 'a_b.c-d', 'audit2']) {
+      const result = await runResult(resolveReviewFile(tmp, good, false));
+      expect(Result.isSuccess(result)).toBe(true);
+    }
+  }));
+
+test('isWithinReviews: rejects a candidate escaping via a symlinked parent', () =>
+  withTempDir(async ({ tmp }) => {
+    const reviews = path.join(tmp, '.agents/reviews');
+    fs.mkdirSync(reviews, { recursive: true });
+    const outside = path.join(tmp, 'outside');
+    fs.mkdirSync(outside, { recursive: true });
+    fs.symlinkSync(outside, path.join(reviews, 'link'), 'dir');
+
+    await withNodePath((p) => {
+      // Existing target: realpath resolves fully outside the reviews root.
+      fs.writeFileSync(path.join(outside, '001.md'), '# Review\n');
+      expect(isWithinReviews(p, tmp, path.join(reviews, 'link', '001.md'))).toBe(false);
+      // Not-yet-existing target (what ensureStateDirs would create): the
+      // deepest existing ancestor (`link` → outside) is resolved, so the
+      // missing leaf cannot smuggle the path back inside the root.
+      expect(isWithinReviews(p, tmp, path.join(reviews, 'link', '002.md'))).toBe(false);
+    });
+  }));
+
+test('isWithinReviews: a reviews root that is itself a symlink is compared by its real target', () =>
+  withTempDir(async ({ tmp }) => {
+    const realRoot = path.join(tmp, 'real-reviews');
+    fs.mkdirSync(realRoot, { recursive: true });
+    fs.mkdirSync(path.join(tmp, '.agents'), { recursive: true });
+    fs.symlinkSync(realRoot, path.join(tmp, '.agents', 'reviews'), 'dir');
+
+    await withNodePath((p) => {
+      // Writes through the symlinked reviews root land in its real target,
+      // so legitimate review paths (via either spelling) stay contained.
+      expect(isWithinReviews(p, tmp, path.join(realRoot, 'myreview', '001.md'))).toBe(true);
+      expect(isWithinReviews(p, tmp, path.join(tmp, '.agents', 'reviews', 'myreview', '001.md'))).toBe(true);
+      // An internal link escaping the real root is still rejected.
+      const outside = path.join(tmp, 'outside');
+      fs.mkdirSync(outside, { recursive: true });
+      fs.symlinkSync(outside, path.join(realRoot, 'link'), 'dir');
+      expect(isWithinReviews(p, tmp, path.join(realRoot, 'link', '001.md'))).toBe(false);
+    });
+  }));
+
+test('isWithinReviews: accepts real (non-symlinked) review paths', () =>
+  withTempDir(async ({ tmp }) => {
+    const reviews = path.join(tmp, '.agents/reviews');
+    fs.mkdirSync(reviews, { recursive: true });
+    await withNodePath((p) => {
+      expect(isWithinReviews(p, tmp, path.join(reviews, 'myreview', '001.md'))).toBe(true);
+      // The reviews root itself is contained.
+      expect(isWithinReviews(p, tmp, reviews)).toBe(true);
+      // A sibling directory outside the root is not.
+      expect(isWithinReviews(p, tmp, path.join(tmp, 'elsewhere', '001.md'))).toBe(false);
+    });
   }));

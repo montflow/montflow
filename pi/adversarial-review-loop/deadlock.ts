@@ -5,7 +5,7 @@ import {
   type TrackedFinding,
   type FindingTransition,
 } from './loop-state';
-import { parseFindingBlocks, type FindingBlock } from './findings';
+import { parseFindingBlocks, SUMMARY_SECTION_RE, type FindingBlock } from './findings';
 
 export interface DeadlockUpdate {
   readonly state: LoopState;
@@ -25,17 +25,45 @@ const escalateFindingInMarkdown = (
   findingId: string,
   reason: string,
 ): string => {
-  const pattern = new RegExp(
-    `(#### ${findingId}\\s+(?:—|--|-)[\\s\\S]*?- \\*\\*Status\\*\\*: )([^\\n]+)([\\s\\S]*?)(### Discussion\\s*\\n)`,
-    'm',
-  );
-  if (!pattern.test(markdown)) return markdown;
+  const turn =
+    `[Orchestrator] Deadlock detected: ${reason}. Escalating — further fixer thrash will not run on this finding.\n`;
 
-  return markdown.replace(pattern, (_match, before, _status, middle, discussionHeader) => {
-    const turn =
-      `[Orchestrator] Deadlock detected: ${reason}. Escalating — further fixer thrash will not run on this finding.\n`;
-    return `${before}Escalated${middle}${discussionHeader}${turn}`;
-  });
+  // Locate THIS finding's block: from its header to the next finding header
+  // or section. Scoping is essential — the old greedy pattern could reach
+  // across a Status-less block into a neighbor's Status line and corrupt it
+  // (F4).
+  const startMatch = markdown.match(
+    new RegExp(`^#### ${findingId}\\s+(?:—|--|-).*$`, 'm'),
+  );
+  const start = startMatch?.index;
+  if (start === undefined) return markdown;
+  const tail = markdown.slice(start);
+  const headerEnd = tail.indexOf('\n');
+  const body = tail.slice(headerEnd + 1);
+  const nextBlock = body.search(/^#### F\\d+\\s+(?:—|--|-)|^##\\s/m);
+  const blockEnd = nextBlock < 0 ? tail.length : headerEnd + 1 + nextBlock;
+  const block = tail.slice(0, blockEnd);
+
+  // Set Status: Escalated — replace the LAST Status line in the block's head
+  // (fields precede Discussion, and Status is the last of them), or insert one
+  // before Attempts when the block has none (F4).
+  const head = block.split(/\n### Discussion\b/)[0] ?? block;
+  const statusRe = /- \*\*Status\*\*: [^\n]*/g;
+  const statuses = [...head.matchAll(statusRe)];
+  const last = statuses[statuses.length - 1];
+  let next = block;
+  if (last !== undefined && last.index !== undefined) {
+    next =
+      next.slice(0, last.index) +
+      '- **Status**: Escalated' +
+      next.slice(last.index + last[0].length);
+  } else {
+    next = next.replace(/(- \*\*Attempts\*\*:)/, '- **Status**: Escalated\n$1');
+  }
+
+  // Append the orchestrator turn under Discussion.
+  next = next.replace(/(### Discussion\s*\n)/, `$1${turn}`);
+  return markdown.slice(0, start) + next + markdown.slice(start + blockEnd);
 };
 
 /**
@@ -56,9 +84,17 @@ const adjustSummaryAfterDeadlocks = (markdown: string, newlyEscalated: number): 
       },
     );
 
+  // Anchor every count edit to the `## Summary` section: a document-wide
+  // replace would bump the first `- **Open**:`/`- **Escalated**:` line found
+  // anywhere (finding Problem/Impact/Discussion text frequently quotes review
+  // content) and leave the real Summary stale.
+  const sectionMatch = markdown.match(SUMMARY_SECTION_RE);
+  const section = sectionMatch?.[0];
+  if (section === undefined) return markdown;
+
   // Move counts from Open/In Review into Escalated (approximate — exact rebuild
   // happens on the next merge cycle).
-  let next = bump('Escalated', newlyEscalated)(markdown);
+  let next = bump('Escalated', newlyEscalated)(section);
   // Prefer decrementing Open first.
   const openMatch = next.match(/- \*\*Open\*\*:\s*(\d+)/);
   const open = openMatch?.[1] !== undefined ? parseInt(openMatch[1], 10) : 0;
@@ -66,7 +102,7 @@ const adjustSummaryAfterDeadlocks = (markdown: string, newlyEscalated: number): 
   next = bump('Open', -fromOpen)(next);
   const remaining = newlyEscalated - fromOpen;
   if (remaining > 0) next = bump('In Review', -remaining)(next);
-  return next;
+  return markdown.replace(SUMMARY_SECTION_RE, () => next);
 };
 
 /**

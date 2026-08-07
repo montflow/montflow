@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Performs a hostile, bug-hunting code review that assumes the author made mistakes. Surfaces possible bugs, edge cases, security holes, missed refactors, missing tests, and documentation gaps, and writes the report to a file under `.agents/reviews/`. Use when reviewing code, PRs, or diffs before merge. Pair with addressing-adversarial-review to resolve findings across fix→re-review loops. For feature-spec auditing, see adversarial-review-feature-spec.
+description: Performs a hostile, bug-hunting code review that assumes the author made mistakes. Surfaces possible bugs, edge cases, security holes, missed refactors, missing tests, and documentation gaps, and writes the report to a file under `.agents/reviews/`. Use when reviewing code, PRs, or diffs before merge. Pair with addressing-adversarial-review to resolve findings across fix→re-review loops.
 id: 714e99f0430c9637
 author: Daniel Montilla
 version: 3.1.0
@@ -27,7 +27,7 @@ Adopt the stance of a hostile reviewer whose job is to find the defect the autho
 
 You MUST review in a **brand new context** — you may only know about the feature, the changes, and the goals. You must NEVER know about the thoughts, rationale, or context of the agent that originally implemented the code. Specifically:
 
-- You may see: the diff/changed code, the feature specification, requirements/goals, relevant tests, and any public documentation.
+- You may see: the diff/changed code, the requirements/goals, relevant tests, and any public documentation.
 - You must NOT see: the original author's implementation notes, design commentary, commit messages explaining intent, internal discussion threads, or any other artifact that reveals what the author *thought* they were doing.
 
 This prevents anchoring bias and ensures the review judges only what the code *actually does* against what it *should do*, not against what the author intended.
@@ -36,7 +36,7 @@ This prevents anchoring bias and ensures the review judges only what the code *a
 
 Isolation is a *structural* property of the orchestration, not a self-attested checkbox. The review MUST be performed by a reviewer that did not author, edit, or execute the code under review:
 
-- **Inside an orchestration pipeline** (any orchestrator that runs an end-of-phase review, such as `executing-feature-spec`): the orchestrator MUST spawn an independent subagent for the review, distinct from any agent that authored or executed the phase. `executing-feature-spec` is named here as a canonical example, not a hard dependency — the principle applies to any orchestrator.
+- **Inside an orchestration pipeline** (any orchestrator that runs an end-of-phase review): the orchestrator MUST spawn an independent subagent for the review, distinct from any agent that authored or executed the phase.
 - **Direct invocation by the user**: if the hosting environment supports subagents/sessions, run the review in a fresh subagent or session that has not seen the implementer's context. If the host has no such capability, the reviewer MUST discard the implementer's context from working memory before starting (state this explicitly before the review), and the user MUST be warned that structural isolation is unavailable for that run.
 
 A reviewer that already saw the author's intent (e.g. from an earlier conversation turn) cannot self-certify forgetting it; treat such a run as non-isolated and mark it so in the report's Review Metadata.
@@ -223,7 +223,7 @@ Lead with the highest-severity, highest-likelihood bugs. Distinguish confirmed d
 
 ## 9. Re-Review (when iterating an existing review file)
 
-A re-review runs when `.agents/reviews/<name>/<code>.md` already exists and the user (or the orchestrator, e.g. `executing-feature-spec`) asks for another pass. The reviewer **does not start over** — it iterates the existing file in place.
+A re-review runs when `.agents/reviews/<name>/<code>.md` already exists and the user (or the orchestrator) asks for another pass. The reviewer **does not start over** — it iterates the existing file in place.
 
 1. **Read only the current review file.** Do not read sibling review files. This is the one controlled exception to the file-output isolation restriction.
 2. **Scope the re-review to non-terminal findings.** Terminal statuses are `Resolved` and `Won't Fix` (unless the user explicitly asks to reopen). Re-evaluate findings in `Open`, `In Review`, and `Escalated`:

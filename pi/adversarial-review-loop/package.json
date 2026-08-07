@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Pi extension: automated adversarial review loop (reviewer → fixer → verifier cycle)",
+  "description": "Pi extension: automated adversarial review loop — independent reviewer loops, each with same-reviewer re-review cycles (review → fix → consensus → next loop)",
   "pi": {
     "extensions": [
       "./index.ts"
@@ -17,12 +17,14 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@earendil-works/pi-ai": "^0.74.0",
-    "@earendil-works/pi-coding-agent": "^0.74.0"
+    "@earendil-works/pi-ai": "^0.84.0",
+    "@earendil-works/pi-coding-agent": "^0.84.0",
+    "@earendil-works/pi-tui": "^0.84.0"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.74.0",
-    "@earendil-works/pi-coding-agent": "^0.74.0",
+    "@earendil-works/pi-ai": "^0.84.0",
+    "@earendil-works/pi-coding-agent": "^0.84.0",
+    "@earendil-works/pi-tui": "^0.84.0",
     "@types/node": "^26.1.2",
     "typescript": "^5.5.0",
     "vitest": "^3.2.0"

@@ -1,21 +1,7 @@
 import {
   REVIEWER_SKILL_PATH,
-  RECONCILIATOR_SKILL_PATH,
   SUPERVISOR_SKILL_PATH,
 } from './skill-paths';
-
-/** How the LLM reconciliator is invoked after programmatic merge (fallback when supervisor is off). */
-export type ReconcileMode = 'on-conflict' | 'always' | 'never';
-
-/**
- * When the supervisor LLM runs.
- * - `on-multi` — only when the roster has more than one reviewer (default)
- * - `always` — even for a single generic reviewer
- * - `never` — use legacy programmatic merge + reconciliator
- */
-export const SUPERVISOR_MODES = ['on-multi', 'always', 'never'] as const;
-
-export type SupervisorMode = (typeof SUPERVISOR_MODES)[number];
 
 export interface ReviewerProfile {
   readonly id: string;
@@ -33,13 +19,6 @@ export interface ReviewerProfile {
 export interface SupervisorConfig {
   readonly model: string;
   readonly skillPath: string;
-  readonly mode: SupervisorMode;
-}
-
-export interface ReconciliatorConfig {
-  readonly model: string;
-  readonly skillPath: string;
-  readonly mode: ReconcileMode;
 }
 
 export interface DeadlockConfig {
@@ -50,9 +29,13 @@ export interface DeadlockConfig {
 export interface LoopConfig {
   readonly reviewers: readonly ReviewerProfile[];
   readonly supervisor: SupervisorConfig;
-  readonly reconciliator: ReconciliatorConfig;
   readonly fixerModel: string;
+  /** How many independent reviewer **loops** to run (each spawns a fresh set of reviewers). */
   readonly maxLoops: number;
+  /** Max **cycles** per loop — the same reviewers re-review the updated code up to this many times. */
+  readonly maxCycles: number;
+  /** How many reviewer/fixer agents may run concurrently (1 = sequential). */
+  readonly agentConcurrency: number;
   readonly deadlock: DeadlockConfig;
 }
 
@@ -60,7 +43,17 @@ export const DEFAULT_REVIEWER_MODEL = 'deepseek-v4-pro';
 
 export const DEFAULT_FIXER_MODEL = 'deepseek-v4-flash-free';
 
-export const DEFAULT_DEPTH = 5;
+/** Default number of loops (independent reviewer sets). */
+export const DEFAULT_MAX_LOOPS = 3;
+
+/** Default number of cycles per loop (same reviewers re-review up to this many times). */
+export const DEFAULT_MAX_CYCLES = 5;
+
+/** @deprecated Use {@link DEFAULT_MAX_CYCLES}. */
+export const DEFAULT_DEPTH = DEFAULT_MAX_CYCLES;
+
+/** Default parallel reviewer/fixer agents (reviewer fan-out + fixer waves). */
+export const DEFAULT_AGENT_CONCURRENCY = 5;
 
 interface BuiltinReviewer {
   readonly id: string;
@@ -165,7 +158,8 @@ export const BUILTIN_REVIEWERS: Readonly<Record<string, BuiltinReviewer>> = {
 };
 
 /**
- * Default loop config: single generic reviewer, no supervisor, hybrid reconcile fallback.
+ * Default loop config: single generic reviewer behind an always-on supervisor
+ * (brief + aggregate) — aggregation is always agent-driven.
  * @returns The default loop configuration
  */
 export const defaultLoopConfig = (): LoopConfig => ({
@@ -173,25 +167,10 @@ export const defaultLoopConfig = (): LoopConfig => ({
   supervisor: {
     model: DEFAULT_REVIEWER_MODEL,
     skillPath: SUPERVISOR_SKILL_PATH,
-    mode: 'on-multi',
-  },
-  reconciliator: {
-    model: DEFAULT_REVIEWER_MODEL,
-    skillPath: RECONCILIATOR_SKILL_PATH,
-    mode: 'on-conflict',
   },
   fixerModel: DEFAULT_FIXER_MODEL,
-  maxLoops: DEFAULT_DEPTH,
+  maxLoops: DEFAULT_MAX_LOOPS,
+  maxCycles: DEFAULT_MAX_CYCLES,
+  agentConcurrency: DEFAULT_AGENT_CONCURRENCY,
   deadlock: { flipThreshold: 2, action: 'escalate' },
 });
-
-/**
- * Whether this config should run the supervisor LLM for the current roster.
- * @param {LoopConfig} config Loop config
- * @returns True when brief + aggregate should run
- */
-export const usesSupervisor = (config: LoopConfig): boolean => {
-  if (config.supervisor.mode === 'always') return true;
-  if (config.supervisor.mode === 'never') return false;
-  return config.reviewers.length > 1;
-};

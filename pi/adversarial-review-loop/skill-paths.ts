@@ -20,20 +20,6 @@ export const FIXER_SKILL_PATH = path.join(
   'SKILL.md',
 );
 
-/** Absolute path to the bundled feature-spec SKILL.md (structure reference). */
-export const FEATURE_SPEC_SKILL_PATH = path.join(
-  SKILLS_ROOT,
-  'feature-spec',
-  'SKILL.md',
-);
-
-/** Absolute path to the bundled reconciliator SKILL.md (conflict-only LLM merge). */
-export const RECONCILIATOR_SKILL_PATH = path.join(
-  SKILLS_ROOT,
-  'adversarial-review-reconcile',
-  'SKILL.md',
-);
-
 /** Absolute path to the bundled supervisor SKILL.md (brief + aggregate). */
 export const SUPERVISOR_SKILL_PATH = path.join(
   SKILLS_ROOT,

@@ -1,6 +1,70 @@
-import { Effect } from 'effect';
+import { realpathSync } from 'node:fs';
+import { Data, Effect } from 'effect';
 import { FileSystem } from 'effect/FileSystem';
 import { Path } from 'effect/Path';
+import { isValidPresetName } from './preset-store';
+
+/** Error raised when a review name/path escapes `.agents/reviews/`. */
+export class ReviewPathError extends Data.TaggedError('ReviewPathError')<{
+  readonly message: string;
+}> {}
+
+/**
+ * Absolute root of the reviews directory: `<cwd>/.agents/reviews`.
+ * @param {Path} path The Path service
+ * @param {string} cwd Working directory
+ * @returns The absolute reviews root path
+ */
+export const reviewsRoot = (path: Path, cwd: string): string =>
+  path.resolve(cwd, '.agents', 'reviews');
+
+/**
+ * Resolve `p` to its real path, following symlinks. When a leaf on the path
+ * does not exist yet (e.g. a fresh review file that `ensureStateDirs` has
+ * not created), `realpathSync` throws ENOENT — in that case resolve the
+ * deepest existing ancestor and re-append the missing suffix, so a symlinked
+ * parent is still followed. Falls back to the lexical path only when no
+ * ancestor exists at all.
+ * @param {Path} path The Path service
+ * @param {string} p Path to resolve
+ * @returns The real path, or the lexical path when nothing exists
+ */
+const resolveRealOrLexical = (path: Path, p: string): string => {
+  const suffix: string[] = [];
+  let current = p;
+  for (;;) {
+    try {
+      return path.join(realpathSync(current), ...suffix.reverse());
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return p; // reached the fs root — give up
+      suffix.push(path.basename(current));
+      current = parent;
+    }
+  }
+};
+
+/**
+ * True when `candidate` resolves to a path inside `<cwd>/.agents/reviews`
+ * (or equal to it). Blocks path traversal (`../`), absolute paths that
+ * escape the reviews directory, and symlinked parents: both the root and the
+ * candidate are resolved to their real paths (`resolveRealOrLexical`) before
+ * the containment comparison, so `<cwd>/.agents/reviews/link/001.md` with
+ * `link` → `/etc` is rejected even when `/etc/001.md` does not exist yet,
+ * and a reviews root that is itself a symlink is compared by its real
+ * target.
+ * @param {Path} path The Path service
+ * @param {string} cwd Working directory
+ * @param {string} candidate Path to check
+ * @returns True when the resolved path is contained under the reviews root
+ */
+export const isWithinReviews = (path: Path, cwd: string, candidate: string): boolean => {
+  const root = reviewsRoot(path, cwd);
+  const resolved = path.resolve(candidate);
+  const realRoot = resolveRealOrLexical(path, root);
+  const realCandidate = resolveRealOrLexical(path, resolved);
+  return realCandidate === realRoot || realCandidate.startsWith(realRoot + path.sep);
+};
 
 /**
  * Resolve the standalone review file path under `.agents/reviews/<name>/`.
@@ -20,14 +84,22 @@ import { Path } from 'effect/Path';
  * @param {string} cwd Working directory the review belongs to
  * @param {string} reviewName `<name>` segment of `.agents/reviews/<name>/`
  * @param {boolean} fresh Allocate a new code instead of reusing the highest
- * @returns The absolute review file path
+ * @returns The absolute review file path, or ReviewPathError for names that
+ *   would escape `.agents/reviews/` (e.g. `../escape`, absolute paths)
  */
 export const resolveReviewFile = (
   cwd: string,
   reviewName: string,
   fresh: boolean,
-): Effect.Effect<string, never, FileSystem | Path> =>
+): Effect.Effect<string, ReviewPathError, FileSystem | Path> =>
   Effect.gen(function* () {
+    if (!isValidPresetName(reviewName)) {
+      return yield* Effect.fail(
+        new ReviewPathError({
+          message: `Invalid review name '${reviewName}': must match [a-zA-Z0-9][a-zA-Z0-9._-]* (no path separators, spaces, or '..')`,
+        }),
+      );
+    }
     const fileSystem = yield* FileSystem;
     const path = yield* Path;
 

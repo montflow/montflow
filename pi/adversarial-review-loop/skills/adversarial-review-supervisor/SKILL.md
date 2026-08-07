@@ -1,6 +1,6 @@
 ---
 name: adversarial-review-supervisor
-description: Scopes a multi-reviewer adversarial pass — drafts the brief for specialists and aggregates their scratch reports into one canonical review. Invoked only by the adversarial-review-loop orchestrator.
+description: Scopes an adversarial review pass — drafts the brief for the reviewer roster and aggregates their scratch reports into one canonical review. Always invoked by the adversarial-review-loop orchestrator.
 author: Daniel Montilla
 version: 1.0.0
 license: MIT
@@ -11,9 +11,9 @@ groups:
 
 # When To Use
 
-Invoked by the adversarial-review-loop orchestrator when the user selected a multi-reviewer roster (or `supervisor.mode=always`). Do not use for the default single-`generic` loop.
+Invoked by the adversarial-review-loop orchestrator on **every** review pass — the supervisor is always on and aggregation is always agent-driven (never programmatic merge).
 
-You receive **orchestrator instructions** each turn (brief or aggregate). Follow that turn's task exactly. You do **not** choose which specialists run — the roster is fixed by the user/config.
+You receive **orchestrator instructions** each turn (brief or aggregate). Follow that turn's task exactly. You do **not** choose which reviewers run — the roster is fixed by the user.
 
 # Mindset
 

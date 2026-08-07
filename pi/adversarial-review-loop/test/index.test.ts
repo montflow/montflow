@@ -3,11 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
-import { Option, Result } from 'effect';
+import { Option } from 'effect';
 
-import { getCurrentGitBranch, validateFeatureSpecFromBranch } from '../index';
+import { getCurrentGitBranch } from '../index';
 import { getUnstagedChanges } from '../git';
-import { runEffect, runResult, withProjectRoot, type TempDir } from './helpers';
+import { runEffect, withProjectRoot, type TempDir } from './helpers';
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -108,6 +108,22 @@ test('getUnstagedChanges: lists unstaged + untracked files and the diff', () => 
     expect(changes.files).toContain('new-file.ts');
     expect(changes.diff).toContain('README.md');
     expect(changes.diff).toContain('+changed');
+    // Untracked file content is materialized in the diff too (F11).
+    expect(changes.diff).toContain('new-file.ts');
+    expect(changes.diff).toContain('+export const x = 1;');
+  } finally {
+    cleanup();
+  }
+});
+
+test('getUnstagedChanges: materializes untracked files whose names start with a dash', () => {
+  const { tmp, cleanup } = withGitRepo('main');
+  try {
+    fs.writeFileSync(path.join(tmp, '-dash.ts'), 'export const y = 2;\n');
+
+    const changes = getUnstagedChanges(tmp);
+    expect(changes.files).toContain('-dash.ts');
+    expect(changes.diff).toContain('+export const y = 2;');
   } finally {
     cleanup();
   }
@@ -130,102 +146,6 @@ test('getUnstagedChanges: empty for a non-git directory', () => {
     const changes = getUnstagedChanges(tmp);
     expect(changes.files).toEqual([]);
     expect(changes.diff).toBe('');
-  } finally {
-    cleanup();
-  }
-});
-
-// ─── validateFeatureSpecFromBranch Tests ──────────────────────────────
-
-test('validateFeatureSpecFromBranch: returns specName for valid feat/* branch with feature dir', async () => {
-  const { tmp, cleanup } = withGitRepo('feat/auth-flow');
-  try {
-    // Create feature spec directory
-    const featureDir = path.join(tmp, '.agents/features/auth-flow');
-    fs.mkdirSync(featureDir, { recursive: true });
-    fs.writeFileSync(path.join(featureDir, 'FEATURE.md'), '---\nname: auth-flow\n---\n# Auth Flow');
-
-    const result = await runResult(validateFeatureSpecFromBranch(tmp));
-    expect(Result.isSuccess(result)).toBe(true);
-    if (Result.isFailure(result)) return;
-    expect(result.success).toBe('auth-flow');
-  } finally {
-    cleanup();
-  }
-});
-
-test('validateFeatureSpecFromBranch: fails when branch is not feat/* format', async () => {
-  const { tmp, cleanup } = withGitRepo('main');
-  try {
-    const result = await runResult(validateFeatureSpecFromBranch(tmp));
-    expect(Result.isFailure(result)).toBe(true);
-    if (Result.isSuccess(result)) return;
-    expect(result.failure.message).toContain("does not match expected format 'feat/<feature-name>'");
-  } finally {
-    cleanup();
-  }
-});
-
-test('validateFeatureSpecFromBranch: fails when branch is fix/* format', async () => {
-  const { tmp, cleanup } = withGitRepo('fix/bug-123');
-  try {
-    const result = await runResult(validateFeatureSpecFromBranch(tmp));
-    expect(Result.isFailure(result)).toBe(true);
-    if (Result.isSuccess(result)) return;
-    expect(result.failure.message).toContain("does not match expected format 'feat/<feature-name>'");
-  } finally {
-    cleanup();
-  }
-});
-
-test('validateFeatureSpecFromBranch: fails when feature directory does not exist', async () => {
-  const { tmp, cleanup } = withGitRepo('feat/nonexistent-feature');
-  try {
-    const result = await runResult(validateFeatureSpecFromBranch(tmp));
-    expect(Result.isFailure(result)).toBe(true);
-    if (Result.isSuccess(result)) return;
-    expect(result.failure.message).toContain('Feature directory not found');
-  } finally {
-    cleanup();
-  }
-});
-
-test('validateFeatureSpecFromBranch: fails when FEATURE.md does not exist', async () => {
-  const { tmp, cleanup } = withGitRepo('feat/auth-flow');
-  try {
-    // Create feature directory but no FEATURE.md
-    const featureDir = path.join(tmp, '.agents/features/auth-flow');
-    fs.mkdirSync(featureDir, { recursive: true });
-
-    const result = await runResult(validateFeatureSpecFromBranch(tmp));
-    expect(Result.isFailure(result)).toBe(true);
-    if (Result.isSuccess(result)) return;
-    expect(result.failure.message).toContain('FEATURE.md not found');
-  } finally {
-    cleanup();
-  }
-});
-
-test('validateFeatureSpecFromBranch: fails for non-git directory', async () => {
-  const { tmp, cleanup } = withProjectRoot({});
-  try {
-    const result = await runResult(validateFeatureSpecFromBranch(tmp));
-    expect(Result.isFailure(result)).toBe(true);
-    if (Result.isSuccess(result)) return;
-    expect(result.failure.message).toContain('Not a git repository');
-  } finally {
-    cleanup();
-  }
-});
-
-test('validateFeatureSpecFromBranch: fails for detached HEAD', async () => {
-  const { tmp, cleanup } = withGitRepo('feat/test');
-  try {
-    detachHead(tmp);
-    const result = await runResult(validateFeatureSpecFromBranch(tmp));
-    expect(Result.isFailure(result)).toBe(true);
-    if (Result.isSuccess(result)) return;
-    expect(result.failure.message).toContain('detached HEAD');
   } finally {
     cleanup();
   }
