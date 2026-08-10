@@ -11,6 +11,9 @@ import {
   type CreateAgentSessionOptions,
 } from '@earendil-works/pi-coding-agent';
 import type { StreamKind } from './stream';
+import { formatDuration } from './format';
+import type { TurnUsage } from './run-stats';
+import type { ThinkingLevel } from './config';
 
 /** Agent session creation failure (prompt-turn failures are reported via AgentRunResult). */
 export class AgentRunError extends Data.TaggedError('AgentRunError')<{
@@ -92,6 +95,11 @@ export interface AgentSessionOptions {
   readonly tools: readonly string[];
   readonly cwd: string;
   /**
+   * Optional extended-thinking level for this session (clamped to the
+   * model's capabilities by pi). Omitted = pi default.
+   */
+  readonly thinkingLevel?: ThinkingLevel;
+  /**
    * Optional live tool-activity callback for progress UI (e.g. the loop
    * widget). Fired from the agent event subscription; must not throw.
    */
@@ -102,6 +110,13 @@ export interface AgentSessionOptions {
    * not throw.
    */
   readonly onDelta?: (delta: string, kind: StreamKind) => void;
+  /**
+   * Optional usage callback fired once per completed turn with the summed
+   * provider-reported usage (tokens + cost) of the turn's assistant messages.
+   * Timed-out turns report nothing (their usage may be partial). Must not
+   * throw.
+   */
+  readonly onUsage?: (usage: TurnUsage) => void;
 }
 
 export interface AgentRunOptions extends AgentSessionOptions {
@@ -114,6 +129,7 @@ export interface PersistentAgent {
     timeoutMs?: number,
     onTool?: (activity: ToolActivity) => void,
     onDelta?: (delta: string, kind: StreamKind) => void,
+    onUsage?: (usage: TurnUsage) => void,
   ) => Effect.Effect<AgentRunResult>;
   readonly dispose: () => Effect.Effect<void>;
 }
@@ -227,6 +243,39 @@ const extractAssistantText = (events: readonly AgentSessionEvent[]): string => {
 };
 
 /**
+ * Sums the provider-reported usage of every assistant `message_end` in a
+ * turn (a turn can emit several assistant messages when tools run mid-turn;
+ * each carries its own usage). Tool-result usage is intentionally excluded
+ * (not part of main LLM context accounting). Returns undefined when no
+ * assistant message reported usage.
+ * @param {readonly AgentSessionEvent[]} events Events collected during a turn
+ * @returns The summed usage, or undefined
+ */
+const extractTurnUsage = (events: readonly AgentSessionEvent[]): TurnUsage | undefined => {
+  let total: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    cost?: { total: number };
+  } | undefined;
+  for (const event of events) {
+    if (event.type !== 'message_end') continue;
+    const message = event.message;
+    if (!('role' in message) || message.role !== 'assistant') continue;
+    const usage = (message as { usage?: TurnUsage }).usage;
+    if (usage === undefined) continue;
+    total ??= { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+    total.input += usage.input;
+    total.output += usage.output;
+    total.cacheRead += usage.cacheRead;
+    total.cacheWrite += usage.cacheWrite;
+    total.cost = { total: (total.cost?.total ?? 0) + (usage.cost?.total ?? 0) };
+  }
+  return total;
+};
+
+/**
  * Reports a tool event to the optional progress callback.
  * @param {(activity: ToolActivity) => void | undefined} onTool Progress callback
  * @param {Extract<AgentSessionEvent, { type: 'tool_execution_start' | 'tool_execution_end' }>} event The event
@@ -268,6 +317,9 @@ const ABORT_GRACE_MS = 30_000;
  * @param {string} modelLabel Model label for error messages
  * @param {number} [timeoutMs] Turn timeout in milliseconds (default 10 minutes)
  * @param {(activity: ToolActivity) => void} [onTool] Live tool-activity callback
+ * @param {(delta: string, kind: StreamKind) => void} [onDelta] Live token-delta callback
+ * @param {number} [abortGraceMs] How long to wait for a timed-out session to abort
+ * @param {(usage: TurnUsage) => void} [onUsage] Usage callback (completed turns only)
  * @returns The turn result
  */
 export const runOneTurn = (
@@ -278,6 +330,7 @@ export const runOneTurn = (
   onTool?: (activity: ToolActivity) => void,
   onDelta?: (delta: string, kind: StreamKind) => void,
   abortGraceMs: number = ABORT_GRACE_MS,
+  onUsage?: (usage: TurnUsage) => void,
 ): Effect.Effect<AgentRunResult> =>
   Effect.gen(function* () {
     const events: AgentSessionEvent[] = [];
@@ -334,7 +387,7 @@ export const runOneTurn = (
       );
       return {
         text: '',
-        error: `${modelLabel} — Agent run timed out after ${timeoutMs}ms`,
+        error: `${modelLabel} — Agent run timed out after ${formatDuration(timeoutMs)}`,
         timedOut: true,
       };
     }
@@ -343,6 +396,10 @@ export const runOneTurn = (
     }
 
     const text = extractAssistantText(events);
+    if (onUsage !== undefined) {
+      const usage = extractTurnUsage(events);
+      if (usage !== undefined) onUsage(usage);
+    }
     return text !== ''
       ? { text, error: undefined }
       : { text: '', error: `${modelLabel} — No assistant response produced` };
@@ -371,6 +428,8 @@ export const runAgent = (
         timeoutMs,
         options.onTool,
         options.onDelta,
+        undefined,
+        options.onUsage,
       );
     }),
   );
@@ -458,7 +517,7 @@ export const createPersistentAgent = (
   defaultTimeoutMs?: number,
 ): Effect.Effect<PersistentAgent, AgentRunError> =>
   Effect.map(createSession(options), (session) => ({
-    prompt: (task, timeoutMs, onTool, onDelta) =>
+    prompt: (task, timeoutMs, onTool, onDelta, onUsage) =>
       runOneTurn(
         session,
         task,
@@ -466,6 +525,8 @@ export const createPersistentAgent = (
         timeoutMs ?? defaultTimeoutMs,
         onTool ?? options.onTool,
         onDelta ?? options.onDelta,
+        undefined,
+        onUsage ?? options.onUsage,
       ),
     dispose: () => Effect.sync(() => session.dispose()),
   }));
@@ -487,11 +548,17 @@ export const retryPrompt = (
   defaultTimeoutMs: number,
   policy: RetryPolicy = DEFAULT_RETRY_POLICY,
 ): PersistentAgent['prompt'] =>
-  (task, timeoutMs, onTool, onDelta) =>
+  (task, timeoutMs, onTool, onDelta, onUsage) =>
     Effect.gen(function* () {
       let delay = policy.baseDelayMs;
       for (let attempt = 0; ; attempt++) {
-        const result = yield* prompt(task, timeoutMs ?? defaultTimeoutMs, onTool, onDelta);
+        const result = yield* prompt(
+          task,
+          timeoutMs ?? defaultTimeoutMs,
+          onTool,
+          onDelta,
+          onUsage,
+        );
         if (result.error === undefined || result.timedOut === true) return result;
         if (attempt >= policy.maxRetries) return result;
         if (classifyFailure(result.error) === 'permanent') return result;
@@ -551,6 +618,7 @@ const createSession = (
         agentDir: getAgentDir(),
         model,
         modelRuntime: runtime,
+        thinkingLevel: options.thinkingLevel,
         tools: [...options.tools],
         sessionManager: SessionManager.inMemory(),
         resourceLoader: loader,

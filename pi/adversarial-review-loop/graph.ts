@@ -28,8 +28,14 @@ import {
 } from './resolve-review-file';
 import { verifyLoopSkills, type SkillVerificationError } from './verify-skill';
 import { FIXER_SKILL_PATH } from './skill-paths';
+import { formatDuration } from './format';
+import { RunStats, type TurnUsage } from './run-stats';
 import type { LoopConfig, ReviewerProfile } from './config';
-import { defaultLoopConfig, DEFAULT_AGENT_CONCURRENCY } from './config';
+import {
+  defaultLoopConfig,
+  DEFAULT_AGENT_CONCURRENCY,
+  DEFAULT_SUPERVISOR_TIMEOUT_MS,
+} from './config';
 import {
   briefPath,
   ensurePassDirs,
@@ -84,14 +90,21 @@ export const MAX_FIXER_DISPATCH_ATTEMPTS = 3;
 export const REVIEWER_TIMEOUT = 900000;
 
 /**
+ * Effective per-turn supervisor budget (brief AND aggregate each get this):
+ * the configurable `supervisorTimeoutMs`, falling back to the default.
+ * @param {LoopConfig} config The loop config
+ * @returns The supervisor turn budget in ms
+ */
+const supervisorTimeout = (config: LoopConfig): number =>
+  config.supervisorTimeoutMs ?? DEFAULT_SUPERVISOR_TIMEOUT_MS;
+
+/**
  * Per-finding fixer turn budget: the fixer must apply a code change AND run
  * the repo's real checks (typecheck/lint/tests) in one turn. Matches the
  * reviewer budget — a 5-minute cap was the most common cause of fixer
  * timeouts that surfaced as "produced no scratch block".
  */
 export const FIXER_TIMEOUT = 900000;
-
-export const SUPERVISOR_TIMEOUT = 600000;
 
 export interface LoopOptions {
   readonly reviewerModel: string;
@@ -157,6 +170,12 @@ export interface GraphCtx {
    * reference pattern as `streams`).
    */
   readonly fixerActivity?: FixerActivityStore;
+  /**
+   * Accumulated run statistics (total wall time + summed provider-reported
+   * cost/tokens). One mutable instance for the whole run, shared with the
+   * loop widget (same reference pattern as `streams`).
+   */
+  readonly runStats?: RunStats;
   /** Persistent supervisor session for the whole loop (brief + aggregate). */
   readonly supervisor?: PersistentAgent;
   /**
@@ -466,6 +485,8 @@ const withWidget = (
     streams: patch.streams ?? base.streams ?? ctx.streams,
     // Same for the per-fixer tool store.
     fixerActivity: patch.fixerActivity ?? base.fixerActivity ?? ctx.fixerActivity,
+    // Same for the run statistics store (total time + cost).
+    stats: patch.stats ?? base.stats ?? ctx.runStats,
     fixers: patch.fixers ?? base.fixers,
     fixerSchedule: patch.fixerSchedule ?? base.fixerSchedule,
     fixerWave: patch.fixerWave ?? base.fixerWave,
@@ -480,6 +501,18 @@ const withWidget = (
   }
   return { ...ctx, widget };
 };
+
+/**
+ * Builds a usage callback that accumulates a turn's provider-reported usage
+ * into the run's shared stats store (total cost / tokens). No-op when the
+ * store is absent (e.g. headless callers that never pushed a widget).
+ * @param {GraphCtx} ctx Graph context (carries the shared stats store)
+ * @returns The usage callback for one agent turn
+ */
+const trackUsage = (ctx: GraphCtx): ((usage: TurnUsage) => void) =>
+  (usage) => {
+    ctx.runStats?.addUsage(usage);
+  };
 
 /**
  * Builds a tool-activity callback that live-updates the widget's "now" line
@@ -880,15 +913,17 @@ const ensureSupervisor = (
         systemPrompt: SUPERVISOR_SYSTEM,
         tools: TOOLS.supervisor,
         cwd: ctx.cwd,
+        thinkingLevel: config.supervisor.thinkingLevel,
+        onUsage: trackUsage(ctx),
       },
-      SUPERVISOR_TIMEOUT,
+      supervisorTimeout(config),
     );
     const supervisor: PersistentAgent = {
       ...created,
       // Transient failures (rate limits, overloads) retry on the same
       // session with backoff; timeouts return immediately (the caller drops
       // the poisoned session — see dropSupervisor).
-      prompt: retryPrompt(created.prompt, SUPERVISOR_TIMEOUT, policy),
+      prompt: retryPrompt(created.prompt, supervisorTimeout(config), policy),
     };
     // Register eagerly: if a defect escapes before the new ctx is returned,
     // runGraph's ensuring can still dispose via the holder.
@@ -997,6 +1032,8 @@ const ensureReviewerSession = (
         systemPrompt: buildReviewerSystem(profile),
         tools: TOOLS.reviewer,
         cwd: ctx.cwd,
+        thinkingLevel: profile.thinkingLevel,
+        onUsage: trackUsage(ctx),
       },
       REVIEWER_TIMEOUT,
     );
@@ -1276,7 +1313,7 @@ const review: GraphNode = (ctx, deps) =>
     const preBrief = yield* mtimeMs(fileSystem, briefFile);
     const briefResult = yield* briefSupervisor.prompt(
       buildSupervisorBriefTask(runningCtx, config, briefFile, loop + 1, cycle),
-      SUPERVISOR_TIMEOUT,
+      supervisorTimeout(config),
       toolProgress(runningCtx, 'supervisor brief'),
       agentDelta(runningCtx, 'supervisor', 'supervisor'),
     );
@@ -1300,7 +1337,7 @@ const review: GraphNode = (ctx, deps) =>
       yield* notify(
         ui,
         briefTimedOut
-          ? `Supervisor brief timed out after ${SUPERVISOR_TIMEOUT}ms — retrying the review pass with a fresh session.`
+          ? `Supervisor brief timed out after ${formatDuration(supervisorTimeout(config))} — retrying the review pass with a fresh session.`
           : briefMissing && briefResult.error === undefined
             ? 'Supervisor brief missing or empty after brief turn — refusing to fan out reviewers without scope.'
             : `Supervisor brief error: ${briefResult.error ?? 'brief file empty or missing'}`,
@@ -1498,7 +1535,7 @@ const review: GraphNode = (ctx, deps) =>
       const preAgg = yield* mtimeMs(fileSystem, reviewFile);
       const aggResult = yield* supervisorAgent.prompt(
         buildSupervisorAggregateTask(runningCtx, config, briefFile, loop + 1, cycle, scratchFiles),
-        SUPERVISOR_TIMEOUT,
+        supervisorTimeout(config),
         toolProgress(runningCtx, 'supervisor aggregate'),
         agentDelta(runningCtx, 'supervisor', 'supervisor'),
       );
@@ -1521,7 +1558,7 @@ const review: GraphNode = (ctx, deps) =>
         yield* notify(
           ui,
           aggTimedOut
-            ? `Supervisor aggregate timed out after ${SUPERVISOR_TIMEOUT}ms — retrying the review pass with a fresh session.`
+            ? `Supervisor aggregate timed out after ${formatDuration(supervisorTimeout(config))} — retrying the review pass with a fresh session.`
             : `Supervisor aggregate failed (${aggResult.error ?? 'empty canonical'}) — retrying the review pass.`,
           'error',
         );
@@ -1720,7 +1757,7 @@ export const fixerFailureMessage = (
     case 'agent-error':
       return `Fixer for ${findingId}: agent run failed (${outcome.reason}). ${unrecorded}`;
     case 'timeout':
-      return `Fixer for ${findingId}: timed out after ${outcome.ms}ms (${outcome.reason}). A fix may be partially applied — ${unrecorded}`;
+      return `Fixer for ${findingId}: timed out after ${formatDuration(outcome.ms)} (${outcome.reason}). A fix may be partially applied — ${unrecorded}`;
     case 'scratch-missing':
       return `Fixer for ${findingId}: finished but wrote no scratch block (expected ${scratchPath}). ${unrecorded}`;
     case 'scratch-unparseable':
@@ -1933,8 +1970,10 @@ const runFindingFixer = (
           task,
           tools: TOOLS.fixer,
           cwd: ctx.cwd,
+          thinkingLevel: fixerConfig.fixerThinkingLevel,
           onTool: fixerToolProgress(ctx, finding.id),
           onDelta: agentDelta(ctx, `fixer:${finding.id}`, `fixer ${finding.id}`),
+          onUsage: trackUsage(ctx),
         }),
         FIXER_TIMEOUT,
         deps.retryPolicy,
@@ -2403,7 +2442,8 @@ export const runGraph = (
     // handle the focus command (/adversarial-review-loop-focus) reads/re-pushes.
     const streams = ctx.streams ?? new StreamStore();
     const fixerActivity = ctx.fixerActivity ?? new FixerActivityStore();
-    ctx = { ...ctx, streams, fixerActivity };
+    const runStats = ctx.runStats ?? new RunStats();
+    ctx = { ...ctx, streams, fixerActivity, runStats };
     activeLoop = {
       streams,
       ui: ctx.ui,

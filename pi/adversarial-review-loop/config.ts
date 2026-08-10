@@ -3,12 +3,27 @@ import {
   SUPERVISOR_SKILL_PATH,
 } from './skill-paths';
 
+/**
+ * Pi extended-thinking level for an agent role: `off` disables thinking,
+ * `minimal`…`max` scale the reasoning effort. The level is clamped to the
+ * model's capabilities by pi at session creation (`thinkingLevelMap`), so an
+ * unsupported level never fails the run — it silently maps to the nearest
+ * supported one. Omitted (undefined) means "pi default" (`medium` clamped to
+ * the model).
+ */
+export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
 export interface ReviewerProfile {
   readonly id: string;
   readonly label: string;
   readonly model: string;
   /** Optional ordered fallback models tried after `model` fails (rate limits, overloads). */
   readonly fallbackModels?: readonly string[];
+  /**
+   * Optional extended-thinking level for this reviewer's sessions. Omitted =
+   * pi default (medium clamped to the model).
+   */
+  readonly thinkingLevel?: ThinkingLevel;
   readonly skillPath: string;
   /** Specialist objective / focus lens for this reviewer. */
   readonly objective: string;
@@ -23,6 +38,12 @@ export interface SupervisorConfig {
   readonly skillPath: string;
   /** Optional ordered fallback models tried after `model` fails. */
   readonly fallbackModels?: readonly string[];
+  /**
+   * Optional extended-thinking level for the supervisor's sessions (brief +
+   * aggregate both inherit it). Omitted = pi default (medium clamped to the
+   * model).
+   */
+  readonly thinkingLevel?: ThinkingLevel;
 }
 
 export interface DeadlockConfig {
@@ -36,12 +57,23 @@ export interface LoopConfig {
   readonly fixerModel: string;
   /** Optional ordered fallback models tried after `fixerModel` fails. */
   readonly fixerFallbackModels?: readonly string[];
+  /**
+   * Optional extended-thinking level for every fixer session. Omitted = pi
+   * default (medium clamped to the model).
+   */
+  readonly fixerThinkingLevel?: ThinkingLevel;
   /** How many independent reviewer **loops** to run (each spawns a fresh set of reviewers). */
   readonly maxLoops: number;
   /** Max **cycles** per loop — the same reviewers re-review the updated code up to this many times. */
   readonly maxCycles: number;
   /** How many reviewer/fixer agents may run concurrently (1 = sequential). */
   readonly agentConcurrency: number;
+  /**
+   * Per-turn supervisor budget in ms (brief AND aggregate each get this).
+   * Optional for legacy configs/presets; defaults to
+   * {@link DEFAULT_SUPERVISOR_TIMEOUT_MS} at use time.
+   */
+  readonly supervisorTimeoutMs?: number;
   readonly deadlock: DeadlockConfig;
 }
 
@@ -60,6 +92,14 @@ export const DEFAULT_DEPTH = DEFAULT_MAX_CYCLES;
 
 /** Default parallel reviewer/fixer agents (reviewer fan-out + fixer waves). */
 export const DEFAULT_AGENT_CONCURRENCY = 5;
+
+/**
+ * Default per-turn supervisor budget (brief AND aggregate each get this).
+ * 20 minutes: the supervisor must read every reviewer's scratch file plus the
+ * full findings/discussion state before writing the canonical review — the
+ * old 10-minute cap was a common cause of aggregate timeouts on large reviews.
+ */
+export const DEFAULT_SUPERVISOR_TIMEOUT_MS = 1_200_000;
 
 interface BuiltinReviewer {
   readonly id: string;
@@ -81,11 +121,13 @@ export const makeReviewerProfile = (input: {
   readonly skillPath: string;
   readonly objective: string;
   readonly fallbackModels?: readonly string[];
+  readonly thinkingLevel?: ThinkingLevel;
 }): ReviewerProfile => ({
   id: input.id,
   label: input.label,
   model: input.model,
   fallbackModels: input.fallbackModels,
+  thinkingLevel: input.thinkingLevel,
   skillPath: input.skillPath,
   objective: input.objective,
   focus: input.objective,
@@ -180,5 +222,6 @@ export const defaultLoopConfig = (): LoopConfig => ({
   maxLoops: DEFAULT_MAX_LOOPS,
   maxCycles: DEFAULT_MAX_CYCLES,
   agentConcurrency: DEFAULT_AGENT_CONCURRENCY,
+  supervisorTimeoutMs: DEFAULT_SUPERVISOR_TIMEOUT_MS,
   deadlock: { flipThreshold: 2, action: 'escalate' },
 });

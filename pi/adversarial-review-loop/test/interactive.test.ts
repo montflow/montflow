@@ -120,19 +120,32 @@ test('settingsMenuItems: shows current values and the done action', () => {
   expect(items.some((item) => item.startsWith('Max cycles'))).toBe(true);
   expect(items.some((item) => item.startsWith('Fixer model'))).toBe(true);
   expect(items.some((item) => item.startsWith('Fixer fallback models'))).toBe(true);
+  expect(items.some((item) => item.startsWith('Fixer thinking level'))).toBe(true);
   expect(items.some((item) => item.startsWith('Supervisor model'))).toBe(true);
   expect(items.some((item) => item.startsWith('Supervisor fallback models'))).toBe(true);
+  expect(items.some((item) => item.startsWith('Supervisor thinking level'))).toBe(true);
   expect(items.some((item) => item.startsWith('Deadlock flip threshold'))).toBe(true);
   expect(items.some((item) => item.startsWith('Fixer concurrency'))).toBe(true);
+  expect(items.some((item) => item.startsWith('Supervisor timeout'))).toBe(true);
   expect(items[items.length - 1]).toBe('✓ Done — start review');
   expect(items[0]).toContain(String(settings.maxLoops));
   expect(items[1]).toContain(String(settings.maxCycles));
   expect(settings.agentConcurrency).toBe(5);
+  // Supervisor timeout defaults to 20 minutes and renders as minutes.
+  expect(settings.supervisorTimeoutMs).toBe(1_200_000);
+  expect(
+    items.some((item) => item.startsWith('Supervisor timeout') && item.includes('20')),
+  ).toBe(true);
   // Fallback lists default to empty ("none") and render in the menu.
   expect(settings.fixerFallbackModels).toEqual([]);
   expect(settings.supervisorFallbackModels).toEqual([]);
   expect(items.some((item) => item.startsWith('Fixer fallback models') && item.includes('none'))).toBe(true);
   expect(items.some((item) => item.startsWith('Supervisor fallback models') && item.includes('none'))).toBe(true);
+  // Thinking levels default to unset and render as 'default'.
+  expect(settings.fixerThinkingLevel).toBeUndefined();
+  expect(settings.supervisorThinkingLevel).toBeUndefined();
+  expect(items.some((item) => item.startsWith('Fixer thinking level') && item.includes('default'))).toBe(true);
+  expect(items.some((item) => item.startsWith('Supervisor thinking level') && item.includes('default'))).toBe(true);
 });
 
 // ─── buildScopeClause ────────────────────────────────────────────────
@@ -307,6 +320,58 @@ test('create preset: added profile reviewer lands in the roster and menu reflect
     { type: 'builtin', id: 'generic' },
     { type: 'profile', name: 'security-auditor', model: 'deepseek/deepseek-v4-pro' },
   ]);
+});
+
+test('create preset: fixer/supervisor thinking levels persist into the preset file', async () => {
+  const { ui } = scriptedUi(
+    [
+      'Preset',
+      'Create preset',
+      '✓ Done — choose settings',
+      'Fixer thinking level             [default]',
+      'high',
+      'Supervisor thinking level        [default]',
+      'max',
+      '✓ Done — create preset',
+      'Exit',
+    ],
+    [],
+    ['thinking-demo'],
+  );
+
+  const setup = await runInteractiveSetup(fakePi(createEventBus()), makeCtx(dir, ui));
+  expect(setup).toBeNull();
+  const stored = JSON.parse(
+    fs.readFileSync(path.join(dir, '.agents/review-presets/thinking-demo.json'), 'utf8'),
+  ) as {
+    config: { fixerThinkingLevel?: string; supervisor?: { thinkingLevel?: string } };
+  };
+  expect(stored.config.fixerThinkingLevel).toBe('high');
+  expect(stored.config.supervisor?.thinkingLevel).toBe('max');
+});
+
+test('create preset: per-reviewer thinking level persists into the stored reference', async () => {
+  const { ui } = scriptedUi(
+    [
+      'Preset',
+      'Create preset',
+      '~ Thinking level of a reviewer',
+      'Generic (deepseek-v4-pro)',
+      'xhigh',
+      '✓ Done — choose settings',
+      '✓ Done — create preset',
+      'Exit',
+    ],
+    [],
+    ['thinking-reviewer'],
+  );
+
+  const setup = await runInteractiveSetup(fakePi(createEventBus()), makeCtx(dir, ui));
+  expect(setup).toBeNull();
+  const stored = JSON.parse(
+    fs.readFileSync(path.join(dir, '.agents/review-presets/thinking-reviewer.json'), 'utf8'),
+  ) as { config: { reviewers: Array<{ thinkingLevel?: string }> } };
+  expect(stored.config.reviewers[0]?.thinkingLevel).toBe('xhigh');
 });
 
 test('wizard: cancel at the action menu aborts the setup', async () => {

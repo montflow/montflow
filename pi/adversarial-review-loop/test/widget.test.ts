@@ -1,5 +1,6 @@
 import { test, expect, vi } from 'vitest';
 import { Option } from 'effect';
+import { visibleWidth } from '@earendil-works/pi-tui';
 import {
   clearLoopWidget,
   fixerStatusLabel,
@@ -12,6 +13,7 @@ import {
   type LoopWidgetState,
 } from '../widget';
 import { StreamStore, FixerActivityStore } from '../stream';
+import { RunStats } from '../run-stats';
 
 /** Sample state used across render tests. */
 const sampleState = (): LoopWidgetState => ({
@@ -108,13 +110,46 @@ test('setLoopWidget: pushes a component factory that renders the state', () => {
   const factory = setWidget.mock.calls[0]?.[1] as (
     tui: unknown,
     theme: unknown,
-  ) => { render(): string[]; dispose?(): void };
+  ) => { render(width?: number): string[]; dispose?(): void };
   const component = factory({ requestRender: () => {} }, theme);
   expect(component.render().join('\n')).toContain('cycle 2/5');
   component.dispose?.();
 
   clearLoopWidget({ setWidget });
   expect(setWidget).toHaveBeenCalledWith('adversarial-review-loop', undefined);
+});
+
+test('setLoopWidget: truncates every rendered line to the viewport width (wide waves line crash)', () => {
+  const setWidget = vi.fn();
+  const theme = { fg: (_c: string, t: string) => t, bold: (t: string) => t } as never;
+  // Many findings → the waves diagram line would exceed any real terminal width
+  // (the crash: "Rendered line exceeds terminal width").
+  const findings = Array.from({ length: 46 }, (_, i) => `F${i + 1}`);
+  const state: LoopWidgetState = {
+    ...sampleState(),
+    fixer: 'running',
+    fixerWave: 1,
+    fixerSchedule: findings.map((id) => [id]),
+    fixers: findings.map((id) => ({ id, status: 'queued' })),
+  };
+  setLoopWidget({ setWidget, theme }, state);
+  const factory = setWidget.mock.calls[0]?.[1] as (
+    tui: unknown,
+    theme: unknown,
+  ) => { render(width: number): string[]; dispose?(): void };
+  const component = factory({ requestRender: () => {} }, theme);
+
+  for (const width of [121, 80, 40]) {
+    const lines = component.render(width);
+    for (const [index, line] of lines.entries()) {
+      // Same measurement pi's TUI enforces: visible width incl. ANSI handling.
+      expect(
+        visibleWidth(line),
+        `line ${index} exceeds width ${width}: "${line}"`,
+      ).toBeLessThanOrEqual(width);
+    }
+  }
+  component.dispose?.();
 });
 
 test('renderLoopWidget: shows the phase elapsed timer', () => {
@@ -229,6 +264,43 @@ test('renderLoopWidget: decision banner when waiting on the user', () => {
 });
 
 // ─── Focused stream view ─────────────────────────────────────────────
+
+test('renderLoopWidget: shows total run time and summed cost once turns report usage', () => {
+  const stats = new RunStats(1_000_000);
+  stats.addUsage({
+    input: 1000,
+    output: 500,
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: { total: 0.42 },
+  });
+  const now = 1_000_000 + 5 * 60 * 1000 + 30 * 1000; // 5m 30s into the run
+  const lines = renderLoopWidget({ ...sampleState(), stats }, undefined, now);
+
+  // Header: phase timer (current) + total run time next to it.
+  expect(lines[0]).toContain('5m 30s');
+  expect(lines[0]).toContain('total 5m 30s');
+  // Run line: summed cost + turn count.
+  expect(lines.some((line) => line.includes('$0.42') && line.includes('1 turns'))).toBe(true);
+});
+
+test('renderLoopWidget: hides cost until a turn reports usage', () => {
+  const lines = renderLoopWidget(sampleState());
+  expect(lines.some((line) => line.includes('$'))).toBe(false);
+  expect(lines.some((line) => line.includes('total'))).toBe(false);
+});
+
+test('renderLoopWidget: focused view header carries total time and cost too', () => {
+  const stats = new RunStats(2_000_000);
+  stats.addUsage({ input: 10, output: 5, cacheRead: 0, cacheWrite: 0, cost: { total: 0.003 } });
+  const lines = renderLoopWidget(
+    { ...sampleState(), stats, focused: 'reviewer:generic' },
+    undefined,
+    2_000_000 + 60_000,
+  );
+  expect(lines[0]).toContain('total 1m');
+  expect(lines[0]).toContain('$0.003');
+});
 
 test('renderLoopWidget: focused view shows the agent stream tail + hint', () => {
   const streams = new StreamStore();

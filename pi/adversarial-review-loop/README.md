@@ -29,8 +29,9 @@ Running `/adversarial-review-loop` (in the TUI) opens an interactive setup wizar
    - **Pick…** — type space-separated files/directories with **file autocomplete** (path/directory suggestions appear as you type; Tab or Enter applies a suggestion), a free-form focus prompt, or `.` for the whole directory. Paths that exist become the file scope; any other text becomes the focus prompt.
    - **Directive…** — a free-form prompt for the supervisor: describe *what* you want reviewed ("only the file-signing flow in `src/crypto/`", "check the import feature") and the supervisor treats it as the authoritative intent for the pass — it locates the relevant code itself (read/grep/glob) and scopes the specialists to it, instead of you naming files.
 3. **Reviewer roster** (inside **Create / Modify preset**) — starts with a single built-in `generic` reviewer (no profile needed). `+ Add reviewer` lists the **profiles stored in the current repo** (`.agents/profiles/`, via the `@montflow/profiles` extension) with their descriptions — type to search. Each added reviewer gets a **model** pick from a searchable list of **every model available in the session**, **preselected with the model you are currently using** (the profile's preferred model stays reachable via search). The same picker backs "Change model of a reviewer", "Fallback models of a reviewer", and the fixer/supervisor model settings. Change/remove reviewers freely.
-4. **Settings** (inside **Create / Modify preset**) — edit **max loops** (how many independent reviewer sets run), **max cycles per loop** (how many times the same reviewers re-review), **fixer model**, **supervisor model**, **fallback model chains**, and **deadlock flip threshold**. The supervisor itself is always on.
-5. **Run** — the chosen preset + confirmed scope become the loop options and the loop starts immediately.
+4. **Settings** (inside **Create / Modify preset**) — edit **max loops** (how many independent reviewer sets run), **max cycles per loop** (how many times the same reviewers re-review), **fixer model**, **supervisor model**, **fallback model chains**, **deadlock flip threshold**, and the **supervisor timeout** (minutes per supervisor turn — brief and aggregate each get this budget; enter `0` to restore the 20-minute default). The supervisor itself is always on.
+5. **Thinking levels** (per role) — every agent (each reviewer, the supervisor, the fixer) has its own extended-thinking level: **off** · **minimal** · **low** · **medium** · **high** · **xhigh** · **max**, or **default** (pi's own default, `medium` clamped to the model's capabilities). Set them in the wizard via **Settings → fixer/supervisor thinking level** and roster → **Thinking level of a reviewer**, or directly in the preset JSON (`thinkingLevel` per reviewer reference, `supervisor.thinkingLevel`, `fixerThinkingLevel`). Unsupported levels are clamped by pi at session creation (`thinkingLevelMap`), so a level a model cannot express silently maps to the nearest one it can. Use `off` to cut cost/latency on mechanical roles (e.g. a style/linguist reviewer), `max` for deep adversarial passes.
+6. **Run** — the chosen preset + confirmed scope become the loop options and the loop starts immediately.
 
 Every menu offers a **`← Back`** option that steps up to the previous menu (scope → action
 menu; in preset operations, back returns to the preset submenu, and the preset submenu's back
@@ -145,6 +146,16 @@ thinking deltas) — **`Ctrl+Shift+F`**, one keypress while the loop runs:
   `/adversarial-review-loop-focus reviewer:security` or `/adversarial-review-loop-focus supervisor`.
 - **`/adversarial-review-loop-focus off`** — returns the widget to the roster view.
 
+> **Terminal requirement for the keybinds.** `Ctrl+Shift+letter` cannot be expressed in
+> legacy terminal escape codes — terminals only send it distinctly when the **kitty
+> keyboard protocol** is active (Ghostty, kitty, WezTerm, and modern terminal emulators
+> negotiate it automatically with the TUI). In a terminal without it, `Ctrl+Shift+F`
+> arrives as `Ctrl+F` (cursor right) and `Ctrl+Shift+I` as Tab, so the binds silently do
+> nothing. Sanity check: pi's built-in `Shift+Ctrl+P` (cycle model backward) uses the same
+> mechanism — if that doesn't work either, the terminal protocol is the issue, not this
+> extension. The `/adversarial-review-loop-focus` and `/adversarial-review-loop-findings`
+> commands work in every terminal as fallbacks.
+
 The focused widget keeps the header (loop/cycle/phase/elapsed) and the live `now` tool
 line, and shows the agent's stream tail (text, falling back to thinking when only
 reasoning has streamed). The stream store is capped (keeps the tail) so long briefs and
@@ -156,8 +167,9 @@ While the loop runs you can open an interactive **findings table** — the full 
 what the reviewers found and where each finding stands:
 
 - **`Ctrl+Shift+I`** (in the TUI) — opens the browser. No command needed — one keypress
-  while the loop runs.
-- **`/adversarial-review-loop-findings`** — the same browser as a command.
+  while the loop runs (same kitty-protocol requirement as `Ctrl+Shift+F` above).
+- **`/adversarial-review-loop-findings`** — the same browser as a command (works in any
+  terminal).
 
 The browser shows every finding in the canonical review file as a table row:
 `F5 · Major · <title>` with a secondary line carrying `status · attempts · fixer
@@ -204,11 +216,12 @@ Preset files are validated by the Effect Schema in `preset-schema.ts`
   "name": "security-audit",
   "config": {
     "reviewers": [
-      { "type": "builtin", "id": "generic" },
+      { "type": "builtin", "id": "generic", "thinkingLevel": "max" },
       { "type": "profile", "name": "security-auditor", "model": "anthropic/claude-sonnet-4-5" }
     ],
-    "supervisor": { "model": "deepseek-v4-pro" },
+    "supervisor": { "model": "deepseek-v4-pro", "thinkingLevel": "xhigh" },
     "fixerModel": "deepseek-v4-flash-free",
+    "fixerThinkingLevel": "low",
     "maxLoops": 3,
     "maxCycles": 5,
     "agentConcurrency": 5,
@@ -223,6 +236,11 @@ Reviewers are stored as **references**, not expanded profiles:
   The `model` field is omitted when it equals the builtin's default.
 - `{ "type": "profile", "name": "security-auditor", "model": "…" }` — a profile
   from `.agents/profiles/`, with the model chosen when it was added.
+
+Each reviewer reference, the supervisor, and the fixer can additionally pin a
+**thinking level** (`off` · `minimal` · `low` · `medium` · `high` · `xhigh` · `max`)
+via `thinkingLevel` (reviewer refs / `supervisor`) or `fixerThinkingLevel`; the field is
+omitted when unset (pi default applies at use time, clamped to the model).
 
 The objective text, label, and bundled skill paths are **never stored** — they are
 resolved at **Use / Modify** time (`preset-resolve.ts`) from the builtin catalog or the
@@ -324,11 +342,15 @@ Equivalent to:
 ```
 
 The wizard edits `maxLoops`, `maxCycles`, `fixer.model`, `supervisor.model`,
-`deadlock.flipThreshold`, and `agentConcurrency` interactively. Presets persist this
-configuration in the **runtime shape** (`fixerModel` / `skillPath` — see [Preset file
-format](#preset-file-format-effect-schema)). `agentConcurrency` defaults to **5** and caps
-how many reviewer/fixer agents run in parallel (reviewer fan-out and fixer waves; 1 =
-fully sequential); legacy presets without it default to 5.
+`deadlock.flipThreshold`, and `agentConcurrency` interactively — and, per role, the
+**thinking level** (`thinkingLevel` on each reviewer, `supervisor.thinkingLevel`,
+`fixerThinkingLevel`). Unset levels default to pi's own default (`medium` clamped to the
+model's capabilities); pi clamps a level the model does not support to the nearest one it
+does. Presets persist this configuration in the **runtime shape** (`fixerModel` /
+`skillPath` — see [Preset file format](#preset-file-format-effect-schema)).
+`agentConcurrency` defaults to **5** and caps how many reviewer/fixer agents run in
+parallel (reviewer fan-out and fixer waves; 1 = fully sequential); legacy presets without
+it default to 5.
 
 ### Built-in reviewer ids
 
@@ -380,7 +402,11 @@ Action: mark finding(s) `Escalated` with an `[Orchestrator]` Discussion turn.
 
 Uses Pi `ctx.ui.setWidget` (interactive TUI / RPC). Renders a colored, summary-first
 status board above the editor: **loop/cycle progress** (`loop 1/3 · cycle 2/5`) + current
-phase with a **spinner and a live elapsed timer**, loop-level banners for **consensus**
+phase with a **spinner and a live elapsed timer**, the **total run time and summed cost**
+(header `· total 12m 5s`; a `run` line with **`$0.42 · 47 turns`** once the first agent
+turn reports usage — cost comes straight from each provider's per-turn usage, so it sums
+supervisor brief/aggregate, every reviewer, and every fixer), loop-level banners for
+**consensus**
 (✓ loop complete — fresh reviewers next) and the **cycle-max decision** (waiting on you),
 the findings scoreboard (open / in-review / resolved / escalated, with a deadlock warning),
 supervisor status, per-reviewer status (queued / reviewing / done, with finding counts, all

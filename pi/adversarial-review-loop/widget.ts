@@ -1,6 +1,9 @@
 import type { ExtensionUIContext, Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
+import { truncateToWidth } from '@earendil-works/pi-tui';
 import type { SummaryCounts } from './parse-summary';
 import type { FixerActivityStore, StreamStore } from './stream';
+import type { RunStats } from './run-stats';
+import { formatCost } from './format';
 import { Option } from 'effect';
 
 export type ReviewerRunStatus = 'pending' | 'running' | 'done' | 'error' | 'skipped';
@@ -70,6 +73,11 @@ export interface LoopWidgetState {
    * the 1s re-render timer shows fresh deltas without re-pushing the widget.
    */
   readonly streams?: StreamStore;
+  /**
+   * Run statistics (total wall time + summed cost/tokens) — same mutable
+   * reference pattern as `streams`, read live by the re-render timer.
+   */
+  readonly stats?: RunStats;
   /** Live per-fixer tool store (same mutable reference across renders). */
   readonly fixerActivity?: FixerActivityStore;
   /** Per-fixer rows while the fixer phase runs (finding id → status). */
@@ -240,6 +248,35 @@ const spinnerFrame = (now: number): string =>
   SPINNER_FRAMES[Math.floor(now / 1000) % SPINNER_FRAMES.length] ?? '◐';
 
 /**
+ * Total-run elapsed fragment for a header, e.g. `· total 12m 5s`. Empty when
+ * the stats store is absent (never pushed).
+ * @param {LoopWidgetState} state Widget state
+ * @param {number} now Current epoch ms
+ * @param {Theme | undefined} theme Current theme
+ * @returns The header fragment
+ */
+const totalTimeFragment = (
+  state: LoopWidgetState,
+  now: number,
+  theme: Theme | undefined,
+): string =>
+  state.stats === undefined
+    ? ''
+    : paint(theme, 'dim', `  · total ${formatElapsed(now, state.stats.startedAt)}`);
+
+/**
+ * Summed-cost fragment, e.g. `· $0.42`. Empty until at least one turn has
+ * reported usage (or the stats store is absent).
+ * @param {LoopWidgetState} state Widget state
+ * @param {Theme | undefined} theme Current theme
+ * @returns The header fragment
+ */
+const costFragment = (state: LoopWidgetState, theme: Theme | undefined): string =>
+  state.stats === undefined || state.stats.totalTurns === 0
+    ? ''
+    : paint(theme, 'dim', `  · ${formatCost(state.stats.totalCost)}`);
+
+/**
  * Formats a duration as `42s`, `2m 5s`, or `1h 3m`.
  * @param {number} now Current epoch ms
  * @param {number} startedAt Phase start epoch ms
@@ -295,7 +332,9 @@ const renderFocusedStream = (
       paint(theme, 'dim', `  loop ${state.loop + 1}/${state.maxLoops}`) +
       paint(theme, 'dim', `  · cycle ${state.cycle + 1}/${state.maxCycles}`) +
       paint(theme, 'accent', `  · ${spinnerFrame(now)} ${phaseLabel(state.phase)}`) +
-      elapsed,
+      elapsed +
+      totalTimeFragment(state, now, theme) +
+      costFragment(state, theme),
   );
 
   const key = state.focused;
@@ -405,8 +444,22 @@ export const renderLoopWidget = (state: LoopWidgetState, theme?: Theme, now: num
       paint(theme, 'dim', `  loop ${state.loop + 1}/${state.maxLoops}`) +
       paint(theme, 'dim', `  · cycle ${state.cycle + 1}/${state.maxCycles}`) +
       paint(theme, 'accent', `  · ${spinnerFrame(now)} ${phaseLabel(state.phase)}`) +
-      elapsed,
+      elapsed +
+      totalTimeFragment(state, now, theme) +
+      costFragment(state, theme),
   );
+
+  // Run-level scoreboard: summed cost + turns (appears once turns report usage).
+  if (state.stats !== undefined && state.stats.totalTurns > 0) {
+    lines.push(
+      paint(theme, 'muted', 'run'.padEnd(ROLE_WIDTH)) +
+        paint(
+          theme,
+          'dim',
+          `${formatCost(state.stats.totalCost)} · ${state.stats.totalTurns} turns`,
+        ),
+    );
+  }
 
   // Loop-level banner: consensus reached (advancing) or waiting on a decision.
   if (state.loopStatus === 'consensus') {
@@ -541,7 +594,13 @@ export const setLoopWidget = (ui: WidgetUi | undefined, state: LoopWidgetState):
   ui.setWidget(WIDGET_KEY, (tui, theme) => {
     const timer = setInterval(() => tui.requestRender(), 1000);
     return {
-      render: () => renderLoopWidget(state, theme, Date.now()),
+      // Pi's TUI hard-errors when a rendered line exceeds the viewport width, so
+      // every line must be truncated here (the roster's waves line can be very
+      // long with many findings). truncateToWidth keeps ANSI styling intact.
+      render: (width) =>
+        renderLoopWidget(state, theme, Date.now()).map((line) =>
+          truncateToWidth(line, Math.max(1, width ?? 120)),
+        ),
       invalidate: () => {},
       dispose: () => clearInterval(timer),
     };

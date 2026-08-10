@@ -20,10 +20,12 @@ import {
 import {
   BUILTIN_REVIEWERS,
   DEFAULT_REVIEWER_MODEL,
+  DEFAULT_SUPERVISOR_TIMEOUT_MS,
   defaultLoopConfig,
   genericReviewer,
   type LoopConfig,
   type ReviewerProfile,
+  type ThinkingLevel,
 } from './config';
 import type { LoopOptions } from './graph';
 import { getUnstagedChanges } from './git';
@@ -134,11 +136,17 @@ export interface ReviewSettings {
   readonly fixerModel: string;
   /** Ordered fallback models tried after the fixer model fails (empty = none). */
   readonly fixerFallbackModels: readonly string[];
+  /** Extended-thinking level for every fixer session (undefined = pi default). */
+  readonly fixerThinkingLevel?: ThinkingLevel;
   readonly supervisorModel: string;
   /** Ordered fallback models tried after the supervisor model fails (empty = none). */
   readonly supervisorFallbackModels: readonly string[];
+  /** Extended-thinking level for the supervisor's sessions (undefined = pi default). */
+  readonly supervisorThinkingLevel?: ThinkingLevel;
   readonly deadlockFlipThreshold: number;
   readonly agentConcurrency: number;
+  /** Per-turn supervisor budget in ms (brief AND aggregate each get this). */
+  readonly supervisorTimeoutMs: number;
 }
 
 export interface InteractiveSetupResult {
@@ -162,10 +170,13 @@ export const defaultSettings = (): ReviewSettings => {
     maxCycles: base.maxCycles,
     fixerModel: base.fixerModel,
     fixerFallbackModels: base.fixerFallbackModels ?? [],
+    fixerThinkingLevel: base.fixerThinkingLevel,
     supervisorModel: base.supervisor.model,
     supervisorFallbackModels: base.supervisor.fallbackModels ?? [],
+    supervisorThinkingLevel: base.supervisor.thinkingLevel,
     deadlockFlipThreshold: base.deadlock.flipThreshold,
     agentConcurrency: base.agentConcurrency,
+    supervisorTimeoutMs: base.supervisorTimeoutMs ?? DEFAULT_SUPERVISOR_TIMEOUT_MS,
   };
 };
 
@@ -196,10 +207,13 @@ export const settingsMenuItems = (
   `Max cycles (per loop)            [${settings.maxCycles}]`,
   `Fixer model                      [${settings.fixerModel}]`,
   `Fixer fallback models            [${settings.fixerFallbackModels.join(', ') || 'none'}]`,
+  `Fixer thinking level             [${settings.fixerThinkingLevel ?? 'default'}]`,
   `Supervisor model                 [${settings.supervisorModel}]`,
   `Supervisor fallback models       [${settings.supervisorFallbackModels.join(', ') || 'none'}]`,
+  `Supervisor thinking level        [${settings.supervisorThinkingLevel ?? 'default'}]`,
   `Deadlock flip threshold          [${settings.deadlockFlipThreshold}]`,
   `Fixer concurrency (parallel)     [${settings.agentConcurrency}]`,
+  `Supervisor timeout (minutes)     [${Math.round(settings.supervisorTimeoutMs / 60000)}]`,
   doneLabel,
 ];
 
@@ -526,6 +540,7 @@ const buildRoster = async (
       '+ Add reviewer (profile)',
       '~ Change model of a reviewer',
       '~ Fallback models of a reviewer',
+      '~ Thinking level of a reviewer',
     ];
     // Removing the last reviewer would leave an empty roster — hide the option.
     if (roster.length > 1) menuOptions.push('− Remove reviewer');
@@ -558,6 +573,10 @@ const buildRoster = async (
     }
     if (pick === '~ Fallback models of a reviewer') {
       await changeReviewerFallbacks(ctx, roster);
+      continue;
+    }
+    if (pick === '~ Thinking level of a reviewer') {
+      await changeReviewerThinkingLevel(ctx, roster);
       continue;
     }
     if (pick === '− Remove reviewer') {
@@ -763,6 +782,44 @@ const changeReviewerFallbacks = async (
 };
 
 /**
+ * Changes the extended-thinking level of one roster member.
+ * @param {ExtensionContext} ctx The command context
+ * @param {RosterEntry[]} roster The current roster (mutable)
+ * @returns Nothing
+ */
+const changeReviewerThinkingLevel = async (
+  ctx: ExtensionContext,
+  roster: RosterEntry[],
+): Promise<void> => {
+  const labels = roster.map((entry) =>
+    `${entry.reviewer.label} (${entry.reviewer.model})` +
+    (entry.reviewer.thinkingLevel === undefined
+      ? ''
+      : ` · thinking ${entry.reviewer.thinkingLevel}`),
+  );
+  const target = await ctx.ui.select('Thinking level of which reviewer?', labels);
+  const index = target === undefined ? -1 : labels.indexOf(target);
+  if (index < 0) return;
+  const entry = roster[index];
+  if (entry === undefined) return;
+
+  const level = await pickThinkingLevel(
+    ctx,
+    `Thinking level for '${entry.reviewer.label}' (off disables reasoning; default = pi default, medium clamped to the model):`,
+  );
+  if (level === null) return;
+
+  roster[index] = {
+    ...entry,
+    reviewer: { ...entry.reviewer, thinkingLevel: level },
+  };
+  ctx.ui.notify(
+    `${entry.reviewer.label} thinking level → ${level ?? 'default'}`,
+    'info',
+  );
+};
+
+/**
  * Step 4: edit the loop settings (max loops, fixer model, supervisor model,
  * deadlock threshold). "← Back" returns to the roster step. Loops until the
  * user finishes. The confirm entry is flow-specific via `doneLabel`.
@@ -781,10 +838,13 @@ const editSettings = async (
     maxCycles: number;
     fixerModel: string;
     fixerFallbackModels: readonly string[];
+    fixerThinkingLevel?: ThinkingLevel;
     supervisorModel: string;
     supervisorFallbackModels: readonly string[];
+    supervisorThinkingLevel?: ThinkingLevel;
     deadlockFlipThreshold: number;
     agentConcurrency: number;
+    supervisorTimeoutMs: number;
   } = { ...initial };
 
   for (;;) {
@@ -859,6 +919,16 @@ const editSettings = async (
       ctx.ui.notify(`Fixer fallback models → ${fallbacks.join(', ') || 'none'}`, 'info');
       continue;
     }
+    if (pick.startsWith('Fixer thinking level')) {
+      const level = await pickThinkingLevel(
+        ctx,
+        'Fixer thinking level (off disables reasoning; default = pi default, medium clamped to the model):',
+      );
+      if (level === null) continue;
+      current.fixerThinkingLevel = level;
+      ctx.ui.notify(`Fixer thinking level → ${level ?? 'default'}`, 'info');
+      continue;
+    }
     if (pick.startsWith('Supervisor fallback models')) {
       const fallbacks = await editFallbackModels(
         ctx,
@@ -868,6 +938,16 @@ const editSettings = async (
       if (fallbacks === null) continue;
       current.supervisorFallbackModels = fallbacks;
       ctx.ui.notify(`Supervisor fallback models → ${fallbacks.join(', ') || 'none'}`, 'info');
+      continue;
+    }
+    if (pick.startsWith('Supervisor thinking level')) {
+      const level = await pickThinkingLevel(
+        ctx,
+        'Supervisor thinking level (off disables reasoning; default = pi default, medium clamped to the model):',
+      );
+      if (level === null) continue;
+      current.supervisorThinkingLevel = level;
+      ctx.ui.notify(`Supervisor thinking level → ${level ?? 'default'}`, 'info');
       continue;
     }
     if (pick.startsWith('Deadlock flip threshold')) {
@@ -900,6 +980,30 @@ const editSettings = async (
       ctx.ui.notify(`Agent concurrency → ${parsed}`, 'info');
       continue;
     }
+    if (pick.startsWith('Supervisor timeout')) {
+      const value = await ctx.ui.input(
+        'Supervisor timeout in minutes (per brief/aggregate turn, 0 = keep default):',
+        String(Math.round(current.supervisorTimeoutMs / 60000)),
+      );
+      if (value === undefined) continue;
+      const trimmed = value.trim();
+      if (trimmed === '0' || trimmed === '') {
+        current.supervisorTimeoutMs = DEFAULT_SUPERVISOR_TIMEOUT_MS;
+        ctx.ui.notify(
+          `Supervisor timeout → default (${Math.round(DEFAULT_SUPERVISOR_TIMEOUT_MS / 60000)} minutes)`,
+          'info',
+        );
+        continue;
+      }
+      const parsed = parsePositiveInt(trimmed);
+      if (parsed === undefined) {
+        ctx.ui.notify(`'${value}' is not a positive integer.`, 'warning');
+        continue;
+      }
+      current.supervisorTimeoutMs = parsed * 60000;
+      ctx.ui.notify(`Supervisor timeout → ${parsed} minutes`, 'info');
+      continue;
+    }
     if (pick === doneLabel) {
       return {
         status: 'ok',
@@ -908,10 +1012,13 @@ const editSettings = async (
           maxCycles: current.maxCycles,
           fixerModel: current.fixerModel,
           fixerFallbackModels: current.fixerFallbackModels,
+          fixerThinkingLevel: current.fixerThinkingLevel,
           supervisorModel: current.supervisorModel,
           supervisorFallbackModels: current.supervisorFallbackModels,
+          supervisorThinkingLevel: current.supervisorThinkingLevel,
           deadlockFlipThreshold: current.deadlockFlipThreshold,
           agentConcurrency: current.agentConcurrency,
+          supervisorTimeoutMs: current.supervisorTimeoutMs,
         },
       };
     }
@@ -1061,11 +1168,18 @@ const askExitOrContinue = async (ctx: ExtensionContext): Promise<boolean> => {
  */
 const presetSummary = (config: PresetLoopConfigDecoded): string => {
   const roster = config.reviewers
-    .map((ref) => (ref.type === 'builtin' ? ref.id : ref.name))
+    .map((ref) => {
+      const base = ref.type === 'builtin' ? ref.id : ref.name;
+      return ref.thinkingLevel === undefined ? base : `${base} (thinking ${ref.thinkingLevel})`;
+    })
     .join(', ');
   const cycles =
     config.maxCycles !== undefined ? ` · cycles ${config.maxCycles}/loop` : '';
-  return `reviewers: ${roster} · loops ${config.maxLoops}${cycles} · fixer ${config.fixerModel}`;
+  const fixer =
+    config.fixerThinkingLevel === undefined
+      ? config.fixerModel
+      : `${config.fixerModel} (thinking ${config.fixerThinkingLevel})`;
+  return `reviewers: ${roster} · loops ${config.maxLoops}${cycles} · fixer ${fixer}`;
 };
 
 /**
@@ -1088,9 +1202,16 @@ const reviewerToStoredRef = (entry: RosterEntry): ReviewerRefDecoded => {
       model:
         entry.reviewer.model === DEFAULT_REVIEWER_MODEL ? undefined : entry.reviewer.model,
       fallbackModels,
+      thinkingLevel: entry.reviewer.thinkingLevel,
     };
   }
-  return { type: 'profile', name: entry.reviewer.id, model: entry.reviewer.model, fallbackModels };
+  return {
+    type: 'profile',
+    name: entry.reviewer.id,
+    model: entry.reviewer.model,
+    fallbackModels,
+    thinkingLevel: entry.reviewer.thinkingLevel,
+  };
 };
 
 /**
@@ -1113,13 +1234,16 @@ const storedConfigFrom = (
         settings.supervisorFallbackModels.length > 0
           ? settings.supervisorFallbackModels
           : undefined,
+      thinkingLevel: settings.supervisorThinkingLevel,
     },
     fixerModel: settings.fixerModel,
     fixerFallbackModels:
       settings.fixerFallbackModels.length > 0 ? settings.fixerFallbackModels : undefined,
+    fixerThinkingLevel: settings.fixerThinkingLevel,
     maxLoops: settings.maxLoops,
     maxCycles: settings.maxCycles,
     agentConcurrency: settings.agentConcurrency,
+    supervisorTimeoutMs: settings.supervisorTimeoutMs,
     deadlock: { ...base.deadlock, flipThreshold: settings.deadlockFlipThreshold },
   };
 };
@@ -1141,13 +1265,16 @@ const loopConfigFrom = (roster: RosterEntry[], settings: ReviewSettings): LoopCo
       settings.supervisorFallbackModels.length > 0
         ? settings.supervisorFallbackModels
         : undefined,
+    thinkingLevel: settings.supervisorThinkingLevel,
   },
   fixerModel: settings.fixerModel,
   fixerFallbackModels:
     settings.fixerFallbackModels.length > 0 ? settings.fixerFallbackModels : undefined,
+  fixerThinkingLevel: settings.fixerThinkingLevel,
   maxLoops: settings.maxLoops,
   maxCycles: settings.maxCycles,
   agentConcurrency: settings.agentConcurrency,
+  supervisorTimeoutMs: settings.supervisorTimeoutMs,
   deadlock: { flipThreshold: settings.deadlockFlipThreshold, action: 'escalate' },
 });
 
@@ -1553,13 +1680,22 @@ const removePreset = async (ctx: ExtensionContext, name?: string): Promise<strin
 export const renderPresetGraphic = (preset: ReviewPresetDecoded): string => {
   const { name, config } = preset;
   const roster = config.reviewers
-    .map((ref) => (ref.type === 'builtin' ? ref.id : ref.name))
+    .map((ref) => {
+      const base = ref.type === 'builtin' ? ref.id : ref.name;
+      return ref.thinkingLevel === undefined ? base : `${base} (thinking ${ref.thinkingLevel})`;
+    })
     .join(', ');
   const rows = [
     `preset   : ${name}`,
     `reviewers: ${roster}`,
-    `supervisor: ${config.supervisor.model}`,
-    `fixer    : ${config.fixerModel}`,
+    `supervisor: ${config.supervisor.model}` +
+      (config.supervisor.thinkingLevel === undefined
+        ? ''
+        : ` (thinking ${config.supervisor.thinkingLevel})`),
+    `fixer    : ${config.fixerModel}` +
+      (config.fixerThinkingLevel === undefined
+        ? ''
+        : ` (thinking ${config.fixerThinkingLevel})`),
     `max loops: ${config.maxLoops}`,
     `max cycles/loop: ${config.maxCycles ?? config.maxLoops}`,
     `deadlock : flip ${config.deadlock.flipThreshold} → ${config.deadlock.action}`,
@@ -1839,6 +1975,32 @@ export const pickModel = async (
   return picked;
 };
 
+/**
+ * Asks for a thinking level via a plain select over the pi levels. The
+ * `default` entry clears the setting back to undefined (pi default — the
+ * model's own clamped default). Returns null on cancel.
+ * @param {ExtensionContext} ctx The command context
+ * @param {string} title Dialog title (explains the levels)
+ * @returns The chosen level (undefined = default), or null on cancel
+ */
+export const pickThinkingLevel = async (
+  ctx: ExtensionContext,
+  title: string,
+): Promise<ThinkingLevel | undefined | null> => {
+  const picked = await ctx.ui.select(title, [
+    'default',
+    'off',
+    'minimal',
+    'low',
+    'medium',
+    'high',
+    'xhigh',
+    'max',
+  ]);
+  if (picked === undefined) return null;
+  return picked === 'default' ? undefined : (picked as ThinkingLevel);
+};
+
 // ─── Options assembly ────────────────────────────────────────────────
 
 /**
@@ -1865,10 +2027,13 @@ const settingsFromConfig = (config: LoopConfig): ReviewSettings => ({
   maxCycles: config.maxCycles,
   fixerModel: config.fixerModel,
   fixerFallbackModels: config.fixerFallbackModels ?? [],
+  fixerThinkingLevel: config.fixerThinkingLevel,
   supervisorModel: config.supervisor.model,
   supervisorFallbackModels: config.supervisor.fallbackModels ?? [],
+  supervisorThinkingLevel: config.supervisor.thinkingLevel,
   deadlockFlipThreshold: config.deadlock.flipThreshold,
   agentConcurrency: config.agentConcurrency,
+  supervisorTimeoutMs: config.supervisorTimeoutMs ?? DEFAULT_SUPERVISOR_TIMEOUT_MS,
 });
 
 /**

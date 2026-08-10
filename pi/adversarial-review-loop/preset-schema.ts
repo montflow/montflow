@@ -29,11 +29,27 @@ import { Schema } from 'effect';
  */
 
 /**
+ * Thinking levels a preset may pin for a role. `null` is never stored — a
+ * level is simply omitted when unset (pi default applies at use time).
+ */
+export const ThinkingLevelSchema = Schema.Literals([
+  'off',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+]);
+
+/**
  * One reviewer reference in a preset. The `type` discriminator selects the
  * reference source: `builtin` (the `id` field) or `profile` (the `name`
  * field). `model` is an optional override — omitted means the builtin's
- * default model / the profile's preferred model. Missing `id`/`name` for the
- * selected type is caught with a clear error when the preset is resolved.
+ * default model / the profile's preferred model. `thinkingLevel` is an
+ * optional per-reviewer thinking-level override (omitted = pi default).
+ * Missing `id`/`name` for the selected type is caught with a clear error
+ * when the preset is resolved.
  */
 export const ReviewerRefSchema = Schema.Struct({
   type: Schema.Literals(['builtin', 'profile']),
@@ -45,13 +61,17 @@ export const ReviewerRefSchema = Schema.Struct({
   model: Schema.optional(Schema.String),
   /** Optional ordered fallback models tried after `model` fails. */
   fallbackModels: Schema.optional(Schema.Array(Schema.String)),
+  /** Optional extended-thinking level override for this reviewer. */
+  thinkingLevel: Schema.optional(ThinkingLevelSchema),
 });
 
-/** Supervisor reference: the model only — the skill path is always the bundled one. */
+/** Supervisor reference: the model (and optional thinking level) — the skill path is always the bundled one. */
 export const PresetSupervisorSchema = Schema.Struct({
   model: Schema.String,
   /** Optional ordered fallback models tried after `model` fails. */
   fallbackModels: Schema.optional(Schema.Array(Schema.String)),
+  /** Optional extended-thinking level for the supervisor's sessions. */
+  thinkingLevel: Schema.optional(ThinkingLevelSchema),
 });
 
 /** JSON shape of the deadlock config. */
@@ -67,12 +87,16 @@ export const PresetLoopConfigSchema = Schema.Struct({
   fixerModel: Schema.String,
   /** Optional ordered fallback models tried after `fixerModel` fails. */
   fixerFallbackModels: Schema.optional(Schema.Array(Schema.String)),
+  /** Optional extended-thinking level for every fixer session. */
+  fixerThinkingLevel: Schema.optional(ThinkingLevelSchema),
   /** Number of independent reviewer loops. */
   maxLoops: Schema.Number,
   /** Optional for legacy presets; resolution defaults to the legacy maxLoops as the per-loop cycle cap. */
   maxCycles: Schema.optional(Schema.Number),
   /** Optional for legacy presets; resolution defaults to 5. */
   agentConcurrency: Schema.optional(Schema.Number),
+  /** Optional per-turn supervisor budget in ms; defaults to 20 minutes. */
+  supervisorTimeoutMs: Schema.optional(Schema.Number),
   deadlock: DeadlockConfigSchema,
 });
 

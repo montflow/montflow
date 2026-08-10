@@ -135,6 +135,58 @@ test('preset schema: legacy presets without agentConcurrency still decode', () =
   expect(decoded.config.maxCycles).toBeUndefined();
 });
 
+test('preset schema: round-trips thinking levels for every role', () => {
+  const preset = {
+    version: 1 as const,
+    name: 'thinking',
+    config: {
+      reviewers: [
+        { type: 'builtin' as const, id: 'generic', thinkingLevel: 'high' as const },
+        {
+          type: 'profile' as const,
+          name: 'auditor',
+          model: 'auditor-rev',
+          thinkingLevel: 'xhigh' as const,
+        },
+      ],
+      supervisor: {
+        model: 'sup',
+        thinkingLevel: 'max' as const,
+      },
+      fixerModel: 'fixer',
+      fixerThinkingLevel: 'low' as const,
+      maxLoops: 2,
+      maxCycles: 3,
+      deadlock: { flipThreshold: 2, action: 'escalate' as const },
+    },
+  };
+  const decoded = decode(encode(preset)) as ReviewPresetDecoded;
+  expect(decoded.config.reviewers[0]?.thinkingLevel).toBe('high');
+  expect(decoded.config.reviewers[1]?.thinkingLevel).toBe('xhigh');
+  expect(decoded.config.supervisor.thinkingLevel).toBe('max');
+  expect(decoded.config.fixerThinkingLevel).toBe('low');
+  // Levels are omitted (not null) when unset — a config without them decodes.
+  const plain = decode(encode({ version: 1 as const, name: 'plain', config: storedConfig() })) as ReviewPresetDecoded;
+  expect(plain.config.supervisor.thinkingLevel).toBeUndefined();
+  expect(plain.config.fixerThinkingLevel).toBeUndefined();
+  expect(plain.config.reviewers[0]?.thinkingLevel).toBeUndefined();
+});
+
+test('preset schema: rejects an unknown thinking level', () => {
+  const json = JSON.stringify({
+    version: 1,
+    name: 'x',
+    config: {
+      reviewers: [{ type: 'builtin', id: 'generic', thinkingLevel: 'turbo' }],
+      supervisor: { model: 'm' },
+      fixerModel: 'f',
+      maxLoops: 3,
+      deadlock: { flipThreshold: 2, action: 'escalate' },
+    },
+  });
+  expect(() => decode(json)).toThrow();
+});
+
 test('preset schema: rejects legacy expanded reviewer entries', () => {
   const legacy = JSON.stringify({
     version: 1,

@@ -3,8 +3,10 @@ import {
   DEFAULT_REVIEWER_MODEL,
   makeReviewerProfile,
   type ReviewerProfile,
+  type ThinkingLevel,
 } from './config';
 import { REVIEWER_SKILL_PATH } from './skill-paths';
+import { formatDuration } from './format';
 
 /**
  * Event-bus client for the @montflow/profiles extension.
@@ -100,7 +102,7 @@ export const getProfileViaBus = (
       resolve({
         id,
         ok: false,
-        error: `profiles:get timed out after ${timeoutMs}ms (profiles extension not loaded?)`,
+        error: `profiles:get timed out after ${formatDuration(timeoutMs)} (profiles extension not loaded?)`,
       });
     }, timeoutMs);
     const off = pi.events.on(PROFILES_GET_RESULT_CHANNEL, (data) => {
@@ -135,7 +137,7 @@ export const listProfilesViaBus = (
       resolve({
         id,
         ok: false,
-        error: `profiles:list timed out after ${timeoutMs}ms (profiles extension not loaded?)`,
+        error: `profiles:list timed out after ${formatDuration(timeoutMs)} (profiles extension not loaded?)`,
       });
     }, timeoutMs);
     const off = pi.events.on(PROFILES_LIST_RESULT_CHANNEL, (data) => {
@@ -206,18 +208,22 @@ export const objectiveFromProfile = (profile: Profile): string => {
  * the profile contributes the id/label, preferred model, and objective lens.
  * @param {Profile} profile The profile from the profiles extension
  * @param {string} [model] Model override (takes precedence over profile.model)
+ * @param {readonly string[]} [fallbackModels] Ordered fallback models
+ * @param {ThinkingLevel} [thinkingLevel] Extended-thinking level override
  * @returns The reviewer profile
  */
 export const profileToReviewerProfile = (
   profile: Profile,
   model?: string,
   fallbackModels?: readonly string[],
+  thinkingLevel?: ThinkingLevel,
 ): ReviewerProfile =>
   makeReviewerProfile({
     id: profile.name,
     label: titleFromProfileName(profile.name),
     model: pickModel(profile, model),
     fallbackModels,
+    thinkingLevel,
     skillPath: REVIEWER_SKILL_PATH,
     objective:
       objectiveFromProfile(profile) || `adversarial review focused on ${profile.name}`,

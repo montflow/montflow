@@ -94,6 +94,12 @@ test('profileToReviewerProfile: falls back to default model when profile has non
   expect(reviewer.model).toBe('deepseek-v4-pro');
 });
 
+test('profileToReviewerProfile: thinking level passes through when given', () => {
+  expect(profileToReviewerProfile(sampleProfile()).thinkingLevel).toBeUndefined();
+  const reviewer = profileToReviewerProfile(sampleProfile(), 'm', undefined, 'xhigh');
+  expect(reviewer.thinkingLevel).toBe('xhigh');
+});
+
 // ─── isProfilesExtensionLoaded ───────────────────────────────────────
 
 test('isProfilesExtensionLoaded: true when /profiles command registered', () => {

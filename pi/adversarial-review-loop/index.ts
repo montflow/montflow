@@ -55,7 +55,7 @@ export default function adversarialReviewLoopExtension(pi: ExtensionAPI): void {
       '(adversarial-review-loop)',
     handler: async (ctx) => {
       if (getActiveLoop() === undefined) {
-        ctx.ui.notify('No adversarial review loop is currently running.', 'info');
+        ctx.ui.notify('No adversarial review loop is currently running.', 'warning');
         return;
       }
       await openAgentFocusPicker(ctx);
@@ -69,7 +69,7 @@ export default function adversarialReviewLoopExtension(pi: ExtensionAPI): void {
     handler: async (ctx) => {
       const reviewFile = getActiveLoop()?.reviewFile;
       if (reviewFile === undefined) {
-        ctx.ui.notify('No adversarial review loop is currently running.', 'info');
+        ctx.ui.notify('No adversarial review loop is currently running.', 'warning');
         return;
       }
       await openFindingsBrowser(ctx, reviewFile);
@@ -156,7 +156,7 @@ const openAgentFocusPicker = async (ctx: {
 }): Promise<void> => {
   const agents = activeStreamAgents();
   if (agents.length === 0) {
-    ctx.ui.notify('[adversarial-review-loop] No agents are streaming yet.', 'info');
+    ctx.ui.notify('[adversarial-review-loop] No agents are streaming yet.', 'warning');
     return;
   }
   const pick = await ctx.ui.select(

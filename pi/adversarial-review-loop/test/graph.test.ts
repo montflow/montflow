@@ -1721,6 +1721,31 @@ test('runGraph: a timed-out supervisor turn is disposed and recreated, not re-pr
     );
   }));
 
+test('runGraph: supervisor timeout is configurable and reported in human units', () =>
+  withReviewDir(async (dir, reviewFile) => {
+    const { ui } = mockUi();
+    // Custom 15-minute supervisor budget — the timeout notification must
+    // echo it as `15 minutes`, not raw milliseconds.
+    const allTerminal = `# Review\n\n## Summary\n- **Open**: 0\n- **In Review**: 0\n- **Escalated**: 0\n- **Resolved**: 1\n- **Won't Fix**: 0\n`;
+    const factory = fakeAgentFactory(reviewFile, allTerminal, { timeoutBriefOnCreate: 2 });
+    const config = { ...defaultLoopConfig(), supervisorTimeoutMs: 900000 };
+
+    const result = await runEffect(
+      runGraph(testCtx(dir, ui, { maxLoops: 1, fresh: true, config }), {
+        verifySkill: () => Effect.succeed(undefined),
+        createPersistentAgent: () => Effect.succeed(factory.create()),
+      }),
+    );
+
+    // The retried pass still completed (fresh session created after dispose).
+    expect(factory.disposals).toContain(2);
+    expect(result.terminal).toBe('done');
+    expect(ui.notify).toHaveBeenCalledWith(
+      expect.stringContaining('Supervisor brief timed out after 15 minutes'),
+      'error',
+    );
+  }));
+
 test('runGraph: early exit when the LAST loop is all-terminal on resume', () =>
   withReviewDir(async (dir, reviewFile) => {
     fs.writeFileSync(
@@ -2024,4 +2049,99 @@ test('runGraph: reports working → idle to herdr when running inside a herdr pa
     expect(states.filter((state) => state === 'idle')).toHaveLength(1);
     // The working report carries the loop/phase detail.
     expect(String(received[0]?.params.message)).toContain('[loop 1/1');
+  }));
+
+test('runGraph: configured thinking levels reach supervisor, reviewer, and fixer sessions', () =>
+  withReviewDir(async (dir, reviewFile) => {
+    // Every role pins a different thinking level; the run must forward each
+    // to its session-creation options (the fixer goes through runAgent, the
+    // supervisor + reviewer through createPersistentAgent).
+    const canonical = `# Review
+
+## Findings
+
+### Major
+
+#### F1 — Bug
+- **Severity**: Major
+- **Location**: \`src/a.ts\`
+- **Problem**: Wrong thing.
+- **Impact**: Breaks.
+- **Suggestion**: Fix it.
+- **Status**: Open
+- **Attempts**: 0
+- **First Seen**: 1
+
+### Discussion
+
+## Summary
+- **Open**: 1
+- **In Review**: 0
+- **Escalated**: 0
+- **Resolved**: 0
+- **Won't Fix**: 0
+`;
+    const base = defaultLoopConfig();
+    const generic =
+      base.reviewers[0] ?? {
+        id: 'generic',
+        label: 'Generic',
+        model: 'r',
+        skillPath: '',
+        objective: 'full',
+        focus: 'full',
+      };
+    const config = {
+      ...base,
+      maxLoops: 1,
+      maxCycles: 1,
+      reviewers: [{ ...generic, model: 'reviewer-model', thinkingLevel: 'high' as const }],
+      supervisor: {
+        ...base.supervisor,
+        model: 'supervisor-model',
+        thinkingLevel: 'xhigh' as const,
+      },
+      fixerModel: 'fixer-model',
+      fixerThinkingLevel: 'low' as const,
+    };
+    const { ui } = mockUi();
+    const persistentOptions: Array<{ model: string; thinkingLevel?: string }> = [];
+    const runOptions: Array<{ model: string; thinkingLevel?: string }> = [];
+    await runEffect(
+      runGraph(testCtx(dir, ui, { maxLoops: 1, maxCycles: 1, fresh: true, config }), {
+        verifySkill: () => Effect.succeed(undefined),
+        retryPolicy: { maxRetries: 0, baseDelayMs: 0 },
+        createPersistentAgent: (options) => {
+          persistentOptions.push({ model: options.model, thinkingLevel: options.thinkingLevel });
+          return Effect.succeed(
+            fakeAgentFor(reviewFile, canonical, []),
+          );
+        },
+        runAgent: (options) => {
+          runOptions.push({ model: options.model, thinkingLevel: options.thinkingLevel });
+          const scratch = options.task.match(/scratch file at (\S+\.md)/)?.[1];
+          const id = options.task.match(/\b(F\d+)\b/)?.[1];
+          if (scratch !== undefined && id !== undefined) {
+            fs.mkdirSync(path.dirname(scratch), { recursive: true });
+            fs.writeFileSync(
+              scratch,
+              `#### ${id} — Fixed\n- **Severity**: Major\n- **Location**: \`src/a.ts\`\n- **Problem**: Wrong thing.\n- **Impact**: Breaks.\n- **Suggestion**: Fix it.\n- **Status**: In Review\n- **Attempts**: 1\n- **First Seen**: 1\n\n### Discussion\n`,
+            );
+          }
+          return Effect.succeed({ text: 'ok', error: undefined });
+        },
+      }),
+    );
+
+    // Supervisor (xhigh) and reviewer (high) each got their own level.
+    expect(
+      persistentOptions.find((options) => options.model === 'supervisor-model')?.thinkingLevel,
+    ).toBe('xhigh');
+    expect(
+      persistentOptions.find((options) => options.model === 'reviewer-model')?.thinkingLevel,
+    ).toBe('high');
+    // The fixer run got the loop-level fixer thinking level.
+    expect(runOptions.find((options) => options.model === 'fixer-model')?.thinkingLevel).toBe(
+      'low',
+    );
   }));

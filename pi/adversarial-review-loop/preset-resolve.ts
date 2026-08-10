@@ -50,6 +50,7 @@ export const resolveReviewerRef = async (
       label: builtin.label,
       model,
       fallbackModels: ref.fallbackModels,
+      thinkingLevel: ref.thinkingLevel,
       skillPath: builtin.skillPath,
       objective: builtin.objective,
     });
@@ -71,7 +72,7 @@ export const resolveReviewerRef = async (
     );
     return null;
   }
-  return profileToReviewerProfile(result.profile, ref.model, ref.fallbackModels);
+  return profileToReviewerProfile(result.profile, ref.model, ref.fallbackModels, ref.thinkingLevel);
 };
 
 /**
@@ -100,9 +101,11 @@ export const resolvePresetConfig = async (
       model: stored.supervisor.model,
       skillPath: SUPERVISOR_SKILL_PATH,
       fallbackModels: stored.supervisor.fallbackModels,
+      thinkingLevel: stored.supervisor.thinkingLevel,
     },
     fixerModel: stored.fixerModel,
     fixerFallbackModels: stored.fixerFallbackModels,
+    fixerThinkingLevel: stored.fixerThinkingLevel,
     // Legacy presets predate the loop/cycle split: their maxLoops meant
     // review cycles, so it becomes the per-loop cycle cap with the default
     // loop count (mirrors normalizeStoredConfig in loop-state.ts).
@@ -117,6 +120,7 @@ export const resolvePresetConfig = async (
           ? stored.maxLoops
           : DEFAULT_MAX_CYCLES,
     agentConcurrency: stored.agentConcurrency ?? DEFAULT_AGENT_CONCURRENCY,
+    supervisorTimeoutMs: stored.supervisorTimeoutMs,
     deadlock: stored.deadlock,
   };
 };

@@ -169,6 +169,88 @@ test('runOneTurn: no onDelta → message deltas are silently ignored', async () 
   expect(result.text).toBe('done');
 });
 
+test('runOneTurn: onUsage receives the summed usage of the turn\'s assistant messages', async () => {
+  const session = {
+    subscribe: vi.fn((listener: (event: unknown) => void) => {
+      listener({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          content: 'first',
+          usage: {
+            input: 100,
+            output: 50,
+            cacheRead: 10,
+            cacheWrite: 0,
+            totalTokens: 160,
+            cost: { input: 0.001, output: 0.002, cacheRead: 0, cacheWrite: 0, total: 0.003 },
+          },
+        },
+      });
+      listener({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          content: 'second',
+          usage: {
+            input: 200,
+            output: 25,
+            cacheRead: 0,
+            cacheWrite: 5,
+            totalTokens: 230,
+            cost: { input: 0.002, output: 0.001, cacheRead: 0, cacheWrite: 0, total: 0.003 },
+          },
+        },
+      });
+      return () => undefined;
+    }),
+    prompt: vi.fn(() => Promise.resolve()),
+    abort: vi.fn(() => Promise.resolve()),
+    agent: { waitForIdle: vi.fn(() => Promise.resolve()) },
+  } as unknown as AgentSession;
+
+  const usages: unknown[] = [];
+  const result = await Effect.runPromise(
+    runOneTurn(
+      session,
+      'task',
+      'test-model',
+      1000,
+      undefined,
+      undefined,
+      undefined,
+      (usage) => usages.push(usage),
+    ),
+  );
+  expect(result.error).toBeUndefined();
+  // One aggregated callback per turn, summing both assistant messages.
+  expect(usages).toEqual([
+    { input: 300, output: 75, cacheRead: 10, cacheWrite: 5, cost: { total: 0.006 } },
+  ]);
+});
+
+test('runOneTurn: onUsage is skipped when no assistant message reports usage', async () => {
+  const session = {
+    subscribe: vi.fn((listener: (event: unknown) => void) => {
+      listener({
+        type: 'message_end',
+        message: { role: 'assistant', content: 'done' },
+      });
+      return () => undefined;
+    }),
+    prompt: vi.fn(() => Promise.resolve()),
+    abort: vi.fn(() => Promise.resolve()),
+    agent: { waitForIdle: vi.fn(() => Promise.resolve()) },
+  } as unknown as AgentSession;
+
+  const onUsage = vi.fn();
+  const result = await Effect.runPromise(
+    runOneTurn(session, 'task', 'test-model', 1000, undefined, undefined, undefined, onUsage),
+  );
+  expect(result.error).toBeUndefined();
+  expect(onUsage).not.toHaveBeenCalled();
+});
+
 // ─── runOneTurn timeout aborts the in-flight generation ────────────────
 
 /**
