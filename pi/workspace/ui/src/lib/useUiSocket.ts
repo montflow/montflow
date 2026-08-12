@@ -42,6 +42,8 @@ export interface SkillRunState {
   entries: Array<{ role: 'user' | 'assistant'; text: string }>
   /** Tool activity in order of appearance (`turn` = assistant entry index). */
   tools: Array<{ name: string; status: 'running' | 'done' | 'error'; turn: number }>
+  /** Short generated title (opencode big-pickle); undefined until ready. */
+  title?: string
 }
 
 const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
@@ -115,10 +117,15 @@ export function useUiSocket(): UiSocketState {
               workspaceId: msg.workspaceId,
               entries: [...(msg.entries ?? [])],
               tools: [...(msg.tools ?? [])],
+              title: msg.title,
             },
           }
         }
         if (current === undefined) return prev // missed the start — snapshot recovers
+        if (msg.phase === 'title') {
+          // The generated title arrived — patch it in place.
+          return { ...prev, [msg.runId]: { ...current, title: msg.title } }
+        }
         if (msg.phase === 'delta') {
           const entries = current.entries.map((entry, index) =>
             index === msg.entry ? { ...entry, text: entry.text + msg.text } : entry,

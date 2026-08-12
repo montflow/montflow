@@ -40,6 +40,7 @@ import {
   type SkillRunAgent,
 } from './skill-run';
 import { listModelChoices } from './models-client';
+import { generateRunTitle } from './run-title';
 import {
   DEFAULT_ROUTER_PORT,
   PROTOCOL_VERSION,
@@ -370,6 +371,8 @@ interface SkillRunRecord {
   readonly workspaceId: string;
   /** Project dir the run belongs to (used for persistence + resume). */
   readonly cwd: string;
+  /** Short generated title (opencode big-pickle); falls back to the prompt. */
+  title?: string;
   agent: SkillRunAgent | null;
   status: 'running' | 'done' | 'awaiting' | 'interrupted' | 'error';
   entries: SkillRunEntry[];
@@ -388,7 +391,7 @@ const newRunId = (): string => randomUUID().slice(0, 8);
 const sendSkillGen = (
   folder: string,
   record: SkillRunRecord,
-  phase: 'start' | 'delta' | 'tool' | 'done' | 'awaiting' | 'error' | 'snapshot',
+  phase: 'start' | 'delta' | 'tool' | 'title' | 'done' | 'awaiting' | 'error' | 'snapshot',
   entry: number,
   status: SkillRunRecord['status'],
   text: string,
@@ -402,6 +405,7 @@ const sendSkillGen = (
     entry,
     status,
     text,
+    title: record.title,
     entries: phase === 'start' || phase === 'snapshot' ? record.entries : undefined,
     tools: phase === 'start' || phase === 'snapshot' ? record.tools : undefined,
   });
@@ -422,6 +426,7 @@ interface PersistedRun {
   readonly status: SkillRunRecord['status'];
   readonly entries: SkillRunEntry[];
   readonly tools: SkillRunTool[];
+  readonly title?: string;
   readonly sessionFile?: string;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -443,6 +448,7 @@ const toPersisted = (record: SkillRunRecord): PersistedRun => ({
   status: record.status,
   entries: record.entries,
   tools: record.tools,
+  title: record.title,
   sessionFile: record.sessionFile,
   createdAt: record.createdAt,
   updatedAt: Date.now(),
@@ -521,6 +527,7 @@ const restoreRuns = async (cwd: string): Promise<void> => {
         folder: typeof parsed.folder === 'string' ? parsed.folder : basename(cwd),
         workspaceId: typeof parsed.workspaceId === 'string' ? parsed.workspaceId : '',
         cwd,
+        title: typeof parsed.title === 'string' ? parsed.title : undefined,
         agent: null,
         status:
           parsed.status === 'running' ? 'interrupted' : (parsed.status ?? 'interrupted'),
@@ -932,6 +939,91 @@ export const startUiServer = async (
     });
   };
 
+  /** Kinds of agentic runs the UI can start. */
+  type AgenticRunKind = 'skill' | 'profile' | 'preset';
+
+  /** Options for {@link startAgenticRun}. */
+  interface StartAgenticRunOptions {
+    /** Client-generated run id; a short id is generated when omitted. */
+    runId?: string;
+    /** The user's raw request text (stored as the first transcript entry). */
+    text: string;
+    /** Existing preset name for preset runs that modify in place. */
+    presetName?: string;
+    /** Existing skill id (directory slug) for skill runs that modify in place. */
+    skillName?: string;
+    /** Existing profile name for profile runs that modify in place. */
+    profileName?: string;
+    /** Include the workspace's authoring-skills skill (skill runs). */
+    useAuthoringSkill?: boolean;
+    /** Per-run model override (`provider/model-id`). */
+    model?: string;
+    /**
+     * Prefix for the generated title (e.g. `[skill-create]`). When omitted a
+     * per-kind default is used; pass `''` to disable the prefix entirely.
+     */
+    titlePrefix?: string;
+  }
+
+  /**
+   * Creates and starts an agentic run — the SINGLE entry point every
+   * agentic creation/modification flow funnels through (skill, profile,
+   * preset). The run gets its own isolated, resumable agent session under
+   * `~/.pi/agent/runs/<cwd-slug>/<runId>/`; the start is broadcast, then
+   * live deltas and tool activity are streamed to the browser.
+   * @param {AgenticRunKind} kind Which authoring agent to run
+   * @param {StartAgenticRunOptions} opts Run identity, request, prompt hooks
+   * @returns Nothing
+   */
+  const startAgenticRun = (kind: AgenticRunKind, opts: StartAgenticRunOptions): void => {
+    if (opts.text.trim() === '' || assignedFolder === null) return;
+    const folder = assignedFolder;
+    const runId = opts.runId ?? newRunId();
+    const record = makeRunRecord(runId, folder, workspace.id, cwd, opts.text);
+    skillRuns.set(runId, record);
+    persistRun(record, true);
+    sendSkillGen(folder, record, 'start', 0, 'running', opts.text);
+    // Title prefix: per-kind default unless the caller overrides (or passes
+    // '' to disable). e.g. `[skill-create] Audit PRs`.
+    const titlePrefix =
+      opts.titlePrefix ??
+      (kind === 'skill'
+        ? '[skill-create]'
+        : kind === 'profile'
+          ? '[profile-create]'
+          : opts.presetName !== undefined
+            ? '[preset-edit]'
+            : '[preset-create]');
+    // Generate a short title from the prompt via opencode's big-pickle
+    // model. Fire-and-forget: any failure falls back to the prompt itself,
+    // which is exactly what the UI showed before titles existed.
+    void generateRunTitle(opts.text, { prefix: titlePrefix }).then((title) => {
+      if (title === null || title === '') return;
+      record.title = title;
+      persistRun(record, true);
+      sendSkillGen(folder, record, 'title', 0, record.status, title);
+    });
+    void (async () => {
+      const authoringSkill =
+        kind === 'skill' && opts.useAuthoringSkill === true
+          ? await loadAuthoringSkill(cwd)
+          : undefined;
+      const prompt =
+        kind === 'skill'
+          ? wrapSkillPrompt(opts.text, authoringSkill, opts.skillName)
+          : kind === 'profile'
+            ? wrapProfilePrompt(opts.text, opts.profileName)
+            : wrapPresetPrompt(opts.text, opts.presetName);
+      const makeAgent = (model?: string): Promise<SkillRunAgent> =>
+        kind === 'skill'
+          ? createSkillAgent(ctx, model, { sessionDir: runDir(cwd, runId) })
+          : kind === 'profile'
+            ? createProfileAgent(ctx, model, { sessionDir: runDir(cwd, runId) })
+            : createPresetAgent(ctx, model, { sessionDir: runDir(cwd, runId) });
+      runAgentTurn(record, folder, prompt, makeAgent, opts.model);
+    })();
+  };
+
   const handleCommand = (command: BrowserCommand): void => {
     const text = command.text;
     switch (command.type) {
@@ -941,44 +1033,28 @@ export const startUiServer = async (
         // persisted to a pi session file so the run survives restarts and can
         // be resumed. Streams live deltas and tool activity to the browser;
         // the user can reply on the run page (skillReply).
-        if (text.trim() === '' || assignedFolder === null) return;
-        const folder = assignedFolder;
-        const runId = command.runId ?? newRunId();
-        const record = makeRunRecord(runId, folder, workspace.id, cwd, text);
-        skillRuns.set(runId, record);
-        persistRun(record, true);
-        sendSkillGen(folder, record, 'start', 0, 'running', text);
-        void (async () => {
-          const authoringSkill =
-            command.useAuthoringSkill === true ? await loadAuthoringSkill(ctx.cwd) : undefined;
-          runAgentTurn(
-            record,
-            folder,
-            wrapSkillPrompt(text, authoringSkill),
-            (model) => createSkillAgent(ctx, model, { sessionDir: runDir(cwd, runId) }),
-            command.model,
-          );
-        })();
+        startAgenticRun('skill', {
+          runId: command.runId,
+          text,
+          useAuthoringSkill: command.useAuthoringSkill,
+          skillName: command.skillName,
+          model: command.model,
+        });
         break;
       }
 
       case 'profileAgentic': {
-        // Agentic profile creation — same isolated, persistent run machinery
-        // as skills, but the agent authors a PROFILE.md instead.
-        if (text.trim() === '' || assignedFolder === null) return;
-        const folder = assignedFolder;
-        const runId = command.runId ?? newRunId();
-        const record = makeRunRecord(runId, folder, workspace.id, cwd, text);
-        skillRuns.set(runId, record);
-        persistRun(record, true);
-        sendSkillGen(folder, record, 'start', 0, 'running', text);
-        runAgentTurn(
-          record,
-          folder,
-          wrapProfilePrompt(text),
-          (model) => createProfileAgent(ctx, model, { sessionDir: runDir(cwd, runId) }),
-          command.model,
-        );
+        // Agentic profile creation/modification — same isolated, persistent
+        // run machinery as skills, but the agent authors (or edits in place)
+        // a `.agents/@montflow/profiles/<name>/PROFILE.md`. `profileName`
+        // (when present) targets an existing profile so the run modifies it
+        // instead of creating a duplicate.
+        startAgenticRun('profile', {
+          runId: command.runId,
+          text,
+          profileName: command.profileName,
+          model: command.model,
+        });
         break;
       }
 
@@ -988,20 +1064,12 @@ export const startUiServer = async (
         // in place) a `.agents/@montflow/review-presets/<name>.json` config.
         // `presetName` (when present) targets an existing preset so the run
         // modifies it instead of creating a duplicate.
-        if (text.trim() === '' || assignedFolder === null) return;
-        const folder = assignedFolder;
-        const runId = command.runId ?? newRunId();
-        const record = makeRunRecord(runId, folder, workspace.id, cwd, text);
-        skillRuns.set(runId, record);
-        persistRun(record, true);
-        sendSkillGen(folder, record, 'start', 0, 'running', text);
-        runAgentTurn(
-          record,
-          folder,
-          wrapPresetPrompt(text, command.presetName),
-          (model) => createPresetAgent(ctx, model, { sessionDir: runDir(cwd, runId) }),
-          command.model,
-        );
+        startAgenticRun('preset', {
+          runId: command.runId,
+          text,
+          presetName: command.presetName,
+          model: command.model,
+        });
         break;
       }
 
@@ -1136,4 +1204,55 @@ export const stopUiServer = async (kill: boolean = false): Promise<boolean> => {
     }
   }
   return stopped;
+};
+
+/** True while any live router answers healthz on this port. */
+const isPortServed = async (port: number): Promise<boolean> =>
+  (await probeHealth(port)) !== null;
+
+/**
+ * Wait until nothing answers healthz on `port` — the old router has fully
+ * exited. `/api/shutdown` returns before the router's ~200ms teardown
+ * (terminate sockets, close server, delete the state file) completes, so a
+ * restart that starts too early would hand the fresh backend a dying router
+ * to connect to. Gives up after the timeout and lets `startUiServer` reuse a
+ * router that is still healthy.
+ * @param {number} port Router port to watch
+ * @param {number} timeoutMs How long to wait before giving up
+ * @returns Nothing
+ */
+const waitForPortFree = async (port: number, timeoutMs = 5000): Promise<void> => {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (!(await isPortServed(port))) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+};
+
+/**
+ * Restart the UI server for this workspace (`/montflow restart`): close the
+ * local connection (the router forgets this folder), gracefully stop the
+ * router daemon, wait for its port to free up, then re-register — spawning a
+ * fresh router when none is running. The running router's port is preserved
+ * so browsers on a pinned port keep working; other folders' backends
+ * reconnect on their own once the fresh router answers.
+ * @param {ExtensionAPI} pi Pi extension API
+ * @param {ExtensionCommandContext} ctx Command context
+ * @param {UiServerOptions} options Same options as {@link startUiServer}
+ * @returns The new UI server handle
+ */
+export const restartUiServer = async (
+  pi: ExtensionAPI,
+  ctx: ExtensionCommandContext,
+  options: UiServerOptions = {},
+): Promise<UiServerHandle> => {
+  // Drop this folder's registration first so the router forgets it, then
+  // stop the router daemon itself.
+  if (activeHandle !== null) await activeHandle.close();
+  const status = await getRouterStatus();
+  const runningPort = status.running ? status.port : undefined;
+  await stopUiServer();
+  if (runningPort !== undefined) await waitForPortFree(runningPort);
+
+  return startUiServer(pi, ctx, { ...options, port: options.port ?? runningPort });
 };

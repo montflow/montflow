@@ -122,6 +122,7 @@ export type BackendToRouter =
   // indexes into the run's transcript entries (0 = user prompt, then each
   // assistant turn). `snapshot` carries the full transcript for late joiners.
   // `tool` phases stream tool activity (start → running, end/error → done/error);
+  // `title` replaces the run's generated title (opencode big-pickle) once ready;
   // `awaiting` marks a finished turn where the agent asked a question and is
   // waiting for the user to answer back.
   | {
@@ -129,10 +130,12 @@ export type BackendToRouter =
       readonly folder: string;
       readonly runId: string;
       readonly workspaceId: string;
-      readonly phase: 'start' | 'delta' | 'tool' | 'done' | 'awaiting' | 'error' | 'snapshot';
+      readonly phase: 'start' | 'delta' | 'tool' | 'title' | 'done' | 'awaiting' | 'error' | 'snapshot';
       readonly entry: number;
       readonly status: 'running' | 'done' | 'awaiting' | 'interrupted' | 'error';
       readonly text: string;
+      /** Short generated title (undefined until big-pickle has replied). */
+      readonly title?: string;
       /** Set on `start` and `snapshot` — the full transcript. */
       readonly entries?: readonly { readonly role: 'user' | 'assistant'; readonly text: string }[];
       /** Set on `start` and `snapshot` — tool activity so far (`turn` = assistant entry index). */
@@ -151,6 +154,10 @@ export interface BrowserCommand {
   readonly runId?: string;
   /** Existing preset name for presetAgentic modify runs (undefined = create a new one). */
   readonly presetName?: string;
+  /** Existing skill id (directory slug) for skillAgentic modify runs (undefined = create a new one). */
+  readonly skillName?: string;
+  /** Existing profile name for profileAgentic modify runs (undefined = create a new one). */
+  readonly profileName?: string;
   /** Include the workspace's authoring-skills skill in the agent's instructions (skill runs). */
   readonly useAuthoringSkill?: boolean;
   /**
@@ -223,10 +230,12 @@ export type RouterToBrowser =
       readonly folder: string;
       readonly runId: string;
       readonly workspaceId: string;
-      readonly phase: 'start' | 'delta' | 'tool' | 'done' | 'awaiting' | 'error' | 'snapshot';
+      readonly phase: 'start' | 'delta' | 'tool' | 'title' | 'done' | 'awaiting' | 'error' | 'snapshot';
       readonly entry: number;
       readonly status: 'running' | 'done' | 'awaiting' | 'interrupted' | 'error';
       readonly text: string;
+      /** Short generated title (undefined until big-pickle has replied). */
+      readonly title?: string;
       readonly entries?: readonly { readonly role: 'user' | 'assistant'; readonly text: string }[];
       readonly tools?: readonly {
         readonly name: string;

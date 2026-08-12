@@ -82,6 +82,10 @@ export interface ClientCommand {
   useAuthoringSkill?: boolean
   /** Existing preset name for presetAgentic modify runs (undefined = create a new one). */
   presetName?: string
+  /** Existing skill id (directory slug) for skillAgentic modify runs (undefined = create a new one). */
+  skillName?: string
+  /** Existing profile name for profileAgentic modify runs (undefined = create a new one). */
+  profileName?: string
   /** Model for agentic runs (`provider/model-id`), injected by the router. */
   model?: string
 }
@@ -129,10 +133,12 @@ export type RouterToBrowser =
       folder: string
       runId: string
       workspaceId: string
-      phase: 'start' | 'delta' | 'tool' | 'done' | 'awaiting' | 'error' | 'snapshot'
+      phase: 'start' | 'delta' | 'tool' | 'title' | 'done' | 'awaiting' | 'error' | 'snapshot'
       entry: number
       status: 'running' | 'done' | 'awaiting' | 'interrupted' | 'error'
       text: string
+      /** Short generated title (opencode big-pickle); undefined until ready. */
+      title?: string
       entries?: Array<{ role: 'user' | 'assistant'; text: string }>
       tools?: Array<{ name: string; status: 'running' | 'done' | 'error'; turn: number }>
     }
@@ -200,6 +206,8 @@ export interface ProfileSummary {
 export interface ProfileDetail extends ProfileSummary {
   instructions: string
   checklist: string[]
+  /** Raw PROFILE.md contents (frontmatter + body) for editing. */
+  markdown: string
 }
 
 export interface SkillSummary {
@@ -215,6 +223,21 @@ export interface SkillDetail extends SkillSummary {
 }
 
 // --- Presets (filesystem-backed via /api/workspaces/<id>/presets) ---
+
+/** One agentic run as reported by /api/runs (durable snapshot summary). */
+export interface RunSummary {
+  runId: string
+  folder: string
+  workspaceId: string
+  status: 'running' | 'done' | 'awaiting' | 'interrupted' | 'error'
+  /** First user prompt (fallback title). */
+  prompt: string
+  /** Short generated title (opencode big-pickle); empty until ready. */
+  title?: string
+  entryCount: number
+  toolCount: number
+  updatedAt: number
+}
 
 export interface WorkspaceInfo {
   id: string

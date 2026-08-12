@@ -26,6 +26,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { Schema } from 'effect';
 import { BUILTIN_REVIEWERS } from './config.ts';
 import { ReviewPresetFromJson, ReviewPresetSchema } from './preset-schema.ts';
+import { openRunStore, type RunStore, type StoredRun } from './run-store.ts';
 import { parseProfile, parseFrontmatter } from './profiles/model.ts';
 import {
   DEFAULT_ROUTER_PORT,
@@ -334,6 +335,7 @@ const handleBackendMessage = async (socket: WebSocket, raw: string): Promise<voi
         entry: msg.entry,
         status: msg.status,
         text: msg.text,
+        title: msg.title,
         entries: msg.entries,
         tools: msg.tools,
       });
@@ -386,40 +388,93 @@ interface CachedRun {
     readonly status: 'running' | 'done' | 'error';
     readonly turn: number;
   }[];
+  /** Short generated title (opencode big-pickle); undefined until ready. */
+  readonly title?: string;
+  /** Epoch ms of the last cache merge (also persisted to the store). */
+  readonly updatedAt: number;
 }
 
 const cachedRuns = new Map<string, CachedRun>();
+
+/** Durable snapshot store (SQLite) — null when node:sqlite is unavailable. */
+let runStore: RunStore | null = null;
+/** Debounced store upserts per run (deltas are chatty; start/terminal flush). */
+const storeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/**
+ * Persist a cached run to the SQLite store. Deltas are debounced (800ms,
+ * same as the backend's run.json writes); start/snapshot and terminal
+ * phases flush immediately.
+ * @param {string} runId The run id
+ * @param {CachedRun} run The current cached state
+ * @param {boolean} immediate True to flush now instead of debouncing
+ * @returns Nothing
+ */
+const persistRunToStore = (runId: string, run: CachedRun, immediate: boolean): void => {
+  if (runStore === null) return;
+  const stored: StoredRun = {
+    runId,
+    folder: run.folder,
+    workspaceId: run.workspaceId,
+    status: run.status,
+    entries: run.entries,
+    tools: run.tools,
+    title: run.title,
+    updatedAt: run.updatedAt,
+  };
+  const pending = storeTimers.get(runId);
+  if (pending !== undefined) clearTimeout(pending);
+  if (immediate) {
+    storeTimers.delete(runId);
+    runStore.upsert(stored);
+    return;
+  }
+  storeTimers.set(
+    runId,
+    setTimeout(() => {
+      storeTimers.delete(runId);
+      runStore?.upsert(stored);
+    }, 800),
+  );
+};
 
 /**
  * Merges one skillGen chunk into the router's run cache. `start`/`snapshot`
  * carry the full transcript; `delta` appends to the assistant entry; `tool`
  * phases append/close tool activity; the terminal phases set the status and
- * fill in an empty assistant entry.
+ * fill in an empty assistant entry. Each merged state is mirrored to the
+ * SQLite store (immediate on start/terminal, debounced otherwise).
  * @param {Extract<BackendToRouter, { type: 'skillGen' }>} msg The chunk
  * @returns Nothing
  */
 const cacheSkillGen = (msg: Extract<BackendToRouter, { type: 'skillGen' }>): void => {
   const prev = cachedRuns.get(msg.runId);
+  let next: CachedRun;
+  let immediate = false;
   if (msg.phase === 'start' || msg.phase === 'snapshot' || prev === undefined) {
-    cachedRuns.set(msg.runId, {
+    next = {
       folder: msg.folder,
       workspaceId: msg.workspaceId,
       status: msg.status,
       entries: [...(msg.entries ?? [])],
       tools: [...(msg.tools ?? [])],
-    });
-    return;
-  }
-  if (msg.phase === 'delta') {
-    cachedRuns.set(msg.runId, {
+      title: msg.title,
+      updatedAt: Date.now(),
+    };
+    immediate = true;
+  } else if (msg.phase === 'title') {
+    // The generated title arrived — replace it (also flushed to the store).
+    next = { ...prev, title: msg.title, updatedAt: Date.now() };
+    immediate = true;
+  } else if (msg.phase === 'delta') {
+    next = {
       ...prev,
       entries: prev.entries.map((entry, index) =>
         index === msg.entry ? { ...entry, text: entry.text + msg.text } : entry,
       ),
-    });
-    return;
-  }
-  if (msg.phase === 'tool') {
+      updatedAt: Date.now(),
+    };
+  } else if (msg.phase === 'tool') {
     const tools = [...prev.tools];
     if (msg.status === 'running') {
       tools.push({ name: msg.text, status: 'running', turn: msg.entry });
@@ -431,17 +486,21 @@ const cacheSkillGen = (msg: Extract<BackendToRouter, { type: 'skillGen' }>): voi
         tools[idx] = { ...tool, status: msg.status === 'error' ? 'error' : 'done' };
       }
     }
-    cachedRuns.set(msg.runId, { ...prev, tools });
-    return;
+    next = { ...prev, tools, updatedAt: Date.now() };
+  } else {
+    // done / awaiting / error — terminal, flush to the store now.
+    next = {
+      ...prev,
+      status: msg.status,
+      entries: prev.entries.map((entry, index) =>
+        index === msg.entry && entry.text === '' ? { ...entry, text: msg.text } : entry,
+      ),
+      updatedAt: Date.now(),
+    };
+    immediate = true;
   }
-  // done / error
-  cachedRuns.set(msg.runId, {
-    ...prev,
-    status: msg.status,
-    entries: prev.entries.map((entry, index) =>
-      index === msg.entry && entry.text === '' ? { ...entry, text: msg.text } : entry,
-    ),
-  });
+  cachedRuns.set(msg.runId, next);
+  persistRunToStore(msg.runId, next, immediate);
 };
 
 /** Router-generated skillGen payload for a run that cannot be loaded. */
@@ -656,6 +715,7 @@ interface ProfileSummary {
 interface ProfileDetail extends ProfileSummary {
   readonly instructions: string; // ## Instructions body (markdown)
   readonly checklist: readonly string[]; // ## Review Checklist items
+  readonly markdown: string; // raw PROFILE.md (frontmatter + body)
 }
 
 const listProfiles = async (cwd: string): Promise<ProfileSummary[]> => {
@@ -706,6 +766,7 @@ const readProfile = async (cwd: string, profileName: string): Promise<ProfileDet
     skills: profile.skills,
     instructions: profile.instructions,
     checklist: profile.checklist,
+    markdown,
   };
 };
 
@@ -936,6 +997,27 @@ async function main(): Promise<void> {
   await loadSessionNames();
   await loadModelSelection();
 
+  // Durable run snapshot store — survives router restarts so a late-joining
+  // tab can still recover a run whose backend has disconnected. Falls back
+  // to the in-memory cache when node:sqlite is unavailable or the DB cannot
+  // be opened. Stored runs are preloaded into the cache so the browser-connect
+  // snapshot dump below serves them like any other cached run.
+  const dbPath = join(routerStateDir(), 'runs.db');
+  runStore = await openRunStore(dbPath);
+  if (runStore !== null) {
+    for (const run of runStore.list()) {
+      cachedRuns.set(run.runId, {
+        folder: run.folder,
+        workspaceId: run.workspaceId,
+        status: run.status,
+        entries: run.entries,
+        tools: run.tools,
+        title: run.title,
+        updatedAt: run.updatedAt,
+      });
+    }
+  }
+
   const httpServer: Server = createServer(async (req, res) => {
     const pathname = (req.url ?? '/').split('?')[0] ?? '/';
 
@@ -976,6 +1058,49 @@ async function main(): Promise<void> {
       if (pathname === '/api/reviewers' && req.method === 'GET') {
         sendJson(200, {
           builtins: Object.values(BUILTIN_REVIEWERS).map((r) => ({ id: r.id, label: r.label })),
+        });
+        return;
+      }
+
+      // Agentic run history — durable snapshots with status/workspace filters.
+      // GET /api/runs?workspace=<id>&status=done,running
+      if (pathname === '/api/runs' && req.method === 'GET') {
+        const url = new URL(req.url ?? '/', 'http://localhost');
+        const workspaceFilter = url.searchParams.get('workspace') ?? '';
+        const statusFilter = (url.searchParams.get('status') ?? '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => s !== '');
+        // Prefer the durable store; fall back to the live in-memory cache
+        // when node:sqlite is unavailable.
+        const allRuns: StoredRun[] =
+          runStore !== null
+            ? runStore.list()
+            : [...cachedRuns.entries()].map(([runId, run]) => ({
+                runId,
+                folder: run.folder,
+                workspaceId: run.workspaceId,
+                status: run.status,
+                entries: run.entries,
+                tools: run.tools,
+                updatedAt: run.updatedAt,
+              }));
+        const filtered = allRuns
+          .filter((r) => workspaceFilter === '' || r.workspaceId === workspaceFilter)
+          .filter((r) => statusFilter.length === 0 || statusFilter.includes(r.status))
+          .toSorted((a, b) => b.updatedAt - a.updatedAt);
+        sendJson(200, {
+          runs: filtered.map((r) => ({
+            runId: r.runId,
+            folder: r.folder,
+            workspaceId: r.workspaceId,
+            status: r.status,
+            prompt: r.entries.find((e) => e.role === 'user')?.text ?? '',
+            title: r.title ?? '',
+            entryCount: r.entries.length,
+            toolCount: r.tools.length,
+            updatedAt: r.updatedAt,
+          })),
         });
         return;
       }
@@ -1143,8 +1268,10 @@ async function main(): Promise<void> {
         return;
       }
 
-      // Profile detail — full parsed PROFILE.md for a single profile.
-      // GET /api/workspaces/<id>/profiles/<name>
+      // Profile detail — full parsed PROFILE.md for a single profile; modify/delete.
+      // GET    /api/workspaces/<id>/profiles/<name>
+      // PUT    /api/workspaces/<id>/profiles/<name>   { markdown }
+      // DELETE /api/workspaces/<id>/profiles/<name>
       const profileDetail = pathname.match(/^\/api\/workspaces\/([^/]+)\/profiles\/([^/]+)$/);
       if (profileDetail) {
         const wsId = decodeURIComponent(profileDetail[1] ?? '');
@@ -1154,6 +1281,37 @@ async function main(): Promise<void> {
           sendJson(404, { error: `Unknown workspace '${wsId}'` });
           return;
         }
+        if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(profileName)) {
+          sendJson(400, { error: `Invalid profile name '${profileName}'` });
+          return;
+        }
+
+        if (req.method === 'DELETE') {
+          await rm(join(cwd, ...PROFILE_DIR, profileName), { recursive: true, force: true });
+          broadcastProfileChanged(cwd, wsId, profileName, 'deleted');
+          sendJson(200, { ok: true });
+          return;
+        }
+
+        if (req.method === 'PUT') {
+          let body: unknown;
+          try {
+            body = await readJsonBody(req);
+          } catch {
+            sendJson(400, { error: 'Invalid JSON body' });
+            return;
+          }
+          const markdown = (body as { markdown?: unknown }).markdown;
+          if (typeof markdown !== 'string') {
+            sendJson(400, { error: 'Missing string field: markdown' });
+            return;
+          }
+          await writeFile(join(cwd, ...PROFILE_DIR, profileName, PROFILE_FILE), markdown, 'utf8');
+          broadcastProfileChanged(cwd, wsId, profileName, 'updated');
+          sendJson(200, { ok: true });
+          return;
+        }
+
         if (req.method !== 'GET') {
           sendJson(405, { error: 'Method not allowed' });
           return;
@@ -1472,6 +1630,7 @@ async function main(): Promise<void> {
           entry: 0,
           status: run.status,
           text: '',
+          title: run.title,
           entries: run.entries,
           tools: run.tools,
         } satisfies RouterToBrowser),
@@ -1545,12 +1704,44 @@ async function main(): Promise<void> {
                 entry: 0,
                 status: cached.status,
                 text: '',
+                title: cached.title,
                 entries: cached.entries,
                 tools: cached.tools,
               } satisfies RouterToBrowser),
             );
-          } else if (runId !== '') {
-            socket.send(JSON.stringify(notFoundRun(runId, msg.folder)));
+          } else {
+            // Not in memory — try the durable store (covers router restarts
+            // since the last time this run was cached). Re-seed the memory
+            // cache so a second request doesn't hit the DB again.
+            const stored = runStore?.load(runId) ?? null;
+            if (stored !== null) {
+              cachedRuns.set(runId, {
+                folder: stored.folder,
+                workspaceId: stored.workspaceId,
+                status: stored.status,
+                entries: stored.entries,
+                tools: stored.tools,
+                title: stored.title,
+                updatedAt: stored.updatedAt,
+              });
+              socket.send(
+                JSON.stringify({
+                  type: 'skillGen',
+                  folder: stored.folder,
+                  runId,
+                  workspaceId: stored.workspaceId,
+                  phase: 'snapshot',
+                  entry: 0,
+                  status: stored.status,
+                  text: '',
+                  title: stored.title,
+                  entries: stored.entries,
+                  tools: stored.tools,
+                } satisfies RouterToBrowser),
+              );
+            } else if (runId !== '') {
+              socket.send(JSON.stringify(notFoundRun(runId, msg.folder)));
+            }
           }
         }
         return;
