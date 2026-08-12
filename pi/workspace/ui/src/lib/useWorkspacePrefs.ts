@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 
-export type PanelKey = 'skills' | 'profiles' | 'presets'
+export type PanelKey = 'skills' | 'profiles' | 'presets' | 'runs'
 
 /** Per-panel UI state persisted per workspace in localStorage. */
 export interface PanelPrefs {
@@ -22,6 +22,7 @@ const DEFAULTS: WorkspacePrefs = {
   skills: { open: true, query: '', chips: [], sort: [{ id: 'name', desc: false }] },
   profiles: { open: true, query: '', chips: [], sort: [{ id: 'name', desc: false }] },
   presets: { open: true, query: '', chips: [], sort: [{ id: 'name', desc: false }] },
+  runs: { open: true, query: '', chips: [], sort: [{ id: 'name', desc: false }] },
 }
 
 const loadPrefs = (workspaceId: string): WorkspacePrefs => {
@@ -33,6 +34,7 @@ const loadPrefs = (workspaceId: string): WorkspacePrefs => {
       skills: { ...DEFAULTS.skills, ...parsed.skills },
       profiles: { ...DEFAULTS.profiles, ...parsed.profiles },
       presets: { ...DEFAULTS.presets, ...parsed.presets },
+      runs: { ...DEFAULTS.runs, ...parsed.runs },
     }
   } catch {
     return DEFAULTS

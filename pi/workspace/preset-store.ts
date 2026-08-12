@@ -4,6 +4,7 @@ import { Path } from 'effect/Path';
 import {
   ReviewPresetFromJson,
   type PresetLoopConfigDecoded,
+  type PresetWorkflowConfigDecoded,
   type ReviewPresetDecoded,
 } from './preset-schema';
 
@@ -146,8 +147,10 @@ export const readPreset = (
   });
 
 /**
- * Writes a preset file (creating/overwriting `<name>.json`), encoding the
- * stored (reference-based) loop config through the preset schema.
+ * Writes a LOOP preset file (creating/overwriting `<name>.json`), encoding the
+ * stored (reference-based) loop config through the preset schema and stamping
+ * `type: "loop"` so the file records its kind. For workflow presets, use
+ * {@link writeWorkflowPreset}.
  * @param {string} cwd Working directory
  * @param {string} name Preset name
  * @param {PresetLoopConfigDecoded} config Stored configuration to persist
@@ -158,6 +161,42 @@ export const writePreset = (
   name: string,
   config: PresetLoopConfigDecoded,
 ): Effect.Effect<void, PresetError, FileSystem | Path> =>
+  writePresetFile(cwd, name, { version: 1 as const, type: 'loop' as const, name, config });
+
+/**
+ * Writes a WORKFLOW preset file (creating/overwriting `<name>.json`), encoding
+ * the open-ended step config with `type: "workflow"`. Workflows are not yet
+ * executable — this only persists/edits them.
+ * @param {string} cwd Working directory
+ * @param {string} name Preset name
+ * @param {PresetWorkflowConfigDecoded} config Stored workflow configuration to persist
+ * @returns An effect writing the file, or PresetError
+ */
+export const writeWorkflowPreset = (
+  cwd: string,
+  name: string,
+  config: PresetWorkflowConfigDecoded,
+): Effect.Effect<void, PresetError, FileSystem | Path> =>
+  writePresetFile(cwd, name, {
+    version: 1 as const,
+    type: 'workflow' as const,
+    name,
+    config,
+  });
+
+/**
+ * Shared writer: validates the name, encodes the full preset (version + type +
+ * config) through the preset schema, and writes the JSON file.
+ * @param {string} cwd Working directory
+ * @param {string} name Preset name
+ * @param {ReviewPresetDecoded} preset The full preset to persist
+ * @returns An effect writing the file, or PresetError
+ */
+const writePresetFile = (
+  cwd: string,
+  name: string,
+  preset: ReviewPresetDecoded,
+): Effect.Effect<void, PresetError, FileSystem | Path> =>
   Effect.gen(function* () {
     if (!isValidPresetName(name)) return yield* fail(`Invalid preset name: ${name}`);
     yield* ensurePresetDir(cwd);
@@ -165,7 +204,6 @@ export const writePreset = (
     const fileSystem = yield* FileSystem;
     const path = yield* Path;
     const target = presetFilePath(path, cwd, name);
-    const preset = { version: 1 as const, name, config };
 
     const json = yield* Effect.try({
       try: () => Schema.encodeUnknownSync(ReviewPresetFromJson)(preset),

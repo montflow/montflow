@@ -22,8 +22,17 @@ const GAP = 6
  *   0 skips horizontal clamping (e.g. panels spanning the trigger width)
  * @param height estimated panel height in px; 0 disables vertical logic
  * @param margin minimum distance from the viewport edges, px
+ * @param align which panel edge aligns to the trigger: 'left' (panel grows
+ *   rightward from the trigger's left edge) or 'right' (panel grows leftward
+ *   from the trigger's right edge — for buttons near the right viewport edge)
  */
-export function useClampedPopover(open: boolean, width: number, height = 0, margin = 8) {
+export function useClampedPopover(
+  open: boolean,
+  width: number,
+  height = 0,
+  margin = 8,
+  align: 'left' | 'right' = 'left',
+) {
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const [panelLeft, setPanelLeft] = useState(0)
   const [openUp, setOpenUp] = useState(false)
@@ -33,9 +42,10 @@ export function useClampedPopover(open: boolean, width: number, height = 0, marg
     const position = (): void => {
       const rect = triggerRef.current?.getBoundingClientRect()
       if (!rect) return
+      const anchor = align === 'right' ? rect.right - width : rect.left
       const left = Math.max(
         margin,
-        Math.min(rect.left, window.innerWidth - width - margin),
+        Math.min(anchor, window.innerWidth - width - margin),
       )
       setPanelLeft(left - rect.left)
       if (height > 0) {
@@ -47,7 +57,7 @@ export function useClampedPopover(open: boolean, width: number, height = 0, marg
     position()
     window.addEventListener('resize', position)
     return () => window.removeEventListener('resize', position)
-  }, [open, width, height, margin])
+  }, [open, width, height, margin, align])
 
   return { triggerRef, panelLeft, openUp }
 }

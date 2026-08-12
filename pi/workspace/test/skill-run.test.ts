@@ -68,6 +68,25 @@ describe('wrapProfilePrompt', () => {
     expect(wrapProfilePrompt('x', '  ')).toContain('Create a new agent profile');
   });
 
+  test('injects the chosen skills into the create prompt', () => {
+    const prompt = wrapProfilePrompt('A code reviewer.', undefined, [
+      'security-audit',
+      'typescript-conventions',
+    ]);
+    expect(prompt).toContain('  - security-audit');
+    expect(prompt).toContain('  - typescript-conventions');
+    expect(prompt).toContain('MUST load exactly these skills');
+    expect(prompt).toContain('security-audit, typescript-conventions');
+  });
+
+  test('injects the chosen skills into modify runs', () => {
+    const prompt = wrapProfilePrompt('Add a security checklist.', 'security-auditor', [
+      'security-audit',
+    ]);
+    expect(prompt).toContain("Modify the existing profile 'security-auditor'");
+    expect(prompt).toContain('  - security-audit');
+  });
+
   test('the create prompt mirrors the bundled TEMPLATE.md (comment lines included)', () => {
     const prompt = wrapProfilePrompt('A rigorous code-reviewer agent.');
     expect(prompt).toContain('# Preferred model: provider/model-id, e.g. anthropic/claude-sonnet-4-5 (optional)');

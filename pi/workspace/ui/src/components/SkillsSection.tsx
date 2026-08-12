@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { NewSkillDialog } from '@/components/NewSkillDialog'
+import { TableEmptyState } from '@/components/TableEmptyState'
 import { skillUrl } from '@/components/LandingPage'
 import { useSkills } from '@/lib/useSkills'
 import { navigate } from '@/lib/useLocation'
@@ -207,10 +208,6 @@ export function SkillsSection({ workspaceId, conn, folder, id, reveal }: SkillsS
 
       {isPending ? (
         <SkillsTableSkeleton />
-      ) : !hasSkills ? (
-        <p className="text-xs text-muted-foreground">
-          No skills in <code className="rounded bg-muted px-1">.agents/skills/</code> yet.
-        </p>
       ) : (
         <>
           <div className="mb-3 flex items-center gap-2">
@@ -282,10 +279,18 @@ export function SkillsSection({ workspaceId, conn, folder, id, reveal }: SkillsS
               rows — so typing never changes the layout. */}
           <div ref={tableScrollRef} className="relative h-96 overflow-y-auto rounded-md border">
             {filtered.length === 0 ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                <SearchX className="size-4" />
-                No skills match your filters.
-              </div>
+              hasSkills ? (
+                <TableEmptyState
+                  icon={<SearchX className="size-4" />}
+                  message="No skills match your filters."
+                />
+              ) : (
+                <TableEmptyState
+                  icon={<Sparkles className="size-4" />}
+                  message="No skills yet"
+                  hint="Add them to .agents/skills/ or click New."
+                />
+              )
             ) : (
               <table className="w-full table-fixed text-sm">
                 <thead className="sticky top-0 z-10 bg-card">

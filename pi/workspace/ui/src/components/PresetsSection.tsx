@@ -9,14 +9,16 @@ import {
 } from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { NewPresetDialog } from '@/components/NewPresetDialog'
+import { TableEmptyState } from '@/components/TableEmptyState'
 import { useBuiltinReviewers, usePresets } from '@/lib/usePresets'
 import { presetUrl, profileUrl } from '@/components/LandingPage'
 import { navigate } from '@/lib/useLocation'
 import { useWorkspacePrefs } from '@/lib/useWorkspacePrefs'
 import { titleFromSlug } from '@/lib/utils'
-import type { PresetSummary } from '@/protocol'
+import type { PresetConfig, PresetLoopConfig, PresetSummary } from '@/protocol'
 import {
   ArrowDown,
   ArrowUp,
@@ -46,6 +48,10 @@ const PAGE_SIZE = 16
 /** Human label for a builtin reviewer id (from the catalog API). */
 const builtinLabel = (id: string, map: Map<string, string>): string =>
   map.get(id) ?? id
+
+/** Narrows a preset config to the loop shape (workflow configs → undefined, cells render —). */
+const loopConfigOf = (config: PresetConfig | undefined): PresetLoopConfig | undefined =>
+  config !== undefined && 'reviewers' in config ? config : undefined
 
 const makeColumns = (
   workspaceId: string,
@@ -90,11 +96,49 @@ const makeColumns = (
     ),
   },
   {
+    accessorKey: 'type',
+    header: ({ column }) => (
+      <button
+        type="button"
+        onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+        className="flex items-center gap-1 hover:text-foreground"
+      >
+        Type
+        {column.getIsSorted() === 'asc' ? (
+          <ArrowUp className="size-3" />
+        ) : column.getIsSorted() === 'desc' ? (
+          <ArrowDown className="size-3" />
+        ) : (
+          <ArrowUpDown className="size-3 opacity-50" />
+        )}
+      </button>
+    ),
+    cell: ({ row }) => {
+      const type = row.original.type ?? 'loop'
+      return type === 'workflow' ? (
+        <Badge
+          variant="outline"
+          className="border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300"
+          title="Workflow preset — open-ended step pipeline (not yet executable)"
+        >
+          workflow
+        </Badge>
+      ) : (
+        <Badge
+          variant="secondary"
+          title="Review loop preset — supervisor, reviewers, fixers"
+        >
+          loop
+        </Badge>
+      )
+    },
+  },
+  {
     accessorKey: 'reviewers',
     header: 'Reviewers',
     enableSorting: false,
     cell: ({ row }) => {
-      const reviewers = row.original.config?.reviewers ?? []
+      const reviewers = loopConfigOf(row.original.config)?.reviewers ?? []
       if (reviewers.length === 0) return <span className="text-muted-foreground/50">—</span>
       return (
         <div className="flex flex-wrap gap-1">
@@ -135,40 +179,44 @@ const makeColumns = (
     accessorKey: 'supervisor',
     header: 'Supervisor',
     enableSorting: false,
-    cell: ({ row }) =>
-      row.original.config?.supervisor.model === undefined ? (
+    cell: ({ row }) => {
+      const supervisor = loopConfigOf(row.original.config)?.supervisor
+      return supervisor?.model === undefined ? (
         <span className="text-muted-foreground/50">—</span>
       ) : (
         <span
           className="block truncate font-mono text-xs text-muted-foreground"
-          title={row.original.config.supervisor.model}
+          title={supervisor.model}
         >
-          {row.original.config.supervisor.model}
+          {supervisor.model}
         </span>
-      ),
+      )
+    },
   },
   {
     accessorKey: 'fixerModel',
     header: 'Fixer',
     enableSorting: false,
-    cell: ({ row }) =>
-      row.original.config?.fixerModel === undefined ? (
+    cell: ({ row }) => {
+      const fixerModel = loopConfigOf(row.original.config)?.fixerModel
+      return fixerModel === undefined ? (
         <span className="text-muted-foreground/50">—</span>
       ) : (
         <span
           className="block truncate font-mono text-xs text-muted-foreground"
-          title={row.original.config.fixerModel}
+          title={fixerModel}
         >
-          {row.original.config.fixerModel}
+          {fixerModel}
         </span>
-      ),
+      )
+    },
   },
   {
     accessorKey: 'loops',
     header: 'Loops',
     enableSorting: false,
     cell: ({ row }) => {
-      const config = row.original.config
+      const config = loopConfigOf(row.original.config)
       if (config === undefined) return <span className="text-muted-foreground/50">—</span>
       const cycles = config.maxCycles ?? config.maxLoops
       return (
@@ -207,6 +255,7 @@ export function PresetsSection({ workspaceId, conn, folder, id, reveal }: Preset
       new Fuse(presets ?? [], {
         keys: [
           'name',
+          'type',
           'config.reviewers.id',
           'config.reviewers.name',
           'config.supervisor.model',
@@ -278,12 +327,6 @@ export function PresetsSection({ workspaceId, conn, folder, id, reveal }: Preset
 
       {isPending ? (
         <PresetsTableSkeleton />
-      ) : !hasPresets ? (
-        <p className="text-xs text-muted-foreground">
-          No presets in{' '}
-          <code className="rounded bg-muted px-1">.agents/@montflow/review-presets/</code> — create
-          one with <code className="rounded bg-muted px-1">/montflow preset</code>.
-        </p>
       ) : (
         <>
           <div className="mb-3 flex items-center gap-2">
@@ -332,10 +375,18 @@ export function PresetsSection({ workspaceId, conn, folder, id, reveal }: Preset
               rows — so typing never changes the layout. */}
           <div ref={tableScrollRef} className="relative h-96 overflow-y-auto rounded-md border">
             {filtered.length === 0 ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                <SearchX className="size-4" />
-                No presets match your filters.
-              </div>
+              hasPresets ? (
+                <TableEmptyState
+                  icon={<SearchX className="size-4" />}
+                  message="No presets match your filters."
+                />
+              ) : (
+                <TableEmptyState
+                  icon={<SlidersHorizontal className="size-4" />}
+                  message="No presets yet"
+                  hint="Create one in .agents/@montflow/review-presets/ or run /montflow preset."
+                />
+              )
             ) : (
               <table className="w-full table-fixed text-sm">
                 <thead className="sticky top-0 z-10 bg-card">
@@ -346,12 +397,14 @@ export function PresetsSection({ workspaceId, conn, folder, id, reveal }: Preset
                           key={header.id}
                           className={`px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground ${
                             header.column.id === 'name'
-                              ? 'w-[24%]'
-                              : header.column.id === 'reviewers'
-                                ? 'w-[28%]'
-                                : header.column.id === 'supervisor' || header.column.id === 'fixerModel'
-                                  ? 'w-[16%]'
-                                  : 'w-[8%]'
+                              ? 'w-[20%]'
+                              : header.column.id === 'type'
+                                ? 'w-[10%]'
+                                : header.column.id === 'reviewers'
+                                  ? 'w-[24%]'
+                                  : header.column.id === 'supervisor' || header.column.id === 'fixerModel'
+                                    ? 'w-[13%]'
+                                    : 'w-[8%]'
                           }`}
                         >
                           {header.isPlaceholder

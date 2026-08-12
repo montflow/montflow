@@ -28,10 +28,25 @@ interface UiSocketState {
   dismissToast: (id: string) => void
   /** Agentic skill runs (isolated agent sessions) by run id. */
   runs: Record<string, SkillRunState>
+  /**
+   * One-shot AI-input text fills by id (NOT runs — ephemeral, nothing
+   * persisted). Only the latest text per id; used by the AI-input modal.
+   */
+  textGens: Record<string, TextGenState>
+  /** Notification-center entries (run lifecycle events). */
+  notifications: NotificationItem[]
+  dismissNotification: (id: string) => void
+  markNotificationsRead: () => void
+  clearNotifications: () => void
   /** Send a follow-up answer to a run's agent (folder resolved router-side). */
   sendSkillReply: (runId: string, text: string) => void
   /** Fetch the full transcript for a run (late join / page reload). */
   requestSkillSnapshot: (runId: string) => void
+  /**
+   * Force-stop or manually override a run's status (folder resolved
+   * router-side). Aborts the agent when it is still running.
+   */
+  setRunStatus: (runId: string, status: 'done' | 'error' | 'interrupted') => void
 }
 
 /** One agentic skill run as seen by the browser. */
@@ -44,6 +59,47 @@ export interface SkillRunState {
   tools: Array<{ name: string; status: 'running' | 'done' | 'error'; turn: number }>
   /** Short generated title (opencode big-pickle); undefined until ready. */
   title?: string
+}
+
+/** One AI-input text fill as seen by the browser. */
+export interface TextGenState {
+  status: 'running' | 'done' | 'error'
+  /** Accumulated streamed text (final answer on done/error). */
+  text: string
+}
+
+/**
+ * One entry in the header notification center — emitted when an agentic run
+ * changes state (started, finished, needs your answer, errored). Clicking an
+ * entry navigates to the run (`runId`).
+ */
+export interface NotificationItem {
+  id: string
+  folder: string | null
+  level: 'info' | 'warning' | 'error'
+  message: string
+  ts: number
+  /** Run id for run-lifecycle notifications (click → /runs/<id>/). */
+  runId?: string
+  read: boolean
+}
+
+/**
+ * Notification message per run status transition (`prev|next`, '' = none).
+ * Follow-up answers move awaiting/error/interrupted → running and are
+ * reported as "resumed" rather than "started".
+ */
+const RUN_TRANSITIONS: Record<string, { message: string; level: NotificationItem['level'] }> = {
+  '|running': { message: 'Agentic run started', level: 'info' },
+  'running|awaiting': { message: 'Agentic run needs your answer', level: 'warning' },
+  'running|done': { message: 'Agentic run finished', level: 'info' },
+  'running|error': { message: 'Agentic run errored', level: 'error' },
+  'running|interrupted': { message: 'Agentic run interrupted', level: 'warning' },
+  'awaiting|running': { message: 'Agentic run resumed', level: 'info' },
+  'awaiting|done': { message: 'Agentic run finished', level: 'info' },
+  'awaiting|error': { message: 'Agentic run errored', level: 'error' },
+  'interrupted|running': { message: 'Agentic run resumed', level: 'info' },
+  'error|running': { message: 'Agentic run retried', level: 'info' },
 }
 
 const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
@@ -69,11 +125,15 @@ export function useUiSocket(): UiSocketState {
   const [port, setPort] = useState<number | null>(null)
   const [toasts, setToasts] = useState<Toast[]>([])
   const [runs, setRuns] = useState<Record<string, SkillRunState>>({})
+  const [textGens, setTextGens] = useState<Record<string, TextGenState>>({})
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
 
   const wsRef = useRef<WebSocket | null>(null)
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastAssistantId = useRef<Record<string, string | null>>({})
   const prevLoop = useRef<Record<string, FolderState['loop']>>({})
+  // Last seen status per run id — drives the transition notifications.
+  const prevRunStatus = useRef<Record<string, SkillRunState['status']>>({})
 
   const pushToast = useCallback((folder: string | null, message: string, level: Toast['level'] = 'info') => {
     const id = uid('toast')
@@ -83,6 +143,30 @@ export function useUiSocket(): UiSocketState {
 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
+  }, [])
+
+  /** Newest-first, capped at 50 entries so the center can't grow unbounded. */
+  const pushNotification = useCallback(
+    (folder: string | null, message: string, level: NotificationItem['level'] = 'info', runId?: string) => {
+      const id = uid('notif')
+      setNotifications((prev) => {
+        const item: NotificationItem = { id, folder, message, level, ts: Date.now(), runId, read: false }
+        return [item, ...prev].slice(0, 50)
+      })
+    },
+    [],
+  )
+
+  const dismissNotification = useCallback((id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id))
+  }, [])
+
+  const markNotificationsRead = useCallback(() => {
+    setNotifications((prev) => (prev.some((n) => !n.read) ? prev.map((n) => ({ ...n, read: true })) : prev))
+  }, [])
+
+  const clearNotifications = useCallback(() => {
+    setNotifications([])
   }, [])
 
   const sendSkillReply = useCallback((runId: string, text: string): void => {
@@ -99,9 +183,31 @@ export function useUiSocket(): UiSocketState {
     }
   }, [])
 
+  const setRunStatus = useCallback((runId: string, status: 'done' | 'error' | 'interrupted'): void => {
+    const ws = wsRef.current
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ folder: '', command: { type: 'skillSetStatus', runId, text: '', status } }))
+    }
+  }, [])
+
   // Merge a skillGen chunk into the run state.
   const applySkillGen = useCallback(
     (msg: Extract<ServerMessage, { type: 'skillGen' }>): void => {
+      // Notify on real run state transitions (started / finished / awaiting
+      // answer / errored). Snapshot replays only seed the tracker — a late
+      // join must not re-notify, but the next real transition still fires.
+      if (msg.phase === 'snapshot') {
+        prevRunStatus.current[msg.runId] = msg.status
+      } else {
+        const prev = prevRunStatus.current[msg.runId]
+        if (prev !== msg.status) {
+          prevRunStatus.current[msg.runId] = msg.status
+          const transition = RUN_TRANSITIONS[`${prev ?? ''}|${msg.status}`]
+          if (transition !== undefined) {
+            pushNotification(msg.folder, transition.message, transition.level, msg.runId)
+          }
+        }
+      }
       setRuns((prev) => {
         const current = prev[msg.runId]
         // start / snapshot always carry the full transcript; an error for a
@@ -160,7 +266,7 @@ export function useUiSocket(): UiSocketState {
         return { ...prev, [msg.runId]: { ...current, status: msg.status, entries } }
       })
     },
-    [queryClient],
+    [queryClient, pushNotification],
   )
 
   const sendCommand = useCallback(
@@ -300,6 +406,23 @@ export function useUiSocket(): UiSocketState {
             // /model) — refresh the model query so every tab converges.
             void queryClient.invalidateQueries({ queryKey: ['models'] })
             break
+
+          case 'textGen': {
+            // One-shot AI-input fill — accumulate deltas; the done/error
+            // phases carry the full answer text. No runs, no notifications.
+            setTextGens((prev) => {
+              const current = prev[msg.runId]
+              if (msg.phase === 'start') {
+                return { ...prev, [msg.runId]: { status: msg.status, text: '' } }
+              }
+              if (current === undefined) return prev // missed the start — done still lands
+              if (msg.phase === 'delta') {
+                return { ...prev, [msg.runId]: { ...current, text: current.text + msg.text } }
+              }
+              return { ...prev, [msg.runId]: { status: msg.status, text: msg.text } }
+            })
+            break
+          }
 
           case 'skillGen':
             applySkillGen(msg)
@@ -525,8 +648,14 @@ export function useUiSocket(): UiSocketState {
     sendCommand,
     dismissToast,
     runs,
+    textGens,
+    notifications,
+    dismissNotification,
+    markNotificationsRead,
+    clearNotifications,
     sendSkillReply,
     requestSkillSnapshot,
+    setRunStatus,
   }
 }
 

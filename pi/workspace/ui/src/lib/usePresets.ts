@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { BuiltinReviewerInfo, PresetConfig, PresetSummary } from '../protocol'
+import type { BuiltinReviewerInfo, PresetConfig, PresetSummary, PresetType } from '../protocol'
 
 const fetchPresets = async (target: string): Promise<PresetSummary[]> => {
   const res = await fetch(`/api/workspaces/${encodeURIComponent(target)}/presets`)
@@ -57,21 +57,29 @@ export function usePresetDetail(
 }
 
 /**
- * Creates or overwrites a preset (manual mode) — POSTs `{ config }` to the
- * preset's file URL and invalidates the workspace's preset list on success.
- * The router validates the config against the preset schema.
+ * Creates or overwrites a preset (manual mode) — POSTs `{ type, config }` to
+ * the preset's file URL and invalidates the workspace's preset list on
+ * success. The router validates the payload against the preset schema.
  */
 export function useCreatePreset(workspaceId: string | null) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ name, config }: { name: string; config: PresetConfig }) => {
+    mutationFn: async ({
+      name,
+      config,
+      type,
+    }: {
+      name: string
+      config: PresetConfig
+      type: PresetType
+    }) => {
       if (workspaceId === null) throw new Error('No workspace selected')
       const res = await fetch(
         `/api/workspaces/${encodeURIComponent(workspaceId)}/presets/${encodeURIComponent(name)}.json`,
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ config }),
+          body: JSON.stringify({ type, config }),
         },
       )
       if (!res.ok) {

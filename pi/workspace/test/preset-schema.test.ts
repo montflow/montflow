@@ -3,7 +3,10 @@ import { Schema } from 'effect';
 import {
   PresetLoopConfigSchema,
   ReviewPresetFromJson,
+  isLoopConfig,
+  presetTypeOf,
   type PresetLoopConfigDecoded,
+  type PresetWorkflowConfigDecoded,
   type ReviewPresetDecoded,
 } from '../preset-schema';
 
@@ -12,6 +15,12 @@ const encode = (preset: unknown): string =>
 
 const decode = (json: string): unknown =>
   Schema.decodeUnknownSync(ReviewPresetFromJson)(json);
+
+/** Narrows a decoded preset to its loop config (all existing fixtures are loops). */
+const loopOf = (preset: ReviewPresetDecoded): PresetLoopConfigDecoded => {
+  if (!isLoopConfig(preset.config)) throw new Error('expected a loop preset');
+  return preset.config;
+};
 
 const storedConfig = (): PresetLoopConfigDecoded => ({
   reviewers: [
@@ -32,10 +41,10 @@ test('preset schema: round-trips a stored reference-based config', () => {
   const decoded = decode(json) as ReviewPresetDecoded;
   expect(decoded.version).toBe(1);
   expect(decoded.name).toBe('demo');
-  expect(decoded.config.maxLoops).toBe(5);
-  expect(decoded.config.maxCycles).toBe(4);
-  expect(decoded.config.supervisor.model).toBe('deepseek-v4-pro');
-  expect(decoded.config.reviewers).toHaveLength(2);
+  expect(loopOf(decoded).maxLoops).toBe(5);
+  expect(loopOf(decoded).maxCycles).toBe(4);
+  expect(loopOf(decoded).supervisor.model).toBe('deepseek-v4-pro');
+  expect(loopOf(decoded).reviewers).toHaveLength(2);
 });
 
 test('preset schema: round-trips fallback model chains for every role', () => {
@@ -64,14 +73,14 @@ test('preset schema: round-trips fallback model chains for every role', () => {
     },
   };
   const decoded = decode(encode(preset)) as ReviewPresetDecoded;
-  expect(decoded.config.reviewers[0]?.fallbackModels).toEqual(['fb-rev-1', 'fb-rev-2']);
-  expect(decoded.config.reviewers[1]?.fallbackModels).toBeUndefined();
-  expect(decoded.config.supervisor.fallbackModels).toEqual(['fb-sup-1']);
-  expect(decoded.config.fixerFallbackModels).toEqual(['fb-fixer-1', 'fb-fixer-2']);
+  expect(loopOf(decoded).reviewers[0]?.fallbackModels).toEqual(['fb-rev-1', 'fb-rev-2']);
+  expect(loopOf(decoded).reviewers[1]?.fallbackModels).toBeUndefined();
+  expect(loopOf(decoded).supervisor.fallbackModels).toEqual(['fb-sup-1']);
+  expect(loopOf(decoded).fixerFallbackModels).toEqual(['fb-fixer-1', 'fb-fixer-2']);
   // A config without fallbacks still decodes (all optional).
   const plain = decode(encode({ version: 1 as const, name: 'plain', config: storedConfig() })) as ReviewPresetDecoded;
-  expect(plain.config.fixerFallbackModels).toBeUndefined();
-  expect(plain.config.supervisor.fallbackModels).toBeUndefined();
+  expect(loopOf(plain).fixerFallbackModels).toBeUndefined();
+  expect(loopOf(plain).supervisor.fallbackModels).toBeUndefined();
 });
 
 test('preset schema: encoded JSON is compact references — no expanded profile data', () => {
@@ -114,7 +123,7 @@ test('preset schema: decodes presets that omit the model override', () => {
     },
   });
   const decoded = decode(json) as ReviewPresetDecoded;
-  expect(decoded.config.reviewers[0]).toEqual({ type: 'profile', name: 'auditor' });
+  expect(loopOf(decoded).reviewers[0]).toEqual({ type: 'profile', name: 'auditor' });
 });
 
 test('preset schema: legacy presets without agentConcurrency still decode', () => {
@@ -130,9 +139,9 @@ test('preset schema: legacy presets without agentConcurrency still decode', () =
     },
   });
   const decoded = decode(legacy) as ReviewPresetDecoded;
-  expect(decoded.config.agentConcurrency).toBeUndefined();
+  expect(loopOf(decoded).agentConcurrency).toBeUndefined();
   // Legacy presets also omit maxCycles — optional, resolution fills the cap.
-  expect(decoded.config.maxCycles).toBeUndefined();
+  expect(loopOf(decoded).maxCycles).toBeUndefined();
 });
 
 test('preset schema: round-trips thinking levels for every role', () => {
@@ -161,15 +170,15 @@ test('preset schema: round-trips thinking levels for every role', () => {
     },
   };
   const decoded = decode(encode(preset)) as ReviewPresetDecoded;
-  expect(decoded.config.reviewers[0]?.thinkingLevel).toBe('high');
-  expect(decoded.config.reviewers[1]?.thinkingLevel).toBe('xhigh');
-  expect(decoded.config.supervisor.thinkingLevel).toBe('max');
-  expect(decoded.config.fixerThinkingLevel).toBe('low');
+  expect(loopOf(decoded).reviewers[0]?.thinkingLevel).toBe('high');
+  expect(loopOf(decoded).reviewers[1]?.thinkingLevel).toBe('xhigh');
+  expect(loopOf(decoded).supervisor.thinkingLevel).toBe('max');
+  expect(loopOf(decoded).fixerThinkingLevel).toBe('low');
   // Levels are omitted (not null) when unset — a config without them decodes.
   const plain = decode(encode({ version: 1 as const, name: 'plain', config: storedConfig() })) as ReviewPresetDecoded;
-  expect(plain.config.supervisor.thinkingLevel).toBeUndefined();
-  expect(plain.config.fixerThinkingLevel).toBeUndefined();
-  expect(plain.config.reviewers[0]?.thinkingLevel).toBeUndefined();
+  expect(loopOf(plain).supervisor.thinkingLevel).toBeUndefined();
+  expect(loopOf(plain).fixerThinkingLevel).toBeUndefined();
+  expect(loopOf(plain).reviewers[0]?.thinkingLevel).toBeUndefined();
 });
 
 test('preset schema: rejects an unknown thinking level', () => {
@@ -242,6 +251,104 @@ test('preset schema: unknown reviewer type is rejected', () => {
 test('preset schema: PresetLoopConfigSchema decodes the stored shape', () => {
   const decoded = Schema.decodeUnknownSync(PresetLoopConfigSchema)(storedConfig());
   expect(decoded.reviewers.map((ref) => ref.type)).toEqual(['builtin', 'profile']);
+});
+
+test('preset schema: legacy files without a type field decode as loops', () => {
+  const legacy = JSON.stringify({ version: 1, name: 'old', config: storedConfig() });
+  const decoded = decode(legacy) as ReviewPresetDecoded;
+  expect(decoded.type).toBeUndefined(); // legacy — no type field
+  expect(presetTypeOf(decoded)).toBe('loop');
+  expect(loopOf(decoded).maxLoops).toBe(5);
+});
+
+test('preset schema: loop presets round-trip an explicit type', () => {
+  const preset = { version: 1 as const, type: 'loop' as const, name: 'demo', config: storedConfig() };
+  const json = encode(preset);
+  expect(JSON.parse(json).type).toBe('loop');
+  const decoded = decode(json) as ReviewPresetDecoded;
+  expect(decoded.type).toBe('loop');
+  expect(presetTypeOf(decoded)).toBe('loop');
+});
+
+test('preset schema: workflow presets round-trip open-ended steps', () => {
+  const workflow: PresetWorkflowConfigDecoded = {
+    description: 'Review then ask the user',
+    prompt: 'Stay in the repo, never invent findings',
+    steps: [
+      {
+        id: 's1',
+        kind: 'reviewer-group',
+        label: 'Reviewers',
+        reviewers: [
+          { type: 'builtin', id: 'generic' }, // legacy bare ref still decodes
+          { reviewer: { type: 'profile', name: 'security-auditor' }, prompt: 'Focus on auth' },
+        ],
+      },
+      { id: 's2', kind: 'reviewer', label: 'Deep dive', reviewer: { type: 'profile', name: 'data-flow' }, prompt: 'Focus on file-signing flows' },
+      { id: 's3', kind: 'human', label: 'Ask the user for input' },
+      { id: 's4', kind: 'fixer', params: { waves: 2 } },
+    ],
+  };
+  const preset = { version: 1 as const, type: 'workflow' as const, name: 'pipeline', config: workflow };
+  const json = encode(preset);
+  expect(JSON.parse(json).type).toBe('workflow');
+  const decoded = decode(json) as ReviewPresetDecoded;
+  expect(decoded.type).toBe('workflow');
+  if (!isLoopConfig(decoded.config)) {
+    expect(decoded.config.description).toBe('Review then ask the user');
+    expect(decoded.config.prompt).toBe('Stay in the repo, never invent findings');
+    expect(decoded.config.steps).toHaveLength(4);
+    // Reviewer-group steps carry their typed roster (bare refs + spec entries).
+    expect(decoded.config.steps[0]?.reviewers).toEqual([
+      { type: 'builtin', id: 'generic' },
+      { reviewer: { type: 'profile', name: 'security-auditor' }, prompt: 'Focus on auth' },
+    ]);
+    // Single reviewer steps carry their picked ref (and can be empty).
+    expect(decoded.config.steps[1]?.reviewer).toEqual({ type: 'profile', name: 'data-flow' });
+    expect(decoded.config.steps[1]?.prompt).toBe('Focus on file-signing flows');
+    expect(decoded.config.steps[2]?.label).toBe('Ask the user for input');
+    expect(decoded.config.steps[3]?.params).toEqual({ waves: 2 });
+    expect(decoded.config.steps[3]?.reviewer).toBeUndefined();
+  } else {
+    throw new Error('expected a workflow config');
+  }
+});
+
+test('preset schema: an empty reviewer step round-trips as unconfigured', () => {
+  const workflow: PresetWorkflowConfigDecoded = {
+    steps: [{ id: 's1', kind: 'reviewer' }],
+  };
+  const preset = { version: 1 as const, type: 'workflow' as const, name: 'empty', config: workflow };
+  const decoded = decode(encode(preset)) as ReviewPresetDecoded;
+  if (isLoopConfig(decoded.config)) throw new Error('expected a workflow config');
+  expect(decoded.config.steps[0]?.reviewer).toBeUndefined();
+});
+
+test('preset schema: a workflow config without an explicit type is rejected', () => {
+  const json = JSON.stringify({
+    version: 1,
+    name: 'x',
+    config: { steps: [{ id: 's1', kind: 'reviewer' }] },
+  });
+  expect(() => decode(json)).toThrow();
+});
+
+test('preset schema: mismatched type/config pairs are rejected', () => {
+  const loopTypeWorkflowConfig = JSON.stringify({
+    version: 1,
+    name: 'x',
+    type: 'loop',
+    config: { steps: [{ id: 's1', kind: 'reviewer' }] },
+  });
+  expect(() => decode(loopTypeWorkflowConfig)).toThrow();
+
+  const workflowTypeLoopConfig = JSON.stringify({
+    version: 1,
+    name: 'x',
+    type: 'workflow',
+    config: storedConfig(),
+  });
+  expect(() => decode(workflowTypeLoopConfig)).toThrow();
 });
 
 // Compile-time checks: the decoded types expose the expected fields.

@@ -2,10 +2,18 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useUiSocket } from '@/lib/useUiSocket'
 import { runTitle } from '@/lib/runTitle'
 import { consumeRestored } from '@/lib/scrollRestoration'
-import { CheckCircle2, CircleAlert, Loader2, Lock, MessageCircle, Send, Wrench, XCircle } from 'lucide-react'
+import { CheckCircle2, CircleAlert, CircleStop, Loader2, Lock, MessageCircle, MoreHorizontal, Send, Wrench, XCircle } from 'lucide-react'
 
 interface RunPageProps {
   runId: string
@@ -13,7 +21,7 @@ interface RunPageProps {
 }
 
 export function RunPage({ runId, conn }: RunPageProps) {
-  const { runs, sendSkillReply, requestSkillSnapshot } = useUiSocket()
+  const { runs, sendSkillReply, requestSkillSnapshot, setRunStatus } = useUiSocket()
   const run = runs[runId]
 
   // Late join / page reload — fetch the authoritative transcript. Keep
@@ -92,6 +100,24 @@ export function RunPage({ runId, conn }: RunPageProps) {
           <StatusIcon className={`size-3 ${running ? 'animate-spin' : ''}`} />
           {statusMeta.label}
         </span>
+        {run !== undefined && (
+          <>
+            {running && (
+              <Button
+                size="xs"
+                variant="outline"
+                className="border-red-500/40 text-red-500 hover:bg-red-500/10 hover:text-red-500 dark:border-red-500/40"
+                onClick={() => setRunStatus(runId, 'interrupted')}
+                disabled={conn !== 'open'}
+                title="Force stop — abort the agent and mark the run interrupted"
+              >
+                <CircleStop className="size-3" />
+                Stop
+              </Button>
+            )}
+            <RunStatusMenu runId={runId} status={status} conn={conn} setRunStatus={setRunStatus} />
+          </>
+        )}
       </header>
 
       <div ref={scrollRef} onScroll={handleScroll} data-scroll-region className="flex-1 overflow-y-auto">
@@ -195,6 +221,60 @@ export function RunPage({ runId, conn }: RunPageProps) {
 const EMPTY_ENTRIES: Array<{ role: 'user' | 'assistant'; text: string }> = []
 const EMPTY_TOOLS: Array<{ name: string; status: 'running' | 'done' | 'error'; turn: number }> = []
 
+/**
+ * Header kebab menu for manual run-status control: force-stops a run stuck
+ * in "running" (aborts the agent) or overrides the status of any run whose
+ * lifecycle is wrong (e.g. one that never finished). The backend persists
+ * the change and broadcasts it to every tab.
+ */
+function RunStatusMenu({
+  runId,
+  status,
+  conn,
+  setRunStatus,
+}: {
+  runId: string
+  status: 'running' | 'done' | 'awaiting' | 'interrupted' | 'error'
+  conn: 'connecting' | 'open' | 'closed'
+  setRunStatus: (runId: string, status: 'done' | 'error' | 'interrupted') => void
+}) {
+  const canEdit = conn === 'open'
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="size-7" title="Run actions" disabled={!canEdit}>
+          <MoreHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuLabel>Run status</DropdownMenuLabel>
+        {status === 'running' && (
+          <DropdownMenuItem variant="destructive" onSelect={() => setRunStatus(runId, 'interrupted')}>
+            <CircleStop className="size-4" />
+            Force stop
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled={status === 'done'} onSelect={() => setRunStatus(runId, 'done')}>
+          <CheckCircle2 className="size-4" />
+          Mark as done
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={status === 'error'} onSelect={() => setRunStatus(runId, 'error')}>
+          <XCircle className="size-4" />
+          Mark as error
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={status === 'interrupted' || status === 'running'}
+          onSelect={() => setRunStatus(runId, 'interrupted')}
+        >
+          <CircleAlert className="size-4" />
+          Mark as interrupted
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function RunEntry({
   entry,
   streaming,
@@ -204,15 +284,15 @@ function RunEntry({
 }) {
   if (entry.role === 'user') {
     return (
-      <div className="flex justify-end">
-        <div className="w-full rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
+      <div className="flex justify-end pl-12">
+        <div className="w-full rounded-lg bg-sky-100 px-3 py-2 text-sm text-sky-900 dark:bg-sky-500/15 dark:text-sky-100">
           <p className="whitespace-pre-wrap">{entry.text}</p>
         </div>
       </div>
     )
   }
   return (
-    <div className="flex justify-start">
+    <div className="flex justify-start pr-12">
       <div className="w-full rounded-lg border bg-card px-3 py-2">
         <div className="prose prose-sm dark:prose-invert max-w-none">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.text}</ReactMarkdown>

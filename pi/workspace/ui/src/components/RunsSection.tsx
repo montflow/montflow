@@ -1,7 +1,9 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { CollapsibleSection } from '@/components/CollapsibleSection'
+import { TableEmptyState } from '@/components/TableEmptyState'
 import { ALL_RUN_STATUSES, useRuns, type RunStatusFilter } from '@/lib/useRuns'
+import { useWorkspacePrefs } from '@/lib/useWorkspacePrefs'
 import { runUrl } from '@/components/LandingPage'
 import { navigate, setSearchParams, useSearchParams } from '@/lib/useLocation'
 import type { RunSummary } from '@/protocol'
@@ -12,6 +14,8 @@ interface RunsSectionProps {
   conn: 'connecting' | 'open' | 'closed'
   /** Scroll-target id (e.g. for the command palette). */
   id?: string
+  /** Deep link (?section=runs) — force the panel open when navigating here. */
+  reveal?: boolean
 }
 
 /** Status badge styling — mirrors the RunPage status colors. */
@@ -38,7 +42,16 @@ const timeAgo = (ts: number): string => {
   return `${days}d ago`
 }
 
-export function RunsSection({ workspaceId, conn, id }: RunsSectionProps) {
+export function RunsSection({ workspaceId, conn, id, reveal }: RunsSectionProps) {
+  // Panel open state is persisted per workspace (status filters live in the URL).
+  const [prefs, setPrefs] = useWorkspacePrefs(workspaceId, 'runs')
+
+  // Deep-link reveal: a breadcrumb section link (?section=runs) opens a
+  // collapsed panel so the scroll lands on visible content.
+  useEffect(() => {
+    if (reveal === true) setPrefs({ open: true })
+  }, [reveal, setPrefs])
+
   // Status filters live in the URL (?rs=done,error) so they survive navigation.
   const params = useSearchParams()
   const selected = useMemo(
@@ -65,10 +78,14 @@ export function RunsSection({ workspaceId, conn, id }: RunsSectionProps) {
     setSearchParams(url)
   }
 
-  const hasRuns = (runs?.length ?? 0) > 0
-
   return (
-    <CollapsibleSection id={id} title="Runs" icon={<Terminal className="size-5" />}>
+    <CollapsibleSection
+      id={id}
+      title="Runs"
+      icon={<Terminal className="size-5" />}
+      open={prefs.open}
+      onOpenChange={(open) => setPrefs({ open })}
+    >
       {isError && (
         <div className="mb-2 flex items-center gap-2 text-xs text-red-500">
           <span className="truncate">{error instanceof Error ? error.message : String(error)}</span>
@@ -80,10 +97,6 @@ export function RunsSection({ workspaceId, conn, id }: RunsSectionProps) {
 
       {isPending ? (
         <RunsTableSkeleton />
-      ) : !hasRuns ? (
-        <p className="text-xs text-muted-foreground">
-          No runs yet — create a skill, profile, or preset with the agent and it appears here.
-        </p>
       ) : (
         <>
           <div className="mb-3 flex flex-wrap gap-1.5">
@@ -119,12 +132,20 @@ export function RunsSection({ workspaceId, conn, id }: RunsSectionProps) {
             {!isFetching && `${runs?.length ?? 0} run${(runs?.length ?? 0) === 1 ? '' : 's'}`}
           </p>
 
-          <div className="relative h-72 overflow-y-auto rounded-md border">
+          <div className="relative h-96 overflow-y-auto rounded-md border">
             {runs?.length === 0 ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                <Terminal className="size-4" />
-                No runs match the selected statuses.
-              </div>
+              selected.length > 0 ? (
+                <TableEmptyState
+                  icon={<Terminal className="size-4" />}
+                  message="No runs match the selected statuses."
+                />
+              ) : (
+                <TableEmptyState
+                  icon={<Terminal className="size-4" />}
+                  message="No runs yet"
+                  hint="Create a skill, profile, or preset with the agent and it appears here."
+                />
+              )
             ) : (
               <table className="w-full table-fixed text-sm">
                 <thead className="sticky top-0 z-10 bg-card">
@@ -203,8 +224,11 @@ function RunTitle({ run }: { run: RunSummary }) {
 
 function RunsTableSkeleton() {
   return (
-    <div className="h-72 overflow-hidden rounded-md border">
-      {Array.from({ length: 5 }, (_, index) => (
+    <div className="h-96 overflow-hidden rounded-md border">
+      <div className="flex items-center border-b px-3 py-2">
+        <div className="h-2.5 w-24 animate-pulse rounded bg-muted" />
+      </div>
+      {Array.from({ length: 8 }, (_, index) => (
         <div key={index} className="flex items-center gap-4 border-b px-3 py-2.5 last:border-b-0">
           <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
           <div className="h-4 w-16 animate-pulse rounded-full bg-muted" />

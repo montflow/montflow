@@ -33,10 +33,12 @@ import { ensureStateDirs, isStoredConfig, loopStatePath, stateDirForReviewFile }
 import { parseSummaryText, type SummaryCounts } from './parse-summary';
 import type {
   PresetLoopConfigDecoded,
+  PresetWorkflowConfigDecoded,
   ReviewPresetDecoded,
   ReviewerRefDecoded,
 } from './preset-schema';
-import { resolvePresetConfig } from './preset-resolve';
+import { isLoopConfig, presetTypeOf } from './preset-schema';
+import { resolveLoopPreset } from './preset-resolve';
 import {
   deletePreset as deleteStoredPreset,
   isValidPresetName,
@@ -1174,6 +1176,17 @@ const presetSummary = (config: PresetLoopConfigDecoded): string => {
 };
 
 /**
+ * One-line summary of a stored preset (loop or workflow) — used in the preset
+ * picker descriptions. Workflows summarize as their step count.
+ * @param {ReviewPresetDecoded} preset The stored preset
+ * @returns The summary text
+ */
+const presetSummaryOf = (preset: ReviewPresetDecoded): string =>
+  isLoopConfig(preset.config)
+    ? presetSummary(preset.config)
+    : `workflow · ${preset.config.steps.length} step${preset.config.steps.length === 1 ? '' : 's'}`;
+
+/**
  * Converts one roster entry to its stored reviewer reference. Builtin entries
  * become `{ type: 'builtin', id }` (model omitted when it equals the default);
  * profile entries become `{ type: 'profile', name, model }` — the profile
@@ -1355,7 +1368,7 @@ const usePreset = async (
   const preset = await runPresetOp(ctx, readPreset(ctx.cwd, picked));
   if (preset === null) return { status: 'cancel' };
 
-  const config = await resolvePresetConfig(ctx, preset.config);
+  const config = await resolveLoopPreset(ctx, preset);
   if (config === null) return { status: 'cancel' };
 
   for (;;) {
@@ -1579,7 +1592,7 @@ const runResumeFlow = async (
   if (presetName === null) return { status: 'back' }; // → action menu
   const preset = await runPresetOp(ctx, readPreset(ctx.cwd, presetName));
   if (preset === null) return { status: 'cancel' };
-  const config = await resolvePresetConfig(ctx, preset.config);
+  const config = await resolveLoopPreset(ctx, preset);
   if (config === null) return { status: 'cancel' };
 
   return { status: 'run', opts: optsForResume(ctx, config, review.file) };
@@ -1605,7 +1618,7 @@ const modifyPreset = async (
   const preset = await runPresetOp(ctx, readPreset(ctx.cwd, picked));
   if (preset === null) return null;
 
-  const config = await resolvePresetConfig(ctx, preset.config);
+  const config = await resolveLoopPreset(ctx, preset);
   if (config === null) return null;
 
   let roster: RosterEntry[] | null = null;
@@ -1658,6 +1671,7 @@ const removePreset = async (ctx: ExtensionContext, name?: string): Promise<strin
  *
  * ```
  * ┌─ preset: security-audit ─────────────────┐
+ * │ type      : loop                         │
  * │ reviewers : generic, security-auditor    │
  * │ supervisor: deepseek-v4-pro              │
  * │ fixer     : deepseek-v4-flash-free       │
@@ -1665,32 +1679,17 @@ const removePreset = async (ctx: ExtensionContext, name?: string): Promise<strin
  * │ deadlock  : flip 2 → escalate            │
  * └──────────────────────────────────────────┘
  * ```
+ *
+ * Workflow presets render their step list instead.
  * @param {ReviewPresetDecoded} preset The stored preset
  * @returns The boxed graphic text
  */
 export const renderPresetGraphic = (preset: ReviewPresetDecoded): string => {
   const { name, config } = preset;
-  const roster = config.reviewers
-    .map((ref) => {
-      const base = ref.type === 'builtin' ? ref.id : ref.name;
-      return ref.thinkingLevel === undefined ? base : `${base} (thinking ${ref.thinkingLevel})`;
-    })
-    .join(', ');
-  const rows = [
-    `preset   : ${name}`,
-    `reviewers: ${roster}`,
-    `supervisor: ${config.supervisor.model}` +
-      (config.supervisor.thinkingLevel === undefined
-        ? ''
-        : ` (thinking ${config.supervisor.thinkingLevel})`),
-    `fixer    : ${config.fixerModel}` +
-      (config.fixerThinkingLevel === undefined
-        ? ''
-        : ` (thinking ${config.fixerThinkingLevel})`),
-    `max loops: ${config.maxLoops}`,
-    `max cycles/loop: ${config.maxCycles ?? config.maxLoops}`,
-    `deadlock : flip ${config.deadlock.flipThreshold} → ${config.deadlock.action}`,
-  ];
+  const type = presetTypeOf(preset);
+  const rows: string[] = isLoopConfig(config)
+    ? loopGraphicRows(name, config, type)
+    : workflowGraphicRows(name, config);
   const inner = Math.max(...rows.map((row) => row.length));
   const pad = (row: string): string => row + ' '.repeat(inner - row.length);
   // Body rows are `│ ` + inner + ` │` = inner+4 chars, so the border needs
@@ -1701,6 +1700,50 @@ export const renderPresetGraphic = (preset: ReviewPresetDecoded): string => {
     ...rows.map((row) => `│ ${pad(row)} │`),
     `└${border}┘`,
   ].join('\n');
+};
+
+/** Body rows for a loop preset graphic. */
+const loopGraphicRows = (
+  name: string,
+  config: PresetLoopConfigDecoded,
+  type: 'loop' | 'workflow',
+): string[] => {
+  const roster = config.reviewers
+    .map((ref) => {
+      const base = ref.type === 'builtin' ? ref.id : ref.name;
+      return ref.thinkingLevel === undefined ? base : `${base} (thinking ${ref.thinkingLevel})`;
+    })
+    .join(', ');
+  return [
+    `type      : ${type}`,
+    `preset    : ${name}`,
+    `reviewers : ${roster}`,
+    `supervisor: ${config.supervisor.model}` +
+      (config.supervisor.thinkingLevel === undefined
+        ? ''
+        : ` (thinking ${config.supervisor.thinkingLevel})`),
+    `fixer     : ${config.fixerModel}` +
+      (config.fixerThinkingLevel === undefined
+        ? ''
+        : ` (thinking ${config.fixerThinkingLevel})`),
+    `max loops : ${config.maxLoops}`,
+    `max cycles/loop: ${config.maxCycles ?? config.maxLoops}`,
+    `deadlock  : flip ${config.deadlock.flipThreshold} → ${config.deadlock.action}`,
+  ];
+};
+
+/** Body rows for a workflow preset graphic (step list). */
+const workflowGraphicRows = (name: string, config: PresetWorkflowConfigDecoded): string[] => {
+  const steps = config.steps.map(
+    (step) => `  ${step.id} ${step.kind}${step.label === undefined ? '' : ` (${step.label})`}`,
+  );
+  return [
+    'type      : workflow',
+    `preset    : ${name}`,
+    ...(config.description === undefined ? [] : [`desc      : ${config.description}`]),
+    `steps     : ${config.steps.length}`,
+    ...steps,
+  ];
 };
 
 /**
@@ -1807,7 +1850,9 @@ const pickPreset = async (ctx: ExtensionContext): Promise<string | null> => {
   for (const name of names) {
     const preset = await runPresetOp(ctx, readPreset(ctx.cwd, name));
     const description =
-      preset === null ? `.agents/@montflow/review-presets/${name}.json` : presetSummary(preset.config);
+      preset === null
+        ? `.agents/@montflow/review-presets/${name}.json`
+        : presetSummaryOf(preset);
     items.push({ value: name, label: name, description });
   }
   return selectWithSearch(ctx, 'Choose a preset', items);

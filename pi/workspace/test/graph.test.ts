@@ -248,6 +248,7 @@ const fakeAgentFactory = (
           Effect.sync(() => {
             disposals.push(id);
           }),
+        abort: () => Effect.succeed(undefined),
         sessionFile: () => undefined,
       };
     },
@@ -311,6 +312,7 @@ const fakeAgentFor = (
   prompts: string[],
 ): {
   prompt: (task: string) => Effect.Effect<{ text: string; error: string | undefined; timedOut?: boolean }>;
+  abort: () => Effect.Effect<void>;
   dispose: () => Effect.Effect<void>;
   sessionFile: () => string | undefined;
 } => ({
@@ -334,6 +336,7 @@ const fakeAgentFor = (
     return Effect.succeed({ text: 'ok', error: undefined });
   },
   dispose: () => Effect.succeed(undefined),
+  abort: () => Effect.succeed(undefined),
   sessionFile: () => undefined,
 });
 
@@ -1314,6 +1317,7 @@ test('runGraph: a failing reviewer is retried IN-PASS with its fallback model', 
               return Effect.succeed({ text: 'ok', error: undefined });
             },
             dispose: () => Effect.succeed(undefined),
+            abort: () => Effect.succeed(undefined),
             sessionFile: () => undefined,
           });
         },
@@ -1375,6 +1379,7 @@ test('runGraph: a failing supervisor is recreated with its fallback model on the
               return Effect.succeed({ text: 'ok', error: undefined });
             },
             dispose: () => Effect.succeed(undefined),
+            abort: () => Effect.succeed(undefined),
             sessionFile: () => undefined,
           });
         },
@@ -1436,6 +1441,7 @@ test('runGraph: a reviewer that never completes fails the pass — no resume wit
               return Effect.succeed({ text: 'ok', error: undefined });
             },
             dispose: () => Effect.succeed(undefined),
+            abort: () => Effect.succeed(undefined),
             sessionFile: () => undefined,
           }),
       }),
@@ -1874,6 +1880,7 @@ const streamingAgent = (
     _onTool?: unknown,
     onDelta?: (delta: string, kind: 'text' | 'thinking') => void,
   ) => Effect.Effect<{ text: string; error: string | undefined; timedOut?: boolean }>;
+  abort: () => Effect.Effect<void>;
   dispose: () => Effect.Effect<void>;
   sessionFile: () => string | undefined;
 } => ({
@@ -1899,6 +1906,7 @@ const streamingAgent = (
     return Effect.succeed({ text: 'ok', error: undefined });
   },
   dispose: () => Effect.succeed(undefined),
+  abort: () => Effect.succeed(undefined),
   sessionFile: () => undefined,
 });
 

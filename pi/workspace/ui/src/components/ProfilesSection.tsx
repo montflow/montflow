@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { NewProfileDialog } from '@/components/NewProfileDialog'
+import { TableEmptyState } from '@/components/TableEmptyState'
 import { useProfiles } from '@/lib/useProfiles'
 import { useSkillNameToIdMap } from '@/lib/useSkills'
 import { useWorkspacePrefs } from '@/lib/useWorkspacePrefs'
@@ -261,12 +262,6 @@ export function ProfilesSection({ workspaceId, conn, folder, id, reveal }: Profi
 
       {isPending ? (
         <ProfilesTableSkeleton />
-      ) : !hasProfiles ? (
-        <p className="text-xs text-muted-foreground">
-          No profiles in{' '}
-          <code className="rounded bg-muted px-1">.agents/@montflow/profiles/</code> — create one
-          with <code className="rounded bg-muted px-1">/montflow profiles</code>.
-        </p>
       ) : (
         <>
           <div className="mb-3 flex items-center gap-2">
@@ -296,7 +291,7 @@ export function ProfilesSection({ workspaceId, conn, folder, id, reveal }: Profi
             </Button>
           </div>
           {skills.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
+            <div className="mb-3 flex flex-wrap gap-1.5">
                 {skills.map((skill) => {
                   const active = selectedSkills.includes(skill)
                   return (
@@ -337,10 +332,18 @@ export function ProfilesSection({ workspaceId, conn, folder, id, reveal }: Profi
               rows — so typing never changes the layout. */}
           <div ref={tableScrollRef} className="relative h-96 overflow-y-auto rounded-md border">
             {filtered.length === 0 ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-xs text-muted-foreground">
-                <SearchX className="size-4" />
-                No profiles match your filters.
-              </div>
+              hasProfiles ? (
+                <TableEmptyState
+                  icon={<SearchX className="size-4" />}
+                  message="No profiles match your filters."
+                />
+              ) : (
+                <TableEmptyState
+                  icon={<Users className="size-4" />}
+                  message="No profiles yet"
+                  hint="Create one in .agents/@montflow/profiles/ or run /montflow profiles."
+                />
+              )
             ) : (
               <table className="w-full table-fixed text-sm">
                 <thead className="sticky top-0 z-10 bg-card">

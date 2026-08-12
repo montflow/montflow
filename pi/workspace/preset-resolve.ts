@@ -10,7 +10,12 @@ import {
 } from './config';
 import { SUPERVISOR_SKILL_PATH } from './skill-paths';
 import { getProfile, profileToReviewerProfile } from './profiles-client';
-import type { PresetLoopConfigDecoded, ReviewerRefDecoded } from './preset-schema';
+import {
+  isLoopConfig,
+  type PresetLoopConfigDecoded,
+  type ReviewerRefDecoded,
+  type ReviewPresetDecoded,
+} from './preset-schema';
 
 /**
  * Resolves one stored reviewer reference to a full runtime reviewer profile.
@@ -62,6 +67,30 @@ export const resolveReviewerRef = async (
     return null;
   }
   return profileToReviewerProfile(result.profile, ref.model, ref.fallbackModels, ref.thinkingLevel);
+};
+
+/**
+ * Resolves a stored preset to a runtime {@link LoopConfig}. Loop presets
+ * expand every reviewer reference and fill the always-bundled skill paths;
+ * workflow presets are not executable yet — the user is notified and null is
+ * returned so the caller can abort the flow.
+ * @param {ExtensionContext} ctx The command context
+ * @param {ReviewPresetDecoded} preset The stored preset
+ * @returns The runtime loop config, or null when the preset is a workflow or a reviewer cannot be resolved
+ */
+export const resolveLoopPreset = async (
+  ctx: ExtensionContext,
+  preset: ReviewPresetDecoded,
+): Promise<LoopConfig | null> => {
+  if (!isLoopConfig(preset.config)) {
+    ctx.ui.notify(
+      `Preset '${preset.name}' is a workflow preset — workflows are not executable yet. ` +
+        'Edit it as JSON for now.',
+      'error',
+    );
+    return null;
+  }
+  return resolvePresetConfig(ctx, preset.config);
 };
 
 /**

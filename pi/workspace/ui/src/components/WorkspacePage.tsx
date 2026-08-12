@@ -1,5 +1,5 @@
 import { useEffect, useMemo, type ReactNode } from 'react'
-import type { WorkspaceInfo } from '@/protocol'
+import type { WorkspaceInfo, WorkspaceInfoDetail } from '@/protocol'
 import { ProfilesSection } from '@/components/ProfilesSection'
 import { SkillsSection } from '@/components/SkillsSection'
 import { PresetsSection } from '@/components/PresetsSection'
@@ -9,23 +9,21 @@ import { ProfileDetail } from '@/components/ProfileDetail'
 import { PresetDetail } from '@/components/PresetDetail'
 import { CommandPalette, type PaletteCommand } from '@/components/CommandPalette'
 import { presetNameFromPath, profileNameFromPath, skillIdFromPath, workspaceUrl } from '@/components/LandingPage'
-import { useWorkspaceInfo } from '@/lib/useWorkspaceInfo'
 import { navigate, setSearchParams, usePathname, useSearchParams } from '@/lib/useLocation'
 import { skipNextRestore } from '@/lib/scrollRestoration'
 
 interface WorkspacePageProps {
   conn: 'connecting' | 'open' | 'closed'
   workspace: WorkspaceInfo
+  /** Router-computed git info (folder, repo, branch, path) — fetched by App for the tab title. */
+  info: WorkspaceInfoDetail | null
 }
 
-export function WorkspacePage({ conn, workspace }: WorkspacePageProps) {
+export function WorkspacePage({ conn, workspace, info }: WorkspacePageProps) {
   const pathname = usePathname()
   const skillId = skillIdFromPath(pathname)
   const profileName = profileNameFromPath(pathname)
   const presetName = presetNameFromPath(pathname)
-  // Hooks must run unconditionally — fetch workspace info even when the
-  // detail views short-circuit below (cached by react-query anyway).
-  const info = useWorkspaceInfo(workspace.id, conn)
 
   // Breadcrumb section links (?section=skills) — the section to scroll to.
   const params = useSearchParams()
@@ -133,7 +131,7 @@ export function WorkspacePage({ conn, workspace }: WorkspacePageProps) {
 
         <PresetsSection workspaceId={workspace.id} conn={conn} folder={info?.folder ?? null} id="presets" reveal={section === 'presets'} />
 
-        <RunsSection workspaceId={workspace.id} conn={conn} id="runs" />
+        <RunsSection workspaceId={workspace.id} conn={conn} id="runs" reveal={section === 'runs'} />
       </main>
     )
   }

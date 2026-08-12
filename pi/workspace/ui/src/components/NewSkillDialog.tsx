@@ -13,6 +13,7 @@ import { useCreateSkill, useSkills } from '@/lib/useSkills'
 import { useUiSocket } from '@/lib/useUiSocket'
 import { useModels } from '@/lib/useModels'
 import { ModelSelect } from '@/components/ModelSelect'
+import { AiInput } from '@/components/AiInput'
 import { runUrl } from '@/components/LandingPage'
 import { navigate } from '@/lib/useLocation'
 import type { SkillDetail } from '@/protocol'
@@ -200,15 +201,14 @@ export function NewSkillDialog({
         {mode === 'agentic' && (
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="skill-prompt" className="text-xs font-medium text-muted-foreground">
-                Prompt
-              </label>
-              <textarea
-                id="skill-prompt"
+              <AiInput
                 value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
+                onChange={setPrompt}
+                folder={folder}
+                label="Prompt"
+                prompt={`Create a prompt to generate a skill with the following qualities:\n${name.trim()}`}
                 placeholder="e.g. A skill that audits TypeScript code for Result-over-throws error handling…"
-                className="min-h-28 w-full resize-y rounded-md border border-input bg-transparent p-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="min-h-28"
               />
               {hasAuthoringSkill && (
                 <label className="flex items-start gap-2 text-xs text-muted-foreground">

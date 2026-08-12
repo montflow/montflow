@@ -6,6 +6,8 @@ import { runTitle } from '@/lib/runTitle'
 import { ModelPicker } from '@/components/ModelPicker'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { useClampedPopover } from '@/lib/useClampedPopover'
+import { Notifications } from '@/components/Notifications'
+import type { NotificationItem } from '@/lib/useUiSocket'
 import { ALL_RUN_STATUSES, type RunStatusFilter } from '@/lib/useRuns'
 import type { WorkspaceInfo, FolderInfo } from '@/protocol'
 import { ChevronDown, Search, Sparkles, X } from 'lucide-react'
@@ -53,6 +55,11 @@ interface HeaderProps {
   port: number | null
   /** Agentic skill runs (isolated agents) — the only thing this dropdown lists. */
   runs: Record<string, SkillRunState>
+  /** Notification center (toasts + run lifecycle) — bell dropdown. */
+  notifications: NotificationItem[]
+  dismissNotification: (id: string) => void
+  markNotificationsRead: () => void
+  clearNotifications: () => void
   /** For breadcrumb labels (workspace names) and the sessions/run trails. */
   workspaces: WorkspaceInfo[] | null
   folders: FolderInfo[]
@@ -67,7 +74,7 @@ const connLabel: Record<HeaderProps['conn'], { text: string; className: string }
 /** Panel width must match the `w-96` class on the runs dropdown below. */
 const RUNS_PANEL_WIDTH = 384
 
-export function Header({ conn, port, runs, workspaces, folders }: HeaderProps) {
+export function Header({ conn, port, runs, workspaces, folders, notifications, dismissNotification, markNotificationsRead, clearNotifications }: HeaderProps) {
   const state = connLabel[conn]
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -257,6 +264,13 @@ export function Header({ conn, port, runs, workspaces, folders }: HeaderProps) {
         </div>
 
         <div className="ml-auto flex items-center gap-3">
+          <Notifications
+            notifications={notifications}
+            runs={runs}
+            onDismiss={dismissNotification}
+            onMarkAllRead={markNotificationsRead}
+            onClearAll={clearNotifications}
+          />
           <span className={`rounded-full px-2 py-0.5 text-xs ${state.className}`}>{state.text}</span>
           <div className="text-xs text-muted-foreground">
             <span className="font-mono">:{port ?? '—'}</span>

@@ -16,7 +16,7 @@ import { join } from 'node:path';
  * rejected (`VERSION_MISMATCH`) so two incompatible versions can never
  * coexist behind one router.
  */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** Default single router port for all folders (deliberately uncommon). */
 export const DEFAULT_ROUTER_PORT = 24242;
@@ -115,6 +115,10 @@ export type BackendToRouter =
   // The backend's session model list changed (e.g. the user ran /model in
   // the pi session) — the router refreshes the union for the model picker.
   | { readonly type: 'modelsChanged'; readonly folder: string; readonly models: readonly ModelChoice[] }
+  // One-shot AI-input text fill — NOT a run: no record, no persistence, no
+  // notifications. Deltas stream to the browser; the SPA inserts the final
+  // answer into the field it was launched from.
+  | { readonly type: 'textGen'; readonly folder: string; readonly runId: string; readonly phase: 'start' | 'delta' | 'done' | 'error'; readonly status: 'running' | 'done' | 'error'; readonly text: string }
   // The backend replaced its session (e.g. agentic skill creation starts a
   // fresh session) — browsers update the folder's session id and navigate.
   | { readonly type: 'sessionChanged'; readonly folder: string; readonly sessionId: string }
@@ -130,7 +134,7 @@ export type BackendToRouter =
       readonly folder: string;
       readonly runId: string;
       readonly workspaceId: string;
-      readonly phase: 'start' | 'delta' | 'tool' | 'title' | 'done' | 'awaiting' | 'error' | 'snapshot';
+      readonly phase: 'start' | 'delta' | 'tool' | 'title' | 'done' | 'awaiting' | 'interrupted' | 'error' | 'snapshot';
       readonly entry: number;
       readonly status: 'running' | 'done' | 'awaiting' | 'interrupted' | 'error';
       readonly text: string;
@@ -148,10 +152,12 @@ export type BackendToRouter =
 
 /** Command shape forwarded verbatim from the browser to the backend. */
 export interface BrowserCommand {
-  readonly type: 'prompt' | 'steer' | 'followUp' | 'command' | 'skillAgentic' | 'profileAgentic' | 'presetAgentic' | 'skillReply' | 'skillSnapshot';
+  readonly type: 'prompt' | 'steer' | 'followUp' | 'command' | 'skillAgentic' | 'profileAgentic' | 'presetAgentic' | 'textAgentic' | 'textGenerate' | 'skillReply' | 'skillSnapshot' | 'skillSetStatus';
   readonly text: string;
-  /** Client-generated run id (skillAgentic/profileAgentic/presetAgentic) or target run id (skillReply/skillSnapshot). */
+  /** Client-generated run id (agentic kinds) or target run id (skillReply/skillSnapshot/skillSetStatus). */
   readonly runId?: string;
+  /** Target status for skillSetStatus (manual status override / force stop). */
+  readonly status?: 'done' | 'error' | 'interrupted';
   /** Existing preset name for presetAgentic modify runs (undefined = create a new one). */
   readonly presetName?: string;
   /** Existing skill id (directory slug) for skillAgentic modify runs (undefined = create a new one). */
@@ -160,6 +166,8 @@ export interface BrowserCommand {
   readonly profileName?: string;
   /** Include the workspace's authoring-skills skill in the agent's instructions (skill runs). */
   readonly useAuthoringSkill?: boolean;
+  /** Skills the generated profile must include (profileAgentic runs). */
+  readonly skills?: readonly string[];
   /**
    * Model to run agentic tasks on (`provider/model-id`). The dialog can
    * override the header picker per run; when absent the router injects the
@@ -224,13 +232,15 @@ export type RouterToBrowser =
   // a model, or a backend connected/disconnected/ran /model) — browsers
   // refresh their model query so every tab stays in sync.
   | { readonly type: 'modelsChanged'; readonly models: readonly ModelChoice[]; readonly selected: string | null }
+  // One-shot AI-input text fill (mirrors BackendToRouter) — NOT a run.
+  | { readonly type: 'textGen'; readonly folder: string; readonly runId: string; readonly phase: 'start' | 'delta' | 'done' | 'error'; readonly status: 'running' | 'done' | 'error'; readonly text: string }
   // Agentic skill run stream (mirrors BackendToRouter).
   | {
       readonly type: 'skillGen';
       readonly folder: string;
       readonly runId: string;
       readonly workspaceId: string;
-      readonly phase: 'start' | 'delta' | 'tool' | 'title' | 'done' | 'awaiting' | 'error' | 'snapshot';
+      readonly phase: 'start' | 'delta' | 'tool' | 'title' | 'done' | 'awaiting' | 'interrupted' | 'error' | 'snapshot';
       readonly entry: number;
       readonly status: 'running' | 'done' | 'awaiting' | 'interrupted' | 'error';
       readonly text: string;

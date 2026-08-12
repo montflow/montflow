@@ -313,6 +313,19 @@ const handleBackendMessage = async (socket: WebSocket, raw: string): Promise<voi
       });
       return;
 
+    // One-shot AI-input text fill — forwarded as-is (no run cache, no
+    // folder map entry, no persistence).
+    case 'textGen':
+      broadcastToBrowsers({
+        type: 'textGen',
+        folder: msg.folder,
+        runId: msg.runId,
+        phase: msg.phase,
+        status: msg.status,
+        text: msg.text,
+      });
+      return;
+
     case 'sessionChanged':
       broadcastToBrowsers({
         type: 'sessionChanged',
@@ -896,6 +909,8 @@ const readJsonBody = (req: IncomingMessage): Promise<unknown> =>
 
 interface PresetSummary {
   readonly name: string;
+  /** 'loop' or 'workflow'; undefined for legacy files (loops) or invalid files. */
+  readonly type?: 'loop' | 'workflow';
   readonly config?: unknown;
   readonly error?: string;
 }
@@ -913,7 +928,7 @@ const listPresets = async (cwd: string): Promise<PresetSummary[]> => {
     try {
       const raw = await readFile(presetFilePath(cwd, name), 'utf8');
       const preset = Schema.decodeSync(ReviewPresetFromJson)(raw);
-      results.push({ name, config: preset.config });
+      results.push({ name, type: preset.type, config: preset.config });
     } catch (error) {
       results.push({ name, error: error instanceof Error ? error.message : String(error) });
     }
@@ -932,7 +947,8 @@ const writePresetFile = async (
   }
   const bodyObj =
     typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
-  const preset = { version: 1 as const, name, config: bodyObj.config };
+  const type: 'loop' | 'workflow' = bodyObj.type === 'workflow' ? 'workflow' : 'loop';
+  const preset = { version: 1 as const, type, name, config: bodyObj.config };
   try {
     Schema.decodeUnknownSync(ReviewPresetSchema)(preset);
   } catch (error) {
@@ -1664,7 +1680,9 @@ async function main(): Promise<void> {
       if (
         command.type === 'skillAgentic' ||
         command.type === 'profileAgentic' ||
-        command.type === 'presetAgentic'
+        command.type === 'presetAgentic' ||
+        command.type === 'textAgentic' ||
+        command.type === 'textGenerate'
       ) {
         command = { ...command, model: command.model ?? selectedModel ?? undefined };
       }
@@ -1675,8 +1693,14 @@ async function main(): Promise<void> {
       // back to the command's folder, then fan out to every backend so the
       // owning one can answer. If nothing is connected and the router has no
       // cached transcript, reply with an explicit error so the browser never
-      // sits on "Loading run…" forever.
-      if (command.type === 'skillReply' || command.type === 'skillSnapshot') {
+      // sits on "Loading run…" forever. `skillSetStatus` additionally falls
+      // back to the router's own cache/store when no backend is live (a
+      // stuck run whose pi session died can still be marked done/error).
+      if (
+        command.type === 'skillReply' ||
+        command.type === 'skillSnapshot' ||
+        command.type === 'skillSetStatus'
+      ) {
         const runId = typeof command.runId === 'string' ? command.runId : '';
         const known = runFolder.get(runId);
         const target = known ?? (msg.folder !== '' ? msg.folder : undefined);
@@ -1692,23 +1716,46 @@ async function main(): Promise<void> {
           }
         }
         if (!delivered) {
+          // No live backend: serve the cached transcript (snapshot), apply a
+          // manual status override to the cache + store (skillSetStatus), or
+          // reply with an explicit error.
           const cached = cachedRuns.get(runId);
           if (cached !== undefined) {
-            socket.send(
-              JSON.stringify({
+            if (command.type === 'skillSetStatus' && command.status !== undefined) {
+              const updated: CachedRun = { ...cached, status: command.status, updatedAt: Date.now() };
+              cachedRuns.set(runId, updated);
+              persistRunToStore(runId, updated, true);
+              // A manual status override affects every tab — broadcast it.
+              broadcastToBrowsers({
                 type: 'skillGen',
-                folder: cached.folder,
+                folder: updated.folder,
                 runId,
-                workspaceId: cached.workspaceId,
-                phase: 'snapshot',
+                workspaceId: updated.workspaceId,
+                phase: command.status,
                 entry: 0,
-                status: cached.status,
+                status: updated.status,
                 text: '',
-                title: cached.title,
-                entries: cached.entries,
-                tools: cached.tools,
-              } satisfies RouterToBrowser),
-            );
+                title: updated.title,
+                entries: updated.entries,
+                tools: updated.tools,
+              });
+            } else {
+              socket.send(
+                JSON.stringify({
+                  type: 'skillGen',
+                  folder: cached.folder,
+                  runId,
+                  workspaceId: cached.workspaceId,
+                  phase: 'snapshot',
+                  entry: 0,
+                  status: cached.status,
+                  text: '',
+                  title: cached.title,
+                  entries: cached.entries,
+                  tools: cached.tools,
+                } satisfies RouterToBrowser),
+              );
+            }
           } else {
             // Not in memory — try the durable store (covers router restarts
             // since the last time this run was cached). Re-seed the memory
@@ -1724,21 +1771,45 @@ async function main(): Promise<void> {
                 title: stored.title,
                 updatedAt: stored.updatedAt,
               });
-              socket.send(
-                JSON.stringify({
+              if (command.type === 'skillSetStatus' && command.status !== undefined) {
+                const updated: CachedRun = {
+                  ...cachedRuns.get(runId)!,
+                  status: command.status,
+                  updatedAt: Date.now(),
+                };
+                cachedRuns.set(runId, updated);
+                persistRunToStore(runId, updated, true);
+                // A manual status override affects every tab — broadcast it.
+                broadcastToBrowsers({
                   type: 'skillGen',
-                  folder: stored.folder,
+                  folder: updated.folder,
                   runId,
-                  workspaceId: stored.workspaceId,
-                  phase: 'snapshot',
+                  workspaceId: updated.workspaceId,
+                  phase: command.status,
                   entry: 0,
-                  status: stored.status,
+                  status: updated.status,
                   text: '',
-                  title: stored.title,
-                  entries: stored.entries,
-                  tools: stored.tools,
-                } satisfies RouterToBrowser),
-              );
+                  title: updated.title,
+                  entries: updated.entries,
+                  tools: updated.tools,
+                });
+              } else {
+                socket.send(
+                  JSON.stringify({
+                    type: 'skillGen',
+                    folder: stored.folder,
+                    runId,
+                    workspaceId: stored.workspaceId,
+                    phase: 'snapshot',
+                    entry: 0,
+                    status: stored.status,
+                    text: '',
+                    title: stored.title,
+                    entries: stored.entries,
+                    tools: stored.tools,
+                  } satisfies RouterToBrowser),
+                );
+              }
             } else if (runId !== '') {
               socket.send(JSON.stringify(notFoundRun(runId, msg.folder)));
             }
@@ -1752,10 +1823,25 @@ async function main(): Promise<void> {
         // Agentic creation can't start without a live backend — tell the
         // browser directly (the run page shows this instead of hanging).
         if (
-          (command.type === 'skillAgentic' || command.type === 'presetAgentic') &&
+          (command.type === 'skillAgentic' ||
+            command.type === 'presetAgentic' ||
+            command.type === 'textAgentic') &&
           typeof command.runId === 'string'
         ) {
           socket.send(JSON.stringify(notFoundRun(command.runId, msg.folder)));
+        } else if (command.type === 'textGenerate' && typeof command.runId === 'string') {
+          // No live backend for the one-shot text fill — answer with a
+          // textGen error so the modal unlocks instead of hanging.
+          socket.send(
+            JSON.stringify({
+              type: 'textGen',
+              folder: msg.folder,
+              runId: command.runId,
+              phase: 'error',
+              status: 'error',
+              text: 'No pi session is connected — start /montflow in the project session to use AI generation.',
+            } satisfies RouterToBrowser),
+          );
         } else {
           socket.send(
             JSON.stringify({

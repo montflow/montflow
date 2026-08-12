@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,20 +11,22 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ModelSelect } from '@/components/ModelSelect'
+import { AiInput } from '@/components/AiInput'
+import { WorkflowEditor } from '@/components/WorkflowEditor'
 import { useBuiltinReviewers, useCreatePreset, useDeletePreset, usePresetDetail } from '@/lib/usePresets'
 import { useUiSocket } from '@/lib/useUiSocket'
 import { useModels } from '@/lib/useModels'
 import { profileUrl, runUrl, workspaceUrl } from '@/components/LandingPage'
 import { navigate } from '@/lib/useLocation'
 import { titleFromSlug } from '@/lib/utils'
-import type { PresetConfig, PresetSummary } from '@/protocol'
+import type { PresetConfig, PresetSummary, PresetWorkflowConfig } from '@/protocol'
 import {
-  Braces,
   CircleAlert,
   Loader2,
   RefreshCw,
   Sparkles,
   Trash2,
+  Workflow,
 } from 'lucide-react'
 
 interface PresetDetailProps {
@@ -85,6 +87,8 @@ export function PresetDetail({ workspaceId, presetName, conn, folder }: PresetDe
           <PresetConfigView
             preset={preset}
             workspaceId={workspaceId}
+            conn={conn}
+            folder={folder}
             onSaved={() =>
               void queryClient.invalidateQueries({ queryKey: ['presets', workspaceId] })
             }
@@ -127,7 +131,7 @@ function PresetHeader({
   onDelete: () => void
 }) {
   const config = preset.config
-  const reviewers = config?.reviewers ?? []
+  const isWorkflow = preset.type === 'workflow'
   return (
     <div className="mt-3">
       <div className="flex items-start justify-between gap-4">
@@ -149,47 +153,66 @@ function PresetHeader({
           </p>
           {config !== undefined && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              {reviewers.map((ref, index) =>
-                ref.type === 'builtin' ? (
-                  <Badge key={index} variant="secondary" title={`Builtin reviewer: ${ref.id ?? '?'}`}>
-                    {builtinById.get(ref.id ?? '?') ?? ref.id ?? '?'}
+              <Badge
+                variant={isWorkflow ? 'outline' : 'secondary'}
+                title={
+                  isWorkflow
+                    ? 'Workflow preset — open-ended step pipeline (not yet executable)'
+                    : 'Review loop preset — supervisor, reviewers, fixers'
+                }
+                className={isWorkflow ? 'border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300' : undefined}
+              >
+                {isWorkflow ? 'workflow' : 'loop'}
+              </Badge>
+              {'steps' in config ? (
+                <Badge variant="secondary" title="Number of steps in this workflow">
+                  {config.steps.length} step{config.steps.length === 1 ? '' : 's'}
+                </Badge>
+              ) : (
+                <>
+                  {config.reviewers.map((ref, index) =>
+                    ref.type === 'builtin' ? (
+                      <Badge key={index} variant="secondary" title={`Builtin reviewer: ${ref.id ?? '?'}`}>
+                        {builtinById.get(ref.id ?? '?') ?? ref.id ?? '?'}
+                      </Badge>
+                    ) : (
+                      <Badge
+                        key={index}
+                        variant="outline"
+                        asChild
+                        className="hover:border-primary/40 hover:text-foreground"
+                      >
+                        <a
+                          href={profileUrl(workspaceId, ref.name ?? '')}
+                          title={`Profile reviewer: ${ref.name ?? '?'}`}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            navigate(profileUrl(workspaceId, ref.name ?? ''))
+                          }}
+                        >
+                          {ref.name ?? '?'}
+                        </a>
+                      </Badge>
+                    ),
+                  )}
+                  <Badge variant="secondary" title="Supervisor model">
+                    <Sparkles className="size-3" />
+                    <span className="font-mono">{config.supervisor.model}</span>
                   </Badge>
-                ) : (
-                  <Badge
-                    key={index}
-                    variant="outline"
-                    asChild
-                    className="hover:border-primary/40 hover:text-foreground"
-                  >
-                    <a
-                      href={profileUrl(workspaceId, ref.name ?? '')}
-                      title={`Profile reviewer: ${ref.name ?? '?'}`}
-                      onClick={(event) => {
-                        event.preventDefault()
-                        navigate(profileUrl(workspaceId, ref.name ?? ''))
-                      }}
-                    >
-                      {ref.name ?? '?'}
-                    </a>
+                  <Badge variant="secondary" title="Fixer model">
+                    <RefreshCw className="size-3" />
+                    <span className="font-mono">{config.fixerModel}</span>
                   </Badge>
-                ),
+                  <Badge variant="secondary" title="Review loops × cycles per loop">
+                    {config.maxLoops}
+                    <span className="text-muted-foreground">×</span>
+                    {config.maxCycles ?? config.maxLoops}
+                  </Badge>
+                  <Badge variant="outline" title="Deadlock handling">
+                    flip after {config.deadlock.flipThreshold} · {config.deadlock.action}
+                  </Badge>
+                </>
               )}
-              <Badge variant="secondary" title="Supervisor model">
-                <Sparkles className="size-3" />
-                <span className="font-mono">{config.supervisor.model}</span>
-              </Badge>
-              <Badge variant="secondary" title="Fixer model">
-                <RefreshCw className="size-3" />
-                <span className="font-mono">{config.fixerModel}</span>
-              </Badge>
-              <Badge variant="secondary" title="Review loops × cycles per loop">
-                {config.maxLoops}
-                <span className="text-muted-foreground">×</span>
-                {config.maxCycles ?? config.maxLoops}
-              </Badge>
-              <Badge variant="outline" title="Deadlock handling">
-                flip after {config.deadlock.flipThreshold} · {config.deadlock.action}
-              </Badge>
             </div>
           )}
         </div>
@@ -214,24 +237,52 @@ function PresetHeader({
 }
 
 /**
- * Config JSON, click-to-edit inline. Clicking the JSON switches it to a
- * textarea with Save / Discard — no separate edit dialog or button.
+ * Config editor. WORKFLOW presets default to a visual stage-pipeline editor
+ * (palette + drag-and-drop rows) with a JSON fallback tab; LOOP presets keep
+ * the click-to-edit JSON flow (the roster wizard edits loops).
  */
 function PresetConfigView({
   preset,
   workspaceId,
+  conn,
+  folder,
   onSaved,
 }: {
   preset: PresetSummary
   workspaceId: string
+  conn: 'connecting' | 'open' | 'closed'
+  folder: string | null
   onSaved: () => void
 }) {
   const createPreset = useCreatePreset(workspaceId)
+  const isWorkflow =
+    preset.type === 'workflow' && preset.config !== undefined && 'steps' in preset.config
+  const presetKey = preset.name // re-arm only when navigating between presets
+
+  const [mode, setMode] = useState<'visual' | 'json'>(isWorkflow ? 'visual' : 'json')
+  const [workflowConfig, setWorkflowConfig] = useState<PresetWorkflowConfig | null>(() =>
+    isWorkflow && preset.config !== undefined && 'steps' in preset.config
+      ? { description: preset.config.description, steps: preset.config.steps }
+      : null,
+  )
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const start = (): void => {
+  useEffect(() => {
+    setMode(isWorkflow ? 'visual' : 'json')
+    setWorkflowConfig(
+      isWorkflow && preset.config !== undefined && 'steps' in preset.config
+        ? { description: preset.config.description, steps: preset.config.steps }
+        : null,
+    )
+    setEditing(false)
+    setDraft('')
+    setError(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetKey])
+
+  const startJson = (): void => {
     setDraft(JSON.stringify(preset.config ?? {}, null, 2))
     setError(null)
     setEditing(true)
@@ -250,15 +301,38 @@ function PresetConfigView({
       setError('Invalid JSON — fix the syntax before saving.')
       return
     }
-    if (typeof config !== 'object' || config === null || !Array.isArray(config.reviewers)) {
+    if (typeof config !== 'object' || config === null) {
+      setError('Config must be a JSON object.')
+      return
+    }
+    if (preset.type === 'workflow') {
+      if (!('steps' in config) || !Array.isArray(config.steps)) {
+        setError('Workflow config must be a JSON object with a "steps" array.')
+        return
+      }
+    } else if (!('reviewers' in config) || !Array.isArray(config.reviewers)) {
       setError('Config must be a JSON object with a "reviewers" array.')
       return
     }
     createPreset.mutate(
-      { name: preset.name, config },
+      { name: preset.name, type: preset.type ?? 'loop', config },
       {
         onSuccess: () => {
           setEditing(false)
+          setError(null)
+          onSaved()
+        },
+        onError: (e) => setError(e instanceof Error ? e.message : 'Failed to save preset'),
+      },
+    )
+  }
+
+  const saveVisual = (): void => {
+    if (workflowConfig === null) return
+    createPreset.mutate(
+      { name: preset.name, type: 'workflow', config: workflowConfig },
+      {
+        onSuccess: () => {
           setError(null)
           onSaved()
         },
@@ -271,35 +345,83 @@ function PresetConfigView({
     <section className="mt-6">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-          <Braces className="size-4" />
-          Config
+          <Workflow className="size-4" />
+          {isWorkflow ? 'Pipeline' : 'Config'}
         </h2>
-        {editing && (
-          <div className="flex gap-2">
-            <Button size="xs" variant="outline" onClick={discard} disabled={createPreset.isPending}>
-              Discard
-            </Button>
-            <Button size="xs" onClick={save} disabled={createPreset.isPending}>
-              {createPreset.isPending ? (
-                <>
-                  <Loader2 className="size-3.5 animate-spin" />
-                  Saving…
-                </>
-              ) : (
-                'Save'
+        <div className="flex items-center gap-2">
+          {isWorkflow && (
+            <div className="flex gap-1 rounded-md border border-input p-0.5">
+              <button
+                type="button"
+                onClick={() => setMode('visual')}
+                className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                  mode === 'visual'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Visual
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('json')}
+                className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                  mode === 'json'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                JSON
+              </button>
+            </div>
+          )}
+          {(mode === 'json' ? editing : true) && (
+            <div className="flex gap-2">
+              {mode === 'json' && (
+                <Button size="xs" variant="outline" onClick={discard} disabled={createPreset.isPending}>
+                  Discard
+                </Button>
               )}
-            </Button>
-          </div>
-        )}
+              <Button
+                size="xs"
+                onClick={mode === 'visual' ? saveVisual : save}
+                disabled={createPreset.isPending || (mode === 'visual' && workflowConfig === null)}
+              >
+                {createPreset.isPending ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Saving…
+                  </>
+                ) : (
+                  'Save'
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
-      {editing ? (
+
+      {isWorkflow && mode === 'visual' ? (
+        workflowConfig !== null && (
+          <div className="flex flex-col gap-3">
+            <WorkflowEditor
+              value={workflowConfig}
+              onChange={setWorkflowConfig}
+              workspaceId={workspaceId}
+              conn={conn}
+            />
+            {error !== null && <p className="text-xs text-red-500">{error}</p>}
+          </div>
+        )
+      ) : editing ? (
         <>
-          <textarea
+          <AiInput
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={setDraft}
+            folder={folder}
             spellCheck={false}
             autoFocus
-            className="min-h-80 w-full resize-y rounded-md border border-input bg-transparent p-3 font-mono text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="min-h-80 font-mono"
           />
           {error !== null && <p className="mt-2 text-xs text-red-500">{error}</p>}
         </>
@@ -307,11 +429,11 @@ function PresetConfigView({
         <pre
           role="button"
           tabIndex={0}
-          onClick={start}
+          onClick={startJson}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault()
-              start()
+              startJson()
             }
           }}
           title="Click to edit"
@@ -491,7 +613,14 @@ function DeletePresetDialog({
 /** One-line summary of the current preset, used to seed the modify prompt. */
 const describePreset = (preset: PresetSummary | null): string => {
   if (preset === null || preset.config === undefined) return ''
-  const { reviewers, supervisor, fixerModel, maxLoops, maxCycles, deadlock } = preset.config
+  const config = preset.config
+  if (preset.type === 'workflow' || 'steps' in config) {
+    if (!('steps' in config)) return ''
+    const steps = config.steps.map((step) => `${step.id}:${step.kind}`).join(', ')
+    const count = config.steps.length
+    return `Modify the workflow preset '${preset.name}'. It currently has ${count === 0 ? 'no' : count} step${count === 1 ? '' : 's'}${count > 0 ? `: [${steps}]` : ''}.`
+  }
+  const { reviewers, supervisor, fixerModel, maxLoops, maxCycles, deadlock } = config
   const reviewerText = reviewers
     .map((ref) =>
       ref.type === 'builtin' ? `builtin:${ref.id ?? '?'}` : `profile:${ref.name ?? '?'}`,

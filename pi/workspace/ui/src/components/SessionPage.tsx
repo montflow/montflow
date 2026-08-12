@@ -383,8 +383,8 @@ function ToolRow({ group }: { group: ToolGroup }) {
 function MessageBubble({ message }: { message: UiMsg }) {
   if (message.kind === 'user') {
     return (
-      <div className="flex justify-end">
-        <div className="w-full rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
+      <div className="flex justify-end pl-12">
+        <div className="w-full rounded-lg bg-sky-100 px-3 py-2 text-sm text-sky-900 dark:bg-sky-500/15 dark:text-sky-100">
           <p className="whitespace-pre-wrap">{message.text}</p>
         </div>
       </div>
@@ -393,7 +393,7 @@ function MessageBubble({ message }: { message: UiMsg }) {
 
   if (message.kind === 'assistant') {
     return (
-      <div className="flex justify-start">
+      <div className="flex justify-start pr-12">
         <div className="w-full rounded-lg border bg-card px-3 py-2">
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>

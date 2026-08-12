@@ -172,6 +172,30 @@ Rules:
 - When done, summarize in one short line: the preset name and what it
   contains/changed.`;
 
+/**
+ * System prompt: a plain-text answer agent for the AI-assisted input
+ * component. Produces the requested text itself and nothing else — the
+ * answer is inserted verbatim into the field the run was launched from.
+ */
+export const TEXT_GENERATOR_SYSTEM = `You are a text generation assistant.
+
+The user will give you a short prompt describing text they want written,
+rewritten, or improved. Produce ONLY the requested text itself — no
+preamble, no explanation, no markdown code fences, no "Here is ..."
+lead-ins, and no trailing commentary. The response is inserted directly
+into a text field.
+
+Rules:
+- Output exactly the content requested, ready to paste.
+- When the user asks for a specific format (JSON, a list, a commit message,
+  a description, ...), produce that format directly.
+- You may read files in the workspace to ground the answer, but never write
+  or edit anything.
+- Keep the output self-contained: no references to "I", "I wrote", or to
+  the prompt itself.
+- If the request is genuinely ambiguous, ask ONE concise clarifying
+  question and END it with a single "?".`;
+
 export interface SkillRunAgent {
   readonly agent: PersistentAgent;
   readonly model: string;
@@ -284,6 +308,38 @@ export const createPresetAgent = async (
 };
 
 /**
+ * Create a fresh, isolated agent for an AI-input text run (read-only tools,
+ * text-only system prompt). Shares the model-resolution rules of
+ * {@link createSkillAgent}. The agent can ground itself in workspace files
+ * but has no write tools, so it can never mutate anything.
+ */
+export const createTextAgent = async (
+  ctx: ExtensionCommandContext,
+  modelOverride?: string,
+  options: SkillRunSessionOptions = {},
+): Promise<SkillRunAgent> => {
+  const model = resolveInitialModel(ctx, modelOverride);
+  if (model === undefined) {
+    throw new Error('No active model — start a pi session first.');
+  }
+  const agent = await Effect.runPromise(
+    createPersistentAgent({
+      model,
+      systemPrompt: TEXT_GENERATOR_SYSTEM,
+      tools: ['read', 'grep', 'glob'],
+      cwd: ctx.cwd,
+      sessionDir: options.sessionDir,
+      resumeSessionFile: options.resumeSessionFile,
+    }),
+  );
+  return {
+    agent,
+    model,
+    sessionFile: agent.sessionFile(),
+  };
+};
+
+/**
  * Wrap a preset request into an authoring prompt for the agent. When an
  * existing preset name is given, the prompt targets that file so a modify
  * run edits in place instead of creating a duplicate.
@@ -298,6 +354,35 @@ export const wrapPresetPrompt = (idea: string, presetName?: string): string => {
 Request: ${idea.trim()}
 
 Keep the stored JSON schema-exact and minimal. Ask me if anything is unclear.`;
+};
+
+/**
+ * Wrap a text-generation request for the AI-input agent: the request plus a
+ * reminder to answer with the bare text (no wrapping commentary).
+ */
+export const wrapTextPrompt = (idea: string): string =>
+  `Produce the requested text now — output ONLY the final text, nothing else:
+
+${idea.trim()}`;
+
+/**
+ * One-shot AI-input text generation. Creates an EPHEMERAL text agent (no
+ * persisted session, nothing recorded — explicitly NOT a run), runs a single
+ * turn, streams deltas via `onDelta`, and disposes the agent. The final
+ * result carries the complete answer text.
+ */
+export const generateText = async (
+  ctx: ExtensionCommandContext,
+  modelOverride: string | undefined,
+  task: string,
+  onDelta: (delta: string) => void,
+): Promise<SkillRunResult> => {
+  const agent = await createTextAgent(ctx, modelOverride);
+  try {
+    return await promptSkillAgent(agent, wrapTextPrompt(task), onDelta);
+  } finally {
+    await disposeSkillAgent(agent);
+  }
 };
 
 /**
@@ -327,6 +412,16 @@ export const promptSkillAgent = async (
 /** Release the run's agent session. */
 export const disposeSkillAgent = async (run: SkillRunAgent): Promise<void> => {
   await Effect.runPromise(run.agent.dispose()).catch(() => undefined);
+};
+
+/**
+ * Abort the run's in-flight generation (force stop). Best-effort: a provider
+ * that ignores the abort can keep generating past this call, so callers must
+ * dispose the agent afterwards and treat the session as poisoned (resume
+ * recreates it from the persisted session file).
+ */
+export const abortSkillAgent = async (run: SkillRunAgent): Promise<void> => {
+  await Effect.runPromise(run.agent.abort()).catch(() => undefined);
 };
 
 /**
@@ -368,13 +463,23 @@ Keep it focused and well-structured. Ask me if anything is unclear.`;
 /**
  * Wrap a profile idea into an authoring prompt for the agent. When an
  * existing profile name is given, the prompt targets that file so a modify
- * run edits in place instead of creating a duplicate.
+ * run edits in place instead of creating a duplicate. When the user picked
+ * skills in the dialog, they are pinned into the frontmatter template so
+ * the agent includes exactly those (and no others).
  */
-export const wrapProfilePrompt = (idea: string, profileName?: string): string => {
+export const wrapProfilePrompt = (idea: string, profileName?: string, skills?: readonly string[]): string => {
   const target =
     profileName !== undefined && profileName.trim() !== ''
       ? `Modify the existing profile '${profileName.trim()}' at .agents/@montflow/profiles/${profileName.trim()}/PROFILE.md — read it first, apply the change, and write the updated PROFILE.md back.`
       : `Create a new agent profile for me in .agents/@montflow/profiles/ (one directory with PROFILE.md), following the standard format:`;
+  const skillLines =
+    skills !== undefined && skills.length > 0
+      ? skills.map((skill) => `  - ${skill}`).join('\n')
+      : '  - <skill-name>';
+  const skillsNote =
+    skills !== undefined && skills.length > 0
+      ? `\n\nThe profile MUST load exactly these skills — set them in the skills: frontmatter list, in this order, and do not add or drop any: ${skills.join(', ')}.`
+      : '';
   return `${target}
 
 ---
@@ -384,7 +489,7 @@ description: <one-line description of the agent: its role and what it does, e.g.
 model: <provider>/<model-id>
 # Skills this profile must load (names from SKILL.md frontmatter)
 skills:
-  - <skill-name>
+${skillLines}
 ---
 
 # <Profile Name>
@@ -399,6 +504,7 @@ skills:
 - [ ] <What the reviewer must verify before the work is done>
 
 Profile idea: ${idea.trim()}
+${skillsNote}
 
 Keep it focused and well-structured. Ask me if anything is unclear.`;
 };

@@ -30,8 +30,8 @@ interface BreadcrumbsProps {
   runs: Record<string, SkillRunState>
 }
 
-/** Workspace list root — every non-root breadcrumb path starts here. */
-const ROOT: Crumb = { label: 'Workspaces', target: '/' }
+/** Landing page root — every non-root breadcrumb path starts here. */
+const ROOT: Crumb = { label: 'Home', target: '/' }
 
 /**
  * Target for a section crumb (Skills/Profiles/Presets): the workspace page
@@ -115,6 +115,18 @@ const buildCrumbs = (
   const runId = runIdFromPath(pathname)
   if (runId !== null) {
     const run = runs[runId]
+    const wsId = run?.workspaceId
+    if (wsId !== undefined) {
+      const ws = workspaces?.find((w) => w.id === wsId) ?? null
+      return [
+        ROOT,
+        { label: ws?.name ?? wsId, target: workspaceUrl(wsId) + location.search, truncate: true },
+        { label: 'Runs', target: sectionTarget(wsId, 'runs') },
+        { label: run !== undefined ? runTitle(run) : 'Skill run', target: null, truncate: true },
+      ]
+    }
+    // Run record not yet loaded (fresh reload before the socket snapshot) —
+    // keep the trail stable; the workspace crumb appears once it arrives.
     return [
       ROOT,
       { label: 'Runs', target: null },

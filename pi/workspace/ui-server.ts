@@ -31,11 +31,15 @@ import {
   createSkillAgent,
   createProfileAgent,
   createPresetAgent,
+  createTextAgent,
   promptSkillAgent,
   wrapSkillPrompt,
   wrapProfilePrompt,
   wrapPresetPrompt,
+  wrapTextPrompt,
+  generateText,
   disposeSkillAgent,
+  abortSkillAgent,
   isAwaitingAnswer,
   type SkillRunAgent,
 } from './skill-run';
@@ -380,6 +384,11 @@ interface SkillRunRecord {
   tools: SkillRunTool[];
   /** The run agent's persisted pi session file (for resume after a restart). */
   sessionFile?: string;
+  /**
+   * True once the user force-stopped the run — an in-flight turn must not
+   * overwrite the manual status with its own terminal result. In-memory only.
+   */
+  stopped?: boolean;
   readonly createdAt: number;
   updatedAt: number;
 }
@@ -388,10 +397,20 @@ const skillRuns = new Map<string, SkillRunRecord>();
 
 const newRunId = (): string => randomUUID().slice(0, 8);
 
+const sendTextGen = (
+  folder: string,
+  runId: string,
+  phase: 'start' | 'delta' | 'done' | 'error',
+  status: 'running' | 'done' | 'error',
+  text: string,
+): void => {
+  sendToRouter({ type: 'textGen', folder, runId, phase, status, text });
+};
+
 const sendSkillGen = (
   folder: string,
   record: SkillRunRecord,
-  phase: 'start' | 'delta' | 'tool' | 'title' | 'done' | 'awaiting' | 'error' | 'snapshot',
+  phase: 'start' | 'delta' | 'tool' | 'title' | 'done' | 'awaiting' | 'interrupted' | 'error' | 'snapshot',
   entry: number,
   status: SkillRunRecord['status'],
   text: string,
@@ -544,7 +563,9 @@ const restoreRuns = async (cwd: string): Promise<void> => {
   }
 };
 
-/** Creates the initial record for a new agentic run (skill or profile). */
+/** Creates the initial record for a new agentic run (skill or profile).
+ * `text` is the FULL prompt sent to the agent (already wrapped) — it becomes
+ * the first user entry so the transcript mirrors the conversation exactly. */
 const makeRunRecord = (
   runId: string,
   folder: string,
@@ -595,6 +616,8 @@ const runAgentTurn = (
         record.sessionFile = record.agent.sessionFile;
         persistRun(record, true);
       } catch (error) {
+        // Force-stopped mid-creation: the stop path owns the terminal state.
+        if (record.stopped === true) return;
         const message = error instanceof Error ? error.message : String(error);
         record.status = 'error';
         record.entries[assistantIdx]!.text = message;
@@ -607,11 +630,15 @@ const runAgentTurn = (
       record.agent,
       prompt,
       (delta) => {
+        // Force-stopped mid-turn: the stop path owns the terminal state —
+        // drop late deltas so they can't resurrect the run.
+        if (record.stopped === true) return;
         record.entries[assistantIdx]!.text += delta;
         persistRun(record);
         sendSkillGen(folder, record, 'delta', assistantIdx, 'running', delta);
       },
       (activity) => {
+        if (record.stopped === true) return;
         if (activity.kind === 'start') {
           record.tools.push({ name: activity.tool, status: 'running', turn: assistantIdx });
           persistRun(record);
@@ -624,6 +651,10 @@ const runAgentTurn = (
         }
       },
     );
+    // Force-stopped while the turn was in flight: the abort makes
+    // promptSkillAgent settle (usually with an error), but the stop path
+    // already set the manual status and broadcast it — don't clobber it.
+    if (record.stopped === true) return;
     record.status = result.ok
       ? isAwaitingAnswer(record.entries[assistantIdx]!.text)
         ? 'awaiting'
@@ -940,13 +971,13 @@ export const startUiServer = async (
   };
 
   /** Kinds of agentic runs the UI can start. */
-  type AgenticRunKind = 'skill' | 'profile' | 'preset';
+  type AgenticRunKind = 'skill' | 'profile' | 'preset' | 'text';
 
   /** Options for {@link startAgenticRun}. */
   interface StartAgenticRunOptions {
     /** Client-generated run id; a short id is generated when omitted. */
     runId?: string;
-    /** The user's raw request text (stored as the first transcript entry). */
+    /** The user's raw request text (embedded in the wrapped prompt). */
     text: string;
     /** Existing preset name for preset runs that modify in place. */
     presetName?: string;
@@ -956,6 +987,8 @@ export const startUiServer = async (
     profileName?: string;
     /** Include the workspace's authoring-skills skill (skill runs). */
     useAuthoringSkill?: boolean;
+    /** Skills the profile agent must put in the generated profile's frontmatter. */
+    skills?: readonly string[];
     /** Per-run model override (`provider/model-id`). */
     model?: string;
     /**
@@ -979,31 +1012,11 @@ export const startUiServer = async (
     if (opts.text.trim() === '' || assignedFolder === null) return;
     const folder = assignedFolder;
     const runId = opts.runId ?? newRunId();
-    const record = makeRunRecord(runId, folder, workspace.id, cwd, opts.text);
-    skillRuns.set(runId, record);
-    persistRun(record, true);
-    sendSkillGen(folder, record, 'start', 0, 'running', opts.text);
-    // Title prefix: per-kind default unless the caller overrides (or passes
-    // '' to disable). e.g. `[skill-create] Audit PRs`.
-    const titlePrefix =
-      opts.titlePrefix ??
-      (kind === 'skill'
-        ? '[skill-create]'
-        : kind === 'profile'
-          ? '[profile-create]'
-          : opts.presetName !== undefined
-            ? '[preset-edit]'
-            : '[preset-create]');
-    // Generate a short title from the prompt via opencode's big-pickle
-    // model. Fire-and-forget: any failure falls back to the prompt itself,
-    // which is exactly what the UI showed before titles existed.
-    void generateRunTitle(opts.text, { prefix: titlePrefix }).then((title) => {
-      if (title === null || title === '') return;
-      record.title = title;
-      persistRun(record, true);
-      sendSkillGen(folder, record, 'title', 0, record.status, title);
-    });
     void (async () => {
+      // The run transcript must show EXACTLY what we send the agent, so the
+      // wrapped prompt (not just the raw request) becomes the first user
+      // entry. Skill runs may load the workspace's authoring skill, which is
+      // why the wrap happens here — everything else waits for it.
       const authoringSkill =
         kind === 'skill' && opts.useAuthoringSkill === true
           ? await loadAuthoringSkill(cwd)
@@ -1012,14 +1025,44 @@ export const startUiServer = async (
         kind === 'skill'
           ? wrapSkillPrompt(opts.text, authoringSkill, opts.skillName)
           : kind === 'profile'
-            ? wrapProfilePrompt(opts.text, opts.profileName)
-            : wrapPresetPrompt(opts.text, opts.presetName);
+            ? wrapProfilePrompt(opts.text, opts.profileName, opts.skills)
+            : kind === 'text'
+              ? wrapTextPrompt(opts.text)
+              : wrapPresetPrompt(opts.text, opts.presetName);
+      const record = makeRunRecord(runId, folder, workspace.id, cwd, prompt);
+      skillRuns.set(runId, record);
+      persistRun(record, true);
+      sendSkillGen(folder, record, 'start', 0, 'running', prompt);
+      // Title prefix: per-kind default unless the caller overrides (or passes
+      // '' to disable). e.g. `[skill-create] Audit PRs`.
+      const titlePrefix =
+        opts.titlePrefix ??
+        (kind === 'skill'
+          ? '[skill-create]'
+          : kind === 'profile'
+            ? '[profile-create]'
+            : kind === 'text'
+              ? '[ai-input]'
+              : opts.presetName !== undefined
+                ? '[preset-edit]'
+                : '[preset-create]');
+      // Generate a short title from the raw request via opencode's big-pickle
+      // model. Fire-and-forget: any failure falls back to the prompt itself,
+      // which is exactly what the UI showed before titles existed.
+      void generateRunTitle(opts.text, { prefix: titlePrefix }).then((title) => {
+        if (title === null || title === '') return;
+        record.title = title;
+        persistRun(record, true);
+        sendSkillGen(folder, record, 'title', 0, record.status, title);
+      });
       const makeAgent = (model?: string): Promise<SkillRunAgent> =>
         kind === 'skill'
           ? createSkillAgent(ctx, model, { sessionDir: runDir(cwd, runId) })
           : kind === 'profile'
             ? createProfileAgent(ctx, model, { sessionDir: runDir(cwd, runId) })
-            : createPresetAgent(ctx, model, { sessionDir: runDir(cwd, runId) });
+            : kind === 'text'
+              ? createTextAgent(ctx, model, { sessionDir: runDir(cwd, runId) })
+              : createPresetAgent(ctx, model, { sessionDir: runDir(cwd, runId) });
       runAgentTurn(record, folder, prompt, makeAgent, opts.model);
     })();
   };
@@ -1053,6 +1096,7 @@ export const startUiServer = async (
           runId: command.runId,
           text,
           profileName: command.profileName,
+          skills: command.skills,
           model: command.model,
         });
         break;
@@ -1073,6 +1117,40 @@ export const startUiServer = async (
         break;
       }
 
+      case 'textAgentic': {
+        // AI-input text fill — same isolated, persistent run machinery, but
+        // the agent produces a plain-text answer (read-only tools) which the
+        // SPA inserts back into the field the run was launched from.
+        startAgenticRun('text', {
+          runId: command.runId,
+          text,
+          model: command.model,
+        });
+        break;
+      }
+
+      case 'textGenerate': {
+        // One-shot AI-input text fill — explicitly NOT a run: no record, no
+        // persistence, no notifications. An ephemeral agent (read-only
+        // tools, no session file) answers in a single turn; deltas stream
+        // back over the same socket and the SPA inserts the final answer
+        // into the field the modal was launched from.
+        if (assignedFolder === null) return;
+        const folder = assignedFolder;
+        const runId = command.runId ?? newRunId();
+        sendTextGen(folder, runId, 'start', 'running', '');
+        void generateText(ctx, command.model, text, (delta) => {
+          sendTextGen(folder, runId, 'delta', 'running', delta);
+        }).then((result) => {
+          if (result.ok) {
+            sendTextGen(folder, runId, 'done', 'done', result.text);
+          } else {
+            sendTextGen(folder, runId, 'error', 'error', result.error);
+          }
+        });
+        break;
+      }
+
       case 'skillReply': {
         // A follow-up answer from the user — the agent session keeps its
         // context and continues. When the agent is gone (process restarted),
@@ -1085,6 +1163,9 @@ export const startUiServer = async (
         const folder = assignedFolder;
         record.entries.push({ role: 'user', text });
         record.entries.push({ role: 'assistant', text: '' });
+        // A resumed run is live again — clear the force-stop latch so the
+        // turn's own terminal result (done/awaiting/error) is applied.
+        record.stopped = false;
         record.status = 'running';
         persistRun(record, true);
         const userIdx = record.entries.length - 2;
@@ -1114,6 +1195,36 @@ export const startUiServer = async (
         if (record === undefined) return;
         const folder = assignedFolder ?? record.folder;
         sendSkillGen(folder, record, 'snapshot', 0, record.status, '');
+        break;
+      }
+      case 'skillSetStatus': {
+        // Manual status override / force stop from the run page. Aborts any
+        // in-flight generation so a run stuck in 'running' actually stops,
+        // then marks the run with the requested status and broadcasts the
+        // terminal phase. The agent is disposed afterwards (an aborted
+        // session may be poisoned) and recreated from the persisted session
+        // file on the next reply.
+        if (assignedFolder === null) return;
+        const runId = command.runId ?? '';
+        const record = skillRuns.get(runId);
+        if (record === undefined || command.status === undefined) return;
+        const folder = assignedFolder;
+        record.stopped = true;
+        const agent = record.agent;
+        record.agent = null;
+        if (agent !== null) {
+          void abortSkillAgent(agent).finally(() => void disposeSkillAgent(agent));
+        }
+        record.status = command.status;
+        persistRun(record, true);
+        sendSkillGen(
+          folder,
+          record,
+          command.status,
+          record.entries.length - 1,
+          command.status,
+          '',
+        );
         break;
       }
       case 'command':

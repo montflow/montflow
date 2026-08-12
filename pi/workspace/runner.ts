@@ -143,6 +143,13 @@ export interface PersistentAgent {
     onDelta?: (delta: string, kind: StreamKind) => void,
     onUsage?: (usage: TurnUsage) => void,
   ) => Effect.Effect<AgentRunResult>;
+  /**
+   * Abort the in-flight generation (if any) and wait for the agent to go
+   * idle. Best-effort — a provider that ignores the abort may keep the
+   * generation running past the returned effect, so the caller should treat
+   * an aborted session as poisoned (dispose + recreate) before re-prompting.
+   */
+  readonly abort: () => Effect.Effect<void>;
   readonly dispose: () => Effect.Effect<void>;
   /** The persisted session file path, or undefined when the session is in-memory. */
   readonly sessionFile: () => string | undefined;
@@ -542,6 +549,11 @@ export const createPersistentAgent = (
         undefined,
         onUsage ?? options.onUsage,
       ),
+    abort: () =>
+      Effect.tryPromise({
+        try: () => session.abort(),
+        catch: () => undefined,
+      }).pipe(Effect.ignore, Effect.timeoutOption(Duration.seconds(30)), Effect.as(undefined)),
     dispose: () => Effect.sync(() => session.dispose()),
     sessionFile: () => session.sessionFile,
   }));

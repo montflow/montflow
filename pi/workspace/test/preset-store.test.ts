@@ -1,7 +1,11 @@
 import { test, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { PresetLoopConfigDecoded } from '../preset-schema';
+import {
+  isLoopConfig,
+  type PresetLoopConfigDecoded,
+  type PresetWorkflowConfigDecoded,
+} from '../preset-schema';
 import {
   deletePreset,
   isValidPresetName,
@@ -9,6 +13,7 @@ import {
   presetExists,
   readPreset,
   writePreset,
+  writeWorkflowPreset,
 } from '../preset-store';
 import { runEffect, runResult, withProjectRoot, type TempDir } from './helpers';
 
@@ -37,6 +42,12 @@ const storedConfig = (): PresetLoopConfigDecoded => ({
   deadlock: { flipThreshold: 2, action: 'escalate' },
 });
 
+/** Narrows a decoded preset to its loop config. */
+const loopConfigOf = (preset: { config: PresetLoopConfigDecoded | PresetWorkflowConfigDecoded }): PresetLoopConfigDecoded => {
+  if (!isLoopConfig(preset.config)) throw new Error('expected a loop preset');
+  return preset.config;
+};
+
 test('preset store: write → list → read round-trips the config', () =>
   withTempDir(async ({ tmp }) => {
     await runEffect(writePreset(tmp, 'security-audit', storedConfig()));
@@ -47,11 +58,13 @@ test('preset store: write → list → read round-trips the config', () =>
     const preset = await runEffect(readPreset(tmp, 'security-audit'));
     expect(preset.version).toBe(1);
     expect(preset.name).toBe('security-audit');
-    expect(preset.config.maxLoops).toBe(5);
-    expect(preset.config.reviewers).toEqual([{ type: 'builtin', id: 'generic' }]);
+    expect(preset.type).toBe('loop');
+    expect(loopConfigOf(preset).maxLoops).toBe(5);
+    expect(loopConfigOf(preset).reviewers).toEqual([{ type: 'builtin', id: 'generic' }]);
 
     const raw = JSON.parse(fs.readFileSync(presetPath(tmp, 'security-audit'), 'utf8'));
     expect(raw.version).toBe(1);
+    expect(raw.type).toBe('loop');
     expect(raw.config.fixerModel).toBe('deepseek-v4-flash-free');
     // The stored file references reviewers — no expanded profile data.
     expect(raw.config.reviewers[0].type).toBe('builtin');
@@ -65,7 +78,68 @@ test('preset store: overwrite replaces the stored config', () =>
     );
 
     const preset = await runEffect(readPreset(tmp, 'audit'));
-    expect(preset.config.maxLoops).toBe(9);
+    expect(loopConfigOf(preset).maxLoops).toBe(9);
+  }));
+
+test('preset store: workflow presets round-trip with type: workflow', () =>
+  withTempDir(async ({ tmp }) => {
+    const workflow: PresetWorkflowConfigDecoded = {
+      description: 'Review then ask the user',
+      steps: [
+        { id: 's1', kind: 'reviewer', label: 'Security review', params: { count: 2 } },
+        { id: 's2', kind: 'gate', label: 'Ask the user' },
+      ],
+    };
+    await runEffect(writeWorkflowPreset(tmp, 'pipeline', workflow));
+
+    const names = await runEffect(listPresets(tmp));
+    expect(names).toEqual(['pipeline']);
+
+    const preset = await runEffect(readPreset(tmp, 'pipeline'));
+    expect(preset.type).toBe('workflow');
+    expect(preset.name).toBe('pipeline');
+    if (!('steps' in preset.config)) throw new Error('expected a workflow config');
+    expect(preset.config.description).toBe('Review then ask the user');
+    expect(preset.config.steps).toHaveLength(2);
+    expect(preset.config.steps[0]?.params).toEqual({ count: 2 });
+
+    const raw = JSON.parse(fs.readFileSync(presetPath(tmp, 'pipeline'), 'utf8'));
+    expect(raw.type).toBe('workflow');
+    expect(raw.config.steps[1].kind).toBe('gate');
+  }));
+
+test('preset store: reads legacy files without a type field as loop presets', () =>
+  withTempDir(async ({ tmp }) => {
+    const root = path.join(tmp, '.agents', '@montflow', 'review-presets');
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(
+      path.join(root, 'legacy.json'),
+      JSON.stringify({
+        version: 1,
+        name: 'legacy',
+        config: storedConfig(),
+      }),
+    );
+
+    const preset = await runEffect(readPreset(tmp, 'legacy'));
+    expect(preset.type).toBeUndefined(); // legacy — no type field
+    expect(loopConfigOf(preset).maxLoops).toBe(5);
+  }));
+
+test('preset store: a workflow-shaped file without an explicit type fails to read', () =>
+  withTempDir(async ({ tmp }) => {
+    const root = path.join(tmp, '.agents', '@montflow', 'review-presets');
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(
+      path.join(root, 'bad.json'),
+      JSON.stringify({
+        version: 1,
+        name: 'bad',
+        config: { steps: [{ id: 's1', kind: 'reviewer' }] },
+      }),
+    );
+    const result = await runResult(readPreset(tmp, 'bad'));
+    expect(result._tag).toBe('Failure');
   }));
 
 test('preset store: delete removes the file and list empties', () =>

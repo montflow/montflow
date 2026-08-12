@@ -70,16 +70,23 @@ export type ClientCommandType =
   | 'skillAgentic'
   | 'profileAgentic'
   | 'presetAgentic'
+  | 'textAgentic'
+  | 'textGenerate'
   | 'skillReply'
   | 'skillSnapshot'
+  | 'skillSetStatus'
 
 export interface ClientCommand {
   type: ClientCommandType
   text: string
-  /** Client-generated run id (skillAgentic) or target run id (skillReply/skillSnapshot). */
+  /** Client-generated run id (agentic kinds) or target run id (skillReply/skillSnapshot/skillSetStatus). */
   runId?: string
+  /** Target status for skillSetStatus (manual status override / force stop). */
+  status?: 'done' | 'error' | 'interrupted'
   /** Include the workspace's authoring-skills skill in the agent's instructions. */
   useAuthoringSkill?: boolean
+  /** Skills the generated profile must include (profileAgentic). */
+  skills?: string[]
   /** Existing preset name for presetAgentic modify runs (undefined = create a new one). */
   presetName?: string
   /** Existing skill id (directory slug) for skillAgentic modify runs (undefined = create a new one). */
@@ -129,11 +136,19 @@ export type RouterToBrowser =
       selected: string | null
     }
   | {
+      type: 'textGen'
+      folder: string
+      runId: string
+      phase: 'start' | 'delta' | 'done' | 'error'
+      status: 'running' | 'done' | 'error'
+      text: string
+    }
+  | {
       type: 'skillGen'
       folder: string
       runId: string
       workspaceId: string
-      phase: 'start' | 'delta' | 'tool' | 'title' | 'done' | 'awaiting' | 'error' | 'snapshot'
+      phase: 'start' | 'delta' | 'tool' | 'title' | 'done' | 'awaiting' | 'interrupted' | 'error' | 'snapshot'
       entry: number
       status: 'running' | 'done' | 'awaiting' | 'interrupted' | 'error'
       text: string
@@ -271,7 +286,8 @@ export interface PresetReviewerRef {
   model?: string
 }
 
-export interface PresetConfig {
+/** Stored LOOP preset config — the classic review loop (supervisor + reviewers + fixers). */
+export interface PresetLoopConfig {
   reviewers: PresetReviewerRef[]
   supervisor: { model: string }
   fixerModel: string
@@ -280,8 +296,45 @@ export interface PresetConfig {
   deadlock: { flipThreshold: number; action: 'escalate' }
 }
 
+/** One reviewer inside a reviewer-group roster: a ref plus an optional per-reviewer prompt. */
+export interface PresetGroupReviewer {
+  reviewer: PresetReviewerRef
+  prompt?: string
+}
+
+/** Roster entries may be legacy bare refs or the richer { reviewer, prompt? } shape. */
+export type PresetGroupReviewerEntry = PresetReviewerRef | PresetGroupReviewer
+
+/** One open-ended step in a WORKFLOW preset (not yet executable). */
+export interface PresetWorkflowStep {
+  id: string
+  kind: string
+  label?: string
+  params?: Record<string, unknown>
+  /** Reviewer roster inside a reviewer-group step (each with an optional prompt). */
+  reviewers?: PresetGroupReviewerEntry[]
+  /** Selected reviewer for a single reviewer step; undefined = unconfigured (invalid). */
+  reviewer?: PresetReviewerRef
+  /** Optional extra instructions for this step (e.g. a reviewer's focus directive). */
+  prompt?: string
+}
+
+/** Stored WORKFLOW preset config — an open-ended step pipeline (schematized, not executed). */
+export interface PresetWorkflowConfig {
+  description?: string
+  /** Global prompt injected into every agent run in this workflow. */
+  prompt?: string
+  steps: PresetWorkflowStep[]
+}
+
+export type PresetConfig = PresetLoopConfig | PresetWorkflowConfig
+
+export type PresetType = 'loop' | 'workflow'
+
 export interface PresetSummary {
   name: string
+  /** 'loop' or 'workflow'; undefined for legacy files (loops) or invalid files. */
+  type?: PresetType
   config?: PresetConfig
   error?: string
 }
