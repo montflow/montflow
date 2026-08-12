@@ -3,8 +3,8 @@ import { NodeServices } from '@effect/platform-node';
 import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
 import { runGraph } from './graph';
 import { runInteractiveSetup } from './interactive';
-import { startUiServer, stopUiServer, broadcastNotify, getRouterStatus } from './ui-server';
-import profilesExtension from './profiles/index';
+import { startUiServer, stopUiServer, restartUiServer, broadcastNotify, getRouterStatus } from './ui-server';
+import { registerProfileApi } from './profiles/api';
 
 export { getCurrentGitBranch } from './git';
 export { defaultLoopConfig, BUILTIN_REVIEWERS } from './config';
@@ -13,19 +13,22 @@ export { defaultLoopConfig, BUILTIN_REVIEWERS } from './config';
 let activeLoopController: AbortController | undefined;
 
 /**
- * Pi extension entry: registers the /workspace, /montflow, and (merged in)
- * /profiles commands + profile event-bus API.
+ * Pi extension entry: registers the /workspace and /montflow commands plus
+ * the merged-in profile event-bus API (profiles:get / profiles:list).
  *
  * `/montflow` launches the web UI for the current workspace (auto-creating
  * `.agents/@montflow/workspace.json` named after the git branch when missing).
  * `/workspace` is the interactive review-loop wizard; its `ui` subcommand is
- * an alias for `/montflow`.
+ * an alias for `/montflow`. Profiles are managed from the web UI (manual or
+ * agentic runs) and read by the loop directly from the store.
  * @param {ExtensionAPI} pi The Pi extension API
  * @returns Nothing
  */
 export default function workspaceExtension(pi: ExtensionAPI): void {
-  // Merged-in @montflow/profiles: /profiles command + profiles:get/list bus.
-  profilesExtension(pi);
+  // Merged-in @montflow/profiles: profiles:get/list event-bus API (the
+  // /profiles command + interactive wizard were removed — the web UI
+  // manages profiles now).
+  registerProfileApi(pi);
 
   pi.registerCommand('workspace', {
     description:
@@ -50,7 +53,8 @@ export default function workspaceExtension(pi: ExtensionAPI): void {
       '.agents/@montflow/workspace.json (named after the current git branch) when ' +
       'missing, then opens the shared UI (single router, folder picker) at the ' +
       'workspace page. Flags: `--stop` stops the router, `--port=NNNN` pins the ' +
-      'port. `kill` ends every registered session and stops the router ' +
+      'port. `restart` stops and restarts the UI (fresh router, same port), ' +
+      '`kill` ends every registered session and stops the router ' +
       '(e.g. `/montflow kill`). `stop` and `status` work too: `/montflow stop`, ' +
       '`/montflow status`.',
     handler: async (args, ctx) => {
@@ -90,6 +94,41 @@ async function dispatchCommand(
         : 'No UI router is running — nothing to kill.',
       'info',
     );
+    return;
+  }
+
+  // `/montflow restart` stops the router and starts the UI again for this
+  // workspace (fresh router, same port when one was running). Works without
+  // the UI running too — it just starts it.
+  if (rest.split(/\s+/).includes('restart')) {
+    const { flags } = parseUiArgs(rest);
+    const portRaw = flags.get('port');
+    let port: number | undefined;
+    if (portRaw !== undefined) {
+      port = parseInt(portRaw, 10);
+      if (!Number.isFinite(port) || port < 1 || port > 65535) {
+        ctx.ui.notify(`--port must be 1-65535, got: '${portRaw}'`, 'error');
+        return;
+      }
+    }
+    try {
+      const handle = await restartUiServer(pi, ctx, {
+        port,
+        // In-process command dispatch: route like the slash command (no agent turn).
+        dispatch: (cmd) => {
+          void dispatchCommand(pi, cmd, ctx);
+        },
+        // What user action started this session (Sessions dropdown).
+        initiator: '/montflow restart',
+      });
+      ctx.ui.notify(
+        `Montflow restarted for '${handle.name}' available at ${handle.url}`,
+        'info',
+      );
+      broadcastNotify(`Montflow restarted: ${handle.url}`, 'info');
+    } catch (error) {
+      ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error');
+    }
     return;
   }
 
@@ -148,6 +187,32 @@ async function dispatchCommand(
 }
 
 /**
+ * Splits UI args into `--flag=value` pairs and bare `--flag`s (shared by
+ * the start/restart command paths). Bare tokens like `restart` are ignored
+ * here — they are matched earlier in dispatch.
+ * @param {string} rest Arguments after the command name
+ * @returns The parsed flags and bare flags
+ */
+function parseUiArgs(rest: string): {
+  readonly flags: Map<string, string>;
+  readonly bare: Set<string>;
+} {
+  const flags = new Map<string, string>();
+  const bare = new Set<string>();
+  for (const token of rest.split(/\s+/)) {
+    if (token === '') continue;
+    const eqMatch = token.match(/^--(\w[\w-]*)=(.*)$/);
+    if (eqMatch) {
+      flags.set(eqMatch[1] ?? '', eqMatch[2] ?? '');
+      continue;
+    }
+    const bareMatch = token.match(/^--(\w[\w-]*)$/);
+    if (bareMatch) bare.add(bareMatch[1] ?? '');
+  }
+  return { flags, bare };
+}
+
+/**
  * Parses the UI flags (--port=NNNN, --stop) and starts the web UI (reusing
  * the running router when there is one). The workspace marker
  * (`.agents/@montflow/workspace.json`) is auto-created with the git branch
@@ -164,18 +229,7 @@ async function handleUiCommand(
   ctx: ExtensionCommandContext,
   label: string,
 ): Promise<void> {
-  const flags = new Map<string, string>();
-  const bare = new Set<string>();
-  for (const token of rest.split(/\s+/)) {
-    if (token === '') continue;
-    const eqMatch = token.match(/^--(\w[\w-]*)=(.*)$/);
-    if (eqMatch) {
-      flags.set(eqMatch[1] ?? '', eqMatch[2] ?? '');
-      continue;
-    }
-    const bareMatch = token.match(/^--(\w[\w-]*)$/);
-    if (bareMatch) bare.add(bareMatch[1] ?? '');
-  }
+  const { flags, bare } = parseUiArgs(rest);
 
   if (bare.has('stop')) {
     const stopped = await stopUiServer();
