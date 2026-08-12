@@ -58,8 +58,8 @@ flowchart TD
     D -->|No| C
     D -->|Yes| CX{Review task<br>in Phase X?}
     CX -->|No| E[Halt execution]
-    CX -->|Yes| RX[Spawn INDEPENDENT subagent<br>run adversarial-review<br>write .agents/reviews/&lt;feature-name&gt;/&lt;code&gt;.md]
-    RX --> RY[Prompt user:<br>review .agents/reviews/&lt;feature-name&gt;/&lt;code&gt;.md?<br>accept/dismiss findings]
+    CX -->|Yes| RX[Spawn INDEPENDENT subagent<br>run adversarial-review<br>write .agents/@montflow/reviews/&lt;feature-name&gt;/&lt;code&gt;.md]
+    RX --> RY[Prompt user:<br>review .agents/@montflow/reviews/&lt;feature-name&gt;/&lt;code&gt;.md?<br>accept/dismiss findings]
     RY --> RZ{Accepted findings?}
     RZ -->|Yes| I[Author remediation tasks<br>defect/execution per finding]
     I --> J[Show remediation tasks<br>for approval]
@@ -124,7 +124,7 @@ Each task's `type` (in TASK.md frontmatter) determines behavior:
 | **execution** | Write/modify code. May optionally have GATES.md for validation (test, lint, format). |
 | **interruptor** | Hard stop. Present context, ask user question. Complete only after user answers. |
 | **defect** | Fix bugs from phase reviews. Same as execution, focused on `related-tasks`. |
-| **review** | Run by an **INDEPENDENT subagent** (never the agents that authored/executed the phase). Execute the `adversarial-review` skill over the completed phase and write findings to `.agents/reviews/<feature-name>/<code>.md`. Block completion on human review of the review file; accepted findings become `defect`/`execution` remediation tasks. |
+| **review** | Run by an **INDEPENDENT subagent** (never the agents that authored/executed the phase). Execute the `adversarial-review` skill over the completed phase and write findings to `.agents/@montflow/reviews/<feature-name>/<code>.md`. Block completion on human review of the review file; accepted findings become `defect`/`execution` remediation tasks. |
 
 Before executing a task, check the `FEATURE.md` task table's `Gates` column. If `Yes`, the sub-agent must execute and pass `<task-dir>/GATES.md` before marking the task complete. If the column says `Yes` but no `<task-dir>/GATES.md` exists, treat the task as failed and report the mismatch. Conversely, if the `Gates` column says `No` but a `<task-dir>/GATES.md` exists on disk, warn and execute its gates anyway.
 
@@ -135,8 +135,8 @@ When all **non-review** tasks in the current Phase complete:
 1. **Halt execution.**
 2. **If the phase contains a `review` task** → run the independent-subagent review flow, subject to a **review-loop cap of 5 iterations** (see Review Loop Counter below):
         - **Construct the review scope:** collect all file paths modified by completed tasks in the phase (from their MEMORY.md handoff notes or git diff). Pass this scope to the review subagent as the review target.
-        - Spawn an **independent subagent** (distinct from any agent that authored or executed tasks in this phase) to execute the `adversarial-review` skill over the completed phase. The subagent writes its findings to `.agents/reviews/<feature-name>/<code>.md`.
-        - **Prompt user:** "Phase <X> review ready. Review `.agents/reviews/<feature-name>/<code>.md`?" Present the findings.
+        - Spawn an **independent subagent** (distinct from any agent that authored or executed tasks in this phase) to execute the `adversarial-review` skill over the completed phase. The subagent writes its findings to `.agents/@montflow/reviews/<feature-name>/<code>.md`.
+        - **Prompt user:** "Phase <X> review ready. Review `.agents/@montflow/reviews/<feature-name>/<code>.md`?" Present the findings.
 - For each **accepted** finding, author a remediation task (`type: defect` or `execution`) with `finding-ref: <F<n>>` in its frontmatter linking to the specific finding ID. Determine the new task ID by scanning existing tasks in the active phase and incrementing the highest number, using zero-padded three-digit numbering (A001–A999).
         - For each **dismissed** finding, record the reason in the finding's `### Discussion` thread as a `[Human]` turn.
        - Create the remediation task directories (`<PHASE_LETTER><NNN>-<name>/`) within the active phase namespace. Do not nest tasks inside other task directories.

@@ -10,7 +10,7 @@
 
 ### Changed (breaking)
 
-- **Removed in-place output mode.** Spec audits are now ALWAYS written to `.agents/reviews/<name>/SPEC_<code>.md`. Aligns with `adversarial-review` v3.0.0; the file is the shared artifact the reviewer and `addressing-adversarial-review` coordinate through across fix→re-review loops.
+- **Removed in-place output mode.** Spec audits are now ALWAYS written to `.agents/@montflow/reviews/<name>/SPEC_<code>.md`. Aligns with `adversarial-review` v3.0.0; the file is the shared artifact the reviewer and `addressing-adversarial-review` coordinate through across fix→re-review loops.
 - **Removed global `Fixer Notes` section.** Status and the `[Reviewer]`/`[Fixer]`/`[Human]` discussion now live per-finding under each finding's `### Discussion` thread.
 - Per-finding format adopted from base skill: stable ID (`F1`, …), `Status`, `Attempts` (starts at 0, incremented only by the fixer), `First Seen`, append-only `### Discussion`, plus `## Summary` counts.
 - Step 0 and Step 3 rewritten for file-only output; `<code>` reuse-on-re-audit rule aligned with base Step 9 (overwrite in place, bump `Iteration`, not the file code).

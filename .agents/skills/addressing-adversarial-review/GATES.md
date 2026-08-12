@@ -1,6 +1,6 @@
 ## Phase 1: Triage & Scope
 
-- [ ] The review file was located at `.agents/reviews/<name>/<code>.md` and parsed successfully
+- [ ] The review file was located at `.agents/@montflow/reviews/<name>/<code>.md` and parsed successfully
 - [ ] `Max Attempts` resolved (defaults to 3 if missing/unparseable, and the field was backfilled into Review Metadata)
 - [ ] `Resolved` findings were skipped entirely
 - [ ] `Won't Fix` findings were skipped unless the reviewer reopened them with a `[Reviewer]` turn flipping Status to `Open`

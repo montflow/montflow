@@ -28,11 +28,11 @@ status: <pending | in-progress | complete | blocked>
 - [ ] Code compiles / Tests pass (if execution)
 - [ ] Output summarized in MEMORY.md (if exploratory/planning)
 - [ ] User decision recorded (if interruptor)
-- [ ] Findings written to `.agents/reviews/<feature-name>/<code>.md` and reviewed by human (if review)
+- [ ] Findings written to `.agents/@montflow/reviews/<feature-name>/<code>.md` and reviewed by human (if review)
 
 ## Example: review task
 
-For `type: review`, this task is executed by an **independent subagent** (never the agent that authored/executed the phase) running the `adversarial-review` skill. The review is written to `.agents/reviews/<feature-name>/<code>.md`. The phase is blocked until the human has reviewed the review file and accepted, deferred, or dismissed each finding.
+For `type: review`, this task is executed by an **independent subagent** (never the agent that authored/executed the phase) running the `adversarial-review` skill. The review is written to `.agents/@montflow/reviews/<feature-name>/<code>.md`. The phase is blocked until the human has reviewed the review file and accepted, deferred, or dismissed each finding.
 
 ## Example: defect task
 

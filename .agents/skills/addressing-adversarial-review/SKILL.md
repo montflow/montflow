@@ -1,6 +1,6 @@
 ---
 name: addressing-adversarial-review
-description: Resolves findings in an adversarial-review report file by applying fixes, incrementing a per-finding attempt counter, and appending to the shared Discussion thread — coordinating with the reviewer across fix→re-review loops. Use after adversarial-review has written a review file at `.agents/reviews/<name>/<code>.md` and the user wants to address its findings.
+description: Resolves findings in an adversarial-review report file by applying fixes, incrementing a per-finding attempt counter, and appending to the shared Discussion thread — coordinating with the reviewer across fix→re-review loops. Use after adversarial-review has written a review file at `.agents/@montflow/reviews/<name>/<code>.md` and the user wants to address its findings.
 id: ad1f945c1a0624a3
 author: Daniel Montilla
 version: 1.1.0
@@ -16,13 +16,13 @@ groups:
 
 # When To Use
 
-Use after [adversarial-review](../adversarial-review/SKILL.md) has produced a review file at `.agents/reviews/<name>/<code>.md` and the user wants to address its findings — "fix the review", "address these findings", "resolve the review", "work through the adversarial report". This skill is the **fixer** half of the review loop; the review file is the shared artifact both roles communicate through.
+Use after [adversarial-review](../adversarial-review/SKILL.md) has produced a review file at `.agents/@montflow/reviews/<name>/<code>.md` and the user wants to address its findings — "fix the review", "address these findings", "resolve the review", "work through the adversarial report". This skill is the **fixer** half of the review loop; the review file is the shared artifact both roles communicate through.
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md) skill before running this pipeline. It governs how skills are loaded, executed, and verified.
 
 # The Fixer↔Reviewer Contract
 
-The review file (`.agents/reviews/<name>/<code>.md`) is the single source of truth. Both roles read and write it; neither relies on conversation memory across loops. Each finding carries:
+The review file (`.agents/@montflow/reviews/<name>/<code>.md`) is the single source of truth. Both roles read and write it; neither relies on conversation memory across loops. Each finding carries:
 
 - A stable **ID** (`F1`, `F2`, …) that never changes across iterations.
 - A **Status** (`Open` → `In Review` → `Resolved` / `Won't Fix` / `Escalated`).
@@ -46,7 +46,7 @@ The fixer NEVER rewrites reviewer-authored content. If the fixer disagrees with 
 
 ## 1. Locate & Parse the Review File
 
-1. Resolve the target. If the user named a review (`<name>` or a path), use it. If unspecified, ask. The expected location is `.agents/reviews/<name>/<code>.md`.
+1. Resolve the target. If the user named a review (`<name>` or a path), use it. If unspecified, ask. The expected location is `.agents/@montflow/reviews/<name>/<code>.md`.
 2. Read the file in full. Parse Review Metadata (`Max Attempts`, `Iteration`) and every finding (`ID`, `Severity`, `Location`, `Status`, `Attempts`, and the `### Discussion` thread).
 3. Establish **Max Attempts**: read `Max Attempts` from Review Metadata; default to **3** if missing or unparseable, and add the field to Review Metadata so subsequent runs see it.
 4. **Format validation gate**: every finding must have an `ID`, a `Status`, an `Attempts` integer, and a `### Discussion` heading. If a finding predates the v3 format (no ID/Attempts/Discussion), normalize it in place before proceeding: assign the next free `F<n>`, set `Attempts: 0`, `Status: Open` (unless clearly resolved), and add an empty `### Discussion` block. Log the normalization in a top `[Fixer]` turn under `## Review Metadata` (not per-finding) so the reviewer sees what was changed.
@@ -98,7 +98,7 @@ When `Attempts >= Max Attempts` for a finding that is still `Open` (i.e. the fix
 
 ## 5. Write the Review File
 
-Overwrite `.agents/reviews/<name>/<code>.md` in place:
+Overwrite `.agents/@montflow/reviews/<name>/<code>.md` in place:
 
 - Preserve every prior turn in every `### Discussion` thread verbatim — append-only.
 - Update only: `Attempts` (per attempt), `Status` (per transition you own), the `### Discussion` threads (append `[Fixer]` / `[Human]` turns), and `## Summary` counts.

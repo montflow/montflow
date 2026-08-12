@@ -2,7 +2,7 @@
 
 - [ ] The reviewer did not author, edit, or review the spec under audit (independent subagent in pipelines; fresh session/subagent for direct invocation; if neither is available, the run is explicitly marked non-isolated in Review Metadata)
 - [ ] The reviewer had no access to the original spec author's thoughts, notes, or context beyond the spec files themselves. The reviewer did not read the spec author's implementation notes, design commentary, or chat history.
-- [ ] On a re-audit, the reviewer read ONLY the `SPEC_<code>.md` file currently being iterated; no sibling review files in `.agents/reviews/<name>/` were opened
+- [ ] On a re-audit, the reviewer read ONLY the `SPEC_<code>.md` file currently being iterated; no sibling review files in `.agents/@montflow/reviews/<name>/` were opened
 - [ ] `[Fixer]` Discussion turns were treated as unverified assertions; every `In Review` finding was verified against the spec files (`FEATURE.md`/`TASK.md`/`MEMORY.md`/`GATES.md`) itself, not by trusting the fixer's narrative
 - [ ] Findings are based solely on what the spec *actually says* vs. what it *should say*, not on what the author intended
 
@@ -21,7 +21,7 @@
 
 ## Phase 3: File Format (mandatory file output)
 
-- [ ] The audit was written to `.agents/reviews/<name>/SPEC_<code>.md` (there is no in-place mode)
+- [ ] The audit was written to `.agents/@montflow/reviews/<name>/SPEC_<code>.md` (there is no in-place mode)
 - [ ] The filename uses the `SPEC_` prefix to distinguish spec audits from code reviews
 - [ ] Review Metadata contains **Target** (feature spec), **Review Type** (`Standalone` or `Re-review`), **Review File**, **Iteration**, **Isolation**, and **Max Attempts: 3**
 - [ ] Every finding has a stable unique ID (`F1`, `F2`, …), a Severity, a Location pointing at a spec artifact, a Problem, an Impact, a Suggestion, a Status (`Open` on a standalone audit), `Attempts: 0`, a `First Seen` iteration, and an `### Discussion` subsection

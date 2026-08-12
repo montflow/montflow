@@ -2,7 +2,7 @@
 
 - [ ] The reviewer did not author, edit, or execute the code under review (independent subagent in pipelines; fresh session/subagent for direct invocation; if neither is available, the run is explicitly marked non-isolated in Review Metadata)
 - [ ] The reviewer had no access to the original implementer's thoughts, notes, commit messages, design commentary, or any context beyond the code, spec, and goals
-- [ ] On a re-review, the reviewer read ONLY the review file currently being iterated; no sibling review files in `.agents/reviews/<name>/` were opened
+- [ ] On a re-review, the reviewer read ONLY the review file currently being iterated; no sibling review files in `.agents/@montflow/reviews/<name>/` were opened
 - [ ] `[Fixer]` Discussion turns were treated as unverified assertions; every `In Review` finding was verified by reading the actual code, not by trusting the fixer's narrative
 - [ ] Findings are based solely on what the code *does* vs. what it *should do*, not on what the author intended
 
@@ -21,7 +21,7 @@
 
 ## Phase 3: File Format (mandatory file output)
 
-- [ ] The review was written to `.agents/reviews/<name>/<code>.md` (there is no in-place mode)
+- [ ] The review was written to `.agents/@montflow/reviews/<name>/<code>.md` (there is no in-place mode)
 - [ ] Review Metadata contains **Target**, **Review Type**, **Review File**, **Iteration**, **Isolation**, and **Max Attempts: 3**
 - [ ] Every finding has a stable, unique ID (`F1`, `F2`, …), a Severity, a Location, a Problem, an Impact, a Suggestion, a Status (`Open` on initial review), `Attempts: 0`, a `First Seen` iteration, and an `### Discussion` subsection (empty on a standalone review)
 - [ ] No global "Fixer Notes" section exists — status and discussion live per-finding

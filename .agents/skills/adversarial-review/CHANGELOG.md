@@ -10,7 +10,7 @@
 
 ### Changed (breaking)
 
-- **Removed in-place output mode.** Reviews are now ALWAYS written to `.agents/reviews/<name>/<code>.md`. The file is the shared artifact enabling fixer↔reviewer coordination across fix→re-review loops (pairs with the new `addressing-adversarial-review` skill). Step 0 simplified accordingly.
+- **Removed in-place output mode.** Reviews are now ALWAYS written to `.agents/@montflow/reviews/<name>/<code>.md`. The file is the shared artifact enabling fixer↔reviewer coordination across fix→re-review loops (pairs with the new `addressing-adversarial-review` skill). Step 0 simplified accordingly.
 - **Removed global `Fixer Notes` section.** Status and coordination now live per-finding (`Status`, `Attempts`, `### Discussion`).
 - Per-finding format extended: stable ID (`F1`, `F2`, …), `Status`, `Attempts` (starts at 0, incremented only by the fixer), `First Seen` iteration, and an append-only `### Discussion` thread tagged `[Reviewer]` / `[Fixer]`.
 - Added status lifecycle table (`Open` → `In Review` → `Resolved` / `Won't Fix` / `Escalated`) describing which role writes each transition.
@@ -52,8 +52,8 @@
 
 ### Added
 
-- Optional file output: when the user explicitly requests, the review is saved to `.agents/reviews/<name>/<code>.md` with sequential numeric codes and zero-padded numbering; reviewer must not read existing reviews in that directory to maintain isolation (adversarial-review M3)
-- Step 0 (Determine Output Mode): agent must self-check before reviewing whether output is in-place, `.agents/reviews/`, or feature-spec `REVIEW.md` (adversarial-review M4). *(The feature-spec `REVIEW.md` output mode was removed in 2.0.0 — see the 2.0.0 changelog entry.)*
+- Optional file output: when the user explicitly requests, the review is saved to `.agents/@montflow/reviews/<name>/<code>.md` with sequential numeric codes and zero-padded numbering; reviewer must not read existing reviews in that directory to maintain isolation (adversarial-review M3)
+- Step 0 (Determine Output Mode): agent must self-check before reviewing whether output is in-place, `.agents/@montflow/reviews/`, or feature-spec `REVIEW.md` (adversarial-review M4). *(The feature-spec `REVIEW.md` output mode was removed in 2.0.0 — see the 2.0.0 changelog entry.)*
 - Standard file structure for review files across both output modes, with **Findings** and **Fixer Notes** sections; feature-spec adaptation omits **Review Metadata** since the spec provides context (adversarial-review M4)
 
 ## [1.1.1] - 2026-07-18

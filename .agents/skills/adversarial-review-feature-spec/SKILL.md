@@ -1,6 +1,6 @@
 ---
 name: adversarial-review-feature-spec
-description: Audits feature specifications (FEATURE.md, TASK.md, MEMORY.md, GATES.md) for completeness, correctness, and consistency and writes the report to a file under `.agents/reviews/`. Use when reviewing a feature spec during or after authoring. Pair with addressing-adversarial-review to resolve findings across fix→re-review loops. For code/PR/diff reviews, see adversarial-review.
+description: Audits feature specifications (FEATURE.md, TASK.md, MEMORY.md, GATES.md) for completeness, correctness, and consistency and writes the report to a file under `.agents/@montflow/reviews/`. Use when reviewing a feature spec during or after authoring. Pair with addressing-adversarial-review to resolve findings across fix→re-review loops. For code/PR/diff reviews, see adversarial-review.
 id: e675df1f0e8d82a2
 author: Daniel Montilla
 version: 2.1.0
@@ -31,7 +31,7 @@ The base skill's [Isolation Requirement](../adversarial-review/SKILL.md#isolatio
 
 A reviewer that authored or reviewed the spec earlier in the same session cannot self-certify forgetting; spawn a fresh subagent for the audit, or mark the run non-isolated in Review Metadata.
 
-> **File output restriction**: Reviews are ALWAYS written to `.agents/reviews/<name>/SPEC_<code>.md` (see Step 0). The base skill's directory-isolation rule applies — listing directory entries is permitted, but you must NOT read the *contents* of any other review or spec-audit files in that directory. Re-reviews re-read only the single file currently being iterated.
+> **File output restriction**: Reviews are ALWAYS written to `.agents/@montflow/reviews/<name>/SPEC_<code>.md` (see Step 0). The base skill's directory-isolation rule applies — listing directory entries is permitted, but you must NOT read the *contents* of any other review or spec-audit files in that directory. Re-reviews re-read only the single file currently being iterated.
 
 ### Discussion Channel vs. Evidence
 
@@ -41,12 +41,12 @@ Inherited from the base skill: per-finding `### Discussion` turns tagged `[Revie
 
 ## 0. Output Mode: File Only
 
-The spec audit is ALWAYS written to `.agents/reviews/<name>/SPEC_<code>.md` (the `SPEC_` prefix distinguishes spec audits from code reviews). There is no in-place mode — the file is the shared artifact the reviewer and the fixer ([addressing-adversarial-review](../addressing-adversarial-review/SKILL.md)) coordinate through.
+The spec audit is ALWAYS written to `.agents/@montflow/reviews/<name>/SPEC_<code>.md` (the `SPEC_` prefix distinguishes spec audits from code reviews). There is no in-place mode — the file is the shared artifact the reviewer and the fixer ([addressing-adversarial-review](../addressing-adversarial-review/SKILL.md)) coordinate through.
 
 Determine the two path parameters:
 
 1. **`<name>`**: Use the feature spec's directory name (the same `<name>` from `.agents/features/<name>/`). Reuse across iterations.
-2. **`<code>`**: Check if `.agents/reviews/<name>/` exists. If it does, this is a **re-audit** unless the user asks for a fresh one — list `*.md` filenames whose names start with `SPEC_` (directory entries only — reading file contents is forbidden), find the highest existing numeric portion, and reuse that same code to overwrite in place. If no `SPEC_<code>.md` exists yet, start at `SPEC_001` (or `SPEC_<highest+1>` if `SPEC_` files exist but the user wants a fresh audit). Code-review files (no `SPEC_` prefix) are skipped by this counter and must not be read.
+2. **`<code>`**: Check if `.agents/@montflow/reviews/<name>/` exists. If it does, this is a **re-audit** unless the user asks for a fresh one — list `*.md` filenames whose names start with `SPEC_` (directory entries only — reading file contents is forbidden), find the highest existing numeric portion, and reuse that same code to overwrite in place. If no `SPEC_<code>.md` exists yet, start at `SPEC_001` (or `SPEC_<highest+1>` if `SPEC_` files exist but the user wants a fresh audit). Code-review files (no `SPEC_` prefix) are skipped by this counter and must not be read.
 
 Findings follow the per-finding structure from [adversarial-review Step 8](../adversarial-review/SKILL.md) (ID, Severity, Location, Problem, Impact, Suggestion, Status, Attempts, First Seen, `### Discussion`).
 
@@ -79,7 +79,7 @@ Emit these as findings in the per-finding structure from [adversarial-review Ste
 
 ## 3. Report
 
-Write the audit to `.agents/reviews/<name>/SPEC_<code>.md` using the standard file structure from [adversarial-review Step 8](../adversarial-review/SKILL.md) (**Review Metadata** with `Review Type: Standalone | Re-review`, `Iteration`, `Isolation`, `Max Attempts: 3`; per-severity **Findings** with stable IDs and per-finding `### Discussion`; **Summary** counts). The global **Fixer Notes** section is gone — coordination lives per-finding. Include any spec-audit adaptations in Review Metadata (e.g. note `Target: feature spec`).
+Write the audit to `.agents/@montflow/reviews/<name>/SPEC_<code>.md` using the standard file structure from [adversarial-review Step 8](../adversarial-review/SKILL.md) (**Review Metadata** with `Review Type: Standalone | Re-review`, `Iteration`, `Isolation`, `Max Attempts: 3`; per-severity **Findings** with stable IDs and per-finding `### Discussion`; **Summary** counts). The global **Fixer Notes** section is gone — coordination lives per-finding. Include any spec-audit adaptations in Review Metadata (e.g. note `Target: feature spec`).
 
 ### Re-Audit (when iterating an existing `SPEC_<code>.md`)
 

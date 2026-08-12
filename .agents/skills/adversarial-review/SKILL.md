@@ -1,6 +1,6 @@
 ---
 name: adversarial-review
-description: Performs a hostile, bug-hunting code review that assumes the author made mistakes. Surfaces possible bugs, edge cases, security holes, missed refactors, missing tests, and documentation gaps, and writes the report to a file under `.agents/reviews/`. Use when reviewing code, PRs, or diffs before merge. Pair with addressing-adversarial-review to resolve findings across fix→re-review loops. For feature-spec auditing, see adversarial-review-feature-spec.
+description: Performs a hostile, bug-hunting code review that assumes the author made mistakes. Surfaces possible bugs, edge cases, security holes, missed refactors, missing tests, and documentation gaps, and writes the report to a file under `.agents/@montflow/reviews/`. Use when reviewing code, PRs, or diffs before merge. Pair with addressing-adversarial-review to resolve findings across fix→re-review loops. For feature-spec auditing, see adversarial-review-feature-spec.
 id: 714e99f0430c9637
 author: Daniel Montilla
 version: 3.1.0
@@ -41,7 +41,7 @@ Isolation is a *structural* property of the orchestration, not a self-attested c
 
 A reviewer that already saw the author's intent (e.g. from an earlier conversation turn) cannot self-certify forgetting it; treat such a run as non-isolated and mark it so in the report's Review Metadata.
 
-> **File output restriction**: Reviews are ALWAYS written to `.agents/reviews/<name>/<code>.md` (see Step 0). When picking the next numeric code you may list directory entries (`ls`, `glob`), but you must NOT read the *contents* of any other review files in that directory — only filenames. In a re-review (Step 9), the reviewer reads the *single* review file currently being iterated on, nothing else in the directory.
+> **File output restriction**: Reviews are ALWAYS written to `.agents/@montflow/reviews/<name>/<code>.md` (see Step 0). When picking the next numeric code you may list directory entries (`ls`, `glob`), but you must NOT read the *contents* of any other review files in that directory — only filenames. In a re-review (Step 9), the reviewer reads the *single* review file currently being iterated on, nothing else in the directory.
 
 ### Discussion Channel vs. Evidence
 
@@ -55,14 +55,14 @@ Each finding carries a `### Discussion` thread that the reviewer (this skill) an
 
 ## 0. Output Mode: File Only
 
-The review is ALWAYS written to a file at `.agents/reviews/<name>/<code>.md`. There is no in-place mode — the file is the shared artifact that lets the reviewer and the fixer ([addressing-adversarial-review](../addressing-adversarial-review/SKILL.md)) coordinate across fix→re-review loops via the per-finding `### Discussion` thread.
+The review is ALWAYS written to a file at `.agents/@montflow/reviews/<name>/<code>.md`. There is no in-place mode — the file is the shared artifact that lets the reviewer and the fixer ([addressing-adversarial-review](../addressing-adversarial-review/SKILL.md)) coordinate across fix→re-review loops via the per-finding `### Discussion` thread.
 
 Before reviewing, determine the two path parameters:
 
 1. **`<name>`**: A short identifier for the feature, project, or thing being reviewed (infer from the user's request or the target context). Reuse the same `<name>` across iterations of the same review so the file is overwritten/extended rather than scattered.
-2. **`<code>`**: Check if `.agents/reviews/<name>/` exists. If it does, this is a **re-review** of the most recent review file in that directory (see Step 9) — list `*.md` filenames (directory entries only — reading *other* review files' contents is forbidden by the isolation requirement), find the highest existing numeric portion of any filename ignoring non-numeric prefixes (e.g. ignores `SPEC_001.md`, sees `003.md` → numeric portion `003`), and reuse that same `<code>` to overwrite the file in place. If the directory does not exist or the user explicitly asks for a fresh review, start at the next unused code (`001` if the directory is new, else highest+1).
+2. **`<code>`**: Check if `.agents/@montflow/reviews/<name>/` exists. If it does, this is a **re-review** of the most recent review file in that directory (see Step 9) — list `*.md` filenames (directory entries only — reading *other* review files' contents is forbidden by the isolation requirement), find the highest existing numeric portion of any filename ignoring non-numeric prefixes (e.g. ignores `SPEC_001.md`, sees `003.md` → numeric portion `003`), and reuse that same `<code>` to overwrite the file in place. If the directory does not exist or the user explicitly asks for a fresh review, start at the next unused code (`001` if the directory is new, else highest+1).
 
-Create `.agents/reviews/<name>/` if missing. Proceed through the pipeline; the file is written in Step 8.
+Create `.agents/@montflow/reviews/<name>/` if missing. Proceed through the pipeline; the file is written in Step 8.
 
 ## 1. Map the Change
 
@@ -174,7 +174,7 @@ Lead with the highest-severity, highest-likelihood bugs. Distinguish confirmed d
 ## Review Metadata
 - **Target**: <what was reviewed — file, module, PR, feature>
 - **Review Type**: Standalone | Re-review
-- **Review File**: .agents/reviews/<name>/<code>.md
+- **Review File**: .agents/@montflow/reviews/<name>/<code>.md
 - **Iteration**: <N>                 # 1 = initial; increments on each re-review overwrite
 - **Isolation**: Isolated | Non-isolated (<reason>)
 - **Max Attempts**: 3                # ceiling; fixer escalates when Attempts >= Max Attempts
@@ -217,13 +217,13 @@ Lead with the highest-severity, highest-likelihood bugs. Distinguish confirmed d
 
 ### Write the File
 
-1. Write the review to `.agents/reviews/<name>/<code>.md` using the structure above. Overwrite the same file on re-review (Step 9) — do not create a new code unless the user asks for a fresh review.
+1. Write the review to `.agents/@montflow/reviews/<name>/<code>.md` using the structure above. Overwrite the same file on re-review (Step 9) — do not create a new code unless the user asks for a fresh review.
 2. The per-finding `### Discussion` block starts empty on a standalone review. It is appended to — never rewritten — across iterations.
-3. Isolation: do NOT read the *contents* of other review files in `.agents/reviews/<name>/`. Only the file currently being iterated on may be read, and only during a re-review (Step 9).
+3. Isolation: do NOT read the *contents* of other review files in `.agents/@montflow/reviews/<name>/`. Only the file currently being iterated on may be read, and only during a re-review (Step 9).
 
 ## 9. Re-Review (when iterating an existing review file)
 
-A re-review runs when `.agents/reviews/<name>/<code>.md` already exists and the user (or the orchestrator, e.g. `executing-feature-spec`) asks for another pass. The reviewer **does not start over** — it iterates the existing file in place.
+A re-review runs when `.agents/@montflow/reviews/<name>/<code>.md` already exists and the user (or the orchestrator, e.g. `executing-feature-spec`) asks for another pass. The reviewer **does not start over** — it iterates the existing file in place.
 
 1. **Read only the current review file.** Do not read sibling review files. This is the one controlled exception to the file-output isolation restriction.
 2. **Scope the re-review to non-terminal findings.** Terminal statuses are `Resolved` and `Won't Fix` (unless the user explicitly asks to reopen). Re-evaluate findings in `Open`, `In Review`, and `Escalated`:
