@@ -14,10 +14,9 @@ import {
 } from '@/components/ui/dialog'
 import { useUiSocket } from '@/lib/useUiSocket'
 import { useWorkspaces } from '@/lib/useWorkspaces'
-import { workspaceUrl } from '@/components/LandingPage'
-import { navigate } from '@/lib/useLocation'
+import { consumeRestored } from '@/lib/scrollRestoration'
 import type { UiMsg } from '@/protocol'
-import { ArrowLeft, ChevronDown, Loader2, Lock, Pencil, Send, Wrench } from 'lucide-react'
+import { ChevronDown, Loader2, Lock, Pencil, Send, Wrench } from 'lucide-react'
 
 interface SessionPageProps {
   sessionId: string
@@ -178,10 +177,15 @@ export function SessionPage({ sessionId, conn }: SessionPageProps) {
   }
 
   // Follow new content while the user is near the bottom; stay put if they
-  // scrolled up to read.
+  // scrolled up to read. Skip the initial pin when a restored scroll (back
+  // navigation to a mid-conversation position) just landed.
   useEffect(() => {
     const el = scrollRef.current
-    if (el !== null && stickToBottom.current) {
+    if (
+      el !== null &&
+      stickToBottom.current &&
+      !consumeRestored(location.pathname + location.search)
+    ) {
       el.scrollTop = el.scrollHeight
     }
   }, [messages])
@@ -205,24 +209,9 @@ export function SessionPage({ sessionId, conn }: SessionPageProps) {
     resetComposer()
   }
 
-  const goToWorkspace = (): void => {
-    if (workspaceId !== null) navigate(workspaceUrl(workspaceId))
-  }
-
   return (
     <main className="flex h-full flex-1 flex-col overflow-hidden">
       <header className="flex items-center gap-2 border-b px-4 py-3">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="-ml-2 text-muted-foreground"
-          onClick={goToWorkspace}
-          disabled={workspaceId === null}
-          title={workspaceId === null ? 'No workspace for this session' : 'Go to workspace'}
-        >
-          <ArrowLeft className="size-4" />
-          Go to workspace
-        </Button>
         <h1 className="truncate text-sm font-semibold">{folder?.name ?? 'Session'}</h1>
         {folder !== null && (
           <Button
@@ -246,7 +235,7 @@ export function SessionPage({ sessionId, conn }: SessionPageProps) {
       </header>
 
       <div className="relative flex-1 overflow-hidden">
-        <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto">
+        <div ref={scrollRef} onScroll={handleScroll} data-scroll-region className="h-full overflow-y-auto">
           <div className="mx-auto w-full max-w-5xl space-y-3 p-4">
             {folder === null ? (
               <div className="flex h-full min-h-64 flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">

@@ -4,8 +4,7 @@ import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/button'
 import { useUiSocket } from '@/lib/useUiSocket'
 import { runTitle } from '@/lib/runTitle'
-import { workspaceUrl } from '@/components/LandingPage'
-import { navigate } from '@/lib/useLocation'
+import { consumeRestored } from '@/lib/scrollRestoration'
 import { CheckCircle2, CircleAlert, Loader2, Lock, MessageCircle, Send, Wrench, XCircle } from 'lucide-react'
 
 interface RunPageProps {
@@ -41,7 +40,11 @@ export function RunPage({ runId, conn }: RunPageProps) {
 
   useEffect(() => {
     const el = scrollRef.current
-    if (el !== null && stickToBottom.current) {
+    if (
+      el !== null &&
+      stickToBottom.current &&
+      !consumeRestored(location.pathname + location.search)
+    ) {
       el.scrollTop = el.scrollHeight
     }
   }, [run?.entries, run?.status])
@@ -67,11 +70,6 @@ export function RunPage({ runId, conn }: RunPageProps) {
     if (el !== null) el.style.height = 'auto'
   }
 
-  const goToWorkspace = (): void => {
-    if (run !== undefined && run.workspaceId !== '') navigate(workspaceUrl(run.workspaceId))
-    else navigate('/')
-  }
-
   const statusMeta =
     status === 'done'
       ? { label: 'done', className: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400', Icon: CheckCircle2 }
@@ -87,9 +85,6 @@ export function RunPage({ runId, conn }: RunPageProps) {
   return (
     <main className="flex h-full flex-1 flex-col overflow-hidden">
       <header className="flex items-center gap-2 border-b px-4 py-3">
-        <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground" onClick={goToWorkspace}>
-          ← Go to workspace
-        </Button>
         <h1 className="truncate text-sm font-semibold">{run === undefined ? 'Skill run' : runTitle(run)}</h1>
         <span
           className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs ${statusMeta.className}`}
@@ -99,7 +94,7 @@ export function RunPage({ runId, conn }: RunPageProps) {
         </span>
       </header>
 
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} onScroll={handleScroll} data-scroll-region className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-5xl space-y-3 p-4">
           {run === undefined ? (
             <div className="flex h-full min-h-64 flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">

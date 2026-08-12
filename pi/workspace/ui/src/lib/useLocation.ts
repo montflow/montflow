@@ -1,13 +1,22 @@
 import { useMemo, useSyncExternalStore } from 'react'
+import { saveScroll, setCurrentPath } from '@/lib/scrollRestoration'
 
 /** Custom event fired after pushState/replaceState (popstate doesn't cover it). */
 const NAV_EVENT = 'montflow:navigate'
 
 const subscribe = (onChange: () => void): (() => void) => {
-  window.addEventListener('popstate', onChange)
+  const onPopState = (): void => {
+    // The browser has already switched the URL, but the old page is still in
+    // the DOM — snapshot its scroll under the URL we're leaving, then tell
+    // the store which URL is current now.
+    saveScroll()
+    setCurrentPath()
+    onChange()
+  }
+  window.addEventListener('popstate', onPopState)
   window.addEventListener(NAV_EVENT, onChange)
   return () => {
-    window.removeEventListener('popstate', onChange)
+    window.removeEventListener('popstate', onPopState)
     window.removeEventListener(NAV_EVENT, onChange)
   }
 }
@@ -15,8 +24,11 @@ const subscribe = (onChange: () => void): (() => void) => {
 const getSnapshot = (): string => location.pathname + location.search
 
 const update = (path: string, replace: boolean): void => {
+  // Snapshot the page we're leaving before the URL moves.
+  saveScroll()
   if (replace) window.history.replaceState(null, '', path)
   else window.history.pushState(null, '', path)
+  setCurrentPath(path)
   window.dispatchEvent(new Event(NAV_EVENT))
 }
 

@@ -87,7 +87,7 @@ export function LandingPage({ conn, workspaces }: LandingPageProps) {
   }
 
   return (
-    <main className="flex-1 overflow-y-auto p-4">
+    <main data-scroll-region className="flex-1 overflow-y-auto p-4">
       <h1 className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
         <FolderTree className="size-4" />
         Workspaces

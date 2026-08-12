@@ -6,6 +6,7 @@ import { WorkspacePage } from '@/components/WorkspacePage'
 import { SessionPage } from '@/components/SessionPage'
 import { RunPage } from '@/components/RunPage'
 import { Toasts } from '@/components/Toasts'
+import { ScrollRestore } from '@/components/ScrollRestore'
 import { usePathname } from '@/lib/useLocation'
 import { FolderOpen } from 'lucide-react'
 
@@ -20,8 +21,9 @@ export default function App() {
   if (sessionId !== null) {
     return (
       <div className="flex h-dvh flex-col bg-background text-foreground">
-        <Header conn={conn} port={port} runs={runs} />
+        <Header conn={conn} port={port} runs={runs} workspaces={workspaces} folders={folders} />
         <SessionPage sessionId={sessionId} conn={conn} />
+        <ScrollRestore />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
       </div>
     )
@@ -31,8 +33,9 @@ export default function App() {
   if (runId !== null) {
     return (
       <div className="flex h-dvh flex-col bg-background text-foreground">
-        <Header conn={conn} port={port} runs={runs} />
+        <Header conn={conn} port={port} runs={runs} workspaces={workspaces} folders={folders} />
         <RunPage runId={runId} conn={conn} />
+        <ScrollRestore />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
       </div>
     )
@@ -46,7 +49,7 @@ export default function App() {
 
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
-      <Header conn={conn} port={port} runs={runs} />
+      <Header conn={conn} port={port} runs={runs} workspaces={workspaces} folders={folders} />
       {workspaceId === null ? (
         <LandingPage conn={conn} workspaces={workspaces} />
       ) : workspace === null ? (
@@ -60,6 +63,7 @@ export default function App() {
       ) : (
         <WorkspacePage conn={conn} workspace={workspace} />
       )}
+      <ScrollRestore />
       <Toasts toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
