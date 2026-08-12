@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0] - 2026-08-12
+
+### Changed
+
+- AGENTS.md registration is no longer mandatory — GATES.md Phase 4 gate is now conditional (only if the project maintains a skill index there)
+- Pipeline Step 2: added optional "Register in AGENTS.md" sub-step pointing to setup-agentic-repo
+
 ## [1.2.0] - 2026-07-24
 
 ### Added

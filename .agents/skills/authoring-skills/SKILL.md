@@ -3,7 +3,7 @@ name: authoring-skills
 description: Guides the creation, formatting, and refinement of Skills. Use when the user wants to write a new Skill, convert documentation into a Skill, or audit an existing Skill.
 id: b186a4a0ab10373c
 author: Daniel Montilla
-version: 1.2.0
+version: 1.3.0
 license: MIT
 dependencies:
   - executing-skills
@@ -89,6 +89,10 @@ This outputs a 16-character hex string. Paste it into the `id` field. The ID is 
 ### Create CHANGELOG.md
 
 Initialize with a `## [1.0.0]` entry describing the initial release. See the changelog template in [templates/CHANGELOG.md](templates/CHANGELOG.md).
+
+### Register in AGENTS.md (Optional)
+
+Listing the skill in the project's `AGENTS.md` is **optional**, never required. Some projects maintain a skill index table there; others keep AGENTS.md surface-level only (see [setup-agentic-repo](../setup-agentic-repo/SKILL.md)). Ask the user which convention this project follows — or skip registration if unsure.
 
 ## 3. Plan Content
 

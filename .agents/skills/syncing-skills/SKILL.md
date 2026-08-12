@@ -3,7 +3,7 @@ name: syncing-skills
 description: Syncs skills from this repo into a target project's .agents/skills/. Manages fresh syncs and updates with version comparison, changelog preservation, and parallel subagent orchestration. Use when the user wants to sync, update, or upgrade skills to another project.
 id: 2eb6346337a80569
 author: Daniel Montilla
-version: 2.1.0
+version: 2.2.0
 license: MIT
 dependencies:
   - executing-skills
@@ -234,9 +234,11 @@ For each synced/upgraded skill:
 - `version` in target matches expected version from source
 - No missing files vs source directory listing
 
-### 4.2 Update AGENTS.md in Target
+### 4.2 Update AGENTS.md in Target (Optional)
 
-Read SKILL.md frontmatter from all skills now in `$TARGET/.agents/skills/`. Generate or replace the skill table at the **project root** `$TARGET/AGENTS.md` (matching this repo's convention where `AGENTS.md` lives at root and references `.agents/skills/<name>/SKILL.md`):
+Ask the user whether the target project maintains a skill index in its root `AGENTS.md`. Registration is **optional** — per [setup-agentic-repo](../setup-agentic-repo/SKILL.md), AGENTS.md stays surface-level only and may skip per-skill tables entirely.
+
+Only if the user confirms the target maintains a skill table: read SKILL.md frontmatter from all skills now in `$TARGET/.agents/skills/` and generate/replace the table at the **project root** `$TARGET/AGENTS.md` (table format below — this repo itself keeps AGENTS.md table-free per [setup-agentic-repo](../setup-agentic-repo/SKILL.md)):
 
 | Skill | Description |
 |-------|-------------|

@@ -32,6 +32,6 @@
 
 ## Phase 4: Integration
 
-- [ ] Skill is listed in `.agents/AGENTS.md` (or equivalent index file)
+- [ ] Skill is listed in project `AGENTS.md` **only if** the project maintains a skill index there — otherwise skip. Registration is **optional**, never required (per [setup-agentic-repo](../setup-agentic-repo/SKILL.md), AGENTS.md may stay surface-level only)
 - [ ] All cross-references within the skill resolve correctly
 - [ ] Any referenced scripts in `SCRIPTS/` exist and are executable

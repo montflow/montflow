@@ -3,7 +3,7 @@ name: modifying-skills
 description: Modifies, updates, extends, or audits existing skills in .agents/skills/. Use when the user wants to edit an existing skill, add content to a skill, audit a skill for quality, or update skill metadata.
 id: cb9ed8fd8e9b253a
 author: Daniel
-version: 1.1.0
+version: 1.1.1
 license: MIT
 groups:
   - skills
@@ -63,9 +63,9 @@ Apply changes using Edit/Write tools. Follow these conventions:
 
 Run through [GATES.md](GATES.md) checks. Fix any failures.
 
-## 7. Update AGENTS.md
+## 7. Update AGENTS.md (if registered)
 
-If the skill's name or description changed in AGENTS.md, update the index entry.
+If the skill is already listed in the project's `AGENTS.md` and its name or description changed, update the entry. Never add a new entry to a repo that doesn't maintain a skill index — registration is optional, and per [setup-agentic-repo](../setup-agentic-repo/SKILL.md) AGENTS.md may stay surface-level only.
 
 # Reference
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.1] - 2026-08-12
+
+### Changed
+
+- AGENTS.md step clarified: update only if already registered, never force-add (registration optional per setup-agentic-repo)
+
 ## [1.1.0] - 2026-07-24
 
 ### Added

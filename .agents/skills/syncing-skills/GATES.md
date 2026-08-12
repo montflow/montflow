@@ -8,9 +8,9 @@
 
 ## Phase 2: Metadata & Documentation
 
-- [ ] `$TARGET/.agents/skills/AGENTS.md` exists with correct table
-- [ ] AGENTS.md table lists all installed skills (not `syncing-skills`)
-- [ ] AGENTS.md entries have correct relative paths and descriptions
+- [ ] If target maintains a skill index: table exists at `$TARGET/AGENTS.md` with correct entries — otherwise skipped by user choice (AGENTS.md registration is optional per setup-agentic-repo)
+- [ ] AGENTS.md table (if present) lists all installed skills (not `syncing-skills`)
+- [ ] AGENTS.md entries (if present) have correct relative paths and descriptions
 - [ ] Changelog entries preserved per user's merge instructions
 
 ## Phase 3: User Communication
