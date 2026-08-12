@@ -2,7 +2,7 @@
 
 The montflow **workspace** — one Pi extension that owns the project's agent state and runs an automated **adversarial review loop** on your codebase. A **code orchestrator** (not an LLM) drives the **loops and cycles**: each **loop** spawns a fresh set of independent reviewers; within a loop the **same reviewers re-review the updated code** (with their context) across cycles until they reach consensus or hit the per-loop cycle cap. Agents write findings/fixes only — they never decide continue/stop/deadlock.
 
-This extension also **merges the former `@montflow/profiles` feature**: `/profiles` creates/modifies/deletes/lists named agent profiles, and `profiles:get` / `profiles:list` are served on the event bus for other extensions (see [Profiles](#profiles)). No separate profiles package is needed.
+This extension also **merges the former `@montflow/profiles` feature**: named agent profiles are managed from the **web UI** (manual or agentic runs), and `profiles:get` / `profiles:list` are served on the event bus for other extensions (see [Profiles](#profiles)). No separate profiles package is needed.
 
 **All state lives under `.agents/@montflow/`** in the project:
 
@@ -22,9 +22,8 @@ The review file lives at `.agents/@montflow/reviews/<name>/<code>.md` with loop 
 
 | Command | What it does |
 |---|---|
-| `/montflow` | Launch the montflow **web UI** for the current workspace. Auto-creates `.agents/@montflow/workspace.json` (named after the current **git branch**) when missing, then opens the shared UI at the workspace page. Flags: `--stop` stops the router, `--port=NNNN` pins the port. `kill` ends every registered session and stops the router (e.g. `/montflow kill`). Works without a TUI (RPC/print). |
+| `/montflow` | Launch the montflow **web UI** for the current workspace. Auto-creates `.agents/@montflow/workspace.json` (named after the current **git branch**) when missing, then opens the shared UI at the workspace page. Flags: `--stop` stops the router, `--port=NNNN` pins the port. `restart` stops and restarts the UI (fresh router, same port), `kill` ends every registered session and stops the router (e.g. `/montflow kill`). Works without a TUI (RPC/print). |
 | `/workspace` | The interactive **review-loop wizard** (TUI only). `ui` subcommand is an alias for `/montflow` (`/workspace ui`, `/workspace ui --stop`). |
-| `/profiles` | Manage agent profiles (new / modify / delete / list; `--new --name … --description …` for the CLI form). |
 
 > `/workspace` (without `ui`) is **interactive-only** — it always opens the TUI wizard; there are no flags to pass.
 
@@ -365,7 +364,7 @@ it default to 5.
 
 `generic` · `security` · `quality` · `technical` (`quality` variant whose objective also covers security — not a true alias) · `guidelines` · `style` · `linguist`
 
-Builtin ids are used to seed the **default `generic` roster entry** and are referenced by the profiles extension (`PROFILE.md` skills) rather than through CLI flags. Reviewer rosters are built in the wizard from stored profiles.
+Builtin ids are used to seed the **default `generic` roster entry** and are referenced by the profiles extension (`PROFILE.md` skills). Reviewer rosters are built in the wizard from stored profiles.
 
 ## Session policy
 
@@ -401,13 +400,9 @@ truth).
 
 The **merged `@montflow/profiles` feature** — a pure profile store. A profile is data — a one-line description (the agent's role and what it does), custom instructions, a review checklist, a preferred model, and a list of skills — nothing more. Profiles live at `.agents/@montflow/profiles/<name>/PROFILE.md`; the canonical structure is defined by the bundled `profiles/TEMPLATE.md` (copied into `.agents/@montflow/profiles/TEMPLATE.md` on first use).
 
-This extension **never executes anything** on the profiles side: no activation, no model switching, no prompt injection, no skill loading. It only creates / modifies / deletes / lists profiles, and serves profile context to **other extensions** over the event bus (`profiles:get` / `profiles:list` — see `profiles/api.ts`). In **agentic** create mode the request is handed to the main agent as a user message; the agent (not this extension) resolves the fields and runs the standalone CLI itself.
+Profiles are managed from the **montflow web UI** (`/montflow` → Profiles): create/modify manually (raw PROFILE.md) or **agentically** — an isolated agent run reads the profile, applies the change, and writes it back, streamed to the run page where you can answer back. Agentic runs follow `profiles/TEMPLATE.md` exactly (frontmatter comment lines included), so files created by either path share the same shape.
 
-### `/profiles` command
-
-- `/profiles` — TUI menu: **New profile** (agentic or manual), **Modify**, **Delete**, **List**.
-- `/profiles --list` / `--show <name>` / `--delete <name>` / `--template` / `--new --name … --description … [--model …] [--skills …]` — same parser as the standalone CLI.
-- Standalone CLI (same Effect core, prints to stdout): `node profiles/cli.ts --list`, `node profiles/cli.ts --new --name x --description="You are…"`.
+This extension **never executes anything** on the profiles side: no activation, no model switching, no prompt injection, no skill loading. It only stores profiles and serves profile context to **other extensions** over the event bus (`profiles:get` / `profiles:list` — see `profiles/api.ts`).
 
 ### Profile structure
 
@@ -520,7 +515,7 @@ Requires `@earendil-works/pi-coding-agent` as a peer dependency. TypeScript load
 
 | File | Responsibility |
 |---|---|
-| `index.ts` | Pi command entry — registers `/workspace` (wizard + `ui` subcommand) and the merged `/profiles` command + bus API |
+| `index.ts` | Pi command entry — registers `/workspace` (wizard + `ui` subcommand), `/montflow` (web UI), and the merged profile bus API |
 | `interactive.ts` | Interactive setup wizard (action menu + scope picker + roster builder + settings editor) |
 | `profiles-client.ts` | Direct profile→reviewer mapping (reads the merged profiles store) |
 | `models-client.ts` | Model-picker helpers (available models, current-model preselection) |
@@ -539,5 +534,5 @@ Requires `@earendil-works/pi-coding-agent` as a peer dependency. TypeScript load
 | `herdr.ts` | herdr pane agent-state reporting (working/idle while the loop runs) |
 | `git.ts` | Git branch + working-tree diff helpers |
 | `skills/` | Bundled role skills |
-| `profiles/` | **Merged `@montflow/profiles` feature**: profile store (`store.ts`), parse/serialize (`model.ts`), `/profiles` command (`index.ts`), wizard/menu, standalone CLI (`cli.ts`), event-bus API for other extensions (`api.ts`) |
+| `profiles/` | **Merged `@montflow/profiles` feature**: profile store (`store.ts`), parse/serialize (`model.ts`), template (`TEMPLATE.md`), and the event-bus API for other extensions (`api.ts`). The former `/profiles` command, wizard/menu, and standalone CLI were removed — profiles are managed from the web UI |
 | `test/` | Unit tests |
