@@ -1,38 +1,17 @@
-| Skill | Description |
-|-------|-------------|
-| [adding-references](.agents/skills/adding-references/SKILL.md) | Adds and manages third-party reference source code as cloned git repositories. Use when the user wants to add reference source code for local reading or analysis. |
-| [addressing-adversarial-review](.agents/skills/addressing-adversarial-review/SKILL.md) | Resolves findings in an adversarial-review report file by applying fixes, incrementing a per-finding attempt counter, and appending to the shared Discussion thread. Use after adversarial-review has written a review file and the user wants to address its findings. |
-| [adversarial-review](.agents/skills/adversarial-review/SKILL.md) | Performs a hostile, bug-hunting code review of code, PRs, and diffs and writes the report to `.agents/@montflow/reviews/`. Surfaces bugs, security holes, edge cases, design issues, and test gaps. Pair with addressing-adversarial-review to resolve findings across fix→re-review loops. For feature-spec auditing, see adversarial-review-feature-spec. |
-| [adversarial-review-feature-spec](.agents/skills/adversarial-review-feature-spec/SKILL.md) | Audits feature specifications (FEATURE.md, TASK.md, MEMORY.md, GATES.md) for completeness, correctness, and consistency and writes the report to `.agents/@montflow/reviews/`. Wraps adversarial-review with spec-specific audit steps. Pair with addressing-adversarial-review to resolve findings across fix→re-review loops. |
-| [applying-solid](.agents/skills/applying-solid/SKILL.md) | Reviews object-oriented code against all 5 SOLID principles, detecting violations and suggesting corrections. Use when designing new classes/modules or refactoring existing ones. |
-| [authoring-feature-spec](.agents/skills/authoring-feature-spec/SKILL.md) | Authors a phased feature specification with typed tasks and validation gates. Use when user wants to spec a new feature or rewrite an existing plan in the current workspace. |
-| [authoring-feature-spec-in-worktree](.agents/skills/authoring-feature-spec-in-worktree/SKILL.md) | Authors a phased feature specification with workspace isolation via git worktrees. Wraps authoring-feature-spec with worktree creation, initialization, and relocation. |
-| [authoring-rules](.agents/skills/authoring-rules/SKILL.md) | Creates and maintains agent rules and system prompts. Use when the user wants to create, improve, or audit agent rules, system prompts, or context files. |
-| [authoring-skills](.agents/skills/authoring-skills/SKILL.md) | Guides the creation, formatting, and refinement of Skills. Use when the user wants to write a new Skill, convert documentation into a Skill, or audit an existing Skill. |
-| [caveman-compression](.agents/skills/caveman-compression/SKILL.md) | Aggressively removes stop words and grammatical scaffolding while preserving meaning. Use when user asks to compress, shorten, simplify, or caveman-style reduce text. |
-| [caveman-reasoning](.agents/skills/caveman-reasoning/SKILL.md) | Applies caveman-compression to the model's internal reasoning/thinking trace while emitting a normal uncompressed final answer. Use on any multi-step, planning, debugging, analysis, or design task needing internal reasoning before the final output. |
-| [creating-effect-services](.agents/skills/creating-effect-services/SKILL.md) | Scaffolds Effect v4 services with ServiceMap.Service pattern. Use when creating a new service in packages/*/src/services/. |
-| [creating-typescript-modules](.agents/skills/creating-typescript-modules/SKILL.md) | Creates tree-shakable TypeScript modules with namespace-style exports. Use when the user wants to scaffold a new reusable module package. |
-| [creating-typescript-structs](.agents/skills/creating-typescript-structs/SKILL.md) | Creates branded struct modules with validation, blueprint, and brand utilities in the structs folder. Use when creating a new branded type in packages/*/src/structs/. |
-| [detecting-duplication](.agents/skills/detecting-duplication/SKILL.md) | Scans for and refactors duplicated code, logic, and configuration. Use when reviewing PRs, cleaning tech debt, or before adding features. |
-| [executing-feature-spec](.agents/skills/executing-feature-spec/SKILL.md) | Executes feature spec tasks — orchestrates by type (exploratory, execution, planning, interruptor, defect, review) with human-in-the-loop phase interruptions, independent-subagent adversarial reviews, and flat defect resolution. Reads feature state to determine active phase and resumes or begins execution accordingly. |
-| [executing-skills](.agents/skills/executing-skills/SKILL.md) | Loads, executes, and verifies skills from .agents/skills/. Use when the user's request matches an existing skill's description or when instructed to use a specific skill. |
-| [favoring-composition](.agents/skills/favoring-composition/SKILL.md) | Identifies deep inheritance trees and replaces them with composition-based designs. Use when designing object relationships or refactoring brittle class hierarchies. |
-| [finding-references](.agents/skills/finding-references/SKILL.md) | Finds, explores, and reports on third-party reference source code cloned into the project. Use when the user wants to examine reference code, find a specific reference package, or understand available reference dependencies. |
-| [finding-skills](.agents/skills/finding-skills/SKILL.md) | Discovers and surfaces available skills matching user requests. Use when the user asks "what skills do you have", "how do I do X", or wants to find a skill for a specific task. |
-| [grilling](.agents/skills/grilling/SKILL.md) | Grill the user relentlessly about a plan or design. Use when the user wants to stress-test a plan before building, or uses any 'grill' trigger phrases. |
-| [syncing-skills](.agents/skills/syncing-skills/SKILL.md) | Syncs skills from this repo into a target project's .agents/skills/. Manages fresh syncs and updates with version comparison, changelog preservation, and parallel subagent orchestration. Use when the user wants to sync, update, or upgrade skills to another project. |
-| [leaving-it-cleaner](.agents/skills/leaving-it-cleaner/SKILL.md) | Prompts incremental code hygiene improvements whenever touching a file. Use during any edit, bugfix, or feature work — leave the campground cleaner than before. |
-| [mimicking-conventions](.agents/skills/mimicking-conventions/SKILL.md) | Explores nearby files and analogous modules — same structural role, different domain — to learn project conventions before writing code. Use when creating or editing any file, module, or package to ensure new code looks like it belongs in the same codebase. |
-| [modifying-skills](.agents/skills/modifying-skills/SKILL.md) | Modifies, updates, extends, or audits existing skills in .agents/skills/. Use when the user wants to edit an existing skill, add content to a skill, audit a skill for quality, or update skill metadata. |
-| [planning-git-commits](.agents/skills/planning-git-commits/SKILL.md) | Creates a commit plan with conventional commits based on file paths. Use when the user wants to push or commit changes to git. |
-| [setup-typescript-package](.agents/skills/setup-typescript-package/SKILL.md) | Scaffolds TypeScript monorepo packages and services with consistent tooling, tsdown bundling, linting, formatting, and typechecking. Use when setting up a new package or service in a monorepo. |
-| [effect-unit-testing](.agents/skills/effect-unit-testing/SKILL.md) | Effect-specific testing patterns and infrastructure for Effect v4 monorepo packages. Use when testing Effect services, layers, streams, or schedules. |
-| [simplifying-code](.agents/skills/simplifying-code/SKILL.md) | Audits code for over-engineering, unnecessary abstraction, and complexity. Suggests simpler alternatives. Use when a solution feels bloated or during code review. |
-| [typescript-conventions](.agents/skills/typescript-conventions/SKILL.md) | Index of TypeScript-specific skills in this project — lists short descriptions and paths. Use when deciding which TypeScript skill applies, or as a reference map of available TS tooling. |
-| [typescript-prefer-inference](.agents/skills/typescript-prefer-inference/SKILL.md) | Prefers TypeScript inference over explicit type annotations on variable declarations. Use when reviewing TypeScript code that overuses `: SomeType` annotations or `as` casts. |
-| [typescript-result-over-throws](.agents/skills/typescript-result-over-throws/SKILL.md) | Enforces Result-over-throws error handling for TypeScript — prefer returning a typed `Result` from @montflow/core over throwing exceptions. Use when writing, reviewing, or refactoring TypeScript functions that can fail. |
-| [typescript-unit-testing](.agents/skills/typescript-unit-testing/SKILL.md) | TypeScript-specific test infrastructure, directory structure, Vitest configuration, and test-running validation. Use when setting up tests in a TypeScript monorepo. |
-| [unit-testing](.agents/skills/unit-testing/SKILL.md) | Language-agnostic test quality fundamentals. Probes whether tests test real behavior or just mocks, evaluates test structure, and identifies missing coverage. Use when writing or reviewing tests in any language. |
-| [using-git-worktrees](.agents/skills/using-git-worktrees/SKILL.md) | Use starting feature work needs isolation from current workspace or before executing implementation plans - ensures isolated workspace exists via native tools or git worktree fallback |
-| [writting-jsdoc](.agents/skills/writting-jsdoc/SKILL.md) | Generates concise JSDoc annotations for TypeScript functions, methods, interfaces, and classes. Use when the user asks to add, improve, or generate JSDoc documentation for TypeScript code. |
+# Agentic Skills Collection
+
+Collection of installable AI agent skills.
+
+## Entry Points
+
+- [README.md](README.md) — overview
+- [INSTALL.md](INSTALL.md) — install skills into a target project
+
+## Pointers to Depth
+
+- `.agents/skills/` — skill sources; discovered by scanning this directory (see [finding-skills](.agents/skills/finding-skills/SKILL.md), [executing-skills](.agents/skills/executing-skills/SKILL.md))
+- [typescript-conventions](.agents/skills/typescript-conventions/SKILL.md) — index of TypeScript skills
+
+## Conventions
+
+- AGENTS.md stays surface-level only — see [setup-agentic-repo](.agents/skills/setup-agentic-repo/SKILL.md)

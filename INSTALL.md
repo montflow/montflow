@@ -25,4 +25,4 @@ See [.agents/skills/syncing-skills/SKILL.md](.agents/skills/syncing-skills/SKILL
 | Upgrade | SKILL.md §3.2 |
 | Git sparse checkout | SKILL.md §3.3 |
 | Multi-skill orchestration | SKILL.md §3.4 |
-| Post-install + AGENTS.md | SKILL.md §4 |
+| Post-install + AGENTS.md (optional) | SKILL.md §4 |
