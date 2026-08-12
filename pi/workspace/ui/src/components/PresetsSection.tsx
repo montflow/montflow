@@ -6,7 +6,6 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
-  type SortingState,
 } from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,7 +13,8 @@ import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { NewPresetDialog } from '@/components/NewPresetDialog'
 import { useBuiltinReviewers, usePresets } from '@/lib/usePresets'
 import { presetUrl, profileUrl } from '@/components/LandingPage'
-import { navigate, setSearchParams, useSearchParams } from '@/lib/useLocation'
+import { navigate } from '@/lib/useLocation'
+import { useWorkspacePrefs } from '@/lib/useWorkspacePrefs'
 import { titleFromSlug } from '@/lib/utils'
 import type { PresetSummary } from '@/protocol'
 import {
@@ -34,6 +34,10 @@ interface PresetsSectionProps {
   conn: 'connecting' | 'open' | 'closed'
   /** Folder slug for agentic commands (from workspace info); null when offline. */
   folder: string | null
+  /** Scroll-target id (e.g. for the command palette). */
+  id?: string
+  /** Deep link (?section=presets) — force the panel open when navigating here. */
+  reveal?: boolean
 }
 
 /** How many preset rows to reveal at a time. */
@@ -113,7 +117,7 @@ const makeColumns = (
                 onClick={(event) => {
                   event.stopPropagation()
                   if (ref.name !== undefined) {
-                    navigate(profileUrl(workspaceId, ref.name) + location.search)
+                    navigate(profileUrl(workspaceId, ref.name))
                   }
                 }}
                 className="rounded-full border px-2 py-0.5 text-[10px] text-muted-foreground underline-offset-4 transition-colors hover:border-primary/40 hover:text-foreground hover:underline"
@@ -178,7 +182,7 @@ const makeColumns = (
   },
 ]
 
-export function PresetsSection({ workspaceId, conn, folder }: PresetsSectionProps) {
+export function PresetsSection({ workspaceId, conn, folder, id, reveal }: PresetsSectionProps) {
   const { data: presets, isPending, isFetching, isError, error, refetch } = usePresets(workspaceId, conn)
   const { data: builtins } = useBuiltinReviewers(conn)
   const builtinById = useMemo(
@@ -187,20 +191,16 @@ export function PresetsSection({ workspaceId, conn, folder }: PresetsSectionProp
   )
   const [newOpen, setNewOpen] = useState(false)
 
-  // Filters live in the URL (?rq=…) so they survive navigation. The query
-  // key is presets-specific — SkillsSection owns `q` and ProfilesSection `pq`.
-  const params = useSearchParams()
-  const query = params.get('rq') ?? ''
+  // Panel state (open/closed, search text, sort) is persisted per workspace
+  // in localStorage and restored on mount.
+  const [prefs, setPrefs] = useWorkspacePrefs(workspaceId, 'presets')
+  const query = prefs.query
+  const sorting = prefs.sort
+
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const tableScrollRef = useRef<HTMLDivElement>(null)
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }])
 
-  const setQuery = (value: string): void => {
-    const next = new URLSearchParams(params)
-    if (value.trim() === '') next.delete('rq')
-    else next.set('rq', value)
-    setSearchParams(next)
-  }
+  const setQuery = (value: string): void => setPrefs({ query: value })
 
   const fuse = useMemo(
     () =>
@@ -228,7 +228,8 @@ export function PresetsSection({ workspaceId, conn, folder }: PresetsSectionProp
     data: filtered,
     columns: makeColumns(workspaceId, builtinById),
     state: { sorting },
-    onSortingChange: setSorting,
+    onSortingChange: (updater) =>
+      setPrefs({ sort: typeof updater === 'function' ? updater(sorting) : updater }),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   })
@@ -250,10 +251,22 @@ export function PresetsSection({ workspaceId, conn, folder }: PresetsSectionProp
     })
   }
 
+  // Deep-link reveal: a breadcrumb section link (?section=presets) opens a
+  // collapsed panel so the scroll lands on visible content.
+  useEffect(() => {
+    if (reveal === true) setPrefs({ open: true })
+  }, [reveal, setPrefs])
+
   const hasPresets = (presets?.length ?? 0) > 0
 
   return (
-    <CollapsibleSection title="Presets" icon={<SlidersHorizontal className="size-5" />}>
+    <CollapsibleSection
+      id={id}
+      title="Presets"
+      icon={<SlidersHorizontal className="size-5" />}
+      open={prefs.open}
+      onOpenChange={(open) => setPrefs({ open })}
+    >
       {isError && (
         <div className="mb-2 flex items-center gap-2 text-xs text-red-500">
           <span className="truncate">{error instanceof Error ? error.message : String(error)}</span>
@@ -351,7 +364,7 @@ export function PresetsSection({ workspaceId, conn, folder }: PresetsSectionProp
                 </thead>
                 <tbody>
                   {table.getRowModel().rows.slice(0, visibleCount).map((row) => {
-                    const target = presetUrl(workspaceId, row.original.name) + location.search
+                    const target = presetUrl(workspaceId, row.original.name)
                     return (
                       <tr
                         key={row.id}
@@ -395,7 +408,7 @@ export function PresetsSection({ workspaceId, conn, folder }: PresetsSectionProp
         folder={folder}
         open={newOpen}
         onOpenChange={setNewOpen}
-        onCreated={(name) => navigate(presetUrl(workspaceId, name) + location.search)}
+        onCreated={(name) => navigate(presetUrl(workspaceId, name))}
       />
     </CollapsibleSection>
   )

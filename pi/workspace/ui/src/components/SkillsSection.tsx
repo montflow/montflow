@@ -6,7 +6,6 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
-  type SortingState,
 } from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,7 +13,8 @@ import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { NewSkillDialog } from '@/components/NewSkillDialog'
 import { skillUrl } from '@/components/LandingPage'
 import { useSkills } from '@/lib/useSkills'
-import { navigate, setSearchParams, useSearchParams } from '@/lib/useLocation'
+import { navigate } from '@/lib/useLocation'
+import { useWorkspacePrefs } from '@/lib/useWorkspacePrefs'
 import { titleFromSlug } from '@/lib/utils'
 import type { SkillSummary } from '@/protocol'
 import { ArrowDown, ArrowUp, ArrowUpDown, Plus, Search, SearchX, Sparkles, X } from 'lucide-react'
@@ -24,6 +24,10 @@ interface SkillsSectionProps {
   conn: 'connecting' | 'open' | 'closed'
   /** Folder slug for agentic commands (from workspace info); null when offline. */
   folder: string | null
+  /** Scroll-target id (e.g. for the command palette). */
+  id?: string
+  /** Deep link (?section=skills) — force the panel open when navigating here. */
+  reveal?: boolean
 }
 
 /** How many skill rows to reveal at a time. */
@@ -95,31 +99,21 @@ const columns: ColumnDef<SkillSummary>[] = [
   },
 ]
 
-export function SkillsSection({ workspaceId, conn, folder }: SkillsSectionProps) {
+export function SkillsSection({ workspaceId, conn, folder, id, reveal }: SkillsSectionProps) {
   const { data: skills, isPending, isFetching, isError, error, refetch } = useSkills(workspaceId, conn)
   const [newOpen, setNewOpen] = useState(false)
 
-  // Filters live in the URL (?q=…&g=a,b) so they survive navigation.
-  const params = useSearchParams()
-  const query = params.get('q') ?? ''
-  const selectedGroups = useMemo(
-    () =>
-      (params.get('g') ?? '')
-        .split(',')
-        .map((group) => group.trim())
-        .filter((group) => group !== ''),
-    [params],
-  )
+  // Panel state (open/closed, search text, group filters, sort) is persisted
+  // per workspace in localStorage and restored on mount.
+  const [prefs, setPrefs] = useWorkspacePrefs(workspaceId, 'skills')
+  const query = prefs.query
+  const selectedGroups = prefs.chips
+  const sorting = prefs.sort
+
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }])
   const tableScrollRef = useRef<HTMLDivElement>(null)
 
-  const setQuery = (value: string): void => {
-    const next = new URLSearchParams(params)
-    if (value.trim() === '') next.delete('q')
-    else next.set('q', value)
-    setSearchParams(next)
-  }
+  const setQuery = (value: string): void => setPrefs({ query: value })
 
   const groups = useMemo(() => {
     const set = new Set<string>()
@@ -156,7 +150,8 @@ export function SkillsSection({ workspaceId, conn, folder }: SkillsSectionProps)
     data: filtered,
     columns,
     state: { sorting },
-    onSortingChange: setSorting,
+    onSortingChange: (updater) =>
+      setPrefs({ sort: typeof updater === 'function' ? updater(sorting) : updater }),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   })
@@ -167,17 +162,10 @@ export function SkillsSection({ workspaceId, conn, folder }: SkillsSectionProps)
   }, [query, selectedGroups, skills])
 
   const toggleGroup = (group: string): void => {
-    const next = new URLSearchParams(params)
-    const current = (next.get('g') ?? '')
-      .split(',')
-      .map((g) => g.trim())
-      .filter((g) => g !== '')
-    const updated = current.includes(group)
-      ? current.filter((g) => g !== group)
-      : [...current, group]
-    if (updated.length === 0) next.delete('g')
-    else next.set('g', updated.join(','))
-    setSearchParams(next)
+    const updated = selectedGroups.includes(group)
+      ? selectedGroups.filter((g) => g !== group)
+      : [...selectedGroups, group]
+    setPrefs({ chips: updated })
   }
 
   const loadMore = (): void => {
@@ -192,10 +180,22 @@ export function SkillsSection({ workspaceId, conn, folder }: SkillsSectionProps)
     })
   }
 
+  // Deep-link reveal: a breadcrumb section link (?section=skills) opens a
+  // collapsed panel so the scroll lands on visible content.
+  useEffect(() => {
+    if (reveal === true) setPrefs({ open: true })
+  }, [reveal, setPrefs])
+
   const hasSkills = (skills?.length ?? 0) > 0
 
   return (
-    <CollapsibleSection title="Skills" icon={<Sparkles className="size-5" />}>
+    <CollapsibleSection
+      id={id}
+      title="Skills"
+      icon={<Sparkles className="size-5" />}
+      open={prefs.open}
+      onOpenChange={(open) => setPrefs({ open })}
+    >
       {isError && (
         <div className="mb-2 flex items-center gap-2 text-xs text-red-500">
           <span className="truncate">{error instanceof Error ? error.message : String(error)}</span>
@@ -314,9 +314,7 @@ export function SkillsSection({ workspaceId, conn, folder }: SkillsSectionProps)
                   {table.getRowModel().rows.slice(0, visibleCount).map((row) => {
                     // Older routers don't send `id` yet — fall back to the name.
                     const slug = row.original.id !== '' ? row.original.id : row.original.name
-                    // Keep the current filters in the URL so the back button
-                    // from the skill detail restores them.
-                    const target = skillUrl(workspaceId, slug) + location.search
+                    const target = skillUrl(workspaceId, slug)
                     return (
                       <tr
                         key={row.id}

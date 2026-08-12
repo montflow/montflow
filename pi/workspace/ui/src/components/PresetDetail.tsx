@@ -19,7 +19,6 @@ import { navigate } from '@/lib/useLocation'
 import { titleFromSlug } from '@/lib/utils'
 import type { PresetConfig, PresetSummary } from '@/protocol'
 import {
-  ArrowLeft,
   Braces,
   CircleAlert,
   Loader2,
@@ -50,7 +49,6 @@ export function PresetDetail({ workspaceId, presetName, conn, folder }: PresetDe
   )
 
   const [modifyOpen, setModifyOpen] = useState(false)
-  const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
   // Filters are in the query string (see PresetsSection) — carry them through
@@ -58,17 +56,7 @@ export function PresetDetail({ workspaceId, presetName, conn, folder }: PresetDe
   const back = (): void => navigate(workspaceUrl(workspaceId) + location.search)
 
   return (
-    <main className="flex-1 overflow-y-auto p-4">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="-ml-2 text-muted-foreground"
-        onClick={back}
-      >
-        <ArrowLeft className="size-4" />
-        Back to workspace
-      </Button>
-
+    <main data-scroll-region className="flex-1 overflow-y-auto p-4">
       {isError && (
         <div className="mt-3 flex items-center gap-2 text-xs text-red-500">
           <span className="truncate">{error instanceof Error ? error.message : String(error)}</span>
@@ -92,10 +80,15 @@ export function PresetDetail({ workspaceId, presetName, conn, folder }: PresetDe
             builtinById={builtinById}
             workspaceId={workspaceId}
             onModify={() => setModifyOpen(true)}
-            onEdit={() => setEditOpen(true)}
             onDelete={() => setDeleteOpen(true)}
           />
-          <PresetConfigView preset={preset} />
+          <PresetConfigView
+            preset={preset}
+            workspaceId={workspaceId}
+            onSaved={() =>
+              void queryClient.invalidateQueries({ queryKey: ['presets', workspaceId] })
+            }
+          />
         </>
       ) : (
         <p className="mt-6 text-sm text-muted-foreground">Preset not found.</p>
@@ -108,19 +101,6 @@ export function PresetDetail({ workspaceId, presetName, conn, folder }: PresetDe
         open={modifyOpen}
         onOpenChange={setModifyOpen}
       />
-
-      {preset !== null && (
-        <EditPresetJsonDialog
-          workspaceId={workspaceId}
-          preset={preset}
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          onSaved={() => {
-            void queryClient.invalidateQueries({ queryKey: ['presets', workspaceId] })
-            setEditOpen(false)
-          }}
-        />
-      )}
 
       <DeletePresetDialog
         workspaceId={workspaceId}
@@ -138,14 +118,12 @@ function PresetHeader({
   builtinById,
   workspaceId,
   onModify,
-  onEdit,
   onDelete,
 }: {
   preset: PresetSummary
   builtinById: Map<string, string>
   workspaceId: string
   onModify: () => void
-  onEdit: () => void
   onDelete: () => void
 }) {
   const config = preset.config
@@ -220,10 +198,6 @@ function PresetHeader({
             <Sparkles className="size-3.5" />
             Modify
           </Button>
-          <Button size="sm" variant="outline" onClick={onEdit}>
-            <Braces className="size-3.5" />
-            Edit JSON
-          </Button>
           <Button size="sm" variant="destructive" onClick={onDelete}>
             <Trash2 className="size-3.5" />
             Delete
@@ -239,17 +213,119 @@ function PresetHeader({
   )
 }
 
-function PresetConfigView({ preset }: { preset: PresetSummary }) {
-  if (preset.config === undefined) return null
+/**
+ * Config JSON, click-to-edit inline. Clicking the JSON switches it to a
+ * textarea with Save / Discard — no separate edit dialog or button.
+ */
+function PresetConfigView({
+  preset,
+  workspaceId,
+  onSaved,
+}: {
+  preset: PresetSummary
+  workspaceId: string
+  onSaved: () => void
+}) {
+  const createPreset = useCreatePreset(workspaceId)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const start = (): void => {
+    setDraft(JSON.stringify(preset.config ?? {}, null, 2))
+    setError(null)
+    setEditing(true)
+  }
+
+  const discard = (): void => {
+    setEditing(false)
+    setError(null)
+  }
+
+  const save = (): void => {
+    let config: PresetConfig
+    try {
+      config = JSON.parse(draft) as PresetConfig
+    } catch {
+      setError('Invalid JSON — fix the syntax before saving.')
+      return
+    }
+    if (typeof config !== 'object' || config === null || !Array.isArray(config.reviewers)) {
+      setError('Config must be a JSON object with a "reviewers" array.')
+      return
+    }
+    createPreset.mutate(
+      { name: preset.name, config },
+      {
+        onSuccess: () => {
+          setEditing(false)
+          setError(null)
+          onSaved()
+        },
+        onError: (e) => setError(e instanceof Error ? e.message : 'Failed to save preset'),
+      },
+    )
+  }
+
   return (
     <section className="mt-6">
-      <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-        <Braces className="size-4" />
-        Config
-      </h2>
-      <pre className="overflow-x-auto rounded-md border bg-muted/30 p-3 font-mono text-xs leading-relaxed">
-        {JSON.stringify(preset.config, null, 2)}
-      </pre>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+          <Braces className="size-4" />
+          Config
+        </h2>
+        {editing && (
+          <div className="flex gap-2">
+            <Button size="xs" variant="outline" onClick={discard} disabled={createPreset.isPending}>
+              Discard
+            </Button>
+            <Button size="xs" onClick={save} disabled={createPreset.isPending}>
+              {createPreset.isPending ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                'Save'
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
+      {editing ? (
+        <>
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            spellCheck={false}
+            autoFocus
+            className="min-h-80 w-full resize-y rounded-md border border-input bg-transparent p-3 font-mono text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          />
+          {error !== null && <p className="mt-2 text-xs text-red-500">{error}</p>}
+        </>
+      ) : (
+        <pre
+          role="button"
+          tabIndex={0}
+          onClick={start}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              start()
+            }
+          }}
+          title="Click to edit"
+          className="cursor-text overflow-x-auto rounded-md border bg-muted/30 p-3 font-mono text-xs leading-relaxed outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          {preset.config === undefined ? (
+            <span className="text-muted-foreground">
+              Preset file is invalid — click to edit the raw JSON.
+            </span>
+          ) : (
+            JSON.stringify(preset.config, null, 2)
+          )}
+        </pre>
+      )}
     </section>
   )
 }
@@ -348,93 +424,6 @@ function ModifyPresetDialog({
           <Button onClick={generate} disabled={prompt.trim() === '' || preset === null}>
             <Sparkles className="size-3.5" />
             Run agent
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-/** Manual edit — raw config JSON, overwrites the file via the preset API. */
-function EditPresetJsonDialog({
-  workspaceId,
-  preset,
-  open,
-  onOpenChange,
-  onSaved,
-}: {
-  workspaceId: string
-  preset: PresetSummary
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onSaved: () => void
-}) {
-  const createPreset = useCreatePreset(workspaceId)
-  const [draft, setDraft] = useState('')
-  const [error, setError] = useState<string | null>(null)
-
-  const start = (): void => {
-    setDraft(JSON.stringify(preset.config ?? {}, null, 2))
-    setError(null)
-  }
-
-  const save = (): void => {
-    let config: PresetConfig
-    try {
-      config = JSON.parse(draft) as PresetConfig
-    } catch {
-      setError('Invalid JSON — fix the syntax before saving.')
-      return
-    }
-    if (typeof config !== 'object' || config === null || !Array.isArray(config.reviewers)) {
-      setError('Config must be a JSON object with a "reviewers" array.')
-      return
-    }
-    createPreset.mutate(
-      { name: preset.name, config },
-      {
-        onSuccess: onSaved,
-        onError: (e) => setError(e instanceof Error ? e.message : 'Failed to save preset'),
-      },
-    )
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next) start()
-        else onOpenChange(false)
-      }}
-    >
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Edit {titleFromSlug(preset.name)}</DialogTitle>
-          <DialogDescription>
-            Edits the raw <code className="rounded bg-muted px-1">config</code> JSON — the server
-            validates it against the preset schema.
-          </DialogDescription>
-        </DialogHeader>
-        <textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          spellCheck={false}
-          className="min-h-80 w-full resize-y rounded-md border border-input bg-transparent p-3 font-mono text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        />
-        {error !== null && <p className="text-xs text-red-500">{error}</p>}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={createPreset.isPending}>
-            Cancel
-          </Button>
-          <Button onClick={save} disabled={createPreset.isPending}>
-            {createPreset.isPending ? (
-              <>
-                <Loader2 className="size-3.5 animate-spin" />
-                Saving…
-              </>
-            ) : (
-              'Save'
-            )}
           </Button>
         </DialogFooter>
       </DialogContent>

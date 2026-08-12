@@ -76,6 +76,36 @@ export function useCreateProfile(workspaceId: string | null) {
 }
 
 /**
+ * Deletes a profile (removes its `.agents/@montflow/profiles/<name>/`
+ * directory) and invalidates the workspace's profile list on success.
+ */
+export function useDeleteProfile(workspaceId: string | null) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (name: string) => {
+      if (workspaceId === null) throw new Error('No workspace selected')
+      const res = await fetch(
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/profiles/${encodeURIComponent(name)}`,
+        { method: 'DELETE' },
+      )
+      if (!res.ok) {
+        let message = `HTTP ${res.status}`
+        try {
+          const data = (await res.json()) as { error?: string }
+          if (typeof data.error === 'string') message = data.error
+        } catch {
+          // non-JSON error body
+        }
+        throw new Error(message)
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['profiles', workspaceId] })
+    },
+  })
+}
+
+/**
  * Fetches one profile's full parsed PROFILE.md by its directory name.
  */
 export function useProfileDetail(

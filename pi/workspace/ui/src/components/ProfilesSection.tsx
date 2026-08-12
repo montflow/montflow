@@ -6,7 +6,6 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
-  type SortingState,
 } from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,8 +13,9 @@ import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { NewProfileDialog } from '@/components/NewProfileDialog'
 import { useProfiles } from '@/lib/useProfiles'
 import { useSkillNameToIdMap } from '@/lib/useSkills'
+import { useWorkspacePrefs } from '@/lib/useWorkspacePrefs'
 import { profileUrl, skillUrl } from '@/components/LandingPage'
-import { navigate, setSearchParams, useSearchParams } from '@/lib/useLocation'
+import { navigate } from '@/lib/useLocation'
 import { titleFromSlug } from '@/lib/utils'
 import type { ProfileSummary } from '@/protocol'
 import { ArrowDown, ArrowUp, ArrowUpDown, Plus, Search, SearchX, Users, X } from 'lucide-react'
@@ -25,6 +25,10 @@ interface ProfilesSectionProps {
   conn: 'connecting' | 'open' | 'closed'
   /** Folder slug for agentic commands (from workspace info); null when offline. */
   folder: string | null
+  /** Scroll-target id (e.g. for the command palette). */
+  id?: string
+  /** Deep link (?section=profiles) — force the panel open when navigating here. */
+  reveal?: boolean
 }
 
 /** How many profile rows to reveal at a time. */
@@ -124,7 +128,7 @@ const makeColumns = (
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation()
-                  navigate(skillUrl(workspaceId, id) + location.search)
+                  navigate(skillUrl(workspaceId, id))
                 }}
                 className="rounded-full border px-2 py-0.5 text-[10px] text-muted-foreground underline-offset-4 transition-colors hover:border-primary/40 hover:text-foreground hover:underline"
                 title={`Open skill ${skill}`}
@@ -146,35 +150,24 @@ const makeColumns = (
   },
 ]
 
-export function ProfilesSection({ workspaceId, conn, folder }: ProfilesSectionProps) {
+export function ProfilesSection({ workspaceId, conn, folder, id, reveal }: ProfilesSectionProps) {
   const { data: profiles, isPending, isFetching, isError, error, refetch } = useProfiles(workspaceId, conn)
   const [newOpen, setNewOpen] = useState(false)
   // Profiles reference skills by frontmatter name; the skill detail route is
   // keyed by directory slug — resolve names to slugs for the skill chips.
   const skillIdBySlug = useSkillNameToIdMap(workspaceId, conn)
 
-  // Filters live in the URL (?pq=…&s=a,b) so they survive navigation. The
-  // query key is profiles-specific — SkillsSection owns `q` for its search.
-  const params = useSearchParams()
-  const query = params.get('pq') ?? ''
-  const selectedSkills = useMemo(
-    () =>
-      (params.get('s') ?? '')
-        .split(',')
-        .map((skill) => skill.trim())
-        .filter((skill) => skill !== ''),
-    [params],
-  )
+  // Panel state (open/closed, search text, skill filters, sort) is persisted
+  // per workspace in localStorage and restored on mount.
+  const [prefs, setPrefs] = useWorkspacePrefs(workspaceId, 'profiles')
+  const query = prefs.query
+  const selectedSkills = prefs.chips
+  const sorting = prefs.sort
+
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const tableScrollRef = useRef<HTMLDivElement>(null)
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'name', desc: false }])
 
-  const setQuery = (value: string): void => {
-    const next = new URLSearchParams(params)
-    if (value.trim() === '') next.delete('pq')
-    else next.set('pq', value)
-    setSearchParams(next)
-  }
+  const setQuery = (value: string): void => setPrefs({ query: value })
 
   const skills = useMemo(() => {
     const set = new Set<string>()
@@ -211,7 +204,8 @@ export function ProfilesSection({ workspaceId, conn, folder }: ProfilesSectionPr
     data: filtered,
     columns: makeColumns(workspaceId, skillIdBySlug),
     state: { sorting },
-    onSortingChange: setSorting,
+    onSortingChange: (updater) =>
+      setPrefs({ sort: typeof updater === 'function' ? updater(sorting) : updater }),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   })
@@ -222,17 +216,10 @@ export function ProfilesSection({ workspaceId, conn, folder }: ProfilesSectionPr
   }, [query, selectedSkills, profiles])
 
   const toggleSkill = (skill: string): void => {
-    const next = new URLSearchParams(params)
-    const current = (next.get('s') ?? '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s !== '')
-    const updated = current.includes(skill)
-      ? current.filter((s) => s !== skill)
-      : [...current, skill]
-    if (updated.length === 0) next.delete('s')
-    else next.set('s', updated.join(','))
-    setSearchParams(next)
+    const updated = selectedSkills.includes(skill)
+      ? selectedSkills.filter((s) => s !== skill)
+      : [...selectedSkills, skill]
+    setPrefs({ chips: updated })
   }
 
   const loadMore = (): void => {
@@ -247,10 +234,22 @@ export function ProfilesSection({ workspaceId, conn, folder }: ProfilesSectionPr
     })
   }
 
+  // Deep-link reveal: a breadcrumb section link (?section=profiles) opens a
+  // collapsed panel so the scroll lands on visible content.
+  useEffect(() => {
+    if (reveal === true) setPrefs({ open: true })
+  }, [reveal, setPrefs])
+
   const hasProfiles = (profiles?.length ?? 0) > 0
 
   return (
-    <CollapsibleSection title="Profiles" icon={<Users className="size-5" />}>
+    <CollapsibleSection
+      id={id}
+      title="Profiles"
+      icon={<Users className="size-5" />}
+      open={prefs.open}
+      onOpenChange={(open) => setPrefs({ open })}
+    >
       {isError && (
         <div className="mb-2 flex items-center gap-2 text-xs text-red-500">
           <span className="truncate">{error instanceof Error ? error.message : String(error)}</span>
@@ -370,7 +369,7 @@ export function ProfilesSection({ workspaceId, conn, folder }: ProfilesSectionPr
                 </thead>
                 <tbody>
                   {table.getRowModel().rows.slice(0, visibleCount).map((row) => {
-                    const target = profileUrl(workspaceId, row.original.name) + location.search
+                    const target = profileUrl(workspaceId, row.original.name)
                     return (
                       <tr
                         key={row.id}
@@ -418,7 +417,7 @@ export function ProfilesSection({ workspaceId, conn, folder }: ProfilesSectionPr
         folder={folder}
         open={newOpen}
         onOpenChange={setNewOpen}
-        onCreated={(profile) => navigate(profileUrl(workspaceId, profile.name) + location.search)}
+        onCreated={(profile) => navigate(profileUrl(workspaceId, profile.name))}
       />
     </CollapsibleSection>
   )

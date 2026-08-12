@@ -62,41 +62,47 @@ Rules:
 export const PROFILE_AUTHOR_SYSTEM = `You are a profile author for a montflow workspace.
 
 Profiles define an agent persona. They live at
-.agents/@montflow/profiles/<name>/PROFILE.md and consist of a frontmatter
-block (name, description, model, skills) plus a body with Instructions and a
-Review Checklist.
-
-The user will give you a short prompt describing a profile they want. Create
-it at .agents/@montflow/profiles/<name>/PROFILE.md (choose a kebab-case
-<name> that fits), following this exact format:
+.agents/@montflow/profiles/<name>/PROFILE.md and follow the bundled
+template (profiles/TEMPLATE.md) exactly — frontmatter comment lines
+included:
 
 ---
 name: <kebab-case-name>
-description: <one line: the agent's role and what it does>
-model: <provider/model-id — the profile's preferred model, or leave empty>
+description: <one-line description of the agent: its role and what it does, e.g. "You are a senior code reviewer focused on security.">
+# Preferred model: provider/model-id, e.g. anthropic/claude-sonnet-4-5 (optional)
+model: <provider>/<model-id>
+# Skills this profile must load (names from SKILL.md frontmatter)
 skills:
-  - <skill name (SKILL.md frontmatter name) this profile must load>
+  - <skill-name>
 ---
 
-# <Title>
+# <Profile Name>
 
 ## Instructions
 
-<Concise, actionable instructions for the agent that will use this profile:
-how it should behave, what it reviews/does, expected rigor. Short paragraphs
-or bullets — no filler.>
+<Custom system-prompt instructions. How the agent should behave, what to focus on, what to avoid.>
 
 ## Review Checklist
 
-- [ ] <item a reviewer must verify>
-- [ ] <item>
+- [ ] <What the reviewer must verify before the work is done>
+- [ ] <What the reviewer must verify before the work is done>
 
 Rules:
-- Always write the frontmatter block exactly as shown (name/description are
-  required; model/skills optional but encouraged).
-- description must be ONE line covering role + job.
+- Always write the frontmatter block exactly in this shape — keep the
+  "# Preferred model" and "# Skills this profile must load" comment lines
+  verbatim (they document the fields for humans).
+- name is required, kebab-case, and matches the profile directory.
+- description is required and must be ONE line covering role + job.
+- model is optional: when the user gives no preferred model, emit a bare
+  "model:" line.
 - skills must reference EXISTING skills by their SKILL.md frontmatter name —
-  read .agents/skills/<name>/SKILL.md to confirm before listing one.
+  read .agents/skills/<name>/SKILL.md to confirm before listing one. Replace
+  the "- <skill-name>" placeholder with one "- <name>" per skill; leave the
+  list empty when none apply.
+- The body heading is the title-cased profile name (e.g. "Security Reviewer").
+- Instructions: concise, actionable system-prompt behavior — how the agent
+  should behave, what to focus on, what to avoid. Short paragraphs or bullets.
+- Review Checklist: concrete verification items, each on its own "- [ ] " line.
 - If the named profile already exists, edit it in place instead of duplicating.
 - Do not touch anything outside .agents/@montflow/profiles/.
 - If you need clarification, ask a concise question and wait for the answer
@@ -326,10 +332,19 @@ export const disposeSkillAgent = async (run: SkillRunAgent): Promise<void> => {
 /**
  * Wrap a skill idea into an authoring prompt for the agent. When an existing
  * authoring skill is included, its full SKILL.md is appended so the agent
- * follows the workspace's own skill-authoring conventions.
+ * follows the workspace's own skill-authoring conventions. When an existing
+ * skill id (directory slug) is given, the prompt targets that file so a
+ * modify run edits in place instead of creating a duplicate.
  */
-export const wrapSkillPrompt = (idea: string, authoringSkill?: string): string => {
-  const base = `Create a new skill for me in .agents/skills/ (one directory with SKILL.md), following the standard format:
+export const wrapSkillPrompt = (
+  idea: string,
+  authoringSkill?: string,
+  skillName?: string,
+): string => {
+  const target =
+    skillName !== undefined && skillName.trim() !== ''
+      ? `Modify the existing skill '${skillName.trim()}' at .agents/skills/${skillName.trim()}/SKILL.md — read it first, apply the change, and write the updated SKILL.md back.`
+      : `Create a new skill for me in .agents/skills/ (one directory with SKILL.md), following the standard format:
 
 ---
 name: <kebab-case-name>
@@ -338,38 +353,50 @@ groups: [<optional tags>]
 dependencies: [<optional skill names>]
 ---
 
-<Body: concise, actionable instructions — short sections and bullet lists.>
+<Body: concise, actionable instructions — short sections and bullet lists.>`;
+  let prompt = `${target}
 
 Skill idea: ${idea.trim()}
 
 Keep it focused and well-structured. Ask me if anything is unclear.`;
-  if (authoringSkill === undefined || authoringSkill.trim() === '') return base;
-  return `${base}\n\nThis workspace has an authoring skill you MUST follow when writing the skill.\nRead its rules carefully and apply them:\n\n<authoring-skill>\n${authoringSkill.trim()}\n</authoring-skill>`;
+  if (authoringSkill !== undefined && authoringSkill.trim() !== '') {
+    prompt += `\n\nThis workspace has an authoring skill you MUST follow when writing the skill.\nRead its rules carefully and apply them:\n\n<authoring-skill>\n${authoringSkill.trim()}\n</authoring-skill>`;
+  }
+  return prompt;
 };
 
 /**
- * Wrap a profile idea into an authoring prompt for the agent.
+ * Wrap a profile idea into an authoring prompt for the agent. When an
+ * existing profile name is given, the prompt targets that file so a modify
+ * run edits in place instead of creating a duplicate.
  */
-export const wrapProfilePrompt = (idea: string): string => {
-  return `Create a new agent profile for me in .agents/@montflow/profiles/ (one directory with PROFILE.md), following the standard format:
+export const wrapProfilePrompt = (idea: string, profileName?: string): string => {
+  const target =
+    profileName !== undefined && profileName.trim() !== ''
+      ? `Modify the existing profile '${profileName.trim()}' at .agents/@montflow/profiles/${profileName.trim()}/PROFILE.md — read it first, apply the change, and write the updated PROFILE.md back.`
+      : `Create a new agent profile for me in .agents/@montflow/profiles/ (one directory with PROFILE.md), following the standard format:`;
+  return `${target}
 
 ---
 name: <kebab-case-name>
-description: <one line: role and what it does>
-model: <provider/model-id preferred model, or empty>
+description: <one-line description of the agent: its role and what it does, e.g. "You are a senior code reviewer focused on security.">
+# Preferred model: provider/model-id, e.g. anthropic/claude-sonnet-4-5 (optional)
+model: <provider>/<model-id>
+# Skills this profile must load (names from SKILL.md frontmatter)
 skills:
-  - <skill names this profile must load>
+  - <skill-name>
 ---
 
-# <Title>
+# <Profile Name>
 
 ## Instructions
 
-<Concise, actionable instructions>
+<Custom system-prompt instructions. How the agent should behave, what to focus on, what to avoid.>
 
 ## Review Checklist
 
-- [ ] <checklist items>
+- [ ] <What the reviewer must verify before the work is done>
+- [ ] <What the reviewer must verify before the work is done>
 
 Profile idea: ${idea.trim()}
 

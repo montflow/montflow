@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import {
   Dialog,
@@ -10,13 +11,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useCreateProfile } from '@/lib/useProfiles'
+import { useSkills } from '@/lib/useSkills'
+import { skillsFromMarkdown, withSkills } from '@/lib/frontmatter'
 import { useUiSocket } from '@/lib/useUiSocket'
 import { useModels } from '@/lib/useModels'
 import { ModelSelect } from '@/components/ModelSelect'
 import { runUrl } from '@/components/LandingPage'
 import { navigate } from '@/lib/useLocation'
 import type { ProfileDetail } from '@/protocol'
-import { ArrowLeft, ArrowUpRight, Loader2, Pencil, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Loader2, Pencil, Search, Sparkles, X } from 'lucide-react'
 
 interface NewProfileDialogProps {
   workspaceId: string
@@ -49,6 +52,39 @@ export function NewProfileDialog({
   const [name, setName] = useState('')
   const [markdown, setMarkdown] = useState('')
 
+  // Skills picker (manual mode) — chips are kept in sync with the `skills:`
+  // frontmatter list of the pasted markdown.
+  const skillsQuery = useSkills(workspaceId, conn)
+  const [skillQuery, setSkillQuery] = useState('')
+  const [skillOpen, setSkillOpen] = useState(false)
+
+  const selectedSkills = useMemo(() => skillsFromMarkdown(markdown), [markdown])
+
+  /** Skills available to add: filtered by query, already-selected ones hidden. */
+  const skillResults = useMemo(() => {
+    const all = skillsQuery.data ?? []
+    const selected = new Set(selectedSkills)
+    const trimmed = skillQuery.trim().toLowerCase()
+    const matches = all.filter((skill) => {
+      if (selected.has(skill.name)) return false
+      if (trimmed === '') return true
+      return (
+        skill.name.toLowerCase().includes(trimmed) ||
+        skill.description.toLowerCase().includes(trimmed) ||
+        skill.groups.some((group) => group.toLowerCase().includes(trimmed))
+      )
+    })
+    // Preview a handful on click; typed queries reveal more matches.
+    return trimmed === '' ? matches.slice(0, 5) : matches.slice(0, 12)
+  }, [skillsQuery.data, selectedSkills, skillQuery])
+
+  const toggleSkill = (skillName: string): void => {
+    const next = new Set(selectedSkills)
+    if (next.has(skillName)) next.delete(skillName)
+    else next.add(skillName)
+    setMarkdown(withSkills(markdown, [...next]))
+  }
+
   // Agentic mode
   const [prompt, setPrompt] = useState('')
   /** Per-run model override (`provider/model-id`); null = header picker default. */
@@ -62,6 +98,8 @@ export function NewProfileDialog({
     setPrompt('')
     setModel(null)
     setAgenticError(null)
+    setSkillQuery('')
+    setSkillOpen(false)
   }
 
   // Re-arm the dialog each time it opens.
@@ -166,6 +204,77 @@ export function NewProfileDialog({
                 placeholder="code-reviewer"
                 className="font-mono"
               />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="profile-skills-search" className="text-xs font-medium text-muted-foreground">
+                Skills
+              </label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="profile-skills-search"
+                  value={skillQuery}
+                  onChange={(event) => {
+                    setSkillQuery(event.target.value)
+                    setSkillOpen(true)
+                  }}
+                  onFocus={() => setSkillOpen(true)}
+                  onBlur={() => setSkillOpen(false)}
+                  autoComplete="off"
+                  disabled={skillsQuery.isPending || (skillsQuery.data?.length ?? 0) === 0}
+                  placeholder={
+                    skillsQuery.isPending
+                      ? 'Loading skills…'
+                      : (skillsQuery.data?.length ?? 0) === 0
+                        ? 'No skills in this workspace yet'
+                        : 'Search existing skills…'
+                  }
+                  className="pl-8"
+                />
+                {skillOpen && skillResults.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md">
+                    <div className="max-h-56 overflow-y-auto">
+                      {skillResults.map((skill) => (
+                        <button
+                          key={skill.id}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => toggleSkill(skill.name)}
+                          className="flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition-colors hover:bg-accent"
+                        >
+                          <span className="font-mono text-xs font-medium">{skill.name}</span>
+                          {skill.description !== '' && (
+                            <span className="line-clamp-1 text-[11px] text-muted-foreground">
+                              {skill.description}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {skillOpen && skillQuery.trim() !== '' && skillResults.length === 0 && (
+                  <p className="text-[11px] text-muted-foreground">No matching skills.</p>
+                )}
+              </div>
+              {selectedSkills.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedSkills.map((skill) => (
+                    <Badge key={skill} variant="secondary" className="gap-1 pr-1">
+                      <span className="font-mono">{skill}</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleSkill(skill)}
+                        title={`Remove ${skill}`}
+                        aria-label={`Remove ${skill}`}
+                        className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="profile-markdown" className="text-xs font-medium text-muted-foreground">
