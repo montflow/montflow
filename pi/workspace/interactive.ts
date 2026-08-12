@@ -607,7 +607,7 @@ const addProfileReviewer = async (
   const profiles = await listProfilesWithDetails(ctx.cwd);
   if (profiles.length === 0) {
     ctx.ui.notify(
-      'No profiles in .agents/@montflow/profiles/. Create one with /profiles --new.',
+      'No profiles in .agents/@montflow/profiles/. Create one in the montflow UI (/montflow → Profiles → New).',
       'info',
     );
     return null;

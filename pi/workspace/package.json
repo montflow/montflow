@@ -9,9 +9,6 @@
       "./index.ts"
     ]
   },
-  "bin": {
-    "profiles": "./profiles/cli.ts"
-  },
   "scripts": {
     "lint": "oxlint .",
     "lint:check": "oxlint --deny-warnings .",
