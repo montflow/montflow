@@ -1,0 +1,543 @@
+# @montflow/workspace
+
+The montflow **workspace** — one Pi extension that owns the project's agent state and runs an automated **adversarial review loop** on your codebase. A **code orchestrator** (not an LLM) drives the **loops and cycles**: each **loop** spawns a fresh set of independent reviewers; within a loop the **same reviewers re-review the updated code** (with their context) across cycles until they reach consensus or hit the per-loop cycle cap. Agents write findings/fixes only — they never decide continue/stop/deadlock.
+
+This extension also **merges the former `@montflow/profiles` feature**: `/profiles` creates/modifies/deletes/lists named agent profiles, and `profiles:get` / `profiles:list` are served on the event bus for other extensions (see [Profiles](#profiles)). No separate profiles package is needed.
+
+**All state lives under `.agents/@montflow/`** in the project:
+
+```text
+.agents/@montflow/
+  profiles/             # named agent profiles (<name>/PROFILE.md + TEMPLATE.md)
+  review-presets/       # stored loop configurations (<name>.json)
+  reviews/              # canonical review files + loop state + passes
+  workspace.json        # generated workspace identity (for the web UI)
+```
+
+Skills ship **inside this package** under `skills/`. The target project does not need to install them.
+
+The review file lives at `.agents/@montflow/reviews/<name>/<code>.md` with loop state beside it in `.agents/@montflow/reviews/<name>/<code>/`.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `/montflow` | Launch the montflow **web UI** for the current workspace. Auto-creates `.agents/@montflow/workspace.json` (named after the current **git branch**) when missing, then opens the shared UI at the workspace page. Flags: `--stop` stops the router, `--port=NNNN` pins the port. `kill` ends every registered session and stops the router (e.g. `/montflow kill`). Works without a TUI (RPC/print). |
+| `/workspace` | The interactive **review-loop wizard** (TUI only). `ui` subcommand is an alias for `/montflow` (`/workspace ui`, `/workspace ui --stop`). |
+| `/profiles` | Manage agent profiles (new / modify / delete / list; `--new --name … --description …` for the CLI form). |
+
+> `/workspace` (without `ui`) is **interactive-only** — it always opens the TUI wizard; there are no flags to pass.
+
+## Loops & cycles
+
+A **cycle** is one review pass of a loop: supervisor brief → the loop's reviewers review → supervisor aggregate → canonical review → deadlock check → fixers fix the open findings. Then the orchestrator goes **back to the same reviewers** with the updated code and they re-review (with their session context) — that resumes the cycle.
+
+- When a cycle ends with **no actionable findings** (all resolved / won't fix — **consensus**), the loop is complete and the orchestrator advances to the **next loop**, spawning a **fresh set of independent reviewers** (no context from the previous loop).
+- When a loop hits its **cycle max** without consensus, the loop pauses and asks the user: **Increase cycle max** (keep the same reviewers grinding), **Resume to NEXT loop** (fresh reviewers), or **Stop**. At the last loop the same prompt offers **Add a new loop** instead (extends `maxLoops` and continues), otherwise the run just ends.
+
+## Interactive wizard
+
+Running `/workspace` (in the TUI) opens an interactive setup wizard:
+
+1. **Action menu** — **New review**, **Resume review**, or **Preset** to manage stored
+   configurations (create / list / modify / delete). **New review requires a stored preset**
+   (hidden when none exist); **Resume review** continues an interrupted loop from an existing
+   review (hidden when none exist). Pick a preset, then pick the scope, and the loop runs
+   with the preset's configuration (roster + settings always come from the preset).
+2. **Scope** (after picking a preset) — three options:
+   - **Git unstaged changes** (tracked + untracked; the diff is materialized next to the review file so reviewers read exactly what changed).
+   - **Pick…** — type space-separated files/directories with **file autocomplete** (path/directory suggestions appear as you type; Tab or Enter applies a suggestion), a free-form focus prompt, or `.` for the whole directory. Paths that exist become the file scope; any other text becomes the focus prompt.
+   - **Directive…** — a free-form prompt for the supervisor: describe *what* you want reviewed ("only the file-signing flow in `src/crypto/`", "check the import feature") and the supervisor treats it as the authoritative intent for the pass — it locates the relevant code itself (read/grep/glob) and scopes the specialists to it, instead of you naming files.
+3. **Reviewer roster** (inside **Create / Modify preset**) — starts with a single built-in `generic` reviewer (no profile needed). `+ Add reviewer` lists the **profiles stored in the current repo** (`.agents/@montflow/profiles/`, via the `@montflow/profiles` extension) with their descriptions — type to search. Each added reviewer gets a **model** pick from a searchable list of **every model available in the session**, **preselected with the model you are currently using** (the profile's preferred model stays reachable via search). The same picker backs "Change model of a reviewer", "Fallback models of a reviewer", and the fixer/supervisor model settings. Change/remove reviewers freely.
+4. **Settings** (inside **Create / Modify preset**) — edit **max loops** (how many independent reviewer sets run), **max cycles per loop** (how many times the same reviewers re-review), **fixer model**, **supervisor model**, **fallback model chains**, **deadlock flip threshold**, and the **supervisor timeout** (minutes per supervisor turn — brief and aggregate each get this budget; enter `0` to restore the 20-minute default). The supervisor itself is always on.
+5. **Thinking levels** (per role) — every agent (each reviewer, the supervisor, the fixer) has its own extended-thinking level: **off** · **minimal** · **low** · **medium** · **high** · **xhigh** · **max**, or **default** (pi's own default, `medium` clamped to the model's capabilities). Set them in the wizard via **Settings → fixer/supervisor thinking level** and roster → **Thinking level of a reviewer**, or directly in the preset JSON (`thinkingLevel` per reviewer reference, `supervisor.thinkingLevel`, `fixerThinkingLevel`). Unsupported levels are clamped by pi at session creation (`thinkingLevelMap`), so a level a model cannot express silently maps to the nearest one it can. Use `off` to cut cost/latency on mechanical roles (e.g. a style/linguist reviewer), `max` for deep adversarial passes.
+6. **Run** — the chosen preset + confirmed scope become the loop options and the loop starts immediately.
+
+Every menu offers a **`← Back`** option that steps up to the previous menu (scope → action
+menu; in preset operations, back returns to the preset submenu, and the preset submenu's back
+returns to the action menu). `Esc` still cancels the whole setup.
+
+### Retries & fallback models
+
+Every agent turn (reviewers, supervisor, fixers) runs through a retry/fallback policy so
+rate limits and temporary provider failures don't kill the loop:
+
+- **Transient failures are retried** on the same model with exponential backoff (2 retries,
+  2s → 4s by default). Rate limits (`429` / quota / throttling), provider overloads (`5xx`,
+  `529`), and network blips (`ECONNRESET`, timeouts) are classified as transient; auth,
+  bad-request, and unknown-model errors are permanent and are **not** retried. Timed-out
+  turns are never retried in place (the session may still be busy) — the session is
+  disposed instead.
+- **Fallback model chains** — every role (each reviewer, the supervisor, the fixer) can have
+  an ordered list of fallback models (`fallbackModels` / `fixerFallbackModels` in the
+  preset). When the primary model exhausts its retries (or fails permanently), the next
+  model in the chain is tried: the session is recreated with it (reviewers/supervisor) or
+  the single-use run is re-dispatched (fixers). When EVERY model fails, the failure is
+  reported with a per-model breakdown (`All 2 model(s) failed: …`) instead of a bare
+  "agent failed".
+- Configure chains in the wizard (**Settings → fixer/supervisor fallback models**, roster →
+  **Fallback models of a reviewer**) or directly in the preset JSON. Empty chains mean no
+  fallback — the primary model is the only one tried.
+
+**An agent must complete before the loop moves on.** A failed turn is never silently
+skipped:
+
+- **Reviewers** are retried **in-pass** (fresh session, next fallback model, up to 3
+  attempts). The supervisor aggregate only runs after EVERY reviewer completed — a missing
+  reviewer's lens would silently drop findings. A reviewer that still fails after its
+  in-pass attempts fails the pass (retry, then escalate to a human after 2 consecutive
+  failed passes).
+- **Fixers** are **re-dispatched** in-phase (each re-dispatch gets the prior failure record
+  + partial scratch as hand-off context, up to 3 attempts). A finding that still produced
+  no valid block after every attempt **escalates to a human** — the phase never advances
+  with a failed finding. Escalated runs are resumable: the review keeps its state, and a
+  resume re-enters the fixer phase to re-dispatch the failed findings.
+
+### Resuming an interrupted loop
+
+Interrupted loops are resumable: the review file (`.agents/@montflow/reviews/adversarial/<code>.md`)
+and its loop state (`.agents/@montflow/reviews/adversarial/<code>/loop-state.json`) are the persisted
+orchestrator memory, so the findings' Status/Attempts/Discussion threads and the deadlock
+tracker all survive a stop. From the action menu, **Resume review**:
+
+1. Picks the review to resume (searchable list annotated with its reviewer ids, loop/cycle,
+   and summary counts).
+2. Asks whether to resume with the **locked-in config** or **modify config before
+   resuming** — re-edit the reviewer roster and settings (models, **fallback model
+   chains**, loops/cycles, deadlock) seeded from the review's snapshot, then write the
+   updated config back into `loop-state.json`. Later resumes keep using the modified
+   snapshot. Use this to add fallback models to a review that kept hitting rate limits.
+3. Re-runs **in place** (`fresh: false` targeting that file): the reviewers re-review the
+   existing findings (Step 9), the fixer continues the remaining `Open` findings, and the
+   loop/cycle counters continue from loop-state (e.g. an interrupted loop 1 cycle 3 resumes
+   at loop 1 cycle 4/5). Sessions are recreated on resume (persistent context is best-effort
+   within a continuous run).
+
+**Resume routing is phase-aware.** The orchestrator records the last completed phase
+(`reviewed` / `fixed`) in `loop-state.json`. A resume after the review phase completed jumps
+**straight into the fixer phase** — the reviewers do not re-run (their verdicts are already
+in the canonical file). The fixer phase is checkpointed per finding:
+
+- A fixer's scratch block (`passes/<loop>/<cycle>/fixes/<F>.md`) **is the checkpoint**: if a
+  previous fixer finished writing its updated block but the run died before the merge, the
+  resume merges it automatically without re-dispatching.
+- A failed fixer attempt writes its **failure reason** to `fixes/<F>.error.json` (session
+  error / agent error / timeout / missing, malformed, or wrong-id scratch). The re-dispatched
+  fixer gets that reason plus any partial scratch as **hand-off context**, so it can finish
+  or correct the previous attempt's work instead of re-applying changes blindly.
+
+The configuration is **locked in**: every loop writes its resolved config (reviewers,
+models, supervisor, fixer, max loops, max cycles, deadlock) into `loop-state.json` at
+start, and resume uses exactly that snapshot — **no preset pick, and editing a preset later
+never changes what a running/stopped review resumes with**. Cycle-max decisions that raise
+the cycle cap or add a loop persist into that snapshot too. Legacy reviews created before
+config snapshots fall back to picking a preset once (which then becomes their snapshot);
+legacy snapshots/presets without `maxCycles` are migrated (their old `maxLoops` becomes the
+per-loop cycle cap with the default loop count).
+
+A resume of a fully-resolved review at its **last** loop exits early with
+"already all-terminal — nothing to do"; if earlier loops remain, it advances to the next
+loop's fresh reviewers instead.
+
+### Stopping the loop
+
+The loop is **gracefully stoppable**: the graph checks an abort signal between steps
+(nodes/cycles, between reviewers, between fixer findings) and terminates cleanly —
+disposing the supervisor and per-loop reviewer sessions, clearing the widget, and
+notifying. An in-flight agent
+turn finishes first (or hits its timeout); the loop stops before the next one starts. Stop
+anytime and **Resume review** continues where it left off.
+
+- **`/workspace-stop`** — the explicit stop command.
+- **`Ctrl+C` / `Esc`** in the TUI while the loop runs also fire the stop (when the TUI
+  routes the key to the extension).
+- For an **immediate kill**, `Ctrl+C` twice at the terminal level terminates the pi process
+  (and with it the running agents) — use this only when a graceful stop isn't enough.
+
+### Inspect an agent (live stream)
+
+While the loop runs you can drill into any agent's **live token stream** (visible text and
+thinking deltas) — **`Ctrl+Shift+F`**, one keypress while the loop runs:
+
+- **`Ctrl+Shift+F`** (in the TUI) — opens the interactive agent picker: lists the agents
+  that have produced output so far (supervisor, each reviewer, each fixer) to pick from.
+- **`/workspace-focus`** (no arg) — the same picker as a command.
+- **`/workspace-focus <agent>`** — inspects the widget directly, e.g.
+  `/workspace-focus reviewer:security` or `/workspace-focus supervisor`.
+- **`/workspace-focus off`** — returns the widget to the roster view.
+
+> **Terminal requirement for the keybinds.** `Ctrl+Shift+letter` cannot be expressed in
+> legacy terminal escape codes — terminals only send it distinctly when the **kitty
+> keyboard protocol** is active (Ghostty, kitty, WezTerm, and modern terminal emulators
+> negotiate it automatically with the TUI). In a terminal without it, `Ctrl+Shift+F`
+> arrives as `Ctrl+F` (cursor right) and `Ctrl+Shift+I` as Tab, so the binds silently do
+> nothing. Sanity check: pi's built-in `Shift+Ctrl+P` (cycle model backward) uses the same
+> mechanism — if that doesn't work either, the terminal protocol is the issue, not this
+> extension. The `/workspace-focus` and `/workspace-findings`
+> commands work in every terminal as fallbacks.
+
+The focused widget keeps the header (loop/cycle/phase/elapsed) and the live `now` tool
+line, and shows the agent's stream tail (text, falling back to thinking when only
+reasoning has streamed). The stream store is capped (keeps the tail) so long briefs and
+aggregates can't grow without bound.
+
+### Inspect issues (findings table)
+
+While the loop runs you can open an interactive **findings table** — the full picture of
+what the reviewers found and where each finding stands:
+
+- **`Ctrl+Shift+I`** (in the TUI) — opens the browser. No command needed — one keypress
+  while the loop runs (same kitty-protocol requirement as `Ctrl+Shift+F` above).
+- **`/workspace-findings`** — the same browser as a command (works in any
+  terminal).
+
+The browser shows every finding in the canonical review file as a table row:
+`F5 · Major · <title>` with a secondary line carrying `status · attempts · fixer
+<status> <live tool> · location`. Rows sort **running fixers first** (what's happening
+now), then by severity. `type` filters, `↑↓` navigates, and the bottom pane shows the
+selected finding's detail: status/attempts, the corresponding fixer (status + current
+tool + model chain), location, source, Problem/Impact/Suggestion, and the discussion
+thread tail. The detail re-reads the review file on every navigation step, so merges that
+happen while the browser is open appear live.
+
+```
+/workspace                  # interactive wizard (TUI only)
+```
+
+## Presets
+
+**Presets** persist the loop *configuration* (reviewer roster + supervisor + settings) so a
+review setup can be reused. They are stored as JSON files in the project at
+`.agents/@montflow/review-presets/<name>.json` (sibling of `.agents/@montflow/profiles/` and `.agents/@montflow/reviews/`).
+
+From the action menu, **Preset** opens a submenu:
+
+| Action | Behavior |
+|---|---|
+| **Create preset** | Like **New review** but **skips the scope pick** — only name, roster, and settings. The settings confirm reads **✓ Done — create preset** (not "start review"). The configuration is written to `.agents/@montflow/review-presets/<name>.json`; afterwards the wizard logs a summary of the saved config and asks **Continue / Exit**. Refuses to overwrite an existing name (use Modify). |
+| **List presets** | Pick a stored preset (searchable list, annotated with its reviewer/loops/fixer summary) and view its configuration as a **boxed ASCII graphic** (reviewers, supervisor, fixer, max loops, max cycles/loop, deadlock). While viewing, act directly on it: **Modify** (re-edit, then re-renders the updated graphic) or **Delete** (confirm, removes the file). |
+| **Modify preset** | Pick a stored preset, re-edit its roster + settings seeded from the stored config (settings confirm reads **✓ Done — update preset**), and write the result back under the same name. |
+| **Delete preset** | Pick a stored preset, confirm, and remove its file. |
+
+Running a review always happens through **New review** (action menu), which picks a stored
+preset and then the scope. Each preset operation returns to the preset submenu; **`← Back`**
+returns to the action menu, and `Esc` cancels the whole setup. When no presets are stored
+yet, **List / Modify / Delete are hidden** — the submenu shows only **Create preset** and
+**`← Back`**, and the action menu shows only **Preset** (no **New review**).
+
+### Preset file format (Effect Schema)
+
+Preset files are validated by the Effect Schema in `preset-schema.ts`
+(`ReviewPresetSchema` / `ReviewPresetFromJson`):
+
+```json
+{
+  "version": 1,
+  "name": "security-audit",
+  "config": {
+    "reviewers": [
+      { "type": "builtin", "id": "generic", "thinkingLevel": "max" },
+      { "type": "profile", "name": "security-auditor", "model": "anthropic/claude-sonnet-4-5" }
+    ],
+    "supervisor": { "model": "deepseek-v4-pro", "thinkingLevel": "xhigh" },
+    "fixerModel": "deepseek-v4-flash-free",
+    "fixerThinkingLevel": "low",
+    "maxLoops": 3,
+    "maxCycles": 5,
+    "agentConcurrency": 5,
+    "deadlock": { "flipThreshold": 2, "action": "escalate" }
+  }
+}
+```
+
+Reviewers are stored as **references**, not expanded profiles:
+
+- `{ "type": "builtin", "id": "generic" }` — a builtin reviewer from the catalog.
+  The `model` field is omitted when it equals the builtin's default.
+- `{ "type": "profile", "name": "security-auditor", "model": "…" }` — a profile
+  from `.agents/@montflow/profiles/`, with the model chosen when it was added.
+
+Each reviewer reference, the supervisor, and the fixer can additionally pin a
+**thinking level** (`off` · `minimal` · `low` · `medium` · `high` · `xhigh` · `max`)
+via `thinkingLevel` (reviewer refs / `supervisor`) or `fixerThinkingLevel`; the field is
+omitted when unset (pi default applies at use time, clamped to the model).
+
+The objective text, label, and bundled skill paths are **never stored** — they are
+resolved at **Use / Modify** time (`preset-resolve.ts`) from the builtin catalog or the
+profile itself, so a preset stays small, portable, and never goes stale when a profile
+changes. The schema rejects unknown versions, missing fields,
+unknown reviewer `type`, and unknown `deadlock.action` values, and the store
+(`preset-store.ts`) validates the preset name to block path traversal.
+
+## Reviewers are profiles
+
+Reviewers are **profiles** — named agent definitions stored by this extension at `.agents/@montflow/profiles/<name>/PROFILE.md` (see [Profiles](#profiles)). Profiles are read **directly** from the store (no event bus, no separate extension — the profiles feature is merged in); external extensions can still read them over the bus via `profiles:get` / `profiles:list` (`profiles/api.ts`).
+
+The profile contributes the reviewer's **id/label**, **preferred model**, and its **description / instructions / review checklist become the reviewer's objective lens**. The bundled `adversarial-review` skill is always the behavioral skill.
+
+The only roster entry that does **not** require a profile is the built-in `generic` reviewer (the default). The other builtin ids (`security`, `quality`, …) remain available through the wizard's profile list only if a profile of that name exists — add builtins to a roster by creating matching profiles.
+
+## Pass + Supervisor
+
+See **[DESIGN-pass-supervisor.md](./DESIGN-pass-supervisor.md)** for the full design.
+
+- **The supervisor is always on** — there is no mode toggle. Every cycle: supervisor brief → the loop's reviewers → supervisor aggregate → canonical review.
+- **Reviewers persist per loop** — the same sessions re-review the updated code across a loop's cycles (with their context); a new loop spawns a fresh independent set (new sessions, supervisor disposed).
+- **Aggregation is always agent-driven** — the supervisor owns the canonical file; a failed aggregate retries the pass rather than falling back to a programmatic merge.
+- Reviewers are **codebase read-only** (`read` / `grep` / `glob` + `write` for scratch).
+- Supervisor mode and reconcile settings are gone (no `on-multi`/`always`/`never`, no reconciliator).
+
+## Bundled skills
+
+| Path | Role |
+|---|---|
+| `skills/adversarial-review/` | Reviewer behavior + report format |
+| `skills/adversarial-review-supervisor/` | Brief + aggregate (always-on) |
+| `skills/addressing-adversarial-review/` | Fixer triage / fix / Discussion protocol |
+
+Agents spawn with `noSkills: true` and `read` these files by absolute path (`skill-paths.ts`).
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["/workspace"] --> B["SkillGate"]
+    B --> C["ResolveContext + config + loop-state"]
+    C --> D{"Open or In Review?"}
+    D -->|no, last loop / all-terminal resume| Done["DONE"]
+    D -->|no, consensus in an earlier loop| L["advance to NEXT loop · fresh reviewers"]
+    D -->|yes| E["Supervisor brief"]
+    E --> F["Loop reviewers (same sessions, scratch)"]
+    F --> G["Supervisor aggregate → canonical"]
+    G --> H["Deadlock detection"]
+    H --> I{"terminal?"}
+    I -->|fixer| J["Fixer: schedule waves → parallel fixers (≤ concurrency) → merge scratch"]
+    J --> K{"cycle < maxCycles?"}
+    K -->|yes, same reviewers re-review| E
+    K -->|no| M["cycle-max decision: increase cycles / next loop / add a loop / stop"]
+    M -->|continue| E
+    I -->|consensus| L
+    I -->|escalated| End["STOP"]
+    L --> E
+```
+
+**Default roster:** a single `generic` reviewer behind the always-on supervisor. The supervisor briefs it, the reviewer writes scratch, the supervisor aggregates into the canonical review.
+
+## Configuration
+
+### Defaults (editable in the wizard's Settings step)
+
+Equivalent to:
+
+```json
+{
+  "supervisor": {
+    "model": "deepseek-v4-pro",
+    "skill": "adversarial-review-supervisor"
+  },
+  "reviewers": [
+    {
+      "id": "generic",
+      "model": "deepseek-v4-pro",
+      "skill": "adversarial-review",
+      "objective": "full adversarial audit"
+    }
+  ],
+  "fixer": { "model": "deepseek-v4-flash-free" },
+  "maxLoops": 3,
+  "maxCycles": 5,
+  "deadlock": { "flipThreshold": 2, "action": "escalate" }
+}
+```
+
+The wizard edits `maxLoops`, `maxCycles`, `fixer.model`, `supervisor.model`,
+`deadlock.flipThreshold`, and `agentConcurrency` interactively — and, per role, the
+**thinking level** (`thinkingLevel` on each reviewer, `supervisor.thinkingLevel`,
+`fixerThinkingLevel`). Unset levels default to pi's own default (`medium` clamped to the
+model's capabilities); pi clamps a level the model does not support to the nearest one it
+does. Presets persist this configuration in the **runtime shape** (`fixerModel` /
+`skillPath` — see [Preset file format](#preset-file-format-effect-schema)).
+`agentConcurrency` defaults to **5** and caps how many reviewer/fixer agents run in
+parallel (reviewer fan-out and fixer waves; 1 = fully sequential); legacy presets without
+it default to 5.
+
+### Built-in reviewer ids
+
+`generic` · `security` · `quality` · `technical` (`quality` variant whose objective also covers security — not a true alias) · `guidelines` · `style` · `linguist`
+
+Builtin ids are used to seed the **default `generic` roster entry** and are referenced by the profiles extension (`PROFILE.md` skills) rather than through CLI flags. Reviewer rosters are built in the wizard from stored profiles.
+
+## Session policy
+
+| Role | Session |
+|---|---|
+| Orchestrator (code) | Resumed via `loop-state.json` |
+| Supervisor | **One persistent session per loop** (brief + aggregate); disposed and recreated per loop |
+| Reviewers | **One persistent session per reviewer per loop** — the same reviewers re-review the updated code across the loop's cycles **with their context**. A new loop spawns a fresh independent set (new sessions, no prior context). Each reviewer is codebase read-only, writes only its own scratch file; they run **in parallel**, capped by `agentConcurrency` (default 5). A timed-out/errored session is disposed and recreated on retry |
+| Fixer | **Fresh per finding** — scheduled in **waves**: same-location (related) findings run sequentially, different locations run in parallel, capped by `agentConcurrency` (default 5). Each fixer writes its updated finding block to a per-finding scratch file; the orchestrator merges them into the review file after each wave (agents never race on the shared file). 5-minute budget per finding |
+
+Sessions are in-memory: stopping and resuming recreates them (context continuity is
+best-effort within a continuous run — the canonical review file remains the source of
+truth).
+
+## On-disk layout (standalone)
+
+```text
+.agents/@montflow/reviews/<name>/
+  001.md                 # canonical review (fixer + humans)
+  001/
+    loop-state.json      # orchestrator memory (resume): loop + cycle counters
+    scope.diff           # materialized git unstaged diff (git-unstaged scope)
+    passes/
+      1/                 # loop 1
+        1/               #   cycle 1
+          brief.md       #     supervisor → reviewers
+          scratch/<id>.md#     per-reviewer cycle scratch
+          fixes/<id>.md  #     per-finding fixer blocks (merged after each wave)
+      2/                 # loop 2 (fresh reviewers, new pass dirs)
+```
+
+## Profiles
+
+The **merged `@montflow/profiles` feature** — a pure profile store. A profile is data — a one-line description (the agent's role and what it does), custom instructions, a review checklist, a preferred model, and a list of skills — nothing more. Profiles live at `.agents/@montflow/profiles/<name>/PROFILE.md`; the canonical structure is defined by the bundled `profiles/TEMPLATE.md` (copied into `.agents/@montflow/profiles/TEMPLATE.md` on first use).
+
+This extension **never executes anything** on the profiles side: no activation, no model switching, no prompt injection, no skill loading. It only creates / modifies / deletes / lists profiles, and serves profile context to **other extensions** over the event bus (`profiles:get` / `profiles:list` — see `profiles/api.ts`). In **agentic** create mode the request is handed to the main agent as a user message; the agent (not this extension) resolves the fields and runs the standalone CLI itself.
+
+### `/profiles` command
+
+- `/profiles` — TUI menu: **New profile** (agentic or manual), **Modify**, **Delete**, **List**.
+- `/profiles --list` / `--show <name>` / `--delete <name>` / `--template` / `--new --name … --description … [--model …] [--skills …]` — same parser as the standalone CLI.
+- Standalone CLI (same Effect core, prints to stdout): `node profiles/cli.ts --list`, `node profiles/cli.ts --new --name x --description="You are…"`.
+
+### Profile structure
+
+```markdown
+---
+name: code-reviewer
+description: You are a senior code reviewer focused on security.
+model: anthropic/claude-sonnet-4-5
+skills:
+  - adversarial-review
+  - unit-testing
+---
+
+# Code Reviewer
+
+## Instructions
+
+Review diffs aggressively. Assume the author made mistakes.
+
+## Review Checklist
+
+- [ ] No security holes
+- [ ] Tests updated
+```
+
+- **Frontmatter** holds machine-readable metadata: `name`, `description`, optional `model`, and `skills` (canonical skill names from each `SKILL.md`'s frontmatter).
+- **Body** holds the human-readable definition: `## Instructions` (custom system prompt) and `## Review Checklist` (items a reviewer must verify).
+- The `description` is the **single** description concept — it covers both who the agent is (its role) and what it does (the job), in one line. Legacy files created with a `## Purpose` section still parse: the purpose text folds into `description` when the frontmatter description is missing.
+
+### Getting profile context (event bus)
+
+Consumers (other extensions) read profiles over the shared event bus; the API is typed in `profiles/api.ts`:
+
+```ts
+import { getProfileViaBus, listProfilesViaBus } from './profiles/api.ts';
+const result = await getProfileViaBus(pi, 'code-reviewer', ctx.cwd); // { ok, profile } | { ok, error }
+const names = await listProfilesViaBus(pi, ctx.cwd);                 // { ok, names } | { ok, error }
+```
+
+Channels: `profiles:get` `{ id, name, cwd }` → `profiles:get:result`; `profiles:list` `{ id, cwd }` → `profiles:list:result`. Client helpers time out (5s default) when no server is registered. The review loop itself reads profiles **directly** from the store (`profiles-client.ts`) — the bus exists for external consumers.
+
+## Deadlock detection
+
+Programmatic (not LLM):
+
+- Status oscillation (`In Review` → `Open`) past `flipThreshold`
+- Suggestion/patch-hash A → B → A at the same fingerprint
+- Multiple open findings at the same location with contradictory suggestions
+
+Action: mark finding(s) `Escalated` with an `[Orchestrator]` Discussion turn.
+
+## Widget
+
+Uses Pi `ctx.ui.setWidget` (interactive TUI / RPC). Renders a colored, summary-first
+status board above the editor: **loop/cycle progress** (`loop 1/3 · cycle 2/5`) + current
+phase with a **spinner and a live elapsed timer**, the **total run time and summed cost**
+(header `· total 12m 5s`; a `run` line with **`$0.42 · 47 turns`** once the first agent
+turn reports usage — cost comes straight from each provider's per-turn usage, so it sums
+supervisor brief/aggregate, every reviewer, and every fixer), loop-level banners for
+**consensus**
+(✓ loop complete — fresh reviewers next) and the **cycle-max decision** (waiting on you),
+the findings scoreboard (open / in-review / resolved / escalated, with a deadlock warning),
+supervisor status, per-reviewer status (queued / reviewing / done, with finding counts, all
+running concurrently with a `N concurrent` tag), fixer status with **concurrency and wave
+progress** (`3 concurrent · wave 2/3 · fixed 6/9`), and a live `now` line showing the
+current tool of the running agent. Statuses use human-readable labels (e.g. `waiting on
+reviewers`, `reviewing`) and are colored via the current theme. The scoreboard is kept at
+the top so it survives Pi's widget line limit with large rosters. Agent progress is driven
+through Pi's UI APIs only — the extension writes nothing to stdout, so it never corrupts
+the TUI layout. Cleared on terminal. No-op in print/JSON mode.
+
+While a loop runs, `/workspace-focus` (or **`Ctrl+Shift+F`**) swaps the
+roster for one agent's **live stream** (see [Watching a running agent's stream](#watching-a-running-agents-stream)):
+the header + `now` tool line stay, and the stream tail (text, or thinking when only
+reasoning has streamed) renders below, refreshed by the widget's 1s timer from a shared
+mutable stream store — no per-token widget pushes.
+
+During the **fixer phase** the widget adds a **wave schedule diagram** and **per-fixer
+rows** so the many parallel fixers are visible, not just the aggregate counter: each
+fixer gets a row (finding id + `◉`/`○`/`●`/`✗` glyph + its current live tool), and the
+schedule shows the waves (`✓[F1 F2] ▶[F3] [F4 F5]` — done waves checked, the current
+wave highlighted, later waves plain). Done rows collapse into the `fixed N/M` counter;
+rows are capped (`+N more`). A dim `hint` line advertises the focus shortcut.
+
+## herdr visibility
+
+When pi runs inside a **herdr** pane, herdr normally only sees the main session's
+`Working...` indicator — the loop's agents run in background sessions while the main
+session is idle, so the pane would show as idle mid-loop. The extension speaks herdr's
+`pane.report_agent` socket protocol directly (the same one herdr's own pi integration
+uses): it reports `working` when the loop starts — refreshed by a 30s heartbeat carrying
+the current phase (`[loop 1/3 · cycle 1/5] supervisor brief`) — and `idle` when the loop
+ends (done, failed, or stopped). Requires `HERDR_ENV=1` + `HERDR_SOCKET_PATH` +
+`HERDR_PANE_ID` (set automatically in herdr panes); a no-op elsewhere, and a failed send
+never blocks or fails the loop.
+
+## Installation
+
+```json
+{
+  "pi": {
+    "extensions": ["path/to/workspace/index.ts"]
+  }
+}
+```
+
+Requires `@earendil-works/pi-coding-agent` as a peer dependency. TypeScript loaded by Pi's jiti loader — no build step. Runtime side effects use Effect v4 + `@effect/platform-node`.
+
+## Module map
+
+| File | Responsibility |
+|---|---|
+| `index.ts` | Pi command entry — registers `/workspace` (wizard + `ui` subcommand) and the merged `/profiles` command + bus API |
+| `interactive.ts` | Interactive setup wizard (action menu + scope picker + roster builder + settings editor) |
+| `profiles-client.ts` | Direct profile→reviewer mapping (reads the merged profiles store) |
+| `models-client.ts` | Model-picker helpers (available models, current-model preselection) |
+| `config.ts` | Defaults, builtin reviewer catalog, roster helpers |
+| `preset-schema.ts` | Effect Schema for the JSON preset configuration (reviewer references) |
+| `preset-resolve.ts` | Resolves stored reviewer references (builtin catalog / profiles store) into the runtime config |
+| `preset-store.ts` | `.agents/@montflow/review-presets/` CRUD (list / read / write / delete + name validation) |
+| `graph.ts` | State machine (orchestrator) |
+| `loop-state.ts` | Resumable orchestrator memory |
+| `deadlock.ts` | Oscillation / thrash detection |
+| `widget.ts` | Pi `setWidget` rendering |
+| `findings.ts` | Finding parse/render helpers |
+| `agents.ts` | Per-role system prompts + tools |
+| `runner.ts` | Fresh + persistent agent sessions |
+| `stream.ts` | Live per-agent token stream store (focus command + widget) |
+| `herdr.ts` | herdr pane agent-state reporting (working/idle while the loop runs) |
+| `git.ts` | Git branch + working-tree diff helpers |
+| `skills/` | Bundled role skills |
+| `profiles/` | **Merged `@montflow/profiles` feature**: profile store (`store.ts`), parse/serialize (`model.ts`), `/profiles` command (`index.ts`), wizard/menu, standalone CLI (`cli.ts`), event-bus API for other extensions (`api.ts`) |
+| `test/` | Unit tests |

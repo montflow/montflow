@@ -1,0 +1,6 @@
+node_modules/
+package-lock.json
+
+# Generated workspace state (tests / ui runs write these into the package cwd)
+.agents/
+@montflow/
