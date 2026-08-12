@@ -8,6 +8,23 @@ export interface ModelsState {
   selected: string | null
 }
 
+/**
+ * The model id that would actually be used for an agentic run: the per-run
+ * override if set, else the persisted header-picker selection, else — while
+ * following each session's current model — the first session-current model.
+ * The last case is display-only: the backend falls back to its own session's
+ * active model when the id is not pickable there.
+ */
+export function effectiveModelId(
+  models: ModelChoice[],
+  selected: string | null,
+  override: string | null,
+): string | null {
+  if (override !== null) return override
+  if (selected !== null) return selected
+  return models.find((model) => model.isCurrent)?.id ?? null
+}
+
 const fetchModels = async (): Promise<ModelsState> => {
   const res = await fetch('/api/models')
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
