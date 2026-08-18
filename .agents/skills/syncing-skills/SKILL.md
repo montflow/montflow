@@ -3,7 +3,7 @@ name: syncing-skills
 description: Syncs skills from this repo into a target project's .agents/skills/. Manages fresh syncs and updates with version comparison, changelog preservation, and parallel subagent orchestration. Use when the user wants to sync, update, or upgrade skills to another project.
 id: 2eb6346337a80569
 author: Daniel Montilla
-version: 2.2.0
+version: 2.2.1
 license: MIT
 dependencies:
   - executing-skills
@@ -195,7 +195,7 @@ If syncing from remote instead of local filesystem:
 : "${TARGET:?target path required}"
 (
   tmp="$(mktemp -d)"
-  git clone --depth 1 --filter=blob:none --sparse https://github.com/DanielMontilla/skills.git "$tmp"
+  git clone --depth 1 --filter=blob:none --sparse https://github.com/montflow/montflow.git "$tmp"
   cd "$tmp"
   git sparse-checkout set ".agents/skills/<skill-name>"
   cp -r ".agents/skills/<skill-name>/." "$TARGET/.agents/skills/<skill-name>/"
@@ -274,7 +274,7 @@ git commit -m "feat: sync/update skills"
 
 # Reference
 
-- **Source repo**: `https://github.com/DanielMontilla/skills` (branch `main`)
+- **Source repo**: `https://github.com/montflow/montflow` (branch `main`)
 - **Skill authoring**: [authoring-skills](../authoring-skills/SKILL.md)
 - **Skill modification**: [modifying-skills](../modifying-skills/SKILL.md)
 - **Skill execution**: [executing-skills](../executing-skills/SKILL.md)

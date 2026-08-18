@@ -1,3 +1,9 @@
+## [2.2.1] - 2026-08-17
+
+### Fixed
+
+- Source repo URLs DanielMontilla/* → montflow/montflow
+
 ## [2.2.0] - 2026-08-12
 
 ### Changed

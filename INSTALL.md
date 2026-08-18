@@ -2,7 +2,7 @@
 
 Install skills from this repo into a target project `.agents/skills/`, or into any supported coding agent via `npx skills`.
 
-- **Repo**: `https://github.com/DanielMontilla/ai` (branch `main`; `DanielMontilla/skills` redirects here)
+- **Repo**: `https://github.com/montflow/montflow` (branch `main`)
 - **Skills**: `.agents/skills/<skill-name>/` — discovered by both Pi and the `skills` CLI
 
 ## Quick Install (recommended): `npx skills`
@@ -11,21 +11,21 @@ The `skills` CLI (Vercel Labs, [skills.sh](https://skills.sh), `npm i skills`) i
 
 ```bash
 # List what's available
-npx skills add DanielMontilla/ai --list
+npx skills add montflow/montflow --list
 
 # Install interactively to your detected agents
-npx skills add DanielMontilla/ai
+npx skills add montflow/montflow
 
 # Pi only — global (~/.pi/agent/skills/) or project (.pi/skills/)
-npx skills add DanielMontilla/ai -a pi -g
-npx skills add DanielMontilla/ai -a pi
+npx skills add montflow/montflow -a pi -g
+npx skills add montflow/montflow -a pi
 
 # Pick skills / agents non-interactively
-npx skills add DanielMontilla/ai -s authoring-skills -s grilling -a pi -y
-npx skills add DanielMontilla/ai --all
+npx skills add montflow/montflow -s authoring-skills -s grilling -a pi -y
+npx skills add montflow/montflow --all
 
 # One skill from a deep path
-npx skills add https://github.com/DanielMontilla/ai/tree/main/.agents/skills/authoring-skills
+npx skills add https://github.com/montflow/montflow/tree/main/.agents/skills/authoring-skills
 ```
 
 Maintenance: `npx skills list` (installed), `npx skills update [name]`, `npx skills remove [name]`, `npx skills find [query]`.
@@ -58,8 +58,8 @@ See [.agents/skills/syncing-skills/SKILL.md](.agents/skills/syncing-skills/SKILL
 
 | Topic | Instruction |
 |-------|-------------|
-| Install anywhere (any agent) | `npx skills add DanielMontilla/ai` |
-| Pi only | `npx skills add DanielMontilla/ai -a pi` (+ `-g` for global) |
+| Install anywhere (any agent) | `npx skills add montflow/montflow` |
+| Pi only | `npx skills add montflow/montflow -a pi` (+ `-g` for global) |
 | Mode detection | syncing-skills SKILL.md §0 |
 | Context & guardrails | syncing-skills SKILL.md §1 |
 | Fresh install | syncing-skills SKILL.md §3.1 |
