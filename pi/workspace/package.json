@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Pi extension: the montflow workspace — adversarial review loops (review → fix → consensus → next loop), agent profiles, and a shared web UI. All state lives under .agents/@montflow/",
+  "description": "Pi extension: the montflow workspace — a server-first web UI (router daemon + thin pi backend + SPA render target) with agentic skill/profile authoring runs, agent profiles, and a shared event bus. All state lives under .agents/@montflow/",
   "pi": {
     "extensions": [
       "./index.ts"

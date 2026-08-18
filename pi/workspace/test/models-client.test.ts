@@ -2,11 +2,9 @@ import { test, expect } from 'vitest';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { Model } from '@earendil-works/pi-ai';
 import {
-  currentModelId,
   hasModelChoice,
   listModelChoices,
   modelIdOf,
-  modelSelectItems,
   resolveInitialModel,
 } from '../models-client';
 
@@ -39,20 +37,10 @@ const makeCtx = (options: {
     },
   }) as unknown as ExtensionContext;
 
-// ─── modelIdOf / currentModelId ──────────────────────────────────────
+// ─── modelIdOf ───────────────────────────────────────────────────────
 
 test('modelIdOf: formats provider/model-id', () => {
   expect(modelIdOf(model('anthropic', 'claude-sonnet-4-5'))).toBe('anthropic/claude-sonnet-4-5');
-});
-
-test('currentModelId: undefined without an active model', () => {
-  const ctx = makeCtx({});
-  expect(currentModelId(ctx)).toBeUndefined();
-});
-
-test('currentModelId: provider/model-id of the active model', () => {
-  const ctx = makeCtx({ current: model('deepseek', 'deepseek-v4-pro') });
-  expect(currentModelId(ctx)).toBe('deepseek/deepseek-v4-pro');
 });
 
 // ─── listModelChoices ────────────────────────────────────────────────
@@ -221,27 +209,4 @@ test('resolveInitialModel: bare preferred id resolves within a scoped set', () =
     ],
   });
   expect(resolveInitialModel(ctx, 'claude-sonnet-4-5')).toBe('anthropic/claude-sonnet-4-5');
-});
-
-// ─── modelSelectItems ────────────────────────────────────────────────
-
-test('modelSelectItems: value/label are provider/model-id, description is the name', () => {
-  const ctx = makeCtx({
-    current: model('deepseek', 'deepseek-v4-pro'),
-    available: [model('anthropic', 'claude-sonnet-4-5', 'Claude 4 Sonnet')],
-  });
-  const items = modelSelectItems(listModelChoices(ctx));
-  expect(items).toHaveLength(1);
-  expect(items[0]?.value).toBe('anthropic/claude-sonnet-4-5');
-  expect(items[0]?.label).toBe('anthropic/claude-sonnet-4-5');
-  expect(items[0]?.description).toBe('Claude 4 Sonnet');
-});
-
-test('modelSelectItems: tags the current model in its description', () => {
-  const ctx = makeCtx({
-    current: model('deepseek', 'deepseek-v4-pro', 'DeepSeek V4 Pro'),
-    available: [model('deepseek', 'deepseek-v4-pro', 'DeepSeek V4 Pro')],
-  });
-  const items = modelSelectItems(listModelChoices(ctx));
-  expect(items[0]?.description).toBe('DeepSeek V4 Pro — current model');
 });

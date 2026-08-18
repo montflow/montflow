@@ -1,47 +1,34 @@
-import { Effect } from 'effect';
-import { NodeServices } from '@effect/platform-node';
 import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
-import { runGraph } from './graph';
-import { runInteractiveSetup } from './interactive';
 import { startUiServer, stopUiServer, restartUiServer, broadcastNotify, getRouterStatus } from './ui-server';
 import { registerProfileApi } from './profiles/api';
 
 export { getCurrentGitBranch } from './git';
-export { defaultLoopConfig, BUILTIN_REVIEWERS } from './config';
-
-/** Abort controller for the currently running loop (Ctrl+C/Esc graceful stop). */
-let activeLoopController: AbortController | undefined;
 
 /**
- * Pi extension entry: registers the /workspace and /montflow commands plus
+ * Pi extension entry: registers the `/workspace` and `/montflow` commands plus
  * the merged-in profile event-bus API (profiles:get / profiles:list).
  *
- * `/montflow` launches the web UI for the current workspace (auto-creating
- * `.agents/@montflow/workspace.json` named after the git branch when missing).
- * `/workspace` is the interactive review-loop wizard; its `ui` subcommand is
- * an alias for `/montflow`. Profiles are managed from the web UI (manual or
- * agentic runs) and read by the loop directly from the store.
+ * Both commands launch the shared web UI for the current workspace
+ * (auto-creating `.agents/@montflow/workspace.json` named after the git
+ * branch when missing). The UI is served by a single machine-level router
+ * daemon that all folders share; the browser is the only render target — the
+ * interactive TUI wizard was removed. Profiles are managed from the web UI
+ * (manual or agentic runs) and read by extensions over the event bus.
  * @param {ExtensionAPI} pi The Pi extension API
  * @returns Nothing
  */
 export default function workspaceExtension(pi: ExtensionAPI): void {
-  // Merged-in @montflow/profiles: profiles:get/list event-bus API (the
-  // /profiles command + interactive wizard were removed — the web UI
-  // manages profiles now).
+  // Merged-in @montflow/profiles: profiles:get/list event-bus API.
   registerProfileApi(pi);
 
   pi.registerCommand('workspace', {
     description:
-      'Run an interactive adversarial review loop: action menu → pick a stored preset ' +
-      '(new reviews always start from a preset; the reviewer roster + settings live in ' +
-      'presets) → scope (git unstaged or a picked place) → run. Interrupted loops can be ' +
-      'resumed in place (pick an existing review from the action menu). Presets are created, ' +
-      'listed (ASCII config view with modify/delete), and managed from the wizard, and ' +
-      'persist a roster+settings configuration to .agents/@montflow/review-presets/. The ' +
-      'supervisor (brief + aggregate) is always on. Stop with Ctrl+C/Esc in the TUI. ' +
-      'Subcommand `ui` launches the shared web UI (single router, folder picker) — same ' +
-      'as /montflow; `ui --stop` stops the router. Interactive-only (TUI). Skills ship ' +
-      'with the extension under skills/.',
+      'Launch the montflow web UI for the current workspace (alias of /montflow). ' +
+      'Auto-creates .agents/@montflow/workspace.json (named after the current git ' +
+      'branch) when missing, then opens the shared UI (single router, folder ' +
+      'picker) at the workspace page. Flags: `--stop` stops the router, ' +
+      '`--port=NNNN` pins the port, `restart` restarts the router, `kill` ends ' +
+      'every session and stops the router, `status` reports router state.',
     handler: async (args, ctx) => {
       await dispatchCommand(pi, `/workspace${args === '' ? '' : ` ${args}`}`, ctx);
     },
@@ -64,10 +51,10 @@ export default function workspaceExtension(pi: ExtensionAPI): void {
 }
 
 /**
- * Routes a `/workspace` or `/montflow` invocation: `ui` subcommand or
- * `--flags` → web UI, anything else → the interactive wizard (only for
- * `/workspace`). Accepts the full slash-command text (as sent from the
- * browser over the router) or the args after the command name.
+ * Routes a `/workspace` or `/montflow` invocation: everything opens the web
+ * UI, except the lifecycle flags (`kill` / `restart` / `stop` / `status`).
+ * Accepts the full slash-command text (as sent from the browser over the
+ * router) or the args after the command name.
  * @param {ExtensionAPI} pi Pi extension API
  * @param {string} text Full slash-command text (e.g. `/montflow --stop`)
  * @param {ExtensionCommandContext} ctx Command context
@@ -80,9 +67,7 @@ async function dispatchCommand(
 ): Promise<void> {
   const match = text.trim().match(/^\/(workspace|montflow)(?:\s+(.*))?$/s);
   if (match === null) return; // not one of our commands
-  const command = match[1] ?? 'workspace';
   const rest = (match[2] ?? '').trim();
-  const first = rest.split(/\s+/)[0] ?? '';
 
   // `/montflow kill` (any position, e.g. `/montflow --port=24342 kill`) ends
   // every registered session and stops the router. No UI router → nothing to kill.
@@ -140,7 +125,7 @@ async function dispatchCommand(
   }
 
   // `/montflow status` reports whether the UI router is running.
-  if (first === 'status' || rest.split(/\s+/).includes('status')) {
+  if (rest.split(/\s+/).includes('status')) {
     const status = await getRouterStatus();
     if (!status.running) {
       ctx.ui.notify('Montflow UI: not running — start it with /montflow.', 'info');
@@ -163,27 +148,8 @@ async function dispatchCommand(
     return;
   }
 
-  // `/montflow` always launches the web UI; `/workspace ui …` or any
-  // `--flags` (e.g. `/montflow --stop`) do too. Only bare `/workspace`
-  // opens the interactive wizard.
-  if (command === 'montflow' || first === 'ui' || first.startsWith('--')) {
-    await handleUiCommand(
-      pi,
-      rest,
-      ctx,
-      command === 'montflow' ? 'Montflow UI' : 'Adversarial review UI',
-    );
-    return;
-  }
-
-  if (!ctx.hasUI) {
-    ctx.ui.notify(
-      'workspace is interactive-only — run it inside the pi TUI.',
-      'error',
-    );
-    return;
-  }
-  await handleInteractive(pi, ctx);
+  // Everything else opens the web UI.
+  await handleUiCommand(pi, rest, ctx);
 }
 
 /**
@@ -220,14 +186,12 @@ function parseUiArgs(rest: string): {
  * @param {ExtensionAPI} pi Pi extension API
  * @param {string} rest Arguments after the command name
  * @param {ExtensionCommandContext} ctx Command context
- * @param {string} label Display name for the UI in notifications
  * @returns Nothing
  */
 async function handleUiCommand(
   pi: ExtensionAPI,
   rest: string,
   ctx: ExtensionCommandContext,
-  label: string,
 ): Promise<void> {
   const { flags, bare } = parseUiArgs(rest);
 
@@ -255,74 +219,11 @@ async function handleUiCommand(
         void dispatchCommand(pi, text, ctx);
       },
       // What user action started this session (Sessions dropdown).
-      initiator: label === 'Montflow UI' ? '/montflow' : '/workspace ui',
+      initiator: '/montflow',
     });
-    ctx.ui.notify(`${label} for '${handle.name}' available at ${handle.url}`, 'info');
-    broadcastNotify(`${label} available: ${handle.url}`, 'info');
+    ctx.ui.notify(`Montflow UI for '${handle.name}' available at ${handle.url}`, 'info');
+    broadcastNotify(`Montflow UI available: ${handle.url}`, 'info');
   } catch (error) {
     ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error');
   }
 }
-
-/**
- * Interactive mode: run the setup wizard, then the loop. Cancelled setups
- * return without running. The loop is stoppable via the abort signal: a raw
- * terminal listener for Ctrl+C / Esc fires it; the graph checks it between
- * steps and stops gracefully (disposing the supervisor and clearing the widget).
- * @param {ExtensionAPI} pi The Pi extension API
- * @param {ExtensionCommandContext} ctx The command context
- * @returns Nothing
- */
-const handleInteractive = async (
-  pi: ExtensionAPI,
-  ctx: ExtensionCommandContext,
-): Promise<void> => {
-  try {
-    const setup = await runInteractiveSetup(pi, ctx);
-    if (setup === null) return;
-
-    const controller = new AbortController();
-    activeLoopController = controller;
-    const unlisten = ctx.ui.onTerminalInput((data) => {
-      // Ctrl+C (\x03) or Esc (\x1b) while the loop runs → graceful stop.
-      if (data === '\x03' || data === '\x1b') {
-        if (!controller.signal.aborted) {
-          controller.abort();
-          ctx.ui.notify(
-            'Adversarial review loop stop requested — it will stop after the current step.',
-            'warning',
-          );
-        }
-        return { consume: true };
-      }
-      return undefined;
-    });
-
-    try {
-      const result = await Effect.runPromise(
-        runGraph(
-          {
-            opts: setup.opts,
-            cwd: ctx.cwd,
-            ui: ctx.ui,
-            signal: controller.signal,
-          },
-          {
-            // Mid-run cycle-max decision: raise the cycle cap, advance to the
-            // next loop (or add a loop at the cap), or stop.
-            askUser: async (question, options) =>
-              (await ctx.ui.select(question, [...options])) ?? null,
-          },
-        ).pipe(Effect.provide(NodeServices.layer)),
-      );
-      if (result.terminal === 'stopped') {
-        ctx.ui.notify('[workspace] Stopped by user request.', 'warning');
-      }
-    } finally {
-      unlisten();
-      if (activeLoopController === controller) activeLoopController = undefined;
-    }
-  } catch (error) {
-    ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error');
-  }
-};

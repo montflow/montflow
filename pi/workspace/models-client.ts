@@ -1,21 +1,18 @@
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { Model } from '@earendil-works/pi-ai';
-import type { SelectItem } from '@earendil-works/pi-tui';
 
 /**
- * Model-picker helpers for the review-loop UI.
+ * Model-picker helpers for the web UI and agentic runs.
  *
- * Model strings in loop configs are `provider/model-id` (or a bare model id
- * Pi's model registry can resolve). Instead of typing them by hand, the
- * interactive wizard lists the models that are actually pickable in this
- * session — the session-scoped set when `--models`/`enabledModels` scoping is
- * configured (same set the built-in `/model` picker shows), otherwise the
- * full available catalogue — and preselects the currently active model.
+ * Model strings are `provider/model-id` (or a bare model id Pi's model
+ * registry can resolve). The pickable set is the session-scoped set when
+ * `--models`/`enabledModels` scoping is configured (same set the built-in
+ * `/model` picker shows), otherwise the full available catalogue.
  */
 
 /** One selectable model in the picker. */
 export interface ModelChoice {
-  /** Full `provider/model-id` string stored in loop configs. */
+  /** Full `provider/model-id` string stored in run configs. */
   readonly id: string;
   /** Provider id, e.g. `anthropic`. */
   readonly provider: string;
@@ -46,16 +43,15 @@ export const modelIdOf = (model: ModelLike): string => `${model.provider}/${mode
  * @param {ExtensionContext} ctx The extension context
  * @returns The current model id, or undefined
  */
-export const currentModelId = (ctx: ExtensionContext): string | undefined => {
+const currentModelId = (ctx: ExtensionContext): string | undefined => {
   const model = ctx.model;
   return model === undefined ? undefined : modelIdOf(model);
 };
 
 /**
- * Lists the models the user can pick for a review run: the session-scoped set
- * when scoping is configured (mirrors the built-in `/model` picker), otherwise
- * every available model in the registry. The active model is flagged as
- * `isCurrent`.
+ * Lists the models the user can pick: the session-scoped set when scoping is
+ * configured (mirrors the built-in `/model` picker), otherwise every available
+ * model in the registry. The active model is flagged as `isCurrent`.
  * @param {ExtensionContext} ctx The extension context
  * @returns The pickable model choices
  */
@@ -112,10 +108,10 @@ export const hasModelChoice = (ctx: ExtensionContext, id: string): boolean =>
   findModelChoice(listModelChoices(ctx), id, currentModelId(ctx)?.split('/')[0]) !== undefined;
 
 /**
- * Resolves the model id to preselect in the picker: the first of the preferred
- * ids that is pickable (bare ids are resolved to their `provider/model-id`
- * form), then the session's current model, then the first available choice.
- * Returns undefined when no models are pickable.
+ * Resolves the model id to preselect: the first of the preferred ids that is
+ * pickable (bare ids are resolved to their `provider/model-id` form), then the
+ * session's current model, then the first available choice. Returns undefined
+ * when no models are pickable.
  * @param {ExtensionContext} ctx The extension context
  * @param {Array<string | undefined>} preferred Candidate ids in priority order
  * @returns The preselected model id, or undefined
@@ -134,16 +130,3 @@ export const resolveInitialModel = (
   }
   return choices[0]?.id;
 };
-
-/**
- * SelectItem view of the model choices for the searchable picker dialog. The
- * current model's description is tagged so it is easy to spot while searching.
- * @param {readonly ModelChoice[]} choices The model choices
- * @returns The SelectItems
- */
-export const modelSelectItems = (choices: readonly ModelChoice[]): SelectItem[] =>
-  choices.map((choice) => ({
-    value: choice.id,
-    label: choice.id,
-    description: choice.isCurrent ? `${choice.name} — current model` : choice.name,
-  }));

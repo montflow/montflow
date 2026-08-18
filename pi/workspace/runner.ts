@@ -75,8 +75,8 @@ export interface AgentRunResult {
    * best-effort — a provider that ignores it (or an abort that hangs past
    * the grace window) leaves the generation running on the session — so a
    * caller that reuses the session must treat a timed-out turn as poisoned:
-   * dispose and recreate the session instead of re-prompting it (the loop's
-   * supervisor retry path, see F5).
+   * dispose and recreate the session instead of re-prompting it (the
+   * agentic-run retry path).
    */
   readonly timedOut?: boolean;
 }
@@ -101,8 +101,9 @@ export interface AgentSessionOptions {
    */
   readonly thinkingLevel?: ThinkingLevel;
   /**
-   * Optional live tool-activity callback for progress UI (e.g. the loop
-   * widget). Fired from the agent event subscription; must not throw.
+   * Optional live tool-activity callback for progress reporting (e.g. the
+   * run page's live tool list). Fired from the agent event subscription;
+   * must not throw.
    */
   readonly onTool?: (activity: ToolActivity) => void;
   /**
@@ -188,7 +189,7 @@ const getModelRuntime = (): Promise<ModelRuntime> => {
  * and fail with a misleading "No API key found for undefined".
  * @param {ModelLookup} runtime The model runtime
  * @param {string} [id] The model id (`provider/model-id` or bare `model-id`);
- *   undefined (e.g. an unset fixer model) resolves to undefined
+ *   undefined (e.g. an unset model) resolves to undefined
  * @returns The resolved model, or undefined when not available
  */
 export const resolveModelObject = (
@@ -318,7 +319,7 @@ export const reportTool = (
  * How long `runOneTurn` waits for a timed-out session to abort and go idle
  * before giving up. `session.abort()` awaits the agent's idle wait, which can
  * hang if a provider ignores the abort signal — bounding it keeps the timeout
- * path from blocking the loop indefinitely.
+ * path from blocking a run indefinitely.
  */
 const ABORT_GRACE_MS = 30_000;
 
@@ -527,7 +528,6 @@ export const runAgentResilient = (
 /**
  * Creates an agent session that persists across multiple prompts.
  * The same context (system prompt, conversation history) carries forward.
- * Use for the reviewer so it remembers previous cycles' findings.
  * The caller is responsible for running the returned dispose effect.
  * @param {AgentSessionOptions} options Agent configuration
  * @param {number} [defaultTimeoutMs] Default per-turn timeout in milliseconds
@@ -596,15 +596,13 @@ export const retryPrompt = (
 
 /**
  * Creates an agent session with skill auto-loading intentionally disabled
- * (`noSkills: true`). Agents load the extension's bundled skills under
- * `skills/` by absolute path (see buildReviewerSystem / FIXER_SYSTEM in
- * agents.ts and skill-paths.ts). Each agent reads the skill file fresh every run.
+ * (`noSkills: true`). Agents load skills by absolute path (see the run
+ * system prompts in skill-run.ts). Each agent reads its skill file fresh
+ * every run.
  *
- * Reviewers are never persisted: each cycle runs a fresh reviewer agent via
- * `runAgent` (see runFreshReviewer in graph.ts), so conversation history does
- * not carry across cycles. Only the supervisor is persistent, created once via
- * `createPersistentAgent` (see ensureSupervisor in graph.ts). Cross-cycle
- * context is kept in the review file, which remains the canonical state.
+ * Agent sessions are persistent (conversation history carries across
+ * turns): skill/profile authoring runs keep one session for the whole run
+ * and resume it from its session file after a restart.
  *
  * The model name is resolved to a real `Model` object via the shared
  * `ModelRuntime` before `createAgentSession` (passing a raw string makes pi
@@ -636,7 +634,7 @@ const createSession = (
       if (model === undefined) {
         throw new Error(
           `Model '${options.model}' is not available in this pi setup. ` +
-            'Pick an available model when creating the preset, or check /models.',
+            'Pick an available model in the UI, or check /models.',
         );
       }
 

@@ -6,7 +6,6 @@ import { execSync } from 'node:child_process';
 import { Option } from 'effect';
 
 import { getCurrentGitBranch } from '../index';
-import { getUnstagedChanges } from '../git';
 import { runEffect, withProjectRoot, type TempDir } from './helpers';
 
 // ─── Helpers ──────────────────────────────────────────────────────────
@@ -90,62 +89,6 @@ test('getCurrentGitBranch: returns none for non-git directory', async () => {
   try {
     const branch = await runEffect(getCurrentGitBranch(tmp));
     expect(Option.isNone(branch)).toBe(true);
-  } finally {
-    cleanup();
-  }
-});
-
-// ─── getUnstagedChanges Tests ────────────────────────────────────────
-
-test('getUnstagedChanges: lists unstaged + untracked files and the diff', () => {
-  const { tmp, cleanup } = withGitRepo('main');
-  try {
-    fs.writeFileSync(path.join(tmp, 'README.md'), '# Test\nchanged\n');
-    fs.writeFileSync(path.join(tmp, 'new-file.ts'), 'export const x = 1;\n');
-
-    const changes = getUnstagedChanges(tmp);
-    expect(changes.files).toContain('README.md');
-    expect(changes.files).toContain('new-file.ts');
-    expect(changes.diff).toContain('README.md');
-    expect(changes.diff).toContain('+changed');
-    // Untracked file content is materialized in the diff too (F11).
-    expect(changes.diff).toContain('new-file.ts');
-    expect(changes.diff).toContain('+export const x = 1;');
-  } finally {
-    cleanup();
-  }
-});
-
-test('getUnstagedChanges: materializes untracked files whose names start with a dash', () => {
-  const { tmp, cleanup } = withGitRepo('main');
-  try {
-    fs.writeFileSync(path.join(tmp, '-dash.ts'), 'export const y = 2;\n');
-
-    const changes = getUnstagedChanges(tmp);
-    expect(changes.files).toContain('-dash.ts');
-    expect(changes.diff).toContain('+export const y = 2;');
-  } finally {
-    cleanup();
-  }
-});
-
-test('getUnstagedChanges: empty when the working tree is clean', () => {
-  const { tmp, cleanup } = withGitRepo('main');
-  try {
-    const changes = getUnstagedChanges(tmp);
-    expect(changes.files).toEqual([]);
-    expect(changes.diff).toBe('');
-  } finally {
-    cleanup();
-  }
-});
-
-test('getUnstagedChanges: empty for a non-git directory', () => {
-  const { tmp, cleanup } = withProjectRoot({});
-  try {
-    const changes = getUnstagedChanges(tmp);
-    expect(changes.files).toEqual([]);
-    expect(changes.diff).toBe('');
   } finally {
     cleanup();
   }

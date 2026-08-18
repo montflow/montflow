@@ -10,7 +10,7 @@
  * - Ensures the router is running (spawns it detached when missing).
  * - Registers with the wire protocol version; a version mismatch is fatal
  *   (two different versions can never coexist behind one router).
- * - Streams pi events + structured loop state to the router; forwards
+ * - Streams pi events + agentic-run streams to the router; forwards
  *   browser commands (`prompt` / `steer` / `followUp` / `command`) into the
  *   live session via `pi.sendUserMessage` / in-process dispatch.
  */
@@ -24,7 +24,6 @@ import { fileURLToPath } from 'node:url';
 import { WebSocket } from 'ws';
 import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
-import type { LoopWidgetState } from './widget';
 import { Effect, Option } from 'effect';
 import { getCurrentGitBranch } from './git';
 import {
@@ -60,25 +59,6 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-export interface UiLoopState {
-  readonly cycle: number;
-  readonly maxLoops: number;
-  readonly supervisor: string;
-  readonly supervisorDetail?: string;
-  readonly reviewers: ReadonlyArray<{
-    readonly id: string;
-    readonly label: string;
-    readonly status: string;
-    readonly findingCount?: number;
-  }>;
-  readonly reconcile: string;
-  readonly reconcileDetail?: string;
-  readonly fixer: string;
-  readonly summary: { readonly open: number; readonly inReview: number; readonly resolved: number; readonly escalated: number; readonly wontFix: number } | null;
-  readonly deadlocks: number;
-  readonly phase: string;
-}
-
 export interface UiEntry {
   readonly id: string;
   readonly parentId: string | null;
@@ -108,49 +88,14 @@ export interface UiServerHandle {
 }
 
 // ---------------------------------------------------------------------------
-// Outbound broadcast (module-level: graph.ts / index.ts call these)
+// Outbound broadcast (module-level: index.ts calls these)
 // ---------------------------------------------------------------------------
 
 let socket: WebSocket | null = null;
-let latestLoopState: UiLoopState | null = null;
 let assignedFolder: string | null = null;
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
-
-/**
- * Normalize the production LoopWidgetState into the JSON-safe wire shape.
- * Production always uses the supervisor (no reconcile step) and tracks
- * `loop`/`cycle` separately — the UI shows loop number / total loops.
- */
-const toUiLoopState = (state: LoopWidgetState): UiLoopState => ({
-  cycle: state.loop + 1,
-  maxLoops: state.maxLoops,
-  supervisor: state.supervisor,
-  supervisorDetail: state.supervisorDetail,
-  reviewers: state.reviewers.map((r) => ({
-    id: r.id,
-    label: r.label,
-    status: r.status,
-    findingCount: r.findingCount,
-  })),
-  reconcile: 'skipped',
-  fixer: state.fixer,
-  summary: Option.isSome(state.summary) ? state.summary.value : null,
-  deadlocks: state.deadlocks,
-  phase: state.phase,
-});
-
-/** Publish structured loop state. `null` signals the loop finished. */
-export const broadcastLoopState = (state: LoopWidgetState | null): void => {
-  latestLoopState = state === null ? null : toUiLoopState(state);
-  if (assignedFolder !== null) {
-    sendToRouter({ type: 'loopState', folder: assignedFolder, state: latestLoopState });
-  }
-};
-
-/** Get the most recent loop state (for the hello snapshot). */
-export const getLatestLoopState = (): UiLoopState | null => latestLoopState;
 
 /** Fire-and-forget notification to connected browsers. */
 export const broadcastNotify = (message: string, level: 'info' | 'warning' | 'error' = 'info'): void => {
@@ -917,7 +862,6 @@ export const startUiServer = async (
                 entries: snapshotEntries(ctx),
                 leafId: ctx.sessionManager.getLeafId(),
                 sessionFile: ctx.sessionManager.getSessionFile() ?? null,
-                loopState: getLatestLoopState(),
               },
             } satisfies BackendToRouter),
           );
@@ -1000,8 +944,7 @@ export const startUiServer = async (
 
   /**
    * Creates and starts an agentic run — the SINGLE entry point every
-   * agentic creation/modification flow funnels through (skill, profile,
-   * preset). The run gets its own isolated, resumable agent session under
+   * agentic creation/modification flow funnels through (skill, profile). The run gets its own isolated, resumable agent session under
    * `~/.pi/agent/runs/<cwd-slug>/<runId>/`; the start is broadcast, then
    * live deltas and tool activity are streamed to the browser.
    * @param {AgenticRunKind} kind Which authoring agent to run
@@ -1026,9 +969,9 @@ export const startUiServer = async (
           ? wrapSkillPrompt(opts.text, authoringSkill, opts.skillName)
           : kind === 'profile'
             ? wrapProfilePrompt(opts.text, opts.profileName, opts.skills)
-            : kind === 'text'
-              ? wrapTextPrompt(opts.text)
-              : wrapPresetPrompt(opts.text, opts.presetName);
+            : kind === 'preset'
+              ? wrapPresetPrompt(opts.text, opts.presetName)
+              : wrapTextPrompt(opts.text);
       const record = makeRunRecord(runId, folder, workspace.id, cwd, prompt);
       skillRuns.set(runId, record);
       persistRun(record, true);
@@ -1041,11 +984,11 @@ export const startUiServer = async (
           ? '[skill-create]'
           : kind === 'profile'
             ? '[profile-create]'
-            : kind === 'text'
-              ? '[ai-input]'
-              : opts.presetName !== undefined
+            : kind === 'preset'
+              ? opts.presetName !== undefined
                 ? '[preset-edit]'
-                : '[preset-create]');
+                : '[preset-create]'
+              : '[ai-input]');
       // Generate a short title from the raw request via opencode's big-pickle
       // model. Fire-and-forget: any failure falls back to the prompt itself,
       // which is exactly what the UI showed before titles existed.
@@ -1060,9 +1003,9 @@ export const startUiServer = async (
           ? createSkillAgent(ctx, model, { sessionDir: runDir(cwd, runId) })
           : kind === 'profile'
             ? createProfileAgent(ctx, model, { sessionDir: runDir(cwd, runId) })
-            : kind === 'text'
-              ? createTextAgent(ctx, model, { sessionDir: runDir(cwd, runId) })
-              : createPresetAgent(ctx, model, { sessionDir: runDir(cwd, runId) });
+            : kind === 'preset'
+              ? createPresetAgent(ctx, model, { sessionDir: runDir(cwd, runId) })
+              : createTextAgent(ctx, model, { sessionDir: runDir(cwd, runId) });
       runAgentTurn(record, folder, prompt, makeAgent, opts.model);
     })();
   };

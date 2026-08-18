@@ -20,17 +20,3 @@ export const formatDuration = (ms: number): string => {
   const hoursPart = `${hours} hour${hours === 1 ? '' : 's'}`;
   return restMinutes === 0 ? hoursPart : `${hoursPart} ${restMinutes} minute${restMinutes === 1 ? '' : 's'}`;
 };
-
-/**
- * Formats a dollar cost for the widget, e.g. `$0.42`, `$12.50`, `$0.0042`.
- * Sub-cent costs keep four decimals so tiny per-turn charges don't round to
- * a misleading `$0.00`; zero renders as `$0.00`.
- * @param {number} cost Cost in USD
- * @returns The formatted cost
- */
-export const formatCost = (cost: number): string => {
-  const value = Math.max(0, cost);
-  if (value === 0) return '$0.00';
-  if (value < 0.01) return `$${value.toFixed(4)}`;
-  return `$${value.toFixed(2)}`;
-};

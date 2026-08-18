@@ -7,8 +7,8 @@ import * as Store from './store.ts';
  * Inter-extension API: how OTHER extensions read profile context.
  *
  * The profiles feature is **merged into @montflow/workspace** — the workspace
- * extension registers this bus server at load time. The workspace's own review
- * loop reads profiles directly from the store (see `profiles-client.ts`); this
+ * extension registers this bus server at load time. External consumers read
+ * profiles over this bus; this
  * bus exists for external consumers that cannot import the store.
  *
  * This extension never executes anything (no activation, no model switching,

@@ -109,7 +109,6 @@ export type BackendToRouter =
     }
   | { readonly type: 'hello'; readonly folder: string; readonly hello: unknown }
   | { readonly type: 'event'; readonly folder: string; readonly event: unknown }
-  | { readonly type: 'loopState'; readonly folder: string; readonly state: unknown }
   | { readonly type: 'notify'; readonly folder: string; readonly message: string; readonly level: 'info' | 'warning' | 'error' }
   | { readonly type: 'unregister'; readonly folder: string }
   // The backend's session model list changed (e.g. the user ran /model in
@@ -195,7 +194,6 @@ export type RouterToBrowser =
   | { readonly type: 'folders'; readonly folders: readonly FolderInfo[]; readonly port: number }
   | { readonly type: 'hello'; readonly folder: string; readonly hello: unknown }
   | { readonly type: 'event'; readonly folder: string; readonly event: unknown }
-  | { readonly type: 'loopState'; readonly folder: string; readonly state: unknown }
   | { readonly type: 'notify'; readonly folder: string; readonly message: string; readonly level: 'info' | 'warning' | 'error' }
   | { readonly type: 'folderGone'; readonly folder: string }
   // A skill was created/updated/deleted in a workspace (HTTP API mutations);
@@ -216,7 +214,7 @@ export type RouterToBrowser =
       readonly profileName: string;
       readonly kind: 'created' | 'updated' | 'deleted';
     }
-  // A review preset was created/updated/deleted in a workspace (HTTP API
+  // A preset was created/updated/deleted in a workspace (HTTP API
   // mutations); browsers invalidate their preset queries so every tab stays
   // in sync.
   | {

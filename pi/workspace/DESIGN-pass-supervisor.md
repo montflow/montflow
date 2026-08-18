@@ -1,3 +1,5 @@
+> **Status: archived.** The adversarial review loop (and this supervisor design) was removed from the extension while it is being reworked server-side. This document is kept as historical context for the rework.
+
 # Design: Pass + Always-On Supervisor
 
 > Status: **implemented**. The review half of every cycle is a supervisor-driven pass: supervisor brief → roster reviewers (scratch) → supervisor aggregate → canonical review. The supervisor is **always on** — there is no mode toggle, no single-reviewer shortcut, and no programmatic merge. Aggregation is always agent-driven.
