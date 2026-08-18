@@ -10,7 +10,7 @@
  *
  * Wire protocol (see ui-protocol.ts):
  * - pi backends connect to `/backend`, register with their protocol version,
- *   stream events/loop state, receive commands.
+ *   stream events + agentic-run streams, receive commands.
  * - Browsers connect to `/ws`, get the folder list + cached per-folder state,
  *   send folder-tagged commands.
  */
@@ -24,7 +24,6 @@ import { fileURLToPath } from 'node:url';
 import net from 'node:net';
 import { WebSocket, WebSocketServer } from 'ws';
 import { Schema } from 'effect';
-import { BUILTIN_REVIEWERS } from './config.ts';
 import { ReviewPresetFromJson, ReviewPresetSchema } from './preset-schema.ts';
 import { openRunStore, type RunStore, type StoredRun } from './run-store.ts';
 import { parseProfile, parseFrontmatter } from './profiles/model.ts';
@@ -58,7 +57,6 @@ interface BackendConn {
 const backends = new Map<string, BackendConn>();
 const browserSockets = new Set<WebSocket>();
 const cachedHello = new Map<string, unknown>();
-const cachedLoop = new Map<string, unknown>();
 let currentPort = 0;
 
 // ---------------------------------------------------------------------------
@@ -299,11 +297,6 @@ const handleBackendMessage = async (socket: WebSocket, raw: string): Promise<voi
       broadcastToBrowsers({ type: 'event', folder: msg.folder, event: msg.event });
       return;
 
-    case 'loopState':
-      cachedLoop.set(msg.folder, msg.state);
-      broadcastToBrowsers({ type: 'loopState', folder: msg.folder, state: msg.state });
-      return;
-
     case 'notify':
       broadcastToBrowsers({
         type: 'notify',
@@ -367,7 +360,6 @@ const dropBackend = (folder: string): void => {
   if (!conn) return;
   backends.delete(folder);
   cachedHello.delete(folder);
-  cachedLoop.delete(folder);
   folderModels.delete(folder);
   broadcastToBrowsers({ type: 'folderGone', folder });
   broadcastFolders();
@@ -387,8 +379,8 @@ const runFolder = new Map<string, string>();
 
 // ---------------------------------------------------------------------------
 // Agentic skill runs — cached transcripts so late-joining tabs / page reloads
-// can recover even after the owning backend disconnects (mirrors cachedHello /
-// cachedLoop, which already survive backend disconnects).
+// can recover even after the owning backend disconnects (mirrors cachedHello,
+// which already survives backend disconnects).
 // ---------------------------------------------------------------------------
 
 interface CachedRun {
@@ -883,16 +875,6 @@ const readSkill = async (cwd: string, skillId: string): Promise<SkillDetail | nu
   return null;
 };
 
-const PRESET_DIR = ['.agents', '@montflow', 'review-presets'] as const;
-const PRESET_EXT = '.json';
-
-const isValidPresetName = (name: string): boolean =>
-  /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name);
-
-const presetRoot = (cwd: string): string => join(cwd, ...PRESET_DIR);
-const presetFilePath = (cwd: string, name: string): string =>
-  join(presetRoot(cwd), `${name}${PRESET_EXT}`);
-
 const readJsonBody = (req: IncomingMessage): Promise<unknown> =>
   new Promise((resolveBody, rejectBody) => {
     const chunks: Buffer[] = [];
@@ -907,10 +889,41 @@ const readJsonBody = (req: IncomingMessage): Promise<unknown> =>
     req.on('error', rejectBody);
   });
 
+// ---------------------------------------------------------------------------
+// Review presets — `.agents/@montflow/review-presets/<name>.json`
+// ---------------------------------------------------------------------------
+
+const PRESET_DIR = ['.agents', '@montflow', 'review-presets'] as const;
+const PRESET_EXT = '.json';
+
+const isValidPresetName = (name: string): boolean =>
+  /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name);
+
+const presetRoot = (cwd: string): string => join(cwd, ...PRESET_DIR);
+const presetFilePath = (cwd: string, name: string): string =>
+  join(presetRoot(cwd), `${name}${PRESET_EXT}`);
+
+/**
+ * Builtin reviewer catalog (id → label) served to the UI for rendering
+ * `type: "builtin"` preset references. The catalog is label-only now: the
+ * old builtin skill bundles were retired with the review-loop rework, so
+ * resolution (models/objectives) lives server-side at run time — profiles
+ * are the executable reviewer personas today.
+ */
+const BUILTIN_REVIEWER_CATALOG: ReadonlyArray<{ readonly id: string; readonly label: string }> = [
+  { id: 'generic', label: 'Generic' },
+  { id: 'security', label: 'Security' },
+  { id: 'quality', label: 'Quality' },
+  { id: 'technical', label: 'Technical' },
+  { id: 'guidelines', label: 'Guidelines' },
+  { id: 'style', label: 'Style' },
+  { id: 'linguist', label: 'Linguist' },
+];
+
 interface PresetSummary {
   readonly name: string;
-  /** 'loop' or 'workflow'; undefined for legacy files (loops) or invalid files. */
-  readonly type?: 'loop' | 'workflow';
+  /** 'loop' or 'pipeline'; undefined for legacy files (loops) or invalid files. */
+  readonly type?: 'loop' | 'pipeline';
   readonly config?: unknown;
   readonly error?: string;
 }
@@ -928,7 +941,13 @@ const listPresets = async (cwd: string): Promise<PresetSummary[]> => {
     try {
       const raw = await readFile(presetFilePath(cwd, name), 'utf8');
       const preset = Schema.decodeSync(ReviewPresetFromJson)(raw);
-      results.push({ name, type: preset.type, config: preset.config });
+      // Legacy 'workflow' files are pipelines — normalize so the UI only
+      // ever sees 'loop' | 'pipeline'.
+      results.push({
+        name,
+        type: preset.type === 'workflow' ? 'pipeline' : preset.type,
+        config: preset.config,
+      });
     } catch (error) {
       results.push({ name, error: error instanceof Error ? error.message : String(error) });
     }
@@ -947,7 +966,9 @@ const writePresetFile = async (
   }
   const bodyObj =
     typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
-  const type: 'loop' | 'workflow' = bodyObj.type === 'workflow' ? 'workflow' : 'loop';
+  // Legacy clients may still POST 'workflow' — normalize to 'pipeline'.
+  const type: 'loop' | 'pipeline' =
+    bodyObj.type === 'workflow' || bodyObj.type === 'pipeline' ? 'pipeline' : 'loop';
   const preset = { version: 1 as const, type, name, config: bodyObj.config };
   try {
     Schema.decodeUnknownSync(ReviewPresetSchema)(preset);
@@ -1070,11 +1091,9 @@ async function main(): Promise<void> {
         return;
       }
 
-      // Builtin reviewer catalog (for the create-preset form).
+      // Builtin reviewer catalog (for rendering `builtin` preset references).
       if (pathname === '/api/reviewers' && req.method === 'GET') {
-        sendJson(200, {
-          builtins: Object.values(BUILTIN_REVIEWERS).map((r) => ({ id: r.id, label: r.label })),
-        });
+        sendJson(200, { builtins: BUILTIN_REVIEWER_CATALOG });
         return;
       }
 
@@ -1184,77 +1203,6 @@ async function main(): Promise<void> {
         workspaces.delete(wsId);
         await persistWorkspaces();
         sendJson(200, { ok: true });
-        return;
-      }
-
-      // Presets — keyed by workspace id; the router maps workspace → path.
-      // GET  /api/workspaces/<id>/presets                  → list
-      // GET  /api/workspaces/<id>/presets/<name>.json      → read one
-      // POST /api/workspaces/<id>/presets/<name>.json      → create/overwrite
-      // DELETE /api/workspaces/<id>/presets/<name>.json    → delete
-      const presetList = pathname.match(/^\/api\/workspaces\/([^/]+)\/presets$/);
-      const presetFile = pathname.match(/^\/api\/workspaces\/([^/]+)\/presets\/([^/]+)$/);
-
-      const resolvePresetCwd = (id: string): string | undefined => workspacePath(id);
-
-      if (presetList) {
-        const wsId = decodeURIComponent(presetList[1] ?? '');
-        const cwd = resolvePresetCwd(wsId);
-        if (cwd === undefined) {
-          sendJson(404, { error: `Unknown workspace '${wsId}'` });
-          return;
-        }
-        if (req.method === 'GET') {
-          sendJson(200, { presets: await listPresets(cwd) });
-          return;
-        }
-        sendJson(405, { error: 'Method not allowed' });
-        return;
-      }
-
-      if (presetFile) {
-        const wsId = decodeURIComponent(presetFile[1] ?? '');
-        const name = decodeURIComponent(presetFile[2] ?? '').replace(/\.json$/, '');
-        const cwd = resolvePresetCwd(wsId);
-        if (cwd === undefined) {
-          sendJson(404, { error: `Unknown workspace '${wsId}'` });
-          return;
-        }
-        if (req.method === 'GET') {
-          const raw = await readPresetFile(cwd, name);
-          if (raw === null) {
-            sendJson(404, { error: 'Preset not found' });
-            return;
-          }
-          res.writeHead(200, { 'content-type': 'application/json' });
-          res.end(raw);
-          return;
-        }
-        if (req.method === 'POST') {
-          const body = await readJsonBody(req).catch(() => undefined);
-          if (body === undefined) {
-            sendJson(400, { error: 'Invalid JSON body' });
-            return;
-          }
-          // Distinguish create vs update for the cross-tab broadcast.
-          const existed = await readPresetFile(cwd, name).then((raw) => raw !== null).catch(() => false);
-          const result = await writePresetFile(cwd, name, body);
-          if (result.ok) {
-            broadcastPresetChanged(cwd, wsId, name, existed ? 'updated' : 'created');
-            sendJson(200, { ok: true, name });
-            return;
-          }
-          sendJson(400, { error: result.error });
-          return;
-        }
-        if (req.method === 'DELETE') {
-          const existed = await readPresetFile(cwd, name).then((raw) => raw !== null).catch(() => false);
-          await deletePresetFile(cwd, name);
-          if (existed) broadcastPresetChanged(cwd, wsId, name, 'deleted');
-          sendJson(200, { ok: true });
-          return;
-        }
-        sendJson(405, { error: 'Method not allowed' });
         return;
       }
 
@@ -1389,6 +1337,75 @@ async function main(): Promise<void> {
           return;
         }
         sendJson(200, { profiles: await listProfiles(cwd) });
+        return;
+      }
+
+      // Presets — keyed by workspace id; the router maps workspace → path.
+      // GET  /api/workspaces/<id>/presets                  → list
+      // GET  /api/workspaces/<id>/presets/<name>.json      → read one
+      // POST /api/workspaces/<id>/presets/<name>.json      → create/overwrite
+      // DELETE /api/workspaces/<id>/presets/<name>.json    → delete
+      const presetList = pathname.match(/^\/api\/workspaces\/([^/]+)\/presets$/);
+      const presetFile = pathname.match(/^\/api\/workspaces\/([^/]+)\/presets\/([^/]+)$/);
+
+      if (presetList) {
+        const wsId = decodeURIComponent(presetList[1] ?? '');
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (req.method === 'GET') {
+          sendJson(200, { presets: await listPresets(cwd) });
+          return;
+        }
+        sendJson(405, { error: 'Method not allowed' });
+        return;
+      }
+
+      if (presetFile) {
+        const wsId = decodeURIComponent(presetFile[1] ?? '');
+        const name = decodeURIComponent(presetFile[2] ?? '').replace(/\.json$/, '');
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (req.method === 'GET') {
+          const raw = await readPresetFile(cwd, name);
+          if (raw === null) {
+            sendJson(404, { error: 'Preset not found' });
+            return;
+          }
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(raw);
+          return;
+        }
+        if (req.method === 'POST') {
+          const body = await readJsonBody(req).catch(() => undefined);
+          if (body === undefined) {
+            sendJson(400, { error: 'Invalid JSON body' });
+            return;
+          }
+          // Distinguish create vs update for the cross-tab broadcast.
+          const existed = await readPresetFile(cwd, name).then((raw) => raw !== null).catch(() => false);
+          const result = await writePresetFile(cwd, name, body);
+          if (result.ok) {
+            broadcastPresetChanged(cwd, wsId, name, existed ? 'updated' : 'created');
+            sendJson(200, { ok: true, name });
+            return;
+          }
+          sendJson(400, { error: result.error });
+          return;
+        }
+        if (req.method === 'DELETE') {
+          const existed = await readPresetFile(cwd, name).then((raw) => raw !== null).catch(() => false);
+          await deletePresetFile(cwd, name);
+          if (existed) broadcastPresetChanged(cwd, wsId, name, 'deleted');
+          sendJson(200, { ok: true });
+          return;
+        }
+        sendJson(405, { error: 'Method not allowed' });
         return;
       }
 
@@ -1630,9 +1647,6 @@ async function main(): Promise<void> {
     for (const [folder, hello] of cachedHello) {
       socket.send(JSON.stringify({ type: 'hello', folder, hello } satisfies RouterToBrowser));
     }
-    for (const [folder, state] of cachedLoop) {
-      socket.send(JSON.stringify({ type: 'loopState', folder, state } satisfies RouterToBrowser));
-    }
     // Agentic skill runs: cached transcripts so a reload / late-joining tab
     // can recover a run even after the owning backend disconnected.
     for (const [runId, run] of cachedRuns) {
@@ -1824,6 +1838,7 @@ async function main(): Promise<void> {
         // browser directly (the run page shows this instead of hanging).
         if (
           (command.type === 'skillAgentic' ||
+            command.type === 'profileAgentic' ||
             command.type === 'presetAgentic' ||
             command.type === 'textAgentic') &&
           typeof command.runId === 'string'

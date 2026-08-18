@@ -31,9 +31,10 @@ import {
   UsersRound,
   Workflow,
   Wrench,
+  X,
   type LucideIcon,
 } from 'lucide-react'
-import type { PresetReviewerRef, PresetWorkflowConfig, PresetWorkflowStep } from '@/protocol'
+import type { PresetReviewerRef, PresetStepConfig, PresetWorkflowConfig, PresetWorkflowStep } from '@/protocol'
 import { ReviewerPicker } from '@/components/ReviewerPicker'
 import { ModelSelect } from '@/components/ModelSelect'
 import { InfoTip } from '@/components/ui/tooltip'
@@ -46,17 +47,24 @@ import {
   groupReviewerRef,
   insertStepAt,
   isGroupStep,
+  isModelStep,
   moveStep,
   nodeKindOf,
   removeReviewerFromGroup,
   removeStepAt,
   setGroupReviewer,
+  setGroupReviewerFallbackModel,
   setGroupReviewerModel,
   setGroupReviewerPrompt,
+  setStepConcurrency,
+  setStepFallbackModel,
+  setStepModel,
   setStepReviewer,
+  setStepReviewerFallbackModel,
   setStepReviewerModel,
   stepError,
   updateStep,
+  type WorkflowNodeKind,
 } from '@/lib/workflow'
 
 /** Id of the canvas droppable (drop here = append at the end). */
@@ -81,21 +89,34 @@ const KIND_ICONS: Record<string, LucideIcon> = {
 const kindIcon = (kind: string): LucideIcon => KIND_ICONS[kind] ?? Workflow
 
 interface WorkflowEditorProps {
-  value: PresetWorkflowConfig
-  onChange: (config: PresetWorkflowConfig) => void
+  value: PresetStepConfig
+  onChange: (config: PresetStepConfig) => void
   /** For the reviewer picklist (workspace profiles). */
   workspaceId: string
   conn: 'connecting' | 'open' | 'closed'
+  /** Node vocabulary for the palette — defaults to the pipeline kinds. */
+  kinds?: readonly WorkflowNodeKind[]
+  /** Show the pipeline title/prompt header (hidden for loops, which have their own controls). */
+  showHeader?: boolean
 }
 
 /**
- * Visual stage-pipeline editor for WORKFLOW presets: a draggable node palette
- * on the right, a vertical stage list on the left. Drag a palette node onto
- * the canvas (append) or onto a row (insert after it); drag rows to reorder;
- * edit each step's label and params JSON inline. Steps are stored as the
- * schema's free-form `steps` array — nothing is lost for hand-written kinds.
+ * Visual stage-pipeline editor shared by PIPELINE and LOOP presets: a
+ * draggable node palette on the right, a vertical stage list on the left.
+ * Drag a palette node onto the canvas (append) or onto a row (insert after
+ * it); drag rows to reorder; edit each step's fields inline. Steps are stored
+ * as the schema's free-form `steps` array — nothing is lost for hand-written
+ * kinds. The palette comes from `kinds` (pipeline vocabulary by default,
+ * loop vocabulary for loops).
  */
-export function WorkflowEditor({ value, onChange, workspaceId, conn }: WorkflowEditorProps) {
+export function WorkflowEditor({
+  value,
+  onChange,
+  workspaceId,
+  conn,
+  kinds = WORKFLOW_NODE_KINDS,
+  showHeader = true,
+}: WorkflowEditorProps) {
   const steps = value.steps
   const [overlayKind, setOverlayKind] = useState<string | null>(null)
   // Set while a drag is in flight — the browser still fires a `click` on the
@@ -171,43 +192,47 @@ export function WorkflowEditor({ value, onChange, workspaceId, conn }: WorkflowE
       <div className="flex gap-4">
         {/* Canvas — vertical stage list */}
         <div className="min-w-0 flex-1">
-          <div className="mb-3 flex flex-col gap-2">
-            <div>
-              <div className="mb-1 flex items-center gap-1">
-                <label className="text-xs font-medium text-muted-foreground">Title</label>
-                <InfoTip text="Short name for this workflow — shown in list and detail views." />
+          {showHeader && (
+            <div className="mb-3 flex flex-col gap-2">
+              <div>
+                <div className="mb-1 flex items-center gap-1">
+                  <label className="text-xs font-medium text-muted-foreground">Title</label>
+                  <InfoTip text="Short name for this pipeline — shown in list and detail views." />
+                </div>
+                <input
+                  autoComplete="off"
+                  value={(value as PresetWorkflowConfig).description ?? ''}
+                  onChange={(event) =>
+                    onChange({
+                      ...value,
+                      description: event.target.value === '' ? undefined : event.target.value,
+                    } as PresetWorkflowConfig)
+                  }
+                  placeholder="e.g. Security review"
+                  className="w-full rounded-md border border-input bg-transparent px-2 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                />
               </div>
-              <input
-                value={value.description ?? ''}
-                onChange={(event) =>
-                  onChange({
-                    ...value,
-                    description: event.target.value === '' ? undefined : event.target.value,
-                  })
-                }
-                placeholder="e.g. Security review"
-                className="w-full rounded-md border border-input bg-transparent px-2 py-1.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
-            </div>
-            <div>
-              <div className="mb-1 flex items-center gap-1">
-                <label className="text-xs font-medium text-muted-foreground">Prompt</label>
-                <InfoTip text="Global prompt — injected into every agent run in this workflow. Put repo-wide rules or constraints that every agent must follow here." />
+              <div>
+                <div className="mb-1 flex items-center gap-1">
+                  <label className="text-xs font-medium text-muted-foreground">Prompt</label>
+                  <InfoTip text="Global prompt — injected into every agent run in this pipeline. Put repo-wide rules or constraints that every agent must follow here." />
+                </div>
+                <textarea
+                  autoComplete="off"
+                  value={(value as PresetWorkflowConfig).prompt ?? ''}
+                  onChange={(event) =>
+                    onChange({
+                      ...value,
+                      prompt: event.target.value === '' ? undefined : event.target.value,
+                    } as PresetWorkflowConfig)
+                  }
+                  placeholder="Global prompt — given to every agent in this pipeline"
+                  rows={2}
+                  className="w-full resize-y rounded-md border border-input bg-transparent px-2 py-1.5 text-xs leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                />
               </div>
-              <textarea
-                value={value.prompt ?? ''}
-                onChange={(event) =>
-                  onChange({
-                    ...value,
-                    prompt: event.target.value === '' ? undefined : event.target.value,
-                  })
-                }
-                placeholder="Global prompt — given to every agent in this workflow"
-                rows={2}
-                className="w-full resize-y rounded-md border border-input bg-transparent px-2 py-1.5 text-xs leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
             </div>
-          </div>
+          )}
           <CanvasDropZone isEmpty={steps.length === 0}>
             <SortableContext items={steps.map((s) => rowId(s.id))} strategy={verticalListSortingStrategy}>
               <ol className="flex flex-col gap-2">
@@ -224,11 +249,17 @@ export function WorkflowEditor({ value, onChange, workspaceId, conn }: WorkflowE
                     onChangeReviewerModel={(model) =>
                       commit(setStepReviewerModel(steps, index, model))
                     }
+                    onChangeReviewerFallbackModel={(fallbackModel) =>
+                      commit(setStepReviewerFallbackModel(steps, index, fallbackModel))
+                    }
                     onChangeReviewerAt={(reviewerIndex, ref) =>
                       commit(setGroupReviewer(steps, index, reviewerIndex, ref))
                     }
                     onChangeReviewerModelAt={(reviewerIndex, model) =>
                       commit(setGroupReviewerModel(steps, index, reviewerIndex, model))
+                    }
+                    onChangeReviewerFallbackModelAt={(reviewerIndex, fallbackModel) =>
+                      commit(setGroupReviewerFallbackModel(steps, index, reviewerIndex, fallbackModel))
                     }
                     onChangeReviewerPrompt={(reviewerIndex, prompt) =>
                       commit(setGroupReviewerPrompt(steps, index, reviewerIndex, prompt))
@@ -238,6 +269,13 @@ export function WorkflowEditor({ value, onChange, workspaceId, conn }: WorkflowE
                     }
                     onAddReviewer={(ref) =>
                       commit(addReviewerToGroup(steps, index, ref))
+                    }
+                    onChangeModel={(model) => commit(setStepModel(steps, index, model))}
+                    onChangeFallbackModel={(fallbackModel) =>
+                      commit(setStepFallbackModel(steps, index, fallbackModel))
+                    }
+                    onChangeConcurrency={(concurrency) =>
+                      commit(setStepConcurrency(steps, index, concurrency))
                     }
                   />
                 ))}
@@ -257,7 +295,7 @@ export function WorkflowEditor({ value, onChange, workspaceId, conn }: WorkflowE
             Drag onto the canvas, or click to append.
           </p>
           <div className="flex flex-col gap-1.5">
-            {WORKFLOW_NODE_KINDS.map((node) => (
+            {kinds.map((node) => (
               <PaletteChip
                 key={node.kind}
                 kind={node.kind}
@@ -311,9 +349,14 @@ function StepRow({
   onChangeReviewerAt,
   onChangeReviewerModel,
   onChangeReviewerModelAt,
+  onChangeReviewerFallbackModel,
+  onChangeReviewerFallbackModelAt,
   onRemoveReviewer,
   onChangeReviewerPrompt,
   onAddReviewer,
+  onChangeModel,
+  onChangeFallbackModel,
+  onChangeConcurrency,
 }: {
   step: PresetWorkflowStep
   index: number
@@ -325,9 +368,17 @@ function StepRow({
   onChangeReviewerAt?: (reviewerIndex: number, ref: PresetReviewerRef) => void
   onChangeReviewerModel?: (model: string | undefined) => void
   onChangeReviewerModelAt?: (reviewerIndex: number, model: string | undefined) => void
+  onChangeReviewerFallbackModel?: (fallbackModel: string | undefined) => void
+  onChangeReviewerFallbackModelAt?: (reviewerIndex: number, fallbackModel: string | undefined) => void
   onRemoveReviewer?: (reviewerIndex: number) => void
   onChangeReviewerPrompt?: (reviewerIndex: number, prompt: string | undefined) => void
   onAddReviewer: (ref: PresetReviewerRef) => void
+  /** Model for aggregation / fixers / human steps. */
+  onChangeModel?: (model: string | undefined) => void
+  /** Fallback model for aggregation / fixers / human steps. */
+  onChangeFallbackModel?: (model: string | undefined) => void
+  /** Concurrency for reviewer-group / fixers steps. */
+  onChangeConcurrency?: (concurrency: number | undefined) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } =
     useSortable({
@@ -395,7 +446,6 @@ function StepRow({
         <span className="w-16 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           {node?.label ?? step.kind}
         </span>
-        <span className="font-mono text-[10px] text-muted-foreground/60">#{index + 1}</span>
 
         {error !== null && (
           <span className="truncate text-[10px] font-medium text-rose-400 dark:text-rose-300">
@@ -450,6 +500,13 @@ function StepRow({
                   value={step.reviewer.model ?? null}
                   onChange={(model) => onChangeReviewerModel?.(model === null ? undefined : model)}
                 />
+                <FallbackModelsPicker
+                  conn={conn}
+                  value={step.reviewer.fallbackModel}
+                  onChange={(model) => onChangeReviewerFallbackModel?.(model)}
+                  primary={step.reviewer.model}
+                  label="Fallback reviewer models"
+                />
               </div>
             )}
             <div>
@@ -458,6 +515,7 @@ function StepRow({
                 <InfoTip text="Optional extra instructions for this reviewer — appended to its task." />
               </div>
               <textarea
+                autoComplete="off"
                 value={step.prompt ?? ''}
                 onChange={(event) =>
                   onUpdate({ prompt: event.target.value === '' ? undefined : event.target.value })
@@ -472,6 +530,7 @@ function StepRow({
 
         {step.kind !== 'reviewer' && (
           <input
+            autoComplete="off"
             value={step.label ?? ''}
             onChange={(event) =>
               onUpdate({ label: event.target.value === '' ? undefined : event.target.value })
@@ -479,6 +538,62 @@ function StepRow({
             placeholder={`${node?.label ?? step.kind} label`}
             className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:bg-muted/40"
           />
+        )}
+
+        {isModelStep(step) && (
+          <div className="flex w-full flex-col gap-2">
+            <div>
+              <div className="mb-1 flex items-center gap-1">
+                <label className="text-xs font-medium text-muted-foreground">Model</label>
+                <InfoTip text="Model that runs this step. Defaults to the model selected in the header." />
+              </div>
+              <ModelSelect
+                conn={conn}
+                value={step.model ?? null}
+                onChange={(model) => onChangeModel?.(model === null ? undefined : model)}
+              />
+              <FallbackModelsPicker
+                conn={conn}
+                value={step.fallbackModel}
+                onChange={(model) => onChangeFallbackModel?.(model)}
+                primary={step.model}
+                label={
+                  step.kind === 'fixers'
+                    ? 'Fallback fixer models'
+                    : step.kind === 'human'
+                      ? 'Fallback human models'
+                      : 'Fallback aggregation models'
+                }
+              />
+            </div>
+            {step.kind === 'fixers' && (
+              <ConcurrencyField
+                value={step.concurrency}
+                onChange={(concurrency) => onChangeConcurrency?.(concurrency)}
+                hint="How many fixers run in parallel (fan-out). Omitted = sequential."
+              />
+            )}
+            {step.kind === 'human' && (
+              <div>
+                <div className="mb-1 flex items-center gap-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Prompt <span className="text-rose-400">(required)</span>
+                  </label>
+                  <InfoTip text="What to present to the user — the aggregated findings, the decision being asked, and the question to answer." />
+                </div>
+                <textarea
+                  autoComplete="off"
+                  value={step.prompt ?? ''}
+                  onChange={(event) =>
+                    onUpdate({ prompt: event.target.value === '' ? undefined : event.target.value })
+                  }
+                  placeholder="Present the open findings to the user and ask: …"
+                  rows={3}
+                  className="w-full resize-y rounded border border-transparent bg-transparent px-1 py-1 text-xs leading-relaxed outline-none transition-colors placeholder:text-muted-foreground/50 focus-visible:border-ring focus-visible:bg-muted/40"
+                />
+              </div>
+            )}
+          </div>
         )}
 
         {isGroupStep(step) && (
@@ -525,6 +640,13 @@ function StepRow({
                             onChangeReviewerModelAt?.(reviewerIndex, model === null ? undefined : model)
                           }
                         />
+                        <FallbackModelsPicker
+                          conn={conn}
+                          value={groupReviewerRef(entry).fallbackModel}
+                          onChange={(model) => onChangeReviewerFallbackModelAt?.(reviewerIndex, model)}
+                          primary={groupReviewerRef(entry).model}
+                          label="Fallback reviewer models"
+                        />
                       </div>
                       <div>
                         <div className="mb-1 flex items-center gap-1">
@@ -532,6 +654,7 @@ function StepRow({
                           <InfoTip text="Optional extra instructions for this reviewer — appended to its task." />
                         </div>
                         <textarea
+                          autoComplete="off"
                           value={groupReviewerPrompt(entry) ?? ''}
                           onChange={(event) =>
                             onChangeReviewerPrompt?.(
@@ -549,7 +672,7 @@ function StepRow({
                 ))}
               </ol>
             )}
-            {/* Add one to the end — opens the picker. */}
+            {/* Add one to the end — opens the picker (kept right under the roster). */}
             <div>
               <ReviewerPicker
                 variant="icon"
@@ -558,6 +681,31 @@ function StepRow({
                 value={undefined}
                 onChange={(ref) => onAddReviewer(ref)}
                 title="Add a reviewer to the end"
+              />
+            </div>
+            <ConcurrencyField
+              value={step.concurrency}
+              onChange={(concurrency) => onChangeConcurrency?.(concurrency)}
+              hint="How many group reviewers run in parallel (fan-out). Omitted = sequential."
+            />
+            <div>
+              <div className="mb-1 flex items-center gap-1">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Aggregation model
+                </label>
+                <InfoTip text="Model that aggregates this group's reviews into the canonical review — the aggregation step always runs after the group." />
+              </div>
+              <ModelSelect
+                conn={conn}
+                value={step.model ?? null}
+                onChange={(model) => onChangeModel?.(model === null ? undefined : model)}
+              />
+              <FallbackModelsPicker
+                conn={conn}
+                value={step.fallbackModel}
+                onChange={(model) => onChangeFallbackModel?.(model)}
+                primary={step.model}
+                label="Fallback aggregation models"
               />
             </div>
           </div>
@@ -570,6 +718,7 @@ function StepRow({
         {paramsOpen && (
           <div>
             <textarea
+              autoComplete="off"
               value={paramsDraft}
               onChange={(event) => setParamsDraft(event.target.value)}
               onBlur={commitParams}
@@ -629,6 +778,109 @@ function PalettePreview({ kind }: { kind: string }) {
         <Icon className="size-3" />
       </span>
       <span className="min-w-0 flex-1 truncate font-medium">{node?.label ?? kind}</span>
+    </div>
+  )
+}
+
+/** Small concurrency input for reviewer-group / fixers steps. */
+function ConcurrencyField({
+  value,
+  onChange,
+  hint,
+}: {
+  value: number | undefined
+  onChange: (concurrency: number | undefined) => void
+  hint: string
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center gap-1">
+        <label className="text-xs font-medium text-muted-foreground">Concurrency</label>
+        <InfoTip text={hint} />
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          min={1}
+          autoComplete="off"
+          value={value === undefined ? '' : value}
+          onChange={(event) => {
+            const raw = event.target.value
+            if (raw === '') {
+              onChange(undefined)
+              return
+            }
+            onChange(Math.max(1, Math.trunc(Number(raw) || 1)))
+          }}
+          placeholder="1 (sequential)"
+          className="w-40 rounded-md border border-input bg-transparent px-2 py-1.5 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        />
+        <span className="text-[10px] text-muted-foreground/60">agents in parallel</span>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Single optional fallback model. Flow: a dashed "Add fallback" button →
+ * pressing it opens the model dropdown (autoOpen) → picking sets the model →
+ * the row shows the selected model picker (click to change) plus a Remove
+ * button next to the label. No auto-picking — the user always chooses.
+ */
+function FallbackModelsPicker({
+  conn,
+  value,
+  onChange,
+  primary,
+  label = 'Fallback models',
+}: {
+  conn: 'connecting' | 'open' | 'closed'
+  value: string | undefined
+  onChange: (model: string | undefined) => void
+  /** The step's primary model — excluded from fallbacks so a model can't back up itself. */
+  primary?: string
+  /** Descriptive label, e.g. "Fallback aggregation models". */
+  label?: string
+}) {
+  const [adding, setAdding] = useState(false)
+  const set = (model: string | null): void => {
+    setAdding(false)
+    if (model !== null) onChange(model)
+  }
+
+  return (
+    <div className="mt-2">
+      <div className="mb-1 flex items-center gap-1">
+        <label className="text-xs font-medium text-muted-foreground">
+          {label} <span className="font-normal text-muted-foreground/50">(optional)</span>
+        </label>
+        <InfoTip text="Fallback tried if the primary model fails. A fallback can't be the same as the primary model. Optional — omitted means no fallback." />
+        {value !== undefined && (
+          <button
+            type="button"
+            onClick={() => onChange(undefined)}
+            title="Remove fallback model"
+            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-input px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:border-red-500/40 hover:text-red-500"
+          >
+            <X className="size-3" />
+            Remove
+          </button>
+        )}
+      </div>
+      {adding ? (
+        <ModelSelect conn={conn} value={null} onChange={set} hideDefault exclude={primary} autoOpen />
+      ) : value !== undefined ? (
+        <ModelSelect conn={conn} value={value} onChange={(model) => onChange(model === null ? undefined : model)} hideDefault exclude={primary} />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="inline-flex items-center gap-1 rounded-md border border-dashed border-input px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+        >
+          <Plus className="size-3" />
+          Add fallback
+        </button>
+      )}
     </div>
   )
 }

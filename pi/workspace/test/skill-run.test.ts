@@ -1,9 +1,7 @@
 import { test, expect, describe } from 'vitest';
 import {
   isAwaitingAnswer,
-  PRESET_AUTHOR_SYSTEM,
   PROFILE_AUTHOR_SYSTEM,
-  wrapPresetPrompt,
   wrapProfilePrompt,
   wrapSkillPrompt,
 } from '../skill-run';
@@ -102,32 +100,5 @@ describe('wrapProfilePrompt', () => {
     expect(PROFILE_AUTHOR_SYSTEM.toLowerCase()).toContain(
       'do not touch anything outside .agents/@montflow/profiles/',
     );
-  });
-});
-
-describe('wrapPresetPrompt', () => {
-  test('targets a new preset when no name is given', () => {
-    const prompt = wrapPresetPrompt('A security-focused setup with two reviewers.');
-    expect(prompt).toContain('Create a new preset');
-    expect(prompt).toContain('A security-focused setup with two reviewers.');
-  });
-
-  test('targets the existing file for modify runs', () => {
-    const prompt = wrapPresetPrompt('Add a quality reviewer.', 'security-audit');
-    expect(prompt).toContain("Modify the existing preset 'security-audit'");
-    expect(prompt).toContain('.agents/@montflow/review-presets/security-audit.json');
-    expect(prompt).toContain('Add a quality reviewer.');
-  });
-
-  test('empty preset names fall back to create mode', () => {
-    expect(wrapPresetPrompt('x', '  ')).toContain('Create a new preset');
-  });
-
-  test('the authoring system prompt pins the schema essentials', () => {
-    expect(PRESET_AUTHOR_SYSTEM).toContain('"version": 1');
-    expect(PRESET_AUTHOR_SYSTEM).toContain('reviewers');
-    expect(PRESET_AUTHOR_SYSTEM).toContain('builtin');
-    expect(PRESET_AUTHOR_SYSTEM).toContain('flipThreshold');
-    expect(PRESET_AUTHOR_SYSTEM.toLowerCase()).toContain('only write inside .agents/@montflow/review-presets/');
   });
 });

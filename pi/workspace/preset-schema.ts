@@ -10,10 +10,11 @@ import { Schema } from 'effect';
  * time, so presets stay small, portable, and never go stale when a profile
  * changes.
  *
- * A preset is either a `loop` (the classic review loop — supervisor,
- * reviewers, fixers, loops×cycles, deadlock) or a `workflow` (open-ended step
- * pipeline — schematized but not yet executable). Legacy files without a
- * `type` field decode as loops.
+ * A preset is either a `loop` (a step pipeline with the loop vocabulary —
+ * reviewer groups/singles, fixers, human interruptor — plus loops×cycles and
+ * deadlock) or a `pipeline` (open-ended step pipeline — schematized but not
+ * yet executable; legacy files stored it as `workflow`). Legacy files
+ * without a `type` field decode as loops.
  *
  * ```json
  * {
@@ -21,12 +22,17 @@ import { Schema } from 'effect';
  *   "name": "security-audit",
  *   "type": "loop",
  *   "config": {
- *     "reviewers": [
- *       { "type": "builtin", "id": "generic" },
- *       { "type": "profile", "name": "security-auditor", "model": "anthropic/claude-sonnet-4-5" }
+ *     "steps": [
+ *       { "id": "s1", "kind": "reviewer-group", "label": "Reviewers", "concurrency": 3,
+ *         "model": "deepseek-v4-pro",
+ *         "reviewers": [
+ *           { "type": "builtin", "id": "generic" },
+ *           { "type": "profile", "name": "security-auditor", "model": "anthropic/claude-sonnet-4-5" }
+ *         ] },
+ *       { "id": "s2", "kind": "fixers", "label": "Fix", "model": "deepseek-v4-flash-free", "concurrency": 2 },
+ *       { "id": "s3", "kind": "human", "label": "Ask the user", "model": "deepseek-v4-pro",
+ *         "prompt": "Present the open findings and ask which to escalate" }
  *     ],
- *     "supervisor": { "model": "deepseek-v4-pro" },
- *     "fixerModel": "deepseek-v4-flash-free",
  *     "maxLoops": 5,
  *     "deadlock": { "flipThreshold": 2, "action": "escalate" }
  *   }
@@ -65,18 +71,9 @@ export const ReviewerRefSchema = Schema.Struct({
   name: Schema.optional(Schema.String),
   /** Model override; omitted = default/preferred model. */
   model: Schema.optional(Schema.String),
-  /** Optional ordered fallback models tried after `model` fails. */
-  fallbackModels: Schema.optional(Schema.Array(Schema.String)),
+  /** Single fallback model tried after `model` fails. */
+  fallbackModel: Schema.optional(Schema.String),
   /** Optional extended-thinking level override for this reviewer. */
-  thinkingLevel: Schema.optional(ThinkingLevelSchema),
-});
-
-/** Supervisor reference: the model (and optional thinking level) — the skill path is always the bundled one. */
-export const PresetSupervisorSchema = Schema.Struct({
-  model: Schema.String,
-  /** Optional ordered fallback models tried after `model` fails. */
-  fallbackModels: Schema.optional(Schema.Array(Schema.String)),
-  /** Optional extended-thinking level for the supervisor's sessions. */
   thinkingLevel: Schema.optional(ThinkingLevelSchema),
 });
 
@@ -88,11 +85,12 @@ export const DeadlockConfigSchema = Schema.Struct({
 
 /**
  * Preset kind. `loop` is the classic review loop (supervisor + reviewers +
- * fixers, loops×cycles, deadlock) — the executable form today. `workflow` is
+ * fixers, loops×cycles, deadlock) — the executable form today. `pipeline` is
  * the open-ended successor (arbitrary step pipeline) — schematized but NOT
- * yet executable. Legacy preset files omit `type` entirely; they are loops.
+ * yet executable. Legacy preset files omit `type` entirely (loops), and
+ * legacy `workflow` files decode as pipelines.
  */
-export const PresetTypeSchema = Schema.Literals(['loop', 'workflow']);
+export const PresetTypeSchema = Schema.Literals(['loop', 'pipeline', 'workflow']);
 
 /**
  * One reviewer inside a reviewer-group roster: a reviewer reference plus an
@@ -108,11 +106,15 @@ export const WorkflowGroupReviewerSchema = Schema.Union([
   }),
 ]);
 
-/** One open-ended step in a workflow preset. Deliberately loose — workflows are not executable yet. */
+/** One open-ended step in a loop or pipeline preset. Deliberately loose — nothing is destroyed for hand-written kinds. */
 export const WorkflowStepSchema = Schema.Struct({
-  /** Stable step id within the workflow (e.g. `s1`). */
+  /** Stable step id within the pipeline (e.g. `s1`). */
   id: Schema.String,
-  /** Step kind — free-form for now (`reviewer`, `reviewer-group`, `human`, `fixer`, …). */
+  /**
+   * Step kind. Pipelines are free-form (`reviewer`, `reviewer-group`,
+   * `human`, `fixer`, …); loops use the loop vocabulary
+   * (`reviewer-group`, `reviewer`, `aggregation`, `fixers`, `human`).
+   */
   kind: Schema.String,
   /** Optional human label for the step. */
   label: Schema.optional(Schema.String),
@@ -129,12 +131,18 @@ export const WorkflowStepSchema = Schema.Struct({
    * name. A reviewer step without one is unconfigured (invalid until picked).
    */
   reviewer: Schema.optional(ReviewerRefSchema),
-  /** Optional extra instructions for this step (e.g. a reviewer's focus directive). */
+  /** Optional extra instructions for this step (e.g. a reviewer's focus directive, or the required human-interruptor prompt). */
   prompt: Schema.optional(Schema.String),
+  /** Model override for `aggregation` / `fixers` / `human` steps (loop). */
+  model: Schema.optional(Schema.String),
+  /** Single fallback model tried after `model` fails (loop steps). */
+  fallbackModel: Schema.optional(Schema.String),
+  /** Parallel agent count for `reviewer-group` / `fixers` steps (loop). */
+  concurrency: Schema.optional(Schema.Number),
 });
 
 /**
- * Open-ended workflow configuration. Workflows are NOT yet executable — the
+ * Open-ended pipeline configuration. Pipelines are NOT yet executable — the
  * schema is intentionally loose so the editor can evolve the node vocabulary
  * (kinds, params, later edges/conditions) without schema churn. `steps` is an
  * ordered list of free-form steps.
@@ -142,28 +150,23 @@ export const WorkflowStepSchema = Schema.Struct({
 export const PresetWorkflowConfigSchema = Schema.Struct({
   /** Optional one-line description shown in list/detail views. */
   description: Schema.optional(Schema.String),
-  /** Global prompt injected into EVERY agent run in this workflow. */
+  /** Global prompt injected into EVERY agent run in this pipeline. */
   prompt: Schema.optional(Schema.String),
   steps: Schema.Array(WorkflowStepSchema),
 });
 
-/** Stored loop configuration: reviewers are references, not expanded profiles. */
+/**
+ * Stored loop configuration: an ordered step pipeline with the loop
+ * vocabulary (`reviewer-group`, `reviewer`, `aggregation`, `fixers`,
+ * `human`), plus the loop-level execution controls (loops × cycles,
+ * deadlock). Reviewers inside steps are references, not expanded profiles.
+ */
 export const PresetLoopConfigSchema = Schema.Struct({
-  reviewers: Schema.Array(ReviewerRefSchema),
-  supervisor: PresetSupervisorSchema,
-  fixerModel: Schema.String,
-  /** Optional ordered fallback models tried after `fixerModel` fails. */
-  fixerFallbackModels: Schema.optional(Schema.Array(Schema.String)),
-  /** Optional extended-thinking level for every fixer session. */
-  fixerThinkingLevel: Schema.optional(ThinkingLevelSchema),
+  steps: Schema.Array(WorkflowStepSchema),
   /** Number of independent reviewer loops. */
   maxLoops: Schema.Number,
-  /** Optional for legacy presets; resolution defaults to the legacy maxLoops as the per-loop cycle cap. */
+  /** Cycles per loop; defaults to maxLoops for legacy presets. */
   maxCycles: Schema.optional(Schema.Number),
-  /** Optional for legacy presets; resolution defaults to 5. */
-  agentConcurrency: Schema.optional(Schema.Number),
-  /** Optional per-turn supervisor budget in ms; defaults to 20 minutes. */
-  supervisorTimeoutMs: Schema.optional(Schema.Number),
   deadlock: DeadlockConfigSchema,
 });
 
@@ -180,12 +183,12 @@ export const LoopPresetSchema = Schema.Struct({
   config: PresetLoopConfigSchema,
 });
 
-/** A stored WORKFLOW preset: an open-ended step pipeline (not yet executable). */
+/** A stored PIPELINE preset: an open-ended step pipeline (not yet executable). */
 export const WorkflowPresetSchema = Schema.Struct({
   version: Schema.Literal(1),
   name: Schema.String,
-  /** 'workflow' — required: a workflow file must declare its kind. */
-  type: Schema.Literal('workflow'),
+  /** 'pipeline' (current) or legacy 'workflow' — a pipeline file must declare its kind. */
+  type: Schema.Literals(['pipeline', 'workflow']),
   config: PresetWorkflowConfigSchema,
 });
 
@@ -210,36 +213,41 @@ export type ReviewPresetDecoded = Schema.Schema.Type<typeof ReviewPresetSchema>;
 /** Decoded (validated) shape of the stored reference-based config. */
 export type PresetLoopConfigDecoded = Schema.Schema.Type<typeof PresetLoopConfigSchema>;
 
-/** Decoded (validated) shape of an open-ended workflow config. */
+/** Decoded (validated) shape of an open-ended pipeline config. */
 export type PresetWorkflowConfigDecoded = Schema.Schema.Type<typeof PresetWorkflowConfigSchema>;
 
 /** Decoded (validated) shape of a single reviewer reference. */
 export type ReviewerRefDecoded = Schema.Schema.Type<typeof ReviewerRefSchema>;
 
-/** The effective preset kind: `loop` or `workflow`. */
-export type PresetType = 'loop' | 'workflow';
+/** The effective preset kind: `loop` or `pipeline`. */
+export type PresetType = 'loop' | 'pipeline';
+
+/** Raw stored kind — includes the legacy `workflow` value until files migrate. */
+export type PresetTypeStored = 'loop' | 'pipeline' | 'workflow';
 
 /**
- * Effective kind of a decoded preset — legacy files (no `type` field) are loops.
+ * Effective kind of a decoded preset — legacy files (no `type` field) are
+ * loops and legacy `workflow` files are pipelines.
  * @param {ReviewPresetDecoded} preset The decoded preset
  * @returns The effective preset kind
  */
-export const presetTypeOf = (preset: ReviewPresetDecoded): PresetType => preset.type ?? 'loop';
+export const presetTypeOf = (preset: ReviewPresetDecoded): PresetType =>
+  preset.type === 'workflow' ? 'pipeline' : (preset.type ?? 'loop');
 
-/** True when the preset is a loop (explicit `workflow` is the only non-loop). */
+/** True when the preset is a loop (pipeline is the only non-loop). */
 export const isLoopPreset = (preset: ReviewPresetDecoded): boolean =>
-  preset.type !== 'workflow';
+  preset.type !== 'workflow' && preset.type !== 'pipeline';
 
-/** True when the preset is a workflow. */
+/** True when the preset is a pipeline (explicit `pipeline`, or legacy `workflow`). */
 export const isWorkflowPreset = (preset: ReviewPresetDecoded): boolean =>
-  preset.type === 'workflow';
+  preset.type === 'workflow' || preset.type === 'pipeline';
 
-/** Narrowing guard: is this a loop config (has `reviewers`) rather than a workflow config? */
+/** Narrowing guard: is this a loop config (has `maxLoops`) rather than a pipeline config? */
 export const isLoopConfig = (
   config: PresetLoopConfigDecoded | PresetWorkflowConfigDecoded,
-): config is PresetLoopConfigDecoded => 'reviewers' in config;
+): config is PresetLoopConfigDecoded => 'maxLoops' in config;
 
-/** Narrowing guard: is this a workflow config (has `steps`) rather than a loop config? */
+/** Narrowing guard: is this a pipeline config (has `steps` but no `maxLoops`) rather than a loop config? */
 export const isWorkflowConfig = (
   config: PresetLoopConfigDecoded | PresetWorkflowConfigDecoded,
-): config is PresetWorkflowConfigDecoded => 'steps' in config;
+): config is PresetWorkflowConfigDecoded => 'steps' in config && !('maxLoops' in config);

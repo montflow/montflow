@@ -113,7 +113,9 @@ Rules:
 /**
  * System prompt: the agent authors ONE preset at
  * `.agents/@montflow/review-presets/<name>.json` (reference-based loop
- * config, not expanded profiles), then reports what it created/changed.
+ * config), then reports what it created. Loop presets are the config
+ * surface for the (being reworked) review loop — the agent writes JSON
+ * only, never executes anything.
  */
 export const PRESET_AUTHOR_SYSTEM = `You are a preset author for a montflow workspace.
 
@@ -125,12 +127,17 @@ this exact shape:
   "version": 1,
   "name": "security-audit",
   "config": {
-    "reviewers": [
-      { "type": "builtin", "id": "generic" },
-      { "type": "profile", "name": "security-auditor", "model": "anthropic/claude-sonnet-4-5" }
+    "steps": [
+      { "id": "s1", "kind": "reviewer-group", "label": "Reviewers", "concurrency": 3,
+        "model": "deepseek-v4-pro",
+        "reviewers": [
+          { "type": "builtin", "id": "generic" },
+          { "type": "profile", "name": "security-auditor", "model": "anthropic/claude-sonnet-4-5" }
+        ] },
+      { "id": "s2", "kind": "fixers", "label": "Fix", "model": "deepseek-v4-flash-free", "concurrency": 2 },
+      { "id": "s3", "kind": "human", "label": "Ask the user", "model": "deepseek-v4-pro",
+        "prompt": "Present the open findings and ask which to escalate" }
     ],
-    "supervisor": { "model": "deepseek-v4-pro" },
-    "fixerModel": "deepseek-v4-flash-free",
     "maxLoops": 5,
     "maxCycles": 3,
     "deadlock": { "flipThreshold": 2, "action": "escalate" }
@@ -139,21 +146,29 @@ this exact shape:
 
 Schema rules:
 - version must be 1; name must be kebab-case and match the file name.
-- reviewers: an array of references. type "builtin" uses the catalog id
-  (generic, security, quality, technical, guidelines, style, linguist);
-  type "profile" references an existing profile by name under
+- steps: an ordered array of steps. Each step has id ("s1", "s2", …) and
+  kind, plus an optional label.
+  - "reviewer-group": several reviewers in parallel; the aggregation step
+    always runs after the group, so the group carries the aggregation
+    model. Fields: reviewers (array of refs), model (aggregation model),
+    optional fallbackModel (a single model id tried after model),
+    optional concurrency (int > 0).
+  - "reviewer": one reviewer. Field reviewer: a single ref.
+  - "fixers": applies fixes. Field model: a model id string; optional
+    fallbackModel, optional concurrency (int > 0).
+  - "human": asks the user. Field model: a model id string; optional
+    fallbackModel; field prompt: REQUIRED — what to present to the user
+    and the question to answer.
+- Reviewer refs: type "builtin" uses the catalog id (generic, security,
+  quality, technical, guidelines, style, linguist); type "profile"
+  references an existing profile by name under
   .agents/@montflow/profiles/<name>/PROFILE.md — READ the profile dir to
   confirm it exists before referencing it. Each ref may optionally carry a
-  model override, fallbackModels array, and thinkingLevel
+  model override, fallbackModel (a single model id), and thinkingLevel
   (off|minimal|low|medium|high|xhigh|max).
-- supervisor: an object with model (always), optional fallbackModels and
-  thinkingLevel.
-- fixerModel: a model id string; optional fixerFallbackModels and
-  fixerThinkingLevel.
 - maxLoops: number of independent reviewer loops (int > 0);
   maxCycles: cycles per loop (int > 0, optional).
 - deadlock: { flipThreshold: int, action: "escalate" }.
-- Optional: agentConcurrency (int), supervisorTimeoutMs (int ms).
 
 Store REFERENCES only — never expand a profile's objective/skills into the
 preset. Everything derived is resolved from the source at use time.
@@ -340,23 +355,6 @@ export const createTextAgent = async (
 };
 
 /**
- * Wrap a preset request into an authoring prompt for the agent. When an
- * existing preset name is given, the prompt targets that file so a modify
- * run edits in place instead of creating a duplicate.
- */
-export const wrapPresetPrompt = (idea: string, presetName?: string): string => {
-  const target =
-    presetName !== undefined && presetName.trim() !== ''
-      ? `Modify the existing preset '${presetName.trim()}' at .agents/@montflow/review-presets/${presetName.trim()}.json — read it first, apply the change, and write the updated JSON back.`
-      : `Create a new preset in .agents/@montflow/review-presets/ — pick a kebab-case <name>.json that fits the request.`;
-  return `${target}
-
-Request: ${idea.trim()}
-
-Keep the stored JSON schema-exact and minimal. Ask me if anything is unclear.`;
-};
-
-/**
  * Wrap a text-generation request for the AI-input agent: the request plus a
  * reminder to answer with the bare text (no wrapping commentary).
  */
@@ -467,6 +465,21 @@ Keep it focused and well-structured. Ask me if anything is unclear.`;
  * skills in the dialog, they are pinned into the frontmatter template so
  * the agent includes exactly those (and no others).
  */
+/**
+ * Wrap a preset request into an authoring prompt for the agent. When an
+ * existing preset name is given, the prompt targets that file so a modify
+ * run edits in place instead of creating a duplicate.
+ */
+export const wrapPresetPrompt = (idea: string, presetName?: string): string => {
+  const target =
+    presetName !== undefined && presetName.trim() !== ''
+      ? `Modify the existing preset '${presetName.trim()}' at .agents/@montflow/review-presets/${presetName.trim()}.json — read it first, apply the change, and write the updated JSON back.`
+      : `Create a new preset in .agents/@montflow/review-presets/ — pick a kebab-case <name>.json that fits the request.`;
+  return `${target}
+
+User request: ${idea.trim()}`;
+};
+
 export const wrapProfilePrompt = (idea: string, profileName?: string, skills?: readonly string[]): string => {
   const target =
     profileName !== undefined && profileName.trim() !== ''

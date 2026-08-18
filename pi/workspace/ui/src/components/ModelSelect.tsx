@@ -9,19 +9,32 @@ interface ModelSelectProps {
   /** Per-run model id, or null to follow the header picker default. */
   value: string | null
   onChange: (value: string | null) => void
+  /** Hide the "Default (header picker)" row — for contexts where a concrete model is required (fallbacks). */
+  hideDefault?: boolean
+  /** A model id to exclude from the pickable list (e.g. the step's primary — a model can't back up itself). */
+  exclude?: string
+  /** Open the dropdown as soon as the component mounts (used by the fallback "Add" flow). */
+  autoOpen?: boolean
 }
 
 /** Estimated panel height — drives the open-upward decision in dialogs. */
 const PANEL_HEIGHT = 400
 
 /**
- * Searchable per-run model override for agentic dialogs (skill/preset/
- * profile creation & editing). Same UX as the header's ModelPicker — fuzzy
+ * Searchable per-run model override for agentic dialogs (skill/profile
+ * creation & editing). Same UX as the header's ModelPicker — fuzzy
  * search over ids and names, a "Default (header picker)" row, and the
  * session "current" badge. Picking a model here overrides the header picker
  * for this run only; picking "Default" (null) follows it.
  */
-export function ModelSelect({ conn, value, onChange }: ModelSelectProps) {
+export function ModelSelect({
+  conn,
+  value,
+  onChange,
+  hideDefault = false,
+  exclude,
+  autoOpen = false,
+}: ModelSelectProps) {
   const modelsQuery = useModels(conn)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -41,7 +54,10 @@ export function ModelSelect({ conn, value, onChange }: ModelSelectProps) {
   // The model that would actually run: the per-run override, else the
   // persisted header-picker selection, else the session's current model.
   const effectiveId = effectiveModelId(models, selected, value)
-  const selectedModel = models.find((model) => model.id === effectiveId) ?? null
+  // The excluded model is never shown as selected — a fallback can't be the
+  // same as the primary, so it must not look pre-picked either.
+  const selectedModel =
+    models.find((model) => model.id === effectiveId && model.id !== exclude) ?? null
 
   // Fuzzy search over the model id (with and without provider prefix) and the
   // display name — same pattern as the header picker and the other sections.
@@ -57,14 +73,19 @@ export function ModelSelect({ conn, value, onChange }: ModelSelectProps) {
 
   const matches = useMemo(() => {
     const trimmed = query.trim()
-    if (trimmed === '') return modelsQuery.data?.models ?? []
-    return fuse.search(trimmed).map((result) => result.item)
-  }, [modelsQuery.data?.models, fuse, query])
+    const base = trimmed === '' ? (modelsQuery.data?.models ?? []) : fuse.search(trimmed).map((result) => result.item)
+    return exclude === undefined ? base : base.filter((model) => model.id !== exclude)
+  }, [modelsQuery.data?.models, fuse, query, exclude])
 
   // Focus the search box whenever the dropdown opens.
   useEffect(() => {
     if (open) inputRef.current?.focus()
   }, [open])
+
+  // The fallback "Add" flow wants the dropdown open the moment it appears.
+  useEffect(() => {
+    if (autoOpen) setOpen(true)
+  }, [autoOpen])
 
   const close = (): void => {
     setOpen(false)
@@ -91,10 +112,12 @@ export function ModelSelect({ conn, value, onChange }: ModelSelectProps) {
         <Cpu className="size-3.5 shrink-0" />
         {selectedModel !== null ? (
           <span className="min-w-0 flex-1 truncate text-left font-mono">{selectedModel.id}</span>
+        ) : hideDefault ? (
+          <span className="min-w-0 flex-1 text-left">Pick a model…</span>
         ) : (
           <span className="min-w-0 flex-1 text-left">Default (header picker)</span>
         )}
-        {value === null && headerModelId !== null && (
+        {!hideDefault && value === null && headerModelId !== null && (
           <span className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">
             default
           </span>
@@ -151,26 +174,28 @@ export function ModelSelect({ conn, value, onChange }: ModelSelectProps) {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => pick(null)}
-              role="option"
-              aria-selected={value === null}
-              className="flex w-full items-center gap-2.5 border-b px-3 py-2 text-left transition-colors hover:bg-muted/50"
-            >
-              <span
-                className={`size-2 shrink-0 rounded-full ${value === null ? 'bg-primary' : 'bg-transparent ring-1 ring-border'}`}
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-medium">Default (header picker)</span>
-                {headerModelId !== null && (
-                  <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground">
-                    {headerModelId}
-                  </span>
-                )}
-              </span>
-              {value === null && <span className="text-[10px] font-semibold text-primary">✓</span>}
-            </button>
+            {!hideDefault && (
+              <button
+                type="button"
+                onClick={() => pick(null)}
+                role="option"
+                aria-selected={value === null}
+                className="flex w-full items-center gap-2.5 border-b px-3 py-2 text-left transition-colors hover:bg-muted/50"
+              >
+                <span
+                  className={`size-2 shrink-0 rounded-full ${value === null ? 'bg-primary' : 'bg-transparent ring-1 ring-border'}`}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-medium">Default (header picker)</span>
+                  {headerModelId !== null && (
+                    <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground">
+                      {headerModelId}
+                    </span>
+                  )}
+                </span>
+                {value === null && <span className="text-[10px] font-semibold text-primary">✓</span>}
+              </button>
+            )}
 
             {modelsQuery.isPending && modelsQuery.isFetching ? (
               <p className="flex items-center gap-2 px-3 py-4 text-xs text-muted-foreground">
@@ -183,7 +208,11 @@ export function ModelSelect({ conn, value, onChange }: ModelSelectProps) {
               </p>
             ) : matches.length === 0 ? (
               <p className="px-3 py-4 text-xs text-muted-foreground">
-                No models match your search.
+                {query.trim() !== ''
+                  ? 'No models match your search.'
+                  : exclude !== undefined
+                    ? 'No other models available — every pickable model is already the primary.'
+                    : 'No models available.'}
               </p>
             ) : (
               <ul id="model-select-list" className="max-h-72 overflow-y-auto py-1">

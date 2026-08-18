@@ -5,7 +5,7 @@ import type {
 } from '../protocol'
 
 /**
- * The node vocabulary the workflow palette offers. `kind` is what gets stored
+ * The node vocabulary the pipeline palette offers. `kind` is what gets stored
  * in `step.kind` — the schema is deliberately loose, so steps hand-written
  * with other kinds still render (as generic nodes) and are never destroyed.
  */
@@ -44,24 +44,78 @@ export const WORKFLOW_NODE_KINDS: readonly WorkflowNodeKind[] = [
   },
 ]
 
-/** Palette entry lookup by kind; undefined for unknown (hand-written) kinds. */
+/**
+ * The node vocabulary the LOOP palette offers. Same canvas as pipelines but
+ * loop-shaped: reviewer groups/singles (aggregation is part of the group —
+ * it always runs after it), fixers, and the human interruptor.
+ */
+export const LOOP_NODE_KINDS: readonly WorkflowNodeKind[] = [
+  {
+    kind: 'reviewer-group',
+    label: 'Reviewer group',
+    description: 'Several reviewers in parallel — with concurrency and its aggregation model',
+    accent: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400',
+  },
+  {
+    kind: 'reviewer',
+    label: 'Reviewers',
+    description: 'One adversarial reviewer',
+    accent: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+  },
+  {
+    kind: 'fixers',
+    label: 'Fixers',
+    description: 'Apply fixes for findings — with concurrency',
+    accent: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
+  },
+  {
+    kind: 'human',
+    label: 'Human Interruptor',
+    description: 'Presents data to the user and asks a question — with a required prompt',
+    accent: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  },
+]
+
+/** Palette entry lookup by kind (searches both vocabularies); undefined for unknown (hand-written) kinds. */
 export const nodeKindOf = (kind: string): WorkflowNodeKind | undefined =>
-  WORKFLOW_NODE_KINDS.find((k) => k.kind === kind)
+  WORKFLOW_NODE_KINDS.find((k) => k.kind === kind) ??
+  LOOP_NODE_KINDS.find((k) => k.kind === kind)
 
 /** True when the step is a reviewer-group (a container for reviewer refs). */
 export const isGroupStep = (step: PresetWorkflowStep): boolean => step.kind === 'reviewer-group'
 
 /**
+ * True when the step needs a model picker (aggregation is legacy — it was
+ * folded into the reviewer-group; fixers/human take a model).
+ */
+export const isModelStep = (step: PresetWorkflowStep): boolean =>
+  step.kind === 'aggregation' || step.kind === 'fixers' || step.kind === 'human'
+
+/** True when the step has a concurrency control (reviewer-group / fixers). */
+export const hasConcurrency = (step: PresetWorkflowStep): boolean =>
+  isGroupStep(step) || step.kind === 'fixers'
+
+/**
  * Error message when a step's inputs are incomplete; null = valid. A
  * `reviewer` step must have a picked reviewer; a `reviewer-group` must have
- * at least one reviewer. Other kinds have no required inputs yet.
+ * at least one reviewer; `aggregation`/`fixers` need a model; `human` needs
+ * a model and the prompt that presents data to the user.
  */
 export const stepError = (step: PresetWorkflowStep): string | null => {
+  if (typeof step !== 'object' || step === null) return 'Invalid step'
   if (step.kind === 'reviewer') {
     return step.reviewer === undefined ? 'Select a reviewer' : null
   }
   if (isGroupStep(step)) {
     return (step.reviewers ?? []).length === 0 ? 'Add at least one reviewer' : null
+  }
+  if (step.kind === 'aggregation' || step.kind === 'fixers') {
+    return (step.model ?? '').trim() === '' ? 'Select a model' : null
+  }
+  if (step.kind === 'human') {
+    if ((step.model ?? '').trim() === '') return 'Select a model'
+    if ((step.prompt ?? '').trim() === '') return 'Prompt required'
+    return null
   }
   return null
 }
@@ -74,6 +128,40 @@ export const setStepReviewer = (
 ): PresetWorkflowStep[] =>
   steps.map((step, i) => (i === index ? { ...step, reviewer: ref } : step))
 
+/** Sets (or clears) the model on an `aggregation` / `fixers` / `human` step (also drops it from the fallback). */
+export const setStepModel = (
+  steps: readonly PresetWorkflowStep[],
+  index: number,
+  model: string | undefined,
+): PresetWorkflowStep[] =>
+  steps.map((step, i) =>
+    i === index
+      ? {
+          ...step,
+          model,
+          fallbackModel: step.fallbackModel === model ? undefined : step.fallbackModel,
+        }
+      : step,
+  )
+
+/** Sets (or clears) the single fallback model on a model step. */
+export const setStepFallbackModel = (
+  steps: readonly PresetWorkflowStep[],
+  index: number,
+  fallbackModel: string | undefined,
+): PresetWorkflowStep[] =>
+  steps.map((step, i) =>
+    i === index ? { ...step, fallbackModel: fallbackModel === undefined ? undefined : fallbackModel } : step,
+  )
+
+/** Sets (or clears) the concurrency on a `reviewer-group` / `fixers` step. */
+export const setStepConcurrency = (
+  steps: readonly PresetWorkflowStep[],
+  index: number,
+  concurrency: number | undefined,
+): PresetWorkflowStep[] =>
+  steps.map((step, i) => (i === index ? { ...step, concurrency } : step))
+
 /** Sets (or clears) the model override on a single `reviewer` step (keeps the pick). */
 export const setStepReviewerModel = (
   steps: readonly PresetWorkflowStep[],
@@ -82,11 +170,35 @@ export const setStepReviewerModel = (
 ): PresetWorkflowStep[] =>
   steps.map((step, i) => {
     if (i !== index || step.reviewer === undefined) return step
-    const reviewer: PresetReviewerRef =
-      model === undefined
-        ? { type: step.reviewer.type, id: step.reviewer.id, name: step.reviewer.name }
-        : { ...step.reviewer, model }
-    return { ...step, reviewer }
+    if (model === undefined) {
+      return {
+        ...step,
+        reviewer: { type: step.reviewer.type, id: step.reviewer.id, name: step.reviewer.name },
+      }
+    }
+    // The new primary can't double as the fallback — clear it.
+    return {
+      ...step,
+      reviewer: {
+        ...step.reviewer,
+        model,
+        fallbackModel: step.reviewer.fallbackModel === model ? undefined : step.reviewer.fallbackModel,
+      },
+    }
+  })
+
+/** Sets (or clears) the single fallback model on a single reviewer step's ref. */
+export const setStepReviewerFallbackModel = (
+  steps: readonly PresetWorkflowStep[],
+  index: number,
+  fallbackModel: string | undefined,
+): PresetWorkflowStep[] =>
+  steps.map((step, i) => {
+    if (i !== index || step.reviewer === undefined) return step
+    return {
+      ...step,
+      reviewer: { ...step.reviewer, fallbackModel },
+    }
   })
 
 /** Extracts the reviewer reference from a roster entry (bare ref or { reviewer, prompt? }). */
@@ -173,11 +285,48 @@ export const setGroupReviewerModel = (
           reviewers: (step.reviewers ?? []).map((entry, ri) => {
             if (ri !== reviewerIndex) return entry
             const ref = groupReviewerRef(entry)
-            const nextRef: PresetReviewerRef =
-              model === undefined
-                ? { type: ref.type, id: ref.id, name: ref.name }
-                : { ...ref, model }
-            return { reviewer: nextRef, prompt: groupReviewerPrompt(entry) }
+            if (model === undefined) {
+              return {
+                reviewer: { type: ref.type, id: ref.id, name: ref.name },
+                prompt: groupReviewerPrompt(entry),
+              }
+            }
+            // The new primary can't double as the fallback — clear it.
+            const fallbackModel = ref.fallbackModel === model ? undefined : ref.fallbackModel
+            return {
+              reviewer: {
+                ...ref,
+                model,
+                fallbackModel,
+              },
+              prompt: groupReviewerPrompt(entry),
+            }
+          }),
+        }
+      : step,
+  )
+
+/** Sets (or clears) the single fallback model on one roster entry's ref (keeps the wrapper shape). */
+export const setGroupReviewerFallbackModel = (
+  steps: readonly PresetWorkflowStep[],
+  groupIndex: number,
+  reviewerIndex: number,
+  fallbackModel: string | undefined,
+): PresetWorkflowStep[] =>
+  steps.map((step, i) =>
+    i === groupIndex
+      ? {
+          ...step,
+          reviewers: (step.reviewers ?? []).map((entry, ri) => {
+            if (ri !== reviewerIndex) return entry
+            const ref = groupReviewerRef(entry)
+            return {
+              reviewer: {
+                ...ref,
+                fallbackModel: fallbackModel === undefined ? undefined : fallbackModel,
+              },
+              prompt: groupReviewerPrompt(entry),
+            }
           }),
         }
       : step,

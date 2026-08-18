@@ -32,7 +32,7 @@ const ICON_PANEL_WIDTH = 240
 
 /**
  * Searchable reviewer picklist (builtin reviewers + workspace profiles) for
- * workflow steps — same popover UX as ModelSelect. A reviewer step is
+ * loop/pipeline steps — same popover UX as ModelSelect. A reviewer step is
  * invalid until something is picked here.
  */
 export function ReviewerPicker({

@@ -34,7 +34,7 @@ interface BreadcrumbsProps {
 const ROOT: Crumb = { label: 'Home', target: '/' }
 
 /**
- * Target for a section crumb (Skills/Profiles/Presets): the workspace page
+ * Target for a section crumb (Skills/Profiles): the workspace page
  * with a `?section=` deep link. WorkspacePage opens the section if it was
  * collapsed and scrolls it into view. Existing query params (e.g. the Runs
  * status filter) are kept.

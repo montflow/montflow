@@ -15,6 +15,7 @@ import { useUiSocket } from '@/lib/useUiSocket'
 import { useModels } from '@/lib/useModels'
 import { ModelSelect } from '@/components/ModelSelect'
 import { SkillPicker } from '@/components/SkillPicker'
+import { AiInput } from '@/components/AiInput'
 import { runUrl } from '@/components/LandingPage'
 import { navigate } from '@/lib/useLocation'
 import type { ProfileDetail } from '@/protocol'
@@ -209,15 +210,14 @@ export function NewProfileDialog({
         {mode === 'agentic' && (
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="profile-prompt" className="text-xs font-medium text-muted-foreground">
-                Prompt
-              </label>
-              <textarea
-                id="profile-prompt"
+              <AiInput
                 value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
+                onChange={setPrompt}
+                folder={folder}
+                label="Prompt"
+                prompt={`Create a prompt to generate a profile with the following qualities:\n${name.trim()}`}
                 placeholder="e.g. A rigorous code-reviewer agent that audits diffs for bugs, security holes, and test gaps…"
-                className="min-h-28 w-full resize-y rounded-md border border-input bg-transparent p-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="min-h-28"
               />
               {folder === null && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">

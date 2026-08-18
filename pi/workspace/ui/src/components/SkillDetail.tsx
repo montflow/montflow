@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ModelSelect } from '@/components/ModelSelect'
+import { AiInput } from '@/components/AiInput'
 import { useSkillDetail, useSkillNameToIdMap, useSkills } from '@/lib/useSkills'
 import { useUiSocket } from '@/lib/useUiSocket'
 import { useModels } from '@/lib/useModels'
@@ -254,12 +255,14 @@ function ModifySkillDialog({
   const [agenticError, setAgenticError] = useState<string | null>(null)
 
   // Re-arm the dialog each time it opens: seed the manual editor with the
-  // current SKILL.md and the agentic prompt with a summary of the skill.
+  // current SKILL.md. The agentic prompt starts empty — the skill summary
+  // (describeSkill) pre-fills the AiInput modal instead, so the AI button is
+  // usable and can draft the change request for the run.
   const start = (): void => {
     setMode('choose')
     setDraft(skill?.markdown ?? '')
     setManualError(null)
-    setPrompt(describeSkill(skill))
+    setPrompt('')
     setIncludeAuthoring(true)
     setAgenticError(null)
   }
@@ -394,17 +397,14 @@ function ModifySkillDialog({
         {mode === 'agentic' && (
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="modify-skill-prompt"
-                className="text-xs font-medium text-muted-foreground"
-              >
-                Change
-              </label>
-              <textarea
-                id="modify-skill-prompt"
+              <AiInput
                 value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                className="min-h-40 w-full resize-y rounded-md border border-input bg-transparent p-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                onChange={setPrompt}
+                folder={folder}
+                label="Change"
+                prompt={describeSkill(skill)}
+                placeholder="e.g. Tighten the checklist — require a test for every fix…"
+                className="min-h-40"
               />
               {hasAuthoringSkill && (
                 <label className="flex items-start gap-2 text-xs text-muted-foreground">
@@ -476,7 +476,7 @@ function ModifySkillDialog({
   )
 }
 
-/** One-line summary of the current skill, used to seed the modify prompt. */
+/** One-line summary of the current skill, used to pre-fill the modify AI modal. */
 const describeSkill = (skill: SkillDetailType | undefined): string => {
   if (skill === undefined) return ''
   const groups = skill.groups.length > 0 ? ` Groups: [${skill.groups.join(', ')}].` : ''

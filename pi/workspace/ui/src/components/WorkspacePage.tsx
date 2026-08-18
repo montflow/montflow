@@ -129,7 +129,7 @@ export function WorkspacePage({ conn, workspace, info }: WorkspacePageProps) {
 
         <ProfilesSection workspaceId={workspace.id} conn={conn} folder={info?.folder ?? null} id="profiles" reveal={section === 'profiles'} />
 
-        <PresetsSection workspaceId={workspace.id} conn={conn} folder={info?.folder ?? null} id="presets" reveal={section === 'presets'} />
+        <PresetsSection workspaceId={workspace.id} conn={conn} id="presets" reveal={section === 'presets'} />
 
         <RunsSection workspaceId={workspace.id} conn={conn} id="runs" reveal={section === 'runs'} />
       </main>

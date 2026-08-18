@@ -26,40 +26,10 @@ export interface UiEntry {
   isError?: boolean
 }
 
-export interface UiReviewer {
-  id: string
-  label: string
-  status: string
-  findingCount?: number
-}
-
-export interface UiSummary {
-  open: number
-  inReview: number
-  resolved: number
-  escalated: number
-  wontFix: number
-}
-
-export interface UiLoopState {
-  cycle: number
-  maxLoops: number
-  supervisor: string
-  supervisorDetail?: string
-  reviewers: UiReviewer[]
-  reconcile: string
-  reconcileDetail?: string
-  fixer: string
-  summary: UiSummary | null
-  deadlocks: number
-  phase: string
-}
-
 export interface HelloPayload {
   entries: UiEntry[]
   leafId: string | null
   sessionFile: string | null
-  loopState: UiLoopState | null
 }
 
 export type ClientCommandType =
@@ -103,7 +73,6 @@ export type RouterToBrowser =
   | { type: 'folders'; folders: FolderInfo[]; port: number }
   | { type: 'hello'; folder: string; hello: HelloPayload }
   | { type: 'event'; folder: string; event: Record<string, unknown> }
-  | { type: 'loopState'; folder: string; state: UiLoopState | null }
   | { type: 'notify'; folder: string; message: string; level: 'info' | 'warning' | 'error' }
   | { type: 'folderGone'; folder: string }
   | {
@@ -196,12 +165,10 @@ export interface FolderState {
   hello: HelloPayload | null
   messages: UiMsg[]
   tools: ToolRun[]
-  loop: UiLoopState | null
-  loopDone: boolean
   busy: boolean
 }
 
-// --- Workspace git info + profiles (router-computed via /api/workspaces/<id>/...) ---
+// --- Workspace git info + skills/profiles (router-computed via /api/workspaces/<id>/...) ---
 
 export interface WorkspaceInfoDetail {
   id: string
@@ -236,8 +203,6 @@ export interface SkillSummary {
 export interface SkillDetail extends SkillSummary {
   markdown: string
 }
-
-// --- Presets (filesystem-backed via /api/workspaces/<id>/presets) ---
 
 /** One agentic run as reported by /api/runs (durable snapshot summary). */
 export interface RunSummary {
@@ -279,18 +244,22 @@ export interface ModelChoice {
   isCurrent: boolean
 }
 
+// --- Presets (filesystem-backed via /api/workspaces/<id>/presets) ---
+
 export interface PresetReviewerRef {
   type: 'builtin' | 'profile'
   id?: string
   name?: string
   model?: string
+  /** Single fallback model tried after `model` fails (optional). */
+  fallbackModel?: string
 }
 
-/** Stored LOOP preset config — the classic review loop (supervisor + reviewers + fixers). */
-export interface PresetLoopConfig {
-  reviewers: PresetReviewerRef[]
-  supervisor: { model: string }
-  fixerModel: string
+/**
+ * Stored LOOP preset config — the loop vocabulary as steps, plus execution
+ * controls (loops × cycles, deadlock).
+ */
+export interface PresetLoopConfig extends PresetStepConfig {
   maxLoops: number
   maxCycles?: number
   deadlock: { flipThreshold: number; action: 'escalate' }
@@ -305,7 +274,11 @@ export interface PresetGroupReviewer {
 /** Roster entries may be legacy bare refs or the richer { reviewer, prompt? } shape. */
 export type PresetGroupReviewerEntry = PresetReviewerRef | PresetGroupReviewer
 
-/** One open-ended step in a WORKFLOW preset (not yet executable). */
+/**
+ * One step in a loop or pipeline preset. Deliberately loose — nothing is
+ * destroyed for hand-written kinds. Loop kinds: `reviewer-group`, `reviewer`,
+ * `aggregation`, `fixers`, `human`.
+ */
 export interface PresetWorkflowStep {
   id: string
   kind: string
@@ -315,25 +288,35 @@ export interface PresetWorkflowStep {
   reviewers?: PresetGroupReviewerEntry[]
   /** Selected reviewer for a single reviewer step; undefined = unconfigured (invalid). */
   reviewer?: PresetReviewerRef
-  /** Optional extra instructions for this step (e.g. a reviewer's focus directive). */
+  /** Optional extra instructions (reviewer focus, or the required human-interruptor prompt). */
   prompt?: string
+  /** Model override for aggregation / fixers / human steps. */
+  model?: string
+  /** Single fallback model tried after `model` fails (optional). */
+  fallbackModel?: string
+  /** Parallel agent count for reviewer-group / fixers steps. */
+  concurrency?: number
 }
 
-/** Stored WORKFLOW preset config — an open-ended step pipeline (schematized, not executed). */
-export interface PresetWorkflowConfig {
-  description?: string
-  /** Global prompt injected into every agent run in this workflow. */
-  prompt?: string
+/** A config that is an ordered step pipeline (shared by loop and pipeline presets). */
+export interface PresetStepConfig {
   steps: PresetWorkflowStep[]
+}
+
+/** Stored PIPELINE preset config — an open-ended step pipeline (schematized, not executed). */
+export interface PresetWorkflowConfig extends PresetStepConfig {
+  description?: string
+  /** Global prompt injected into every agent run in this pipeline. */
+  prompt?: string
 }
 
 export type PresetConfig = PresetLoopConfig | PresetWorkflowConfig
 
-export type PresetType = 'loop' | 'workflow'
+export type PresetType = 'loop' | 'pipeline'
 
 export interface PresetSummary {
   name: string
-  /** 'loop' or 'workflow'; undefined for legacy files (loops) or invalid files. */
+  /** 'loop' or 'pipeline'; undefined for legacy files (loops) or invalid files. */
   type?: PresetType
   config?: PresetConfig
   error?: string

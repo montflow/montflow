@@ -13,8 +13,9 @@ import { Badge } from '@/components/ui/badge'
 import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { NewPresetDialog } from '@/components/NewPresetDialog'
 import { TableEmptyState } from '@/components/TableEmptyState'
-import { useBuiltinReviewers, usePresets } from '@/lib/usePresets'
-import { presetUrl, profileUrl } from '@/components/LandingPage'
+import { usePresets } from '@/lib/usePresets'
+import { presetStatus } from '@/lib/presetStatus'
+import { presetUrl } from '@/components/LandingPage'
 import { navigate } from '@/lib/useLocation'
 import { useWorkspacePrefs } from '@/lib/useWorkspacePrefs'
 import { titleFromSlug } from '@/lib/utils'
@@ -24,6 +25,8 @@ import {
   ArrowUp,
   ArrowUpDown,
   CircleAlert,
+  CircleCheck,
+  CircleX,
   Plus,
   Search,
   SearchX,
@@ -34,8 +37,6 @@ import {
 interface PresetsSectionProps {
   workspaceId: string
   conn: 'connecting' | 'open' | 'closed'
-  /** Folder slug for agentic commands (from workspace info); null when offline. */
-  folder: string | null
   /** Scroll-target id (e.g. for the command palette). */
   id?: string
   /** Deep link (?section=presets) — force the panel open when navigating here. */
@@ -45,18 +46,27 @@ interface PresetsSectionProps {
 /** How many preset rows to reveal at a time. */
 const PAGE_SIZE = 16
 
-/** Human label for a builtin reviewer id (from the catalog API). */
-const builtinLabel = (id: string, map: Map<string, string>): string =>
-  map.get(id) ?? id
-
-/** Narrows a preset config to the loop shape (workflow configs → undefined, cells render —). */
+/** Narrows a preset config to the loop shape (pipeline configs → undefined, cells render —). */
 const loopConfigOf = (config: PresetConfig | undefined): PresetLoopConfig | undefined =>
-  config !== undefined && 'reviewers' in config ? config : undefined
+  config !== undefined && 'maxLoops' in config ? config : undefined
 
-const makeColumns = (
-  workspaceId: string,
-  builtinById: Map<string, string>,
-): ColumnDef<PresetSummary>[] => [
+/** Number of steps in a config (0 when the config is missing/invalid). */
+const stepCount = (config: PresetConfig | undefined): number =>
+  config !== undefined && 'steps' in config && Array.isArray(config.steps) ? config.steps.length : 0
+
+/** Total reviewer references across all steps (single reviewer = 1, group = roster size). */
+const reviewerCount = (config: PresetConfig | undefined): number => {
+  if (config === undefined || !('steps' in config) || !Array.isArray(config.steps)) return 0
+  let count = 0
+  for (const step of config.steps) {
+    if (typeof step !== 'object' || step === null) continue
+    if (step.kind === 'reviewer' && step.reviewer !== undefined) count += 1
+    if (step.kind === 'reviewer-group') count += (step.reviewers ?? []).length
+  }
+  return count
+}
+
+const makeColumns = (): ColumnDef<PresetSummary>[] => [
   {
     accessorKey: 'name',
     header: ({ column }) => (
@@ -115,21 +125,59 @@ const makeColumns = (
     ),
     cell: ({ row }) => {
       const type = row.original.type ?? 'loop'
-      return type === 'workflow' ? (
+      return type === 'pipeline' ? (
         <Badge
           variant="outline"
           className="border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300"
-          title="Workflow preset — open-ended step pipeline (not yet executable)"
+          title="Pipeline preset — open-ended step pipeline (not yet executable)"
         >
-          workflow
+          pipeline
         </Badge>
       ) : (
         <Badge
           variant="secondary"
-          title="Review loop preset — supervisor, reviewers, fixers"
+          title="Review loop preset — reviewer groups, aggregation, fixers, human interruptor"
         >
           loop
         </Badge>
+      )
+    },
+  },
+  {
+    accessorKey: 'status',
+    header: 'Status',
+    enableSorting: false,
+    cell: ({ row }) => {
+      const { status, issues } = presetStatus(row.original.config)
+      return status === 'valid' ? (
+        <span
+          className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400"
+          title="All required fields are set — ready to run"
+        >
+          <CircleCheck className="size-3" />
+          valid
+        </span>
+      ) : (
+        <span
+          className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400"
+          title={issues.join('\n')}
+        >
+          <CircleX className="size-3" />
+          invalid
+        </span>
+      )
+    },
+  },
+  {
+    accessorKey: 'steps',
+    header: 'Steps',
+    enableSorting: false,
+    cell: ({ row }) => {
+      const count = stepCount(row.original.config)
+      return count === 0 ? (
+        <span className="text-muted-foreground/50">—</span>
+      ) : (
+        <span className="font-mono text-xs text-muted-foreground">{count}</span>
       )
     },
   },
@@ -138,76 +186,11 @@ const makeColumns = (
     header: 'Reviewers',
     enableSorting: false,
     cell: ({ row }) => {
-      const reviewers = loopConfigOf(row.original.config)?.reviewers ?? []
-      if (reviewers.length === 0) return <span className="text-muted-foreground/50">—</span>
-      return (
-        <div className="flex flex-wrap gap-1">
-          {reviewers.map((ref, index) => {
-            if (ref.type === 'builtin') {
-              return (
-                <span
-                  key={index}
-                  className="rounded-full border px-2 py-0.5 text-[10px] text-muted-foreground"
-                  title={`Builtin reviewer: ${ref.id ?? 'unknown'}`}
-                >
-                  {builtinLabel(ref.id ?? '?', builtinById)}
-                </span>
-              )
-            }
-            return (
-              <button
-                key={index}
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  if (ref.name !== undefined) {
-                    navigate(profileUrl(workspaceId, ref.name))
-                  }
-                }}
-                className="rounded-full border px-2 py-0.5 text-[10px] text-muted-foreground underline-offset-4 transition-colors hover:border-primary/40 hover:text-foreground hover:underline"
-                title={`Profile reviewer: ${ref.name ?? 'unknown'}`}
-              >
-                {ref.name ?? '?'}
-              </button>
-            )
-          })}
-        </div>
-      )
-    },
-  },
-  {
-    accessorKey: 'supervisor',
-    header: 'Supervisor',
-    enableSorting: false,
-    cell: ({ row }) => {
-      const supervisor = loopConfigOf(row.original.config)?.supervisor
-      return supervisor?.model === undefined ? (
+      const count = reviewerCount(row.original.config)
+      return count === 0 ? (
         <span className="text-muted-foreground/50">—</span>
       ) : (
-        <span
-          className="block truncate font-mono text-xs text-muted-foreground"
-          title={supervisor.model}
-        >
-          {supervisor.model}
-        </span>
-      )
-    },
-  },
-  {
-    accessorKey: 'fixerModel',
-    header: 'Fixer',
-    enableSorting: false,
-    cell: ({ row }) => {
-      const fixerModel = loopConfigOf(row.original.config)?.fixerModel
-      return fixerModel === undefined ? (
-        <span className="text-muted-foreground/50">—</span>
-      ) : (
-        <span
-          className="block truncate font-mono text-xs text-muted-foreground"
-          title={fixerModel}
-        >
-          {fixerModel}
-        </span>
+        <span className="font-mono text-xs text-muted-foreground">{count}</span>
       )
     },
   },
@@ -230,13 +213,8 @@ const makeColumns = (
   },
 ]
 
-export function PresetsSection({ workspaceId, conn, folder, id, reveal }: PresetsSectionProps) {
+export function PresetsSection({ workspaceId, conn, id, reveal }: PresetsSectionProps) {
   const { data: presets, isPending, isFetching, isError, error, refetch } = usePresets(workspaceId, conn)
-  const { data: builtins } = useBuiltinReviewers(conn)
-  const builtinById = useMemo(
-    () => new Map((builtins ?? []).map((b) => [b.id, b.label])),
-    [builtins],
-  )
   const [newOpen, setNewOpen] = useState(false)
 
   // Panel state (open/closed, search text, sort) is persisted per workspace
@@ -253,14 +231,7 @@ export function PresetsSection({ workspaceId, conn, folder, id, reveal }: Preset
   const fuse = useMemo(
     () =>
       new Fuse(presets ?? [], {
-        keys: [
-          'name',
-          'type',
-          'config.reviewers.id',
-          'config.reviewers.name',
-          'config.supervisor.model',
-          'config.fixerModel',
-        ],
+        keys: ['name', 'type', 'config.steps.kind'],
         threshold: 0.35,
         ignoreLocation: true,
       }),
@@ -275,7 +246,7 @@ export function PresetsSection({ workspaceId, conn, folder, id, reveal }: Preset
 
   const table = useReactTable({
     data: filtered,
-    columns: makeColumns(workspaceId, builtinById),
+    columns: makeColumns(),
     state: { sorting },
     onSortingChange: (updater) =>
       setPrefs({ sort: typeof updater === 'function' ? updater(sorting) : updater }),
@@ -397,14 +368,10 @@ export function PresetsSection({ workspaceId, conn, folder, id, reveal }: Preset
                           key={header.id}
                           className={`px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground ${
                             header.column.id === 'name'
-                              ? 'w-[20%]'
+                              ? 'w-[22%]'
                               : header.column.id === 'type'
-                                ? 'w-[10%]'
-                                : header.column.id === 'reviewers'
-                                  ? 'w-[24%]'
-                                  : header.column.id === 'supervisor' || header.column.id === 'fixerModel'
-                                    ? 'w-[13%]'
-                                    : 'w-[8%]'
+                                ? 'w-[12%]'
+                                : 'w-[8%]'
                           }`}
                         >
                           {header.isPlaceholder
@@ -458,7 +425,6 @@ export function PresetsSection({ workspaceId, conn, folder, id, reveal }: Preset
 
       <NewPresetDialog
         workspaceId={workspaceId}
-        folder={folder}
         open={newOpen}
         onOpenChange={setNewOpen}
         onCreated={(name) => navigate(presetUrl(workspaceId, name))}

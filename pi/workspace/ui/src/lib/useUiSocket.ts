@@ -111,8 +111,6 @@ const emptyFolder = (): FolderState => ({
   hello: null,
   messages: [],
   tools: [],
-  loop: null,
-  loopDone: false,
   busy: false,
 })
 
@@ -131,7 +129,6 @@ export function useUiSocket(): UiSocketState {
   const wsRef = useRef<WebSocket | null>(null)
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastAssistantId = useRef<Record<string, string | null>>({})
-  const prevLoop = useRef<Record<string, FolderState['loop']>>({})
   // Last seen status per run id — drives the transition notifications.
   const prevRunStatus = useRef<Record<string, SkillRunState['status']>>({})
 
@@ -338,19 +335,6 @@ export function useUiSocket(): UiSocketState {
             applyEvent(msg.folder, msg.event)
             break
 
-          case 'loopState': {
-            const folder = msg.folder
-            if (msg.state === null) {
-              if (prevLoop.current[folder] !== null && prevLoop.current[folder] !== undefined) {
-                patchFolder(folder, (f) => ({ ...f, loopDone: true }))
-              }
-            } else {
-              prevLoop.current[folder] = msg.state
-              patchFolder(folder, (f) => ({ ...f, loop: msg.state, loopDone: false }))
-            }
-            break
-          }
-
           case 'notify':
             pushToast(msg.folder, msg.message, msg.level)
             break
@@ -456,15 +440,12 @@ export function useUiSocket(): UiSocketState {
     }
 
     const applyHello = (folder: string, hello: HelloPayload): void => {
-      prevLoop.current[folder] = hello.loopState
       setState((prev) => ({
         ...prev,
         [folder]: {
           hello,
           messages: hello.entries.map(entryToMsg),
           tools: [],
-          loop: hello.loopState,
-          loopDone: false,
           busy: false,
         },
       }))
