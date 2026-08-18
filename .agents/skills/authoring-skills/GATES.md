@@ -17,7 +17,7 @@
 - [ ] `author` is present
 - [ ] `id` is present and is exactly 16 lowercase hex characters (regex: `^[0-9a-f]{16}$`)
 - [ ] `version` is present, starts at `1.0.0`, follows SemVer
-- [ ] No unknown or extra fields in frontmatter (known: `name`, `description`, `id`, `author`, `version`, `license`, `dependencies`, `groups`)
+- [ ] No unknown or extra fields in frontmatter (known: `name`, `description`, `id`, `author`, `version`, `license`, `dependencies`, `groups`, `metadata`)
 
 ## Phase 3: Content Quality
 

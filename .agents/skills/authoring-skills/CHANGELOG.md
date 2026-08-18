@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.1] - 2026-08-18
+
+### Changed
+
+- Documented `metadata` as an allowed optional frontmatter field (pipeline Step 2 + GATES Phase 2) — supports the `skills` CLI's `metadata.internal: true` convention
+
 ## [1.3.0] - 2026-08-12
 
 ### Changed
