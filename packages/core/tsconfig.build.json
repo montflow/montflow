@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "build/esm",
+    "declaration": true,
+    "declarationDir": "build/dts"
+  },
+  "exclude": ["src/scratchpad.ts", "**/*.config.ts", "**/*.test.ts"]
+}

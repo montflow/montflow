@@ -1,0 +1,46 @@
+---
+filePattern: "**/src/*/index.ts"
+description: Core package module structure and formatting guidelines
+---
+
+# Core Package Module Structure Guidelines
+
+## Import Style
+
+Imports should follow this exact pattern:
+
+```typescript
+import { ExternalType } from "external-package";
+import { AnotherExternal } from "another-package";
+
+import * as ModuleName from "../module-name/index.js";
+import { SpecificType } from "../global/index.js";
+import * as AnotherModule from "../another-module/index.js";
+```
+
+**Rules:**
+- External imports first (from node_modules)
+- Empty line separator
+- Internal imports second (from other modules in the project)
+- Internal module imports should always use `* as ModuleName` format
+- All internal imports must use `.js` extension
+- Specific type imports from global are allowed with destructuring
+
+## Related Rules
+
+For detailed guidelines on specific aspects of module development, see:
+
+- [Function Declarations](mdc:function-declarations.mdc) - Arrow function standards, overloads, and template parameter naming
+- [JSDoc Format](mdc:jsdoc-format.mdc) - Documentation formatting, annotation order, and todo requirements
+
+## File Organization
+```
+src/
+├── module-name/
+│   ├── index.ts          # Main module file
+│   └── tests/            # Test directory (if tests exist)
+│       ├── utility1.test.ts      # Function/constant tests
+│       ├── utility2.test.ts      # Function/constant tests
+│       ├── TypeName.type.test.ts  # Type tests
+│       └── ...
+```

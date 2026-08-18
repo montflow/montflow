@@ -1,0 +1,113 @@
+---
+filePattern: "**/*.{ts,tsx,js,jsx}"
+description: Function declaration standards and overload formatting
+---
+
+# Function Declaration Standards
+
+## Arrow Functions Only
+
+**NEVER** use `export function` declarations. **ALWAYS** use arrow functions with `const` declarations:
+
+```typescript
+// ❌ WRONG - Never use function declarations
+export function myFunction(input: string): string {
+  return input.toUpperCase();
+}
+
+// ✅ CORRECT - Always use arrow functions
+export const myFunction = (input: string): string => {
+  return input.toUpperCase();
+};
+
+// ✅ CORRECT - Concise arrow function
+export const myFunction = (input: string): string => input.toUpperCase();
+```
+
+## Template Parameter Naming
+
+- Multi-letter template parameters must be prefixed with "T" (e.g., `<TInput>`, `<TOutput>`, `<TFrom>`, `<TTo>`)
+- Single-letter template parameters should NOT be prefixed with "T" (e.g., `<A>`, `<B>`, `<T>` itself)
+
+```typescript
+// ✅ CORRECT - Multi-letter templates prefixed with T
+export const transform = <TInput, TOutput>(input: TInput, mapper: (value: TInput) => TOutput): TOutput => {
+  return mapper(input);
+};
+
+// ✅ CORRECT - Single-letter templates without T prefix
+export const combine = <A, B>(a: A, b: B): [A, B] => {
+  return [a, b];
+};
+```
+
+## Function Overloads
+
+When creating overloaded functions, use the following pattern with type annotations and JSDoc for each overload:
+
+```typescript
+export const myFunction: {
+  /**
+   * First overload description
+   * 
+   * @param input First parameter type description
+   * @returns First return type description
+   */
+  (input: string): string;
+  
+  /**
+   * Second overload description
+   * 
+   * @param input Second parameter type description
+   * @param options Additional parameter description
+   * @returns Second return type description
+   */
+  (input: number, options?: SomeOptions): number;
+  
+  /**
+   * Third overload description
+   * 
+   * @template T Generic type description
+   * @param input Generic parameter description
+   * @returns Generic return type description
+   */
+  <T>(input: T[]): T;
+} = (input: any, options?: any): any => {
+  // Implementation handles all overload cases
+  if (typeof input === 'string') {
+    return input.toUpperCase();
+  }
+  if (typeof input === 'number') {
+    return input * 2;
+  }
+  if (Array.isArray(input)) {
+    return input[0];
+  }
+  throw new Error('Invalid input type');
+};
+```
+
+**Rules for Overloads:**
+- Each overload signature must have its own JSDoc block
+- JSDoc should describe the specific behavior for that overload
+- Template parameters should be documented with `@template` for generic overloads
+- Parameters should be documented with `@param` for each overload
+- Return values should be documented with `@returns` for each overload
+- Implementation should handle all overload cases appropriately
+- Use `any` types in implementation signature when necessary to satisfy all overloads
+
+## Complex Function Types
+
+For functions with complex type signatures, prefer explicit typing:
+
+```typescript
+// ✅ CORRECT - Explicit type annotation for clarity
+export const complexFunction: <T, U>(
+  input: T,
+  mapper: (value: T) => U,
+  predicate?: (value: U) => boolean
+) => U[] = (input, mapper, predicate) => {
+  const mapped = mapper(input);
+  return predicate ? (predicate(mapped) ? [mapped] : []) : [mapped];
+};
+```

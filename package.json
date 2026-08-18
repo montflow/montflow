@@ -1,0 +1,19 @@
+{
+  "name": "@montflow/root",
+  "author": "Daniel Montilla",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "test": "turbo test",
+    "ts:check": "turbo ts:check",
+    "format:check": "turbo format:check",
+    "format:fix": "turbo format:fix",
+    "lint:check": "turbo lint:check",
+    "lint:fix": "turbo lint:fix"
+  },
+  "devDependencies": {
+    "@montflow/prettier": "workspace:*",
+    "turbo": "^2.5.8"
+  }
+}

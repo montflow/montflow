@@ -1,0 +1,67 @@
+{
+  "name": "@montflow/core",
+  "version": "3.0.0-alpha.9",
+  "private": false,
+  "description": "A collection of typescript utilities",
+  "keywords": [
+    "typescript"
+  ],
+  "bugs": {
+    "url": "https://github.com/montflow/montflow/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/montflow/montflow.git"
+  },
+  "license": "MIT",
+  "author": "Daniel Montilla",
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./build/dts/index.d.ts",
+      "import": "./build/esm/index.js",
+      "default": "./build/cjs/index.cjs"
+    }
+  },
+  "main": "./build/cjs/index.cjs",
+  "module": "./build/esm/index.js",
+  "types": "./build/dts/index.d.ts",
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "pnpm build-esm && pnpm build-annotate && pnpm build-cjs",
+    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
+    "build-cjs": "babel build/esm --config-file ./babel.config.cjs.json --out-dir build/cjs --out-file-extension .cjs --source-maps",
+    "build-esm": "tsc -b tsconfig.build.json",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,mjs,js}\"",
+    "format:fix": "prettier --write \"**/*.{ts,tsx,json,mjs,js}\"",
+    "lint:check": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "release": "pnpm build && pnpm publish --access public --no-git-checks",
+    "test": "vitest run",
+    "ts:check": "pnpm tsc --noEmit -p tsconfig.build.json"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.24.8",
+    "@babel/core": "^7.25.2",
+    "@babel/plugin-transform-export-namespace-from": "^7.24.7",
+    "@babel/plugin-transform-modules-commonjs": "^7.24.8",
+    "@montflow/eslint": "workspace:*",
+    "@montflow/prettier": "workspace:*",
+    "babel-plugin-annotate-pure-calls": "^0.5.0",
+    "babel-plugin-replace-import-extension": "^1.1.5",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
