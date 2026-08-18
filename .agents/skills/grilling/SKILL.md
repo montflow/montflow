@@ -2,8 +2,11 @@
 name: grilling
 description: Grill the user relentlessly about a plan or design. Use when the user wants to stress-test a plan before building, or uses any 'grill' trigger phrases.
 id: a93398a427265102
-author: Matt Pocock
-version: 1.1.0
+author: Daniel Montilla
+version: 1.2.0
+license: MIT
+dependencies:
+  - executing-skills
 groups:
   - planning
 ---
@@ -11,6 +14,8 @@ groups:
 # When To Use
 
 Use when further context, feedback, or decisions need to be made by the user before proceeding.
+
+> **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md) skill before running this pipeline. It governs how skills are loaded, executed, and verified.
 
 # Pipeline
 
@@ -37,3 +42,7 @@ Walk down each branch of your planned decision tree, resolving dependencies one 
 ## 4. Confirm Shared Understanding
 
 Continue the interview relentlessly until reaching a shared understanding of every aspect of the plan or context. Once all branches are resolved, summarize the agreed-upon decisions. Do not enact or execute the plan until the user confirms.
+
+# Reference
+
+- **Source**: Adapted from [Matt Pocock's grilling skill](https://github.com/mattpocock/skills/tree/main/skills/productivity/grilling) (MIT license)

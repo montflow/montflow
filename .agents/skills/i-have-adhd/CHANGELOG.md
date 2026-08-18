@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0] - 2026-08-18
+
+### Changed
+
+- Aligned with authoring-skills conventions: added `license: MIT`, trimmed `groups` to taxonomy values (`conventions`)
+- Author field now records the maintainer (Daniel Montilla); original authorship attributed in Reference
+
 ## [1.1.0] - 2026-07-24
 
 ### Added
