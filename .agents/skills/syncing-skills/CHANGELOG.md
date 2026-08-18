@@ -1,3 +1,16 @@
+## [3.0.0] - 2026-08-18
+
+### Changed
+
+- Complete rewrite: no longer copies files from this repo. Now a guided installer — reads the repo's available skills via `npx skills add montflow/montflow --list`, presents them for selection, and installs the chosen ones with `npx skills add ... -s <skill>`.
+- Removed version conflict resolution, changelog preservation, sparse checkout, and subagent orchestration (obsolete with CLI-driven installs)
+
+## [2.2.2] - 2026-08-17
+
+### Added
+
+- `metadata.internal: true` frontmatter — the `skills` CLI now excludes this skill from discovery, listing, and installs. Force-install via `-s syncing-skills` or `INSTALL_INTERNAL_SKILLS=1`.
+
 ## [2.2.1] - 2026-08-17
 
 ### Fixed

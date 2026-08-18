@@ -44,7 +44,7 @@ Pi auto-discovers `.agents/skills/` in `cwd` and ancestors (repo root), so in-re
 
 ## Alternative: syncing-skills skill
 
-The **syncing-skills** skill copies skills into a target project's `.agents/skills/` with version comparison, changelog preservation, and parallel subagent orchestration. It is an admin tool that runs from this repo — never install it into a target.
+The **syncing-skills** skill is a guided installer: it reads the montflow/montflow repo's available skills, presents them for selection, and installs the chosen ones via `npx skills add`. It runs in any project (or globally) and works with any agent the skills CLI supports.
 
 Load it via:
 
@@ -52,7 +52,9 @@ Load it via:
 skill name: syncing-skills
 ```
 
-See [.agents/skills/syncing-skills/SKILL.md](.agents/skills/syncing-skills/SKILL.md) for the full pipeline.
+It is marked `metadata.internal: true`, so the `skills` CLI **excludes it** from discovery, `--list`, and installs — `npx skills add montflow/montflow` installs the other 39 skills only. To force-install it anyway, name it explicitly (`-s syncing-skills`) or set `INSTALL_INTERNAL_SKILLS=1`.
+
+See [.agents/skills/syncing-skills/SKILL.md](.agents/skills/syncing-skills/SKILL.md) for the pipeline.
 
 ## Quick Reference
 
@@ -60,10 +62,8 @@ See [.agents/skills/syncing-skills/SKILL.md](.agents/skills/syncing-skills/SKILL
 |-------|-------------|
 | Install anywhere (any agent) | `npx skills add montflow/montflow` |
 | Pi only | `npx skills add montflow/montflow -a pi` (+ `-g` for global) |
-| Mode detection | syncing-skills SKILL.md §0 |
-| Context & guardrails | syncing-skills SKILL.md §1 |
-| Fresh install | syncing-skills SKILL.md §3.1 |
-| Upgrade | syncing-skills SKILL.md §3.2 |
-| Git sparse checkout | syncing-skills SKILL.md §3.3 |
-| Multi-skill orchestration | syncing-skills SKILL.md §3.4 |
-| Post-install + AGENTS.md (optional) | syncing-skills SKILL.md §4 |
+| List available skills | syncing-skills SKILL.md §1 |
+| Present & select | syncing-skills SKILL.md §2 |
+| Install | syncing-skills SKILL.md §3 |
+| Verify | syncing-skills SKILL.md §4 |
+| Maintenance | `npx skills list` / `update [name]` / `remove [name]` |
