@@ -256,3 +256,6 @@ $RECYCLE.BIN/
 .agents/@montflow/workspace.json
 .agents/references
 
+
+# --- scratch / test ---
+tmp/
