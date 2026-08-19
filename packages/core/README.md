@@ -7,7 +7,7 @@ npm i @montflow/core
 ```
 
 ```
-pnpm add @montflow/core
+bun add @montflow/core
 ```
 
 ## Features

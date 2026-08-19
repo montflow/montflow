@@ -1,0 +1,10 @@
+{
+  "name": "@montflow/tooling-oxlint",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Shared oxlint configuration and vendored anti-slop plugin",
+  "dependencies": {
+    "@oxlint/plugins": "1.78.0"
+  }
+}

@@ -1,53 +1,27 @@
 {
   "name": "@montflow/stlx",
   "version": "0.0.1",
-  "author": "Daniel Montilla",
-  "description": "tailwind-merge + clsx wrapper",
-  "license": "MIT",
   "private": false,
-  "dependencies": {
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^3.0.1"
-  },
+  "description": "tailwind-merge + clsx wrapper",
   "keywords": [
-    "tailwind",
-    "tailwindcss",
-    "clsx",
-    "tailwind-merge",
     "classnames",
-    "utility",
+    "clsx",
     "conditional-classes",
-    "type-safe",
-    "react",
+    "css",
     "frontend",
-    "css"
+    "react",
+    "tailwind",
+    "tailwind-merge",
+    "tailwindcss",
+    "type-safe",
+    "utility"
   ],
-  "scripts": {
-    "build": "pnpm build-esm && pnpm build-annotate && pnpm build-cjs",
-    "build-esm": "tsc -b tsconfig.build.json",
-    "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
-    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
-    "test": "vitest run",
-    "ts:check": "pnpm tsc --noEmit -p tsconfig.build.json",
-    "format:check": "prettier --check \"**/*.{ts,tsx,json,mjs,js}\"",
-    "format:fix": "prettier --write \"**/*.{ts,tsx,json,mjs,js}\"",
-    "lint:check": "eslint .",
-    "lint:fix": "eslint . --fix"
-  },
-  "devDependencies": {
-    "@babel/cli": "^7.24.8",
-    "@babel/core": "^7.25.2",
-    "@babel/plugin-transform-export-namespace-from": "^7.24.7",
-    "@babel/plugin-transform-modules-commonjs": "^7.24.8",
-    "@montflow/eslint": "workspace:*",
-    "@montflow/prettier": "workspace:*",
-    "babel-plugin-annotate-pure-calls": "^0.5.0",
-    "eslint": "^9.12.0",
-    "eslint-config-prettier": "^9.1.0",
-    "prettier": "^3.7.4",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.15"
-  },
+  "license": "MIT",
+  "author": "Daniel Montilla",
+  "files": [
+    "build",
+    "src"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -56,8 +30,29 @@
       "require": "./build/cjs/index.cjs"
     }
   },
-  "files": [
-    "build",
-    "src"
-  ]
+  "scripts": {
+    "build": "bun run build-esm && bun run build-annotate && bun run build-cjs",
+    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
+    "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
+    "build-esm": "tsc -b tsconfig.build.json",
+    "format:check": "oxfmt --check .",
+    "format:fix": "oxfmt .",
+    "lint:check": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "test": "vitest run",
+    "ts:check": "tsc --noEmit -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.0.1"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.24.8",
+    "@babel/core": "^7.25.2",
+    "@babel/plugin-transform-export-namespace-from": "^7.24.7",
+    "@babel/plugin-transform-modules-commonjs": "^7.24.8",
+    "babel-plugin-annotate-pure-calls": "^0.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  }
 }

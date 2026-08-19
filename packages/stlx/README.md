@@ -9,15 +9,15 @@ npm i @montflow/stlx
 ```
 
 ```bash
-pnpm add @montflow/stlx
+bun add @montflow/stlx
 ```
 
 ## Usage
 
 ```typescript
-import { stlx } from "@montflow/stlx";
+import { stlx } from '@montflow/stlx';
 
-const classes = stlx("text-sm", "text-red-500", true && "font-bold", false && "hidden");
+const classes = stlx('text-sm', 'text-red-500', true && 'font-bold', false && 'hidden');
 // Result: "text-sm text-red-500 font-bold"
 ```
 

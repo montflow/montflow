@@ -1,16 +1,13 @@
 {
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
   "svelte.enable-ts-plugin": true,
   "editor.formatOnSave": true,
-  
+
   "[json]": {
-    "editor.formatOnSave": true,
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.formatOnSave": true
   },
 
   "[jsonc]": {
-    "editor.formatOnSave": true,
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.formatOnSave": true
   },
 
   "[javascript]": {

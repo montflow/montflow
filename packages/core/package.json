@@ -9,13 +9,19 @@
   "bugs": {
     "url": "https://github.com/montflow/montflow/issues"
   },
+  "license": "MIT",
+  "author": "Daniel Montilla",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/montflow/montflow.git"
   },
-  "license": "MIT",
-  "author": "Daniel Montilla",
+  "files": [
+    "build"
+  ],
   "type": "module",
+  "main": "./build/cjs/index.cjs",
+  "module": "./build/esm/index.js",
+  "types": "./build/dts/index.d.ts",
   "exports": {
     "./package.json": "./package.json",
     ".": {
@@ -24,44 +30,31 @@
       "default": "./build/cjs/index.cjs"
     }
   },
-  "main": "./build/cjs/index.cjs",
-  "module": "./build/esm/index.js",
-  "types": "./build/dts/index.d.ts",
-  "files": [
-    "build"
-  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "pnpm build-esm && pnpm build-annotate && pnpm build-cjs",
+    "build": "bun run build-esm && bun run build-annotate && bun run build-cjs",
     "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
     "build-cjs": "babel build/esm --config-file ./babel.config.cjs.json --out-dir build/cjs --out-file-extension .cjs --source-maps",
     "build-esm": "tsc -b tsconfig.build.json",
-    "format:check": "prettier --check \"**/*.{ts,tsx,json,mjs,js}\"",
-    "format:fix": "prettier --write \"**/*.{ts,tsx,json,mjs,js}\"",
-    "lint:check": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "release": "pnpm build && pnpm publish --access public --no-git-checks",
+    "format:check": "oxfmt --check .",
+    "format:fix": "oxfmt .",
+    "lint:check": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "release": "bun run build && bun publish --access public",
     "test": "vitest run",
-    "ts:check": "pnpm tsc --noEmit -p tsconfig.build.json"
+    "ts:check": "tsc --noEmit -p tsconfig.build.json"
   },
   "devDependencies": {
     "@babel/cli": "^7.24.8",
     "@babel/core": "^7.25.2",
     "@babel/plugin-transform-export-namespace-from": "^7.24.7",
     "@babel/plugin-transform-modules-commonjs": "^7.24.8",
-    "@montflow/eslint": "workspace:*",
-    "@montflow/prettier": "workspace:*",
     "babel-plugin-annotate-pure-calls": "^0.5.0",
     "babel-plugin-replace-import-extension": "^1.1.5",
     "jsdom": "^25.0.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.15"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
   }
 }

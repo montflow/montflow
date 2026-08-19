@@ -3,7 +3,12 @@
   "author": "Daniel Montilla",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@10.0.0",
+  "packageManager": "bun@1.3.13",
+  "workspaces": [
+    "packages/*",
+    "tooling/*",
+    "apps/*"
+  ],
   "scripts": {
     "test": "turbo test",
     "ts:check": "turbo ts:check",
@@ -13,7 +18,8 @@
     "lint:fix": "turbo lint:fix"
   },
   "devDependencies": {
-    "@montflow/prettier": "workspace:*",
+    "oxfmt": "0.63.0",
+    "oxlint": "1.78.0",
     "turbo": "^2.5.8"
   }
 }
