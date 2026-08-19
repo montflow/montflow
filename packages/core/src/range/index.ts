@@ -1,7 +1,7 @@
-import * as List from "../list/index.js";
-import * as Macro from "../macro/index.js";
-import * as Numeric from "../numeric/index.js";
-import * as _Object from "../table/index.js";
+import * as List from '../list/index.js';
+import * as Macro from '../macro/index.js';
+import * as Numeric from '../numeric/index.js';
+import * as _Object from '../table/index.js';
 
 /**
  * Object representation of a range.
@@ -27,12 +27,12 @@ export type Range = Object | Tuple;
  * @todo testing
  */
 export const isObject = (thing: unknown): thing is Object =>
-  _Object.isObject(thing)
-  && _Object.hasKeys(thing, ["min", "max"])
-  && _Object.size(thing) === 2
-  && Numeric.isNumber(thing.min)
-  && Numeric.isNumber(thing.max)
-  && thing.min <= thing.max;
+  _Object.isObject(thing) &&
+  _Object.hasKeys(thing, ['min', 'max']) &&
+  _Object.size(thing) === 2 &&
+  Numeric.isNumber(thing.min) &&
+  Numeric.isNumber(thing.max) &&
+  thing.min <= thing.max;
 
 /**
  * Checks if a value is a tuple representation of a range.
@@ -43,11 +43,11 @@ export const isObject = (thing: unknown): thing is Object =>
  * @todo testing
  */
 export const isTuple = (thing: unknown): thing is Tuple =>
-  List.isArray(thing)
-  && List.length(thing) === 2
-  && Numeric.isNumber(thing[0])
-  && Numeric.isNumber(thing[1])
-  && thing[0] <= thing[1];
+  List.isArray(thing) &&
+  List.length(thing) === 2 &&
+  Numeric.isNumber(thing[0]) &&
+  Numeric.isNumber(thing[1]) &&
+  thing[0] <= thing[1];
 
 /**
  * Checks if a value is a range.
@@ -57,8 +57,7 @@ export const isTuple = (thing: unknown): thing is Tuple =>
  *
  * @todo testing
  */
-export const isRange = (thing: unknown): thing is Range =>
-  isObject(thing) || isTuple(thing);
+export const isRange = (thing: unknown): thing is Range => isObject(thing) || isTuple(thing);
 
 /**
  * Converts a range to an object representation.
@@ -79,30 +78,26 @@ export const toObject = (self: Range): Object =>
  *
  * @todo testing
  */
-export const toTuple = (self: Range): Tuple =>
-  isTuple(self) ? self : [self.min, self.max];
+export const toTuple = (self: Range): Tuple => (isTuple(self) ? self : [self.min, self.max]);
 
 /**
  * Error thrown when a range is invalid.
  */
 export class InvalidRangeError extends Error {
   constructor(
-    public readonly reason:
-      | "min_greater_than_max"
-      | "min_not_a_number"
-      | "max_not_a_number"
+    public readonly reason: 'min_greater_than_max' | 'min_not_a_number' | 'max_not_a_number',
   ) {
     super(
       `Invalid range. ${Macro.lambda(() => {
         switch (reason) {
-          case "min_greater_than_max":
-            return "Min must be less than or equal to max";
-          case "min_not_a_number":
-            return "Min must be a number";
-          case "max_not_a_number":
-            return "Max must be a number";
+          case 'min_greater_than_max':
+            return 'Min must be less than or equal to max';
+          case 'min_not_a_number':
+            return 'Min must be a number';
+          case 'max_not_a_number':
+            return 'Max must be a number';
         }
-      })}`
+      })}`,
     );
   }
 }
@@ -119,9 +114,9 @@ export class InvalidRangeError extends Error {
  * @todo testing
  */
 export const make = (min: number, max: number): Range => {
-  if (min > max) throw new InvalidRangeError("min_greater_than_max");
-  if (!Numeric.isNumber(min)) throw new InvalidRangeError("min_not_a_number");
-  if (!Numeric.isNumber(max)) throw new InvalidRangeError("max_not_a_number");
+  if (min > max) throw new InvalidRangeError('min_greater_than_max');
+  if (!Numeric.isNumber(min)) throw new InvalidRangeError('min_not_a_number');
+  if (!Numeric.isNumber(max)) throw new InvalidRangeError('max_not_a_number');
   return { min, max };
 };
 
@@ -140,8 +135,7 @@ export const of = (self: Range) => self;
  *
  * @todo testing
  */
-export const min = (self: Range): number =>
-  isObject(self) ? self.min : self[0];
+export const min = (self: Range): number => (isObject(self) ? self.min : self[0]);
 
 /**
  * Returns the maximum value of a range.
@@ -151,8 +145,7 @@ export const min = (self: Range): number =>
  *
  * @todo testing
  */
-export const max = (self: Range): number =>
-  isObject(self) ? self.max : self[1];
+export const max = (self: Range): number => (isObject(self) ? self.max : self[1]);
 
 /**
  * Checks if a range is valid.
@@ -187,6 +180,6 @@ export const isValid = (self: Range): boolean => {
  * @todo testing
  */
 export const symetric = (midpoint: number, margin: number): Range => {
-  if (Numeric.isNegative(margin)) throw new Error("Marging is negative");
+  if (Numeric.isNegative(margin)) throw new Error('Marging is negative');
   return make(midpoint - margin, midpoint + margin);
 };

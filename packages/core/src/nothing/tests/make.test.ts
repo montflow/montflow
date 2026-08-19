@@ -1,10 +1,10 @@
-import * as Vitest from "vitest";
+import * as Vitest from 'vitest';
 
-import * as Domain from "../../domain/index.js";
-import * as Nothing from "../index.js";
+import * as Domain from '../../domain/index.js';
+import * as Nothing from '../index.js';
 
-Vitest.describe("[runtime] Nothing.make", () => {
-  Vitest.it("should be defined", () => {
+Vitest.describe('[runtime] Nothing.make', () => {
+  Vitest.it('should be defined', () => {
     Vitest.expect(Nothing.make).toBeDefined();
   });
 
@@ -15,8 +15,8 @@ Vitest.describe("[runtime] Nothing.make", () => {
   });
 });
 
-Vitest.describe("[types] Nothing.make", () => {
-  Vitest.it("should be defined", () => {
+Vitest.describe('[types] Nothing.make', () => {
+  Vitest.it('should be defined', () => {
     type Test = typeof Nothing.make;
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });

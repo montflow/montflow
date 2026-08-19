@@ -6,9 +6,9 @@
  */
 export const capitalize = (str: string) =>
   str
-    .split(" ")
+    .split(' ')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
+    .join(' ');
 
 /**
  * Checks if a value is a string.
@@ -18,8 +18,7 @@ export const capitalize = (str: string) =>
  *
  * @todo testing
  */
-export const isString = (thing: unknown): thing is string =>
-  typeof thing === "string";
+export const isString = (thing: unknown): thing is string => typeof thing === 'string';
 
 /**
  * Utility type to assert if a string is empty.
@@ -29,7 +28,7 @@ export const isString = (thing: unknown): thing is string =>
  *
  * @todo testing
  */
-export type IsEmpty<T extends string> = T extends "" ? true : false;
+export type IsEmpty<T extends string> = T extends '' ? true : false;
 
 /**
  * Utility type to assert if a string is not empty.
@@ -39,7 +38,7 @@ export type IsEmpty<T extends string> = T extends "" ? true : false;
  *
  * @todo testing
  */
-export type IsNotEmpty<T extends string> = T extends "" ? false : true;
+export type IsNotEmpty<T extends string> = T extends '' ? false : true;
 
 /**
  * Utility type to assert if a string has spaces.
@@ -49,8 +48,7 @@ export type IsNotEmpty<T extends string> = T extends "" ? false : true;
  *
  * @todo testing
  */
-export type HasSpaces<T extends string> =
-  T extends `${infer _} ${infer _}` ? true : false;
+export type HasSpaces<T extends string> = T extends `${infer _} ${infer _}` ? true : false;
 
 /**
  * Checks if a string is empty.
@@ -60,7 +58,7 @@ export type HasSpaces<T extends string> =
  *
  * @todo testing
  */
-export const isEmpty = (str: string): boolean => str === "";
+export const isEmpty = (str: string): boolean => str === '';
 
 /**
  * Checks if a string is not empty.
@@ -70,7 +68,7 @@ export const isEmpty = (str: string): boolean => str === "";
  *
  * @todo testing
  */
-export const isNotEmpty = (str: string): boolean => str !== "";
+export const isNotEmpty = (str: string): boolean => str !== '';
 
 /**
  * Checks if a string has spaces.
@@ -80,7 +78,7 @@ export const isNotEmpty = (str: string): boolean => str !== "";
  *
  * @todo testing
  */
-export const hasSpaces = (str: string): boolean => str.includes(" ");
+export const hasSpaces = (str: string): boolean => str.includes(' ');
 
 /**
  * Checks if a string has no spaces.
@@ -90,4 +88,4 @@ export const hasSpaces = (str: string): boolean => str.includes(" ");
  *
  * @todo testing
  */
-export const hasNoSpaces = (str: string): boolean => !str.includes(" ");
+export const hasNoSpaces = (str: string): boolean => !str.includes(' ');

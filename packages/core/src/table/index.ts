@@ -1,15 +1,13 @@
-import * as List from "../list/index.js";
-import * as Macro from "../macro/index.js";
-import { Simplify, Struct } from "../global/index.js";
+import * as List from '../list/index.js';
+import * as Macro from '../macro/index.js';
+import { Simplify, Struct } from '../global/index.js';
 
 /**
  * Utility type to make a property optional.
  *
  * @todo testing
  */
-export type Optional<T, K extends keyof T> = Simplify<
-  Omit<T, K> & Partial<Pick<T, K>>
->;
+export type Optional<T, K extends keyof T> = Simplify<Omit<T, K> & Partial<Pick<T, K>>>;
 
 /**
  * Extracts the value type for a given key from a dictionary.
@@ -24,8 +22,7 @@ export type Value<TInput extends Struct, K extends keyof TInput> = TInput[K];
  *
  * @template {Struct} TInput
  */
-export type Keys<TInput extends Struct> =
-  TInput extends Struct<infer K, any> ? K : never;
+export type Keys<TInput extends Struct> = TInput extends Struct<infer K, any> ? K : never;
 
 /**
  * Asserts if an object is empty.
@@ -43,8 +40,7 @@ export type IsEmpty<T> = keyof T extends never ? false : true;
  *
  * @todo testing
  */
-export type Values<TInput extends Struct> =
-  TInput extends Struct<PropertyKey, infer V> ? V : never;
+export type Values<TInput extends Struct> = TInput extends Struct<PropertyKey, infer V> ? V : never;
 
 /**
  * Extracts the entries type from a dictionary.
@@ -66,7 +62,7 @@ export type Entries<TInput extends Struct> = {
  * @todo testing
  */
 export const isObject = (thing: unknown): thing is object =>
-  typeof thing === "object" && thing !== null;
+  typeof thing === 'object' && thing !== null;
 
 /**
  * Checks if a value is a table.
@@ -92,18 +88,17 @@ export const isTable = (thing: unknown): thing is Struct => isObject(thing);
 export const hasKey: {
   <T extends Struct, K extends PropertyKey>(
     self: T,
-    key: K
+    key: K,
   ): self is T & { [P in K]: Exclude<T[P], undefined> };
   <T extends Struct, K extends PropertyKey>(
-    key: K
+    key: K,
   ): (self: T) => self is T & { [P in K]: Exclude<T[P], undefined> };
 } = Macro.dualify(
   1,
   <T extends Struct, K extends PropertyKey>(
     self: T,
-    key: K
-  ): self is T & { [P in K]: Exclude<T[P], undefined> } =>
-    key in self && self[key] !== undefined
+    key: K,
+  ): self is T & { [P in K]: Exclude<T[P], undefined> } => key in self && self[key] !== undefined,
 );
 
 /**
@@ -120,18 +115,18 @@ export const hasKey: {
 export const hasKeys: {
   <T extends Struct, K extends PropertyKey>(
     self: T,
-    keys: readonly K[]
+    keys: readonly K[],
   ): self is T & { [P in K]: Exclude<T[P], undefined> };
   <T extends Struct, K extends PropertyKey>(
-    keys: readonly K[]
+    keys: readonly K[],
   ): (self: T) => self is T & { [P in K]: Exclude<T[P], undefined> };
 } = Macro.dualify(
   1,
   <T extends Struct, K extends PropertyKey>(
     self: T,
-    keys: readonly K[]
+    keys: readonly K[],
   ): self is T & { [P in K]: Exclude<T[P], undefined> } =>
-    keys.every((key) => key in self && self[key] !== undefined)
+    keys.every((key) => key in self && self[key] !== undefined),
 );
 
 /**
@@ -144,6 +139,7 @@ export const hasKeys: {
  * @todo testing
  */
 export const values = <const T extends Struct>(input: T) =>
+  // SAFETY: Object.values on a Struct<T> yields exactly its Values<T> members.
   Object.values(input) as Values<T>[];
 
 /**
@@ -156,6 +152,7 @@ export const values = <const T extends Struct>(input: T) =>
  * @todo testing
  */
 export const keys = <const T extends Struct>(input: T) =>
+  // SAFETY: Object.keys on a Struct<T> yields exactly its Keys<T>.
   Object.keys(input) as Keys<T>[];
 
 /**
@@ -184,6 +181,7 @@ export const length = size;
  * @todo testing
  */
 export const entries = <const T extends Struct>(input: T) =>
+  // SAFETY: Object.entries on a Struct<T> yields its Entries<T> pairs.
   Object.entries(input) as Entries<T>[];
 
 /**
@@ -198,17 +196,19 @@ export const entries = <const T extends Struct>(input: T) =>
 export const pick: {
   <TInput extends Record<PropertyKey, any>, K extends keyof TInput>(
     self: TInput,
-    keys: readonly K[]
+    keys: readonly K[],
   ): Pick<TInput, K>;
   <TInput extends Record<PropertyKey, any>, K extends keyof TInput>(
-    keys: readonly K[]
+    keys: readonly K[],
   ): (self: TInput) => Pick<TInput, K>;
 } = Macro.dualify(
   1,
   <TInput extends Record<PropertyKey, any>, K extends keyof TInput>(
     self: TInput,
-    keys: readonly K[]
+    keys: readonly K[],
   ): Pick<TInput, K> => {
+    // SAFETY: result is populated only from self's own picked keys, so it
+    // satisfies Pick<TInput, K>.
     const result = {} as Pick<TInput, K>;
     for (const key of keys) {
       if (key in self) {
@@ -216,7 +216,7 @@ export const pick: {
       }
     }
     return result;
-  }
+  },
 );
 
 /**
@@ -231,23 +231,27 @@ export const pick: {
 export const omit: {
   <TInput extends Record<PropertyKey, any>, K extends keyof TInput>(
     self: TInput,
-    keys: readonly K[]
+    keys: readonly K[],
   ): Omit<TInput, K>;
   <TInput extends Record<PropertyKey, any>, K extends keyof TInput>(
-    keys: readonly K[]
+    keys: readonly K[],
   ): (self: TInput) => Omit<TInput, K>;
 } = Macro.dualify(
   1,
   <TInput extends Record<PropertyKey, any>, K extends keyof TInput>(
     self: TInput,
-    keys: readonly K[]
+    keys: readonly K[],
   ): Omit<TInput, K> => {
+    // SAFETY: result starts as a full copy of self, so it satisfies
+    // Omit<TInput, K>.
     const result = { ...self } as Omit<TInput, K>;
     for (const key of keys) {
+      // SAFETY: deleted keys are from keyof TInput and exist on the copy; the
+      // cast bypasses delete's restriction on Omit-typed keys.
       delete (result as any)[key];
     }
     return result;
-  }
+  },
 );
 
 /**
@@ -262,10 +266,10 @@ export const keyefy = (struct: Struct): string => {
   const result: Record<string, unknown> = {};
 
   const isPrimitive = (value: unknown): boolean =>
-    value === null
-    || typeof value !== "object"
-    || value instanceof Date
-    || value instanceof Function;
+    value === null ||
+    typeof value !== 'object' ||
+    value instanceof Date ||
+    value instanceof Function;
 
   const isNumericKey = (key: string): boolean => /^\d+$/.test(key);
 
@@ -283,12 +287,14 @@ export const keyefy = (struct: Struct): string => {
       if (isPrimitive(value)) {
         result[newKey] = value;
       } else {
+        // SAFETY: isPrimitive(value) is false, so value is a plain object or
+        // array (null, Date, and Function are primitive by the check above).
         recurse(value as object, newKey);
       }
     }
   };
 
-  recurse(struct, "");
+  recurse(struct, '');
   const flattened = result;
   const sortedKeys = Object.keys(flattened).sort();
 
@@ -296,13 +302,13 @@ export const keyefy = (struct: Struct): string => {
     const value = flattened[key];
 
     // Handle non-serializable values
-    if (typeof value === "symbol") {
+    if (typeof value === 'symbol') {
       throw new TypeError(`Cannot serialize symbol at key "${key}"`);
     }
-    if (typeof value === "bigint") {
+    if (typeof value === 'bigint') {
       throw new TypeError(`Cannot serialize bigint at key "${key}"`);
     }
-    if (typeof value === "function") {
+    if (typeof value === 'function') {
       throw new TypeError(`Cannot serialize function at key "${key}"`);
     }
 
@@ -321,7 +327,7 @@ export const keyefy = (struct: Struct): string => {
       throw error;
     }
     throw new TypeError(
-      `Failed to serialize struct: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to serialize struct: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 };
@@ -329,10 +335,11 @@ export const keyefy = (struct: Struct): string => {
 /**
  * Gets the valid keys for a type, filtering out array/function methods.
  */
-type ValidKeys<T> =
-  T extends readonly any[] ? keyof T & `${number}`
-  : T extends Function ? never
-  : keyof T & (string | number);
+type ValidKeys<T> = T extends readonly any[]
+  ? keyof T & `${number}`
+  : T extends Function
+    ? never
+    : keyof T & (string | number);
 
 /**
  * Flattens a nested object type into a single-level object with dot-notation keys.
@@ -347,38 +354,37 @@ type ValidKeys<T> =
  *
  * @todo testing
  */
-export type Flatten<T, TPrefix extends string = ""> =
-  T extends (
-    | string
-    | number
-    | boolean
-    | null
-    | undefined
-    | symbol
-    | bigint
-    | Function
-    | Date
-  ) ?
-    {}
+export type Flatten<T, TPrefix extends string = ''> = T extends
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | symbol
+  | bigint
+  | Function
+  | Date
+  ? {}
   : Simplify<
       {
-        [K in ValidKeys<T> as T[K] extends (
-          | string
-          | number
-          | boolean
-          | null
-          | undefined
-          | symbol
-          | bigint
-          | Function
-          | Date
-        ) ?
-          TPrefix extends "" ?
-            `${K}`
-          : `${TPrefix}.${K}`
-        : never]: T[K];
+        [
+          K in ValidKeys<T> as T[K] extends
+            | string
+            | number
+            | boolean
+            | null
+            | undefined
+            | symbol
+            | bigint
+            | Function
+            | Date
+            ? TPrefix extends ''
+              ? `${K}`
+              : `${TPrefix}.${K}`
+            : never
+        ]: T[K];
       } & ({
-        [K in ValidKeys<T>]: T[K] extends (
+        [K in ValidKeys<T>]: T[K] extends
           | string
           | number
           | boolean
@@ -388,14 +394,13 @@ export type Flatten<T, TPrefix extends string = ""> =
           | bigint
           | Function
           | Date
-        ) ?
-          {}
-        : Flatten<T[K], TPrefix extends "" ? `${K}` : `${TPrefix}.${K}`>;
-      }[ValidKeys<T>] extends infer U ?
-        (U extends any ? (k: U) => void : never) extends (k: infer I) => void ?
-          I
-        : never
-      : never)
+          ? {}
+          : Flatten<T[K], TPrefix extends '' ? `${K}` : `${TPrefix}.${K}`>;
+      }[ValidKeys<T>] extends infer U
+        ? (U extends any ? (k: U) => void : never) extends (k: infer I) => void
+          ? I
+          : never
+        : never)
     >;
 
 /**
@@ -410,16 +415,14 @@ export type Flatten<T, TPrefix extends string = ""> =
  * const flat = flatten(obj);
  * // { a: 1, "b.x": 10, "c.0": 1, "c.1": 2 }
  */
-export const flatten = <const TObject extends object>(
-  struct: TObject
-): Flatten<TObject> => {
+export const flatten = <const TObject extends object>(struct: TObject): Flatten<TObject> => {
   const result: Record<string, unknown> = {};
 
   const isPrimitive = (value: unknown): boolean =>
-    value === null
-    || typeof value !== "object"
-    || value instanceof Date
-    || value instanceof Function;
+    value === null ||
+    typeof value !== 'object' ||
+    value instanceof Date ||
+    value instanceof Function;
 
   const isNumericKey = (key: string): boolean => /^\d+$/.test(key);
 
@@ -437,11 +440,13 @@ export const flatten = <const TObject extends object>(
       if (isPrimitive(value)) {
         result[newKey] = value;
       } else {
+        // SAFETY: isPrimitive(value) is false, so value is a plain object or
+        // array (null, Date, and Function are primitive by the check above).
         recurse(value as object, newKey);
       }
     }
   };
 
-  recurse(struct, "");
+  recurse(struct, '');
   return Macro.cast<Flatten<TObject>>(result);
 };

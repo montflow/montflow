@@ -1,7 +1,7 @@
-import * as Constructor from "../constructor/index.js";
-import * as Function from "../function/index.js";
-import * as Text from "../text/index.js";
-import { Evaluable, Struct } from "../global/index.js";
+import * as Constructor from '../constructor/index.js';
+import * as Function from '../function/index.js';
+import * as Text from '../text/index.js';
+import { Evaluable, Struct } from '../global/index.js';
 
 /**
  * Executes a function that takes no arguments and returns its result.
@@ -23,16 +23,16 @@ export const lambda = <T>(fn: Function.Nullary<T>): T => fn();
  *
  * @todo testing
  */
-export const cast = <T>(x: unknown): T => x as T;
+export const cast = <T>(x: unknown): T =>
+  // SAFETY: cast is the library's explicit escape hatch — the checked
+  // invariant is established by each caller, not here.
+  x as T;
 
 /** @internal */
 const _singletons: Struct<string, Constructor.Any | Function.Maker.Any> = {};
 
 /** @internal */
-const _onces: Struct<
-  string,
-  { hasRun: boolean; result: any; fn: Function.Callable }
-> = {};
+const _onces: Struct<string, { hasRun: boolean; result: any; fn: Function.Callable }> = {};
 
 /**
  * @todo documentation
@@ -94,9 +94,11 @@ export const singleton: {
 } = <TConstructor extends Constructor.Any | Function.Maker.Any>(
   id: string,
   ctor: TConstructor,
-  ...args: TConstructor extends Constructor.Any ? Constructor.Args<TConstructor>
-  : TConstructor extends Function.Maker.Any ? Function.Maker.Args<TConstructor>
-  : never
+  ...args: TConstructor extends Constructor.Any
+    ? Constructor.Args<TConstructor>
+    : TConstructor extends Function.Maker.Any
+      ? Function.Maker.Args<TConstructor>
+      : never
 ) => {
   if (_singletons[id] !== undefined) {
     throw panic(new SingletonAlreadyExistsError(id));
@@ -109,14 +111,15 @@ export const singleton: {
 
     // If the value is a constructor or function, instantiate it
     if (Constructor.isConstructor(existing) || Function.isCallable(existing)) {
-      const instance =
-        Constructor.isConstructor(ctor) ? new ctor(...args)
-        : Function.isCallable(ctor) ? ctor(...args)
-        : void 0;
+      const instance = Constructor.isConstructor(ctor)
+        ? new ctor(...args)
+        : Function.isCallable(ctor)
+          ? ctor(...args)
+          : void 0;
 
       if (instance === void 0) {
         // TODO: create a custom error
-        throw panic(new Error("Invalid singleton"));
+        throw panic(new Error('Invalid singleton'));
       }
 
       return (_singletons[id] = instance);
@@ -136,10 +139,7 @@ export const once: {
    * @param fn the function to execute once
    * @returns a function that executes only once
    */
-  <TFunction extends Function.Nullary<any>>(
-    id: string,
-    fn: TFunction
-  ): () => ReturnType<TFunction>;
+  <TFunction extends Function.Nullary<any>>(id: string, fn: TFunction): () => ReturnType<TFunction>;
 
   /**
    * Creates a function that executes only on its first invocation with the provided arguments.
@@ -156,11 +156,7 @@ export const once: {
     fn: TFunction,
     ...args: Parameters<TFunction>
   ): () => ReturnType<TFunction>;
-} = <TFunction extends Function.Callable>(
-  id: string,
-  fn: TFunction,
-  ...args: any[]
-): any => {
+} = <TFunction extends Function.Callable>(id: string, fn: TFunction, ...args: any[]): any => {
   if (_onces[id]) {
     throw panic(new OnceAlreadyExistsError(id));
   }
@@ -195,6 +191,7 @@ export const unknown = cast<unknown>(void 0);
  *
  * Value of type `undefined`. Just an `void 0` during runtime.
  */
+// oxlint-disable-next-line no-shadow-restricted-names -- intentional: exports a value named `undefined` (Effect-style), shadowing the global.
 export const undefined = cast<undefined>(void 0);
 
 /**
@@ -264,7 +261,7 @@ export const evaluate = <T>(evaluable: Evaluable<T>): T =>
  *
  * @todo testing
  */
-export const todo = (message?: string) => panic(message ?? "todo");
+export const todo = (message?: string) => panic(message ?? 'todo');
 
 /**
  * @alias todo
@@ -280,7 +277,7 @@ export const placeholder = todo;
  * @returns never
  * @throws {Error} with the message
  */
-export const todoImpl = () => todo("missing implementation");
+export const todoImpl = () => todo('missing implementation');
 
 export namespace Dualify {
   /**
@@ -326,13 +323,10 @@ export namespace Dualify {
  *
  * @copyright major credit to [`effect/Function.ts`](https://github.com/Effect-TS/effect/blob/main/packages/effect/src/Function.ts)
  */
-export const dualify = <
-  Explicit extends Function.Callable,
-  Curried extends Function.Callable,
->(
+export const dualify = <Explicit extends Function.Callable, Curried extends Function.Callable>(
   arity: number,
   body: Explicit,
-  options?: Dualify.Options
+  options?: Dualify.Options,
 ): Explicit & Curried => {
   const opts: Required<Dualify.Options> = { withTail: false, ...options };
 
@@ -374,9 +368,7 @@ export const dualify = <
 
         case arity + 1: {
           const first = args[0];
-          return opts.isSelf(first) ?
-              body(...args)
-            : (self: unknown) => body(self, ...args);
+          return opts.isSelf(first) ? body(...args) : (self: unknown) => body(self, ...args);
         }
 
         case arity + 2: {
@@ -384,7 +376,7 @@ export const dualify = <
         }
 
         default: {
-          throw new Error("invalid arguments");
+          throw new Error('invalid arguments');
         }
       }
     };
@@ -392,17 +384,17 @@ export const dualify = <
 
   switch (arity) {
     case 0: {
+      // SAFETY: the closure handles both invocation forms (self-first and
+      // args-first) per the switch above, matching Explicit & Curried.
       return ((...args) =>
-        args.length !== 0 ?
-          body(...args)
-        : (self: unknown) => body(self)) as Explicit & Curried;
+        args.length !== 0 ? body(...args) : (self: unknown) => body(self)) as Explicit & Curried;
     }
 
     default: {
+      // SAFETY: the closure handles both invocation forms (self-first and
+      // args-first) per the switch above, matching Explicit & Curried.
       return ((...args) => {
-        return args.length > arity ?
-            body(...args)
-          : (self: unknown) => body(self, ...args);
+        return args.length > arity ? body(...args) : (self: unknown) => body(self, ...args);
       }) as Explicit & Curried;
     }
   }
@@ -416,11 +408,8 @@ export const dualify = <
  *
  * @todo testing
  */
-export const assert = (
-  condition: Evaluable<boolean>,
-  error?: Error | string
-) => {
+export const assert = (condition: Evaluable<boolean>, error?: Error | string) => {
   if (!evaluate(condition)) {
-    throw panic(error ?? "Assertion failed");
+    throw panic(error ?? 'Assertion failed');
   }
 };

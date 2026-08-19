@@ -1,6 +1,6 @@
-import * as Function from "../function/index.js";
-import * as Macro from "../macro/index.js";
-import * as Range from "../range/index.js";
+import * as Function from '../function/index.js';
+import * as Macro from '../macro/index.js';
+import * as Range from '../range/index.js';
 
 /**
  * Type alias for the native javascript number type.
@@ -14,7 +14,7 @@ export const Constructor = Number;
  * @returns True if the thing is a number, false otherwise.
  */
 export const isNumber = (thing: unknown): thing is number =>
-  typeof thing === "number" && !Number.isNaN(thing);
+  typeof thing === 'number' && !Number.isNaN(thing);
 
 /**
  * Checks if the given thing is an integer.
@@ -44,8 +44,7 @@ export const isFloat = (thing: unknown): thing is number =>
  *
  * @todo testing
  */
-export const isPositive: Function.Predicate<number> = (n: number): boolean =>
-  isNumber(n) && n > 0;
+export const isPositive: Function.Predicate<number> = (n: number): boolean => isNumber(n) && n > 0;
 
 /**
  * Checks if the given number is negative.
@@ -55,8 +54,7 @@ export const isPositive: Function.Predicate<number> = (n: number): boolean =>
  *
  * @todo testing
  */
-export const isNegative: Function.Predicate<number> = (n: number): boolean =>
-  isNumber(n) && n < 0;
+export const isNegative: Function.Predicate<number> = (n: number): boolean => isNumber(n) && n < 0;
 
 /**
  * Checks if the given number is non-negative.
@@ -133,19 +131,19 @@ export const isBetween: {
   (
     self: number,
     range: Range.Range,
-    options?: { inclusive?: boolean | { min?: boolean; max?: boolean } }
+    options?: { inclusive?: boolean | { min?: boolean; max?: boolean } },
   ): boolean;
 
   (
     range: Range.Range,
-    options?: { inclusive?: boolean | { min?: boolean; max?: boolean } }
+    options?: { inclusive?: boolean | { min?: boolean; max?: boolean } },
   ): (self: number) => boolean;
 } = Macro.dualify(
   1,
   (
     self: number,
     range: Range.Range,
-    options?: { inclusive?: boolean | { min?: boolean; max?: boolean } }
+    options?: { inclusive?: boolean | { min?: boolean; max?: boolean } },
   ): boolean => {
     Macro.assert(Range.isValid(range));
     const { min, max } = Range.toObject(range);
@@ -161,11 +159,11 @@ export const isBetween: {
     }
 
     return (
-      (inclusive.min === false ? self > min : self >= min)
-      && (inclusive.max === false ? self < max : self <= max)
+      (inclusive.min === false ? self > min : self >= min) &&
+      (inclusive.max === false ? self < max : self <= max)
     );
   },
-  { withTail: true, isSelf: isNumber }
+  { withTail: true, isSelf: isNumber },
 );
 
 /**

@@ -1,4 +1,4 @@
-import * as Function from "../function/index.js";
+import * as Function from '../function/index.js';
 
 export const make: {
   /**
@@ -21,7 +21,7 @@ export const make: {
    */
   <TInput, TOutput>(
     input: TInput | Function.Nullary<TInput>,
-    output: Function.Operator<TInput, TOutput>
+    output: Function.Operator<TInput, TOutput>,
   ): TOutput;
 
   /**
@@ -38,7 +38,7 @@ export const make: {
   <TInput, A, TOutput>(
     input: TInput | Function.Nullary<TInput>,
     a: Function.Operator<TInput, A>,
-    output: Function.Operator<A, TOutput>
+    output: Function.Operator<A, TOutput>,
   ): TOutput;
 
   /**
@@ -58,7 +58,7 @@ export const make: {
     input: TInput | Function.Nullary<TInput>,
     a: Function.Operator<TInput, A>,
     b: Function.Operator<A, B>,
-    output: Function.Operator<B, TOutput>
+    output: Function.Operator<B, TOutput>,
   ): TOutput;
 
   /**
@@ -81,7 +81,7 @@ export const make: {
     a: Function.Operator<TInput, A>,
     b: Function.Operator<A, B>,
     c: Function.Operator<B, C>,
-    output: Function.Operator<C, TOutput>
+    output: Function.Operator<C, TOutput>,
   ): TOutput;
 
   /**
@@ -107,7 +107,7 @@ export const make: {
     b: Function.Operator<A, B>,
     c: Function.Operator<B, C>,
     d: Function.Operator<C, D>,
-    output: Function.Operator<D, TOutput>
+    output: Function.Operator<D, TOutput>,
   ): TOutput;
 
   /**
@@ -136,7 +136,7 @@ export const make: {
     c: Function.Operator<B, C>,
     d: Function.Operator<C, D>,
     e: Function.Operator<D, E>,
-    output: Function.Operator<E, TOutput>
+    output: Function.Operator<E, TOutput>,
   ): TOutput;
 
   /**
@@ -168,7 +168,7 @@ export const make: {
     d: Function.Operator<C, D>,
     e: Function.Operator<D, E>,
     f: Function.Operator<E, F>,
-    output: Function.Operator<F, TOutput>
+    output: Function.Operator<F, TOutput>,
   ): TOutput;
 
   /**
@@ -203,7 +203,7 @@ export const make: {
     e: Function.Operator<D, E>,
     f: Function.Operator<E, F>,
     g: Function.Operator<F, G>,
-    output: Function.Operator<G, TOutput>
+    output: Function.Operator<G, TOutput>,
   ): TOutput;
 
   /**
@@ -241,7 +241,7 @@ export const make: {
     f: Function.Operator<E, F>,
     g: Function.Operator<F, G>,
     h: Function.Operator<G, H>,
-    output: Function.Operator<H, TOutput>
+    output: Function.Operator<H, TOutput>,
   ): TOutput;
 
   /**
@@ -282,7 +282,7 @@ export const make: {
     g: Function.Operator<F, G>,
     h: Function.Operator<G, H>,
     i: Function.Operator<H, I>,
-    output: Function.Operator<I, TOutput>
+    output: Function.Operator<I, TOutput>,
   ): TOutput;
 
   /**
@@ -326,7 +326,7 @@ export const make: {
     h: Function.Operator<G, H>,
     i: Function.Operator<H, I>,
     j: Function.Operator<I, J>,
-    output: Function.Operator<J, TOutput>
+    output: Function.Operator<J, TOutput>,
   ): TOutput;
 
   /**
@@ -373,7 +373,7 @@ export const make: {
     i: Function.Operator<H, I>,
     j: Function.Operator<I, J>,
     k: Function.Operator<J, K>,
-    output: Function.Operator<K, TOutput>
+    output: Function.Operator<K, TOutput>,
   ): TOutput;
 
   /**
@@ -423,7 +423,7 @@ export const make: {
     j: Function.Operator<I, J>,
     k: Function.Operator<J, K>,
     l: Function.Operator<K, L>,
-    output: Function.Operator<L, TOutput>
+    output: Function.Operator<L, TOutput>,
   ): TOutput;
 
   /**
@@ -476,7 +476,7 @@ export const make: {
     k: Function.Operator<J, K>,
     l: Function.Operator<K, L>,
     m: Function.Operator<L, M>,
-    output: Function.Operator<M, TOutput>
+    output: Function.Operator<M, TOutput>,
   ): TOutput;
 
   /**
@@ -532,7 +532,7 @@ export const make: {
     l: Function.Operator<K, L>,
     m: Function.Operator<L, M>,
     n: Function.Operator<M, N>,
-    output: Function.Operator<N, TOutput>
+    output: Function.Operator<N, TOutput>,
   ): TOutput;
 
   /**
@@ -591,7 +591,7 @@ export const make: {
     m: Function.Operator<L, M>,
     n: Function.Operator<M, N>,
     o: Function.Operator<N, O>,
-    output: Function.Operator<O, TOutput>
+    output: Function.Operator<O, TOutput>,
   ): TOutput;
 } = (input: any, ...operators: Function.Callable[]): any => {
   let value = Function.isCallable(input) ? input() : input;

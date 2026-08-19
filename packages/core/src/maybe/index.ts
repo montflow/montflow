@@ -1,18 +1,18 @@
-import * as Alias from "../alias/index.js";
-import * as Async from "../async/index.js";
-import * as Domain from "../domain/index.js";
-import * as Function from "../function/index.js";
-import * as Macro from "../macro/index.js";
-import * as Nothing from "../nothing/index.js";
-import * as Numeric from "../numeric/index.js";
-import * as Result from "../result/index.js";
-import * as Table from "../table/index.js";
-import { Evaluable, Struct, Sync } from "../global/index.js";
+import * as Alias from '../alias/index.js';
+import * as Async from '../async/index.js';
+import * as Domain from '../domain/index.js';
+import * as Function from '../function/index.js';
+import * as Macro from '../macro/index.js';
+import * as Nothing from '../nothing/index.js';
+import * as Numeric from '../numeric/index.js';
+import * as Result from '../result/index.js';
+import * as Table from '../table/index.js';
+import { Evaluable, Struct, Sync } from '../global/index.js';
 
 /**
  * Unique domain identifier for the Maybe algebraic data type.
  */
-export const Id = "maybe" as const;
+export const Id = 'maybe' as const;
 
 /**
  * Type of the unique domain identifier for the Maybe algebraic data type.
@@ -22,7 +22,7 @@ export type Id = typeof Id;
 /**
  * Tag used to discriminate the `Some` variant at runtime.
  */
-export const SomeTag = "some" as const;
+export const SomeTag = 'some' as const;
 
 /**
  * Type of the `Some` discriminant tag.
@@ -43,7 +43,7 @@ export type Some<out V> = {
 /**
  * Tag used to discriminate the `None` variant at runtime.
  */
-export const NoneTag = "none" as const;
+export const NoneTag = 'none' as const;
 
 /**
  * Type of the `None` discriminant tag.
@@ -93,8 +93,7 @@ export type Never = Maybe<never>;
  * @template TMaybe Input `Maybe` type
  * @returns The extracted inner value type or `never` for `None`
  */
-export type Value<TMaybe extends Any> =
-  TMaybe extends Some<infer V> ? V : never;
+export type Value<TMaybe extends Any> = TMaybe extends Some<infer V> ? V : never;
 
 /**
  * Unwraps one level of nesting from `Maybe<Maybe<V>>` to `Maybe<V>`.
@@ -102,10 +101,9 @@ export type Value<TMaybe extends Any> =
  * @template TRoot Input `Maybe` type to flatten
  * @returns The flattened `Maybe` type
  */
-export type Flatten<TRoot extends Any> =
-  [TRoot] extends [Maybe<infer TValue>] ?
-    [TValue] extends [Maybe<infer TNested>] ?
-      Maybe<TNested>
+export type Flatten<TRoot extends Any> = [TRoot] extends [Maybe<infer TValue>]
+  ? [TValue] extends [Maybe<infer TNested>]
+    ? Maybe<TNested>
     : TRoot
   : never;
 
@@ -118,10 +116,9 @@ export type Flatten<TRoot extends Any> =
  * @see {@link Flatten}
  * @see {@link Unfold}
  */
-export type InfiniteUnfold<TRoot extends Any> =
-  [TRoot] extends [Maybe<infer TValue>] ?
-    [TValue] extends [Maybe<infer TNested>] ?
-      InfiniteUnfold<Maybe<TNested>>
+export type InfiniteUnfold<TRoot extends Any> = [TRoot] extends [Maybe<infer TValue>]
+  ? [TValue] extends [Maybe<infer TNested>]
+    ? InfiniteUnfold<Maybe<TNested>>
     : TRoot
   : never;
 
@@ -140,13 +137,13 @@ export type InfiniteUnfold<TRoot extends Any> =
 export type Unfold<
   TRoot extends Any,
   TLimit extends number = typeof MAX_UNFOLD_DEPTH,
-> =
-  TLimit extends 0 ? TRoot
-  : [TRoot] extends [Maybe<infer TValue>] ?
-    [TValue] extends [Any] ?
-      Unfold<TValue, Numeric.Decrement<TLimit>>
-    : TRoot
-  : never;
+> = TLimit extends 0
+  ? TRoot
+  : [TRoot] extends [Maybe<infer TValue>]
+    ? [TValue] extends [Any]
+      ? Unfold<TValue, Numeric.Decrement<TLimit>>
+      : TRoot
+    : never;
 
 /**
  * Shorthand for a `Promise` that resolves to a `Maybe<V>`.
@@ -170,13 +167,11 @@ export type Promise<V> = Alias.Promise<Maybe<V>>;
 export const some: {
   (): Some<never>;
   <V>(value: V): Some<V>;
-} = Macro.cast(
-  <V>(value?: V): Some<V | undefined> => ({
-    [Domain.Id]: Id,
-    [Domain.Tag]: SomeTag,
-    value: value === Macro.undefined ? Macro.undefined : value,
-  })
-);
+} = Macro.cast(<V>(value?: V): Some<V | undefined> => ({
+  [Domain.Id]: Id,
+  [Domain.Tag]: SomeTag,
+  value: value === Macro.undefined ? Macro.undefined : value,
+}));
 
 /**
  * @constructor
@@ -185,10 +180,10 @@ export const some: {
  *
  * @returns A `None` value
  */
-export const none = Macro.singleton(
-  "@montflow/none",
-  (): None => ({ [Domain.Id]: Id, [Domain.Tag]: NoneTag })
-);
+export const none = Macro.singleton('@montflow/none', (): None => ({
+  [Domain.Id]: Id,
+  [Domain.Tag]: NoneTag,
+}));
 
 /**
  * @constructor
@@ -217,7 +212,7 @@ export const fromPredicate: {
   <V>(self: V, predicate: Function.Predicate<V>): Maybe<V>;
   <V>(predicate: Function.Predicate<V>): (value: V) => Maybe<V>;
 } = Macro.dualify(1, <V>(self: V, predicate: Function.Predicate<V>) =>
-  predicate(self) ? some(self) : none()
+  predicate(self) ? some(self) : none(),
 );
 
 /**
@@ -234,7 +229,7 @@ export const _if: {
   <V>(self: V, condition: Evaluable<boolean>): Maybe<V>;
   <V>(condition: Evaluable<boolean>): (value: V) => Maybe<V>;
 } = Macro.dualify(1, <V>(self: V, condition: Evaluable<boolean>) =>
-  Macro.evaluate(condition) ? some(self) : none()
+  Macro.evaluate(condition) ? some(self) : none(),
 );
 
 export { _if as if };
@@ -290,11 +285,11 @@ export const tryPromise: {
  * @todo testing
  */
 export const isSome = (thing: unknown): thing is Some<unknown> =>
-  Table.isObject(thing)
-  && Table.hasKeys(thing, [Domain.Id, Domain.Tag, "value"])
-  && Table.size(thing) === 3
-  && thing[Domain.Id] === Id
-  && thing[Domain.Tag] === SomeTag;
+  Table.isObject(thing) &&
+  Table.hasKeys(thing, [Domain.Id, Domain.Tag, 'value']) &&
+  Table.size(thing) === 3 &&
+  thing[Domain.Id] === Id &&
+  thing[Domain.Tag] === SomeTag;
 
 /**
  * Returns `true` if the given value is a `None` variant.
@@ -305,11 +300,11 @@ export const isSome = (thing: unknown): thing is Some<unknown> =>
  * @todo testing
  */
 export const isNone = (thing: unknown): thing is None =>
-  Table.isObject(thing)
-  && Table.hasKeys(thing, [Domain.Id, Domain.Tag])
-  && Table.size(thing) === 2
-  && thing[Domain.Id] === Id
-  && thing[Domain.Tag] === NoneTag;
+  Table.isObject(thing) &&
+  Table.hasKeys(thing, [Domain.Id, Domain.Tag]) &&
+  Table.size(thing) === 2 &&
+  thing[Domain.Id] === Id &&
+  thing[Domain.Tag] === NoneTag;
 
 /**
  * Returns `true` if the given value is a `Maybe` (`Some` or `None`).
@@ -319,8 +314,7 @@ export const isNone = (thing: unknown): thing is None =>
  *
  * @todo testing
  */
-export const isMaybe = (thing: unknown): thing is Maybe<unknown> =>
-  isNone(thing) || isSome(thing);
+export const isMaybe = (thing: unknown): thing is Maybe<unknown> => isNone(thing) || isSome(thing);
 
 /**
  * Transforms the inner value with `mapper` when `Some`; returns `None` otherwise.
@@ -334,17 +328,10 @@ export const isMaybe = (thing: unknown): thing is Maybe<unknown> =>
  * @todo testing
  */
 export const map: {
-  <TFrom, TTo>(
-    mapper: Function.Mapper<TFrom, TTo>
-  ): (self: Maybe<TFrom>) => Maybe<TTo>;
-  <TFrom, TTo>(
-    self: Maybe<TFrom>,
-    mapper: Function.Mapper<TFrom, TTo>
-  ): Maybe<TTo>;
-} = Macro.dualify(
-  1,
-  <TFrom, TTo>(self: Maybe<TFrom>, mapper: Function.Mapper<TFrom, TTo>) =>
-    isSome(self) ? some(mapper(self.value)) : none()
+  <TFrom, TTo>(mapper: Function.Mapper<TFrom, TTo>): (self: Maybe<TFrom>) => Maybe<TTo>;
+  <TFrom, TTo>(self: Maybe<TFrom>, mapper: Function.Mapper<TFrom, TTo>): Maybe<TTo>;
+} = Macro.dualify(1, <TFrom, TTo>(self: Maybe<TFrom>, mapper: Function.Mapper<TFrom, TTo>) =>
+  isSome(self) ? some(mapper(self.value)) : none(),
 );
 
 /**
@@ -353,7 +340,7 @@ export const map: {
  * @todo testing
  */
 export class UnwrapError extends Error {
-  [Domain.Tag] = "unwrap-error";
+  [Domain.Tag] = 'unwrap-error';
 
   constructor() {
     super(`Maybe is "None". Unwrap operation failed`);
@@ -390,7 +377,7 @@ export const orElse: {
   <V, TOr>(value: Evaluable<TOr>): (self: Maybe<V>) => TOr;
   <V, TOr>(self: Maybe<V>, value: Evaluable<TOr>): TOr;
 } = Macro.dualify(1, <V, TOr>(self: Maybe<V>, value: Evaluable<TOr>) =>
-  isSome(self) ? self.value : Macro.evaluate(value)
+  isSome(self) ? self.value : Macro.evaluate(value),
 );
 
 /**
@@ -408,13 +395,23 @@ export const orElse: {
 export const unfold: {
   <V>(self: Maybe<V>): Unfold<Maybe<V>>;
 } = <V>(self: Maybe<V>) => {
-  if (isNone(self)) return self as Unfold<Maybe<V>>;
+  if (isNone(self)) {
+    // SAFETY: a None is its own unfold — there is nothing nested to unwrap.
+    return self as Unfold<Maybe<V>>;
+  }
   let inner = self.value;
   for (let i = 0; i < MAX_UNFOLD_DEPTH; i++) {
     if (!isMaybe(inner)) break;
-    if (isNone(inner)) return inner as Unfold<Maybe<V>>;
+    if (isNone(inner)) {
+      // SAFETY: a None is its own unfold — nothing nested remains.
+      return inner as Unfold<Maybe<V>>;
+    }
+    // SAFETY: inner is a Some (isMaybe passed, isNone returned early), so
+    // inner.value is V.
     inner = inner.value as V;
   }
+  // SAFETY: at loop exit inner is a Maybe<V> (non-Maybe values broke out), so
+  // some(inner) re-wraps it at the single-level unfold boundary.
   return some(inner) as Unfold<Maybe<V>>;
 };
 
@@ -429,8 +426,11 @@ export const unfold: {
  */
 export const flatten = <V>(self: Maybe<V>): Flatten<Maybe<V>> => {
   if (isNone(self) || !isMaybe(self.value) || isNone(self.value)) {
+    // SAFETY: none of the nested-maybe cases apply, so self is already flat.
     return self as Flatten<Maybe<V>>;
   }
+  // SAFETY: self is a Some holding a Some<Maybe<V>>, so self.value is the
+  // single nested level to unwrap.
   return self.value as Flatten<Maybe<V>>;
 };
 
@@ -448,19 +448,12 @@ export const flatten = <V>(self: Maybe<V>): Flatten<Maybe<V>> => {
  * @todo testing
  */
 export const flatmap: {
-  <TFrom, TTo>(
-    mapper: Function.Mapper<TFrom, Maybe<TTo>>
-  ): (self: Maybe<TFrom>) => Maybe<TTo>;
-  <TFrom, TTo>(
-    self: Maybe<TFrom>,
-    mapper: Function.Mapper<TFrom, Maybe<TTo>>
-  ): Maybe<TTo>;
+  <TFrom, TTo>(mapper: Function.Mapper<TFrom, Maybe<TTo>>): (self: Maybe<TFrom>) => Maybe<TTo>;
+  <TFrom, TTo>(self: Maybe<TFrom>, mapper: Function.Mapper<TFrom, Maybe<TTo>>): Maybe<TTo>;
 } = Macro.dualify(
   1,
-  <TFrom, TTo>(
-    self: Maybe<TFrom>,
-    mapper: Function.Mapper<TFrom, Maybe<TTo>>
-  ) => (isSome(self) ? mapper(self.value) : none())
+  <TFrom, TTo>(self: Maybe<TFrom>, mapper: Function.Mapper<TFrom, Maybe<TTo>>) =>
+    isSome(self) ? mapper(self.value) : none(),
 );
 
 /**
@@ -476,10 +469,7 @@ export const filter: {
   <V>(predicate: Function.Predicate<V>): (self: Maybe<V>) => Maybe<V>;
   <V>(self: Maybe<V>, predicate: Function.Predicate<V>): Maybe<V>;
 } = Macro.dualify(1, <V>(self: Maybe<V>, predicate: Function.Predicate<V>) =>
-  isSome(self) ?
-    predicate(self.value) ? self
-    : none()
-  : none()
+  isSome(self) ? (predicate(self.value) ? self : none()) : none(),
 );
 
 /**
@@ -495,7 +485,7 @@ export const tap: {
   <V>(tapper: Function.Tapper<V>): (self: Maybe<V>) => Maybe<V>;
   <V>(self: Maybe<V>, tapper: Function.Tapper<V>): Maybe<V>;
 } = Macro.dualify(1, <V>(self: Maybe<V>, tapper: Function.Tapper<V>) => {
-  isSome(self) ? tapper(self.value) : null;
+  if (isSome(self)) tapper(self.value);
   return self;
 });
 
@@ -517,7 +507,7 @@ export const tapNone: {
   <V>(tapper: Function.Callback): (self: Maybe<V>) => Maybe<V>;
   <V>(self: Maybe<V>, tapper: Function.Callback): Maybe<V>;
 } = Macro.dualify(1, <V>(self: Maybe<V>, fn: () => any) => {
-  isNone(self) ? fn() : null;
+  if (isNone(self)) fn();
   return self;
 });
 
@@ -537,9 +527,7 @@ export const is: {
   <TType>(guard: Function.Guard<TType>): (self: Unknown) => Maybe<TType>;
   <TType>(self: Unknown, guard: Function.Guard<TType>): Maybe<TType>;
 } = Macro.dualify(1, <Type>(self: Unknown, guard: Function.Guard<Type>) =>
-  isNone(self) ? none()
-  : guard(self.value) ? some(self.value)
-  : none()
+  isNone(self) ? none() : guard(self.value) ? some(self.value) : none(),
 );
 
 /**
@@ -552,23 +540,15 @@ export const is: {
  * @todo testing
  */
 export const match: {
-  <V>(branches: {
-    some?: (value: V) => any;
-    none?: () => any;
-  }): (self: Maybe<V>) => Maybe<V>;
-  <V>(
-    self: Maybe<V>,
-    branches: { some?: (value: V) => any; none?: () => any }
-  ): Maybe<V>;
+  <V>(branches: { some?: (value: V) => any; none?: () => any }): (self: Maybe<V>) => Maybe<V>;
+  <V>(self: Maybe<V>, branches: { some?: (value: V) => any; none?: () => any }): Maybe<V>;
 } = Macro.dualify(
   1,
-  <V>(
-    self: Maybe<V>,
-    branches: { some?: (value: V) => any; none?: () => any }
-  ) => {
-    isSome(self) ? branches.some?.(self.value) : branches.none?.();
+  <V>(self: Maybe<V>, branches: { some?: (value: V) => any; none?: () => any }) => {
+    if (isSome(self)) branches.some?.(self.value);
+    else branches.none?.();
     return self;
-  }
+  },
 );
 
 /**
@@ -582,20 +562,15 @@ export const match: {
  * @todo testing
  */
 export const tryMap: {
-  <TFrom, TTo>(
-    mapper: (some: TFrom) => TTo
-  ): (self: Maybe<TFrom>) => Maybe<TTo>;
+  <TFrom, TTo>(mapper: (some: TFrom) => TTo): (self: Maybe<TFrom>) => Maybe<TTo>;
   <TFrom, TTo>(self: Maybe<TFrom>, mapper: (some: TFrom) => TTo): Maybe<TTo>;
-} = Macro.dualify(
-  1,
-  <TFrom, TTo>(self: Maybe<TFrom>, mapper: (some: TFrom) => TTo) => {
-    try {
-      return isSome(self) ? some(mapper(self.value)) : none();
-    } catch {
-      return none();
-    }
+} = Macro.dualify(1, <TFrom, TTo>(self: Maybe<TFrom>, mapper: (some: TFrom) => TTo) => {
+  try {
+    return isSome(self) ? some(mapper(self.value)) : none();
+  } catch {
+    return none();
   }
-);
+});
 
 /**
  * Safely reads a property from an object inside a `Maybe`.
@@ -610,19 +585,13 @@ export const tryMap: {
  * @todo testing
  */
 export const property: {
-  <R extends Struct, K extends keyof R>(
-    key: K
-  ): (self: Maybe<R>) => Maybe<R[K]>;
+  <R extends Struct, K extends keyof R>(key: K): (self: Maybe<R>) => Maybe<R[K]>;
   <R extends Struct, K extends keyof R>(self: Maybe<R>, key: K): Maybe<R[K]>;
-} = Macro.dualify(
-  1,
-  <R extends Struct, K extends keyof R>(self: Maybe<R>, key: K) => {
-    if (isNone(self)) return self;
-    if (!Table.isObject(self.value) || !Table.hasKey(self.value, key))
-      return none();
-    return some(self.value[key]);
-  }
-);
+} = Macro.dualify(1, <R extends Struct, K extends keyof R>(self: Maybe<R>, key: K) => {
+  if (isNone(self)) return self;
+  if (!Table.isObject(self.value) || !Table.hasKey(self.value, key)) return none();
+  return some(self.value[key]);
+});
 
 /**
  * Converts a `Maybe<V>` into a `Result<V, E>`.
@@ -645,14 +614,11 @@ export const toResult: {
   1,
   <V, E>(
     self: Maybe<V>,
-    error?: Evaluable<E>
+    error?: Evaluable<E>,
   ): Result.Result<V, Nothing.Nothing> | Result.Result<V, E> => {
-    if (isNone(self))
-      return error ?
-          Result.err(Macro.evaluate(error))
-        : Result.err(Nothing.make());
+    if (isNone(self)) return error ? Result.err(Macro.evaluate(error)) : Result.err(Nothing.make());
     return Result.ok(self.value);
-  }
+  },
 );
 
 /**
@@ -675,8 +641,7 @@ export const parseJson = (self: Maybe<string>) => tryMap(self, JSON.parse);
  *
  * @todo testing
  */
-export const toNullable = <V>(self: Maybe<V>) =>
-  isSome(self) ? self.value : Macro.null;
+export const toNullable = <V>(self: Maybe<V>) => (isSome(self) ? self.value : Macro.null);
 
 /**
  * Converts a `Maybe<V>` into a `undefined`.
@@ -687,8 +652,7 @@ export const toNullable = <V>(self: Maybe<V>) =>
  *
  * @todo testing
  */
-export const toUndefined = <V>(self: Maybe<V>) =>
-  isSome(self) ? self.value : Macro.undefined;
+export const toUndefined = <V>(self: Maybe<V>) => (isSome(self) ? self.value : Macro.undefined);
 
 /**
  * Extracts the inner value from a `Some`.

@@ -35,9 +35,7 @@ export namespace Operator {
    * @template TInput input type
    * @template TOutput expected output type
    */
-  export type Async<TInput, TOutput = TInput> = (
-    input: TInput
-  ) => Promise<TOutput>;
+  export type Async<TInput, TOutput = TInput> = (input: TInput) => Promise<TOutput>;
 }
 
 /**
@@ -113,9 +111,7 @@ export type Tapper<TInput> = Unary<TInput, void>;
  * @template TInstance the instance type
  * @template TArgs the arguments type
  */
-export type Maker<TInstance, TArgs extends readonly any[]> = (
-  ...args: TArgs
-) => TInstance;
+export type Maker<TInstance, TArgs extends readonly any[]> = (...args: TArgs) => TInstance;
 
 export namespace Maker {
   /**
@@ -163,7 +159,7 @@ export type Guard<TValue> = (input: unknown) => input is TValue;
  * @returns {boolean} `true` if the value is a function.
  */
 export const isCallable: Guard<Callable> = (input): input is Callable =>
-  typeof input === "function";
+  typeof input === 'function';
 
 /**
  * @alias {@link isCallable}

@@ -1,4 +1,4 @@
-import * as Vitest from "vitest";
+import * as Vitest from 'vitest';
 
 /**
  * Helper function to assert elapsed time with tolerance for CI environments
@@ -9,7 +9,7 @@ import * as Vitest from "vitest";
 export const expectElapsedTimeWithTolerance = (
   elapsed: number,
   expected: number,
-  tolerance: number = 1
+  tolerance: number = 1,
 ) => {
   Vitest.expect(elapsed).toBeGreaterThanOrEqual(expected - tolerance);
 };

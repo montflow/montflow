@@ -1,9 +1,9 @@
-import * as Vitest from "vitest";
+import * as Vitest from 'vitest';
 
-import * as Constructor from "../index.js";
+import * as Constructor from '../index.js';
 
-Vitest.describe("[types] Constructor.Nonary", () => {
-  Vitest.it("should be defined", () => {
+Vitest.describe('[types] Constructor.Nonary', () => {
+  Vitest.it('should be defined', () => {
     type Test = Constructor.Nonary<
       string,
       number,

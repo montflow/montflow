@@ -1,6 +1,6 @@
-import * as Function from "../function/index.js";
-import * as Macro from "../macro/index.js";
-import { Evaluable } from "../global/index.js";
+import * as Function from '../function/index.js';
+import * as Macro from '../macro/index.js';
+import { Evaluable } from '../global/index.js';
 
 /**
  * A type that can be either a Promise or a synchronous value.
@@ -35,9 +35,7 @@ export const wait: {
   <V>(millis: number, value: Evaluable<V>): Promise<V>;
 } = Macro.cast(
   <V>(millis: number, value?: Evaluable<V>) =>
-    new Promise((resolve) =>
-      setTimeout(() => resolve(Macro.evaluate(value)), millis)
-    )
+    new Promise((resolve) => setTimeout(() => resolve(Macro.evaluate(value)), millis)),
 );
 
 /**
@@ -70,18 +68,17 @@ export const withMinimumDuration: {
     millis: number,
     ...tasks: TTasks
   ): Promise<{
-    -readonly [P in keyof TTasks]: TTasks[P] extends Promise<infer T> ? T
-    : TTasks[P] extends () => Promise<infer T> ? T
-    : never;
+    -readonly [P in keyof TTasks]: TTasks[P] extends Promise<infer T>
+      ? T
+      : TTasks[P] extends () => Promise<infer T>
+        ? T
+        : never;
   }>;
 } = Macro.cast(async (millis: number, ...tasks: Evaluable<Promise<any>>[]) => {
   const delayPromise = wait(millis);
   const taskPromises = tasks.map((task) => Macro.evaluate(task));
 
-  const [results] = await Promise.all([
-    Promise.all(taskPromises),
-    delayPromise,
-  ]);
+  const [results] = await Promise.all([Promise.all(taskPromises), delayPromise]);
 
   return tasks.length === 1 ? results[0] : results;
 });
@@ -93,10 +90,10 @@ export const withMinimumDuration: {
  * @returns {boolean} `True` if the value is a Promise.
  */
 export const isPromise = (thing: unknown): thing is Promise<unknown> =>
-  thing instanceof Promise
-  || (thing !== null
-    && typeof thing === "object"
-    && "then" in thing
-    && Function.isCallable(thing.then)
-    && "catch" in thing
-    && Function.isCallable(thing.catch));
+  thing instanceof Promise ||
+  (thing !== null &&
+    typeof thing === 'object' &&
+    'then' in thing &&
+    Function.isCallable(thing.then) &&
+    'catch' in thing &&
+    Function.isCallable(thing.catch));
