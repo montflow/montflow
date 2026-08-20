@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "type": "loop",
+  "name": "adversarial-review-loop",
+  "config": {
+    "steps": [
+      {
+        "id": "s1",
+        "kind": "reviewer-group",
+        "label": "Reviewers",
+        "model": "deepseek-v4-flash-free"
+      },
+      {
+        "id": "s2",
+        "kind": "fixers",
+        "label": "Fix",
+        "model": "deepseek-v4-flash-free"
+      }
+    ],
+    "maxLoops": 3,
+    "maxCycles": 5,
+    "deadlock": {
+      "flipThreshold": 2,
+      "action": "escalate"
+    }
+  }
+}
