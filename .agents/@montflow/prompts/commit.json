@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "name": "commit",
+  "template": "After user approval: Check repo for pre-commit hooks. If no hooks, commit normally. If hooks exist, commit all except last using --no-verify. Commit last normally to trigger hooks. If hooks pass, continue to step 5. If hooks fail, override base error rule: if simple error (lint/auto-format), fix, stage with git add --, and retry exactly once. If fail again or error complex (tests/types), stop, show log, ask user. No loops.",
+  "variables": [],
+  "skills": [
+    "planning-git-commits"
+  ]
+}
