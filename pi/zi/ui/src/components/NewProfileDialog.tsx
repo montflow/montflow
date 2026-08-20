@@ -12,7 +12,6 @@ import {
 import { useCreateProfile } from '@/lib/useProfiles'
 import { skillsFromMarkdown, withSkills } from '@/lib/frontmatter'
 import { useUiSocket } from '@/lib/useUiSocket'
-import { useModels } from '@/lib/useModels'
 import { ModelSelect } from '@/components/ModelSelect'
 import { SkillPicker } from '@/components/SkillPicker'
 import { AiInput } from '@/components/AiInput'
@@ -42,9 +41,9 @@ export function NewProfileDialog({
 }: NewProfileDialogProps) {
   const { sendCommand, conn } = useUiSocket()
   const createProfile = useCreateProfile(workspaceId)
-  // Model override for this run: preselect the header picker's current
-  // choice so the user can switch to a different model (null = default).
-  const modelsQuery = useModels(conn)
+  // Model override for this run: starts non-selected (null = follow the
+  // header picker default); the user can pick a model explicitly or hit
+  // "Match current" to pin the live session model.
 
   const [mode, setMode] = useState<Mode>('choose')
 
@@ -79,12 +78,10 @@ export function NewProfileDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  // Entering agentic mode: preselect the header picker's current choice so
-  // the dropdown shows what would run and lets the user pick another model.
-  const startAgentic = (): void => {
-    setModel(modelsQuery.data?.selected ?? null)
-    setMode('agentic')
-  }
+  // Entering agentic mode: leave the model non-selected (no override), so
+  // the dropdown isn't silently pinned to the header's default. The user
+  // picks a model explicitly or one-click "Match current".
+  const startAgentic = (): void => setMode('agentic')
 
   const startGeneration = (): void => {
     if (prompt.trim() === '') return
@@ -122,9 +119,19 @@ export function NewProfileDialog({
 
   const close = (): void => onOpenChange(false)
 
+  // Esc only closes a clean dialog — never drop typed content or picked skills.
+  const dirty =
+    mode !== 'choose' &&
+    (name.trim() !== '' || markdown.trim() !== '' || prompt.trim() !== '' || agenticSkills.length > 0)
+
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? reset() : close())}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent
+        className="sm:max-w-xl"
+        onEscapeKeyDown={(event) => {
+          if (dirty) event.preventDefault()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             {mode === 'choose' && 'New profile'}
@@ -228,7 +235,7 @@ export function NewProfileDialog({
                 <label htmlFor="profile-model" className="text-xs font-medium text-muted-foreground">
                   Model
                 </label>
-                <ModelSelect conn={conn} value={model} onChange={setModel} />
+                <ModelSelect conn={conn} value={model} onChange={setModel} hideDefault />
               </div>
               <SkillPicker
                 workspaceId={workspaceId}
@@ -275,7 +282,7 @@ export function NewProfileDialog({
             </Button>
           )}
           {mode === 'agentic' && (
-            <Button onClick={startGeneration} disabled={prompt.trim() === ''}>
+            <Button onClick={startGeneration} disabled={prompt.trim() === '' || model === null}>
               <Sparkles className="size-3.5" />
               Generate
             </Button>

@@ -62,9 +62,17 @@ export function NewPromptDialog({ workspaceId, open, onOpenChange, onCreated }: 
 
   const close = (): void => onOpenChange(false)
 
+  // Esc only closes a clean dialog — never drop typed content.
+  const dirty = name.trim() !== ''
+
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? reset() : close())}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="sm:max-w-md"
+        onEscapeKeyDown={(event) => {
+          if (dirty) event.preventDefault()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>New prompt</DialogTitle>
           <DialogDescription>

@@ -16,7 +16,6 @@ import { ModelSelect } from '@/components/ModelSelect'
 import { useProfileDetail, useDeleteProfile } from '@/lib/useProfiles'
 import { useSkillNameToIdMap } from '@/lib/useSkills'
 import { useUiSocket } from '@/lib/useUiSocket'
-import { useModels } from '@/lib/useModels'
 import { runUrl, skillUrl, workspaceUrl } from '@/components/LandingPage'
 import { navigate } from '@/lib/useLocation'
 import { titleFromSlug } from '@/lib/utils'
@@ -26,9 +25,7 @@ import {
   ArrowUpRight,
   ListChecks,
   Loader2,
-  Maximize2,
   MessageSquareText,
-  Minimize2,
   Pencil,
   Sparkles,
   Trash2,
@@ -125,9 +122,6 @@ function ProfileHeader({
   onEdit: () => void
   onDelete: () => void
 }) {
-  // The markdown preview is width-constrained for readability; the expand
-  // button in the corner flips it to the full container width.
-  const [previewExpanded, setPreviewExpanded] = useState(false)
   return (
     <div className="mt-3">
       <div className="flex items-start justify-between gap-4">
@@ -191,26 +185,8 @@ function ProfileHeader({
             <MessageSquareText className="size-4" />
             Instructions
           </h2>
-          <div className="relative">
-            <div
-              className={`prose dark:prose-invert ${previewExpanded ? 'max-w-none' : 'max-w-prose'}`}
-            >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{profile.instructions}</ReactMarkdown>
-            </div>
-            <Button
-              size="icon-sm"
-              variant="outline"
-              onClick={() => setPreviewExpanded((value) => !value)}
-              title={previewExpanded ? 'Constrain to readable width' : 'Expand to full width'}
-              aria-label={previewExpanded ? 'Constrain to readable width' : 'Expand to full width'}
-              className="absolute bottom-2 right-2"
-            >
-              {previewExpanded ? (
-                <Minimize2 className="size-3.5" />
-              ) : (
-                <Maximize2 className="size-3.5" />
-              )}
-            </Button>
+          <div className="prose dark:prose-invert w-max max-w-full">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{profile.instructions}</ReactMarkdown>
           </div>
         </section>
       )}
@@ -264,7 +240,6 @@ function EditProfileDialog({
   onSaved: () => void
 }) {
   const { sendCommand } = useUiSocket()
-  const modelsQuery = useModels(conn)
   const [mode, setMode] = useState<EditMode>('choose')
 
   // Manual mode
@@ -294,9 +269,8 @@ function EditProfileDialog({
   }
 
   const startAgentic = (): void => {
-    // Preselect the header picker's current choice so the dropdown shows
-    // what would run and lets the user pick another model.
-    setModel(modelsQuery.data?.selected ?? null)
+    // Leave the model non-selected (no override) so it isn't silently pinned
+    // to the header's default; the user picks one or one-click "Match current".
     setPrompt(describeProfile(profile))
     setMode('agentic')
   }
@@ -439,7 +413,7 @@ function EditProfileDialog({
                 <label htmlFor="profile-edit-model" className="text-xs font-medium text-muted-foreground">
                   Model
                 </label>
-                <ModelSelect conn={conn} value={model} onChange={setModel} />
+                <ModelSelect conn={conn} value={model} onChange={setModel} hideDefault />
               </div>
               {agenticError !== null && <p className="text-xs text-red-500">{agenticError}</p>}
             </div>
@@ -472,7 +446,7 @@ function EditProfileDialog({
             </Button>
           )}
           {mode === 'agentic' && (
-            <Button onClick={generate} disabled={prompt.trim() === ''}>
+            <Button onClick={generate} disabled={prompt.trim() === '' || model === null}>
               <Sparkles className="size-3.5" />
               Run agent
             </Button>

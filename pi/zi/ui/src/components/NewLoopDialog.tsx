@@ -106,9 +106,18 @@ export function NewLoopDialog({
 
   const close = (): void => onOpenChange(false)
 
+  // Esc only closes a clean dialog — never drop the chosen preset, scope,
+  // or a typed goal.
+  const dirty = presetName !== null || mode !== null || goal.trim() !== ''
+
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? reset() : close())}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent
+        className="sm:max-w-xl"
+        onEscapeKeyDown={(event) => {
+          if (dirty) event.preventDefault()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             {step === 'preset' ? 'Kick off a review loop' : 'Choose the scope'}

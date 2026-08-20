@@ -135,7 +135,8 @@ export function WorkspacePage({ conn, workspace, info }: WorkspacePageProps) {
     const showBranch = Boolean(repo && branch)
 
     body = (
-      <main data-scroll-region className="flex-1 overflow-y-auto p-4">
+      <main data-scroll-region className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-6xl p-4">
         <header className="mb-6">
           <h1 className="flex flex-wrap items-baseline gap-x-2 text-lg font-semibold">
             <span className="truncate">{title}</span>
@@ -159,6 +160,7 @@ export function WorkspacePage({ conn, workspace, info }: WorkspacePageProps) {
         <LoopsSection workspaceId={workspace.id} conn={conn} folder={info?.folder ?? null} id="loops" reveal={section === 'loops'} />
 
         <RunsSection workspaceId={workspace.id} conn={conn} id="runs" reveal={section === 'runs'} />
+        </div>
       </main>
     )
   }

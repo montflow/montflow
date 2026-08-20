@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/dialog'
 import { useCreateSkill, useSkills } from '@/lib/useSkills'
 import { useUiSocket } from '@/lib/useUiSocket'
-import { useModels } from '@/lib/useModels'
 import { ModelSelect } from '@/components/ModelSelect'
 import { AiInput } from '@/components/AiInput'
 import { runUrl } from '@/components/LandingPage'
@@ -40,9 +39,8 @@ export function NewSkillDialog({
 }: NewSkillDialogProps) {
   const { sendCommand, conn } = useUiSocket()
   const createSkill = useCreateSkill(workspaceId)
-  // Model override for this run: preselect the header picker's current
-  // choice so the user can switch to a different model (null = default).
-  const modelsQuery = useModels(conn)
+  // Model override for this run: starts non-selected (null = follow the
+  // header picker); the user picks a model explicitly or "Match current".
   // The "include authoring skill" toggle only appears when the workspace
   // actually has the authoring-skills skill (the backend loads it by name).
   const skillsQuery = useSkills(workspaceId, conn)
@@ -73,12 +71,10 @@ export function NewSkillDialog({
     setAgenticError(null)
   }
 
-  // Entering agentic mode: preselect the header picker's current choice so
-  // the dropdown shows what would run and lets the user pick another model.
-  const startAgentic = (): void => {
-    setModel(modelsQuery.data?.selected ?? null)
-    setMode('agentic')
-  }
+  // Entering agentic mode: leave the model non-selected (no override), so
+  // the dropdown isn't silently pinned to the header's default. The user
+  // picks a model explicitly or one-click "Match current".
+  const startAgentic = (): void => setMode('agentic')
 
   // Re-arm the dialog each time it opens.
   useEffect(() => {
@@ -122,9 +118,17 @@ export function NewSkillDialog({
 
   const close = (): void => onOpenChange(false)
 
+  // Esc only closes a clean dialog — never drop typed content.
+  const dirty = mode !== 'choose' && (name.trim() !== '' || markdown.trim() !== '' || prompt.trim() !== '')
+
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? reset() : close())}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent
+        className="sm:max-w-xl"
+        onEscapeKeyDown={(event) => {
+          if (dirty) event.preventDefault()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             {mode === 'choose' && 'New skill'}
@@ -233,7 +237,7 @@ export function NewSkillDialog({
                 <label htmlFor="skill-model" className="text-xs font-medium text-muted-foreground">
                   Model
                 </label>
-                <ModelSelect conn={conn} value={model} onChange={setModel} />
+                <ModelSelect conn={conn} value={model} onChange={setModel} hideDefault />
               </div>
               {agenticError !== null && <p className="text-xs text-red-500">{agenticError}</p>}
             </div>
@@ -269,7 +273,7 @@ export function NewSkillDialog({
             </Button>
           )}
           {mode === 'agentic' && (
-            <Button onClick={startGeneration} disabled={prompt.trim() === ''}>
+            <Button onClick={startGeneration} disabled={prompt.trim() === '' || model === null}>
               <Sparkles className="size-3.5" />
               Generate
             </Button>

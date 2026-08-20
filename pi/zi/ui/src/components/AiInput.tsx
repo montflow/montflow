@@ -133,6 +133,9 @@ export function AiInput({ value, onChange, folder, prompt, label, className, dis
     submittingRef.current = false
   }
 
+  // Esc only closes a clean modal — never drop a typed prompt.
+  const dirty = gen === undefined && draft.trim() !== ''
+
   const generate = (): void => {
     if (submittingRef.current || draft.trim() === '' || folder === null) return
     submittingRef.current = true
@@ -191,7 +194,7 @@ export function AiInput({ value, onChange, folder, prompt, label, className, dis
           showCloseButton={!running}
           // The modal is locked while the agent works — no exit.
           onEscapeKeyDown={(event) => {
-            if (running) event.preventDefault()
+            if (running || dirty) event.preventDefault()
           }}
           onInteractOutside={(event) => {
             if (running) event.preventDefault()

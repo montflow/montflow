@@ -16,7 +16,6 @@ import { ModelSelect } from '@/components/ModelSelect'
 import { AiInput } from '@/components/AiInput'
 import { useSkillDetail, useSkillNameToIdMap, useSkills } from '@/lib/useSkills'
 import { useUiSocket } from '@/lib/useUiSocket'
-import { useModels } from '@/lib/useModels'
 import { runUrl, skillUrl, workspaceUrl } from '@/components/LandingPage'
 import { navigate } from '@/lib/useLocation'
 import { titleFromSlug } from '@/lib/utils'
@@ -231,9 +230,8 @@ function ModifySkillDialog({
 }) {
   const queryClient = useQueryClient()
   const { sendCommand } = useUiSocket()
-  // Model override for this run: preselect the header picker's current
-  // choice so the user can switch to a different model (null = default).
-  const modelsQuery = useModels(conn)
+  // Model override for this run: starts non-selected (null = follow the
+  // header picker); the user picks a model explicitly or "Match current".
   // The "include authoring skill" toggle only appears when the workspace
   // actually has the authoring-skills skill (the backend loads it by name).
   const skillsQuery = useSkills(workspaceId, conn)
@@ -267,12 +265,10 @@ function ModifySkillDialog({
     setAgenticError(null)
   }
 
-  // Entering agentic mode: preselect the header picker's current choice so
-  // the dropdown shows what would run and lets the user pick another model.
-  const startAgentic = (): void => {
-    setModel(modelsQuery.data?.selected ?? null)
-    setMode('agentic')
-  }
+  // Entering agentic mode: leave the model non-selected (no override), so
+  // the dropdown isn't silently pinned to the header's default. The user
+  // picks a model explicitly or one-click "Match current".
+  const startAgentic = (): void => setMode('agentic')
 
   // Re-arm the dialog each time it opens.
   useEffect(() => {
@@ -432,7 +428,7 @@ function ModifySkillDialog({
                 >
                   Model
                 </label>
-                <ModelSelect conn={conn} value={model} onChange={setModel} />
+                <ModelSelect conn={conn} value={model} onChange={setModel} hideDefault />
               </div>
               {agenticError !== null && <p className="text-xs text-red-500">{agenticError}</p>}
             </div>
@@ -464,7 +460,7 @@ function ModifySkillDialog({
           {mode === 'agentic' && (
             <Button
               onClick={startGeneration}
-              disabled={prompt.trim() === '' || skill === undefined}
+              disabled={prompt.trim() === '' || model === null || skill === undefined}
             >
               <Sparkles className="size-3.5" />
               Run agent
