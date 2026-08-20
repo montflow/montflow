@@ -21,22 +21,18 @@ interface NewPromptDialogProps {
 }
 
 /**
- * Minimal prompt creation: name + optional description + a starter template.
- * The created prompt opens on its detail page, where variables are defined
- * and placed (`{{name}}`) in the template.
+ * Minimal prompt creation: just a name. On submit the prompt opens on its
+ * detail page in edit mode — where you declare variables (right panel) and
+ * build the template (left panel, with {{ }} highlighting + autocomplete).
  */
 export function NewPromptDialog({ workspaceId, open, onOpenChange, onCreated }: NewPromptDialogProps) {
   const savePrompt = useSavePrompt(workspaceId)
 
   const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [template, setTemplate] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   const reset = (): void => {
     setName('')
-    setDescription('')
-    setTemplate('')
     setError(null)
   }
 
@@ -51,8 +47,7 @@ export function NewPromptDialog({ workspaceId, open, onOpenChange, onCreated }: 
     savePrompt.mutate(
       {
         name: name.trim(),
-        description: description.trim() === '' ? undefined : description.trim(),
-        template,
+        template: '',
         variables: [],
       },
       {
@@ -69,13 +64,11 @@ export function NewPromptDialog({ workspaceId, open, onOpenChange, onCreated }: 
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? reset() : close())}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>New prompt</DialogTitle>
           <DialogDescription>
-            Create the prompt, then define its variables on its page. Opening a placeholder like{' '}
-            <code className="rounded bg-muted px-1">{'{{files}}'}</code> in the template makes it a
-            prompt you fill in each time you run it.
+            Name it, then give it shape on its page — declare variables and write the template.
           </DialogDescription>
         </DialogHeader>
 
@@ -95,32 +88,6 @@ export function NewPromptDialog({ workspaceId, open, onOpenChange, onCreated }: 
               placeholder="code-review"
               className="font-mono"
               autoFocus
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="prompt-description" className="text-xs font-medium text-muted-foreground">
-              Description <span className="text-muted-foreground/60">(optional)</span>
-            </label>
-            <Input
-              id="prompt-description"
-              autoComplete="off"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="What this prompt does"
-              className="font-mono"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="prompt-template" className="text-xs font-medium text-muted-foreground">
-              Template <span className="text-muted-foreground/60">(add variables later)</span>
-            </label>
-            <textarea
-              id="prompt-template"
-              value={template}
-              onChange={(event) => setTemplate(event.target.value)}
-              spellCheck={false}
-              placeholder="Audit these files for security issues:&#10;{{files}}"
-              className="min-h-28 w-full resize-y rounded-md border border-input bg-transparent p-2.5 font-mono text-xs text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             />
           </div>
           {error !== null && <p className="text-xs text-red-500">{error}</p>}

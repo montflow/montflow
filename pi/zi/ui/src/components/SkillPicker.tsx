@@ -57,6 +57,8 @@ export function SkillPicker({
     if (next.has(skillName)) next.delete(skillName)
     else next.add(skillName)
     onChange([...next])
+    // Selecting resets the search so the full picklist is visible again.
+    setQuery('')
   }
 
   return (

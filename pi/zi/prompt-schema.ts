@@ -89,6 +89,21 @@ export type PromptDecoded = Schema.Schema.Type<typeof PromptSchema>;
 export type PromptVariableDecoded = Schema.Schema.Type<typeof PromptVariableSchema>;
 
 /**
+ * Render a prompt template with collected variable values. Every `{{name}}`
+ * token is replaced with `values[name]`; tokens with no (or empty) value are
+ * left verbatim so the caller can see what is still unfilled.
+ */
+export const renderPromptTemplate = (
+  template: string,
+  values: Readonly<Record<string, string>>,
+): string =>
+  template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (token, rawName: string) => {
+    const name = rawName.trim();
+    const value = values[name];
+    return value !== undefined && value !== '' ? value : token;
+  });
+
+/**
  * True when a template references the given variable name as `{{name}}`
  * somewhere in its text. Used to flag orphan variables in the editor.
  */

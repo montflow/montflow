@@ -2,6 +2,7 @@ import { test, expect } from 'vitest';
 import { Schema } from 'effect';
 import {
   PromptFromJson,
+  renderPromptTemplate,
   templateUsesVariable,
   type PromptDecoded,
 } from '../prompt-schema';
@@ -89,3 +90,16 @@ test('prompt schema: templateUsesVariable matches {{name}} and {{ name }}', () =
 
 // Compile-time check: the decoded types expose the expected fields.
 type _PromptCheck = PromptDecoded;
+
+test('prompt schema: renderPromptTemplate substitutes values and keeps blanks', () => {
+  const template = 'Audit {{files}} focusing on {{focus}}';
+  expect(renderPromptTemplate(template, { files: 'src/a', focus: 'auth' })).toBe(
+    'Audit src/a focusing on auth',
+  );
+  // Missing/blank values stay verbatim so the caller sees what's unfilled.
+  expect(renderPromptTemplate(template, { files: 'src/a' })).toBe(
+    'Audit src/a focusing on {{focus}}',
+  );
+  // Tolerates spacing inside the tokens.
+  expect(renderPromptTemplate('x {{ focus }} y', { focus: 'auth' })).toBe('x auth y');
+});

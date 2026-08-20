@@ -123,7 +123,6 @@ export function WorkspacePage({ conn, workspace, info }: WorkspacePageProps) {
         workspaceId={workspace.id}
         promptName={promptName}
         conn={conn}
-        folder={info?.folder ?? null}
       />
     )
   } else {
