@@ -9,9 +9,7 @@ import { Effect } from 'effect';
 import { readdir, readFile } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import { join } from 'node:path';
-import type { ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
-import { createPersistentAgent, type PersistentAgent } from './runner';
-import { resolveInitialModel } from './models-client';
+import { createPersistentAgent, type PersistentAgent } from './runner.ts';
 
 export type SkillRunResult = { ok: true; text: string } | { ok: false; error: string };
 
@@ -240,20 +238,16 @@ export interface SkillRunSessionOptions {
  * (then the first pickable choice) is used.
  */
 export const createSkillAgent = async (
-  ctx: ExtensionCommandContext,
-  modelOverride?: string,
+  cwd: string,
+  model: string,
   options: SkillRunSessionOptions = {},
 ): Promise<SkillRunAgent> => {
-  const model = resolveInitialModel(ctx, modelOverride);
-  if (model === undefined) {
-    throw new Error('No active model — start a pi session first.');
-  }
   const agent = await Effect.runPromise(
     createPersistentAgent({
       model,
       systemPrompt: SKILL_AUTHOR_SYSTEM,
       tools: ['read', 'write', 'edit', 'grep', 'glob'],
-      cwd: ctx.cwd,
+      cwd,
       sessionDir: options.sessionDir,
       resumeSessionFile: options.resumeSessionFile,
     }),
@@ -271,20 +265,16 @@ export const createSkillAgent = async (
  * {@link createSkillAgent}.
  */
 export const createProfileAgent = async (
-  ctx: ExtensionCommandContext,
-  modelOverride?: string,
+  cwd: string,
+  model: string,
   options: SkillRunSessionOptions = {},
 ): Promise<SkillRunAgent> => {
-  const model = resolveInitialModel(ctx, modelOverride);
-  if (model === undefined) {
-    throw new Error('No active model — start a pi session first.');
-  }
   const agent = await Effect.runPromise(
     createPersistentAgent({
       model,
       systemPrompt: PROFILE_AUTHOR_SYSTEM,
       tools: ['read', 'write', 'edit', 'grep', 'glob'],
-      cwd: ctx.cwd,
+      cwd,
       sessionDir: options.sessionDir,
       resumeSessionFile: options.resumeSessionFile,
     }),
@@ -302,20 +292,16 @@ export const createProfileAgent = async (
  * {@link createSkillAgent}.
  */
 export const createPresetAgent = async (
-  ctx: ExtensionCommandContext,
-  modelOverride?: string,
+  cwd: string,
+  model: string,
   options: SkillRunSessionOptions = {},
 ): Promise<SkillRunAgent> => {
-  const model = resolveInitialModel(ctx, modelOverride);
-  if (model === undefined) {
-    throw new Error('No active model — start a pi session first.');
-  }
   const agent = await Effect.runPromise(
     createPersistentAgent({
       model,
       systemPrompt: PRESET_AUTHOR_SYSTEM,
       tools: ['read', 'write', 'edit', 'grep', 'glob'],
-      cwd: ctx.cwd,
+      cwd,
       sessionDir: options.sessionDir,
       resumeSessionFile: options.resumeSessionFile,
     }),
@@ -334,20 +320,16 @@ export const createPresetAgent = async (
  * but has no write tools, so it can never mutate anything.
  */
 export const createTextAgent = async (
-  ctx: ExtensionCommandContext,
-  modelOverride?: string,
+  cwd: string,
+  model: string,
   options: SkillRunSessionOptions = {},
 ): Promise<SkillRunAgent> => {
-  const model = resolveInitialModel(ctx, modelOverride);
-  if (model === undefined) {
-    throw new Error('No active model — start a pi session first.');
-  }
   const agent = await Effect.runPromise(
     createPersistentAgent({
       model,
       systemPrompt: TEXT_GENERATOR_SYSTEM,
       tools: ['read', 'grep', 'glob'],
-      cwd: ctx.cwd,
+      cwd,
       sessionDir: options.sessionDir,
       resumeSessionFile: options.resumeSessionFile,
     }),
@@ -366,20 +348,16 @@ export const createTextAgent = async (
  * model-resolution rules of {@link createSkillAgent}.
  */
 export const createPromptAgent = async (
-  ctx: ExtensionCommandContext,
-  modelOverride?: string,
+  cwd: string,
+  model: string,
   options: SkillRunSessionOptions = {},
 ): Promise<SkillRunAgent> => {
-  const model = resolveInitialModel(ctx, modelOverride);
-  if (model === undefined) {
-    throw new Error('No active model — start a pi session first.');
-  }
   const agent = await Effect.runPromise(
     createPersistentAgent({
       model,
       systemPrompt: PROMPT_RUNNER_SYSTEM,
       tools: ['read', 'write', 'edit', 'grep', 'glob'],
-      cwd: ctx.cwd,
+      cwd,
       sessionDir: options.sessionDir,
       resumeSessionFile: options.resumeSessionFile,
     }),
@@ -430,21 +408,19 @@ Rules:
  */
 export const wrapPromptPrompt = (
   idea: string,
-  promptName?: string,
+  _promptName?: string,
   skills?: readonly { readonly name: string; readonly body: string }[],
 ): string => {
-  const source =
-    promptName !== undefined && promptName.trim() !== ''
-      ? `Execute the following rendered prompt (from saved prompt '${promptName.trim()}' in this workspace):`
-      : 'Execute the following rendered prompt:';
-  let prompt = `${source}\n\n${idea.trim()}`;
+  const parts: string[] = [];
+  // Skills come first (above the instructions) so the agent has them loaded.
   if (skills !== undefined && skills.length > 0) {
     const blocks = skills
       .map((s) => `<skill name="${s.name}">\n${s.body.trim()}\n</skill>`)
       .join('\n\n');
-    prompt += `\n\nThis prompt has the following workspace skills attached. Read them and follow their instructions where they apply — they shape how you carry out the task:\n\n${blocks}`;
+    parts.push(`Using the following skills:\n\n${blocks}`);
   }
-  return prompt;
+  parts.push(`Follow the following instructions:\n\n${idea.trim()}`);
+  return parts.join('\n\n');
 };
 
 /** A skill's SKILL.md body keyed by its frontmatter name. */
@@ -506,13 +482,23 @@ export const loadPromptSkills = async (
  * turn, streams deltas via `onDelta`, and disposes the agent. The final
  * result carries the complete answer text.
  */
+/**
+ * Generate text with the read-only ephemeral text agent. The model is
+ * resolved upstream (like the run agents); it drives one-shot AI-input fills
+ * that are NOT runs (no record, no persistence).
+ * @param {string} cwd The workspace directory
+ * @param {string} model The resolved model (`provider/model-id`)
+ * @param {string} task The text-generation request
+ * @param {(delta: string) => void} onDelta Streaming delta callback
+ * @returns The final answer
+ */
 export const generateText = async (
-  ctx: ExtensionCommandContext,
-  modelOverride: string | undefined,
+  cwd: string,
+  model: string,
   task: string,
   onDelta: (delta: string) => void,
 ): Promise<SkillRunResult> => {
-  const agent = await createTextAgent(ctx, modelOverride);
+  const agent = await createTextAgent(cwd, model);
   try {
     return await promptSkillAgent(agent, wrapTextPrompt(task), onDelta);
   } finally {

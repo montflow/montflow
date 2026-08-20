@@ -22,11 +22,13 @@ import { readFile, readdir, mkdir, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import net from 'node:net';
+import { randomUUID } from 'node:crypto';
 import { WebSocket, WebSocketServer } from 'ws';
 import { Schema } from 'effect';
 import { ReviewPresetFromJson, ReviewPresetSchema } from './preset-schema.ts';
-import { PromptFromJson, PromptSchema } from './prompt-schema.ts';
+import { PromptFromJson, PromptSchema, renderPromptTemplate, type PromptDecoded } from './prompt-schema.ts';
 import { openRunStore, type RunStore, type StoredRun } from './run-store.ts';
+import type { RunExecutor } from './run-executor.ts';
 import { parseProfile, parseFrontmatter } from './profiles/model.ts';
 import {
   DEFAULT_ROUTER_PORT,
@@ -292,6 +294,15 @@ const handleBackendMessage = async (socket: WebSocket, raw: string): Promise<voi
 
       // Remember the session's pickable models for the header model picker.
       folderModels.set(id, msg.models ?? []);
+      // Remember this folder's workspace identity + dir so the executor can
+      // keep running (and resume) its runs even if the session disconnects.
+      folderCwd.set(id, msg.cwd);
+      const wsId = typeof msg.workspace?.id === 'string' ? msg.workspace.id : '';
+      if (wsId !== '') folderWorkspace.set(id, wsId);
+
+      // Restore this cwd's persisted runs into the executor (survive router
+      // restarts): it re-emits their snapshots so fresh tabs see them.
+      void getExecutor().then((ex) => void ex.restore(msg.cwd));
 
       const ok: RouterToBackend = { type: 'ok', folder: id };
       socket.send(JSON.stringify(ok));
@@ -545,6 +556,107 @@ const notFoundRun = (runId: string, folder: string): RouterToBrowser => ({
     },
   ],
 });
+
+// ---------------------------------------------------------------------------
+// Detached run executor — the router OWNS agentic runs
+// ---------------------------------------------------------------------------
+// Previously agentic runs executed inside the pi session process and died
+// when that session did. Now the router daemon itself runs them via
+// run-executor.ts (each run gets its own isolated SDK session + a bounded
+// concurrency pool), so a run survives the launching session, browser tabs,
+// and router restarts. The executor lazily loads the pi SDK on first use so
+// a router that never starts a run stays light.
+
+/** Max simultaneous agent turns the executor will run (loop fan-out safety). */
+const RUN_MAX_CONCURRENT = 6;
+
+/** folder id → workspace directory, learned at backend register (kept across drops). */
+const folderCwd = new Map<string, string>();
+/** folder id → workspace id, learned at backend register (kept across drops). */
+const folderWorkspace = new Map<string, string>();
+
+let executorPromise: Promise<RunExecutor> | undefined;
+
+/** Lazily create the run executor (loads the pi SDK). Memoized process-wide. */
+const getExecutor = (): Promise<RunExecutor> => {
+  executorPromise ??= import('./run-executor.ts').then(({ createRunExecutor }) =>
+    createRunExecutor({
+      maxConcurrent: RUN_MAX_CONCURRENT,
+      getCwd: (folder) => {
+        if (folder === undefined) return undefined;
+        return folderCwd.get(folder) ?? backends.get(folder)?.info.cwd;
+      },
+      emit: (msg) => {
+        // The router keeps its existing read-cache + durable store in sync, and
+        // the run → folder map for late-join routing — identical to how it
+        // handled backend-emitted skillGen before.
+        runFolder.set(msg.runId, msg.folder);
+        cacheSkillGen(msg as unknown as Extract<BackendToRouter, { type: 'skillGen' }>);
+        broadcastToBrowsers({
+          type: 'skillGen',
+          folder: msg.folder,
+          runId: msg.runId,
+          workspaceId: msg.workspaceId,
+          phase: msg.phase,
+          entry: msg.entry,
+          status: msg.status,
+          text: msg.text,
+          title: msg.title,
+          entries: msg.entries,
+          tools: msg.tools,
+        });
+      },
+    }),
+  );
+  return executorPromise;
+};
+
+/** Map a browser agentic command type to the executor's run kind. */
+const commandKind = (
+  type: BrowserToRouter['command']['type'],
+): 'skill' | 'profile' | 'preset' | 'text' | 'prompt' | undefined =>
+  type === 'skillAgentic'
+    ? 'skill'
+    : type === 'profileAgentic'
+      ? 'profile'
+      : type === 'presetAgentic'
+        ? 'preset'
+        : type === 'textAgentic'
+          ? 'text'
+          : type === 'promptAgentic'
+            ? 'prompt'
+            : undefined;
+
+/** Resolve a concrete model for a run: per-run override → picker selection → folder pickable. */
+const resolveRunModel = (folder: string, requested?: string): string => {
+  if (requested !== undefined && requested !== '') return requested;
+  if (selectedModel !== null && selectedModel !== '') return selectedModel;
+  const pickable = folderModels.get(folder) ?? [];
+  return pickable[0]?.id ?? '';
+};
+
+/** Start an agentic run on the router-side executor (fire-and-forget). */
+const startExecutorRun = (folder: string, command: BrowserToRouter['command'], cwd: string): void => {
+  const kind = commandKind(command.type);
+  if (kind === undefined) return;
+  void getExecutor().then((ex) =>
+    ex.start(kind, {
+      runId: command.runId,
+      folder,
+      workspaceId: folderWorkspace.get(folder) ?? '',
+      cwd,
+      text: command.text,
+      model: resolveRunModel(folder, command.model),
+      useAuthoringSkill: command.useAuthoringSkill,
+      skillName: command.skillName,
+      profileName: command.profileName,
+      presetName: command.presetName,
+      promptName: command.promptName,
+      skills: command.skills,
+    }),
+  );
+};
+
 
 // ---------------------------------------------------------------------------
 // HTTP + WebSocket servers
@@ -1624,6 +1736,65 @@ async function main(): Promise<void> {
         return;
       }
 
+      // POST /api/workspaces/<id>/prompts/<name>/run   { variables, skills?, model? }
+      // Renders the prompt with the supplied variables and starts an agentic
+      // prompt run on the router's executor (streams to the web UI). This is
+      // the programmatic entry point — `/zi prompt` and external agents use it.
+      const promptRun = pathname.match(/^\/api\/workspaces\/([^/]+)\/prompts\/([^/]+)\/run$/);
+      if (promptRun) {
+        const wsId = decodeURIComponent(promptRun[1] ?? '');
+        const name = decodeURIComponent(promptRun[2] ?? '').replace(/\.json$/, '');
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (req.method !== 'POST') {
+          sendJson(405, { error: 'Method not allowed' });
+          return;
+        }
+        const body = await readJsonBody(req).catch(() => undefined);
+        if (body === undefined) {
+          sendJson(400, { error: 'Invalid JSON body' });
+          return;
+        }
+        const raw = await readPromptFile(cwd, name);
+        if (raw === null) {
+          sendJson(404, { error: `Prompt '${name}' not found` });
+          return;
+        }
+        let prompt: PromptDecoded;
+        try {
+          prompt = Schema.decodeSync(PromptFromJson)(raw);
+        } catch (error) {
+          sendJson(400, { error: error instanceof Error ? error.message : String(error) });
+          return;
+        }
+        const { variables, skills, model } = body as {
+          variables?: Record<string, string>;
+          skills?: string[];
+          model?: string;
+        };
+        const values: Record<string, string> =
+          variables !== undefined && typeof variables === 'object' && variables !== null
+            ? variables
+            : {};
+        const rendered = renderPromptTemplate(prompt.template, values);
+        const runId = randomUUID();
+        const folder = folderForCwd(cwd) ?? basename(cwd);
+        const command: BrowserToRouter['command'] = {
+          type: 'promptAgentic',
+          runId,
+          text: rendered,
+          promptName: prompt.name,
+          skills: Array.isArray(skills) ? skills : prompt.skills,
+          model: model ?? undefined,
+        };
+        startExecutorRun(folder, command, cwd);
+        sendJson(200, { ok: true, runId, rendered });
+        return;
+      }
+
       // Skills — read-only listing of `.agents/skills/<name>/SKILL.md` frontmatter.
       // GET  /api/workspaces/<id>/skills          → list
       // POST /api/workspaces/<id>/skills          → create { name, markdown }
@@ -1910,140 +2081,71 @@ async function main(): Promise<void> {
         command.type === 'skillAgentic' ||
         command.type === 'profileAgentic' ||
         command.type === 'presetAgentic' ||
+        command.type === 'promptAgentic' ||
         command.type === 'textAgentic' ||
         command.type === 'textGenerate'
       ) {
         command = { ...command, model: command.model ?? selectedModel ?? undefined };
       }
 
-      // Skill-run commands carry only a run id. Route them via the run →
-      // folder map (learned from the first skillGen broadcast); when the
-      // mapping is not yet known (snapshot raced ahead of the start) fall
-      // back to the command's folder, then fan out to every backend so the
-      // owning one can answer. If nothing is connected and the router has no
-      // cached transcript, reply with an explicit error so the browser never
-      // sits on "Loading run…" forever. `skillSetStatus` additionally falls
-      // back to the router's own cache/store when no backend is live (a
-      // stuck run whose pi session died can still be marked done/error).
+      // Agentic runs execute INSIDE the router (run-executor.ts), so these
+      // commands never reach a backend — divert them to the executor now.
+      if (commandKind(command.type) !== undefined) {
+        const cwd = folderCwd.get(msg.folder) ?? backends.get(msg.folder)?.info.cwd;
+        if (cwd !== undefined) {
+          startExecutorRun(msg.folder, command, cwd);
+        } else if (typeof command.runId === 'string') {
+          // A workspace must be connected to start a run.
+          socket.send(JSON.stringify(notFoundRun(command.runId, msg.folder)));
+        }
+        return;
+      }
+
+      // Skill-run commands carry only a run id. The executor owns them now —
+      // answer from it when it knows the run; otherwise fall back to the
+      // durable store / backend fan-out below (snapshot + force-stop only).
       if (
         command.type === 'skillReply' ||
         command.type === 'skillSnapshot' ||
         command.type === 'skillSetStatus'
       ) {
         const runId = typeof command.runId === 'string' ? command.runId : '';
-        const known = runFolder.get(runId);
-        const target = known ?? (msg.folder !== '' ? msg.folder : undefined);
-        if (target !== undefined && sendCommandToBackend(target, command)) return;
-        // Fan out — the owning backend answers (others no-op).
-        let delivered = false;
-        for (const [fid, conn] of backends) {
-          if (conn.socket.readyState === WebSocket.OPEN) {
-            conn.socket.send(
-              JSON.stringify({ type: 'command', folder: fid, command } satisfies RouterToBackend),
-            );
-            delivered = true;
+        void getExecutor().then(async (ex) => {
+          if (command.type === 'skillReply') {
+            if (runId !== '' && typeof command.text === 'string' && command.text.trim() !== '') {
+              ex.reply(runId, command.text);
+            }
+            return; // only the executor owns live agents
           }
-        }
-        if (!delivered) {
-          // No live backend: serve the cached transcript (snapshot), apply a
-          // manual status override to the cache + store (skillSetStatus), or
-          // reply with an explicit error.
-          const cached = cachedRuns.get(runId);
-          if (cached !== undefined) {
-            if (command.type === 'skillSetStatus' && command.status !== undefined) {
-              const updated: CachedRun = { ...cached, status: command.status, updatedAt: Date.now() };
-              cachedRuns.set(runId, updated);
-              persistRunToStore(runId, updated, true);
-              // A manual status override affects every tab — broadcast it.
-              broadcastToBrowsers({
-                type: 'skillGen',
-                folder: updated.folder,
-                runId,
-                workspaceId: updated.workspaceId,
-                phase: command.status,
-                entry: 0,
-                status: updated.status,
-                text: '',
-                title: updated.title,
-                entries: updated.entries,
-                tools: updated.tools,
-              });
-            } else {
+          if (ex.has(runId)) {
+            if (command.type === 'skillSnapshot') ex.snapshot(runId);
+            else if (command.status !== undefined) ex.setStatus(runId, command.status);
+            return;
+          }
+          // Not in the executor — fall through to the store fallback below.
+          if (command.type === 'skillSnapshot') {
+            const stored = runStore?.load(runId) ?? null;
+            if (stored !== null) {
               socket.send(
                 JSON.stringify({
                   type: 'skillGen',
-                  folder: cached.folder,
+                  folder: stored.folder,
                   runId,
-                  workspaceId: cached.workspaceId,
+                  workspaceId: stored.workspaceId,
                   phase: 'snapshot',
                   entry: 0,
-                  status: cached.status,
+                  status: stored.status,
                   text: '',
-                  title: cached.title,
-                  entries: cached.entries,
-                  tools: cached.tools,
+                  title: stored.title,
+                  entries: stored.entries,
+                  tools: stored.tools,
                 } satisfies RouterToBrowser),
               );
-            }
-          } else {
-            // Not in memory — try the durable store (covers router restarts
-            // since the last time this run was cached). Re-seed the memory
-            // cache so a second request doesn't hit the DB again.
-            const stored = runStore?.load(runId) ?? null;
-            if (stored !== null) {
-              cachedRuns.set(runId, {
-                folder: stored.folder,
-                workspaceId: stored.workspaceId,
-                status: stored.status,
-                entries: stored.entries,
-                tools: stored.tools,
-                title: stored.title,
-                updatedAt: stored.updatedAt,
-              });
-              if (command.type === 'skillSetStatus' && command.status !== undefined) {
-                const updated: CachedRun = {
-                  ...cachedRuns.get(runId)!,
-                  status: command.status,
-                  updatedAt: Date.now(),
-                };
-                cachedRuns.set(runId, updated);
-                persistRunToStore(runId, updated, true);
-                // A manual status override affects every tab — broadcast it.
-                broadcastToBrowsers({
-                  type: 'skillGen',
-                  folder: updated.folder,
-                  runId,
-                  workspaceId: updated.workspaceId,
-                  phase: command.status,
-                  entry: 0,
-                  status: updated.status,
-                  text: '',
-                  title: updated.title,
-                  entries: updated.entries,
-                  tools: updated.tools,
-                });
-              } else {
-                socket.send(
-                  JSON.stringify({
-                    type: 'skillGen',
-                    folder: stored.folder,
-                    runId,
-                    workspaceId: stored.workspaceId,
-                    phase: 'snapshot',
-                    entry: 0,
-                    status: stored.status,
-                    text: '',
-                    title: stored.title,
-                    entries: stored.entries,
-                    tools: stored.tools,
-                  } satisfies RouterToBrowser),
-                );
-              }
             } else if (runId !== '') {
               socket.send(JSON.stringify(notFoundRun(runId, msg.folder)));
             }
           }
-        }
+        });
         return;
       }
 

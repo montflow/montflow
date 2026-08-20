@@ -1,6 +1,11 @@
 import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { Schema } from 'effect';
 import { startUiServer, stopUiServer, restartUiServer, broadcastNotify, getRouterStatus } from './ui-server';
 import { registerProfileApi } from './profiles/api';
+import { PromptFromJson, renderPromptTemplate, type PromptDecoded } from './prompt-schema';
+import { resolveInitialModel } from './models-client';
 
 export { getCurrentGitBranch } from './git';
 
@@ -142,6 +147,13 @@ async function dispatchCommand(
     return;
   }
 
+  // `/zi prompt` — run a saved prompt. Interactive (menu + variable inputs)
+  // or non-interactive for agents: `/zi prompt --name=code-review --set files=a --set focus=b`.
+  if (rest === 'prompt' || rest.startsWith('prompt ')) {
+    await handlePromptCommand(ctx, rest, pi);
+    return;
+  }
+
   // Everything else opens the web UI.
   await handleUiCommand(pi, rest, ctx);
 }
@@ -220,4 +232,262 @@ async function handleUiCommand(
   } catch (error) {
     ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error');
   }
+}
+
+// ---------------------------------------------------------------------------
+// `/zi prompt` — run a saved workspace prompt (prompt factory).
+// ---------------------------------------------------------------------------
+
+/** Load every workspace prompt, validated against the shared schema. */
+const loadWorkspacePrompts = async (cwd: string): Promise<PromptDecoded[]> => {
+  const root = join(cwd, '.agents', '@montflow', 'prompts');
+  let entries: string[];
+  try {
+    entries = await readdir(root);
+  } catch {
+    return []; // no prompts directory yet
+  }
+  const prompts: PromptDecoded[] = [];
+  for (const entry of entries.filter((e) => e.endsWith('.json'))) {
+    try {
+      const raw = await readFile(join(root, entry), 'utf8');
+      prompts.push(Schema.decodeUnknownSync(PromptFromJson)(raw));
+    } catch {
+      // skip unparseable prompt files
+    }
+  }
+  prompts.sort((a, b) => a.name.localeCompare(b.name));
+  return prompts;
+};
+
+/** Read the workspace id from `.agents/@montflow/workspace.json`. */
+const readWorkspaceId = async (cwd: string): Promise<string | null> => {
+  try {
+    const parsed = JSON.parse(
+      await readFile(join(cwd, '.agents', '@montflow', 'workspace.json'), 'utf8'),
+    ) as { id?: string };
+    return typeof parsed.id === 'string' ? parsed.id : null;
+  } catch {
+    return null;
+  }
+};
+
+/** Split `--name=x --set a=b` style CLI args into a target + variable map. */
+const parsePromptArgs = (rest: string): { name?: string; vars: Map<string, string>; run: boolean } => {
+  const vars = new Map<string, string>();
+  let name: string | undefined;
+  let run = false;
+  for (const token of rest.split(/\s+/).filter((t) => t !== '')) {
+    if (token === '--run') {
+      run = true;
+    } else if (token.startsWith('--name=')) {
+      name = token.slice('--name='.length);
+    } else if (token.startsWith('--set=')) {
+      const pair = token.slice('--set='.length);
+      const eq = pair.indexOf('=');
+      if (eq > 0) vars.set(pair.slice(0, eq), pair.slice(eq + 1));
+    } else if (token.startsWith('--')) {
+      // other flag — ignored
+    } else if (token.includes('=')) {
+      const eq = token.indexOf('=');
+      vars.set(token.slice(0, eq), token.slice(eq + 1));
+    }
+  }
+  return { name, vars, run };
+};
+
+/** Submit a rendered prompt run to the router's executor endpoint. */
+const startPromptRun = async (
+  port: number,
+  workspaceId: string,
+  name: string,
+  values: Record<string, string>,
+  skills: readonly string[] | undefined,
+  model: string | undefined,
+): Promise<{ ok: true; runId: string; model?: string } | { ok: false; error: string }> => {
+  try {
+    const res = await fetch(
+      `http://127.0.0.1:${port}/api/workspaces/${encodeURIComponent(workspaceId)}/prompts/${encodeURIComponent(name)}/run`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          variables: values,
+          skills,
+          model: model ?? undefined,
+        }),
+      },
+    );
+    const data = (await res.json().catch(() => ({}))) as { runId?: string; error?: string };
+    if (!res.ok) return { ok: false, error: data.error ?? `HTTP ${res.status}` };
+    if (typeof data.runId !== 'string') return { ok: false, error: 'run returned no id' };
+    return { ok: true, runId: data.runId, model };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+};
+
+/**
+ * `/zi prompt` — pick a saved prompt and run it. Interactive by default
+ * (menu → per-variable inputs → run). With `--name=<slug>` (+ optional
+ * `key=value` / `--set key=value` pairs) it runs non-interactively so agents
+ * can invoke prompts programmatically.
+ */
+/** Build the pre-run summary: prompt file path, variables, skills, and model. */
+const buildPromptSummary = (
+  prompt: PromptDecoded,
+  values: Record<string, string>,
+  model: string | undefined,
+): string => {
+  const lines: string[] = [];
+  lines.push(`Prompt file: .agents/@montflow/prompts/${prompt.name}.json`);
+  const vars = prompt.variables ?? [];
+  if (vars.length > 0) {
+    lines.push('');
+    lines.push('Variables:');
+    for (const v of vars) {
+      lines.push(`  ${v.name} = ${values[v.name] ?? v.default ?? ''}`);
+    }
+  }
+  if ((prompt.skills ?? []).length > 0) {
+    lines.push('');
+    lines.push('Skills:');
+    for (const skill of prompt.skills ?? []) lines.push(`  ${skill}`);
+  }
+  lines.push('');
+  lines.push(`Model: ${model ?? '(default)'}`);
+  return lines.join('\n');
+};
+
+async function handlePromptCommand(
+  ctx: ExtensionCommandContext,
+  rest: string,
+  pi: ExtensionAPI,
+): Promise<void> {
+  const cwd = ctx.cwd;
+
+  const status = await getRouterStatus();
+  if (!status.running || status.port === undefined) {
+    ctx.ui.notify('The UI router is not running — start it with /zi first.', 'error');
+    return;
+  }
+  const port = status.port;
+  const workspaceId = await readWorkspaceId(cwd);
+  if (workspaceId === null) {
+    ctx.ui.notify('No workspace marker (.agents/@montflow/workspace.json) — start /zi first.', 'error');
+    return;
+  }
+
+  const prompts = await loadWorkspacePrompts(cwd);
+  if (prompts.length === 0) {
+    ctx.ui.notify('No prompts yet — create one in the web UI, then run /zi prompt.', 'info');
+    return;
+  }
+
+  const { name: nameFlag, vars, run } = parsePromptArgs(rest);
+  const interactive = nameFlag === undefined || nameFlag === '';
+
+  // Pick the prompt: non-interactive uses --name; interactive shows a menu.
+  let prompt: PromptDecoded;
+  if (!interactive) {
+    prompt = prompts.find((p) => p.name === nameFlag) ?? prompts[0]!;
+    if (prompt.name !== nameFlag) {
+      ctx.ui.notify(`Unknown prompt '${nameFlag}' — run /zi prompt for the list.`, 'error');
+      return;
+    }
+  } else {
+    const options = prompts.map((p) =>
+      p.description !== undefined && p.description !== ''
+        ? `${p.name} — ${p.description}`
+        : p.name,
+    );
+    const chosen = await ctx.ui.select('Run a prompt', options);
+    if (chosen === undefined || chosen === '') return; // cancelled
+    prompt =
+      prompts.find((p) =>
+        p.description !== undefined && p.description !== ''
+          ? `${p.name} — ${p.description}` === chosen
+          : p.name === chosen,
+      ) ?? prompts[0]!;
+  }
+
+  // Collect each variable's value — interactive inputs first, else CLI args.
+  const values: Record<string, string> = {};
+  const missing: string[] = [];
+  for (const v of prompt.variables ?? []) {
+    let value = vars.get(v.name);
+    if (value === undefined && interactive) {
+      const label = v.label !== undefined && v.label !== '' ? v.label : v.name;
+      // input returns undefined on cancel — treat as "use default".
+      const answer = await ctx.ui.input(`${label} (required)`, v.default ?? '');
+      if (answer === undefined) return; // cancelled
+      value = answer;
+    }
+    // Fall back to the default when the user left it blank / no CLI value.
+    const resolved = value !== undefined && value !== '' ? value : (v.default ?? '');
+    if (v.name === '' ) continue;
+    if (resolved === '') {
+      missing.push(v.name);
+      continue;
+    }
+    values[v.name] = resolved;
+  }
+
+  if (missing.length > 0) {
+    ctx.ui.notify(`Missing required variable(s): ${missing.join(', ')}`, 'error');
+    return;
+  }
+
+  // Pin to the session's currently active model (if one is active).
+  const model = resolveInitialModel(ctx);
+  const modelLabel = model !== undefined ? ` on ${model}` : '';
+  const rendered = renderPromptTemplate(prompt.template, values);
+
+  // Interactive: show a summary (prompt, variables, options, model) and get
+  // explicit approval before anything runs.
+  if (interactive) {
+    const summary = buildPromptSummary(prompt, values, model);
+    const approved = await ctx.ui.confirm(`Run prompt '${prompt.name}'?`, summary);
+    if (!approved) {
+      ctx.ui.notify('Prompt run cancelled.', 'info');
+      return;
+    }
+  }
+
+  // Without --run: send the prompt straight into the CURRENT session (like
+  // typing it), so it runs with the session's own context/model.
+  if (!run) {
+    try {
+      pi.sendUserMessage(rendered);
+    } catch (error) {
+      ctx.ui.notify(
+        `Could not send to the current session: ${error instanceof Error ? error.message : String(error)}`,
+        'error',
+      );
+      return;
+    }
+    ctx.ui.notify(`Sent prompt '${prompt.name}' to the current session${modelLabel}.`, 'info');
+    return;
+  }
+
+  // --run: spawn an isolated agentic run on the router's executor and print
+  // the full URL so it can be clicked open in the web UI.
+  const result = await startPromptRun(
+    port,
+    workspaceId,
+    prompt.name,
+    values,
+    prompt.skills,
+    model,
+  );
+  if (!result.ok) {
+    ctx.ui.notify(`Failed to run prompt: ${result.error}`, 'error');
+    return;
+  }
+  const url = `http://127.0.0.1:${port}/runs/${result.runId}/`;
+  ctx.ui.notify(
+    `Running prompt '${prompt.name}'${modelLabel}\n\nOpen to view: ${url}\n\n${rendered}`,
+    'info',
+  );
+  broadcastNotify(`Prompt run started${modelLabel}: ${url}`, 'info');
 }

@@ -11,10 +11,10 @@ import {
   type AgentSessionEvent,
   type CreateAgentSessionOptions,
 } from '@earendil-works/pi-coding-agent';
-import type { StreamKind } from './stream';
-import { formatDuration } from './format';
-import type { TurnUsage } from './run-stats';
-import type { ThinkingLevel } from './config';
+import type { StreamKind } from './stream.ts';
+import { formatDuration } from './format.ts';
+import type { TurnUsage } from './run-stats.ts';
+import type { ThinkingLevel } from './config.ts';
 
 /** Agent session creation failure (prompt-turn failures are reported via AgentRunResult). */
 export class AgentRunError extends Data.TaggedError('AgentRunError')<{
