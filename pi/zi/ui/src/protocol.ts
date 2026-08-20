@@ -46,6 +46,7 @@ export type ClientCommandType =
   | 'skillReply'
   | 'skillSnapshot'
   | 'skillSetStatus'
+  | 'skillRetry'
 
 export interface ClientCommand {
   type: ClientCommandType
@@ -134,7 +135,11 @@ export type RouterToBrowser =
       /** Short generated title (opencode big-pickle); undefined until ready. */
       title?: string
       entries?: Array<{ role: 'user' | 'assistant'; text: string }>
-      tools?: Array<{ name: string; status: 'running' | 'done' | 'error'; turn: number }>
+      tools?: Array<{ name: string; status: 'running' | 'done' | 'error'; turn: number; args?: unknown }>
+      /** Tool-call arguments carried by a `tool` phase start (running only). */
+      toolArgs?: unknown
+      /** Model the run's agent runs on (set on start/snapshot). */
+      model?: string
     }
 
 export type ServerMessage = RouterToBrowser

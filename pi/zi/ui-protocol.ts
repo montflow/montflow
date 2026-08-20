@@ -146,12 +146,18 @@ export type BackendToRouter =
         readonly name: string;
         readonly status: 'running' | 'done' | 'error';
         readonly turn: number;
+        /** Tool-call arguments (absent for legacy snapshots). */
+        readonly args?: unknown;
       }[];
+      /** Tool-call arguments carried by a `tool` phase start (running only). */
+      readonly toolArgs?: unknown;
+      /** Model the run's agent runs on (set on `start`/`snapshot`). */
+      readonly model?: string;
     };
 
 /** Command shape forwarded verbatim from the browser to the backend. */
 export interface BrowserCommand {
-  readonly type: 'prompt' | 'steer' | 'followUp' | 'command' | 'skillAgentic' | 'profileAgentic' | 'presetAgentic' | 'promptAgentic' | 'textAgentic' | 'textGenerate' | 'skillReply' | 'skillSnapshot' | 'skillSetStatus';
+  readonly type: 'prompt' | 'steer' | 'followUp' | 'command' | 'skillAgentic' | 'profileAgentic' | 'presetAgentic' | 'promptAgentic' | 'textAgentic' | 'textGenerate' | 'skillReply' | 'skillSnapshot' | 'skillSetStatus' | 'skillRetry';
   readonly text: string;
   /** Client-generated run id (agentic kinds) or target run id (skillReply/skillSnapshot/skillSetStatus). */
   readonly runId?: string;
@@ -261,5 +267,13 @@ export type RouterToBrowser =
         readonly name: string;
         readonly status: 'running' | 'done' | 'error';
         readonly turn: number;
+        /** Tool-call arguments (absent for legacy snapshots). */
+        readonly args?: unknown;
       }[];
+      /** Tool-call arguments carried by a `tool` phase start (running only). */
+      readonly toolArgs?: unknown;
+      /** Model the run's agent runs on (set on `start`/`snapshot`). */
+      readonly model?: string;
     };
+
+

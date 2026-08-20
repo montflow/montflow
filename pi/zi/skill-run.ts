@@ -356,7 +356,7 @@ export const createPromptAgent = async (
     createPersistentAgent({
       model,
       systemPrompt: PROMPT_RUNNER_SYSTEM,
-      tools: ['read', 'write', 'edit', 'grep', 'glob'],
+      tools: [...PROMPT_RUNNER_TOOLS],
       cwd,
       sessionDir: options.sessionDir,
       resumeSessionFile: options.resumeSessionFile,
@@ -477,6 +477,14 @@ export const loadPromptSkills = async (
 };
 
 /**
+ * Toolset for prompt runs — full read/write access (the rendered prompt IS
+ * the task, so the agent may investigate or apply changes per the prompt).
+ * Shared with the router's input-preview endpoint so the preview reports the
+ * exact toolset the run agent receives.
+ */
+export const PROMPT_RUNNER_TOOLS = ['read', 'write', 'edit', 'grep', 'glob'] as const;
+
+/**
  * One-shot AI-input text generation. Creates an EPHEMERAL text agent (no
  * persisted session, nothing recorded — explicitly NOT a run), runs a single
  * turn, streams deltas via `onDelta`, and disposes the agent. The final
@@ -515,7 +523,7 @@ export const promptSkillAgent = async (
   run: SkillRunAgent,
   task: string,
   onDelta: (delta: string) => void,
-  onTool?: (activity: { kind: 'start' | 'end' | 'error'; tool: string }) => void,
+  onTool?: (activity: { kind: 'start' | 'end' | 'error'; tool: string; args?: unknown }) => void,
 ): Promise<SkillRunResult> => {
   try {
     const result = await Effect.runPromise(

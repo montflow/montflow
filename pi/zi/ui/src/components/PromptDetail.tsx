@@ -12,11 +12,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useDeletePrompt, usePromptDetail, useSavePrompt } from '@/lib/usePrompts'
+import { PromptInputPreviewDialog } from '@/components/PromptInputPreviewDialog'
 import { promptUrl, workspaceUrl } from '@/components/LandingPage'
 import { navigate } from '@/lib/useLocation'
 import type { PromptVariable } from '@/protocol'
 import {
   Braces,
+  Eye,
   Loader2,
   Plus,
   Sparkles,
@@ -45,6 +47,7 @@ export function PromptDetail({ workspaceId, promptName, conn }: PromptDetailProp
   const [dirty, setDirty] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [name, setName] = useState(promptName)
 
   // Re-arm editor state when navigating between prompts (component instance
@@ -217,6 +220,10 @@ export function PromptDetail({ workspaceId, promptName, conn }: PromptDetailProp
                   {dirty && (
                     <span className="text-[11px] text-muted-foreground">Unsaved changes</span>
                   )}
+                  <Button size="xs" variant="outline" onClick={() => setPreviewOpen(true)}>
+                    <Eye className="size-3.5" />
+                    View input
+                  </Button>
                   <Button size="xs" onClick={save} disabled={savePrompt.isPending || !dirty}>
                     {savePrompt.isPending && <Loader2 className="mr-1 size-3.5 animate-spin" />}
                     Save
@@ -329,6 +336,16 @@ export function PromptDetail({ workspaceId, promptName, conn }: PromptDetailProp
         onOpenChange={setDeleteOpen}
         onConfirm={remove}
         pending={deletePrompt.isPending}
+      />
+
+      <PromptInputPreviewDialog
+        workspaceId={workspaceId}
+        promptName={name.trim() === '' ? promptName : name.trim()}
+        template={template}
+        variables={variables}
+        skills={skills}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
       />
     </main>
   )

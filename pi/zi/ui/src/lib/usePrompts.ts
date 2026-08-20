@@ -163,3 +163,54 @@ export function useDeletePrompt(workspaceId: string | null) {
     },
   })
 }
+
+/**
+ * What a prompt run hands to the agent, as reported by the router's preview
+ * endpoint — built from the CURRENT editor draft (template + variables +
+ * skills), so unsaved changes are previewed too.
+ */
+export interface PromptInputPreview {
+  /** Full task text passed to the agent (skills blocks + rendered instructions). */
+  task: string
+  /** Template rendered with each variable's default; unfilled tokens left verbatim. */
+  rendered: string
+  /** System prompt the run agent receives. */
+  system: string
+  /** Toolset the run agent receives. */
+  tools: string[]
+  /** Skills loaded from disk for this draft (name + full SKILL.md body). */
+  skills: Array<{ name: string; body: string }>
+  /** Placeholder tokens with no default — still prompted for at run time. */
+  unfilled: string[]
+}
+
+/**
+ * Builds the agent input for a prompt draft via the router's preview
+ * endpoint (`POST .../prompts/<name>/preview`). Read-only — no run is
+ * started, nothing is written. Used by the prompt detail page's "View input"
+ * preview dialog.
+ */
+export function usePromptInputPreview(workspaceId: string | null) {
+  return useMutation({
+    mutationFn: async (draft: {
+      name: string
+      template: string
+      variables: PromptVariable[]
+      skills: string[]
+    }) => {
+      if (workspaceId === null) throw new Error('No workspace selected')
+      return requestJson<PromptInputPreview>(
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/prompts/${encodeURIComponent(draft.name)}/preview`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            template: draft.template,
+            variables: draft.variables,
+            skills: draft.skills,
+          }),
+        },
+      )
+    },
+  })
+}

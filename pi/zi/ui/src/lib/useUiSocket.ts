@@ -39,7 +39,9 @@ interface UiSocketState {
   markNotificationsRead: () => void
   clearNotifications: () => void
   /** Send a follow-up answer to a run's agent (folder resolved router-side). */
-  sendSkillReply: (runId: string, text: string) => void
+  sendSkillReply: (runId: string, text: string, model?: string) => void
+  /** Re-run the last user prompt (retry after error/no-response, or regenerate a finished answer). */
+  retryRun: (runId: string, model?: string) => void
   /** Fetch the full transcript for a run (late join / page reload). */
   requestSkillSnapshot: (runId: string) => void
   /**
@@ -58,9 +60,11 @@ export interface SkillRunState {
   workspaceId: string
   entries: Array<{ role: 'user' | 'assistant'; text: string }>
   /** Tool activity in order of appearance (`turn` = assistant entry index). */
-  tools: Array<{ name: string; status: 'running' | 'done' | 'error'; turn: number }>
+  tools: Array<{ name: string; status: 'running' | 'done' | 'error'; turn: number; args?: unknown }>
   /** Short generated title (opencode big-pickle); undefined until ready. */
   title?: string
+  /** Model the run's agent runs on (live runs; undefined after router restarts). */
+  model?: string
 }
 
 /** One AI-input text fill as seen by the browser. */
@@ -102,6 +106,7 @@ const RUN_TRANSITIONS: Record<string, { message: string; level: NotificationItem
   'awaiting|error': { message: 'Agentic run errored', level: 'error' },
   'interrupted|running': { message: 'Agentic run resumed', level: 'info' },
   'error|running': { message: 'Agentic run retried', level: 'info' },
+  'done|running': { message: 'Agentic run regenerating', level: 'info' },
 }
 
 const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
@@ -265,6 +270,7 @@ const applySkillGen = (msg: Extract<ServerMessage, { type: 'skillGen' }>): void 
             entries: [...(msg.entries ?? [])],
             tools: [...(msg.tools ?? [])],
             title: msg.title,
+            model: msg.model,
           },
         },
       }
@@ -283,7 +289,7 @@ const applySkillGen = (msg: Extract<ServerMessage, { type: 'skillGen' }>): void 
     if (msg.phase === 'tool') {
       const tools = [...current.tools]
       if (msg.status === 'running') {
-        tools.push({ name: msg.text, status: 'running', turn: msg.entry })
+        tools.push({ name: msg.text, status: 'running', turn: msg.entry, args: msg.toolArgs })
       } else {
         const tool = [...tools].reverse().find((t) => t.name === msg.text && t.status === 'running')
         if (tool !== undefined) {
@@ -648,9 +654,15 @@ const sendCommand = (folder: string, command: ClientCommand): void => {
   }
 }
 
-const sendSkillReply = (runId: string, text: string): void => {
+const sendSkillReply = (runId: string, text: string, model?: string): void => {
   if (ws !== null && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ folder: '', command: { type: 'skillReply', runId, text } }))
+    ws.send(JSON.stringify({ folder: '', command: { type: 'skillReply', runId, text, model } }))
+  }
+}
+
+const retryRun = (runId: string, model?: string): void => {
+  if (ws !== null && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ folder: '', command: { type: 'skillRetry', runId, text: '', model } }))
   }
 }
 
@@ -698,6 +710,7 @@ export function useUiSocket(): UiSocketState {
     markNotificationsRead: useCallback(markNotificationsRead, []),
     clearNotifications: useCallback(clearNotifications, []),
     sendSkillReply: useCallback(sendSkillReply, []),
+    retryRun: useCallback(retryRun, []),
     requestSkillSnapshot: useCallback(requestSkillSnapshot, []),
     setRunStatus: useCallback(setRunStatus, []),
     seedMockRun,

@@ -62,6 +62,7 @@ export function PresetDetail({ workspaceId, presetName, conn }: PresetDetailProp
 
   return (
     <main data-scroll-region className="flex-1 overflow-y-auto p-4">
+      <div className="mx-auto max-w-6xl">
       {isError && (
         <div className="mt-3 flex items-center gap-2 text-xs text-red-500">
           <span className="truncate">{error instanceof Error ? error.message : String(error)}</span>
@@ -102,6 +103,7 @@ export function PresetDetail({ workspaceId, presetName, conn }: PresetDetailProp
         onOpenChange={setDeleteOpen}
         onDeleted={back}
       />
+      </div>
     </main>
   )
 }
@@ -406,7 +408,7 @@ function PresetConfigView({
 
       {showJson ? (
         <pre
-          className="cursor-text overflow-x-auto rounded-md border bg-muted/30 p-3 font-mono text-xs leading-relaxed"
+          className="w-max max-w-full cursor-text overflow-x-auto rounded-md border bg-muted/30 p-3 font-mono text-xs leading-relaxed"
           title="Read-only — edit on the visual canvas"
         >
           {fileJson !== null ? (

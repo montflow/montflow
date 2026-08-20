@@ -84,11 +84,15 @@ test('resolveModelObject: returns undefined for an undefined model id instead of
 
 test('reportTool: maps tool events to start/end/error activities', () => {
   const onTool = vi.fn();
-  reportTool(onTool, { type: 'tool_execution_start', toolName: 'read' } as never);
+  reportTool(onTool, { type: 'tool_execution_start', toolName: 'read', args: { path: 'a.ts', limit: 40 } } as never);
   reportTool(onTool, { type: 'tool_execution_end', toolName: 'read', isError: false } as never);
   reportTool(onTool, { type: 'tool_execution_end', toolName: 'grep', isError: true } as never);
 
-  expect(onTool).toHaveBeenNthCalledWith(1, { kind: 'start', tool: 'read' });
+  expect(onTool).toHaveBeenNthCalledWith(1, {
+    kind: 'start',
+    tool: 'read',
+    args: { path: 'a.ts', limit: 40 },
+  });
   expect(onTool).toHaveBeenNthCalledWith(2, { kind: 'end', tool: 'read' });
   expect(onTool).toHaveBeenNthCalledWith(3, { kind: 'error', tool: 'grep' });
 });

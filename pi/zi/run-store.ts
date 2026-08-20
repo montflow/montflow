@@ -51,6 +51,8 @@ export const RunToolSchema = Schema.Struct({
   name: Schema.String,
   status: RunToolStatusSchema,
   turn: Schema.Number,
+  /** Tool-call arguments (absent in snapshots from before args existed). */
+  args: Schema.optional(Schema.Unknown),
 });
 
 /** JSON-column codecs: entries/tools arrays ⇄ JSON strings. */

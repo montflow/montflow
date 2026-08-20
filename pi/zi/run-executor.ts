@@ -70,7 +70,13 @@ export interface ExecutorSkillGen {
     readonly name: string;
     readonly status: 'running' | 'done' | 'error';
     readonly turn: number;
+    /** Tool-call arguments (absent for pre-args runs / legacy snapshots). */
+    readonly args?: unknown;
   }[];
+  /** Tool-call arguments carried by a `tool` phase start (running only). */
+  readonly toolArgs?: unknown;
+  /** Model the run's agent runs on (set on `start`/`snapshot`). */
+  readonly model?: string;
 }
 
 /** A run kind — which authoring agent (system prompt + tools) to spin up. */
@@ -112,7 +118,12 @@ interface RunRecord {
   agent: SkillRunAgent | null;
   status: 'running' | 'done' | 'awaiting' | 'interrupted' | 'error';
   entries: Array<{ role: 'user' | 'assistant'; text: string }>;
-  tools: Array<{ name: string; status: 'running' | 'done' | 'error'; turn: number }>;
+  tools: Array<{
+    name: string;
+    status: 'running' | 'done' | 'error';
+    turn: number;
+    args?: unknown;
+  }>;
   sessionFile?: string;
   stopped?: boolean;
   readonly createdAt: number;
@@ -194,7 +205,19 @@ export interface RunExecutor {
   start(kind: RunKind, opts: StartRunOptions): void;
   /** True when this executor currently holds a record for the run id. */
   has(runId: string): boolean;
-  reply(runId: string, text: string): void;
+  /**
+   * Follow-up answer to a run's agent. `model` is an optional per-run
+   * override — when the agent must be (re)created (interrupted/error
+   * runs), it is created on that model instead.
+   */
+  reply(runId: string, text: string, model?: string): void;
+  /**
+   * Re-run the last user prompt as a fresh turn (retry after an error or
+   * no-response, or regenerate a finished answer). The current agent is
+   * disposed and recreated WITHOUT resuming its session file, so the
+   * re-prompt starts from a clean conversation. `model` switches the model.
+   */
+  retry(runId: string, model?: string): void;
   snapshot(runId: string): void;
   setStatus(runId: string, status: 'done' | 'error' | 'interrupted'): void;
   /** Rebuild in-memory records for a cwd from its persisted run.json files. */
@@ -314,6 +337,7 @@ export const createRunExecutor = (options: RunExecutorOptions): RunExecutor => {
     entry: number,
     text: string,
     status: ExecutorSkillGen['status'] = record.status,
+    toolArgs?: unknown,
   ): void => {
     options.emit({
       folder: record.folder,
@@ -326,6 +350,8 @@ export const createRunExecutor = (options: RunExecutorOptions): RunExecutor => {
       title: record.title,
       entries: phase === 'start' || phase === 'snapshot' ? record.entries : undefined,
       tools: phase === 'start' || phase === 'snapshot' ? record.tools : undefined,
+      toolArgs: phase === 'tool' && status === 'running' ? toolArgs : undefined,
+      model: phase === 'start' || phase === 'snapshot' ? record.model : undefined,
     });
   };
 
@@ -394,9 +420,14 @@ export const createRunExecutor = (options: RunExecutorOptions): RunExecutor => {
           (activity) => {
             if (record.stopped === true) return;
             if (activity.kind === 'start') {
-              record.tools.push({ name: activity.tool, status: 'running', turn: assistantIdx });
+              record.tools.push({
+                name: activity.tool,
+                status: 'running',
+                turn: assistantIdx,
+                args: activity.args,
+              });
               persistRun(record);
-              send(record, 'tool', assistantIdx, activity.tool, 'running');
+              send(record, 'tool', assistantIdx, activity.tool, 'running', activity.args);
             } else {
               const tool = [...record.tools]
                 .toReversed()
@@ -451,9 +482,10 @@ export const createRunExecutor = (options: RunExecutorOptions): RunExecutor => {
       })();
     },
 
-    reply(runId, text) {
+    reply(runId, text, model) {
       const record = records.get(runId);
       if (record === undefined || record.status === 'running' || text.trim() === '') return;
+      if (model !== undefined && model !== '') record.model = model;
       record.entries.push({ role: 'user', text });
       record.entries.push({ role: 'assistant', text: '' });
       record.stopped = false;
@@ -462,6 +494,40 @@ export const createRunExecutor = (options: RunExecutorOptions): RunExecutor => {
       const userIdx = record.entries.length - 2;
       send(record, 'start', userIdx, text);
       runTurn(record, text);
+    },
+
+    retry(runId, model) {
+      const record = records.get(runId);
+      if (record === undefined || record.status === 'running') return;
+      // Re-run the LAST user prompt. The trailing assistant slot is reset
+      // to empty and re-streamed, so the transcript stays tidy (no stale
+      // failed answer or completed summary below the retried one).
+      const userIdx = record.entries.findLastIndex((entry) => entry.role === 'user');
+      if (userIdx < 0) return;
+      const prompt = record.entries[userIdx]!.text;
+      let assistantIdx = record.entries.length - 1;
+      if (record.entries[assistantIdx]!.role === 'assistant') {
+        record.entries[assistantIdx] = { role: 'assistant', text: '' };
+      } else {
+        record.entries.push({ role: 'assistant', text: '' });
+        assistantIdx = record.entries.length - 1;
+      }
+      if (model !== undefined && model !== '') record.model = model;
+      record.stopped = false;
+      record.status = 'running';
+      // A retry starts from a CLEAN conversation: drop the live agent and
+      // its session file, so the re-prompt is answered without the previous
+      // (failed or completed) attempt in context. Tool activity is cleared
+      // too — a force-stop can leave a tool stuck in `running`, which would
+      // otherwise replay as a permanent spinner on the retried turn.
+      const agent = record.agent;
+      record.agent = null;
+      record.sessionFile = undefined;
+      record.tools = [];
+      if (agent !== null) void disposeSkillAgent(agent);
+      persistRun(record, true);
+      send(record, 'start', assistantIdx, prompt);
+      runTurn(record, prompt);
     },
 
     snapshot(runId) {

@@ -76,6 +76,7 @@ export function SkillDetail({ workspaceId, skillId, conn, folder }: SkillDetailP
 
   return (
     <main data-scroll-region className="flex-1 overflow-y-auto p-4">
+      <div className="mx-auto max-w-6xl">
       {isError && (
         <div className="mt-3 flex items-center gap-2 text-xs text-red-500">
           <span className="truncate">{error instanceof Error ? error.message : String(error)}</span>
@@ -137,6 +138,7 @@ export function SkillDetail({ workspaceId, skillId, conn, folder }: SkillDetailP
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </main>
   )
 }

@@ -29,6 +29,12 @@ import { ReviewPresetFromJson, ReviewPresetSchema } from './preset-schema.ts';
 import { PromptFromJson, PromptSchema, renderPromptTemplate, type PromptDecoded } from './prompt-schema.ts';
 import { openRunStore, type RunStore, type StoredRun } from './run-store.ts';
 import type { RunExecutor } from './run-executor.ts';
+import {
+  PROMPT_RUNNER_SYSTEM,
+  PROMPT_RUNNER_TOOLS,
+  loadPromptSkills,
+  wrapPromptPrompt,
+} from './skill-run.ts';
 import { parseProfile, parseFrontmatter } from './profiles/model.ts';
 import {
   DEFAULT_ROUTER_PORT,
@@ -372,6 +378,8 @@ const handleBackendMessage = async (socket: WebSocket, raw: string): Promise<voi
         title: msg.title,
         entries: msg.entries,
         tools: msg.tools,
+        toolArgs: msg.toolArgs,
+        model: msg.model,
       });
       return;
     }
@@ -411,18 +419,24 @@ const runFolder = new Map<string, string>();
 // which already survives backend disconnects).
 // ---------------------------------------------------------------------------
 
-interface CachedRun {
+export interface CachedTool {
+  readonly name: string;
+  readonly status: 'running' | 'done' | 'error';
+  readonly turn: number;
+  /** Tool-call arguments (absent for legacy snapshots). */
+  readonly args?: unknown;
+}
+
+export interface CachedRun {
   readonly folder: string;
   readonly workspaceId: string;
   readonly status: 'running' | 'done' | 'awaiting' | 'interrupted' | 'error';
   readonly entries: readonly { readonly role: 'user' | 'assistant'; readonly text: string }[];
-  readonly tools: readonly {
-    readonly name: string;
-    readonly status: 'running' | 'done' | 'error';
-    readonly turn: number;
-  }[];
+  readonly tools: readonly CachedTool[];
   /** Short generated title (opencode big-pickle); undefined until ready. */
   readonly title?: string;
+  /** Model the run's agent runs on (live runs only; undefined after restarts). */
+  readonly model?: string;
   /** Epoch ms of the last cache merge (also persisted to the store). */
   readonly updatedAt: number;
 }
@@ -492,6 +506,7 @@ const cacheSkillGen = (msg: Extract<BackendToRouter, { type: 'skillGen' }>): voi
       entries: [...(msg.entries ?? [])],
       tools: [...(msg.tools ?? [])],
       title: msg.title,
+      model: msg.model,
       updatedAt: Date.now(),
     };
     immediate = true;
@@ -510,7 +525,7 @@ const cacheSkillGen = (msg: Extract<BackendToRouter, { type: 'skillGen' }>): voi
   } else if (msg.phase === 'tool') {
     const tools = [...prev.tools];
     if (msg.status === 'running') {
-      tools.push({ name: msg.text, status: 'running', turn: msg.entry });
+      tools.push({ name: msg.text, status: 'running', turn: msg.entry, args: msg.toolArgs });
     } else {
       const tool = [...tools].reverse().find((t) => t.name === msg.text && t.status === 'running');
       if (tool !== undefined) {
@@ -604,6 +619,8 @@ const getExecutor = (): Promise<RunExecutor> => {
           title: msg.title,
           entries: msg.entries,
           tools: msg.tools,
+          toolArgs: msg.toolArgs,
+          model: msg.model,
         });
       },
     }),
@@ -1736,6 +1753,85 @@ async function main(): Promise<void> {
         return;
       }
 
+      // POST /api/workspaces/<id>/prompts/<name>/preview   { template, variables, skills }
+      // Builds the EXACT input a prompt run would hand to the agent from the
+      // CURRENT editor draft (not the saved file): renders the template with
+      // each variable's default (unfilled tokens stay verbatim), loads the
+      // attached skills' SKILL.md bodies from disk, and wraps everything with
+      // the same combos the run executor uses (wrapPromptPrompt +
+      // PROMPT_RUNNER_SYSTEM + PROMPT_RUNNER_TOOLS). Purely read-only — no
+      // run is started and nothing is written.
+      const promptPreview = pathname.match(/^\/api\/workspaces\/([^/]+)\/prompts\/([^/]+)\/preview$/);
+      if (promptPreview) {
+        const wsId = decodeURIComponent(promptPreview[1] ?? '');
+        const name = decodeURIComponent(promptPreview[2] ?? '').replace(/\.json$/, '');
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (req.method !== 'POST') {
+          sendJson(405, { error: 'Method not allowed' });
+          return;
+        }
+        const body = await readJsonBody(req).catch(() => undefined);
+        if (body === undefined) {
+          sendJson(400, { error: 'Invalid JSON body' });
+          return;
+        }
+        const { template, variables, skills } = body as {
+          template?: unknown;
+          variables?: unknown;
+          skills?: unknown;
+        };
+        if (typeof template !== 'string') {
+          sendJson(400, { error: 'Missing string field: template' });
+          return;
+        }
+        // Seed values from each variable's default — mirrors the run dialog's
+        // "leave blank → use default" behavior; tokens without a default stay
+        // verbatim so the preview shows exactly what stays to be filled in.
+        const values: Record<string, string> = {};
+        if (Array.isArray(variables)) {
+          for (const raw of variables) {
+            if (typeof raw !== 'object' || raw === null) continue;
+            const v = raw as { name?: unknown; default?: unknown };
+            if (
+              typeof v.name === 'string' &&
+              v.name !== '' &&
+              typeof v.default === 'string' &&
+              v.default !== ''
+            ) {
+              values[v.name] = v.default;
+            }
+          }
+        }
+        const rendered = renderPromptTemplate(template, values);
+        const skillNames = Array.isArray(skills)
+          ? skills.filter((s): s is string => typeof s === 'string')
+          : [];
+        const promptSkills =
+          skillNames.length > 0 ? await loadPromptSkills(cwd, skillNames) : undefined;
+        const task = wrapPromptPrompt(rendered, name, promptSkills);
+        // Placeholder tokens that survived rendering — the user will be
+        // prompted for these when the prompt actually runs.
+        const unfilled: string[] = [];
+        for (const match of rendered.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)) {
+          const token = (match[1] ?? '').trim();
+          if (token !== '' && !unfilled.includes(token)) unfilled.push(token);
+        }
+        sendJson(200, {
+          ok: true,
+          task,
+          rendered,
+          system: PROMPT_RUNNER_SYSTEM,
+          tools: [...PROMPT_RUNNER_TOOLS],
+          skills: promptSkills ?? [],
+          unfilled,
+        });
+        return;
+      }
+
       // POST /api/workspaces/<id>/prompts/<name>/run   { variables, skills?, model? }
       // Renders the prompt with the supplied variables and starts an agentic
       // prompt run on the router's executor (streams to the web UI). This is
@@ -2049,6 +2145,7 @@ async function main(): Promise<void> {
           title: run.title,
           entries: run.entries,
           tools: run.tools,
+          model: run.model,
         } satisfies RouterToBrowser),
       );
     }
@@ -2083,7 +2180,9 @@ async function main(): Promise<void> {
         command.type === 'presetAgentic' ||
         command.type === 'promptAgentic' ||
         command.type === 'textAgentic' ||
-        command.type === 'textGenerate'
+        command.type === 'textGenerate' ||
+        command.type === 'skillReply' ||
+        command.type === 'skillRetry'
       ) {
         command = { ...command, model: command.model ?? selectedModel ?? undefined };
       }
@@ -2107,14 +2206,19 @@ async function main(): Promise<void> {
       if (
         command.type === 'skillReply' ||
         command.type === 'skillSnapshot' ||
-        command.type === 'skillSetStatus'
+        command.type === 'skillSetStatus' ||
+        command.type === 'skillRetry'
       ) {
         const runId = typeof command.runId === 'string' ? command.runId : '';
         void getExecutor().then(async (ex) => {
           if (command.type === 'skillReply') {
             if (runId !== '' && typeof command.text === 'string' && command.text.trim() !== '') {
-              ex.reply(runId, command.text);
+              ex.reply(runId, command.text, command.model);
             }
+            return; // only the executor owns live agents
+          }
+          if (command.type === 'skillRetry') {
+            if (runId !== '') ex.retry(runId, command.model);
             return; // only the executor owns live agents
           }
           if (ex.has(runId)) {

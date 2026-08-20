@@ -85,6 +85,11 @@ export interface AgentRunResult {
 export interface ToolActivity {
   readonly kind: 'start' | 'end' | 'error';
   readonly tool: string;
+  /**
+   * Tool-call arguments (from `tool_execution_start`). Undefined on
+   * end/error — the running entry keeps the args captured at start.
+   */
+  readonly args?: unknown;
 }
 
 /** Live token-delta callback kind: visible text vs. hidden thinking. */
@@ -308,11 +313,11 @@ export const reportTool = (
   event: Extract<AgentSessionEvent, { type: 'tool_execution_start' | 'tool_execution_end' }>,
 ): void => {
   if (onTool === undefined) return;
-  onTool({
-    kind:
-      event.type === 'tool_execution_start' ? 'start' : event.isError ? 'error' : 'end',
-    tool: event.toolName,
-  });
+  if (event.type === 'tool_execution_start') {
+    onTool({ kind: 'start', tool: event.toolName, args: event.args });
+  } else {
+    onTool({ kind: event.isError ? 'error' : 'end', tool: event.toolName });
+  }
 };
 
 /**

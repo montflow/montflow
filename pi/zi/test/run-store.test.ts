@@ -23,8 +23,8 @@ const sampleRun = (overrides: Partial<StoredRun> = {}): StoredRun => ({
     { role: 'assistant', text: 'Created **security-audit**.' },
   ],
   tools: [
-    { name: 'write', status: 'done', turn: 1 },
-    { name: 'read', status: 'running', turn: 1 },
+    { name: 'write', status: 'done', turn: 1, args: { path: 'a.md', content: 'hi' } },
+    { name: 'read', status: 'running', turn: 1, args: { path: 'a.md' } },
   ],
   updatedAt: now,
   ...overrides,
@@ -47,6 +47,11 @@ describe('run-store schema codecs', () => {
 
   test('tools round-trip through the JSON column codec', () => {
     expect(decodeTools(encodeTools(sampleRun().tools))).toEqual(sampleRun().tools);
+  });
+
+  test('tools without args (legacy snapshots) round-trip as undefined', () => {
+    const legacy = [{ name: 'read', status: 'done', turn: 1 }] as const;
+    expect(decodeTools(encodeTools(legacy))).toEqual(legacy);
   });
 
   test('decoding rejects malformed JSON', () => {
