@@ -1,5 +1,5 @@
 import type { PresetConfig, PresetLoopConfig, PresetWorkflowConfig } from '@/protocol'
-import { stepError } from '@/lib/workflow'
+import { groupReviewerRef, stepError } from '@/lib/workflow'
 
 /**
  * Derived validity of a preset config. Status is NOT stored in the file — it
@@ -8,8 +8,8 @@ import { stepError } from '@/lib/workflow'
  * break them). Saving is allowed in either state.
  *
  * LOOP presets are valid when the canvas holds at least one step, every step
- * is configured (reviewers picked, models set, the human interruptor has its
- * required prompt), and the execution counts are sane.
+ * is configured (reviewers picked, models set), and the execution counts are
+ * sane.
  *
  * PIPELINE presets are valid when the canvas holds at least one step and
  * every step is configured (reviewer steps must have a picked reviewer;
@@ -41,26 +41,32 @@ export const isPipelineConfigShape = (
   Array.isArray((config as PresetWorkflowConfig).steps) &&
   !('maxLoops' in config)
 
-/** Validity of a LOOP config — every step must be configured, plus execution counts. */
+/** Validity of a LOOP config — fixed structure: reviewer-group + fixers + supervisor. */
 const loopStatus = (config: PresetLoopConfig): PresetStatus => {
   const issues: string[] = []
   const steps = Array.isArray(config.steps) ? config.steps.filter(isStepObject) : []
-  if (steps.length === 0) {
-    issues.push('Empty loop — drag a node onto the canvas')
+  const group = steps.find((step) => step.kind === 'reviewer-group')
+  const fixers = steps.find((step) => step.kind === 'fixers')
+
+  if (group === undefined) {
+    issues.push('Add the reviewer group')
   } else {
-    const stepIssues = steps
-      .map((step, index) => {
-        const error = stepError(step)
-        if (error !== null) return `Step ${index + 1} (${step.kind}): ${error}`
-        // Aggregation is part of the reviewer-group — it always runs after it.
-        if (step.kind === 'reviewer-group' && (step.model ?? '').trim() === '') {
-          return `Step ${index + 1} (reviewer-group): aggregation model missing`
-        }
-        return null
-      })
-      .filter((issue): issue is string => issue !== null)
-    issues.push(...stepIssues)
+    const reviewers = group.reviewers ?? []
+    if (reviewers.length === 0) issues.push('Add at least one reviewer')
+    const missingModel = reviewers.findIndex(
+      (entry) => (groupReviewerRef(entry).model ?? '').trim() === '',
+    )
+    if (missingModel >= 0) issues.push(`Reviewer ${missingModel + 1} needs a model`)
+    if ((group.model ?? '').trim() === '') issues.push('Aggregation model missing')
   }
+  if (fixers === undefined) {
+    issues.push('Add the fixers step')
+  } else if ((fixers.model ?? '').trim() === '') {
+    issues.push('Fixers need a model')
+  }
+  if ((config.supervisor?.model ?? '').trim() === '') issues.push('Supervisor needs a model')
+  if ((config.bookkeeper?.model ?? '').trim() === '') issues.push('Bookkeeper needs a model')
+
   if (!Number.isInteger(config.maxLoops) || config.maxLoops < 1) issues.push('Loops must be at least 1')
   if (config.maxCycles !== undefined && (!Number.isInteger(config.maxCycles) || config.maxCycles < 1)) {
     issues.push('Cycles must be at least 1')

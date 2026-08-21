@@ -136,7 +136,7 @@ const makeColumns = (): ColumnDef<PresetSummary>[] => [
       ) : (
         <Badge
           variant="secondary"
-          title="Review loop preset — reviewer groups, aggregation, fixers, human interruptor"
+          title="Review loop preset — reviewer groups, aggregation, fixers"
         >
           loop
         </Badge>

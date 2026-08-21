@@ -443,7 +443,7 @@ function StepRow({
           <Icon className="size-3.5" />
         </span>
 
-        <span className="w-16 shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <span className="w-max shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           {node?.label ?? step.kind}
         </span>
 
@@ -793,7 +793,7 @@ function PalettePreview({ kind }: { kind: string }) {
 }
 
 /** Small concurrency input for reviewer-group / fixers steps. */
-function ConcurrencyField({
+export function ConcurrencyField({
   value,
   onChange,
   hint,
@@ -837,7 +837,7 @@ function ConcurrencyField({
  * the row shows the selected model picker (click to change) plus a Remove
  * button next to the label. No auto-picking — the user always chooses.
  */
-function FallbackModelsPicker({
+export function FallbackModelsPicker({
   conn,
   value,
   onChange,

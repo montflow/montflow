@@ -31,12 +31,6 @@ export const WORKFLOW_NODE_KINDS: readonly WorkflowNodeKind[] = [
     accent: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400',
   },
   {
-    kind: 'human',
-    label: 'Human Interruptor',
-    description: 'Ask the user for input mid-run',
-    accent: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-  },
-  {
     kind: 'fixer',
     label: 'Fixers',
     description: 'Apply fixes for findings (fan-out waves)',
@@ -47,7 +41,7 @@ export const WORKFLOW_NODE_KINDS: readonly WorkflowNodeKind[] = [
 /**
  * The node vocabulary the LOOP palette offers. Same canvas as pipelines but
  * loop-shaped: reviewer groups/singles (aggregation is part of the group —
- * it always runs after it), fixers, and the human interruptor.
+ * it always runs after it) and fixers.
  */
 export const LOOP_NODE_KINDS: readonly WorkflowNodeKind[] = [
   {
@@ -67,12 +61,6 @@ export const LOOP_NODE_KINDS: readonly WorkflowNodeKind[] = [
     label: 'Fixers',
     description: 'Apply fixes for findings — with concurrency',
     accent: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
-  },
-  {
-    kind: 'human',
-    label: 'Human Interruptor',
-    description: 'Presents data to the user and asks a question — with a required prompt',
-    accent: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
   },
 ]
 

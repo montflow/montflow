@@ -154,7 +154,7 @@ function PresetHeader({
                 title={
                   isPipeline
                     ? 'Pipeline preset — open-ended step pipeline (not yet executable)'
-                    : 'Review loop preset — reviewer groups, aggregation, fixers, human interruptor'
+                    : 'Review loop preset — reviewer groups, aggregation, fixers'
                 }
                 className={isPipeline ? 'border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-300' : undefined}
               >

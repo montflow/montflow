@@ -38,6 +38,8 @@ const DEFAULT_LOOP_CONFIG: PresetConfig = {
   maxLoops: 3,
   maxCycles: 5,
   deadlock: { flipThreshold: 2, action: 'escalate' },
+  supervisor: { model: 'deepseek-v4-flash-free' },
+  bookkeeper: { model: 'deepseek-v4-flash-free' },
 }
 
 /**
@@ -135,7 +137,7 @@ export function NewPresetDialog({ workspaceId, open, onOpenChange, onCreated }: 
               </span>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Review loop — reviewer groups, aggregation, fixers, human interruptor. Edited on the
+              Review loop — reviewer groups, aggregation, fixers. Edited on the
               drag-and-drop canvas.
             </p>
           </div>
