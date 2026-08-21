@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "commit",
-  "template": "After user approval: Check repo for pre-commit hooks. If no hooks, commit normally. If hooks exist, commit all except last using --no-verify. Commit last normally to trigger hooks. If hooks pass, continue to step 5. If hooks fail, override base error rule: if simple error (lint/auto-format), fix, stage with git add --, and retry exactly once. If fail again or error complex (tests/types), stop, show log, ask user. No loops.",
+  "template": "After user approval of the commit plan from planning-git-commits: execute that approved plan (commit in plan order, each with its grouped files and message). First check repo for pre-commit hooks. If no hooks, commit every planned commit normally. If hooks exist, commit all but the last planned commit using --no-verify, then commit the last one normally to trigger hooks (runs hooks once instead of per commit). If hooks pass, continue to step 5 (planning-git-commits Step 5 - Push, optional): determine remote/branch, confirm with user, then push; never force-push. If hooks fail, override base error rule: if simple error (lint/auto-format), fix, stage with git add --, and retry exactly once. If fail again or error complex (tests/types), stop, show log, ask user. No loops.",
   "variables": [],
   "skills": [
     "planning-git-commits"
