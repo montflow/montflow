@@ -1,7 +1,7 @@
 {
   "version": 1,
   "type": "loop",
-  "name": "adversarial-review-loop",
+  "name": "adversarial-review",
   "config": {
     "steps": [
       {
