@@ -278,6 +278,10 @@ export interface PresetLoopConfig extends PresetStepConfig {
   maxLoops: number
   maxCycles?: number
   deadlock: { flipThreshold: number; action: 'escalate' }
+  /** Supervisor verdict turn at the end of each cycle (issues remain: yes/no). */
+  supervisor?: { model?: string; fallbackModel?: string }
+  /** Bookkeeper agent — creates loop scaffolding/artifacts from templates. */
+  bookkeeper?: { model?: string; fallbackModel?: string }
 }
 
 /** One reviewer inside a reviewer-group roster: a ref plus an optional per-reviewer prompt. */
