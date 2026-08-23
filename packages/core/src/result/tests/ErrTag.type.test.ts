@@ -7,4 +7,8 @@ Vitest.describe('[types] Result.ErrTag', () => {
     type Test = Result.ErrTag;
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
+
+  Vitest.it('should be the literal type "err"', () => {
+    Vitest.expectTypeOf<Result.ErrTag>().toEqualTypeOf<'err'>();
+  });
 });

@@ -7,4 +7,8 @@ Vitest.describe('[types] Result.Any', () => {
     type Test = Result.Any;
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
+
+  Vitest.it('should equal Result<any, any>', () => {
+    Vitest.expectTypeOf<Result.Any>().toEqualTypeOf<Result.Result<any, any>>();
+  });
 });

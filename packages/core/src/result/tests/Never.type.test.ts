@@ -7,4 +7,8 @@ Vitest.describe('[types] Result.Never', () => {
     type Test = Result.Never;
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
+
+  Vitest.it('should equal Result<never, never>', () => {
+    Vitest.expectTypeOf<Result.Never>().toEqualTypeOf<Result.Result<never, never>>();
+  });
 });

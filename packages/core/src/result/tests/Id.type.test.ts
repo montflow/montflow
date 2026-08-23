@@ -7,4 +7,8 @@ Vitest.describe('[types] Result.Id', () => {
     type Test = Result.Id;
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
+
+  Vitest.it('should be the literal type "result"', () => {
+    Vitest.expectTypeOf<Result.Id>().toEqualTypeOf<'result'>();
+  });
 });

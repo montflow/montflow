@@ -7,4 +7,8 @@ Vitest.describe('[types] Result.OkTag', () => {
     type Test = Result.OkTag;
     Vitest.expectTypeOf<Test>().not.toEqualTypeOf<undefined>();
   });
+
+  Vitest.it('should be the literal type "ok"', () => {
+    Vitest.expectTypeOf<Result.OkTag>().toEqualTypeOf<'ok'>();
+  });
 });
