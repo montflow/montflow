@@ -157,7 +157,7 @@ export type BackendToRouter =
 
 /** Command shape forwarded verbatim from the browser to the backend. */
 export interface BrowserCommand {
-  readonly type: 'prompt' | 'steer' | 'followUp' | 'command' | 'skillAgentic' | 'profileAgentic' | 'presetAgentic' | 'promptAgentic' | 'textAgentic' | 'textGenerate' | 'skillReply' | 'skillSnapshot' | 'skillSetStatus' | 'skillRetry';
+  readonly type: 'prompt' | 'steer' | 'followUp' | 'command' | 'skillAgentic' | 'profileAgentic' | 'presetAgentic' | 'promptAgentic' | 'textAgentic' | 'textGenerate' | 'textGenerateCancel' | 'skillReply' | 'skillSnapshot' | 'skillSetStatus' | 'skillRetry';
   readonly text: string;
   /** Client-generated run id (agentic kinds) or target run id (skillReply/skillSnapshot/skillSetStatus). */
   readonly runId?: string;
@@ -190,6 +190,34 @@ export type RouterToBackend =
   | { readonly type: 'error'; readonly code: string; readonly message: string; readonly expected?: number; readonly got?: number }
   | { readonly type: 'command'; readonly folder: string; readonly command: BrowserCommand }
   | { readonly type: 'shutdown'; readonly folder: string };
+
+/** A loop executor's full loop state, pushed as `loopUpdated` (mirrors loop.json). */
+export interface LoopStateWire {
+  readonly id: string;
+  readonly preset: string;
+  readonly name?: string;
+  readonly status: 'pending' | 'scoping' | 'reviewing' | 'fixing' | 'awaiting-user' | 'done' | 'incomplete' | 'interrupted' | 'error';
+  readonly running: boolean;
+  readonly loop: number;
+  readonly cycle: number;
+  readonly maxLoops: number;
+  readonly maxCycles: number;
+  readonly openIssues: number;
+  readonly scopeType: 'git-unstaged' | 'agentic';
+  readonly roster: readonly {
+    readonly runId: string;
+    readonly label: string;
+    readonly kind: 'supervisor' | 'reviewer' | 'fixer';
+    readonly model?: string;
+    readonly running: boolean;
+    readonly outcome?: 'ok' | 'error' | 'interrupted';
+    readonly finishedAt?: number;
+    readonly summary?: string;
+  }[];
+  readonly history: readonly { readonly at: number; readonly title: string; readonly detail?: string; readonly runId?: string }[];
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
 
 /** browser → router (`/ws` socket). */
 export interface BrowserToRouter {
@@ -244,6 +272,9 @@ export type RouterToBrowser =
     }
   // The backend replaced its session (e.g. agentic skill creation).
   | { readonly type: 'sessionChanged'; readonly folder: string; readonly sessionId: string }
+  // A review loop transitioned (status flip, counter move, roster change);
+  // carries the FULL loop.json state — browsers invalidate their loops query.
+  | { readonly type: 'loopUpdated'; readonly workspaceId: string; readonly loop: LoopStateWire }
   // The pickable model set or the persisted selection changed (a tab picked
   // a model, or a backend connected/disconnected/ran /model) — browsers
   // refresh their model query so every tab stays in sync.

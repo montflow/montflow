@@ -296,6 +296,9 @@ const sendTextGen = (
   sendToRouter({ type: 'textGen', folder, runId, phase, status, text });
 };
 
+/** In-flight one-shot AI-input fills by run id — aborted on cancel. */
+const activeTextGens = new Map<string, AbortController>();
+
 /** Ensure the router daemon is running; returns its port. */
 const ensureRouter = async (requestedPort?: number): Promise<number> => {
   // An explicit --port is authoritative: reuse a healthy router there or
@@ -587,9 +590,13 @@ export const startUiServer = async (
         const folder = assignedFolder;
         const runId = command.runId ?? randomUUID().slice(0, 8);
         sendTextGen(folder, runId, 'start', 'running', '');
+        // Cancelling aborts the ephemeral agent via this controller.
+        const controller = new AbortController();
+        activeTextGens.set(runId, controller);
         void generateText(ctx.cwd, command.model ?? resolveInitialModel(ctx) ?? '', text, (delta) => {
           sendTextGen(folder, runId, 'delta', 'running', delta);
-        }).then((result) => {
+        }, controller.signal).then((result) => {
+          if (controller.signal.aborted) return; // user cancelled — no terminal event
           if (result.ok) {
             sendTextGen(folder, runId, 'done', 'done', result.text);
           } else {
@@ -599,6 +606,7 @@ export const startUiServer = async (
           // generateText can reject outright (e.g. no active model throws in
           // createTextAgent) — surface it as a textGen error so the modal
           // unlocks with a real message instead of hanging on "Working…".
+          if (controller.signal.aborted) return; // user cancelled — no terminal event
           sendTextGen(
             folder,
             runId,
@@ -606,7 +614,13 @@ export const startUiServer = async (
             'error',
             cause instanceof Error ? cause.message : String(cause),
           );
-        });
+        }).finally(() => activeTextGens.delete(runId));
+        break;
+      }
+
+      case 'textGenerateCancel': {
+        // Abort the in-flight one-shot fill (no-op when it already finished).
+        if (typeof command.runId === 'string') activeTextGens.get(command.runId)?.abort();
         break;
       }
 

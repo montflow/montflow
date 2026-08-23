@@ -25,10 +25,11 @@ import net from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { WebSocket, WebSocketServer } from 'ws';
 import { Schema } from 'effect';
-import { ReviewPresetFromJson, ReviewPresetSchema } from './preset-schema.ts';
+import { ReviewPresetFromJson, ReviewPresetSchema, isLoopPreset, type PresetLoopConfigDecoded } from './preset-schema.ts';
 import { PromptFromJson, PromptSchema, renderPromptTemplate, type PromptDecoded } from './prompt-schema.ts';
 import { openRunStore, type RunStore, type StoredRun } from './run-store.ts';
 import type { RunExecutor } from './run-executor.ts';
+import type { LoopExecutor, LoopState } from './run-loop.ts';
 import {
   PROMPT_RUNNER_SYSTEM,
   PROMPT_RUNNER_TOOLS,
@@ -49,6 +50,7 @@ import {
   type ModelChoice,
   type RouterToBackend,
   type RouterToBrowser,
+  type LoopStateWire,
 } from './ui-protocol.ts';
 
 const DIST_DIR = join(dirname(fileURLToPath(import.meta.url)), 'ui', 'dist');
@@ -628,6 +630,61 @@ const getExecutor = (): Promise<RunExecutor> => {
   return executorPromise;
 };
 
+// ---------------------------------------------------------------------------
+// Loop executor (run-loop.ts) — review loops run INSIDE the router like
+// agentic runs: agent streams flow through the same skillGen cache/store/
+// broadcast path, and every loop transition pushes a `loopUpdated` event.
+// ---------------------------------------------------------------------------
+
+let loopExecutorPromise: Promise<LoopExecutor> | undefined;
+
+/** Lazily create the loop executor (loads the pi SDK). Memoized process-wide. */
+const getLoopExecutor = (): Promise<LoopExecutor> => {
+  loopExecutorPromise ??= import('./run-loop.ts').then(({ createLoopExecutor }) =>
+    createLoopExecutor({
+      maxConcurrent: RUN_MAX_CONCURRENT,
+      getCwd: workspacePath,
+      broadcastLoop: (workspaceId, loop) => {
+        broadcastToBrowsers({ type: 'loopUpdated', workspaceId, loop: loopToWire(loop) });
+      },
+      emit: (msg) => {
+        runFolder.set(msg.runId, msg.folder);
+        cacheSkillGen(msg as unknown as Extract<BackendToRouter, { type: 'skillGen' }>);
+        broadcastToBrowsers({
+          type: 'skillGen',
+          folder: msg.folder,
+          runId: msg.runId,
+          workspaceId: msg.workspaceId,
+          phase: msg.phase,
+          entry: msg.entry,
+          status: msg.status,
+          text: msg.text,
+          title: msg.title,
+          entries: msg.entries,
+          tools: msg.tools,
+          toolArgs: msg.toolArgs,
+          model: msg.model,
+        });
+      },
+    }),
+  );
+  return loopExecutorPromise;
+};
+
+/** The wire payload mirrors the persisted state, plus the derived live-agents list. */
+const loopToWire = (loop: LoopState): LoopStateWire => ({
+  ...loop,
+  agents: loop.roster.filter((entry) => entry.running),
+} as unknown as LoopStateWire);
+
+/** First folder connected for a workspace (cosmetic — for skillGen routing). */
+const folderForWorkspace = (workspaceId: string): string => {
+  for (const [folder, ws] of folderWorkspace) {
+    if (ws === workspaceId) return folder;
+  }
+  return '';
+};
+
 /** Map a browser agentic command type to the executor's run kind. */
 const commandKind = (
   type: BrowserToRouter['command']['type'],
@@ -1048,6 +1105,10 @@ const isValidPresetName = (name: string): boolean =>
 const presetRoot = (cwd: string): string => join(cwd, ...PRESET_DIR);
 const presetFilePath = (cwd: string, name: string): string =>
   join(presetRoot(cwd), `${name}${PRESET_EXT}`);
+
+/** Human-readable message from an unknown thrown value (API error bodies). */
+const errorMessage = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
 
 /**
  * Builtin reviewer catalog (id → label) served to the UI for rendering
@@ -1676,6 +1737,157 @@ async function main(): Promise<void> {
           const existed = await readPresetFile(cwd, name).then((raw) => raw !== null).catch(() => false);
           await deletePresetFile(cwd, name);
           if (existed) broadcastPresetChanged(cwd, wsId, name, 'deleted');
+          sendJson(200, { ok: true });
+          return;
+        }
+        sendJson(405, { error: 'Method not allowed' });
+        return;
+      }
+
+      // Loops — review-loop kickoff + lifecycle, executed INSIDE the router
+      // by run-loop.ts. State lives in .agents/@montflow/loops/<loopId>/.
+      // GET    /api/workspaces/<id>/loops                       → list
+      // POST   /api/workspaces/<id>/loops                       → kickoff { preset, scope, model? }
+      // POST   /api/workspaces/<id>/loops/<lid>/stop            → interrupt
+      // POST   /api/workspaces/<id>/loops/<lid>/resume          → continue from last state
+      // POST   /api/workspaces/<id>/loops/<lid>/decision        → { action: raise-cycles | raise-loops | complete }
+      // DELETE /api/workspaces/<id>/loops/<lid>                 → remove stopped loop
+      const loopList = pathname.match(/^\/api\/workspaces\/([^/]+)\/loops$/);
+      const loopAction = pathname.match(/^\/api\/workspaces\/([^/]+)\/loops\/([^/]+)\/(stop|resume|decision)$/);
+      const loopItem = pathname.match(/^\/api\/workspaces\/([^/]+)\/loops\/([^/]+)$/);
+
+      if (loopList) {
+        const wsId = decodeURIComponent(loopList[1] ?? '');
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (req.method === 'GET') {
+          sendJson(200, { loops: await (await getLoopExecutor()).list(cwd) });
+          return;
+        }
+        if (req.method === 'POST') {
+          const body = await readJsonBody(req).catch(() => undefined);
+          if (body === undefined || typeof body !== 'object' || body === null) {
+            sendJson(400, { error: 'Invalid JSON body' });
+            return;
+          }
+          const { preset, scope } = body as {
+            preset?: unknown;
+            scope?: unknown;
+          };
+          if (typeof preset !== 'string' || !isValidPresetName(preset)) {
+            sendJson(400, { error: 'preset must be a preset name string' });
+            return;
+          }
+          const scopeBody = scope as { type?: unknown; goal?: unknown } | undefined;
+          if (
+            scopeBody === undefined ||
+            typeof scopeBody.type !== 'string' ||
+            !['git-unstaged', 'agentic'].includes(scopeBody.type) ||
+            (scopeBody.type === 'agentic' && (typeof scopeBody.goal !== 'string' || scopeBody.goal.trim() === ''))
+          ) {
+            sendJson(400, { error: "scope must be { type: 'git-unstaged' } or { type: 'agentic', goal }" });
+            return;
+          }
+          // Load + validate the preset file.
+          let config: PresetLoopConfigDecoded;
+          try {
+            const raw = await readFile(presetFilePath(cwd, preset), 'utf8');
+            const decoded = Schema.decodeSync(ReviewPresetFromJson)(raw);
+            if (!isLoopPreset(decoded)) {
+              sendJson(400, { error: 'Pipeline presets are not executable — pick a loop preset.' });
+              return;
+            }
+            config = decoded.config as PresetLoopConfigDecoded;
+          } catch (cause) {
+            sendJson(404, { error: `Preset '${preset}' not found or invalid: ${errorMessage(cause)}` });
+            return;
+          }
+          const result = await (await getLoopExecutor()).start({
+            folder: folderForWorkspace(wsId),
+            workspaceId: wsId,
+            cwd,
+            presetName: preset,
+            config,
+            scope:
+              scopeBody.type === 'agentic'
+                ? { type: 'agentic', goal: (scopeBody as { goal: string }).goal }
+                : { type: 'git-unstaged' },
+            // NOTE: no model here on purpose — loop roles run ONLY on models
+            // the preset set. The header picker must never leak into loops.
+          });
+          if (!result.ok) {
+            sendJson(400, { error: result.error });
+            return;
+          }
+          sendJson(201, { loop: loopToWire(result.value) });
+          return;
+        }
+        sendJson(405, { error: 'Method not allowed' });
+        return;
+      }
+
+      if (loopAction) {
+        const wsId = decodeURIComponent(loopAction[1] ?? '');
+        const loopId = decodeURIComponent(loopAction[2] ?? '');
+        const action = loopAction[3];
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (req.method !== 'POST') {
+          sendJson(405, { error: 'Method not allowed' });
+          return;
+        }
+        const executor = await getLoopExecutor();
+        const finish = (result: { ok: true; value: LoopState } | { ok: false; error: string }): void => {
+          if (result.ok) sendJson(200, { loop: loopToWire(result.value) });
+          else sendJson(400, { error: result.error });
+        };
+        if (action === 'stop') {
+          finish(await executor.stop(wsId, loopId));
+          return;
+        }
+        if (action === 'resume') {
+          finish(await executor.resume(wsId, loopId));
+          return;
+        }
+        const body = await readJsonBody(req).catch(() => undefined);
+        const decision = (body as { action?: unknown } | undefined)?.action;
+        if (decision !== 'raise-cycles' && decision !== 'raise-loops' && decision !== 'complete') {
+          sendJson(400, { error: 'action must be raise-cycles, raise-loops, or complete' });
+          return;
+        }
+        finish(await executor.decide(wsId, loopId, decision));
+        return;
+      }
+
+      if (loopItem) {
+        const wsId = decodeURIComponent(loopItem[1] ?? '');
+        const loopId = decodeURIComponent(loopItem[2] ?? '');
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (req.method === 'GET') {
+          const loop = await (await getLoopExecutor()).get(cwd, loopId);
+          if (loop === null) {
+            sendJson(404, { error: 'Loop not found' });
+            return;
+          }
+          sendJson(200, { loop: loopToWire(loop) });
+          return;
+        }
+        if (req.method === 'DELETE') {
+          const result = await (await getLoopExecutor()).remove(wsId, loopId);
+          if (!result.ok) {
+            sendJson(400, { error: result.error });
+            return;
+          }
           sendJson(200, { ok: true });
           return;
         }

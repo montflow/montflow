@@ -176,6 +176,14 @@ export const PresetLoopConfigSchema = Schema.Struct({
       fallbackModel: Schema.optional(Schema.String),
     }),
   ),
+  /** Scoper turn — resolves the kickoff prompt into scope.md once per kickoff. */
+  scoper: Schema.optional(
+    Schema.Struct({
+      model: Schema.optional(Schema.String),
+      /** Single fallback model tried after `model` fails. */
+      fallbackModel: Schema.optional(Schema.String),
+    }),
+  ),
   /** Bookkeeper agent — creates loop scaffolding/artifacts from templates. */
   bookkeeper: Schema.optional(
     Schema.Struct({

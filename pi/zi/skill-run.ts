@@ -498,6 +498,8 @@ export const PROMPT_RUNNER_TOOLS = ['read', 'write', 'edit', 'grep', 'glob'] as 
  * @param {string} model The resolved model (`provider/model-id`)
  * @param {string} task The text-generation request
  * @param {(delta: string) => void} onDelta Streaming delta callback
+ * @param {AbortSignal} [signal] Aborting cancels the generation (best-effort:
+ * the agent is force-stopped and disposed, and the call returns an error).
  * @returns The final answer
  */
 export const generateText = async (
@@ -505,10 +507,20 @@ export const generateText = async (
   model: string,
   task: string,
   onDelta: (delta: string) => void,
+  signal?: AbortSignal,
 ): Promise<SkillRunResult> => {
   const agent = await createTextAgent(cwd, model);
+  if (signal !== undefined) {
+    // Cancelled while the agent was still being created — nothing to run.
+    // (An already-aborted signal never fires its listeners.)
+    if (signal.aborted) {
+      await disposeSkillAgent(agent);
+      return { ok: false, error: 'Cancelled.' };
+    }
+    signal.addEventListener('abort', () => void abortSkillAgent(agent), { once: true });
+  }
   try {
-    return await promptSkillAgent(agent, wrapTextPrompt(task), onDelta);
+    return await promptSkillAgent(agent, wrapTextPrompt(task), onDelta, undefined, signal);
   } finally {
     await disposeSkillAgent(agent);
   }
@@ -517,19 +529,21 @@ export const generateText = async (
 /**
  * Prompt the run's agent (first turn or a follow-up reply). Text deltas are
  * forwarded to `onDelta`; tool activity to `onTool`; the session keeps its
- * context across turns.
+ * context across turns. An aborted `signal` interrupts the in-flight prompt.
  */
 export const promptSkillAgent = async (
   run: SkillRunAgent,
   task: string,
   onDelta: (delta: string) => void,
   onTool?: (activity: { kind: 'start' | 'end' | 'error'; tool: string; args?: unknown }) => void,
+  signal?: AbortSignal,
 ): Promise<SkillRunResult> => {
   try {
     const result = await Effect.runPromise(
       run.agent.prompt(task, undefined, onTool, (delta, kind) => {
         if (kind === 'text') onDelta(delta);
       }),
+      signal !== undefined ? { signal } : undefined,
     );
     if (result.error !== undefined) return { ok: false, error: result.error };
     return { ok: true, text: result.text };
