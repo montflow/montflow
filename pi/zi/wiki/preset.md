@@ -19,9 +19,9 @@ counters, events) lives in [loop.md](loop.md).
 | Preset CRUD API | ✅ done | `../router.ts` → `/api/workspaces/<id>/presets…` |
 | Visual canvas editor (drag-and-drop nodes) | ✅ done | `../ui/src/components/LoopEditor.tsx` |
 | Live validity badge (`valid` / `invalid`) | ✅ done | `../ui/src/lib/presetStatus.ts` |
-| **Executor that runs a loop preset** | ❌ nothing | — |
-| **Loops API + WS streaming** | ❌ nothing | — |
-| Loops UI section | ⚠️ mocked | `../ui/src/lib/useLoops.ts` (localStorage + scripted transcripts) |
+| **Executor that runs a loop preset** | ✅ done (v1) | `../run-loop.ts` — fixed `[reviewer-group, fixers]` only; deviations in its header comment |
+| **Loops API** | ✅ done (v1) | `../router.ts` → `/api/workspaces/<id>/loops…` + `loopUpdated` WS push |
+| Loops UI section | ✅ real | `../ui/src/lib/useLoops.ts` (server-backed; mocks removed) |
 
 A preset today is a **saved configuration and nothing more**. Saving,
 editing, validating, deleting — all work. Running — does not exist.

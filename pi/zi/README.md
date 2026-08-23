@@ -97,12 +97,21 @@ All under the router port; workspaces are addressed by their generated id (`work
 | `GET/POST /api/workspaces/<id>/skills` · `GET/PUT/DELETE .../skills/<skillId>` | SKILL.md CRUD |
 | `GET/POST /api/workspaces/<id>/profiles` · `GET/PUT/DELETE .../profiles/<name>` | PROFILE.md CRUD |
 | `GET /api/runs?workspace=&status=` | Durable agentic-run history |
+| `GET/POST /api/workspaces/<id>/loops` | Review-loop list / kickoff `{ preset, scope, model? }` |
+| `POST /api/workspaces/<id>/loops/<lid>/stop·resume·decision` | Loop lifecycle (decision: raise-cycles / raise-loops / complete) |
+| `GET/DELETE /api/workspaces/<id>/loops/<lid>` | One loop's state / delete a stopped loop |
 
-WS pushes (`/ws`): `folders`, `hello` (session snapshot), `event` (live pi events), `notify`, `skillGen` (run streams), `textGen`, `modelsChanged`, `skillChanged`/`profileChanged` (cross-tab invalidation), `sessionChanged`.
+WS pushes (`/ws`): `folders`, `hello` (session snapshot), `event` (live pi events), `notify`, `skillGen` (run streams), `textGen`, `modelsChanged`, `skillChanged`/`profileChanged`/`presetChanged`/`promptChanged` (cross-tab invalidation), `loopUpdated` (full loop.json state after every transition), `sessionChanged`.
 
 ## Reworking the review loop
 
-The adversarial review loop (reviewer roster → supervisor → fixer state machine, the interactive wizard, review presets, and their TUI widget) was **removed** in this iteration. The plan is to rebuild it **server-side**: the router daemon will own the run orchestration and stream state over the WS (an API to start runs, plus decision requests for cycle-max prompts), so it runs headlessly with the web UI as the only frontend.
+The adversarial review loop was removed, re-planned ([wiki/loop.md](wiki/loop.md) +
+[wiki/preset.md](wiki/preset.md)), and is now **implemented server-side**: the router daemon owns
+execution (`run-loop.ts`) — kickoff → scoper → reviewer fan-out → aggregation → fixer →
+supervisor verdict, with deterministic counters/caps and resumable `loop.json` state under
+`.agents/@montflow/loops/<id>/`. The web UI drives it over the Loops REST API
+(`POST /api/workspaces/<id>/loops` = kickoff) plus `loopUpdated` WS pushes; every agent phase is
+a real streamed run. v1 deviations are recorded in the `run-loop.ts` header comment.
 
 ## Installation
 
@@ -129,6 +138,7 @@ Requires `@earendil-works/pi-coding-agent` as a peer dependency. TypeScript load
 | `models-client.ts` | Model-picker helpers (available models, current-model preselection) |
 | `run-title.ts` | Generated run titles (opencode big-pickle) |
 | `run-store.ts` | Router-side sqlite run store |
+| `run-loop.ts` | **Review-loop executor** — kickoff → scoper → reviewers → aggregate → fixer → supervisor verdict, driven by a plain-code orchestrator; state in `.agents/@montflow/loops/<id>/loop.json` (see [wiki](wiki/loop.md)) |
 | `git.ts` | Git branch helper (workspace identity) |
 | `profiles/` | **Merged `@montflow/profiles` feature**: profile store (`store.ts`), parse/serialize (`model.ts`), template (`TEMPLATE.md`), and the event-bus API for other extensions (`api.ts`) |
 | `ui/` | The SPA (React + Vite) — pure render target |

@@ -8,7 +8,18 @@ Companion to [preset.md](preset.md) (the config). This page plans the
 **runtime**: what happens between "user types a prompt + picks a preset" and
 a finished review loop.
 
-Planning only — no code yet.
+> **Implementation status:** the v1 runtime now EXISTS — `../run-loop.ts`
+> (router-side executor) + the Loops API in `../router.ts`. Where this doc
+> and the code disagree, the code's header comment records the v1
+> deviations: no Bookkeeper LLM (deterministic scaffolding); agent sessions
+> are ephemeral per TURN — so neither the same-sessions re-check within a
+> cycle (§3) nor cross-cycle context carry exists yet. The aggregator additionally writes a
+> **fix-plan.md** per pass (groups = parallel batches, `after` = sequencing,
+> strict `FIX_PLAN_JSON` tail, template in `../templates/loop/`) and fixers
+> dispatch per-finding in waves from that plan — orchestrator code does the
+> mechanical dispatch at the preset's `concurrency`, spending no tokens.
+
+Planning source — no code yet when written.
 
 ---
 
@@ -20,7 +31,7 @@ Planning only — no code yet.
 | **Scoper** 🆕 | LLM agent, runs once at start. Turns the kickoff prompt into a **scope**: target paths, in/out of bounds, focus areas | what the scope contains |
 | **Orchestrator** | Plain code in the router daemon (`run-loop.ts`) — NOT an LLM | all control: counters, caps, terminals, retries, events |
 | **Bookkeeper** 🆕 | LLM agent with the wiki + artifact templates in context. Creates the loop dir, `loop.json`, and per-cycle skeletons at kickoff; the orchestrator still writes counter transitions deterministically on top of what it scaffolds | artifact contents from templates |
-| **Reviewers** | LLM agents spawned per the preset's steps | nothing — scratch findings only |
+| **Reviewers** | LLM agents spawned FRESH at the start of each cycle; the SAME sessions run both review rounds of that cycle | nothing — scratch findings only |
 | **Aggregator** | LLM turn merging reviewer scratch into one canonical review | findings format, dedupe, severity |
 | **Fixers** | LLM agents applying fixes for Open findings | nothing — code changes only |
 | **Supervisor** | LLM turn at end of each cycle: reads the canonical review and renders the **verdict** — "issues remain: yes/no" | the verdict only |
@@ -71,10 +82,10 @@ flowchart TD
 
     subgraph CYCLE["Cycle — LLM agents"]
         direction TB
-        REV["1· Reviewers spawn per preset<br/>scratch findings"]
+        REV["1· Reviewers spawn — brand NEW sessions<br/>scratch findings"]
         AGG["2· Aggregator<br/>scratch → canonical review"]
         FIX["3· Fixers wave on Open findings"]
-        REV2["4· Reviewers again<br/>same scope, updated tree"]
+        REV2["4· SAME reviewer sessions re-check<br/>updated tree, context carried"]
         AGG2["5· Aggregator again<br/>re-checked canonical review"]
         REV -->|"scratch findings"| AGG
         AGG -->|"canonical + Open list<br/>status → fixing"| FIX
@@ -112,6 +123,13 @@ Read of your described sequence, formalized:
   kickoff). Steps 1–5 are one **cycle**: review → aggregate → fix →
   re-review → re-aggregate. The second review round is what proves the fixes
   worked.
+- **Reviewer session identity:** steps 1 and 4 are the SAME reviewer
+  sessions. Each cycle starts by spawning brand-new reviewers (one per
+  preset roster entry); those sessions hold their lens + scratch context
+  from round 1, then re-check the fixed tree in round 4 — so they can see
+  whether THEIR findings were actually resolved, not just whether new ones
+  appeared. A fresh cycle means fresh reviewers: no state crosses the
+  cycle boundary.
 - After each cycle the **supervisor verdict** asks one question: do open
   issues remain?
   - **No** (`clean` with `openIssues = 0`) → `done`
@@ -223,6 +241,45 @@ Same three WS events as planned before:
 | `loopAgentUpdate` | agent id + transcript chunk | live run streaming |
 | `loopDecisionRequest` | question + context | dialog (cap choice in v1; `human` steps would reuse it post-v1) |
 
+### Pipeline graph rendering contract (`ui/src/components/LoopGraph.tsx`)
+
+The loop detail page draws the §3 flow as a React Flow canvas, top to bottom.
+The graph is **derived, never stored** — it reads ONLY what `loopUpdated`
+pushes (`status`, `cycle`, `roster`). Rules the executor must uphold:
+
+- **Cycle blocks** — each cycle renders as a dotted box containing its own
+  `reviewers → aggregate → fixers` rows. Between consecutive cycles sits a
+  **Bookkeeper transition node** (`cycle += 1 · re-spawn reviewers`) — that
+  counter move is Bookkeeper/orchestrator work, not an agent's. The old
+  linear "re-check" node is gone: a re-check IS the next cycle's review.
+- **Persistent sessions** — reviewer rows of later cycles represent the SAME
+  sessions as cycle 1 (§8, resolved toward persistence). They carry a link
+  badge ("same session") instead of posing as new agents. Node identity is
+  per-cycle; run identity is shared across cycles.
+- **Progressive reveal** — past cycles render fully (the cycle counter
+  proves they ran). The CURRENT cycle reveals progressively: reviewers when
+  spawned, aggregate once any reviewer finished, fixers once spawned.
+  Future cycles are ABSENT, not greyed out.
+- **Roster accuracy** — every spawned reviewer/fixer must appear on the
+  roster, because each gets its own node. Stale roster entries render as
+  ghost nodes; missing entries hide real work.
+- **Active glow** — status maps to the glowing stage within the CURRENT
+  cycle: `pending` → bookkeeper, `scoping` → scoper, `reviewing` → reviewers
+  (aggregate once one finishes), `fixing` → fixers, `awaiting-user` →
+  verdict, `done`/`incomplete` → their terminal node.
+- **Crash/stop rule** — on `interrupted` / `error` the graph keeps everything
+  up to the furthest EVIDENCED stage: spawned agents prove their stage ran
+  (fixers → fixers row visible; reviewers → reviewer rows; none → kickoff
+  alone). Future stages stay hidden — an errored Bookkeeper never lights up
+  the pipeline. Interrupted agents render with an amber border, not the
+  green done tick.
+- **Symmetry** — fan-out rows mirror their node CENTERS around the main
+  column axis; Done/Incomplete sit at equal offsets left/right of it.
+- **Click-through** — agent-backed nodes open that agent's run page
+  (`?from=` back to the loop detail), same pattern as the agent cards.
+- **Viewport persistence** — pan/zoom persists per loop in localStorage
+  (`montflow:loop-graph:<loopId>`); the ⟲ control resets to the default.
+
 ## 7. Build order
 
 0. Author `templates/loop/` skeletons (loop.json, scope.md,
@@ -238,14 +295,18 @@ Same three WS events as planned before:
 - [ ] Scoper toolset: read-only (`read`/`grep`/`glob`) like reviewers, or can
       it also write outside its own artifacts? Proposal: read-only + write
       `scope.md` only.
-- [ ] Reviewer sessions: persist across cycles within a loop (context carry),
-      fresh each cycle (clean slate)? The archived design kept them
-      persistent per loop — the same sessions re-reviewed updated code each
-      cycle; fresh-per-cycle trades that context for determinism.
-- [ ] Default model when `supervisor.model` / `bookkeeper.model` are
-      omitted — resolve via the executor's model-default policy (same chain
-      as reviewer refs without overrides); pin the concrete default in
-      build step 1.
+- [x] Reviewer sessions: persist or fresh? — **decided: hybrid** (§3).
+      Sessions live exactly ONE cycle: spawned fresh at step 1, reused for
+      the step-4 re-check (context carry where it matters — verifying their
+      own findings), discarded at the cycle boundary (determinism + clean
+      slate between cycles). Never persists across cycles or loops.
+- [x] Default model when `supervisor.model` / `bookkeeper.model` are
+      omitted — **decided: there is none**. Every role resolves strictly from
+      user-set preset models (`run-loop.ts` → `resolveRoleModels`); a kickoff
+      that would run any role on an unset model is rejected before start, and
+      the UI header picker never leaks into loops. `scoper` joined `supervisor`
+      as an optional per-role config; unset roles fall back to the
+      reviewer-group's model chain (also user-set).
 - [x] Deadlock flip (sides flip after N unresolved passes) — **dropped for
       v1**. The preset's required `deadlock` field is validated and ignored;
       if it stays dropped, a later pass removes the field and the
