@@ -259,3 +259,6 @@ $RECYCLE.BIN/
 
 # --- scratch / test ---
 tmp/
+
+# --- montflow loop runtime state ---
+.agents/@montflow/loops

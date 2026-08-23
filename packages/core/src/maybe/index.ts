@@ -393,8 +393,9 @@ export const orElse: {
  * @todo testing
  */
 export const unfold: {
+  <V>(): (self: Maybe<V>) => Unfold<Maybe<V>>;
   <V>(self: Maybe<V>): Unfold<Maybe<V>>;
-} = <V>(self: Maybe<V>) => {
+} = Macro.dualify(0, <V>(self: Maybe<V>) => {
   if (isNone(self)) {
     // SAFETY: a None is its own unfold — there is nothing nested to unwrap.
     return self as Unfold<Maybe<V>>;
@@ -424,7 +425,10 @@ export const unfold: {
  *
  * @todo testing
  */
-export const flatten = <V>(self: Maybe<V>): Flatten<Maybe<V>> => {
+export const flatten: {
+  <V>(): (self: Maybe<V>) => Flatten<Maybe<V>>;
+  <V>(self: Maybe<V>): Flatten<Maybe<V>>;
+} = Macro.dualify(0, <V>(self: Maybe<V>) => {
   if (isNone(self) || !isMaybe(self.value) || isNone(self.value)) {
     // SAFETY: none of the nested-maybe cases apply, so self is already flat.
     return self as Flatten<Maybe<V>>;
