@@ -8,13 +8,43 @@
         "id": "s1",
         "kind": "reviewer-group",
         "label": "Reviewers",
-        "model": "deepseek-v4-flash-free"
+        "reviewers": [
+          {
+            "reviewer": {
+              "type": "profile",
+              "name": "pattern-consistency-reviewer",
+              "model": "opencode-go/ox-alpha-free",
+              "fallbackModel": "opencode-go/deepseek-v4-flash"
+            }
+          },
+          {
+            "reviewer": {
+              "type": "profile",
+              "name": "documentation-reviewer",
+              "model": "opencode-go/ox-alpha-free",
+              "fallbackModel": "opencode/deepseek-v4-flash"
+            }
+          },
+          {
+            "reviewer": {
+              "type": "profile",
+              "name": "language-quality-reviewer",
+              "model": "opencode-go/hy3",
+              "fallbackModel": "opencode-go/ox-alpha-free"
+            }
+          }
+        ],
+        "model": "opencode-go/ox-alpha-free",
+        "fallbackModel": "opencode/deepseek-v4-flash",
+        "concurrency": 3
       },
       {
         "id": "s2",
         "kind": "fixers",
         "label": "Fix",
-        "model": "deepseek-v4-flash-free"
+        "model": "opencode-go/ox-alpha-free",
+        "fallbackModel": "opencode-go/deepseek-v4-flash",
+        "concurrency": 5
       }
     ],
     "maxLoops": 3,
@@ -22,6 +52,14 @@
     "deadlock": {
       "flipThreshold": 2,
       "action": "escalate"
+    },
+    "supervisor": {
+      "model": "opencode-go/ox-alpha-free",
+      "fallbackModel": "opencode-go/deepseek-v4-flash"
+    },
+    "bookkeeper": {
+      "model": "opencode-go/ox-alpha-free",
+      "fallbackModel": "opencode-go/deepseek-v4-flash"
     }
   }
 }
