@@ -10,7 +10,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { LOOP_STATUS_META } from '@/lib/loopStatus'
-import { useDeleteLoop, useLoopDetail, useResumeLoop, useStopLoop } from '@/lib/useLoops'
+import { useDecideLoop, useDeleteLoop, useLoopDetail, useResumeLoop, useStopLoop } from '@/lib/useLoops'
+import { LoopGraph } from '@/components/LoopGraph'
 import { loopUrl, runUrl, workspaceUrl } from '@/components/LandingPage'
 import { navigate } from '@/lib/useLocation'
 import { titleFromSlug } from '@/lib/utils'
@@ -63,6 +64,7 @@ export function LoopDetail({ workspaceId, loopId, conn }: LoopDetailProps) {
   const stopLoop = useStopLoop(workspaceId)
   const deleteLoop = useDeleteLoop(workspaceId)
   const resumeLoop = useResumeLoop(workspaceId)
+  const decideLoop = useDecideLoop(workspaceId)
   const [confirmStop, setConfirmStop] = useState(false)
 
   const running = loop?.running ?? false
@@ -141,7 +143,7 @@ export function LoopDetail({ workspaceId, loopId, conn }: LoopDetailProps) {
             </Button>
           ) : (
             <>
-              {loop !== null && loop.status !== 'done' && !resumeLoop.isPending && (
+              {loop !== null && loop.status !== 'done' && loop.status !== 'awaiting-user' && !resumeLoop.isPending && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -186,6 +188,50 @@ export function LoopDetail({ workspaceId, loopId, conn }: LoopDetailProps) {
           </div>
         )}
 
+        {/* Caps exhausted — the explicit budget decision (wiki loop.md §3). */}
+        {loop !== null && !loop.running && loop.status === 'awaiting-user' && (
+          <div className="mt-4 rounded-md border border-amber-500/40 bg-amber-500/5 p-4">
+            <p className="text-sm font-medium">Caps exhausted — your call</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Open issues remain but both budgets are spent. Raise a cap by one pass, or stop here
+              and keep the findings.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={decideLoop.isPending}
+                onClick={() => decideLoop.mutate({ loopId, action: 'raise-cycles' })}
+              >
+                <Repeat className="size-3.5" />
+                One more cycle
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={decideLoop.isPending}
+                onClick={() => decideLoop.mutate({ loopId, action: 'raise-loops' })}
+              >
+                <Play className="size-3.5" />
+                Fresh independent loop
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={decideLoop.isPending}
+                onClick={() => decideLoop.mutate({ loopId, action: 'complete' })}
+              >
+                Stop here — keep findings
+              </Button>
+            </div>
+            {decideLoop.isError && (
+              <p className="mt-2 text-xs text-red-500">
+                {decideLoop.error instanceof Error ? decideLoop.error.message : String(decideLoop.error)}
+              </p>
+            )}
+          </div>
+        )}
+
         {isPending ? (
           <LoopDetailSkeleton />
         ) : loop === null ? (
@@ -194,6 +240,9 @@ export function LoopDetail({ workspaceId, loopId, conn }: LoopDetailProps) {
           </div>
         ) : (
           <div className="mt-6 flex flex-col gap-6">
+            {/* Pipeline canvas — the fixed loop.md §3 flow, current stage glowing */}
+            <LoopGraph loop={loop} backTo={backTo} />
+
             {/* Status / progress */}
             <StatusCard loop={loop} />
 

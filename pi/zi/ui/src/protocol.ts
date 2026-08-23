@@ -43,6 +43,7 @@ export type ClientCommandType =
   | 'promptAgentic'
   | 'textAgentic'
   | 'textGenerate'
+  | 'textGenerateCancel'
   | 'skillReply'
   | 'skillSnapshot'
   | 'skillSetStatus'
@@ -109,6 +110,12 @@ export type RouterToBrowser =
     }
   | { type: 'sessionChanged'; folder: string; sessionId: string }
   | {
+      type: 'loopUpdated'
+      workspaceId: string
+      /** FULL loop state (mirrors loop.json) pushed on every transition. */
+      loop: LoopStateWire
+    }
+  | {
       type: 'modelsChanged'
       /** Pickable models (union across connected sessions). */
       models: ModelChoice[]
@@ -141,6 +148,35 @@ export type RouterToBrowser =
       /** Model the run's agent runs on (set on start/snapshot). */
       model?: string
     }
+
+/** A loop executor's full loop state, pushed as `loopUpdated` (mirrors
+ * loop.json — kept in sync with LoopStateWire in ../ui-protocol.ts). */
+export interface LoopStateWire {
+  id: string
+  preset: string
+  name?: string
+  status: 'pending' | 'scoping' | 'reviewing' | 'fixing' | 'awaiting-user' | 'done' | 'incomplete' | 'interrupted' | 'error'
+  running: boolean
+  loop: number
+  cycle: number
+  maxLoops: number
+  maxCycles: number
+  openIssues: number
+  scopeType: 'git-unstaged' | 'agentic'
+  roster: Array<{
+    runId: string
+    label: string
+    kind: 'supervisor' | 'reviewer' | 'fixer'
+    model?: string
+    running: boolean
+    outcome?: 'ok' | 'error' | 'interrupted'
+    finishedAt?: number
+    summary?: string
+  }>
+  history: Array<{ at: number; title: string; detail?: string; runId?: string }>
+  createdAt: number
+  updatedAt: number
+}
 
 export type ServerMessage = RouterToBrowser
 
@@ -280,6 +316,8 @@ export interface PresetLoopConfig extends PresetStepConfig {
   deadlock: { flipThreshold: number; action: 'escalate' }
   /** Supervisor verdict turn at the end of each cycle (issues remain: yes/no). */
   supervisor?: { model?: string; fallbackModel?: string }
+  /** Scoper turn — resolves the kickoff prompt into scope.md once per kickoff. */
+  scoper?: { model?: string; fallbackModel?: string }
   /** Bookkeeper agent — creates loop scaffolding/artifacts from templates. */
   bookkeeper?: { model?: string; fallbackModel?: string }
 }
@@ -376,17 +414,18 @@ export interface PromptSummary {
 }
 
 /**
- * Lifecycle status of a review loop (driven by the supervisor's state file
- * — the kickoff step, its resolved scope, and the pass/cycle progress).
+ * Lifecycle status of a review loop (mirrors `loop.json`'s `status` field —
+ * see wiki/loop.md §5). All flips are performed by the orchestrator.
  */
 export type LoopStatus =
-  | 'kickoff'
-  | 'scoping'
-  | 'reviewing'
-  | 'fixing'
-  | 'awaiting-user'
-  | 'done'
-  | 'deadlocked'
+  | 'pending' // created, scoper not started
+  | 'scoping' // scoper running
+  | 'reviewing' // a cycle is executing
+  | 'fixing' // fixer wave in progress
+  | 'awaiting-user' // paused — needs input (caps exhausted)
+  | 'done' // clean verdict, zero open issues
+  | 'incomplete' // stopped at cap by user choice — findings preserved
+  | 'deadlocked' // never set by the v1 executor; kept for legacy files
   | 'interrupted'
   | 'error'
 
@@ -445,8 +484,14 @@ export interface LoopDetail extends LoopSummary {
   cycle?: number
   maxLoops?: number
   maxCycles?: number
+  /** Open-findings count from the last verdict/aggregation. */
+  openIssues?: number
+  /** How the kickoff scoped the review target. */
+  scopeType?: 'git-unstaged' | 'agentic'
   /** Agents currently working (open their run to see live thoughts). */
   agents: LoopAgent[]
+  /** Full roster of every agent that worked (or is working) on this loop. */
+  roster?: LoopAgent[]
   /** Chronological history of completed work. */
   history: LoopHistoryEntry[]
 }

@@ -171,3 +171,14 @@
 .prose :where(h1, h2, h3):first-child {
   margin-top: 0;
 }
+
+/* React Flow edge labels sit on the canvas — give them a card-colored chip
+   so they stay readable over grid dots and edges. */
+.react-flow__edge-textbg {
+  fill: var(--card);
+  stroke: var(--border);
+}
+.react-flow__edge-text {
+  fill: var(--muted-foreground);
+  font-size: 10px;
+}

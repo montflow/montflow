@@ -49,8 +49,6 @@ interface UiSocketState {
    * router-side). Aborts the agent when it is still running.
    */
   setRunStatus: (runId: string, status: 'done' | 'error' | 'interrupted') => void
-  /** TEMP mock: inject a run into the socket store so the loop mock can populate agent run pages. */
-  seedMockRun: (id: string, run: SkillRunState) => void
 }
 
 /** One agentic skill run as seen by the browser. */
@@ -174,17 +172,6 @@ const subscribe = (listener: () => void): (() => void) => {
   }
 }
 const getSnapshot = (): SocketSnapshot => store
-
-/**
- * TEMP mock: seed a fake agent run into the shared store from module scope.
- * The loop mock (useLoops) advances its stages on timers, so it must be able
- * to push updates to any mounted RunPage without going through a live
- * component hook — otherwise an open run page goes stale until you leave and
- * re-enter it.
- */
-export const seedMockRunGlobal = (id: string, run: SkillRunState): void => {
-  update((s) => (s.runs[id] === run ? s : { ...s, runs: { ...s.runs, [id]: run } }))
-}
 
 // --- helpers that mutate the store ---------------------------------------
 
@@ -398,6 +385,12 @@ const connect = (): void => {
         }
         break
       }
+
+      case 'loopUpdated':
+        // The loop executor pushed a transition (status flip, counter move,
+        // roster change) — the payload IS the new state; refresh the caches.
+        void queryClient.invalidateQueries({ queryKey: ['loops', msg.workspaceId] })
+        break
 
       case 'promptChanged': {
         void queryClient.invalidateQueries({ queryKey: ['prompts', msg.workspaceId] })
@@ -689,10 +682,6 @@ export function useUiSocket(): UiSocketState {
     update((cur) => (cur.selected === folder ? cur : { ...cur, selected: folder }))
   }, [])
 
-  const seedMockRun = useCallback((id: string, run: SkillRunState): void => {
-    seedMockRunGlobal(id, run)
-  }, [])
-
   return {
     conn: s.conn,
     folders: s.folders,
@@ -713,7 +702,6 @@ export function useUiSocket(): UiSocketState {
     retryRun: useCallback(retryRun, []),
     requestSkillSnapshot: useCallback(requestSkillSnapshot, []),
     setRunStatus: useCallback(setRunStatus, []),
-    seedMockRun,
   }
 }
 

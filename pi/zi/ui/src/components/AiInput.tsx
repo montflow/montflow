@@ -40,8 +40,8 @@ interface AiInputProps extends Omit<React.ComponentProps<'textarea'>, 'value' | 
  *
  * This is a one-shot prompt answer — NOT a run: nothing is persisted, no
  * notifications fire, and nothing shows up on the Runs page. While the agent
- * works the modal is locked (no close, no exit); on error it unlocks with a
- * Retry.
+ * works the modal is locked (no close, no exit) except for the Cancel button,
+ * which aborts the generation; on error it unlocks with a Retry.
  */
 export function AiInput({ value, onChange, folder, prompt, label, className, disabled, ...props }: AiInputProps) {
   const { sendCommand, conn, textGens } = useUiSocket()
@@ -147,6 +147,17 @@ export function AiInput({ value, onChange, folder, prompt, label, className, dis
   }
 
   const retry = (): void => {
+    setGenId(null)
+    setError(null)
+    submittingRef.current = false
+  }
+
+  // Abort the in-flight generation server-side and drop back to the form —
+  // the typed prompt is preserved. Late deltas/errors for this id are
+  // ignored because `genId` no longer points at them.
+  const cancel = (): void => {
+    if (genId === null || folder === null) return
+    sendCommand(folder, { type: 'textGenerateCancel', text: '', runId: genId })
     setGenId(null)
     setError(null)
     submittingRef.current = false
@@ -268,9 +279,14 @@ export function AiInput({ value, onChange, folder, prompt, label, className, dis
                 </Button>
               </>
             ) : running ? (
-              <div className="flex w-full items-center justify-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
-                Working…
+              <div className="flex w-full items-center justify-between">
+                <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  Working…
+                </span>
+                <Button variant="outline" onClick={cancel}>
+                  Cancel
+                </Button>
               </div>
             ) : gen.status === 'done' ? (
               // Applied and closed by the terminal-state effect.
