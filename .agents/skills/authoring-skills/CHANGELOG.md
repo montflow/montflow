@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.5.0] - 2026-08-30
+
+### Removed
+
+- "Register in AGENTS.md" pipeline sub-step — AGENTS.md no longer part of skill registration
+
+## [1.4.0] - 2026-08-30
+
+### Removed
+
+- GATES.md + templates/GATES.md and mandatory "Execute All Gates" step — meta-checks stay with authoring-skills, not per-skill files
+
+### Changed
+
+- GATES.md now only required IF the skill has verification steps (test suite, external contract) — otherwise skip and put verification directly in the pipeline
+
 ## [1.3.1] - 2026-08-18
 
 ### Changed

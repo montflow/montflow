@@ -3,7 +3,7 @@ name: modifying-skills
 description: Modifies, updates, extends, or audits existing skills in .agents/skills/. Use when the user wants to edit an existing skill, add content to a skill, audit a skill for quality, or update skill metadata.
 id: cb9ed8fd8e9b253a
 author: Daniel
-version: 1.1.1
+version: 1.2.0
 license: MIT
 groups:
   - skills
@@ -30,7 +30,7 @@ Read all relevant files in the skill directory: `SKILL.md`, `CHANGELOG.md`, `GAT
 
 ## 3. Audit (if applicable)
 
-If the task involves quality review, assess against [authoring-skills GATES.md](../authoring-skills/GATES.md):
+If the task involves quality review, assess against [authoring-skills conventions](../authoring-skills/SKILL.md):
 
 - File structure compliance
 - Frontmatter validity
@@ -63,13 +63,9 @@ Apply changes using Edit/Write tools. Follow these conventions:
 
 Run through [GATES.md](GATES.md) checks. Fix any failures.
 
-## 7. Update AGENTS.md (if registered)
-
-If the skill is already listed in the project's `AGENTS.md` and its name or description changed, update the entry. Never add a new entry to a repo that doesn't maintain a skill index — registration is optional, and per [setup-agentic-repo](../setup-agentic-repo/SKILL.md) AGENTS.md may stay surface-level only.
-
 # Reference
 
-- **Skill audit standards**: [authoring-skills GATES.md](../authoring-skills/GATES.md)
+- **Skill authoring standards**: [authoring-skills](../authoring-skills/SKILL.md)
 - **Changelog template**: [authoring-skills templates/CHANGELOG.md](../authoring-skills/templates/CHANGELOG.md)
 - **Skill execution**: [executing-skills](../executing-skills/SKILL.md)
 - **Skill creation**: [authoring-skills](../authoring-skills/SKILL.md)

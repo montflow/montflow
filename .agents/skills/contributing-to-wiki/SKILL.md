@@ -1,9 +1,9 @@
 ---
 name: contributing-to-wiki
-description: Authors and maintains human-readable wiki pages in wiki/ — ADHD-friendly writing style, Mermaid diagrams where they clarify, and extensive cross-links between pages. Use when creating, editing, or reviewing files in wiki/.
+description: Authors and maintains wiki pages in wiki/ written for human readers — ADHD-friendly writing style, Mermaid diagrams where they clarify, and extensive cross-links between pages. Use when creating, editing, or reviewing files in wiki/.
 id: 8d04af684bd11ff0
 author: Daniel Montilla
-version: 1.0.0
+version: 1.1.0
 license: MIT
 dependencies:
   - executing-skills
@@ -15,6 +15,8 @@ groups:
 # When To Use
 
 Use when the user asks to create, edit, or review a page in `wiki/`. Also applies when asked to "document X in the wiki", "add a wiki entry", or when moving existing documentation into `wiki/`.
+
+> **Scope**: The wiki is written for humans, not agents. Every prose and structural decision below serves a human reader with limited attention. Agent-facing documentation does not belong in `wiki/` — it stays in `AGENTS.md`, `.agents/skills/`, and feature specs.
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md) skill before running this pipeline. It governs how skills are loaded, executed, and verified.
 
@@ -63,11 +65,17 @@ Wiki pages form a graph, not a tree:
 4. Every new page gets linked *from* [index.md](../../../wiki/index.md).
 5. When editing an existing page, add forward-links to newer pages it predates.
 
-## 6. Verify links resolve
+## 6. Verify
 
-Every relative link must point to a file that exists. Broken links fail the gate below.
+Before finishing, check every changed page:
+
+1. Every relative link resolves to an existing file.
+2. Every new page is linked from [index.md](../../../wiki/index.md).
+3. Each page links to at least 2 related pages.
+4. First mention of any concept that has its own page is hyperlinked.
+5. First line of the page states what the reader gets or does — no "This document describes..." openers, no recap closers.
+6. Every Mermaid block uses fenced ` ```mermaid ` syntax and renders without parse errors.
 
 # Reference
 
-- [GATES.md](GATES.md): End-of-work validation for wiki changes (MUST READ)
 - [i-have-adhd SKILL.md](../i-have-adhd/SKILL.md): Writing style rules (MUST READ)

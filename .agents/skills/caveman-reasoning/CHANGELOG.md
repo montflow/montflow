@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.0] - 2026-08-30
+
+### Removed
+
+- GATES.md — verification steps already live in the pipeline (Step 5)
+
 ## [1.1.0] - 2026-07-24
 
 ### Added

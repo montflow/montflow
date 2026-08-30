@@ -14,7 +14,7 @@ Validation gates for the guided-installer flow (`npx skills`-driven). Run throug
 
 ## Phase 2: Metadata & Documentation
 
-- [ ] If the target maintains a skill index: table exists at `$TARGET/AGENTS.md` with correct entries — otherwise skipped by user choice (AGENTS.md registration is optional per setup-agentic-repo)
+- [ ] If the target maintains a skill index: table exists at `$TARGET/AGENTS.md` with correct entries — otherwise skipped by user choice (AGENTS.md registration is optional)
 - [ ] AGENTS.md entries (if present) have correct relative paths and descriptions
 
 ## Phase 3: User Communication

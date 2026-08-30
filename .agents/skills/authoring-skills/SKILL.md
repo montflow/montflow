@@ -3,7 +3,7 @@ name: authoring-skills
 description: Guides the creation, formatting, and refinement of Skills. Use when the user wants to write a new Skill, convert documentation into a Skill, or audit an existing Skill.
 id: b186a4a0ab10373c
 author: Daniel Montilla
-version: 1.3.1
+version: 1.5.0
 license: MIT
 dependencies:
   - executing-skills
@@ -50,7 +50,7 @@ Write the YAML frontmatter. All fields below are required:
 | ------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
 | `name`        | 1–64 chars, lowercase alphanumeric + single hyphens only. Must match directory name. Regex: `^[a-z0-9]+(-[a-z0-9]+)*$` | Unique identifier                |
 | `description` | 1–1024 chars, third person, include when to use                                                                        | Helps agent decide when to apply |
-| `id`          | Exactly 16 lowercase hex chars. Generated via `SCRIPTS/generate-skill-id.sh`                                           | Immutable unique ID for cross-referencing |
+| `id`          | Exactly 16 lowercase hex chars, generated via `SCRIPTS/generate-skill-id.sh` | Immutable unique ID for cross-referencing |
 | `author`      | Name of person or team maintaining the skill                                                                           | Attribution and ownership        |
 | `version`     | [SemVer](https://semver.org) string, starting at `1.0.0`                                                               | Track changes over time          |
 
@@ -90,22 +90,12 @@ This outputs a 16-character hex string. Paste it into the `id` field. The ID is 
 
 Initialize with a `## [1.0.0]` entry describing the initial release. See the changelog template in [templates/CHANGELOG.md](templates/CHANGELOG.md).
 
-### Register in AGENTS.md (Optional)
-
-Listing the skill in the project's `AGENTS.md` is **optional**, never required. Some projects maintain a skill index table there; others keep AGENTS.md surface-level only (see [setup-agentic-repo](../setup-agentic-repo/SKILL.md)). Ask the user which convention this project follows — or skip registration if unsure.
-
 ## 3. Plan Content
 
 Before writing, decide:
 
 - **Does this skill need a Prerequisites section?** Only if specific info or setup is required before starting.
-- **Does this skill need GATES.md?** Gates are strongly recommended for any skill with complex or quality-critical output. They define end-of-process validation checks that **must** all pass before the skill is complete. If unsure, default to **yes** and create GATES.md.
-
-  **Gates validate the skill's WORK OUTPUT**, not the skill's own files.
-  - ✅ Good: "All extracted methods have unique callers", "Test suite passes after refactor"
-  - ❌ Bad: "SKILL.md exists", "Frontmatter is valid", "Content has no fluff"
-
-  Those meta-checks are the responsibility of authoring-skills, not something each skill should duplicate.
+- **Does this skill need GATES.md?** Only if the skill has **verification steps** — concrete end-of-process checks that must pass (e.g., a test suite to run, an external contract to re-confirm). Most skills have none. Authoring-type skills almost never do: their output is content, and validating that content is authoring-skills' job, not a per-skill gate. If unsure, **skip GATES.md** and put any verification steps directly in the pipeline.
 - **Does this skill need a `documentation/` directory?** For detailed reference material the agent can search through. If unsure, **ask the user**.
 
 These decisions shape how you write the content below.
@@ -136,51 +126,16 @@ Index of files in `documentation/` with brief descriptions so the agent can brow
 
 ## 5. Supporting Files
 
-### Create GATES.md (if decided)
-
-> **Reminder**: Gates validate the skill's **WORK OUTPUT**, not the skill's own files (see Step 3). Don't include meta-checks like "SKILL.md exists" or "Frontmatter is valid."
-
-Gates are **end-of-process validation checklists**, not steps in the pipeline. They verify the skill's **work product** (refactored code, generated files, extracted utilities, etc.) is correct before declaring done.
-
-**NEVER include checks about the skill's own files:**
-- ❌ "SKILL.md exists"
-- ❌ "Frontmatter is valid"
-- ❌ "Content has no fluff"
-- ❌ "Cross-references resolve within skill directory"
-
-These are meta-checks handled by authoring-skills itself. Gates should only validate what the skill *produced or changed* during execution.
-
-✅ Good gate examples:
-- "All identified duplicate blocks are extracted into shared utilities"
-- "Test suite passes after refactoring"
-- "External API unchanged after changes"
-- "No unused imports remain in modified files"
-
-Phases run **sequentially** (e.g., verify extraction before checking API compatibility), checks within a phase can be evaluated in **parallel**. If any check fails, **stop and fix the issue** before continuing. See [templates/GATES.md](templates/GATES.md) for the format.
-
 ### Add Optional Files
 
 - `documentation/` — Detailed reference files the agent can search through. Add a **Documentation** section in SKILL.md indexing each file with a brief description.
 - `examples/` — Example skills or usage patterns
 - `templates/` — Reusable templates (see [templates/](templates/))
-- `SCRIPTS/` — Executables referenced by the skill. Place scripts here and reference them:
-  ```markdown
-  Run: `SCRIPTS/deploy.sh <environment>`
-  ```
-  Scripts should be self-contained with clear error messages.
-
-## 6. Execute All Gates — Mandatory
-
-> **IMPORTANT**: This step is **REQUIRED**, not optional. If GATES.md exists, you **MUST** execute every check in every phase before declaring the skill complete.
-
-Evaluate GATES.md as a final quality gate — not a to-do list. Run each phase **sequentially**, completing **all** checks in a phase before advancing. Checks within a phase can be run in parallel. If **any** check fails, **stop and fix the issue** before continuing. Do not skip, defer, or mark any check as "will fix later" — all gates must pass.
-
-If GATES.md does not exist, verify the output carefully before finishing.
+- `SCRIPTS/` — Executables referenced by the skill, e.g. `SCRIPTS/generate-skill-id.sh` for generating the `id`
 
 # Reference
 
 - **Templates**: See [templates/](templates/) (MUST READ)
-- **Gates**: See [GATES.md](GATES.md) (MUST READ if using gates)
 - **Changelog**: See [CHANGELOG.md](CHANGELOG.md)
 - **Agent Skills spec**: https://agentskills.io
 
@@ -213,7 +168,6 @@ For error codes, see [ERRORS.md](ERRORS.md).
 ├── my-skill-name/
 │   ├── SKILL.md           # Required
 │   ├── CHANGELOG.md       # Required
-│   ├── GATES.md           # Optional – validation phases
 │   ├── documentation/     # Optional – detailed reference files
 │   ├── templates/         # Optional – reusable templates
 │   ├── REFERENCE.md       # Optional – detailed docs
@@ -228,17 +182,17 @@ The `groups` field in frontmatter categorizes skills for discovery. Each skill s
 
 | Group | Purpose | Example Skills |
 |---|---|---|
-| `planning` | Design-phase activities: scoping, spec writing, plan review | creating-feature-spec, scoping-features, grilling |
-| `scaffolding` | Code generation and project/package/module setup | setup-typescript-package, creating-typescript-modules |
+| `planning` | Design-phase activities: scoping, spec writing, plan review | creating-feature-spec, grilling |
+| `scaffolding` | Code generation and project/package/module setup | setup-typescript-package, typescript-modules |
 | `refactoring` | Code improvement, restructuring, and cleanup | applying-solid, detecting-duplication, simplifying-code |
 | `documentation` | Doc/rule/schema authoring | writting-jsdoc, authoring-rules |
 | `workflow` | Process-oriented git and reference operations | planning-git-commits, using-git-worktrees, adding-references |
 | `skills` | Meta-skills about the skill system itself | authoring-skills, finding-skills, executing-skills |
 | `feature-spec` | Skills within the feature spec subsystem | creating-feature-spec, executing-feature-spec |
-| `typescript` | TypeScript-specific | typescript-conventions, creating-typescript-modules |
+| `typescript` | TypeScript-specific | typescript-conventions, typescript-modules |
 | `javascript` | JavaScript-specific | simplifying-code, detecting-duplication |
 | `conventions` | Code style and convention enforcement | leaving-it-cleaner, favoring-composition |
-| `testing` | Testing infrastructure and review | unit-testing, typescript-unit-testing, effect-unit-testing |
+| `testing` | Testing infrastructure and review | effect-testing |
 | `git` | Git operations | planning-git-commits, adding-references |
 | `references` | Reference code management | finding-references, adding-references |
-| `effect` | Effect TS ecosystem | effect-unit-testing |
+| `effect` | Effect TS ecosystem | effect-v4, effect-services, effect-testing, effect-structs |

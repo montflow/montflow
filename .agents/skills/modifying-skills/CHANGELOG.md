@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0] - 2026-08-30
+
+### Removed
+
+- "Update AGENTS.md" pipeline step — AGENTS.md no longer part of skill registration
+
+## [1.1.2] - 2026-08-30
+
+### Fixed
+
+- Audit step and reference now point to [authoring-skills conventions](../authoring-skills/SKILL.md) after its GATES.md was removed
+
 ## [1.1.1] - 2026-08-12
 
 ### Changed
