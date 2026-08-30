@@ -124,7 +124,7 @@ Find where better code was possible:
 ## 6. Assess Test Coverage
 
 - Which branches, error paths, and edge cases have **no** test?
-- Do tests assert real behavior or just restate the implementation (see [unit-testing](../unit-testing/SKILL.md))?
+- Do tests assert real behavior or just restate the implementation (see [effect-testing](../effect-testing/SKILL.md))?
 - Are boundary values (empty, max, null) exercised?
 - Are failure modes (timeout, thrown error, bad input) covered?
 - Is there flakiness: dependence on time, order, randomness, global state?
@@ -242,5 +242,5 @@ A re-review runs when `.agents/@montflow/reviews/<name>/<code>.md` already exist
 - **Bug-hunting checklist**: Steps 2–7 above (MUST READ for each review).
 - **Duplication**: [detecting-duplication](../detecting-duplication/SKILL.md) — for repeated logic findings
 - **SOLID**: [applying-solid](../applying-solid/SKILL.md) — for design-violation findings
-- **Testing quality**: [unit-testing](../unit-testing/SKILL.md) — for test-coverage findings
+- **Testing quality**: [effect-testing](../effect-testing/SKILL.md) — for test-coverage findings
 - **Docs**: [writting-jsdoc](../writting-jsdoc/SKILL.md) — for documentation findings
