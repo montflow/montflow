@@ -2,12 +2,13 @@
 
 End-of-process validation checks for Effect v4 services.
 
-## Phase 0: Directory & File Structure
+## Phase 0: Group & File Structure
 
-- [ ] Directory exists at `packages/*/src/services/[service-name]/`
-- [ ] `index.ts` exists with `export * as PascalName from "./[service-name].module.js"`
-- [ ] `[service-name].module.ts` exists (kebab-case, `.module.ts` suffix)
-- [ ] File name matches directory name
+- [ ] Service lives in the `services/` group: `src/services/[service-name]/`
+- [ ] `[service-name].services.module.ts` exists (kebab-case, `services` group infix per typescript-modules)
+- [ ] `index.ts` exists with `export * as PascalName from "./[service-name].services.module.ts"`
+- [ ] `CONTEXT.md` exists at the module root
+- [ ] `tests/` folder exists; test files follow [effect-testing](../effect-testing/SKILL.md)
 
 ## Phase 1: Required Exports
 
@@ -25,7 +26,7 @@ End-of-process validation checks for Effect v4 services.
 - [ ] Service class has no class body, no constructor, no methods
 - [ ] Errors are `Data.TaggedError` classes (if applicable)
 - [ ] No TypeScript `namespace` keyword used
-- [ ] `.js` extension in all relative import paths (not `.ts`)
+- [ ] Full `.ts` extension in all relative import paths
 - [ ] Imports use namespace-style where conventional: `import * as X from "..."`
 
 ## Phase 3: Naming & Registration
@@ -33,9 +34,4 @@ End-of-process validation checks for Effect v4 services.
 - [ ] Export namespace matches `PascalCase` version of service name
 - [ ] `Id` value uses `@scope/PascalName` format (e.g., `@pokerbids/Json`)
 - [ ] `Id` value after `/` matches the class name
-- [ ] Parent `src/services/index.ts` re-exports this service: `export * from "./[service-name]/index.js"`
-
-## Phase 4: Tests (if present)
-
-- [ ] Test file at `[service-name]/tests/[service-name].module.test.ts`
-- [ ] Uses `it.effect` or `it.scoped` from `@effect/vitest`
+- [ ] Parent `src/services/index.ts` re-exports this service: `export * from "./[service-name]/index.ts"`

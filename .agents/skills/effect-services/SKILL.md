@@ -1,13 +1,16 @@
 ---
-name: creating-effect-services
-description: Scaffolds Effect v4 services with ServiceMap.Service pattern. Use when creating a new service in packages/*/src/services/.
+name: effect-services
+description: >-
+  Scaffolds Effect v4 services with ServiceMap.Service pattern inside the services/
+  group. Use when creating a new Effect service module.
 id: 8a7c50b11c6c17df
 author: Daniel Montilla
-version: 1.1.0
+version: 2.0.2
 dependencies:
   - executing-skills
-  - creating-typescript-modules
+  - typescript-modules
 groups:
+  - effect
   - skills
   - typescript
   - scaffolding
@@ -15,19 +18,19 @@ groups:
 
 # When To Use
 
-Use when the user asks to create, scaffold, or add a new Effect v4 service under `packages/*/src/services/`. The service follows the ServiceMap.Service pattern with required exports (Id, Impl, ServiceName, Default).
+Use when the user asks to create, scaffold, or add a new Effect v4 service module. Services are Effect-flavored modules: they live under the `services/` group and follow the full [typescript-modules](../typescript-modules/SKILL.md) structure, while keeping their own required exports (Id, Impl, ServiceName, Default).
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md) skill before running this pipeline. It governs how skills are loaded, executed, and verified.
 
 # Pipeline
 
-## 1. Create Directory
+## 1. Create Module Directory
 
-Create `src/services/[service-name]/` (e.g., `src/services/json/`). The directory name is kebab-case.
+Create `src/services/[service-name]/` (e.g., `src/services/json/`) plus a `CONTEXT.md` and an empty `tests/` folder — full structure per [typescript-modules](../typescript-modules/SKILL.md). The directory name is kebab-case.
 
 ## 2. Export Required Identifiers
 
-In `[service-name].module.ts`, export:
+In `[service-name].services.module.ts`, export:
 
 - **`Id`** — string identifier `@scope/PascalName` (const + type)
 - **`Impl`** — inferred from make effect via `Effect.Success<typeof make>`
@@ -88,7 +91,7 @@ export class ParseError extends Data.TaggedError("@Json/ParseError")<{
 Create `index.ts` that re-exports the module file via namespace:
 
 ```typescript
-export * as PascalCase from "./[service-name].module.js";
+export * as PascalCase from "./[service-name].services.module.ts";
 ```
 
 ## 5. Register in Parent
@@ -96,7 +99,7 @@ export * as PascalCase from "./[service-name].module.js";
 Update `src/services/index.ts` to re-export the new service:
 
 ```typescript
-export * from "./[service-name]/index.js";
+export * from "./[service-name]/index.ts";
 ```
 
 # Reference
@@ -104,7 +107,8 @@ export * from "./[service-name]/index.js";
 - **[Service Template](templates/service.module.ts)**: Full code template showing all required exports and patterns (MUST READ)
 - **[Key Patterns](SKILL.md#key-patterns)**: make effect, as const, Effect.Success, Service class, Default layer
 - **[Full Example](examples/json.service.ts)**: Complete service implementation (MUST READ)
-- **[Namespace Module Pattern](../creating-typescript-modules/SKILL.md)**: The index.ts namespace re-export convention (MUST READ)
+- **[typescript-modules](../typescript-modules/SKILL.md)**: Module structure, naming, and index conventions (MUST READ)
+- **[effect-testing](../effect-testing/SKILL.md)**: Test location, imports, and suite naming for the service's tests
 
 ## Key Patterns
 
@@ -116,10 +120,14 @@ export * from "./[service-name]/index.js";
 ## Directory Structure
 
 ```
-packages/*/src/services/
-├── index.ts                    # exports: export * from "./[service-name]/"
-└── [service-name]/
-    └── [service-name].module.ts
+src/services/
+├─ index.ts                                  # export * from "./[service-name]/index.ts"
+└─ [service-name]/
+   ├─ index.ts                               # export * as PascalName from "./[service-name].services.module.ts"
+   ├─ [service-name].services.module.ts      # Id, Impl, ServiceName, Default + implementation
+   ├─ CONTEXT.md
+   └─ tests/
+      └─ [utility-name].test.ts
 ```
 
 ## Naming Conventions

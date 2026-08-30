@@ -1,24 +1,27 @@
 ---
 name: typescript-conventions
-description: Index of TypeScript-specific skills in this project — lists short descriptions and paths. Use when deciding which TypeScript skill applies, or as a reference map of available TS tooling.
+description: >-
+  Index of TypeScript-specific skills in this project — lists short descriptions and paths.
+  Use when deciding which TypeScript skill applies, or as a reference map of available TS tooling.
 id: 19088d58133341e3
 author: Daniel Montilla
-version: 1.1.0
+version: 1.2.1
 license: MIT
 groups:
   - typescript
 dependencies:
   - executing-skills
   - applying-solid
-  - creating-effect-services
-  - creating-typescript-modules
-  - creating-typescript-structs
+  - effect-services
+  - typescript-modules
+  - effect-testing
+  - effect-structs
+  - typescript-file-structure
   - detecting-duplication
   - favoring-composition
   - leaving-it-cleaner
-  - scoping-features
   - setup-typescript-package
-  - effect-unit-testing
+  - effect-v4
   - simplifying-code
   - typescript-prefer-inference
   - writting-jsdoc
@@ -56,23 +59,22 @@ Load the matched skill with the `skill` tool, then follow its Pipeline section e
 
 | Skill | Description |
 |-------|-------------|
-| [`creating-typescript-modules`](../creating-typescript-modules/SKILL.md) | Creates tree-shakable TypeScript modules with namespace-style exports |
+| [`typescript-modules`](../typescript-modules/SKILL.md) | Creates tree-shakable TypeScript modules with namespace-style exports, organized into group folders |
+| [`typescript-file-structure`](../typescript-file-structure/SKILL.md) | Verifies TypeScript source tree structure — colocated tests, `.test.ts` naming, index.ts re-export chains |
 | [`setup-typescript-package`](../setup-typescript-package/SKILL.md) | Scaffolds TypeScript monorepo packages and services with consistent tooling, bundling, linting, and formatting |
 
 ## Services & Structs
 
 | Skill | Description |
 |-------|-------------|
-| [`creating-effect-services`](../creating-effect-services/SKILL.md) | Scaffolds Effect v4 services with ServiceMap.Service pattern |
-| [`creating-typescript-structs`](../creating-typescript-structs/SKILL.md) | Creates branded struct modules with validation, blueprint, and brand utilities |
+| [`effect-services`](../effect-services/SKILL.md) | Scaffolds Effect v4 services with ServiceMap.Service pattern inside the services/ group |
+| [`effect-structs`](../effect-structs/SKILL.md) | Creates branded struct modules with validation, blueprint, and brand utilities inside the structs/ group |
 
 ## Testing
 
 | Skill | Description |
 |-------|-------------|
-| [`unit-testing`](../unit-testing/SKILL.md) | Language-agnostic test quality fundamentals |
-| [`typescript-unit-testing`](../typescript-unit-testing/SKILL.md) | TypeScript test infrastructure, directory structure, Vitest configuration |
-| [`effect-unit-testing`](../effect-unit-testing/SKILL.md) | Effect-specific testing patterns for Effect v4 monorepo packages |
+| [`effect-testing`](../effect-testing/SKILL.md) | TypeScript module tests — location, imports, suite naming, quality, and Effect runtime patterns |
 
 ## Coding Principles
 
@@ -80,7 +82,6 @@ Load the matched skill with the `skill` tool, then follow its Pipeline section e
 |-------|-------------|
 | [`detecting-duplication`](../detecting-duplication/SKILL.md) | Scans for and refactors duplicated code, logic, and configuration |
 | [`simplifying-code`](../simplifying-code/SKILL.md) | Audits code for over-engineering and unnecessary complexity |
-| [`scoping-features`](../scoping-features/SKILL.md) | Guides feature scoping to current requirements only |
 | [`applying-solid`](../applying-solid/SKILL.md) | Reviews object-oriented code against all 5 SOLID principles |
 | [`favoring-composition`](../favoring-composition/SKILL.md) | Identifies deep inheritance trees and replaces them with composition |
 | [`leaving-it-cleaner`](../leaving-it-cleaner/SKILL.md) | Prompts incremental code hygiene improvements when touching files |

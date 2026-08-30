@@ -1,9 +1,13 @@
-## Phase 1: File Structure
+# Gates
 
-- [ ] Directory `src/structs/<name>/` exists
-- [ ] `[name].struct.module.ts` exists with `.struct.module.ts` suffix
-- [ ] `index.ts` exists with namespace re-export
-- [ ] All imports use `.js` extension
+## Phase 1: Group & File Structure
+
+- [ ] Struct lives in the `structs/` group: `src/structs/[struct-name]/`
+- [ ] `[name].structs.module.ts` exists (`structs` group infix per typescript-modules)
+- [ ] `index.ts` exists with namespace re-export: `export * as PascalCase from "./[name].structs.module.ts"`
+- [ ] `CONTEXT.md` exists at the module root
+- [ ] `tests/` folder exists; test files follow [effect-testing](../effect-testing/SKILL.md)
+- [ ] Full `.ts` extension in all import/export paths
 
 ## Phase 2: Required Exports
 
@@ -20,7 +24,7 @@
 
 - [ ] Id value matches struct name (PascalCase)
 - [ ] File name matches directory name (kebab-case)
-- [ ] Directory name is kebab-case
+- [ ] Directory name is kebab-case, singular
 - [ ] Index file re-exports as PascalCase namespace
 - [ ] Number brands include `fromNumber`/`toNumber` helpers
-- [ ] No `.ts` extension in module exports (use `.js`)
+- [ ] Parent `src/structs/index.ts` re-exports the struct: `export * from "./[struct-name]/index.ts"`

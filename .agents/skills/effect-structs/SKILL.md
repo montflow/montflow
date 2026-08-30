@@ -1,13 +1,16 @@
 ---
-name: creating-typescript-structs
-description: Creates branded struct modules with validation, blueprint, and brand utilities in the structs folder. Use when creating a new branded type in packages/*/src/structs/.
+name: effect-structs
+description: >-
+  Creates branded struct modules with validation, blueprint, and brand utilities inside
+  the structs/ group. Use when creating a new branded type module.
 id: 85949992ca0d93e8
 author: Daniel Montilla
-version: 1.1.0
+version: 3.0.2
 dependencies:
   - executing-skills
-  - creating-typescript-modules
+  - typescript-modules
 groups:
+  - effect
   - skills
   - typescript
   - scaffolding
@@ -15,19 +18,19 @@ groups:
 
 # When To Use
 
-Use when the user asks to create, scaffold, or add a new branded struct type under `packages/*/src/structs/`. Structs define **branded types** over primitives (`string` or `number`) using Effect's `Brand` module. Each struct is a namespace-style module with validation, `make`/`makeUnsafe`, and optional `Blueprint` Schema.
+Use when the user asks to create, scaffold, or add a new branded struct module. Structs live under the `structs/` group and follow the full [typescript-modules](../typescript-modules/SKILL.md) structure, while adding their own required exports (Id, branded type, check, make/makeUnsafe, optional Blueprint). Structs define **branded types** over primitives (`string` or `number`) using Effect's `Brand` module — each struct is a namespace-style module with validation, `make`/`makeUnsafe`, and optional `Blueprint` Schema.
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md) skill before running this pipeline. It governs how skills are loaded, executed, and verified.
 
 # Pipeline
 
-## 1. Create Directory
+## 1. Create Module Directory
 
-Create `src/structs/[struct-name]/` (e.g., `src/structs/uuid/`). Directory name is kebab-case.
+Create `src/structs/[struct-name]/` (e.g., `src/structs/uuid/`) plus a `CONTEXT.md` and an empty `tests/` folder — full structure per [typescript-modules](../typescript-modules/SKILL.md). Directory name is kebab-case.
 
 ## 2. Create Module
 
-Create `[struct-name].struct.module.ts`. Pick the pattern matching the underlying type:
+Create `[struct-name].structs.module.ts`. Pick the pattern matching the underlying type:
 
 ### String brand
 
@@ -52,7 +55,7 @@ Required: `Id` (const + type), `make` (via `Brand.all`), `type [Name]` (`Brand.B
 Create `index.ts` that re-exports the module as a namespace:
 
 ```typescript
-export * as PascalCase from "./[struct-name].struct.module.js";
+export * as PascalCase from "./[struct-name].structs.module.ts";
 ```
 
 ## 4. Register in Parent
@@ -60,7 +63,7 @@ export * as PascalCase from "./[struct-name].struct.module.js";
 Update `src/structs/index.ts` (or equivalent aggregator) to re-export:
 
 ```typescript
-export * from "./[struct-name]/index.js";
+export * from "./[struct-name]/index.ts";
 ```
 
 # Reference
@@ -73,7 +76,8 @@ export * from "./[struct-name]/index.js";
   - [examples/uuid.md](examples/uuid.md): UUID v4 string with `fromRandom`
   - [examples/int.md](examples/int.md): Int — integer number
   - [examples/positive-int.md](examples/positive-int.md): PositiveInt via `Brand.all` composition
-- **[Namespace Module Pattern](../creating-typescript-modules/SKILL.md)**: The index.ts namespace re-export convention (MUST READ)
+- **[typescript-modules](../typescript-modules/SKILL.md)**: Module structure, naming, and index conventions (MUST READ)
+- **[effect-testing](../effect-testing/SKILL.md)**: Test location, imports, and suite naming for the struct's tests
 - **[GATES](GATES.md)**: Validation checklist (MUST READ)
 
 ## Required Exports
@@ -103,7 +107,7 @@ Add per struct type as needed:
 
 ## Schema Transformation Structs (database)
 
-`packages/database/src/structs/` structs define **Schema transformations** between MongoDB type and common struct:
+`src/structs/` structs define **Schema transformations** between MongoDB type and common struct:
 
 ```typescript
 import { Schema, SchemaTransformation } from "effect";
@@ -125,7 +129,7 @@ Examples: **ObjectId** ↔ `DocumentId`, **Decimal128** ↔ `StringNumber`, **Da
 
 ## Conventions
 
-- File naming: `[name].struct.module.ts`
+- File naming: `[name].structs.module.ts` (`structs` group infix per typescript-modules)
 - `Id` constant matches struct name (PascalCase)
 - `Id` type is `typeof Id`
 - `check` returns `true` or error string; accepts `str: string` (string brands) or `num: unknown` (number brands)
@@ -134,4 +138,4 @@ Examples: **ObjectId** ↔ `DocumentId`, **Decimal128** ↔ `StringNumber`, **Da
 - Composed brands use `Brand.all(...)` + `Brand.Brand.FromConstructor<typeof make>` instead of inline type + check
 - Some Blueprints use `Schema.revealCodec` (e.g., string-url) when Schema type needs widening
 - Some structs omit `Blueprint` entirely (e.g., Email) when only branding + validation needed
-- Use `.js` extension in exports (not `.ts`)
+- Full `.ts` extension in all relative import/export paths

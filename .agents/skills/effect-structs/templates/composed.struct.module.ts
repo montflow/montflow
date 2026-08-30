@@ -1,6 +1,6 @@
 import { Brand, Schema } from "effect";
-import { ExistingA } from "../existing-a/index.js";
-import { ExistingB } from "../existing-b/index.js";
+import { ExistingA } from "../existing-a/index.ts";
+import { ExistingB } from "../existing-b/index.ts";
 
 export const Id = "[Name]";
 export type Id = typeof Id;
