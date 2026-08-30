@@ -1,17 +1,21 @@
-# Agentic Skills Collection
+# montflow
 
-Collection of installable AI agent skills.
+## Language
 
-## Entry Points
+TypeScript, Effect v4
 
-- [README.md](README.md) — overview
-- [INSTALL.md](INSTALL.md) — install skills into a target project
+## Package Manager
 
-## Pointers to Depth
+bun@1.3.13 — lockfile is source of truth
 
-- `.agents/skills/` — skill sources; discovered by scanning this directory (see [finding-skills](.agents/skills/finding-skills/SKILL.md), [executing-skills](.agents/skills/executing-skills/SKILL.md))
-- [typescript-conventions](.agents/skills/typescript-conventions/SKILL.md) — index of TypeScript skills
+## Commands
 
-## Conventions
+- install: `bun install`
+- test: `turbo test`
+- typecheck: `turbo ts:check`
+- lint: `turbo lint:check` / `turbo lint:fix`
+- format: `turbo format:check` / `turbo format:fix`
 
-- AGENTS.md stays surface-level only — see [setup-agentic-repo](.agents/skills/setup-agentic-repo/SKILL.md)
+## Skills
+
+- `.agents/skills/` — discovered by scanning this directory
