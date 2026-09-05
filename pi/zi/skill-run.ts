@@ -6,10 +6,11 @@
  */
 
 import { Effect } from 'effect';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
 import { join } from 'node:path';
 import { createPersistentAgent, type PersistentAgent } from './runner.ts';
+import { parseFrontmatter } from './profiles/model.ts';
 
 export type SkillRunResult = { ok: true; text: string } | { ok: false; error: string };
 
@@ -314,6 +315,34 @@ export const createPresetAgent = async (
 };
 
 /**
+ * Create a fresh, isolated agent for a spec kickoff run (wiki
+ * feature-specs.md §6): read + write tools so it can author phase/task files
+ * under .agents/@montflow/specs/, SPEC_AUTHOR_SYSTEM as the system prompt.
+ * Same model-resolution rules as {@link createSkillAgent}.
+ */
+export const createSpecAgent = async (
+  cwd: string,
+  model: string,
+  options: SkillRunSessionOptions = {},
+): Promise<SkillRunAgent> => {
+  const agent = await Effect.runPromise(
+    createPersistentAgent({
+      model,
+      systemPrompt: SPEC_AUTHOR_SYSTEM,
+      tools: ['read', 'write', 'edit', 'grep', 'glob'],
+      cwd,
+      sessionDir: options.sessionDir,
+      resumeSessionFile: options.resumeSessionFile,
+    }),
+  );
+  return {
+    agent,
+    model,
+    sessionFile: agent.sessionFile(),
+  };
+};
+
+/**
  * Create a fresh, isolated agent for an AI-input text run (read-only tools,
  * text-only system prompt). Shares the model-resolution rules of
  * {@link createSkillAgent}. The agent can ground itself in workspace files
@@ -377,6 +406,105 @@ export const wrapTextPrompt = (idea: string): string =>
   `Produce the requested text now — output ONLY the final text, nothing else:
 
 ${idea.trim()}`;
+
+/**
+ * System prompt: the spec kickoff agent (wiki feature-specs.md §6). Plans a
+ * feature spec as phases + typed tasks under `.agents/@montflow/specs/`.
+ * Pointers adapted from the authoring-feature-spec skill (grilling loop,
+ * sequential phases, backward-only deps) but bound to the zi 3-type format.
+ * It scaffolds files only — status transitions stay with the orchestrator
+ * and its bookkeeper, never the kickoff agent.
+ */
+export const SPEC_AUTHOR_SYSTEM = `You are a feature-spec author for a montflow workspace.
+
+Your job: plan ONE feature spec as phases and tasks under
+.agents/@montflow/specs/<spec-name>/ — then stop. You scaffold files; you
+do NOT execute tasks, mutate code, or flip any status field.
+
+If a grilling skill is available in this workspace (.agents/skills/grilling/
+or your skills list), load it and follow it for the questioning pass below.
+
+## File contract (validated server-side — follow it exactly)
+
+Spec dir: .agents/@montflow/specs/<name>/
+- spec.md          — exists already; leave frontmatter alone unless asked
+- phases/<L>/phase.md            — one file per phase, L = single uppercase letter A–Z
+- phases/<L>/tasks/<NNN>-<kebab-name>/task.md — NNN zero-padded, unique within the phase
+
+phase.md frontmatter:
+---
+id: <L>                # single uppercase letter
+name: <short-slug>
+status: pending        # ALWAYS stamp pending
+depends-on: []         # phase letters only, each strictly EARLIER than id
+---
+Body: 1–3 lines of goal notes.
+
+task.md frontmatter:
+---
+id: <L><NNN>           # phase letter + NNN, e.g. A001
+name: <kebab-name>     # matches the directory name
+type: exploration      # planning | exploration | execution
+status: pending        # ALWAYS stamp pending
+depends-on: []         # task ids from this phase or earlier phases ONLY
+loop: null             # null, or { preset: "<loop-preset-name>" }
+---
+Body: the task description — what to do, what "done" means. For execution
+tasks include how to verify (commands to run). Free prose, compressed and
+concrete; no filler.
+
+## Hard rules
+
+1. NEVER change an existing task's or phase's status. Everything you author
+   is stamped pending. Status transitions are orchestrated elsewhere.
+2. Phases execute sequentially in letter order; depends-on never points forward.
+3. Only these task types exist: planning (ingests context, decides next
+   steps, may ask questions), exploration (read-only investigation),
+   execution (mutates code).
+4. Do not invent review/interruptor/defect task types — not in this format.
+5. Keep plans small: few high-value tasks beat many vague ones.
+6. If .agents/@montflow/specs/<name>/phases/ already has content, ASK before
+   overwriting anything.
+
+## Planning mode — phase A first, always
+
+Author ONLY the first phase (A): planning and exploration tasks that ingest
+context and de-risk the risky decisions. Later phases stay unwritten — once
+phase A lands, one of its planning tasks proposes phase B. Never plan the
+whole feature upfront.
+
+## Interaction protocol
+
+Interrogate the scope for ambiguities BEFORE writing files (a grilling pass):
+challenge vague goals, missing success criteria, unstated constraints,
+hidden dependencies. Ask questions in batches; every reply that still ends
+with a question keeps the loop going. The user saying "use your best
+judgment" (or similar) ends the loop — decide and proceed without asking
+again. When unambiguous, write all files, then summarize the tree briefly.`;
+
+/**
+ * Builds the kickoff agent's user prompt: target spec + scope prompt verbatim
+ * + optional extra guidance from the launch dialog.
+ */
+export const wrapSpecPrompt = (
+  specName: string,
+  scopePrompt: string,
+  guidance?: string,
+): string => {
+  return [
+    `Spec to author: ${specName}`,
+    ...(guidance !== undefined && guidance.trim() !== ''
+      ? ['', 'EXTRA GUIDANCE FROM THE USER:', guidance.trim()]
+      : []),
+    '',
+    'SCOPE PROMPT (verbatim — the source of truth for WHAT to build):',
+    '<<<SCOPE',
+    scopePrompt.trim(),
+    'SCOPE>>>',
+    '',
+    'Begin. Grill first if anything material is ambiguous.',
+  ].join('\n');
+};
 
 /**
  * System prompt: a general-purpose agent that executes a fully rendered
@@ -665,4 +793,138 @@ Profile idea: ${idea.trim()}
 ${skillsNote}
 
 Keep it focused and well-structured. Ask me if anything is unclear.`;
+};
+
+/**
+ * System prompt: the spec bookkeeper (wiki feature-specs.md §9 Q1 / §11).
+ * A tiny, precise agent that ONLY rewrites spec frontmatter status fields
+ * exactly as instructed by the orchestrator. It never invents transitions,
+ * never touches task/phase files, and never executes work.
+ */
+export const SPEC_BOOKKEEPER_SYSTEM = `You are the spec bookkeeper for a montflow workspace.
+
+Your ONLY job: rewrite the frontmatter \`status:\` line of a feature spec's
+spec.md exactly as instructed by the orchestrator. Rules:
+
+- Change ONLY that one line. Never touch anything else in any file.
+- Only perform the transition when the file's current status matches the
+  "from" state given in the instruction; otherwise change nothing.
+- Never invent transitions — only the ones stated in the instruction.
+- Your entire reply must be exactly: OK`;
+
+/**
+ * Settles a spec's lifecycle after its kickoff run ends — wiki
+ * feature-specs.md §11. Only acts while the spec is still `planning`.
+ *
+ * - scaffolded: phase A exists → the ORCHESTRATOR INSTRUCTS THE BOOKKEEPER
+ *   (a throwaway LLM session with read/write/edit) to flip `status:
+ *   planning` to `status: pending`. The bookkeeper owns semantic
+ *   transitions.
+ * - failed: errored/interrupted (or nothing was scaffolded) → mechanical
+ *   reset to `draft`, owned by orchestrator code.
+ */
+export const settleSpecAfterKickoff = async (opts: {
+  readonly cwd: string;
+  readonly specName: string;
+  readonly outcome: 'scaffolded' | 'failed';
+  /** Model for the bookkeeper when the spec has none set. */
+  readonly fallbackModel: string;
+}): Promise<void> => {
+  const { cwd, specName, outcome, fallbackModel } = opts;
+  const specFile = join(cwd, '.agents', '@montflow', 'specs', specName, 'spec.md');
+  try {
+    const markdown = await readFile(specFile, 'utf8');
+    const parsed = parseFrontmatter(markdown);
+    const status = typeof parsed?.fields['status'] === 'string' ? parsed.fields['status'] : '';
+    if (status !== 'planning') return; // moved on already — nothing to do
+
+    if (outcome === 'failed') {
+      await writeFile(specFile, markdown.replace(/^(status:)\s*planning\s*$/m, '$1 draft'), 'utf8');
+      console.log(`[spec-bookkeeper] ${specName}: kickoff failed — reset planning → draft`);
+      return;
+    }
+
+    // Scaffolded: verify phase A actually exists before promoting.
+    let hasPhase = false;
+    try {
+      const phases = await readdir(join(cwd, '.agents', '@montflow', 'specs', specName, 'phases'), {
+        withFileTypes: true,
+      });
+      hasPhase = phases.some((e) => e.isDirectory() && /^[A-Z]$/.test(e.name));
+    } catch {
+      hasPhase = false;
+    }
+    if (!hasPhase) {
+      await writeFile(specFile, markdown.replace(/^(status:)\s*planning\s*$/m, '$1 draft'), 'utf8');
+      console.log(`[spec-bookkeeper] ${specName}: kickoff produced no phases — reset planning → draft`);
+      return;
+    }
+
+    // Semantic transition: instruct the bookkeeper to flip planning → pending.
+    const bkModel = await bookkeepingModelFor(cwd, specName, fallbackModel);
+    const instruction = [
+      `Transition the feature spec ".agents/@montflow/specs/${specName}/spec.md" from planning to pending.`,
+      'The kickoff agent finished scaffolding phase A, so the plan is ready to execute.',
+      'Use the edit tool NOW to change ONLY the frontmatter `status:` line: planning → pending.',
+      'Do not reply before the edit has been made. After editing, reply with exactly: OK',
+    ].join('\n');
+    const agent = await Effect.runPromise(
+      createPersistentAgent({
+        model: bkModel,
+        systemPrompt: SPEC_BOOKKEEPER_SYSTEM,
+        tools: ['read', 'write', 'edit'],
+        cwd,
+      }),
+    );
+    try {
+      await agent.prompt(instruction);
+    } finally {
+      void disposeSkillAgent({ agent, model: bkModel, sessionFile: agent.sessionFile() });
+    }
+
+    // Verify the flip actually landed. The bookkeeper is an LLM — it can
+    // reply OK without acting. If it stalled, the orchestrator's mechanical
+    // fallback guarantees the state machine never stalls on a no-op.
+    const settled = await readFile(specFile, 'utf8');
+    if (/^status:\s*pending\s*$/m.test(settled)) {
+      console.log(`[spec-bookkeeper] ${specName}: planning → pending`);
+      return;
+    }
+    await writeFile(specFile, settled.replace(/^(status:)\s*planning\s*$/m, '$1 pending'), 'utf8');
+    console.log(`[spec-bookkeeper] ${specName}: planning → pending (mechanical fallback)`);
+  } catch (error) {
+    console.error(
+      `[spec-bookkeeper] ${specName}: settle failed:`,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+};
+
+/** Resolves the bookkeeper model: spec frontmatter → fallback. */
+const bookkeepingModelFor = async (
+  cwd: string,
+  specName: string,
+  fallbackModel: string,
+): Promise<string> => {
+  try {
+    const meta = await readFile(
+      join(cwd, '.agents', '@montflow', 'specs', specName, 'spec.md'),
+      'utf8',
+    );
+    // The bookkeeping block sits directly under `bookkeeping:`; its `model`
+    // line is indented once. Scoped scan avoids matching other `model:` keys.
+    const lines = meta.split(/\r?\n/);
+    const start = lines.findIndex((line) => line.trim() === 'bookkeeping:');
+    if (start !== -1) {
+      for (let i = start + 1; i < lines.length; i++) {
+        const line = lines[i] ?? '';
+        if (line.trim() !== '' && !line.startsWith(' ')) break;
+        const match = /^  model:\s*(.+)$/.exec(line);
+        if (match !== null && (match[1] ?? '').trim() !== '') return (match[1] ?? '').trim();
+      }
+    }
+  } catch {
+    // fall through to fallback
+  }
+  return fallbackModel;
 };

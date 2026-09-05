@@ -35,6 +35,7 @@ import {
   PROMPT_RUNNER_TOOLS,
   loadPromptSkills,
   wrapPromptPrompt,
+  wrapSpecPrompt,
 } from './skill-run.ts';
 import { parseProfile, parseFrontmatter } from './profiles/model.ts';
 import {
@@ -1331,6 +1332,578 @@ const deletePromptFile = async (cwd: string, name: string): Promise<void> => {
   await rm(promptFilePath(cwd, name), { force: true });
 };
 
+// ---------------------------------------------------------------------------
+// Specs — feature specs at `.agents/@montflow/specs/<name>/`.
+// spec.md + phases/<L>/phase.md + phases/<L>/tasks/<NNN>-<slug>/task.md.
+// Frontmatter is THE machine contract (wiki feature-specs.md §4). Status
+// transitions are orchestrated: the orchestrator instructs the bookkeeper
+// agent, which rewrites frontmatter — nothing derives statuses
+// programmatically. Completely independent of the authoring-feature-spec
+// skill (different format, location, and lifecycle).
+// ---------------------------------------------------------------------------
+
+const SPEC_DIR = ['.agents', '@montflow', 'specs'] as const;
+
+const SPEC_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/; // strict kebab-case
+const PHASE_ID_PATTERN = /^[A-Z]$/;
+const TASK_NUM_PATTERN = /^\d{3}$/;
+const TASK_TYPES = ['planning', 'exploration', 'execution'] as const;
+const SCOPE_START_MARKER = '<!-- scope-prompt:start -->';
+const SCOPE_END_MARKER = '<!-- scope-prompt:end -->';
+
+const specRoot = (cwd: string): string => join(cwd, ...SPEC_DIR);
+const specPath = (cwd: string, name: string): string => join(specRoot(cwd), name);
+const phaseDir = (cwd: string, name: string, phaseId: string): string =>
+  join(specPath(cwd, name), 'phases', phaseId);
+const taskRootDir = (cwd: string, name: string, phaseId: string): string =>
+  join(phaseDir(cwd, name, phaseId), 'tasks');
+
+/** Trims an optional model string — empty/whitespace becomes undefined. Module scope so request handlers do not recreate it per call. */
+const asSpecModel = (v: unknown): string | undefined =>
+  typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined;
+
+/**
+ * Fallback copies of the `templates/spec/` skeletons — the machine contract
+ * (wiki feature-specs.md §4). Must stay identical to the files on disk.
+ */
+const SPEC_TEMPLATE_FALLBACK = `---
+name: {{NAME}}
+status: draft
+created: {{CREATED}}
+bookkeeping:
+  model:
+  fallbackModels: []
+actors:
+  orchestrator:
+  executor:
+---
+
+# {{NAME}}
+
+Free notes. Anything outside the scope-prompt markers below is never sent
+to agents verbatim.
+
+Field contract (validated server-side):
+
+- \`name\` — kebab-case, unique within \`.agents/@montflow/specs/\`.
+- \`status\` — lifecycle state, see wiki §11 (\`draft → planning → pending →
+  active\`, plus \`blocked\`; \`complete\` at the end). Never derived from phase
+  statuses and never flipped by the agent unprompted: the orchestrator
+  detects the trigger event and instructs the bookkeeper to rewrite this
+  field. Manual edit is the escape hatch.
+- \`created\` — ISO date, stamped once at creation.
+- \`bookkeeping.model\` — empty until the user picks one on the details
+  page. Empty model ⇒ all agentic buttons disabled; manual authoring
+  still works.
+- \`bookkeeping.fallbackModels\` — tried in order when \`model\` fails.
+- \`actors.orchestrator\` — drives execution: kickoff/grilling now, task
+  sequencing later.
+- \`actors.executor\` — runs task bodies (planning / exploration /
+  execution).
+
+## Scope prompt
+
+Everything between the two markers below is THE scope prompt. The details
+page renders exactly this range in its own editor and hands it to agents
+verbatim — no re-wrapping, no trimming of interior lines.
+
+<!-- scope-prompt:start -->
+<!-- Describe the feature here — goals, success criteria, constraints. -->
+<!-- scope-prompt:end -->
+`;
+
+const PHASE_TEMPLATE_FALLBACK = `---
+id: {{ID}}
+name: {{NAME}}
+status: pending
+depends-on: []
+---
+
+# Phase {{ID}} — {{NAME}}
+
+Free-form goal notes. Not parsed by the UI; the scaffolding agent may
+read them when generating tasks for this phase.
+
+Field contract (validated server-side):
+
+- \`id\` — single uppercase letter \`A\`…\`Z\`. Phases execute sequentially in
+  letter order.
+- \`name\` — short slug; display label only.
+- \`status\` — \`pending | in-progress | complete | blocked\`.
+- \`depends-on\` — phase letters only, each strictly earlier than \`id\`.
+  Forward references are rejected.
+`;
+
+const TASK_TEMPLATE_FALLBACK = `---
+id: {{ID}}
+name: {{NAME}}
+type: {{TYPE}}
+status: pending
+depends-on: []
+loop: null
+---
+
+# Task {{ID}} — {{NAME}}
+
+Task description. Free prose; for \`loop\` tasks this body plus the spec's
+scope prompt IS the loop kickoff prompt.
+
+Field contract (validated server-side):
+
+- \`id\` — \`<PHASE><NNN>\`, e.g. \`A001\`; NNN unique within the phase.
+- \`type\` — \`planning\` (ingests context, decides next steps, may ask
+  questions) | \`exploration\` (read-only investigation) | \`execution\`
+  (mutates code).
+- \`status\` — \`pending | in-progress | complete | blocked\`. Transitions
+  orchestrated: the orchestrator tells the bookkeeper to rewrite this
+  field; the agent never flips statuses unprompted.
+- \`depends-on\` — task ids from this phase or earlier phases only.
+- \`loop\` — \`null\`, or \`{ preset: "<name>" }\` naming an existing loop
+  preset. Declared + displayed only in v1; execution wiring is follow-up.
+`;
+
+/**
+ * Loads one `templates/spec/<kind>.md` skeleton from next to this module.
+ * Falls back to the embedded copy when the file is missing — same pattern
+ * as the fix-plan template in run-loop.ts. The templates on disk are the
+ * machine contract; the fallbacks below must stay identical to them.
+ */
+const loadSpecTemplate = async (kind: 'spec' | 'phase' | 'task'): Promise<string> => {
+  try {
+    return await readFile(
+      join(dirname(fileURLToPath(import.meta.url)), 'templates', 'spec', `${kind}.md`),
+      'utf8',
+    );
+  } catch {
+    const fallbacks: Record<typeof kind, string> = {
+      spec: SPEC_TEMPLATE_FALLBACK,
+      phase: PHASE_TEMPLATE_FALLBACK,
+      task: TASK_TEMPLATE_FALLBACK,
+    };
+    return fallbacks[kind];
+  }
+};
+
+const stripQuotes = (value: string): string => value.replace(/^['"]|['"]$/g, '');
+
+/** Extracts the verbatim scope prompt — the exact text between the markers.
+ * HTML comment lines are guidance placeholders and legacy template filler
+ * ("Replace this line with the scope prompt.") is ignored — both extract
+ * as empty so stale scaffolding never reaches agents or the UI. */
+const LEGACY_PLACEHOLDER_LINE = /^\s*Replace this line with the scope prompt\.?\s*$/;
+const extractScopePrompt = (markdown: string): string => {
+  const start = markdown.indexOf(SCOPE_START_MARKER);
+  const end = markdown.indexOf(SCOPE_END_MARKER);
+  if (start === -1 || end === -1 || end < start) return '';
+  const inner = markdown.slice(start + SCOPE_START_MARKER.length, end);
+  const contentLines = inner
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .split(/\r?\n/)
+    .filter((line) => !LEGACY_PLACEHOLDER_LINE.test(line));
+  return contentLines.join('\n').replace(/^\r?\n/, '').replace(/\r?\n[ \t]*$/, '').trim();
+};
+
+/** Parses the nested `bookkeeping:` block (the flat frontmatter parser cannot). */
+const parseBookkeeping = (markdown: string): { model: string; fallbackModels: readonly string[] } => {
+  const lines = markdown.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === 'bookkeeping:');
+  if (start === -1) return { model: '', fallbackModels: [] };
+  const out = { model: '', fallbackModels: [] as string[] };
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    if (line.trim() !== '' && !/^[ \t]/.test(line)) break; // dedent → block over
+    const field = /^[ \t]+(model|fallbackModels):(\s*(.*))?$/.exec(line);
+    if (field === null) continue;
+    if (field[1] === 'model') {
+      out.model = stripQuotes((field[3] ?? '').trim());
+      continue;
+    }
+    const inline = (field[3] ?? '').trim();
+    if (inline !== '' && inline !== '[]') {
+      out.fallbackModels = [stripQuotes(inline)];
+      continue;
+    }
+    // Empty or [] → collect an indented `- item` list below.
+    const items: string[] = [];
+    for (let j = i + 1; j < lines.length; j++) {
+      const item = /^[ \t]+-[ \t]+(.+)$/.exec(lines[j] ?? '');
+      if (item === null) break;
+      items.push(stripQuotes((item[1] ?? '').trim()));
+      i = j;
+    }
+    out.fallbackModels = items;
+  }
+  return out;
+};
+
+/** Parses the nested `actors:` block (orchestrator/executor models). */
+const parseActors = (markdown: string): { orchestrator: string; executor: string } => {
+  const lines = markdown.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === 'actors:');
+  if (start === -1) return { orchestrator: '', executor: '' };
+  const out = { orchestrator: '', executor: '' };
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    if (line.trim() !== '' && !/^[ \t]/.test(line)) break; // dedent → block over
+    const field = /^[ \t]+(orchestrator|executor):(\s*(.*))?$/.exec(line);
+    if (field === null) continue;
+    if (field[1] === 'orchestrator') out.orchestrator = stripQuotes((field[3] ?? '').trim());
+    else out.executor = stripQuotes((field[3] ?? '').trim());
+  }
+  return out;
+};
+
+/**
+ * Rebuilds spec.md frontmatter with a new status + actor/bookkeeper models,
+ * preserving the created date and the body (scope markers included). Used by
+ * the Begin flow — wiki feature-specs.md §11: draft → planning is a
+ * mechanical transition owned by orchestrator code.
+ */
+const stampSpecMeta = (
+  markdown: string,
+  opts: {
+    readonly name: string;
+    readonly status: string;
+    readonly bookkeeping?: string;
+    readonly orchestrator?: string;
+    readonly executor?: string;
+  },
+): string => {
+  const parsed = parseFrontmatter(markdown);
+  const created =
+    typeof parsed?.fields['created'] === 'string' && parsed.fields['created'] !== ''
+      ? parsed.fields['created']
+      : new Date().toISOString().slice(0, 10);
+  const bk = parseBookkeeping(markdown);
+  const fallbackLines =
+    bk.fallbackModels.length > 0
+      ? ['  fallbackModels:', ...bk.fallbackModels.map((m) => `    - ${m}`)]
+      : ['  fallbackModels: []'];
+  const front = [
+    '---',
+    `name: ${opts.name}`,
+    `status: ${opts.status}`,
+    `created: ${created}`,
+    'bookkeeping:',
+    `  model: ${opts.bookkeeping ?? bk.model}`,
+    ...fallbackLines,
+    'actors:',
+    `  orchestrator: ${opts.orchestrator ?? ''}`,
+    `  executor: ${opts.executor ?? ''}`,
+    '---',
+  ];
+  return `${front.join('\n')}\n${parsed?.body ?? ''}`;
+};
+
+interface SpecSummary {
+  readonly name: string;
+  readonly status: string;
+  readonly created: string;
+  readonly model: string;
+  readonly phaseCount: number;
+  readonly taskCount: number;
+}
+
+interface TaskEntry {
+  readonly dir: string; // e.g. `001-explore-auth`
+  readonly id: string; // `<PHASE><NNN>`, e.g. `A001`
+  readonly num: string; // NNN part only
+  readonly name: string;
+  readonly type: string;
+  readonly status: string;
+  readonly dependsOn: readonly string[];
+  readonly loopPreset: string | null;
+}
+
+interface PhaseEntry {
+  readonly id: string; // single uppercase letter
+  readonly name: string;
+  readonly status: string;
+  readonly dependsOn: readonly string[];
+  readonly tasks: readonly TaskEntry[];
+}
+
+interface SpecDetail extends SpecSummary {
+  readonly scopePrompt: string;
+  readonly markdown: string; // raw spec.md
+  readonly bookkeepingModel: string; // alias of model (bookkeeper)
+  readonly orchestratorModel: string;
+  readonly executorModel: string;
+  readonly phases: readonly PhaseEntry[];
+}
+
+/** Parses `loop:` — inline `{ preset: "x" }`, bare name, or nested `preset:` line. */
+const parseLoopPreset = (markdown: string): string | null => {
+  const lines = markdown.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim().startsWith('loop:'));
+  if (start === -1) return null;
+  const raw = ((/^loop:\s*(.*)$/.exec(lines[start] ?? '')?.[1]) ?? '').trim();
+  if (raw !== '' && raw !== 'null' && raw !== '~') {
+    const preset = /preset:\s*['"]?([^'"}]+)/.exec(raw);
+    return stripQuotes((preset !== null ? (preset[1] ?? raw) : raw).trim());
+  }
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    if (line.trim() !== '' && !/^[ \t]/.test(line)) break; // dedent → block over
+    const preset = /^[ \t]+preset:\s*(.+)$/.exec(line);
+    if (preset !== null) return stripQuotes((preset[1] ?? '').trim());
+  }
+  return null;
+};
+
+const parseTaskEntry = (markdown: string, dirName: string, phaseId: string): TaskEntry | null => {
+  const parsed = parseFrontmatter(markdown);
+  if (parsed === null) return null;
+  const fields = parsed.fields;
+  const numMatch = /^(\d{3})/.exec(dirName);
+  if (numMatch === null) return null;
+  const num = numMatch[1] ?? '';
+  const loopPreset = parseLoopPreset(markdown);
+  return {
+    dir: dirName,
+    id: `${phaseId}${num}`,
+    num,
+    name: typeof fields['name'] === 'string' ? fields['name'] : dirName,
+    type: typeof fields['type'] === 'string' ? fields['type'] : 'exploration',
+    status: typeof fields['status'] === 'string' ? fields['status'] : 'pending',
+    dependsOn: asStringArray(fields['depends-on']),
+    loopPreset,
+  };
+};
+
+const readPhaseEntry = async (
+  cwd: string,
+  specName: string,
+  phaseId: string,
+): Promise<PhaseEntry | null> => {
+  let markdown: string;
+  try {
+    markdown = await readFile(join(phaseDir(cwd, specName, phaseId), 'phase.md'), 'utf8');
+  } catch {
+    return null;
+  }
+  const parsed = parseFrontmatter(markdown);
+  const fields = parsed?.fields ?? {};
+  let taskEntries: TaskEntry[] = [];
+  try {
+    const entries = await readdir(taskRootDir(cwd, specName, phaseId), { withFileTypes: true });
+    for (const entry of entries.filter((e) => e.isDirectory() && TASK_NUM_PATTERN.test(e.name.slice(0, 3)))) {
+      try {
+        const taskMarkdown = await readFile(
+          join(taskRootDir(cwd, specName, phaseId), entry.name, 'task.md'),
+          'utf8',
+        );
+        const task = parseTaskEntry(taskMarkdown, entry.name, phaseId);
+        if (task !== null) taskEntries.push(task);
+      } catch {
+        // Unreadable task — skip it.
+      }
+    }
+  } catch {
+    // No tasks directory yet.
+  }
+  taskEntries.sort((a, b) => a.num.localeCompare(b.num));
+  return {
+    id: phaseId,
+    name: typeof fields['name'] === 'string' ? fields['name'] : phaseId,
+    status: typeof fields['status'] === 'string' ? fields['status'] : 'pending',
+    dependsOn: asStringArray(fields['depends-on']),
+    tasks: taskEntries,
+  };
+};
+
+/** Reads one spec's full detail tree. Returns null when missing/malformed. */
+const readSpecDetail = async (cwd: string, specName: string): Promise<SpecDetail | null> => {
+  if (!SPEC_NAME_PATTERN.test(specName)) return null;
+  let markdown: string;
+  try {
+    markdown = await readFile(join(specPath(cwd, specName), 'spec.md'), 'utf8');
+  } catch {
+    return null;
+  }
+  const parsed = parseFrontmatter(markdown);
+  const fields = parsed?.fields ?? {};
+  const bookkeeping = parseBookkeeping(markdown);
+  const actors = parseActors(markdown);
+  const phases: PhaseEntry[] = [];
+  try {
+    const entries = await readdir(join(specPath(cwd, specName), 'phases'), { withFileTypes: true });
+    for (const entry of entries.filter((e) => e.isDirectory() && PHASE_ID_PATTERN.test(e.name))) {
+      const phase = await readPhaseEntry(cwd, specName, entry.name);
+      if (phase !== null) phases.push(phase);
+    }
+  } catch {
+    // No phases directory yet.
+  }
+  phases.sort((a, b) => a.id.localeCompare(b.id));
+  return {
+    name: typeof fields['name'] === 'string' && fields['name'] !== '' ? fields['name'] : specName,
+    status: typeof fields['status'] === 'string' ? fields['status'] : 'draft',
+    created: typeof fields['created'] === 'string' ? fields['created'] : '',
+    model: bookkeeping.model,
+    bookkeepingModel: bookkeeping.model,
+    orchestratorModel: actors.orchestrator,
+    executorModel: actors.executor,
+    phaseCount: phases.length,
+    taskCount: phases.reduce((sum, phase) => sum + phase.tasks.length, 0),
+    scopePrompt: extractScopePrompt(markdown),
+    markdown,
+    phases,
+  };
+};
+
+const listSpecs = async (cwd: string): Promise<SpecSummary[]> => {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(specRoot(cwd), { withFileTypes: true });
+  } catch {
+    return []; // directory missing → no specs yet
+  }
+  const results: SpecSummary[] = [];
+  for (const entry of entries.filter((e) => e.isDirectory())) {
+    const detail = await readSpecDetail(cwd, entry.name);
+    if (detail === null) continue; // malformed — skip
+    results.push({
+      name: detail.name,
+      status: detail.status,
+      created: detail.created,
+      model: detail.model,
+      phaseCount: detail.phaseCount,
+      taskCount: detail.taskCount,
+    });
+  }
+  return results.toSorted((a, b) => a.name.localeCompare(b.name));
+};
+
+/** Stamps a template skeleton with placeholder values. */
+const stampTemplate = (template: string, values: Record<string, string>): string => {
+  let out = template;
+  for (const [key, value] of Object.entries(values)) {
+    out = out.replaceAll(`{{${key}}}`, value);
+  }
+  return out;
+};
+
+type CreateResult = { ok: true } | { ok: false; error: string; conflict?: boolean };
+
+const createSpec = async (cwd: string, name: string): Promise<CreateResult> => {
+  if (!SPEC_NAME_PATTERN.test(name)) {
+    return { ok: false, error: 'name must be kebab-case (lowercase letters, digits, hyphens)' };
+  }
+  const dir = specPath(cwd, name);
+  try {
+    await readFile(join(dir, 'spec.md'), 'utf8');
+    return { ok: false, error: `Spec '${name}' already exists`, conflict: true };
+  } catch {
+    // ENOENT → new spec, proceed.
+  }
+  const template = await loadSpecTemplate('spec');
+  const markdown = stampTemplate(template, {
+    NAME: name,
+    CREATED: new Date().toISOString().slice(0, 10),
+  });
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, 'spec.md'), markdown, 'utf8');
+  return { ok: true };
+};
+
+const createPhase = async (cwd: string, specName: string, phaseId: string, name: string): Promise<CreateResult> => {
+  if (!PHASE_ID_PATTERN.test(phaseId)) {
+    return { ok: false, error: `Phase id must be a single uppercase letter A–Z, got '${phaseId}'` };
+  }
+  const detail = await readSpecDetail(cwd, specName);
+  if (detail === null) return { ok: false, error: `Unknown spec '${specName}'` };
+  if (detail.phases.some((phase) => phase.id === phaseId)) {
+    return { ok: false, error: `Phase '${phaseId}' already exists`, conflict: true };
+  }
+  const template = await loadSpecTemplate('phase');
+  const markdown = stampTemplate(template, {
+    ID: phaseId,
+    NAME: name.trim() !== '' ? name.trim() : `phase-${phaseId.toLowerCase()}`,
+  });
+  await mkdir(phaseDir(cwd, specName, phaseId), { recursive: true });
+  await writeFile(join(phaseDir(cwd, specName, phaseId), 'phase.md'), markdown, 'utf8');
+  return { ok: true };
+};
+
+const createTask = async (
+  cwd: string,
+  specName: string,
+  phaseId: string,
+  taskName: string,
+  type: string,
+): Promise<CreateResult> => {
+  if (!PHASE_ID_PATTERN.test(phaseId)) {
+    return { ok: false, error: `Invalid phase id '${phaseId}'` };
+  }
+  if (!SPEC_NAME_PATTERN.test(taskName)) {
+    return { ok: false, error: 'Task name must be kebab-case (lowercase letters, digits, hyphens)' };
+  }
+  if (!(TASK_TYPES as readonly string[]).includes(type)) {
+    return { ok: false, error: `type must be one of ${TASK_TYPES.join(' | ')}` };
+  }
+  const tasksDir = taskRootDir(cwd, specName, phaseId);
+  let existing: string[] = [];
+  try {
+    existing = await readdir(tasksDir);
+  } catch {
+    // No tasks yet → NNN starts at 001.
+  }
+  const usedNums = new Set(existing.map((dir) => dir.slice(0, 3)).filter((num) => TASK_NUM_PATTERN.test(num)));
+  let nnn = 1;
+  while (usedNums.has(String(nnn).padStart(3, '0'))) nnn++;
+  const num = String(nnn).padStart(3, '0');
+  const template = await loadSpecTemplate('task');
+  const markdown = stampTemplate(template, {
+    ID: `${phaseId}${num}`,
+    NAME: taskName,
+    TYPE: type,
+  });
+  await mkdir(join(tasksDir, `${num}-${taskName}`), { recursive: true });
+  await writeFile(join(tasksDir, `${num}-${taskName}`, 'task.md'), markdown, 'utf8');
+  return { ok: true };
+};
+
+/** Writes raw markdown to a fixed file inside the spec tree — no client paths. */
+const writeSpecFile = async (
+  cwd: string,
+  specName: string,
+  file: 'spec.md' | `phases/${string}/phase.md` | `phases/${string}/tasks/${string}/task.md`,
+  markdown: string,
+): Promise<CreateResult> => {
+  // Defense in depth: the type system guarantees `file` is one of three
+  // fixed shapes, but enforce containment here anyway so the invariant
+  // holds even if a future call site bends the rules.
+  const root = resolve(specRoot(cwd)) + sep;
+  const target = resolve(join(specPath(cwd, specName), file));
+  if (!target.startsWith(root)) {
+    return { ok: false, error: 'Refusing to write outside the specs directory' };
+  }
+  await mkdir(dirname(target), { recursive: true });
+  await writeFile(target, markdown, 'utf8');
+  return { ok: true };
+};
+
+/** Resolves a task's NNN to its directory name (`<NNN>-<slug>`), or null. */
+const findTaskDir = async (cwd: string, specName: string, phaseId: string, num: string): Promise<string | null> => {
+  let entries: string[] = [];
+  try {
+    entries = await readdir(taskRootDir(cwd, specName, phaseId));
+  } catch {
+    return null;
+  }
+  return entries.find((entry) => entry.startsWith(`${num}-`) && TASK_NUM_PATTERN.test(num)) ?? null;
+};
+
+/** Collects every task id in the spec that lives in a phase AFTER `beforePhase`. */
+const laterTaskIds = async (cwd: string, specName: string, beforePhase: string): Promise<string[]> => {
+  const detail = await readSpecDetail(cwd, specName);
+  if (detail === null) return [];
+  return detail.phases
+    .filter((phase) => phase.id > beforePhase)
+    .flatMap((phase) => phase.tasks.map((task) => task.id));
+};
+
 const isPortFree = (port: number): Promise<boolean> =>
   new Promise((resolveFree) => {
     const socket = net.connect({ port, host: '127.0.0.1' });
@@ -1965,6 +2538,280 @@ async function main(): Promise<void> {
         return;
       }
 
+      // Specs — feature spec trees at `.agents/@montflow/specs/<name>/`.
+      // GET    /api/workspaces/<id>/specs                                  → list
+      // POST   /api/workspaces/<id>/specs                     { name }     → create (stamped from template)
+      // GET    /api/workspaces/<id>/specs/<name>                           → detail tree
+      // DELETE /api/workspaces/<id>/specs/<name>
+      // PUT    /api/workspaces/<id>/specs/<name>/spec-md      { markdown }
+      // POST   /api/workspaces/<id>/specs/<name>/phases       { id, name? }
+      // PUT    /api/workspaces/<id>/specs/<name>/phases/<L>/phase-md   { markdown }
+      // DELETE /api/workspaces/<id>/specs/<name>/phases/<L>            → 409 when later phases/tasks depend on it
+      // POST   /api/workspaces/<id>/specs/<name>/phases/<L>/tasks      { name, type? }
+      // PUT    /api/workspaces/<id>/specs/<name>/phases/<L>/tasks/<NNN>/task-md { markdown }
+      // DELETE /api/workspaces/<id>/specs/<name>/phases/<L>/tasks/<NNN>         → 409 when other tasks depend on it
+      const specList = pathname.match(/^\/api\/workspaces\/([^/]+)\/specs$/);
+      const specDetail = pathname.match(/^\/api\/workspaces\/([^/]+)\/specs\/([^/]+)$/);
+      const specFile = pathname.match(/^\/api\/workspaces\/([^/]+)\/specs\/([^/]+)\/(spec-md|phases\/([A-Z])\/phase-md|phases\/([A-Z])\/tasks\/(\d{3})\/task-md)$/);
+      const phaseList = pathname.match(/^\/api\/workspaces\/([^/]+)\/specs\/([^/]+)\/phases$/);
+      const phaseItem = pathname.match(/^\/api\/workspaces\/([^/]+)\/specs\/([^/]+)\/phases\/([A-Z])$/);
+      const taskList = pathname.match(/^\/api\/workspaces\/([^/]+)\/specs\/([^/]+)\/phases\/([A-Z])\/tasks$/);
+      const taskItem = pathname.match(/^\/api\/workspaces\/([^/]+)\/specs\/([^/]+)\/phases\/([A-Z])\/tasks\/(\d{3})$/);
+
+      if (specList) {
+        const wsId = decodeURIComponent(specList[1] ?? '');
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (req.method === 'POST') {
+          let body: unknown;
+          try {
+            body = await readJsonBody(req);
+          } catch {
+            sendJson(400, { error: 'Invalid JSON body' });
+            return;
+          }
+          const name = (body as { name?: unknown }).name;
+          if (typeof name !== 'string') {
+            sendJson(400, { error: 'Missing string field: name' });
+            return;
+          }
+          const result = await createSpec(cwd, name);
+          if (!result.ok) {
+            sendJson(result.conflict === true ? 409 : 400, { error: result.error });
+            return;
+          }
+          sendJson(201, { spec: await readSpecDetail(cwd, name) });
+          return;
+        }
+        if (req.method !== 'GET') {
+          sendJson(405, { error: 'Method not allowed' });
+          return;
+        }
+        sendJson(200, { specs: await listSpecs(cwd) });
+        return;
+      }
+
+      if (specDetail && !specFile && !phaseList && !phaseItem && !taskList && !taskItem) {
+        const wsId = decodeURIComponent(specDetail[1] ?? '');
+        const specName = decodeURIComponent(specDetail[2] ?? '');
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (!SPEC_NAME_PATTERN.test(specName)) {
+          sendJson(400, { error: `Invalid spec name '${specName}'` });
+          return;
+        }
+        if (req.method === 'GET') {
+          const detail = await readSpecDetail(cwd, specName);
+          if (detail === null) {
+            sendJson(404, { error: `Unknown spec '${specName}'` });
+            return;
+          }
+          sendJson(200, { spec: detail });
+          return;
+        }
+        if (req.method === 'DELETE') {
+          await rm(specPath(cwd, specName), { recursive: true, force: true });
+          sendJson(200, { ok: true });
+          return;
+        }
+        sendJson(405, { error: 'Method not allowed' });
+        return;
+      }
+
+      if (specFile) {
+        const wsId = decodeURIComponent(specFile[1] ?? '');
+        const specName = decodeURIComponent(specFile[2] ?? '');
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (!SPEC_NAME_PATTERN.test(specName)) {
+          sendJson(400, { error: `Invalid spec name '${specName}'` });
+          return;
+        }
+        if (req.method !== 'PUT') {
+          sendJson(405, { error: 'Method not allowed' });
+          return;
+        }
+        let body: unknown;
+        try {
+          body = await readJsonBody(req);
+        } catch {
+          sendJson(400, { error: 'Invalid JSON body' });
+          return;
+        }
+        const markdown = (body as { markdown?: unknown }).markdown;
+        if (typeof markdown !== 'string' || markdown.trim() === '') {
+          sendJson(400, { error: 'Missing string field: markdown' });
+          return;
+        }
+        const kind = specFile[3] ?? '';
+        let file: Parameters<typeof writeSpecFile>[2];
+        if (kind === 'spec-md') {
+          file = 'spec.md';
+        } else if (kind === 'phase-md') {
+          file = `phases/${specFile[4] ?? ''}/phase.md`;
+        } else {
+          const taskDir = await findTaskDir(cwd, specName, specFile[5] ?? '', specFile[6] ?? '');
+          if (taskDir === null) {
+            sendJson(404, { error: `Unknown task '${specFile[5]}${specFile[6]}'` });
+            return;
+          }
+          file = `phases/${specFile[5] ?? ''}/tasks/${taskDir}/task.md`;
+        }
+        await writeSpecFile(cwd, specName, file, markdown);
+        sendJson(200, { ok: true });
+        return;
+      }
+
+      if (phaseList) {
+        const wsId = decodeURIComponent(phaseList[1] ?? '');
+        const specName = decodeURIComponent(phaseList[2] ?? '');
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (req.method !== 'POST') {
+          sendJson(405, { error: 'Method not allowed' });
+          return;
+        }
+        let body: unknown;
+        try {
+          body = await readJsonBody(req);
+        } catch {
+          sendJson(400, { error: 'Invalid JSON body' });
+          return;
+        }
+        const { id, name } = body as { id?: unknown; name?: unknown };
+        if (typeof id !== 'string') {
+          sendJson(400, { error: 'Missing string field: id' });
+          return;
+        }
+        const result = await createPhase(cwd, specName, id, typeof name === 'string' ? name : '');
+        if (!result.ok) {
+          sendJson(result.conflict === true ? 409 : 400, { error: result.error });
+          return;
+        }
+        sendJson(201, { spec: await readSpecDetail(cwd, specName) });
+        return;
+      }
+
+      if (phaseItem) {
+        const wsId = decodeURIComponent(phaseItem[1] ?? '');
+        const specName = decodeURIComponent(phaseItem[2] ?? '');
+        const phaseId = phaseItem[3] ?? '';
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (req.method !== 'DELETE') {
+          sendJson(405, { error: 'Method not allowed' });
+          return;
+        }
+        const detail = await readSpecDetail(cwd, specName);
+        if (detail === null || !detail.phases.some((phase) => phase.id === phaseId)) {
+          sendJson(404, { error: `Unknown phase '${phaseId}' in spec '${specName}'` });
+          return;
+        }
+        const dependents = detail.phases.filter(
+          (phase) => phase.id !== phaseId && phase.dependsOn.includes(phaseId),
+        );
+        const laterIds = await laterTaskIds(cwd, specName, phaseId);
+        if (dependents.length > 0 || laterIds.length > 0) {
+          const why = [
+            ...dependents.map((phase) => `phase ${phase.id} depends on it`),
+            ...laterIds.map((taskId) => `task ${taskId} depends on a task in it`),
+          ];
+          sendJson(409, { error: `Phase '${phaseId}' cannot be deleted: ${why.join('; ')}` });
+          return;
+        }
+        await rm(phaseDir(cwd, specName, phaseId), { recursive: true, force: true });
+        sendJson(200, { ok: true });
+        return;
+      }
+
+      if (taskList) {
+        const wsId = decodeURIComponent(taskList[1] ?? '');
+        const specName = decodeURIComponent(taskList[2] ?? '');
+        const phaseId = taskList[3] ?? '';
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (req.method !== 'POST') {
+          sendJson(405, { error: 'Method not allowed' });
+          return;
+        }
+        let body: unknown;
+        try {
+          body = await readJsonBody(req);
+        } catch {
+          sendJson(400, { error: 'Invalid JSON body' });
+          return;
+        }
+        const { name, type } = body as { name?: unknown; type?: unknown };
+        if (typeof name !== 'string') {
+          sendJson(400, { error: 'Missing string field: name' });
+          return;
+        }
+        const result = await createTask(cwd, specName, phaseId, name, typeof type === 'string' ? type : 'exploration');
+        if (!result.ok) {
+          sendJson(400, { error: result.error });
+          return;
+        }
+        sendJson(201, { spec: await readSpecDetail(cwd, specName) });
+        return;
+      }
+
+      if (taskItem) {
+        const wsId = decodeURIComponent(taskItem[1] ?? '');
+        const specName = decodeURIComponent(taskItem[2] ?? '');
+        const phaseId = taskItem[3] ?? '';
+        const num = taskItem[4] ?? '';
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (req.method !== 'DELETE') {
+          sendJson(405, { error: 'Method not allowed' });
+          return;
+        }
+        const detail = await readSpecDetail(cwd, specName);
+        const taskId = `${phaseId}${num}`;
+        if (detail === null || !detail.phases.some((phase) => phase.id === phaseId)) {
+          sendJson(404, { error: `Unknown task '${taskId}'` });
+          return;
+        }
+        const dependents = detail.phases.flatMap((phase) =>
+          phase.tasks
+            .filter((task) => task.id !== taskId && task.dependsOn.includes(taskId))
+            .map((dependent) => dependent.id),
+        );
+        if (dependents.length > 0) {
+          sendJson(409, {
+            error: `Task '${taskId}' cannot be deleted: tasks ${dependents.join(', ')} depend on it`,
+          });
+          return;
+        }
+        const taskDir = await findTaskDir(cwd, specName, phaseId, num);
+        if (taskDir !== null) {
+          await rm(join(taskRootDir(cwd, specName, phaseId), taskDir), { recursive: true, force: true });
+        }
+        sendJson(200, { ok: true });
+        return;
+      }
+
       // POST /api/workspaces/<id>/prompts/<name>/preview   { template, variables, skills }
       // Builds the EXACT input a prompt run would hand to the agent from the
       // CURRENT editor draft (not the saved file): renders the template with
@@ -2100,6 +2947,113 @@ async function main(): Promise<void> {
         };
         startExecutorRun(folder, command, cwd);
         sendJson(200, { ok: true, runId, rendered });
+        return;
+      }
+
+      // POST /api/workspaces/<id>/specs/<name>/generate
+      //        { guidance?, model?, bookkeepingModel?, orchestratorModel?, executorModel? }
+      // Starts the spec kickoff agent (wiki feature-specs.md §6): wraps the
+      // spec's scope prompt verbatim and launches a router-side executor run
+      // (streams to the web UI; final message ending in '?' = awaiting user
+      // answers via the grilling loop). The agent only scaffolds phase/task
+      // files — statuses stay pending. Draft-only: 409 unless the spec is
+      // still in `draft` (the Begin edge). Requires the grilling skill installed
+      // in the workspace; the error carries the npx install command.
+      const specGenerate = pathname.match(/^\/api\/workspaces\/([^/]+)\/specs\/([^/]+)\/generate$/);
+      if (specGenerate) {
+        const wsId = decodeURIComponent(specGenerate[1] ?? '');
+        const specName = decodeURIComponent(specGenerate[2] ?? '');
+        const cwd = workspacePath(wsId);
+        if (cwd === undefined) {
+          sendJson(404, { error: `Unknown workspace '${wsId}'` });
+          return;
+        }
+        if (!SPEC_NAME_PATTERN.test(specName)) {
+          sendJson(400, { error: `Invalid spec name '${specName}'` });
+          return;
+        }
+        if (req.method !== 'POST') {
+          sendJson(405, { error: 'Method not allowed' });
+          return;
+        }
+        const body = await readJsonBody(req).catch(() => ({}));
+        const { guidance, model, bookkeepingModel, orchestratorModel, executorModel } = body as {
+          guidance?: unknown;
+          model?: unknown;
+          bookkeepingModel?: unknown;
+          orchestratorModel?: unknown;
+          executorModel?: unknown;
+        };
+        let markdown: string;
+        try {
+          markdown = await readFile(join(specPath(cwd, specName), 'spec.md'), 'utf8');
+        } catch {
+          sendJson(404, { error: `Unknown spec '${specName}'` });
+          return;
+        }
+        const parsed = parseFrontmatter(markdown);
+        const currentStatus =
+          typeof parsed?.fields['status'] === 'string' ? parsed.fields['status'] : '';
+        if (currentStatus !== 'draft') {
+          sendJson(409, {
+            error: `Spec '${specName}' is '${currentStatus}' — kickoff only starts from 'draft'.`,
+          });
+          return;
+        }
+        const scope = extractScopePrompt(markdown);
+        if (scope.trim() === '') {
+          sendJson(400, { error: 'Write the scope prompt first — it is empty.' });
+          return;
+        }
+        // The kickoff agent grills via the workspace's grilling skill — refuse
+        // to start without it, telling the user exactly how to install it.
+        let grilling: string | undefined;
+        try {
+          grilling = await readFile(join(cwd, '.agents', 'skills', 'grilling', 'SKILL.md'), 'utf8');
+        } catch {
+          // not installed
+        }
+        if (grilling === undefined) {
+          sendJson(400, {
+            error:
+              "The grilling skill is not installed in this workspace. Install it, then retry:\nnpx skills add montflow/montflow -s grilling -a pi -y",
+          });
+          return;
+        }
+        // §11 state machine: Begin owns draft → planning. Stamp ALL launch
+        // info (status + bookkeeper + actor models) into frontmatter in one
+        // mechanical write, THEN launch the kickoff agent on the
+        // orchestrator's model.
+        await writeFile(
+          join(specPath(cwd, specName), 'spec.md'),
+          stampSpecMeta(markdown, {
+            name: specName,
+            status: 'planning',
+            bookkeeping: asSpecModel(bookkeepingModel),
+            orchestrator: asSpecModel(orchestratorModel),
+            executor: asSpecModel(executorModel),
+          }),
+          'utf8',
+        );
+        const folder = folderForCwd(cwd) ?? basename(cwd);
+        const requestedModel = asSpecModel(orchestratorModel) ?? asSpecModel(model);
+        const resolved = resolveRunModel(folder, requestedModel);
+        console.log(
+          `[spec-generate] ${specName}: requested=${String(requestedModel)} resolved=${resolved}`,
+        );
+        const runId = randomUUID();
+        void getExecutor().then((ex) =>
+          ex.start('spec', {
+            runId,
+            folder,
+            workspaceId: folderWorkspace.get(folder) ?? '',
+            cwd,
+            text: wrapSpecPrompt(specName, scope, typeof guidance === 'string' ? guidance : undefined),
+            model: resolved,
+            specName,
+          }),
+        );
+        sendJson(200, { ok: true, runId, model: resolved });
         return;
       }
 

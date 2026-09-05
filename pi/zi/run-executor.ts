@@ -27,11 +27,13 @@ import {
   createPromptAgent,
   createPresetAgent,
   createSkillAgent,
+  createSpecAgent,
   createTextAgent,
   disposeSkillAgent,
   isAwaitingAnswer,
   loadPromptSkills,
   promptSkillAgent,
+  settleSpecAfterKickoff,
   wrapPresetPrompt,
   wrapProfilePrompt,
   wrapPromptPrompt,
@@ -80,7 +82,7 @@ export interface ExecutorSkillGen {
 }
 
 /** A run kind — which authoring agent (system prompt + tools) to spin up. */
-export type RunKind = 'skill' | 'profile' | 'preset' | 'text' | 'prompt';
+export type RunKind = 'skill' | 'profile' | 'preset' | 'text' | 'prompt' | 'spec';
 
 /** Inputs a new run needs to start. */
 export interface StartRunOptions {
@@ -97,6 +99,8 @@ export interface StartRunOptions {
   readonly presetName?: string;
   readonly promptName?: string;
   readonly skills?: readonly string[];
+  /** Target spec name for spec kickoff runs (used for the run title prefix). */
+  readonly specName?: string;
   /** Title prefix, e.g. `[skill-create]` (per-kind default when omitted). */
   readonly titlePrefix?: string;
 }
@@ -112,6 +116,8 @@ interface RunRecord {
   readonly workspaceId: string;
   readonly cwd: string;
   readonly kind: RunKind;
+  /** Target spec name (spec runs only) — drives lifecycle settlement. */
+  readonly specName?: string;
   /** Resolved model (`provider/model-id`) this run's agent runs on. */
   model: string;
   title?: string;
@@ -136,6 +142,7 @@ interface PersistedRun {
   readonly workspaceId: string;
   readonly cwd: string;
   readonly kind: RunKind;
+  readonly specName?: string;
   readonly model?: string;
   readonly status: RunRecord['status'];
   readonly entries: RunRecord['entries'];
@@ -235,6 +242,8 @@ const titlePrefixFor = (kind: RunKind, opts: StartRunOptions): string => {
       return opts.presetName !== undefined ? '[preset-edit]' : '[preset-create]';
     case 'prompt':
       return '[prompt]';
+    case 'spec':
+      return opts.specName !== undefined ? `[spec ${opts.specName}]` : '[spec]';
     case 'text':
       return '[ai-input]';
   }
@@ -260,6 +269,10 @@ const buildPrompt = async (kind: RunKind, opts: StartRunOptions): Promise<string
         (opts.skills?.length ?? 0) > 0 ? await loadPromptSkills(cwd, opts.skills ?? []) : undefined;
       return wrapPromptPrompt(opts.text, opts.promptName, promptSkills);
     }
+    case 'spec':
+      // Fully wrapped by the caller (wrapSpecPrompt at the generate route):
+      // scope prompt verbatim + planning depth + extra guidance.
+      return opts.text;
     case 'text':
       return wrapTextPrompt(opts.text);
   }
@@ -283,6 +296,8 @@ const agentFactory = (kind: RunKind) => {
       return createProfileAgent;
     case 'preset':
       return createPresetAgent;
+    case 'spec':
+      return createSpecAgent;
     case 'prompt':
       return createPromptAgent;
     case 'text':
@@ -297,6 +312,7 @@ const toPersisted = (record: RunRecord): PersistedRun => ({
   workspaceId: record.workspaceId,
   cwd: record.cwd,
   kind: record.kind,
+  specName: record.specName,
   model: record.model,
   status: record.status,
   entries: record.entries,
@@ -314,6 +330,7 @@ const makeRecord = (kind: RunKind, opts: StartRunOptions, text: string): RunReco
   workspaceId: opts.workspaceId,
   cwd: opts.cwd,
   kind,
+  specName: opts.specName,
   model: opts.model,
   agent: null,
   status: 'running',
@@ -325,6 +342,29 @@ const makeRecord = (kind: RunKind, opts: StartRunOptions, text: string): RunReco
   createdAt: Date.now(),
   updatedAt: Date.now(),
 });
+
+export /**
+ * Spec lifecycle settlement (wiki feature-specs.md §11): when a kickoff
+ * run reaches a TERMINAL state, hand the result to the bookkeeping seam.
+ * `awaiting` is not terminal — the grilling loop keeps the spec in planning
+ * until the conversation truly finishes.
+ */
+const settleSpec = (record: RunRecord): void => {
+  if (record.kind !== 'spec' || record.specName === undefined) return;
+  const outcome =
+    record.status === 'done'
+      ? 'scaffolded'
+      : record.status === 'error' || record.status === 'interrupted'
+        ? 'failed'
+        : null;
+  if (outcome === null) return;
+  void settleSpecAfterKickoff({
+    cwd: record.cwd,
+    specName: record.specName,
+    outcome,
+    fallbackModel: record.model,
+  });
+};
 
 export const createRunExecutor = (options: RunExecutorOptions): RunExecutor => {
   const records = new Map<string, RunRecord>();
@@ -405,6 +445,7 @@ export const createRunExecutor = (options: RunExecutorOptions): RunExecutor => {
             record.entries[assistantIdx]!.text = message;
             persistRun(record, true);
             send(record, 'error', assistantIdx, message);
+            settleSpec(record);
             return;
           }
         }
@@ -449,6 +490,7 @@ export const createRunExecutor = (options: RunExecutorOptions): RunExecutor => {
         }
         persistRun(record, true);
         send(record, record.status, assistantIdx, record.entries[assistantIdx]!.text);
+        settleSpec(record);
       })
       .catch((cause) => {
         record.status = 'error';
@@ -569,7 +611,8 @@ export const createRunExecutor = (options: RunExecutorOptions): RunExecutor => {
             folder: typeof parsed.folder === 'string' ? parsed.folder : basename(cwd),
             workspaceId: typeof parsed.workspaceId === 'string' ? parsed.workspaceId : '',
             cwd,
-            kind: parsed.kind === 'profile' || parsed.kind === 'preset' || parsed.kind === 'prompt' || parsed.kind === 'text' ? parsed.kind : 'skill',
+            kind: parsed.kind === 'profile' || parsed.kind === 'preset' || parsed.kind === 'prompt' || parsed.kind === 'text' || parsed.kind === 'spec' ? parsed.kind : 'skill',
+            specName: typeof parsed.specName === 'string' ? parsed.specName : undefined,
             model: typeof parsed.model === 'string' ? parsed.model : '',
             title: typeof parsed.title === 'string' ? parsed.title : undefined,
             agent: null,
