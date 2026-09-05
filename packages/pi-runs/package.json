@@ -1,0 +1,52 @@
+{
+  "name": "@montflow/pi-runs",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Effect-first agentic run primitives for Pi extensions (run descriptors, status transitions)",
+  "keywords": [
+    "effect",
+    "pi",
+    "pi-package"
+  ],
+  "bugs": {
+    "url": "https://github.com/montflow/montflow/issues"
+  },
+  "license": "MIT",
+  "author": "Daniel Montilla",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/montflow/montflow.git",
+    "directory": "packages/pi-runs"
+  },
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "format:check": "oxfmt --check .",
+    "format:fix": "oxfmt .",
+    "lint:check": "oxlint --deny-warnings .",
+    "lint:fix": "oxlint . --fix",
+    "test": "vitest run --typecheck",
+    "ts:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@montflow/pi-effect": "workspace:*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.0",
+    "@effect/platform-node": "4.0.0-rc.112",
+    "@effect/vitest": "4.0.0-rc.112",
+    "@types/node": "^26.1.2",
+    "effect": "^4.0.0-rc.112",
+    "oxfmt": "0.63.0",
+    "oxlint": "1.78.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "effect": "^4.0.0-rc.112"
+  }
+}
