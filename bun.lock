@@ -194,6 +194,10 @@
         "@oxlint/plugins": "1.78.0",
       },
     },
+    "tooling/typescript": {
+      "name": "@montflow/tooling-typescript",
+      "version": "0.1.0",
+    },
   },
   "packages": {
     "@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.91.1", "", { "dependencies": { "json-schema-to-ts": "^3.1.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-LAmu761tSN9r66ixvmciswUj/ZC+1Q4iAfpedTfSVLeswRwnY3n2Nb6Tsk+cLPP28aLOPWeMgIuTuCcMC6W/iw=="],
@@ -419,6 +423,8 @@
     "@montflow/tooling-oxfmt": ["@montflow/tooling-oxfmt@workspace:tooling/oxfmt"],
 
     "@montflow/tooling-oxlint": ["@montflow/tooling-oxlint@workspace:tooling/oxlint"],
+
+    "@montflow/tooling-typescript": ["@montflow/tooling-typescript@workspace:tooling/typescript"],
 
     "@msgpackr-extract/msgpackr-extract-darwin-arm64": ["@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.4", "", { "os": "darwin", "cpu": "arm64" }, "sha512-LCkGo6JDfaBhgST7UpPWgNgLINpcpabaHfyz5OBx75nUYxBsaEPxjnyNjWpeb/xBup/682QnBfRBy2/LvPutZQ=="],
 
