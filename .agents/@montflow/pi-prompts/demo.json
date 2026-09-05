@@ -1,0 +1,1 @@
+{"description":"Smoke-test prompt for the local install","model":"","name":"demo","skills":[],"template":"Audit {{files}} for {{focus}}.","variables":["files","focus"]}
