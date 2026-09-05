@@ -552,3 +552,58 @@ export function truncate(text: string, max = 4000): string {
   if (text.length <= max) return text
   return `${text.slice(0, max)}\n… (${text.length - max} more chars)`
 }
+
+/** One feature spec in `.agents/@montflow/specs/<name>/` (list view). */
+export interface SpecSummary {
+  name: string
+  /** Lifecycle state — draft | planning | pending | active | blocked | complete (wiki feature-specs.md §11). */
+  status: string
+  /** ISO date stamped at creation. */
+  created: string
+  /** Bookkeeping model, or '' when unset (agentic actions disabled). */
+  model: string
+  phaseCount: number
+  taskCount: number
+}
+
+/** One task inside a spec phase (detail tree). */
+export interface SpecTaskEntry {
+  /** Directory name, e.g. `001-explore-auth`. */
+  dir: string
+  /** `<PHASE><NNN>`, e.g. `A001`. */
+  id: string
+  /** NNN part only. */
+  num: string
+  name: string
+  /** planning | exploration | execution */
+  type: string
+  /** pending | in-progress | complete | blocked */
+  status: string
+  dependsOn: string[]
+  /** Loop preset name declared for this task, or null. */
+  loopPreset: string | null
+}
+
+/** One phase of a spec (detail tree). */
+export interface SpecPhaseEntry {
+  /** Single uppercase letter A–Z. */
+  id: string
+  name: string
+  /** pending | in-progress | complete | blocked */
+  status: string
+  dependsOn: string[]
+  tasks: SpecTaskEntry[]
+}
+
+/** Full spec detail — the parsed frontmatter tree under `.agents/@montflow/specs/<name>/`. */
+export interface SpecDetailInfo extends SpecSummary {
+  scopePrompt: string
+  markdown: string
+  /** Bookkeeper model (status flips); '' when unset. */
+  bookkeepingModel: string
+  /** Orchestrator actor model; '' when unset. */
+  orchestratorModel: string
+  /** Executor actor model; '' when unset. */
+  executorModel: string
+  phases: SpecPhaseEntry[]
+}

@@ -11,6 +11,7 @@ import {
   profileNameFromPath,
   presetNameFromPath,
   loopIdFromPath,
+  specNameFromPath,
 } from '@/components/LandingPage'
 import { WorkspacePage } from '@/components/WorkspacePage'
 import { SessionPage } from '@/components/SessionPage'
@@ -41,6 +42,7 @@ export default function App() {
   const profileName = profileNameFromPath(pathname)
   const presetName = presetNameFromPath(pathname)
   const loopId = loopIdFromPath(pathname)
+  const specName = specNameFromPath(pathname)
 
   const workspace =
     workspaceId !== null && workspaces !== null
@@ -68,10 +70,11 @@ export default function App() {
     }
     if (profileName !== null) return titleFromSlug(profileName)
     if (presetName !== null) return titleFromSlug(presetName)
+    if (specName !== null) return titleFromSlug(specName)
     if (loopId !== null) return titleFromSlug(loopId)
     // Workspace overview — prefer the git identity, mirroring the page header.
     return info?.repo ?? info?.branch ?? info?.folder ?? workspace.name
-  }, [sessionId, runId, workspaceId, skillId, profileName, presetName, loopId, folders, runs, workspace, info, skill])
+  }, [sessionId, runId, workspaceId, skillId, profileName, presetName, specName, loopId, folders, runs, workspace, info, skill])
   useDocumentTitle(pageTitle)
 
   if (sessionId !== null) {

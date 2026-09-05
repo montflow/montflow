@@ -7,6 +7,7 @@ import {
   runIdFromPath,
   sessionIdFromPath,
   skillIdFromPath,
+  specNameFromPath,
   workspaceIdFromPath,
   workspaceUrl,
 } from '@/components/LandingPage'
@@ -93,6 +94,16 @@ const buildCrumbs = (
         { label: wsLabel, target: wsTarget, truncate: true },
         { label: 'Presets', target: sectionTarget(workspaceId, 'presets') },
         { label: titleFromSlug(presetName), target: null, truncate: true },
+      ]
+    }
+
+    const specName = specNameFromPath(pathname)
+    if (specName !== null) {
+      return [
+        ROOT,
+        { label: wsLabel, target: wsTarget, truncate: true },
+        { label: 'Specs', target: sectionTarget(workspaceId, 'specs') },
+        { label: titleFromSlug(specName), target: null, truncate: true },
       ]
     }
 

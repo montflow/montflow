@@ -3,6 +3,7 @@ import type { WorkspaceInfo, WorkspaceInfoDetail } from '@/protocol'
 import { ProfilesSection } from '@/components/ProfilesSection'
 import { SkillsSection } from '@/components/SkillsSection'
 import { PresetsSection } from '@/components/PresetsSection'
+import { SpecsSection } from '@/components/SpecsSection'
 import { RunsSection } from '@/components/RunsSection'
 import { LoopsSection } from '@/components/LoopsSection'
 import { PromptsSection } from '@/components/PromptsSection'
@@ -10,9 +11,10 @@ import { SkillDetail } from '@/components/SkillDetail'
 import { ProfileDetail } from '@/components/ProfileDetail'
 import { PresetDetail } from '@/components/PresetDetail'
 import { LoopDetail } from '@/components/LoopDetail'
+import { SpecDetail } from '@/components/SpecDetail'
 import { PromptDetail } from '@/components/PromptDetail'
 import { CommandPalette, type PaletteCommand } from '@/components/CommandPalette'
-import { presetNameFromPath, profileNameFromPath, skillIdFromPath, loopIdFromPath, promptNameFromPath, workspaceUrl } from '@/components/LandingPage'
+import { presetNameFromPath, profileNameFromPath, skillIdFromPath, specNameFromPath, loopIdFromPath, promptNameFromPath, workspaceUrl } from '@/components/LandingPage'
 import { navigate, setSearchParams, usePathname, useSearchParams } from '@/lib/useLocation'
 import { skipNextRestore } from '@/lib/scrollRestoration'
 
@@ -28,6 +30,7 @@ export function WorkspacePage({ conn, workspace, info }: WorkspacePageProps) {
   const skillId = skillIdFromPath(pathname)
   const profileName = profileNameFromPath(pathname)
   const presetName = presetNameFromPath(pathname)
+  const specName = specNameFromPath(pathname)
   const loopId = loopIdFromPath(pathname)
   const promptName = promptNameFromPath(pathname)
 
@@ -76,6 +79,7 @@ export function WorkspacePage({ conn, workspace, info }: WorkspacePageProps) {
       { id: 'go-skills', label: 'workspace: go to skills', run: goTo('skills') },
       { id: 'go-profiles', label: 'workspace: go to profiles', run: goTo('profiles') },
       { id: 'go-presets', label: 'workspace: go to presets', run: goTo('presets') },
+      { id: 'go-specs', label: 'workspace: go to specs', run: goTo('specs') },
       { id: 'go-loops', label: 'workspace: go to loops', run: goTo('loops') },
       { id: 'go-prompts', label: 'workspace: go to prompts', run: goTo('prompts') },
       { id: 'go-runs', label: 'workspace: go to runs', run: goTo('runs') },
@@ -107,6 +111,15 @@ export function WorkspacePage({ conn, workspace, info }: WorkspacePageProps) {
         workspaceId={workspace.id}
         presetName={presetName}
         conn={conn}
+      />
+    )
+  } else if (specName !== null) {
+    body = (
+      <SpecDetail
+        workspaceId={workspace.id}
+        specName={specName}
+        conn={conn}
+        folder={info?.folder ?? null}
       />
     )
   } else if (loopId !== null) {
@@ -154,6 +167,8 @@ export function WorkspacePage({ conn, workspace, info }: WorkspacePageProps) {
         <ProfilesSection workspaceId={workspace.id} conn={conn} folder={info?.folder ?? null} id="profiles" reveal={section === 'profiles'} />
 
         <PresetsSection workspaceId={workspace.id} conn={conn} id="presets" reveal={section === 'presets'} />
+
+        <SpecsSection workspaceId={workspace.id} conn={conn} id="specs" reveal={section === 'specs'} />
 
         <PromptsSection workspaceId={workspace.id} conn={conn} id="prompts" reveal={section === 'prompts'} />
 

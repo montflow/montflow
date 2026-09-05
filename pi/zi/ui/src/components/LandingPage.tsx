@@ -21,6 +21,10 @@ export const profileUrl = (workspaceId: string, profileName: string): string =>
 export const presetUrl = (workspaceId: string, presetName: string): string =>
   `/w/${encodeURIComponent(workspaceId)}/presets/${encodeURIComponent(presetName)}/`
 
+/** URL for a feature-spec details page: /w/<workspace-id>/specs/<name>/ */
+export const specUrl = (workspaceId: string, specName: string): string =>
+  `/w/${encodeURIComponent(workspaceId)}/specs/${encodeURIComponent(specName)}/`
+
 /** URL for a loop details page: /w/<workspace-id>/loops/<loop-id>/ */
 export const loopUrl = (workspaceId: string, loopId: string): string =>
   `/w/${encodeURIComponent(workspaceId)}/loops/${encodeURIComponent(loopId)}/`
@@ -69,6 +73,12 @@ export const profileNameFromPath = (pathname: string): string | null => {
 /** Extract the preset name from a /w/<id>/presets/<name>/ pathname (or null). */
 export const presetNameFromPath = (pathname: string): string | null => {
   const match = decodeURIComponent(pathname).match(/^\/w\/[^/]+\/presets\/([^/]+)\/?$/)
+  return match?.[1] ?? null
+}
+
+/** Extract the spec name from a /w/<id>/specs/<name>/ pathname (or null). */
+export const specNameFromPath = (pathname: string): string | null => {
+  const match = decodeURIComponent(pathname).match(/^\/w\/[^/]+\/specs\/([^/]+)\/?$/)
   return match?.[1] ?? null
 }
 

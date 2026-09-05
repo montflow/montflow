@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 
-export type PanelKey = 'skills' | 'profiles' | 'presets' | 'prompts' | 'loops' | 'runs'
+export type PanelKey = 'skills' | 'profiles' | 'presets' | 'specs' | 'prompts' | 'loops' | 'runs'
 
 /** Per-panel UI state persisted per workspace in localStorage. */
 export interface PanelPrefs {
@@ -22,6 +22,7 @@ const DEFAULTS: WorkspacePrefs = {
   skills: { open: true, query: '', chips: [], sort: [{ id: 'name', desc: false }] },
   profiles: { open: true, query: '', chips: [], sort: [{ id: 'name', desc: false }] },
   presets: { open: true, query: '', chips: [], sort: [{ id: 'name', desc: false }] },
+  specs: { open: true, query: '', chips: [], sort: [{ id: 'name', desc: false }] },
   prompts: { open: true, query: '', chips: [], sort: [{ id: 'name', desc: false }] },
   loops: { open: true, query: '', chips: [], sort: [{ id: 'name', desc: false }] },
   runs: { open: true, query: '', chips: [], sort: [{ id: 'name', desc: false }] },
@@ -36,6 +37,7 @@ const loadPrefs = (workspaceId: string): WorkspacePrefs => {
       skills: { ...DEFAULTS.skills, ...parsed.skills },
       profiles: { ...DEFAULTS.profiles, ...parsed.profiles },
       presets: { ...DEFAULTS.presets, ...parsed.presets },
+      specs: { ...DEFAULTS.specs, ...parsed.specs },
       prompts: { ...DEFAULTS.prompts, ...parsed.prompts },
       loops: { ...DEFAULTS.loops, ...parsed.loops },
       runs: { ...DEFAULTS.runs, ...parsed.runs },
