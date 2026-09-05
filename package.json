@@ -10,6 +10,9 @@
     "apps/*"
   ],
   "scripts": {
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "bun run --filter @montflow/format build && changeset publish",
     "test": "turbo test",
     "ts:check": "turbo ts:check",
     "format:check": "turbo format:check",
@@ -18,6 +21,8 @@
     "lint:fix": "turbo lint:fix"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.7.0",
+    "@changesets/cli": "^2.31.0",
     "oxfmt": "0.63.0",
     "oxlint": "1.78.0",
     "turbo": "^2.5.8"

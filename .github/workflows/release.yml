@@ -1,0 +1,115 @@
+# Effect-style release, adapted for Bun. Scoped to @montflow/format only
+# (see .changeset/config.json `ignore` list). Push to `main`:
+# - checks (test, typecheck, lint, format) run in parallel sharing one cache.
+# - PRs carrying a changeset file -> "Version Packages" PR is opened/updated.
+# - Merging that PR (all checks green) -> publishes to npm.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+permissions: {}
+
+jobs:
+  checks:
+    name: ${{ matrix.name }} (@montflow/format)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: test
+            script: test
+          - name: typecheck
+            script: ts:check
+          - name: lint
+            script: lint:check
+          - name: format
+            script: format:check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.13"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Restore Bun install cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-install-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run ${{ matrix.name }}
+        run: bun run --filter @montflow/format ${{ matrix.script }}
+
+  release:
+    name: Release
+    needs: [checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Required so the token below (not the default token) is used when
+          # pushing to the changesets release branch. Otherwise actions on
+          # that branch will not be triggered.
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.13"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Restore Bun install cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-install-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Upgrade npm for OIDC support
+        run: npm install -g npm@11
+
+      - name: Create Release Pull Request or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: bun run changeset:version
+          publish: bun run changeset:publish
+        env:
+          # PAT (not the automatic GITHUB_TOKEN) so workflows trigger on the
+          # changesets release branch. See README/getting-started for setup.
+          GITHUB_TOKEN: ${{ secrets.CHANGESET_GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

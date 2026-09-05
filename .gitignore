@@ -262,3 +262,7 @@ tmp/
 
 # --- montflow loop runtime state ---
 .agents/@montflow/loops
+
+# --- scratchpad (local only, keep dir shell) ---
+scratchpad/*
+!scratchpad/.gitkeep
