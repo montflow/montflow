@@ -65,5 +65,6 @@ If the user wants to read or analyze reference source, navigate to the reference
 | workers-oauth-provider | .agents/references/workers-oauth-provider | https://github.com/cloudflare/workers-oauth-provider |
 | effect-cf | .agents/references/effect-cf | https://github.com/jbt95/effect-cf |
 | vitest | .agents/references/vitest | https://github.com/vitest-dev/vitest |
+| anti-slop | .agents/references/anti-slop | https://github.com/dmmulroy/anti-slop.git |
 
 To add a new reference, use `adding-references` skill.
