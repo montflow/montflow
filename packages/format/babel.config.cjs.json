@@ -1,0 +1,14 @@
+{
+  "plugins": [
+    "@babel/plugin-transform-export-namespace-from",
+    "@babel/plugin-transform-modules-commonjs",
+    [
+      "replace-import-extension",
+      {
+        "extMapping": {
+          ".js": ".cjs"
+        }
+      }
+    ]
+  ]
+}

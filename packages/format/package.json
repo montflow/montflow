@@ -1,0 +1,72 @@
+{
+  "name": "@montflow/format",
+  "version": "0.0.1",
+  "private": false,
+  "description": "ANSI terminal text formatting with an Effect Pipeable API",
+  "keywords": [
+    "ansi",
+    "effect",
+    "format",
+    "terminal"
+  ],
+  "bugs": {
+    "url": "https://github.com/montflow/montflow/issues"
+  },
+  "license": "MIT",
+  "author": "Daniel Montilla",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/montflow/montflow.git",
+    "directory": "packages/format"
+  },
+  "files": [
+    "build",
+    "src"
+  ],
+  "type": "module",
+  "main": "./build/cjs/index.cjs",
+  "module": "./build/esm/index.js",
+  "types": "./build/dts/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./build/dts/index.d.ts",
+      "import": "./build/esm/index.js",
+      "default": "./build/cjs/index.cjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "bun run build-esm && bun run build-annotate && bun run build-cjs",
+    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
+    "build-cjs": "babel build/esm --config-file ./babel.config.cjs.json --out-dir build/cjs --out-file-extension .cjs --source-maps",
+    "build-esm": "tsc -b tsconfig.build.json",
+    "format:check": "oxfmt --check .",
+    "format:fix": "oxfmt .",
+    "lint:check": "oxlint --deny-warnings .",
+    "lint:fix": "oxlint . --fix",
+    "release": "bun run build && bun publish --access public",
+    "test": "vitest run --typecheck --passWithNoTests",
+    "ts:check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.24.8",
+    "@babel/core": "^7.25.2",
+    "@babel/plugin-transform-export-namespace-from": "^7.24.7",
+    "@babel/plugin-transform-modules-commonjs": "^7.24.8",
+    "@effect/vitest": "4.0.0-rc.112",
+    "@types/node": "^26.1.2",
+    "babel-plugin-annotate-pure-calls": "^0.5.0",
+    "babel-plugin-replace-import-extension": "^1.1.5",
+    "effect": "^4.0.0-rc.112",
+    "oxfmt": "0.63.0",
+    "oxlint": "1.78.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.0.15"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0-rc.112"
+  }
+}
