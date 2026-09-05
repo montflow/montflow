@@ -1,5 +1,8 @@
 {
   "packages": [
-    "../pi/zi"
+    "../pi/zi",
+    "https://github.com/nicobailon/pi-subagents",
+    "../packages/pi-prompts",
+    "../packages/pi-skills"
   ]
 }
