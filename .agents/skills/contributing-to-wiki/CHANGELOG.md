@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.2.0] - 2026-09-04
+
+### Added
+
+- New "Attitude" block and pipeline section 3 enforcing that wiki pages are final outputs, not planning documents
+- "What a wiki page IS NOT" table listing forbidden sections (Decisions, Roadmap, Next steps, page-update notes, in-page Author/Changelog, Asking-the-reviewer, planning prerequisites)
+- Verification step 6: scan for forbidden-section keywords and remove them; step 7: no standalone `# Title` header before the value statement
+- Reference pointers to SKILL.md and existing wiki/ pages as living examples
+
+### Changed
+
+- Version bump 1.1.0 → 1.2.0
+- Description updated to state "final outputs that state what a thing does, nothing more"
+
 ## [1.1.0] - 2026-08-30
 
 ### Changed
