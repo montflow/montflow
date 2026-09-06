@@ -11,8 +11,6 @@
     "@montflow/stlx",
     "@montflow/linting",
     "@montflow/pi-effect",
-    "@montflow/pi-interactive",
-    "@montflow/pi-notifications",
     "@montflow/pi-profiles",
     "@montflow/pi-prompts",
     "@montflow/pi-runs",
