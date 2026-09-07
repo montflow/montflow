@@ -2,7 +2,7 @@
   "name": "@montflow/pi-profiles",
   "version": "0.0.1",
   "private": true,
-  "description": "Effect-first agent profile primitives for Pi extensions (profile descriptors, slug names)",
+  "description": "Effect-first agent profile primitives for Pi extensions (profiles, PROFILE.md store, /mf-profiles interactive flows)",
   "keywords": [
     "effect",
     "pi",
@@ -31,18 +31,29 @@
     "test": "vitest run --typecheck",
     "ts:check": "tsc --noEmit"
   },
+  "dependencies": {
+    "@effect/platform-node": "4.0.0-rc.112",
+    "@montflow/pi-effect": "workspace:*",
+    "@montflow/pi-interactive": "workspace:*"
+  },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.84.0",
+    "@earendil-works/pi-tui": "^0.84.2",
     "@effect/vitest": "4.0.0-rc.112",
     "@types/node": "^26.1.2",
     "effect": "^4.0.0-rc.112",
     "oxfmt": "0.63.0",
     "oxlint": "1.78.0",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.0.15"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "effect": "^4.0.0-rc.112"
+  },
+  "pi": {
+    "extensions": [
+      "./src/extension.ts"
+    ]
   }
 }
