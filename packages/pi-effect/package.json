@@ -38,7 +38,7 @@
     "effect": "^4.0.0-rc.112",
     "oxfmt": "0.63.0",
     "oxlint": "1.78.0",
-    "typescript": "^5.9.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.0.15"
   },
   "peerDependencies": {
