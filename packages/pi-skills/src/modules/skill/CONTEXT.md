@@ -14,7 +14,13 @@ stutter becomes painful — that rename is one `mv` plus index edits.
 
 - `Id`, `Skill` class plus boundary helpers
 - `decodeUnknown`, `encode` for `SKILL.md` frontmatter
+- Frontmatter parser (`parseSkillFile`, `fieldString`, `fieldStrings`) — one grammar shared by the store and the verifier
+- Mechanical verification (`verifySkillFile`, `verifyInfoLine`): required frontmatter plus `# When To Use` / `# Pipeline` / `# Reference` shape; style stays a review concern
 - Slug helpers for skill names (`isValidName`, `slugify`)
+- Requirement verification for agentic runs (`GENERATION_REQUIREMENTS`,
+  `MODIFICATION_REQUIREMENTS`, `checkRequirements`, `missingRequirements`,
+  `findInstalled`, `resolveInjection`, `formatInjectedSkills`) — pure,
+  adapter-agnostic: every UI (interactive, RPC, web) checks through these
 
 ## Does not belong here
 

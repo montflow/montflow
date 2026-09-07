@@ -1,8 +1,11 @@
+// eslint-disable-next-line montflow/no-node-platform-imports -- composition root shells out to the skills CLI; migrate to Command when the installer moves onto the layer graph.
+import { execFile } from 'node:child_process';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { DynamicBorder } from '@earendil-works/pi-coding-agent';
 import { Container, Input, Key, SelectList, Text, matchesKey } from '@earendil-works/pi-tui';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { AgentRun } from '@montflow/pi-effect';
+import { Loading, Menu, ModelPicker } from '@montflow/pi-interactive';
 import { Effect, Layer } from 'effect';
 import { FileSystem } from 'effect/FileSystem';
 import { Path } from 'effect/Path';
@@ -18,90 +21,13 @@ export const skillsDir = (path: Path, cwd: string): string => path.join(cwd, '.a
 /** Failure value for store reads/writes. Surfaced through `SkillStore` as strings. */
 export const storeError = (message: string): string => message;
 
-/** One frontmatter value: a scalar `key: value` line or a `- item` list. */
-type FieldValue = string | Array<string>;
-
-/** Parsed frontmatter fields plus the markdown body after the block. */
-export interface ParsedSkillFile {
-  readonly fields: Record<string, FieldValue>;
-  readonly body: string;
-}
-
 /**
- * Read one scalar field. Lists and missing keys read as undefined so the
- * caller falls back (directory name, empty string).
- * @param fields - parsed frontmatter fields
- * @param key - field name
- * @returns the scalar value, if present
+ * Frontmatter parser, re-exported from the pure skill module so the
+ * verifier and the store share one grammar.
  */
-const fieldString = (fields: Record<string, FieldValue>, key: string): string | undefined => {
-  const value = fields[key];
-  if (value === undefined || Array.isArray(value)) return undefined;
-  return value;
-};
-
-/**
- * Read one list field. Scalars and missing keys read as empty.
- * @param fields - parsed frontmatter fields
- * @param key - field name
- * @returns non-blank items
- */
-const fieldStrings = (fields: Record<string, FieldValue>, key: string): ReadonlyArray<string> => {
-  const value = fields[key];
-  if (!Array.isArray(value)) return [];
-  return value.filter((item) => item.trim() !== '');
-};
-
-/**
- * Parse the frontmatter subset `zi` writes: scalar `key: value` lines plus
- * blank-value keys followed by `  - item` list lines. `#` comment lines
- * skip. Returns null when no `---` block opens the file.
- * @param markdown - raw SKILL.md contents
- * @returns frontmatter fields plus body, or null
- */
-export const parseSkillFile = (markdown: string): ParsedSkillFile | null => {
-  const lines = markdown.split(/\r?\n/);
-  if ((lines[0] ?? '').trim() !== '---') return null;
-  let endIndex = -1;
-  for (let index = 1; index < lines.length; index++) {
-    if ((lines[index] ?? '').trim() === '---') {
-      endIndex = index;
-      break;
-    }
-  }
-  if (endIndex === -1) return null;
-  const fields: Record<string, FieldValue> = {};
-  const fmLines = lines.slice(1, endIndex);
-  let index = 0;
-  while (index < fmLines.length) {
-    const trimmed = (fmLines[index] ?? '').trim();
-    index++;
-    if (trimmed === '' || trimmed.startsWith('#')) continue;
-    const match = /^([\w-]+):\s*(.*)$/.exec(trimmed);
-    if (match === null) continue;
-    const key = match[1] ?? '';
-    const rawValue = (match[2] ?? '').trim();
-    if (rawValue === '') {
-      const items: Array<string> = [];
-      while (index < fmLines.length) {
-        const listMatch = /^[ \t]+-\s+(.+)$/.exec(fmLines[index] ?? '');
-        if (listMatch === null) break;
-        items.push((listMatch[1] ?? '').trim());
-        index++;
-      }
-      fields[key] = items;
-    } else {
-      fields[key] = rawValue;
-    }
-  }
-  return {
-    fields,
-    body: lines
-      .slice(endIndex + 1)
-      .join('\n')
-      .trim(),
-  };
-};
+export const parseSkillFile = Skill.parseSkillFile;
+export type ParsedSkillFile = Skill.ParsedSkillFile;
+export type FieldValue = Skill.FieldValue;
 
 /**
  * Decode one `SKILL.md` file into a `Skill`. The directory name is the id;
@@ -114,18 +40,18 @@ export const decodeSkillFile = (
   dirName: string,
   markdown: string,
 ): Effect.Effect<Skill.Skill, string> => {
-  const parsed = parseSkillFile(markdown);
+  const parsed = Skill.parseSkillFile(markdown);
   if (parsed === null) return Effect.fail(`Malformed SKILL.md in '${dirName}'.`);
   const { fields, body } = parsed;
-  const rawName = fieldString(fields, 'name');
+  const rawName = Skill.fieldString(fields, 'name');
   const name = rawName === undefined || rawName === '' ? dirName : rawName;
-  const description = fieldString(fields, 'description') ?? '';
+  const description = Skill.fieldString(fields, 'description') ?? '';
   return Skill.decodeUnknown({
     id: dirName,
     name,
     description,
-    groups: fieldStrings(fields, 'groups'),
-    dependencies: fieldStrings(fields, 'dependencies'),
+    groups: Skill.fieldStrings(fields, 'groups'),
+    dependencies: Skill.fieldStrings(fields, 'dependencies'),
     body,
   }).pipe(Effect.mapError(() => `Invalid skill '${dirName}'.`));
 };
@@ -229,11 +155,37 @@ export const remove = (dir: string, id: string): Effect.Effect<void, string, Fil
  * @param cwd - project working directory
  * @returns store reading/writing `<cwd>/.agents/skills/<slug>/SKILL.md`
  */
+/**
+ * Read one skill's raw `SKILL.md` file for mechanical verification.
+ * The id is slug-validated so it can never escape `.agents/skills/`.
+ * @param dir - absolute skills directory
+ * @param id - skill directory slug
+ * @returns Effect resolving to the raw file contents, failing on unknown ids
+ */
+export const readRaw = (
+  dir: string,
+  id: string,
+): Effect.Effect<string, string, FileSystem | Path> =>
+  Effect.gen(function* () {
+    if (!Skill.isValidName(id)) return yield* Effect.fail(`Unknown skill '${id}'.`);
+    const fs = yield* FileSystem;
+    const path = yield* Path;
+    const file = path.join(dir, id, 'SKILL.md');
+    const raw = yield* fs.readFileString(file).pipe(Effect.orElseSucceed(() => undefined));
+    if (raw === undefined) return yield* Effect.fail(`Unknown skill '${id}'.`);
+    return raw;
+  });
+
 const storeFor = (cwd: string): Interactive.SkillStore => ({
   list: () =>
     Effect.gen(function* () {
       const path = yield* Path;
       return yield* list(skillsDir(path, cwd));
+    }).pipe(Effect.provide(NodeLive)),
+  readRaw: (id) =>
+    Effect.gen(function* () {
+      const path = yield* Path;
+      return yield* readRaw(skillsDir(path, cwd), id);
     }).pipe(Effect.provide(NodeLive)),
   save: (skill) =>
     Effect.gen(function* () {
@@ -311,7 +263,7 @@ const generateFor =
       const beforeIds = new Set(before.map((skill) => skill.id));
       yield* AgentRun.runAgent({
         cwd,
-        preprompt: AUTHOR_PREPROMPT,
+        preprompt: AUTHOR_PREPROMPT + Skill.formatInjectedSkills(input.inject),
         prompt: `Skill description: ${input.description}`,
         postprompt: AUTHOR_POSTPROMPT,
         modelLabel: input.modelLabel,
@@ -329,6 +281,167 @@ const generateFor =
       }
       return fresh;
     }).pipe(Effect.provide(NodeLive));
+
+/**
+ * Instructions before the change request: the child agent edits exactly
+ * the named skill in place, then stops. Transported as the preprompt.
+ */
+export const MODIFY_PREPROMPT =
+  'You are a skill editor for a pi coding agent. Edit exactly the skill named below, then stop. ' +
+  'Do not ask follow-up questions — work from the change request as given. ' +
+  'Do not rename the skill directory. Keep frontmatter keys valid (name/description required; groups/dependencies optional). ' +
+  'Keep the description saying WHEN to use the skill. Do not touch anything outside that skill directory.';
+
+/**
+ * Instructions after the change request: the reply shape.
+ * Transported as the postprompt.
+ */
+export const MODIFY_POSTPROMPT =
+  'When done, reply with one short line: the skill name and what changed.';
+
+/**
+ * Agentic skill modification for a working directory: runs the generic
+ * {@link AgentRun.runAgent} scoped to the existing skill directory,
+ * then re-reads that SKILL.md. The id is slug-validated on read-back,
+ * so the agent cannot redirect the result elsewhere.
+ * @param cwd - project working directory
+ * @returns modifier port for the interactive flows
+ */
+const modifyFor =
+  (cwd: string): Interactive.SkillModifier =>
+  (input) =>
+    Effect.gen(function* () {
+      const path = yield* Path;
+      const dir = skillsDir(path, cwd);
+      yield* AgentRun.runAgent({
+        cwd,
+        preprompt:
+          MODIFY_PREPROMPT +
+          '\n\nSkill to edit: ' +
+          input.skill.id +
+          Skill.formatInjectedSkills(input.inject),
+        prompt: 'Change request: ' + input.instruction,
+        postprompt: MODIFY_POSTPROMPT,
+        modelLabel: input.modelLabel,
+        tools: ['read', 'write', 'edit'],
+      }).pipe(
+        Effect.mapError((error) => error.message),
+        Effect.provide(AgentRuntimeLive),
+      );
+      const after = yield* list(dir);
+      const updated = after.find((skill) => skill.id === input.skill.id);
+      if (updated === undefined) {
+        return yield* Effect.fail(
+          'The agent finished without updating the skill — try describing the change differently.',
+        );
+      }
+      return updated;
+    }).pipe(Effect.provide(NodeLive));
+
+/**
+ * Instructions before the fix request: the child agent brings exactly the
+ * named skill into the standard format, then stops. Transported as the
+ * preprompt.
+ */
+export const TRANSFORM_PREPROMPT =
+  'You are a skill editor for a pi coding agent. Bring exactly the skill named below ' +
+  'into the standard skill format, then stop. Do not ask follow-up questions. ' +
+  'Keep what the skill teaches unchanged — fix the shape only: frontmatter must have ' +
+  'name (matching the directory), description (1-2 sentences saying WHEN to use the skill), ' +
+  'id (keep the existing 16-hex value unchanged), author, version (SemVer), ' +
+  'plus groups/dependencies lists when non-empty; ' +
+  'the body must have `# When To Use`, `# Pipeline`, and `# Reference` sections. ' +
+  'Do not rename the skill directory. Do not touch anything outside that skill directory.';
+
+/**
+ * Instructions after the fix request: the reply shape.
+ * Transported as the postprompt.
+ */
+export const TRANSFORM_POSTPROMPT =
+  'When done, reply with one short line: the skill name and what was fixed.';
+
+/**
+ * Agentic skill format-transform for a working directory: runs the generic
+ * {@link AgentRun.runAgent} scoped to the existing skill directory with a
+ * fixed format-fix instruction, then re-reads that SKILL.md. Same shape as
+ * the modify port, so the interactive flows reuse `SkillModifier`.
+ * @param cwd - project working directory
+ * @returns transformer port for the interactive detail menu
+ */
+const transformFor =
+  (cwd: string): Interactive.SkillModifier =>
+  (input) =>
+    Effect.gen(function* () {
+      const path = yield* Path;
+      const dir = skillsDir(path, cwd);
+      yield* AgentRun.runAgent({
+        cwd,
+        preprompt:
+          TRANSFORM_PREPROMPT +
+          '\n\nSkill to fix: ' +
+          input.skill.id +
+          Skill.formatInjectedSkills(input.inject),
+        prompt: 'Fix request: ' + input.instruction,
+        postprompt: TRANSFORM_POSTPROMPT,
+        modelLabel: input.modelLabel,
+        tools: ['read', 'write', 'edit'],
+      }).pipe(
+        Effect.mapError((error) => error.message),
+        Effect.provide(AgentRuntimeLive),
+      );
+      const after = yield* list(dir);
+      const updated = after.find((skill) => skill.id === input.skill.id);
+      if (updated === undefined) {
+        return yield* Effect.fail('The agent finished without updating the skill — try again.');
+      }
+      return updated;
+    }).pipe(Effect.provide(NodeLive));
+
+/**
+ * Install skills into the workspace via the `skills` CLI (same mechanism
+ * as the syncing-skills flow): `npx skills add montflow/montflow`.
+ * @param cwd - project working directory (project-local install target)
+ * @param names - skill names to install
+ * @returns Effect completing once installed, failing with CLI output
+ */
+const runSkillsInstall = (cwd: string, names: ReadonlyArray<string>): Promise<void> =>
+  new Promise((resolve, reject) => {
+    if (names.length === 0) {
+      resolve();
+      return;
+    }
+    const args = [
+      'skills',
+      'add',
+      'montflow/montflow',
+      ...names.flatMap((name) => ['-s', name]),
+      '-a',
+      'pi',
+      '-y',
+    ];
+    execFile('npx', args, { cwd, timeout: 180_000 }, (error, _stdout, stderr) => {
+      if (error !== null) {
+        reject(new Error(`${error.message}\n${String(stderr).slice(-2000)}`));
+        return;
+      }
+      resolve();
+    });
+  });
+
+/**
+ * Skill installer for a working directory: missing requirement skills via
+ * the `skills` CLI, project-local to `<cwd>/.agents/skills/`.
+ * @param cwd - project working directory
+ * @returns installer port for the interactive flows
+ */
+const installerFor =
+  (cwd: string): Interactive.SkillInstaller =>
+  (names) =>
+    Effect.tryPromise({
+      try: () => runSkillsInstall(cwd, names),
+      catch: (error) =>
+        `Skill install failed: ${error instanceof Error ? error.message : String(error)}`,
+    });
 
 /**
  * Live filter-as-you-type picker: an input row over a scrollable list.
@@ -413,9 +526,30 @@ export const filterSelectDialog = (
  * @returns Nothing
  */
 export default function piSkillsExtension(pi: ExtensionAPI): void {
-  Interactive.register(pi, storeFor, generateFor, (ctx) =>
-    ctx.mode === 'tui'
-      ? (title, dialogOptions) => filterSelectDialog(ctx.ui, title, dialogOptions)
-      : undefined,
+  Interactive.register(
+    pi,
+    storeFor,
+    generateFor,
+    modifyFor,
+    installerFor,
+    (ctx) =>
+      ctx.mode === 'tui'
+        ? (title, dialogOptions) => filterSelectDialog(ctx.ui, title, dialogOptions)
+        : undefined,
+    (ctx) =>
+      ctx.mode === 'tui'
+        ? (models) => Effect.runPromise(ModelPicker.modelPickerDialog(ctx.ui, models))
+        : undefined,
+    (ctx) =>
+      ctx.mode === 'tui'
+        ? <A, E>(message: string, self: Effect.Effect<A, E, never>) =>
+            Loading.run(ctx.ui, message, self)
+        : undefined,
+    (ctx) =>
+      ctx.mode === 'tui'
+        ? (title: string, info: ReadonlyArray<string>, options: ReadonlyArray<string>) =>
+            Menu.menuDialog(ctx.ui, title, options, info)
+        : undefined,
+    transformFor,
   );
 }
