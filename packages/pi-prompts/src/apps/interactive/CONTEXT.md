@@ -16,7 +16,12 @@ codecs, and the store service stay out (`modules/`, `services/`).
   provided as `live` at invocation — no injected port object
 - Manual vs agentic create/modify (`createAgentic`, `modifyAgentic`) over
   injected generator/modifier ports, with a model picker
-  (`resolveModelOptions`, `pickModel`) mirroring `pi-skills`
+  (`resolveModelOptions`, `pickModel` with a bottom `Pick another model…`
+  entry, `pickAgenticModel`) mirroring `pi-skills`
+- TUI ports (`FilterUi`, `ModelPickerFn` widget with the current session
+  model pinned and single-keystroke keep, `CommandEnv`) wired in
+  `register` via `searchFor`/`modelPickerFor` factories — same shape as
+  `pi-skills`
 
 ## Does not belong here
 

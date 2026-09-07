@@ -1,4 +1,5 @@
 import { AgentRun } from '@montflow/pi-effect';
+import { ModelPicker, PiInteractive } from '@montflow/pi-interactive';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Effect, Layer } from 'effect';
@@ -23,18 +24,24 @@ export const AUTHOR_PREPROMPT = `You are a prompt author for a pi coding agent.
 Create exactly one new prompt file following the format below, then stop. Do not
 ask follow-up questions — work from the description as given.
 
-The file is JSON with these fields:
+The file is valid JSON (double quotes, no comments, no trailing commas)
+with these fields:
 - name: kebab-case file slug (also the file name)
-- description: one line saying what the prompt does
+- description: one non-empty line saying what the prompt does
 - template: the prompt text with {{variable}} placeholders for user-supplied values
-- variables: ordered list of variable names used in the template
+- variables: ordered list of variable names used in the template, in
+  first-appearance order
 - skills: list of skill names the run should load (empty when none)
 - model: preferred model as provider/model-id, or '' when unset
 
 Rules:
 - Write the new prompt at .agents/@montflow/pi-prompts/<name>.json (choose a
   kebab-case <name> that fits the description), with all six fields present.
+  The file name must equal the name field plus '.json'.
 - Every {{token}} in the template must appear in variables, and vice versa.
+- List .agents/skills/ and read each SKILL.md frontmatter 'name:' before
+  listing a skill — reference existing skills only, otherwise leave skills
+  empty.
 - If a prompt with that name already exists, pick a fresh name instead.
 - Do not touch anything outside .agents/@montflow/pi-prompts/.`;
 
@@ -57,8 +64,13 @@ follow-up questions — work from the change as given.
 
 Rules:
 - Edit only the named file under .agents/@montflow/pi-prompts/.
-- Keep every {{token}} in the template covered by variables, and vice versa.
-- Do not rename the file. Do not touch anything else.`;
+- Keep every {{token}} in the template covered by variables, and vice versa,
+  with variables in first-appearance order.
+- Do not rename the file and do not change the 'name' field. Do not touch
+  anything else.
+- Keep the file valid JSON (double quotes, no comments, no trailing commas).
+- Reference existing skills only (check .agents/skills/ SKILL.md frontmatter
+  'name:' values); drop unknown names instead of inventing them.`;
 
 /**
  * Instructions after the change request: the reply shape.
@@ -156,7 +168,21 @@ const modifyFor =
  */
 export default function piPromptsExtension(pi: ExtensionAPI): Promise<void> {
   return Effect.gen(function* () {
-    yield* Interactive.register(pi, Live, generateFor, modifyFor);
+    yield* Interactive.register(
+      pi,
+      Live,
+      generateFor,
+      modifyFor,
+      (ctx) =>
+        ctx.mode === 'tui'
+          ? (title, dialogOptions) =>
+              Effect.runPromise(PiInteractive.filterSelectDialog(ctx.ui, title, dialogOptions))
+          : undefined,
+      (ctx) =>
+        ctx.mode === 'tui'
+          ? (models) => Effect.runPromise(ModelPicker.modelPickerDialog(ctx.ui, models))
+          : undefined,
+    );
     yield* Cli.register(pi, Live);
   }).pipe(Effect.runPromise);
 }

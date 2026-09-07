@@ -1,5 +1,5 @@
 import { PiEffect } from '@montflow/pi-effect';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 import { Effect, Layer } from 'effect';
 import * as Prompts from '../../modules/prompts/index.js';
 import { PromptStore } from '../../services/index.js';
@@ -9,11 +9,11 @@ export const COMMAND_NAME = 'mf-prompts';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Manage prompt templates interactively: list, create, show, modify, or render a prompt.';
+  'Browse, create (manually or with an agent), show, modify (manually or with an agent), fill & render workspace prompts.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-prompts [list | create [name] | show <name> | modify [name] | render <name> [key=value ...] | help]';
+  '/mf-prompts [browse | list | create [name] | show <name> | modify [name] | render <name> [key=value ...] | help]';
 
 /** Failure value when the user cancels a dialog. Notified as info, not an error. */
 export const CANCELLED = 'Cancelled.';
@@ -27,11 +27,34 @@ export interface InteractiveUi {
   readonly confirm: (title: string, message: string) => Promise<boolean>;
   readonly input: (title: string, placeholder?: string) => Promise<string | undefined>;
   readonly notify: (message: string, type?: 'info' | 'warning' | 'error') => void;
+  /** Live filter-as-you-type picker. Absent outside the TUI (falls back to input+select). */
+  readonly searchSelect?: (title: string, options: string[]) => Promise<string | undefined>;
+}
+
+/** UI surface available where custom TUI components can render (TUI mode). */
+export interface FilterUi extends InteractiveUi {
+  readonly custom: ExtensionUIContext['custom'];
+}
+
+/**
+ * TUI model picker port the consuming extension injects (search UI with the
+ * current session model pinned). Absent outside the TUI (falls back to the
+ * menu-driven `pickModel`).
+ */
+export type ModelPickerFn = (models: ReadonlyArray<ModelOption>) => Promise<string | undefined>;
+
+/** Command environment: dialogs, cwd, resolved picker options, and TUI ports. */
+export interface CommandEnv {
+  readonly ui: InteractiveUi;
+  readonly cwd: string;
+  readonly models: ReadonlyArray<ModelOption>;
+  readonly modelPicker: ModelPickerFn | undefined;
 }
 
 /** Parsed `/mf-prompts` invocation. */
 export type Action =
   | { readonly kind: 'Menu' }
+  | { readonly kind: 'Browse' }
   | { readonly kind: 'List' }
   | { readonly kind: 'Help' }
   | { readonly kind: 'Create'; readonly name: string | undefined }
@@ -88,6 +111,8 @@ export const parseAction = (args: string): Action => {
   const head = tokens[0];
   if (head === undefined) return { kind: 'Menu' };
   switch (head) {
+    case 'browse':
+      return { kind: 'Browse' };
     case 'list':
       return { kind: 'List' };
     case 'create':
@@ -273,9 +298,29 @@ export const matchesFilter = (label: string, query: string): boolean => {
 const displayModel = (option: ModelOption): string =>
   option.current ? `${option.label} (current)` : option.label;
 
+/** Bottom menu entry opening the filter step. */
+export const PICK_ANOTHER = 'Pick another model…';
+
 /**
- * Model picker: filter input for long lists, then select. The current
- * session model stays first so Enter-picking stays one step.
+ * Map a picked display label back to its model label.
+ * @param models - picker options
+ * @param picked - display label from a dialog
+ * @returns Effect resolving to the model label, failing on unknown picks
+ */
+const modelLabelFor = (
+  models: ReadonlyArray<ModelOption>,
+  picked: string,
+): Effect.Effect<string, string> => {
+  const match = models.find((option) => displayModel(option) === picked || option.label === picked);
+  if (match === undefined) return Effect.fail(`Unknown model ${picked}.`);
+  return Effect.succeed(match.label);
+};
+
+/**
+ * Model picker menu: the current model first and a bottom
+ * `Pick another model…` entry. The filter step uses the live
+ * search dialog when provided, else input-then-select.
+ * Non-TUI path — the TUI uses the injected `ModelPickerFn` widget instead.
  * @param ui - Pi ui dialogs
  * @param models - picker options from {@link resolveModelOptions}
  * @returns Effect resolving to the picked label, failing on cancel or no match
@@ -285,50 +330,86 @@ export const pickModel = (
   models: ReadonlyArray<ModelOption>,
 ): Effect.Effect<string, string> =>
   Effect.gen(function* () {
-    let candidates = models;
-    if (models.length > 6) {
-      const entered = yield* Effect.promise(() => ui.input('Filter models', 'sonnet'));
-      if (entered === undefined) return yield* Effect.fail(CANCELLED);
-      const query = entered.trim();
-      if (query !== '') {
-        candidates = models.filter((option) => matchesFilter(option.label, query));
-        if (candidates.length === 0) return yield* Effect.fail(`No models match '${query}'.`);
-      }
+    const first = yield* Effect.promise(() =>
+      ui.select('Model for the authoring run', [...models.map(displayModel), PICK_ANOTHER]),
+    );
+    if (first === undefined) return yield* Effect.fail(CANCELLED);
+    if (first !== PICK_ANOTHER) return yield* modelLabelFor(models, first);
+    const search = ui.searchSelect;
+    if (search !== undefined) {
+      const picked = yield* Effect.promise(() => search('Filter models', models.map(displayModel)));
+      if (picked === undefined) return yield* Effect.fail(CANCELLED);
+      return yield* modelLabelFor(models, picked);
     }
+    const entered = yield* Effect.promise(() => ui.input('Filter models', 'sonnet'));
+    if (entered === undefined) return yield* Effect.fail(CANCELLED);
+    const query = entered.trim();
+    const candidates =
+      query === '' ? models : models.filter((option) => matchesFilter(option.label, query));
+    if (candidates.length === 0) return yield* Effect.fail(`No models match ${query}.`);
     const picked = yield* Effect.promise(() =>
       ui.select('Model for the authoring run', candidates.map(displayModel)),
     );
     if (picked === undefined) return yield* Effect.fail(CANCELLED);
-    const match = candidates.find((option) => displayModel(option) === picked);
-    if (match === undefined) return yield* Effect.fail(`Unknown model '${picked}'.`);
-    return match.label;
+    return yield* modelLabelFor(candidates, picked);
+  });
+
+/**
+ * Pick the authoring model for an agentic run: session model when the
+ * catalogue is empty, the injected TUI widget when provided (current
+ * session model pinned first, single-keystroke keep), else the
+ * menu-driven `pickModel`. Notifies the chosen runtime.
+ * @param ui - Pi ui dialogs
+ * @param models - picker options from {@link resolveModelOptions}
+ * @param modelPicker - TUI widget port, if available
+ * @param verb - progress verb phrase (e.g. `Generating prompt`)
+ * @returns Effect resolving to the picked label (undefined = session model)
+ */
+export const pickAgenticModel = (
+  ui: InteractiveUi,
+  models: ReadonlyArray<ModelOption>,
+  modelPicker: ModelPickerFn | undefined,
+  verb: string,
+): Effect.Effect<string | undefined, string> =>
+  Effect.gen(function* () {
+    if (models.length === 0) {
+      yield* Effect.sync(() => ui.notify(`${verb} with the session model…`, 'info'));
+      return undefined;
+    }
+    if (modelPicker !== undefined) {
+      const picked = yield* Effect.promise(() => modelPicker(models));
+      if (picked === undefined) return yield* Effect.fail(CANCELLED);
+      yield* Effect.sync(() => ui.notify(`${verb} with ${picked}…`, 'info'));
+      return picked;
+    }
+    const picked = yield* pickModel(ui, models);
+    yield* Effect.sync(() => ui.notify(`${verb} with ${picked}…`, 'info'));
+    return picked;
   });
 
 /**
  * Agentic create flow: describe the prompt, pick the authoring model
  * (current session model first), then run the injected generator.
+ * Uses the injected TUI widget when provided, else the menu-driven
+ * `pickModel`.
  * @param ui - Pi ui dialogs
  * @param models - picker options from {@link resolveModelOptions}
  * @param generate - injected agentic generation port
+ * @param modelPicker - TUI widget port, if available
  * @returns Effect resolving to the generated prompt, failing on cancel or agent errors
  */
 export const createAgentic = (
   ui: InteractiveUi,
   models: ReadonlyArray<ModelOption>,
   generate: PromptGenerator,
+  modelPicker?: ModelPickerFn | undefined,
 ): Effect.Effect<Prompts.Prompt, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const entered = yield* Effect.promise(() => ui.input('Describe the prompt'));
     if (entered === undefined) return yield* Effect.fail(CANCELLED);
     const description = entered.trim();
     if (description === '') return yield* Effect.fail('Description must not be empty.');
-    let modelLabel: string | undefined;
-    if (models.length > 0) {
-      modelLabel = yield* pickModel(ui, models);
-      yield* Effect.sync(() => ui.notify(`Generating prompt with ${modelLabel}…`, 'info'));
-    } else {
-      yield* Effect.sync(() => ui.notify('Generating prompt with the session model…', 'info'));
-    }
+    const modelLabel = yield* pickAgenticModel(ui, models, modelPicker, 'Generating prompt');
     return yield* generate({ description, modelLabel });
   });
 
@@ -345,13 +426,15 @@ export const createPrompt = (
   models: ReadonlyArray<ModelOption>,
   generate: PromptGenerator,
   name: string | undefined,
+  modelPicker?: ModelPickerFn | undefined,
 ): Effect.Effect<Prompts.Prompt, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const mode = yield* Effect.promise(() =>
-      ui.select('Create prompt', ['Create manually', 'Create with agent']),
+      ui.select('Create prompt', ['Create with agent', 'Create manually']),
     );
     if (mode === undefined) return yield* Effect.fail(CANCELLED);
-    if (mode === 'Create with agent') return yield* createAgentic(ui, models, generate);
+    if (mode === 'Create with agent')
+      return yield* createAgentic(ui, models, generate, modelPicker);
     return yield* createManual(ui, name);
   });
 
@@ -400,12 +483,15 @@ export const modifyManual = (
   });
 
 /**
- * Agentic modify flow: describe the change, pick the authoring model, then
- * run the injected modifier.
+ * Agentic modify flow: describe the change, pick the authoring model
+ * (current session model first), then run the injected modifier.
+ * Uses the injected TUI widget when provided, else the menu-driven
+ * `pickModel` — same picker as {@link createAgentic}.
  * @param ui - Pi ui dialogs
  * @param prompt - prompt under edit
  * @param models - picker options from {@link resolveModelOptions}
  * @param modify - injected agentic modification port
+ * @param modelPicker - TUI widget port, if available
  * @returns Effect resolving to the updated prompt, failing on cancel or agent errors
  */
 export const modifyAgentic = (
@@ -413,19 +499,14 @@ export const modifyAgentic = (
   prompt: Prompts.Prompt,
   models: ReadonlyArray<ModelOption>,
   modify: PromptModifier,
+  modelPicker?: ModelPickerFn | undefined,
 ): Effect.Effect<Prompts.Prompt, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const entered = yield* Effect.promise(() => ui.input(`Change to '${prompt.name}'`));
     if (entered === undefined) return yield* Effect.fail(CANCELLED);
     const change = entered.trim();
     if (change === '') return yield* Effect.fail('Change must not be empty.');
-    let modelLabel: string | undefined;
-    if (models.length > 0) {
-      modelLabel = yield* pickModel(ui, models);
-      yield* Effect.sync(() => ui.notify(`Updating prompt with ${modelLabel}…`, 'info'));
-    } else {
-      yield* Effect.sync(() => ui.notify('Updating prompt with the session model…', 'info'));
-    }
+    const modelLabel = yield* pickAgenticModel(ui, models, modelPicker, 'Updating prompt');
     return yield* modify({ name: prompt.name, change, modelLabel });
   });
 
@@ -445,6 +526,7 @@ export const modifyPrompt = (
   models: ReadonlyArray<ModelOption>,
   modify: PromptModifier,
   name: string | undefined,
+  modelPicker?: ModelPickerFn | undefined,
 ): Effect.Effect<Prompts.Prompt, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     let resolved = name;
@@ -462,10 +544,11 @@ export const modifyPrompt = (
     const prompt = prompts.find((candidate) => candidate.name === resolved);
     if (prompt === undefined) return yield* Effect.fail(`Unknown prompt '${resolved}'.`);
     const mode = yield* Effect.promise(() =>
-      ui.select('Modify prompt', ['Modify manually', 'Modify with agent']),
+      ui.select('Modify prompt', ['Modify with agent', 'Modify manually']),
     );
     if (mode === undefined) return yield* Effect.fail(CANCELLED);
-    if (mode === 'Modify with agent') return yield* modifyAgentic(ui, prompt, models, modify);
+    if (mode === 'Modify with agent')
+      return yield* modifyAgentic(ui, prompt, models, modify, modelPicker);
     return yield* modifyManual(ui, prompt);
   });
 
@@ -577,6 +660,7 @@ const promptMenu = (
   models: ReadonlyArray<ModelOption>,
   generate: PromptGenerator,
   modify: PromptModifier,
+  modelPicker: ModelPickerFn | undefined,
 ): Effect.Effect<void, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const store = yield* PromptStore.PromptStore;
@@ -588,26 +672,27 @@ const promptMenu = (
       case 'Show': {
         const prompts = yield* store.list(cwd);
         yield* showPrompt(ui, prompts, name);
-        return yield* promptMenu(ui, cwd, name, models, generate, modify);
+        return yield* promptMenu(ui, cwd, name, models, generate, modify, modelPicker);
       }
       case 'Fill & render': {
         const prompts = yield* store.list(cwd);
         const prompt = yield* findOrFail(prompts, name);
         yield* renderLoop(ui, prompt, {});
-        return yield* promptMenu(ui, cwd, name, models, generate, modify);
+        return yield* promptMenu(ui, cwd, name, models, generate, modify, modelPicker);
       }
       case 'Modify': {
         const prompts = yield* store.list(cwd);
-        const prompt = yield* modifyPrompt(ui, prompts, models, modify, name);
+        const prompt = yield* modifyPrompt(ui, prompts, models, modify, name, modelPicker);
         yield* store.save(cwd, prompt).pipe(Effect.mapError((error) => error.message));
         yield* Effect.sync(() => ui.notify(`Saved prompt '${prompt.name}'.`, 'info'));
-        return yield* promptMenu(ui, cwd, name, models, generate, modify);
+        return yield* promptMenu(ui, cwd, name, models, generate, modify, modelPicker);
       }
       case 'Delete': {
         const confirmed = yield* Effect.promise(() =>
           ui.confirm(`Delete prompt '${name}'?`, `'${name}.json' will be removed permanently.`),
         );
-        if (!confirmed) return yield* promptMenu(ui, cwd, name, models, generate, modify);
+        if (!confirmed)
+          return yield* promptMenu(ui, cwd, name, models, generate, modify, modelPicker);
         yield* store.remove(cwd, name).pipe(Effect.mapError((error) => error.message));
         yield* Effect.sync(() => ui.notify(`Deleted prompt '${name}'.`, 'info'));
         return;
@@ -634,6 +719,7 @@ const browseMenu = (
   models: ReadonlyArray<ModelOption>,
   generate: PromptGenerator,
   modify: PromptModifier,
+  modelPicker: ModelPickerFn | undefined,
 ): Effect.Effect<void, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const store = yield* PromptStore.PromptStore;
@@ -643,22 +729,28 @@ const browseMenu = (
         ui.select('No prompts yet', ['Create prompt', '← Back']),
       );
       if (chosen === 'Create prompt') {
-        const prompt = yield* createPrompt(ui, models, generate, undefined);
+        const prompt = yield* createPrompt(ui, models, generate, undefined, modelPicker);
         yield* store.save(cwd, prompt).pipe(Effect.mapError((error) => error.message));
         yield* Effect.sync(() => ui.notify(`Saved prompt '${prompt.name}'.`, 'info'));
-        return yield* browseMenu(ui, cwd, models, generate, modify);
+        return yield* browseMenu(ui, cwd, models, generate, modify, modelPicker);
       }
       return;
     }
+    const search = ui.searchSelect;
     const chosen = yield* Effect.promise(() =>
-      ui.select('Prompts — pick one', [...prompts.map((prompt) => prompt.name), '← Back']),
+      search !== undefined
+        ? search(
+            'Prompts — pick one',
+            prompts.map((prompt) => prompt.name),
+          )
+        : ui.select('Prompts — pick one', [...prompts.map((prompt) => prompt.name), '← Back']),
     );
     if (chosen === undefined || chosen === '← Back') return;
     if (prompts.every((prompt) => prompt.name !== chosen)) {
       return yield* Effect.fail(`Unknown prompt '${chosen}'.`);
     }
-    yield* promptMenu(ui, cwd, chosen, models, generate, modify);
-    return yield* browseMenu(ui, cwd, models, generate, modify);
+    yield* promptMenu(ui, cwd, chosen, models, generate, modify, modelPicker);
+    return yield* browseMenu(ui, cwd, models, generate, modify, modelPicker);
   });
 
 /**
@@ -676,6 +768,7 @@ const mainMenu = (
   models: ReadonlyArray<ModelOption>,
   generate: PromptGenerator,
   modify: PromptModifier,
+  modelPicker: ModelPickerFn | undefined,
 ): Effect.Effect<void, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const store = yield* PromptStore.PromptStore;
@@ -684,44 +777,45 @@ const mainMenu = (
     );
     if (chosen === undefined || chosen === 'Exit') return;
     if (chosen === 'Create prompt') {
-      const prompt = yield* createPrompt(ui, models, generate, undefined);
+      const prompt = yield* createPrompt(ui, models, generate, undefined, modelPicker);
       yield* store.save(cwd, prompt).pipe(Effect.mapError((error) => error.message));
       yield* Effect.sync(() => ui.notify(`Saved prompt '${prompt.name}'.`, 'info'));
     } else if (chosen === 'Browse prompts') {
-      yield* browseMenu(ui, cwd, models, generate, modify);
+      yield* browseMenu(ui, cwd, models, generate, modify, modelPicker);
     } else {
       return yield* Effect.fail(`Unknown menu choice '${chosen}'.`);
     }
-    return yield* mainMenu(ui, cwd, models, generate, modify);
+    return yield* mainMenu(ui, cwd, models, generate, modify, modelPicker);
   });
 
 /**
  * Run one parsed args string end to end: parse, load, flow, save, notify.
  * @param args - raw slash-command args
- * @param ui - Pi ui dialogs
- * @param cwd - project working directory
- * @param models - picker options from resolveModelOptions
- * @param generate - injected agentic generation port
- * @param modify - injected agentic modification port
- * @param models - picker options from {@link resolveModelOptions}
+ * @param env - command environment (dialogs, cwd, models)
  * @param generate - injected agentic generation port
  * @param modify - injected agentic modification port
  * @returns Effect completing once done, failing with displayable message
  */
 export const run = (
   args: string,
-  ui: InteractiveUi,
-  cwd: string,
-  models: ReadonlyArray<ModelOption>,
+  env: CommandEnv,
   generate: PromptGenerator,
   modify: PromptModifier,
 ): Effect.Effect<void, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const store = yield* PromptStore.PromptStore;
+    const ui = env.ui;
+    const cwd = env.cwd;
+    const models = env.models;
+    const modelPicker = env.modelPicker;
     const action = parseAction(args);
     switch (action.kind) {
       case 'Help': {
         yield* Effect.sync(() => ui.notify(USAGE, 'info'));
+        return;
+      }
+      case 'Browse': {
+        yield* browseMenu(ui, cwd, models, generate, modify, modelPicker);
         return;
       }
       case 'List': {
@@ -729,7 +823,7 @@ export const run = (
         return;
       }
       case 'Create': {
-        const prompt = yield* createPrompt(ui, models, generate, action.name);
+        const prompt = yield* createPrompt(ui, models, generate, action.name, modelPicker);
         yield* store.save(cwd, prompt).pipe(Effect.mapError((error) => error.message));
         yield* Effect.sync(() => ui.notify(`Saved prompt '${prompt.name}'.`, 'info'));
         return;
@@ -741,7 +835,7 @@ export const run = (
       }
       case 'Modify': {
         const prompts = yield* store.list(cwd);
-        const prompt = yield* modifyPrompt(ui, prompts, models, modify, action.name);
+        const prompt = yield* modifyPrompt(ui, prompts, models, modify, action.name, modelPicker);
         yield* store.save(cwd, prompt).pipe(Effect.mapError((error) => error.message));
         yield* Effect.sync(() => ui.notify(`Saved prompt '${prompt.name}'.`, 'info'));
         return;
@@ -754,7 +848,7 @@ export const run = (
         return;
       }
       case 'Menu': {
-        yield* mainMenu(ui, cwd, models, generate, modify);
+        yield* mainMenu(ui, cwd, models, generate, modify, modelPicker);
         return;
       }
     }
@@ -767,6 +861,8 @@ export const run = (
  * @param live - store layer provided to the handler at invocation
  * @param generateFor - agentic generation port for the command's working directory
  * @param modifyFor - agentic modification port for the command's working directory
+ * @param searchFor - TUI filter picker factory, if available
+ * @param modelPickerFor - TUI model picker factory, if available
  * @returns Effect completing once the command is registered
  */
 export const register = (
@@ -774,19 +870,41 @@ export const register = (
   live: Layer.Layer<PromptStore.PromptStore>,
   generateFor: (cwd: string) => PromptGenerator,
   modifyFor: (cwd: string) => PromptModifier,
+  searchFor?: (ctx: {
+    readonly ui: FilterUi;
+    readonly mode: string;
+  }) => InteractiveUi['searchSelect'],
+  modelPickerFor?: (ctx: {
+    readonly ui: FilterUi;
+    readonly mode: string;
+  }) => ModelPickerFn | undefined,
 ): Effect.Effect<void> =>
   PiEffect.registerCommandEffect(
     api,
     COMMAND_NAME,
     COMMAND_DESCRIPTION,
-    (args, ctx) =>
-      run(
+    (args, ctx) => {
+      const base = ctx.ui;
+      let ui: InteractiveUi = {
+        select: (title, options) => base.select(title, options),
+        confirm: (title, message) => base.confirm(title, message),
+        input: (title, placeholder) => base.input(title, placeholder),
+        notify: (message, type) => base.notify(message, type),
+      };
+      const search = searchFor?.({ ui: ctx.ui, mode: ctx.mode });
+      if (search !== undefined) ui = { ...ui, searchSelect: search };
+      const modelPicker = modelPickerFor?.({ ui: ctx.ui, mode: ctx.mode });
+      return run(
         args,
-        ctx.ui,
-        ctx.cwd,
-        resolveModelOptions(ctx),
+        {
+          ui,
+          cwd: ctx.cwd,
+          models: resolveModelOptions(ctx),
+          modelPicker,
+        },
         generateFor(ctx.cwd),
         modifyFor(ctx.cwd),
-      ).pipe(Effect.provide(live)),
+      ).pipe(Effect.provide(live));
+    },
     (error) => (error === CANCELLED ? 'info' : 'error'),
   );
