@@ -1,3 +1,3 @@
-export * as Run from './run/index.js';
-export * as Receipt from './receipt/index.js';
-export * as RunEvent from './run-event/index.js';
+export * as Run from './run/run.module.ts';
+export * as Receipt from './receipt/receipt.module.ts';
+export * as RunEvent from './run-event/run-event.module.ts';

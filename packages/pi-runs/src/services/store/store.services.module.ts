@@ -1,4 +1,4 @@
-import { Context, Data, Effect, FileSystem, Layer, Path, Schema } from 'effect';
+import { Clock, Context, Data, Effect, FileSystem, Layer, Path, Schema } from 'effect';
 import * as ReceiptSchema from '../../modules/receipt/receipt.module.ts';
 import * as RunSchema from '../../modules/run/run.module.ts';
 import * as RunEventSchema from '../../modules/run-event/run-event.module.ts';
@@ -46,7 +46,9 @@ const defaultRoot = (path: Path.Path): string => path.join(process.cwd(), ...ROO
 const repoRelativeSession = (id: string): string =>
   [...ROOT_SEGMENTS, id, 'session.jsonl'].join('/');
 
-const nowIso = (): string => new Date().toISOString();
+const nowIso: Effect.Effect<string> = Clock.currentTimeMillis.pipe(
+  Effect.map((millis) => new Date(millis).toISOString()),
+);
 
 const toStoreError =
   (operation: string) =>
@@ -164,6 +166,52 @@ const memoryBackend = (): Backend => {
   };
 };
 
+/** Mutable run constructor input: base fields plus the optional display captures. */
+interface RunInput {
+  id: RunSchema.Id;
+  parent: RunSchema.Id | null;
+  status: RunSchema.Status;
+  created: string;
+  updated: string;
+  sessionFile: string;
+  name?: string;
+  prompt?: string;
+  model?: string;
+}
+
+/**
+ * Rebuild a run over new base fields while keeping its display
+ * captures (name, prompt, model). Module scope: pure, so the linter
+ * keeps it out of the per-backend builder.
+ * @param run - run carrying the captures
+ * @param base - replacement identity and lifecycle fields
+ * @returns rebuilt run
+ */
+const withExtras = (
+  run: RunSchema.Run,
+  base: {
+    readonly id: RunSchema.Id;
+    readonly parent: RunSchema.Id | null;
+    readonly status: RunSchema.Status;
+    readonly created: string;
+    readonly updated: string;
+    readonly sessionFile: string;
+  },
+): RunSchema.Run => {
+  const input: RunInput = {
+    id: base.id,
+    parent: base.parent,
+    status: base.status,
+    created: base.created,
+    updated: base.updated,
+    sessionFile: base.sessionFile,
+  };
+  if (run.name !== undefined) input.name = run.name;
+  if (run.prompt !== undefined) input.prompt = run.prompt;
+  if (run.model !== undefined) input.model = run.model;
+  return new RunSchema.Run(input);
+};
+
 const build = (backend: Backend) => {
   const extractFrontmatter = (operation: string, text: string): Effect.Effect<string, StoreError> =>
     Effect.try({
@@ -240,6 +288,8 @@ const build = (backend: Backend) => {
     readonly id: string;
     readonly parent?: string;
     readonly name?: string;
+    readonly prompt?: string;
+    readonly model?: string;
   }) =>
     Effect.gen(function* () {
       const operation = 'Store.create';
@@ -248,19 +298,19 @@ const build = (backend: Backend) => {
         return yield* fail(operation, `run '${id}' already exists`);
       }
       const parent = args.parent !== undefined ? yield* decodeId(operation, args.parent) : null;
-      const stamp = nowIso();
-      const base = {
+      const stamp = yield* nowIso;
+      const input: RunInput = {
         id,
         parent,
-        status: 'pending' as const,
+        status: 'pending',
         created: stamp,
         updated: stamp,
         sessionFile: repoRelativeSession(id),
       };
-      const run =
-        args.name !== undefined
-          ? new RunSchema.Run({ ...base, name: args.name })
-          : new RunSchema.Run(base);
+      if (args.name !== undefined) input.name = args.name;
+      if (args.prompt !== undefined) input.prompt = args.prompt;
+      if (args.model !== undefined) input.model = args.model;
+      const run = new RunSchema.Run(input);
       const files = backend.filesFor(id);
       yield* backend.writeText(
         operation,
@@ -282,18 +332,14 @@ const build = (backend: Backend) => {
         if (run.status !== 'pending') {
           return yield* fail(operation, `cannot start run '${id}' from status '${run.status}'`);
         }
-        const base = {
+        const started = withExtras(run, {
           id: run.id,
           parent: run.parent,
           status: 'running' as const,
           created: run.created,
-          updated: nowIso(),
+          updated: yield* nowIso,
           sessionFile: run.sessionFile,
-        };
-        const started =
-          run.name !== undefined
-            ? new RunSchema.Run({ ...base, name: run.name })
-            : new RunSchema.Run(base);
+        });
         const events = yield* readEvents(operation, id);
         const files = backend.filesFor(id);
         yield* backend.writeText(
@@ -318,7 +364,7 @@ const build = (backend: Backend) => {
         const operation = 'Store.append';
         const id = yield* decodeId(operation, args.runId);
         const run = yield* readRun(operation, id);
-        if (run.status !== 'running') {
+        if (run.status !== 'running' && run.status !== 'awaiting-input') {
           return yield* fail(operation, `cannot append to run '${id}' with status '${run.status}'`);
         }
         const events = yield* readEvents(operation, id);
@@ -328,7 +374,7 @@ const build = (backend: Backend) => {
           seq: events.length + 1,
           role: args.role,
           text: args.text,
-          at: nowIso(),
+          at: yield* nowIso,
         };
         const event =
           subrunId !== undefined
@@ -365,7 +411,7 @@ const build = (backend: Backend) => {
         const operation = 'Store.settle';
         const id = yield* decodeId(operation, args.runId);
         const run = yield* readRun(operation, id);
-        if (run.status !== 'running') {
+        if (run.status !== 'running' && run.status !== 'awaiting-input') {
           return yield* fail(operation, `cannot settle run '${id}' from status '${run.status}'`);
         }
         const files = backend.filesFor(id);
@@ -376,30 +422,148 @@ const build = (backend: Backend) => {
           runId: id,
           outcome: args.outcome,
           summary: args.summary,
-          endedAt: nowIso(),
+          endedAt: yield* nowIso,
         });
         yield* backend.writeText(
           operation,
           files.receipt,
           frontmatter(ReceiptSchema.encode(receipt), `# receipt ${id}\n\n${args.summary}\n`),
         );
-        const base = {
+        const settled = withExtras(run, {
           id: run.id,
           parent: run.parent,
           status: args.outcome,
           created: run.created,
-          updated: nowIso(),
+          updated: yield* nowIso,
           sessionFile: run.sessionFile,
-        };
-        const settled =
-          run.name !== undefined
-            ? new RunSchema.Run({ ...base, name: run.name })
-            : new RunSchema.Run(base);
+        });
         const events = yield* readEvents(operation, id);
         yield* backend.writeText(
           operation,
           files.runMd,
           frontmatter(RunSchema.encode(settled), renderBody(settled, events)),
+        );
+        return receipt;
+      }),
+    );
+
+  const ask = (args: { readonly runId: string; readonly question: string }) =>
+    backend.withLock(
+      'Store.ask',
+      args.runId,
+      Effect.gen(function* () {
+        const operation = 'Store.ask';
+        const id = yield* decodeId(operation, args.runId);
+        const run = yield* readRun(operation, id);
+        if (run.status !== 'running') {
+          return yield* fail(operation, `cannot ask on run '${id}' with status '${run.status}'`);
+        }
+        const parked = withExtras(run, {
+          id: run.id,
+          parent: run.parent,
+          status: 'awaiting-input' as const,
+          created: run.created,
+          updated: yield* nowIso,
+          sessionFile: run.sessionFile,
+        });
+        const events = yield* readEvents(operation, id);
+        const files = backend.filesFor(id);
+        yield* backend.writeText(
+          operation,
+          files.runMd,
+          frontmatter(RunSchema.encode(parked), renderBody(parked, events)),
+        );
+        return parked;
+      }),
+    );
+
+  const answer = (args: { readonly runId: string; readonly text: string }) =>
+    backend.withLock(
+      'Store.answer',
+      args.runId,
+      Effect.gen(function* () {
+        const operation = 'Store.answer';
+        const id = yield* decodeId(operation, args.runId);
+        const run = yield* readRun(operation, id);
+        if (run.status !== 'awaiting-input') {
+          return yield* fail(operation, `cannot answer run '${id}' with status '${run.status}'`);
+        }
+        const resumed = withExtras(run, {
+          id: run.id,
+          parent: run.parent,
+          status: 'running' as const,
+          created: run.created,
+          updated: yield* nowIso,
+          sessionFile: run.sessionFile,
+        });
+        const events = yield* readEvents(operation, id);
+        const event = new RunEventSchema.Event({
+          seq: events.length + 1,
+          role: 'user' as const,
+          text: args.text,
+          at: yield* nowIso,
+        });
+        const prior = events
+          .map((entry) => JSON.stringify(RunEventSchema.encode(entry)))
+          .join('\n');
+        const files = backend.filesFor(id);
+        yield* backend.writeText(
+          operation,
+          files.session,
+          `${prior}${events.length > 0 ? '\n' : ''}${JSON.stringify(RunEventSchema.encode(event))}\n`,
+        );
+        const next = [...events, event];
+        yield* backend.writeText(
+          operation,
+          files.runMd,
+          frontmatter(RunSchema.encode(resumed), renderBody(resumed, next)),
+        );
+        return event;
+      }),
+    );
+
+  const cancel = (runId: string) =>
+    backend.withLock(
+      'Store.cancel',
+      runId,
+      Effect.gen(function* () {
+        const operation = 'Store.cancel';
+        const id = yield* decodeId(operation, runId);
+        const run = yield* readRun(operation, id);
+        if (run.status !== 'running' && run.status !== 'awaiting-input') {
+          return yield* fail(operation, `cannot cancel run '${id}' from status '${run.status}'`);
+        }
+        const files = backend.filesFor(id);
+        if (yield* backend.exists(files.receipt)) {
+          return yield* fail(operation, `run '${id}' already has a receipt`);
+        }
+        const receipt = new ReceiptSchema.Receipt({
+          runId: id,
+          outcome: 'cancelled' as const,
+          summary: 'Interrupted by the user.',
+          endedAt: yield* nowIso,
+        });
+        yield* backend.writeText(
+          operation,
+          files.receipt,
+          frontmatter(
+            ReceiptSchema.encode(receipt),
+            `# receipt ${id}\n\nInterrupted by the user.\n`,
+          ),
+        );
+        const cancelled = withExtras(run, {
+          id: run.id,
+          parent: run.parent,
+          status: 'cancelled' as const,
+          created: run.created,
+          updated: yield* nowIso,
+          sessionFile: run.sessionFile,
+        });
+        const events = yield* readEvents(operation, id);
+        yield* backend.writeText(
+          operation,
+          files.runMd,
+          frontmatter(RunSchema.encode(cancelled), renderBody(cancelled, events)),
         );
         return receipt;
       }),
@@ -412,7 +576,10 @@ const build = (backend: Backend) => {
       const run = yield* readRun(operation, id);
       const events = yield* readEvents(operation, id);
       const receipt = yield* readReceipt(operation, id);
-      if (receipt === null && (run.status === 'done' || run.status === 'failed')) {
+      if (
+        receipt === null &&
+        (run.status === 'done' || run.status === 'failed' || run.status === 'cancelled')
+      ) {
         return yield* fail(operation, `run '${id}' is '${run.status}' but has no receipt`);
       }
       if (receipt !== null && run.status !== receipt.outcome) {
@@ -435,7 +602,7 @@ const build = (backend: Backend) => {
       return runs;
     });
 
-  return { create, start, append, settle, load, list } as const;
+  return { create, start, append, settle, ask, answer, cancel, load, list } as const;
 };
 
 const make = Effect.gen(function* () {

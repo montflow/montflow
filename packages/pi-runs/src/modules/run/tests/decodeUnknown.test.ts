@@ -23,7 +23,7 @@ Vitest.describe('Run.decodeUnknown runtime', () => {
 
   Vitest.it.effect('rejects an invalid id', () =>
     Effect.gen(function* () {
-      const error = yield* Effect.flip(Run.decodeUnknown({ ...valid, id: 'BAD ID!' }));
+      const error = yield* Run.decodeUnknown({ ...valid, id: 'BAD ID!' }).pipe(Effect.flip);
       Vitest.expect(error).toBeDefined();
     }),
   );

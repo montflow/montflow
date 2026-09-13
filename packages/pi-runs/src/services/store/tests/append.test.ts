@@ -31,7 +31,9 @@ Vitest.describe('Store.append runtime', () => {
       Effect.gen(function* () {
         const store = yield* Store;
         yield* store.create({ id: 'run-1' });
-        const error = yield* Effect.flip(store.append({ runId: 'run-1', role: 'user', text: 'x' }));
+        const error = yield* store
+          .append({ runId: 'run-1', role: 'user', text: 'x' })
+          .pipe(Effect.flip);
         Vitest.expect(error).toBeInstanceOf(StoreError);
         Vitest.expect(error.reason).toContain("with status 'pending'");
       }),

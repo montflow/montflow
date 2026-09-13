@@ -2,7 +2,7 @@ import { Schema } from 'effect';
 import { Id as RunId } from '../run/run.module.ts';
 
 /** Terminal outcome. Distinct name from `Run.Status`: receipt is terminal-only. */
-export const Outcome = Schema.Literals(['done', 'failed']);
+export const Outcome = Schema.Literals(['done', 'failed', 'cancelled']);
 
 /** Terminal outcome. */
 export type Outcome = typeof Outcome.Type;

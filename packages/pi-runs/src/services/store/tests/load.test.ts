@@ -15,7 +15,7 @@ Vitest.describe('Store.load runtime', () => {
       freshRoot(),
       Effect.gen(function* () {
         const store = yield* Store;
-        const error = yield* Effect.flip(store.load('nope'));
+        const error = yield* store.load('nope').pipe(Effect.flip);
         Vitest.expect(error).toBeInstanceOf(StoreError);
       }),
     ),
@@ -31,7 +31,7 @@ Vitest.describe('Store.load runtime', () => {
         yield* store.start('run-1');
         yield* store.settle({ runId: 'run-1', outcome: 'done', summary: 'green' });
         yield* Effect.sync(() => Fs.rmSync(NodePath.join(root, 'run-1', 'receipt.md')));
-        const error = yield* Effect.flip(store.load('run-1'));
+        const error = yield* store.load('run-1').pipe(Effect.flip);
         Vitest.expect(error).toBeInstanceOf(StoreError);
         Vitest.expect(error.reason).toContain('has no receipt');
       }),

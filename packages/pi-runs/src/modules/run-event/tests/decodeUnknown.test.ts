@@ -33,7 +33,7 @@ Vitest.describe('RunEvent.decodeUnknown runtime', () => {
 
   Vitest.it.effect('rejects seq zero', () =>
     Effect.gen(function* () {
-      const error = yield* Effect.flip(RunEvent.decodeUnknown({ ...valid, seq: 0 }));
+      const error = yield* RunEvent.decodeUnknown({ ...valid, seq: 0 }).pipe(Effect.flip);
       Vitest.expect(error).toBeDefined();
     }),
   );

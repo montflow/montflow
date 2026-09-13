@@ -20,7 +20,9 @@ Vitest.describe('Receipt.decodeUnknown runtime', () => {
 
   Vitest.it.effect('rejects a non-terminal outcome', () =>
     Effect.gen(function* () {
-      const error = yield* Effect.flip(Receipt.decodeUnknown({ ...valid, outcome: 'running' }));
+      const error = yield* Receipt.decodeUnknown({ ...valid, outcome: 'running' }).pipe(
+        Effect.flip,
+      );
       Vitest.expect(error).toBeDefined();
     }),
   );

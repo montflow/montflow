@@ -32,9 +32,9 @@ Vitest.describe('Store.settle runtime', () => {
         yield* store.create({ id: 'run-1' });
         yield* store.start('run-1');
         yield* store.settle({ runId: 'run-1', outcome: 'done', summary: 'green' });
-        const error = yield* Effect.flip(
-          store.settle({ runId: 'run-1', outcome: 'failed', summary: 'again' }),
-        );
+        const error = yield* store
+          .settle({ runId: 'run-1', outcome: 'failed', summary: 'again' })
+          .pipe(Effect.flip);
         Vitest.expect(error).toBeInstanceOf(StoreError);
         Vitest.expect(error.reason).toContain("from status 'done'");
       }),

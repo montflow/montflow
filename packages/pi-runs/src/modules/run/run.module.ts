@@ -13,8 +13,15 @@ export const Id = Schema.String.check(
 /** Branded run identifier. */
 export type Id = typeof Id.Type;
 
-/** Lifecycle status of a run. */
-export const Status = Schema.Literals(['pending', 'running', 'done', 'failed']);
+/** Lifecycle status of a run. `awaiting-input` parks a live run while it waits on user answers; `cancelled` is a terminal interrupt. */
+export const Status = Schema.Literals([
+  'pending',
+  'running',
+  'awaiting-input',
+  'done',
+  'failed',
+  'cancelled',
+]);
 
 /** Lifecycle status of a run. */
 export type Status = typeof Status.Type;
@@ -35,6 +42,10 @@ export class Run extends Schema.Class<Run>('Run')({
   updated: Schema.String.check(Schema.isMinLength(1)),
   sessionFile: Schema.String.check(Schema.isMinLength(1)),
   name: Schema.optionalKey(Schema.String),
+  /** Initial agent prompt captured at creation; the live transcript lives in `session.jsonl`. */
+  prompt: Schema.optionalKey(Schema.String),
+  /** `provider/model-id` pin for the run, if any. */
+  model: Schema.optionalKey(Schema.String),
 }) {}
 
 /**

@@ -25,9 +25,9 @@ Vitest.describe('Store.ephemeral runtime', () => {
       Effect.gen(function* () {
         const store = yield* Store;
         yield* store.create({ id: 'run-1' });
-        const error = yield* Effect.flip(
-          store.settle({ runId: 'run-1', outcome: 'done', summary: 'x' }),
-        );
+        const error = yield* store
+          .settle({ runId: 'run-1', outcome: 'done', summary: 'x' })
+          .pipe(Effect.flip);
         Vitest.expect(error).toBeInstanceOf(StoreError);
         Vitest.expect(error.reason).toContain("from status 'pending'");
       }),

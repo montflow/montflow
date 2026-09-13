@@ -27,7 +27,7 @@ Vitest.describe('Store.start runtime', () => {
         const store = yield* Store;
         yield* store.create({ id: 'run-1' });
         yield* store.start('run-1');
-        const error = yield* Effect.flip(store.start('run-1'));
+        const error = yield* store.start('run-1').pipe(Effect.flip);
         Vitest.expect(error).toBeInstanceOf(StoreError);
         Vitest.expect(error.reason).toContain("from status 'running'");
       }),
