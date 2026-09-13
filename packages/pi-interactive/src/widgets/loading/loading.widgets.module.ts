@@ -62,21 +62,24 @@ export const dialog = <A, E>(ui: CustomUi, message: string, work: Effect.Effect<
   Effect.promise(() =>
     ui.custom<Outcome<A>>((tui, theme, _keybindings, done) => {
       const { batch, loader } = startShelled(theme, tui, message);
-      Effect.runPromise(
-        Effect.match(work, {
-          onFailure: () => ({ status: 'failed' }) satisfies Outcome<A>,
-          onSuccess: (value) => ({ status: 'done', value }) satisfies Outcome<A>,
-        }),
-      ).then(
-        (outcome) => {
-          loader.stop();
-          done(outcome);
-        },
-        () => {
-          loader.stop();
-          done({ status: 'failed' });
-        },
-      );
+      work
+        .pipe(
+          Effect.match({
+            onFailure: () => ({ status: 'failed' }) satisfies Outcome<A>,
+            onSuccess: (value) => ({ status: 'done', value }) satisfies Outcome<A>,
+          }),
+          Effect.runPromise,
+        )
+        .then(
+          (outcome) => {
+            loader.stop();
+            done(outcome);
+          },
+          () => {
+            loader.stop();
+            done({ status: 'failed' });
+          },
+        );
       return Widget.compile(batch);
     }),
   );
@@ -99,21 +102,24 @@ export const run = <A, E>(ui: CustomUi, message: string, self: Effect.Effect<A, 
     const settled = yield* Effect.promise(() =>
       ui.custom<Settled<A, E>>((tui, theme, _keybindings, done) => {
         const { batch, loader } = startShelled(theme, tui, message);
-        Effect.runPromise(
-          Effect.match(self, {
-            onFailure: (error) => ({ outcome: 'failure', error }) satisfies Settled<A, E>,
-            onSuccess: (value) => ({ outcome: 'success', value }) satisfies Settled<A, E>,
-          }),
-        ).then(
-          (result) => {
-            loader.stop();
-            done(result);
-          },
-          (defect) => {
-            loader.stop();
-            throw new Error(`Loading dialog crashed: ${message}`, { cause: defect });
-          },
-        );
+        self
+          .pipe(
+            Effect.match({
+              onFailure: (error) => ({ outcome: 'failure', error }) satisfies Settled<A, E>,
+              onSuccess: (value) => ({ outcome: 'success', value }) satisfies Settled<A, E>,
+            }),
+            Effect.runPromise,
+          )
+          .then(
+            (result) => {
+              loader.stop();
+              done(result);
+            },
+            (defect) => {
+              loader.stop();
+              throw new Error(`Loading dialog crashed: ${message}`, { cause: defect });
+            },
+          );
         return Widget.compile(batch);
       }),
     );

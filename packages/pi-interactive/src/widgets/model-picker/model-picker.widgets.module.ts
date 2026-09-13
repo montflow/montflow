@@ -151,7 +151,7 @@ export const modelPickerDialog = (
               query.handleInput(data);
               const needle = query.getValue();
               const filtered = items.filter((item) =>
-                Effect.runSync(matchesFilter(item.value, needle)),
+                matchesFilter(item.value, needle).pipe(Effect.runSync),
               );
               const next = buildList(filtered);
               container.children.splice(listIndex, 1, next);

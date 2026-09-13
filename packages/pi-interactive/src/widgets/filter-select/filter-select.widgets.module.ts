@@ -136,7 +136,7 @@ export const filterSelectDialog = (
             current.handleInput(data);
           } else {
             query.handleInput(data);
-            const filtered = Effect.runSync(filterOptions(options, query.getValue()));
+            const filtered = filterOptions(options, query.getValue()).pipe(Effect.runSync);
             const next = buildList(filtered);
             container.children.splice(LIST_INDEX, 1, next);
             current = next;

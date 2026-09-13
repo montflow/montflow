@@ -57,7 +57,9 @@ Vitest.describe('Loading.run', () => {
 
   Vitest.it.effect('fails with the wrapped error', () =>
     Effect.gen(function* () {
-      const error = yield* Effect.flip(Loading.run(immediateUi(), 'Loading…', Effect.fail('boom')));
+      const error = yield* Loading.run(immediateUi(), 'Loading…', Effect.fail('boom')).pipe(
+        Effect.flip,
+      );
       Vitest.expect(error).toBe('boom');
     }),
   );

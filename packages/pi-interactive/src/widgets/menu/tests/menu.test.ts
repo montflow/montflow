@@ -7,6 +7,11 @@ import * as Menu from '../index.js';
 /** Exact factory shape `ui.custom` expects — avoids naming Pi's TUI types. */
 type CustomFactory = Parameters<ExtensionUIContext['custom']>[0];
 
+/** Pi's completion callback as a named domain type, so the harness never restates its shape. */
+type DoneCallback = CustomFactory extends (...args: [never, never, never, infer Done]) => object
+  ? Done
+  : never;
+
 /**
  * Headless harness: runs the factory synchronously against inert stubs
  * and hands back the mounted component for render/input assertions.
@@ -14,13 +19,12 @@ type CustomFactory = Parameters<ExtensionUIContext['custom']>[0];
 const mountUi = (onComponent: (component: Component & { dispose?(): void }) => void) => ({
   custom: <T>(factory: CustomFactory): Promise<T> =>
     new Promise<T>((resolve) => {
-      const done = (result: unknown): void => {
-        // SAFETY: Pi always completes a custom dialog with the factory's
-        // own result type, so `unknown` here is `T` by construction.
-        resolve(result as T);
+      const done = (result: T): void => {
+        resolve(result);
       };
-      // SAFETY: headless harness — the dialog only reads theme colors and
-      // calls `requestRender`; the stubs cover every method it touches.
+      // SAFETY: Pi completes a custom dialog with the factory's own `T`,
+      // so our `T`-typed callback never observes a non-`T` argument
+      // through the `unknown`-typed `done` slot.
       const component = factory(
         { requestRender: () => {} } as never,
         {
@@ -28,7 +32,7 @@ const mountUi = (onComponent: (component: Component & { dispose?(): void }) => v
           bg: (_color: 'selectedBg', text: string) => text,
         } as never,
         {} as never,
-        done,
+        done as DoneCallback,
       );
       if (component instanceof Promise) {
         void component.then(onComponent);
@@ -45,8 +49,8 @@ Vitest.describe('Menu.menuDialog', () => {
       rendered = component.render(80);
     });
     // Never settles by design — the harness only needs the mount.
-    Effect.runFork(
-      Menu.menuDialog(ui, 'Skills', ['Browse skills', 'Exit'], ['✓ authoring-skills']),
+    Menu.menuDialog(ui, 'Skills', ['Browse skills', 'Exit'], ['✓ authoring-skills']).pipe(
+      Effect.runFork,
     );
     const text = rendered.join('\n');
     Vitest.expect(text).toContain('Skills');
@@ -60,7 +64,7 @@ Vitest.describe('Menu.menuDialog', () => {
     const ui = mountUi((component) => {
       rendered = component.render(80);
     });
-    Effect.runFork(Menu.menuDialog(ui, 'Skills', ['Exit']));
+    Menu.menuDialog(ui, 'Skills', ['Exit']).pipe(Effect.runFork);
     const text = rendered.join('\n');
     Vitest.expect(text).toContain('Skills');
     Vitest.expect(text).toContain('Exit');
