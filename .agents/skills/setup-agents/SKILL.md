@@ -1,6 +1,6 @@
 ---
 name: setup-agents
-description: Creates a minimal AGENTS.md for a project — package manager, languages, commands, skills location. Use when a project has no AGENTS.md or its AGENTS.md is bloated and needs trimming to essentials.
+description: Creates a minimal AGENTS.md for a project — package manager, languages, commands, verification rules, skills location. Use when a project has no AGENTS.md or its AGENTS.md is bloated and needs trimming to essentials.
 id: bd1ca8a4580cf219
 author: Daniel Montilla
 version: 1.0.0
@@ -27,6 +27,7 @@ Answer the template sections by inspecting the repo — ask the user only what c
 - [ ] **Languages** — extensions, config files (`tsconfig.json`, `Cargo.toml`, …)
 - [ ] **Package manager** — lockfile or `packageManager` field
 - [ ] **Commands** — build/test/lint/typecheck scripts
+- [ ] **Verification** — script runner + scoping mechanism (filters, `--cwd`, file args)
 - [ ] **Skills location** — default `.agents/skills/`
 
 ## 2. Compress
@@ -35,7 +36,7 @@ Apply [caveman-compression](../caveman-compression/SKILL.md) to every fact. One 
 
 ## 3. Write AGENTS.md
 
-Fill [templates/AGENTS.md](templates/AGENTS.md). Drop sections with no answer. Keep `## Skills` always.
+Fill [templates/AGENTS.md](templates/AGENTS.md). Drop sections with no answer. Keep `## Skills` and `## Verification` always.
 
 If an existing AGENTS.md has entries not matching any template section — **delete**. Entry points, indexes, pointers to depth, conventions essays: agents discover these by scanning.
 

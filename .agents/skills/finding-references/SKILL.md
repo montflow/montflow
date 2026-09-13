@@ -66,5 +66,8 @@ If the user wants to read or analyze reference source, navigate to the reference
 | effect-cf | .agents/references/effect-cf | https://github.com/jbt95/effect-cf |
 | vitest | .agents/references/vitest | https://github.com/vitest-dev/vitest |
 | anti-slop | .agents/references/anti-slop | https://github.com/dmmulroy/anti-slop.git |
+| opentui | .agents/references/opentui | https://github.com/sst/opentui.git |
+| opencode | .agents/references/opencode | https://github.com/sst/opencode.git |
+| pi-subagents | .agents/references/pi-subagents | https://github.com/nicobailon/pi-subagents.git |
 
 To add a new reference, use `adding-references` skill.

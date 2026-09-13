@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "columns": [
+    {
+      "width": 2.4,
+      "cells": [
+        { "panel": "info", "keybind": "i", "height": 1 },
+        { "panel": "skills", "keybind": "s", "height": 2 },
+        { "panel": "prompts", "keybind": "p", "height": 1 }
+      ]
+    },
+    {
+      "width": 5,
+      "cells": [
+        { "panel": "runs", "keybind": "r", "height": 3 },
+        { "panel": "profiles", "keybind": "f", "height": 2 }
+      ]
+    }
+  ]
+}
