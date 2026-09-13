@@ -1,0 +1,56 @@
+{
+  "name": "@montflow/workspace",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Fullscreen OpenTUI Solid workspace dashboard (info panel: directory plus git state)",
+  "keywords": [
+    "opentui",
+    "pi",
+    "solid",
+    "tui"
+  ],
+  "bugs": {
+    "url": "https://github.com/montflow/montflow/issues"
+  },
+  "license": "MIT",
+  "author": "Daniel Montilla",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/montflow/montflow.git",
+    "directory": "apps/workspace"
+  },
+  "type": "module",
+  "scripts": {
+    "start": "bun --conditions=browser src/index.tsx",
+    "dev": "bun --conditions=browser src/index.tsx",
+    "format:check": "oxfmt --check .",
+    "format:fix": "oxfmt .",
+    "lint:check": "oxlint --deny-warnings .",
+    "lint:fix": "oxlint . --fix",
+    "test": "vitest run --typecheck --passWithNoTests",
+    "test:tui": "bun test .test.tsx",
+    "ts:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@effect/platform-node": "4.0.0-rc.112",
+    "@montflow/pi-profiles": "workspace:*",
+    "@montflow/pi-prompts": "workspace:*",
+    "@montflow/pi-runs": "workspace:*",
+    "@montflow/pi-skills": "workspace:*",
+    "@opentui/core": "^0.5.11",
+    "@opentui/solid": "^0.5.11",
+    "@tanstack/solid-query": "^5.102.8",
+    "effect": "^4.0.0-rc.112",
+    "fuse.js": "^7.5.0",
+    "solid-js": "1.9.12"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.0-rc.112",
+    "@types/bun": "^1.4.2",
+    "@types/node": "^26.1.2",
+    "oxfmt": "0.63.0",
+    "oxlint": "1.78.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.0.15"
+  }
+}
