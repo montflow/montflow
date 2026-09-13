@@ -75,11 +75,12 @@ export const sendUserMessage = (
  * @returns Promise settling once the Effect is done
  */
 export const runAndNotify = <A, E>(ctx: { readonly ui: PiUi }, self: Effect.Effect<A, E>) =>
-  Effect.runPromise(
-    Effect.matchEffect(self, {
+  self.pipe(
+    Effect.matchEffect({
       onFailure: (error) => notify(ctx.ui, String(error), 'error'),
       onSuccess: () => Effect.sync(() => {}),
     }),
+    Effect.runPromise,
   );
 
 /**
@@ -94,11 +95,12 @@ const commandHandler =
     severity: CommandFailureSeverity<E>,
   ) =>
   (args: string, ctx: ExtensionCommandContext): Promise<void> =>
-    Effect.runPromise(
-      Effect.matchEffect(run(args, ctx), {
+    run(args, ctx).pipe(
+      Effect.matchEffect({
         onFailure: (error) => notify(ctx.ui, String(error), severity(error)),
         onSuccess: () => Effect.sync(() => {}),
       }),
+      Effect.runPromise,
     );
 
 /**

@@ -1536,45 +1536,44 @@ export const register = (
   api.registerCommand(COMMAND_NAME, {
     description: COMMAND_DESCRIPTION,
     handler: (args, ctx) =>
-      Effect.runPromise(
-        Effect.matchEffect(
-          Effect.sync(() => {
-            const base = ctx.ui;
-            let ui: InteractiveUi = {
-              select: (title, options) => base.select(title, options),
-              confirm: (title, message) => base.confirm(title, message),
-              input: (title, placeholder) => base.input(title, placeholder),
-              notify: (message, type) => base.notify(message, type),
-            };
-            const search = searchFor?.({ ui: ctx.ui, mode: ctx.mode });
-            if (search !== undefined) ui = { ...ui, searchSelect: search };
-            const modelPicker = modelPickerFor?.({ ui: ctx.ui, mode: ctx.mode });
-            const loading = loadingFor?.({ ui: ctx.ui, mode: ctx.mode });
-            const menu = menuFor?.({ ui: ctx.ui, mode: ctx.mode });
-            return run(
-              args,
-              {
-                ui,
-                cwd: ctx.cwd,
-                models: resolveModelOptions(ctx),
-                modelPicker,
-                loading,
-                installer: installerFor(ctx.cwd),
-                menu,
-                transform: (transformFor ?? modifyFor)(ctx.cwd),
-              },
-              storeFor(ctx.cwd),
-              skillsFor(ctx.cwd),
-              generateFor(ctx.cwd),
-              modifyFor(ctx.cwd),
-            );
-          }).pipe(Effect.flatMap((effect) => effect)),
+      Effect.sync(() => {
+        const base = ctx.ui;
+        let ui: InteractiveUi = {
+          select: (title, options) => base.select(title, options),
+          confirm: (title, message) => base.confirm(title, message),
+          input: (title, placeholder) => base.input(title, placeholder),
+          notify: (message, type) => base.notify(message, type),
+        };
+        const search = searchFor?.({ ui: ctx.ui, mode: ctx.mode });
+        if (search !== undefined) ui = { ...ui, searchSelect: search };
+        const modelPicker = modelPickerFor?.({ ui: ctx.ui, mode: ctx.mode });
+        const loading = loadingFor?.({ ui: ctx.ui, mode: ctx.mode });
+        const menu = menuFor?.({ ui: ctx.ui, mode: ctx.mode });
+        return run(
+          args,
           {
-            onFailure: (error) =>
-              Effect.sync(() => ctx.ui.notify(error, error === CANCELLED ? 'info' : 'error')),
-            onSuccess: () => Effect.void,
+            ui,
+            cwd: ctx.cwd,
+            models: resolveModelOptions(ctx),
+            modelPicker,
+            loading,
+            installer: installerFor(ctx.cwd),
+            menu,
+            transform: (transformFor ?? modifyFor)(ctx.cwd),
           },
-        ),
+          storeFor(ctx.cwd),
+          skillsFor(ctx.cwd),
+          generateFor(ctx.cwd),
+          modifyFor(ctx.cwd),
+        );
+      }).pipe(
+        Effect.flatMap((effect) => effect),
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Effect.sync(() => ctx.ui.notify(error, error === CANCELLED ? 'info' : 'error')),
+          onSuccess: () => Effect.void,
+        }),
+        Effect.runPromise,
       ),
   });
 };

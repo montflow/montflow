@@ -435,14 +435,14 @@ const installerFor =
 const searchFor = (ctx: { readonly ui: Interactive.FilterUi; readonly mode: string }) =>
   ctx.mode === 'tui'
     ? (title: string, dialogOptions: ReadonlyArray<string>) =>
-        Effect.runPromise(PiInteractive.filterSelectDialog(ctx.ui, title, dialogOptions))
+        PiInteractive.filterSelectDialog(ctx.ui, title, dialogOptions).pipe(Effect.runPromise)
     : undefined;
 
 /** TUI model picker factory for the interactive flows (TUI-only). */
 const modelPickerFor = (ctx: { readonly ui: Interactive.FilterUi; readonly mode: string }) =>
   ctx.mode === 'tui'
     ? (models: ReadonlyArray<Interactive.ModelOption>) =>
-        Effect.runPromise(ModelPicker.modelPickerDialog(ctx.ui, models))
+        ModelPicker.modelPickerDialog(ctx.ui, models).pipe(Effect.runPromise)
     : undefined;
 
 /** TUI loading-modal factory for the interactive flows (TUI-only). */

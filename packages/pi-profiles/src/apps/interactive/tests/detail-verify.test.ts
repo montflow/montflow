@@ -44,16 +44,14 @@ const scriptedUi = (answers: {
   };
 };
 
-const testProfile = Effect.runSync(
-  PiProfiles.decodeUnknown({
-    name: 'code-reviewer',
-    description: 'Reviews code.',
-    model: '',
-    skills: [],
-    instructions: 'Be strict.',
-    checklist: ['Flag issues'],
-  }),
-);
+const testProfile = PiProfiles.decodeUnknown({
+  name: 'code-reviewer',
+  description: 'Reviews code.',
+  model: '',
+  skills: [],
+  instructions: 'Be strict.',
+  checklist: ['Flag issues'],
+}).pipe(Effect.runSync);
 
 const memoryStore = (raw: string, saved: Array<string>): Interactive.ProfileStore => ({
   list: () => Effect.succeed([testProfile]),

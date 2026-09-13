@@ -16,7 +16,7 @@ Vitest.describe('PiProfiles.rename', () => {
   Vitest.it.effect('fails when the new name is not a valid slug', () =>
     Effect.gen(function* () {
       const profile = PiProfiles.make('code-reviewer', 'Reviews code');
-      const error = yield* Effect.flip(PiProfiles.rename(profile, 'Bad Name'));
+      const error = yield* PiProfiles.rename(profile, 'Bad Name').pipe(Effect.flip);
       Vitest.expect(error).toStrictEqual("invalid profile name 'Bad Name'");
     }),
   );

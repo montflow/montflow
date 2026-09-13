@@ -28,15 +28,14 @@ const scriptedUi = (notifies: Array<string>): Interactive.InteractiveUi => ({
 const withTempDir = (
   fn: (dir: string) => Effect.Effect<void, string, ProfileStore.ProfileStore>,
 ): Effect.Effect<void, string> =>
-  Effect.scoped(
-    Effect.gen(function* () {
-      const fs = yield* FileSystem;
-      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-cli-' });
-      return yield* fn(dir).pipe(Effect.provide(TestLive));
-    }).pipe(
-      Effect.provide(NodeLive),
-      Effect.mapError((error) => String(error)),
-    ),
+  Effect.gen(function* () {
+    const fs = yield* FileSystem;
+    const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-cli-' });
+    return yield* fn(dir).pipe(Effect.provide(TestLive));
+  }).pipe(
+    Effect.provide(NodeLive),
+    Effect.mapError((error) => String(error)),
+    Effect.scoped,
   );
 
 Vitest.describe('Cli.parseCliArgs', () => {
@@ -112,15 +111,18 @@ Vitest.describe('Cli.run', () => {
       const ui = scriptedUi([]);
       yield* withTempDir((dir) =>
         Effect.gen(function* () {
-          const missing = yield* Effect.flip(Cli.run('create x', ui, dir)).pipe(
+          const missing = yield* Cli.run('create x', ui, dir).pipe(
+            Effect.flip,
             Effect.mapError(() => 'should have failed'),
           );
           Vitest.expect(missing).toContain('--description');
-          const badSlug = yield* Effect.flip(
-            Cli.run('create "Bad Name" --description d', ui, dir),
-          ).pipe(Effect.mapError(() => 'should have failed'));
+          const badSlug = yield* Cli.run('create "Bad Name" --description d', ui, dir).pipe(
+            Effect.flip,
+            Effect.mapError(() => 'should have failed'),
+          );
           Vitest.expect(badSlug).toContain('kebab-case');
-          const unknown = yield* Effect.flip(Cli.run('show nope', ui, dir)).pipe(
+          const unknown = yield* Cli.run('show nope', ui, dir).pipe(
+            Effect.flip,
             Effect.mapError(() => 'should have failed'),
           );
           Vitest.expect(unknown).toContain("Unknown profile 'nope'");

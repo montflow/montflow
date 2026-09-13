@@ -176,11 +176,11 @@ export default function piPromptsExtension(pi: ExtensionAPI): Promise<void> {
       (ctx) =>
         ctx.mode === 'tui'
           ? (title, dialogOptions) =>
-              Effect.runPromise(PiInteractive.filterSelectDialog(ctx.ui, title, dialogOptions))
+              PiInteractive.filterSelectDialog(ctx.ui, title, dialogOptions).pipe(Effect.runPromise)
           : undefined,
       (ctx) =>
         ctx.mode === 'tui'
-          ? (models) => Effect.runPromise(ModelPicker.modelPickerDialog(ctx.ui, models))
+          ? (models) => ModelPicker.modelPickerDialog(ctx.ui, models).pipe(Effect.runPromise)
           : undefined,
     );
     yield* Cli.register(pi, Live);
