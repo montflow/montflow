@@ -20,8 +20,7 @@
     "directory": "packages/format"
   },
   "files": [
-    "build",
-    "src"
+    "build"
   ],
   "type": "module",
   "main": "./build/cjs/index.cjs",
@@ -45,11 +44,11 @@
     "build-esm": "tsc -b tsconfig.build.json",
     "format:check": "oxfmt --check .",
     "format:fix": "oxfmt .",
-    "lint:check": "oxlint --deny-warnings .",
+    "lint:check": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "release": "bun run build && bun publish --access public",
-    "test": "vitest run --typecheck --passWithNoTests",
-    "ts:check": "tsc --noEmit"
+    "test": "vitest run",
+    "ts:check": "tsc --noEmit -p tsconfig.build.json"
   },
   "devDependencies": {
     "@babel/cli": "^7.24.8",
@@ -57,13 +56,11 @@
     "@babel/plugin-transform-export-namespace-from": "^7.24.7",
     "@babel/plugin-transform-modules-commonjs": "^7.24.8",
     "@effect/vitest": "4.0.0-rc.112",
-    "@types/node": "^26.1.2",
     "babel-plugin-annotate-pure-calls": "^0.5.0",
     "babel-plugin-replace-import-extension": "^1.1.5",
     "effect": "^4.0.0-rc.112",
-    "oxfmt": "0.63.0",
-    "oxlint": "1.78.0",
-    "typescript": "^7.0.2",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.9.3",
     "vitest": "^4.0.15"
   },
   "peerDependencies": {

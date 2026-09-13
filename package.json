@@ -18,7 +18,8 @@
     "format:check": "turbo format:check",
     "format:fix": "turbo format:fix",
     "lint:check": "turbo lint:check",
-    "lint:fix": "turbo lint:fix"
+    "lint:fix": "turbo lint:fix",
+    "workspace": "bun run --cwd apps/workspace start"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",

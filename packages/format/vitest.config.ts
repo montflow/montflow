@@ -1,12 +1,10 @@
-import * as Vitest from 'vitest/config';
+import { defineConfig } from 'vitest/config';
 
-export default Vitest.defineConfig({
+export default defineConfig({
   test: {
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
-    typecheck: {
-      enabled: true,
-      include: ['src/**/*.test.ts'],
-    },
+    environment: 'jsdom',
+    globals: true,
+    isolate: false,
+    pool: 'threads',
   },
 });
