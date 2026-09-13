@@ -183,15 +183,13 @@ Vitest.describe('Interactive.ensureRequirements', () => {
         delete: () => Effect.fail('unused'),
         readRaw: () => Effect.fail('unused'),
       };
-      const error = yield* Effect.flip(
-        Interactive.ensureRequirements(
-          ui,
-          store,
-          () => Effect.fail('installer should not run'),
-          required,
-          'agentic skill creation',
-        ),
-      );
+      const error = yield* Interactive.ensureRequirements(
+        ui,
+        store,
+        () => Effect.fail('installer should not run'),
+        required,
+        'agentic skill creation',
+      ).pipe(Effect.flip);
       Vitest.expect(error).toBe('Cancelled.');
     }),
   );

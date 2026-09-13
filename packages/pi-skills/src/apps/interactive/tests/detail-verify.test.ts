@@ -47,16 +47,14 @@ const scriptedUi = (answers: {
   };
 };
 
-const testSkill = Effect.runSync(
-  Skill.decodeUnknown({
-    id: 'test-skill',
-    name: 'test-skill',
-    description: 'Does X.',
-    groups: [],
-    dependencies: [],
-    body: 'Some body.',
-  }),
-);
+const testSkill = Skill.decodeUnknown({
+  id: 'test-skill',
+  name: 'test-skill',
+  description: 'Does X.',
+  groups: [],
+  dependencies: [],
+  body: 'Some body.',
+}).pipe(Effect.runSync);
 
 const memoryStore = (raw: string, saved: Array<string>): Interactive.SkillStore => ({
   list: () => Effect.succeed([testSkill]),

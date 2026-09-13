@@ -21,16 +21,14 @@ const scriptedUi = (answers: {
   };
 };
 
-const skillFixture = Effect.runSync(
-  Skill.decodeUnknown({
-    id: 'code-reviewer',
-    name: 'code-reviewer',
-    description: 'Reviews code.',
-    groups: [],
-    dependencies: [],
-    body: '',
-  }),
-);
+const skillFixture = Skill.decodeUnknown({
+  id: 'code-reviewer',
+  name: 'code-reviewer',
+  description: 'Reviews code.',
+  groups: [],
+  dependencies: [],
+  body: '',
+}).pipe(Effect.runSync);
 
 const skills = [skillFixture] as const;
 
@@ -43,12 +41,10 @@ const agenticModifier =
   (expectedId: string): Interactive.SkillModifier =>
   (input) =>
     Effect.succeed(
-      Effect.runSync(
-        Skill.decodeUnknown({
-          ...Skill.encode(input.skill),
-          description: `Updated ${expectedId}: ${input.instruction}`,
-        }),
-      ),
+      Skill.decodeUnknown({
+        ...Skill.encode(input.skill),
+        description: `Updated ${expectedId}: ${input.instruction}`,
+      }).pipe(Effect.runSync),
     );
 
 const memoryStore = (installed: ReadonlyArray<Skill.Skill>): Interactive.SkillStore => ({

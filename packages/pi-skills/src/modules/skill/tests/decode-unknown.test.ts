@@ -22,7 +22,7 @@ Vitest.describe('Skill.decodeUnknown', () => {
 
   Vitest.it.effect('fails on non-slug ids', () =>
     Effect.gen(function* () {
-      const error = yield* Effect.flip(Skill.decodeUnknown({ ...valid, id: 'Bad Name' }));
+      const error = yield* Skill.decodeUnknown({ ...valid, id: 'Bad Name' }).pipe(Effect.flip);
       Vitest.expect(String(error)).toContain('["id"]');
     }),
   );

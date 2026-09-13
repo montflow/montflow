@@ -200,39 +200,12 @@ const storeFor = (cwd: string): Interactive.SkillStore => ({
 });
 
 /**
- * Instructions before the user description: the child agent authors
- * exactly one skill, then stops. Transported as the preprompt.
+ * Agent prompts shared by every host. Re-exported from the interactive
+ * flows module (single source of truth) — the pi extension and the
+ * workspace TUI headless runner both build child prompts from these.
  */
-export const AUTHOR_PREPROMPT = `You are a skill author for a pi coding agent.
-
-Create exactly one new skill following the format below, then stop. Do not
-ask follow-up questions — work from the description as given.
-
----
-name: <kebab-case-name>
-description: <one or two sentences: when to use this skill, what it does>
-groups: [<optional comma-separated group tags>]
-dependencies: [<optional names of skills this one depends on>]
----
-
-<Body: concise, actionable instructions for the agent that will load this
-skill. Use short sections and bullet lists. Include concrete steps, expected
-inputs/outputs, and any edge cases. Keep it focused — no filler.>
-
-Rules:
-- Write the new skill at .agents/skills/<name>/SKILL.md (choose a kebab-case
-  <name> that fits the description), with the frontmatter block exactly as
-  shown (name/description required; groups/dependencies optional).
-- The description must say WHEN to use the skill (it drives skill selection).
-- If a skill with that name already exists, pick a fresh name instead.
-- Do not touch anything outside .agents/skills/.`;
-
-/**
- * Instructions after the user description: the reply shape.
- * Transported as the postprompt.
- */
-export const AUTHOR_POSTPROMPT =
-  'When done, reply with one short line: the skill name and what it does.';
+export const AUTHOR_PREPROMPT = Interactive.AUTHOR_PREPROMPT;
+export const AUTHOR_POSTPROMPT = Interactive.AUTHOR_POSTPROMPT;
 
 /**
  * Shared model runtime for child agents: one per process. Provided to
@@ -282,22 +255,8 @@ const generateFor =
       return fresh;
     }).pipe(Effect.provide(NodeLive));
 
-/**
- * Instructions before the change request: the child agent edits exactly
- * the named skill in place, then stops. Transported as the preprompt.
- */
-export const MODIFY_PREPROMPT =
-  'You are a skill editor for a pi coding agent. Edit exactly the skill named below, then stop. ' +
-  'Do not ask follow-up questions — work from the change request as given. ' +
-  'Do not rename the skill directory. Keep frontmatter keys valid (name/description required; groups/dependencies optional). ' +
-  'Keep the description saying WHEN to use the skill. Do not touch anything outside that skill directory.';
-
-/**
- * Instructions after the change request: the reply shape.
- * Transported as the postprompt.
- */
-export const MODIFY_POSTPROMPT =
-  'When done, reply with one short line: the skill name and what changed.';
+export const MODIFY_PREPROMPT = Interactive.MODIFY_PREPROMPT;
+export const MODIFY_POSTPROMPT = Interactive.MODIFY_POSTPROMPT;
 
 /**
  * Agentic skill modification for a working directory: runs the generic
@@ -338,27 +297,8 @@ const modifyFor =
       return updated;
     }).pipe(Effect.provide(NodeLive));
 
-/**
- * Instructions before the fix request: the child agent brings exactly the
- * named skill into the standard format, then stops. Transported as the
- * preprompt.
- */
-export const TRANSFORM_PREPROMPT =
-  'You are a skill editor for a pi coding agent. Bring exactly the skill named below ' +
-  'into the standard skill format, then stop. Do not ask follow-up questions. ' +
-  'Keep what the skill teaches unchanged — fix the shape only: frontmatter must have ' +
-  'name (matching the directory), description (1-2 sentences saying WHEN to use the skill), ' +
-  'id (keep the existing 16-hex value unchanged), author, version (SemVer), ' +
-  'plus groups/dependencies lists when non-empty; ' +
-  'the body must have `# When To Use`, `# Pipeline`, and `# Reference` sections. ' +
-  'Do not rename the skill directory. Do not touch anything outside that skill directory.';
-
-/**
- * Instructions after the fix request: the reply shape.
- * Transported as the postprompt.
- */
-export const TRANSFORM_POSTPROMPT =
-  'When done, reply with one short line: the skill name and what was fixed.';
+export const TRANSFORM_PREPROMPT = Interactive.TRANSFORM_PREPROMPT;
+export const TRANSFORM_POSTPROMPT = Interactive.TRANSFORM_POSTPROMPT;
 
 /**
  * Agentic skill format-transform for a working directory: runs the generic
@@ -538,7 +478,7 @@ export default function piSkillsExtension(pi: ExtensionAPI): void {
         : undefined,
     (ctx) =>
       ctx.mode === 'tui'
-        ? (models) => Effect.runPromise(ModelPicker.modelPickerDialog(ctx.ui, models))
+        ? (models) => ModelPicker.modelPickerDialog(ctx.ui, models).pipe(Effect.runPromise)
         : undefined,
     (ctx) =>
       ctx.mode === 'tui'
