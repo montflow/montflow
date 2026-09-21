@@ -1,8 +1,10 @@
-# Effect-style release, adapted for Bun. Covers @montflow/core and
-# @montflow/format (all other packages remain ignored, see
-# .changeset/config.json `ignore` list). Push to `main`:
-# - setup installs dependencies once and warms the shared store cache.
-# - checks (test, typecheck, lint, format) run in parallel off that cache.
+# Effect-style release, adapted for Bun. Scoped to the workspace packages
+# whose local version is not yet on npm (private and changeset-ignored packages
+# excluded). Push to `main`:
+# - setup installs dependencies once, warms the shared store cache, and
+#   computes the set of packages being released.
+# - checks (test, typecheck, lint, format) run in parallel off that cache,
+#   only for the packages being released.
 # - PRs carrying a changeset file -> "Version Packages" PR is opened/updated.
 # - Merging that PR (all checks green) -> publishes to npm.
 #
@@ -29,6 +31,8 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    outputs:
+      packages: ${{ steps.release.outputs.packages }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,9 +57,52 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Determine packages to release
+        id: release
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const { execFileSync } = require('node:child_process');
+
+          const ignored = new Set(
+            JSON.parse(fs.readFileSync('.changeset/config.json', 'utf8')).ignore ?? [],
+          );
+          const manifests = [];
+
+          for (const dir of ['packages', 'tooling', 'apps']) {
+            if (!fs.existsSync(dir)) continue;
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              if (!entry.isDirectory()) continue;
+              const file = path.join(dir, entry.name, 'package.json');
+              if (!fs.existsSync(file)) continue;
+              const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+              if (manifest.private || !manifest.version || ignored.has(manifest.name)) continue;
+              manifests.push(manifest);
+            }
+          }
+
+          const packages = [];
+          for (const { name, version } of manifests) {
+            let published = '';
+            try {
+              published = execFileSync('npm', ['view', `${name}@${version}`, 'version'], {
+                encoding: 'utf8',
+                stdio: ['ignore', 'pipe', 'ignore'],
+              }).trim();
+            } catch {
+              published = '';
+            }
+            if (published !== version) packages.push(name);
+          }
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `packages=${JSON.stringify(packages)}\n`);
+          NODE
+
   checks:
     name: ${{ matrix.name }} (${{ matrix.package }})
     needs: [setup]
+    if: needs.setup.outputs.packages != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -63,9 +110,12 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        package:
-          - "@montflow/core"
-          - "@montflow/format"
+        package: ${{ fromJSON(needs.setup.outputs.packages) }}
+        name:
+          - test
+          - typecheck
+          - lint
+          - format
         include:
           - name: test
             script: test
@@ -105,6 +155,7 @@ jobs:
   release:
     name: Release
     needs: [checks]
+    if: ${{ !cancelled() && needs.checks.result != 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
