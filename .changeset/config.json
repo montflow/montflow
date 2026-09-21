@@ -7,7 +7,6 @@
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": [
-    "@montflow/core",
     "@montflow/stlx",
     "@montflow/linting",
     "@montflow/pi-effect",

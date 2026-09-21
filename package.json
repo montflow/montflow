@@ -12,7 +12,7 @@
   "scripts": {
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "changeset:publish": "bun run --filter @montflow/format build && changeset publish",
+    "changeset:publish": "bun run --filter @montflow/core --filter @montflow/format build && changeset publish",
     "test": "turbo test",
     "ts:check": "turbo ts:check",
     "format:check": "turbo format:check",
