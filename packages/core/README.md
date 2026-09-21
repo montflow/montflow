@@ -1,5 +1,7 @@
 # @montflow/core ⚙️
 
+TypeScript utilities built on [Effect](https://effect.website) v4.
+
 ## Install
 
 ```
@@ -10,13 +12,12 @@ npm i @montflow/core
 bun add @montflow/core
 ```
 
-## Features
+## 3.0.0
 
-- 🚀 **Powerful**. Provides a set of utilities to enhance your development workflow.
-- 🎈 **Lightweight**. Minimal footprint for maximum performance.
-- 🌳 **Treeshakable**. Import only what you need.
-- 🛠 **Composable**. Build complex logic with simple primitives.
-- 📝 **DX**. Top-in-class support with TypeScript for an enhanced developer experience.
+Rebuilt around Effect. Utilities are grouped into namespaced modules —
+`ArrayExt`, `NumberExt`, `RecordExt`, `StringExt`, `BrandExt`, `Async`,
+`Constructor`, `Function`, `Macro`, `Range` — and branded structs — `Float`,
+`Int`, `PositiveInt`, `PositiveNumber`, `Uuid`.
 
 ## License
 
