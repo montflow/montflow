@@ -45,7 +45,7 @@
           # Core package: bun workspace project producing a build output.
           core = pkgs.stdenv.mkDerivation {
             pname = "montflow-core";
-            version = "3.0.0-alpha.9";
+            version = "3.0.0";
             src = ./.;
 
             nativeBuildInputs = [ pkgs.bun nodejs ];
