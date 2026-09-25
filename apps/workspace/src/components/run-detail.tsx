@@ -2,10 +2,9 @@ import { For, Show } from 'solid-js';
 import type { Runs } from '../services/index.js';
 import { Keybinds, formatKeybinds } from './keybinds.js';
 import { palette } from './palette.js';
+import { liveNote, parkedQuestion, runTranscriptLines } from './run-detail-lines.js';
+import { type RunDetailMode } from './run-detail-keys.js';
 import { runMarker } from './runs-panel.js';
-
-/** Detail body mode: truncated preview or scrollable full view. */
-export type RunDetailMode = 'preview' | 'view';
 
 export interface RunDetailProps {
   readonly detail: Runs.RunDetail;
@@ -15,21 +14,20 @@ export interface RunDetailProps {
 }
 
 /**
- * Run detail content: status line (marker plus status plus model),
- * the initial prompt, then the live transcript — truncated to fit in
- * `preview`, windowed by `scrollOffset` in `view`. Chromeless — the
- * caller owns border and title. The footer names the next action
- * (`v` toggles modes, `j`/`k` scroll the full view, `x` interrupts a
- * live run). Mirrors `PromptDetail` line for line.
+ * Run detail content: status line (marker plus status plus live note),
+ * the initial prompt, a callout for a parked question, then the live
+ * transcript — truncated to fit in `preview`, windowed by `scrollOffset`
+ * in `view`. Chromeless — the caller owns border and title. The footer
+ * names the next action (`v` toggles modes, `j`/`k` scroll the full
+ * view); the parked callout names `a answer` and the status bar owns
+ * the live `s`/`x` hints. Mirrors `PromptDetail` line for line.
  * @param props - run detail, view mode, scroll window, and the body line budget
  * @returns detail content element
  */
 export const RunDetail = (props: RunDetailProps) => {
-  const lines = () =>
-    props.detail.events.map(
-      (event) =>
-        `${event.role === 'user' ? '›' : event.role === 'assistant' ? '◈' : '·'} ${event.text}`,
-    );
+  const lines = () => runTranscriptLines(props.detail);
+  const question = () => parkedQuestion(props.detail);
+  const note = () => liveNote(props.detail.summary.status);
   const budget = () => Math.max(props.maxBodyLines, 1);
   const offset = () =>
     props.mode === 'view'
@@ -37,8 +35,6 @@ export const RunDetail = (props: RunDetailProps) => {
       : 0;
   const shown = () => lines().slice(offset(), offset() + budget());
   const hidden = () => lines().length - shown().length - offset();
-  const live =
-    props.detail.summary.status === 'running' || props.detail.summary.status === 'awaiting-input';
 
   return (
     <box flexDirection="column" flexGrow={1} minHeight={0} gap={1}>
@@ -47,8 +43,8 @@ export const RunDetail = (props: RunDetailProps) => {
         <text>
           <span style={{ fg: palette.dim }}>status </span>
           {`${runMarker(props.detail.summary.status)} ${props.detail.summary.status}`}
-          <Show when={live} fallback={undefined}>
-            <span style={{ fg: palette.accent }}> · live</span>
+          <Show when={note()} fallback={undefined}>
+            {(text: () => string) => <span style={{ fg: palette.accent }}> · {text()}</span>}
           </Show>
         </text>
         <text>
@@ -68,6 +64,17 @@ export const RunDetail = (props: RunDetailProps) => {
           )}
         </Show>
       </box>
+      <Show when={question()} fallback={undefined}>
+        {(text: () => string) => (
+          <box flexDirection="column">
+            <text>
+              <span style={{ fg: palette.accent }}>question </span>
+              <span style={{ fg: palette.text }}>{text()}</span>
+            </text>
+            <text style={{ fg: palette.dim }}>{formatKeybinds([Keybinds.answer()])}</text>
+          </box>
+        )}
+      </Show>
       <box flexDirection="column" flexGrow={1} minHeight={0}>
         <Show
           when={lines().length > 0}

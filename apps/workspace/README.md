@@ -2,7 +2,8 @@
 
 Fullscreen OpenTUI Solid workspace dashboard. One screen, a configurable
 grid of panels — small info over skills and prompts down the wider
-left rail, tall runs over profiles on the right side. Letter keys select a panel
+left rail, tall runs over features and profiles on the right side. Letter keys
+select a panel
 (`[i] Info` titles show the binding), `q` quits.
 
 ```bash
@@ -51,11 +52,19 @@ unknown panel ids render as placeholders under their own id.
 - Runs lists `.agents/@montflow/pi-runs/runs/` with the same `/`
   filter, `j/k` move, enter for details, esc back, `c` create treatment
   as skills. Create asks for a name, an initial prompt, and a model
-  (filterable picker from the pi catalogue), then launches a headless
-  `pi -p` agent on the run. The detail shows the transcript plus the
-  settlement receipt — `v` full view with `j`/`k` scroll, `x` interrupt
-  a live run, `a` answer a parked one, `R` reload. A missing store dir
-  offers `⏎` to seed it.
+  (filterable picker from the pi catalogue), then dispatches the
+  in-process `@montflow/pi-runs` engine on the run. The detail shows the
+  transcript (refreshed live while the run is running or parked) plus
+  the settlement receipt — `v` full view with `j`/`k` scroll, `s` steer
+  a running run, `x` interrupt a live run, `a` answer a parked one, `R`
+  reload. A missing store dir offers `⏎` to seed it.
+- Features lists `.agents/@montflow/features/` read-only — one row per
+  feature with its derived lifecycle state (`complete`, `in-progress`,
+  `blocked`, `not-started`, `inconsistent`). `/` filters, `j/k` move,
+  enter opens the detail, esc back, `R` refetches. The detail shows the
+  header meta, verification issues, and every phase with its tasks and
+  per-task statuses — `v` full view with `j`/`k` scroll. Verification
+  and state come from `@montflow/pi-features`.
 
 Without the `pi` CLI on PATH the dashboard never reaches the grid —
 startup renders a full-screen install pointer instead.

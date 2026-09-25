@@ -35,6 +35,18 @@ Vitest.describe('Keybinds.listBanner', () => {
       formatKeybinds(Keybinds.listBanner(true, 2, { quickRemove: true })),
     ).toStrictEqual('/ search · ⏎ open · c create · x remove · j/k move');
   });
+
+  Vitest.it('adds the section toggle for runs panels', () => {
+    Vitest.expect(formatKeybinds(Keybinds.listBanner(true, 2, { allRuns: true }))).toStrictEqual(
+      '/ search · ⏎ open · c create · j/k move · A all runs',
+    );
+  });
+});
+
+Vitest.describe('Keybinds runs section toggle', () => {
+  Vitest.it('binds A to the full run history', () => {
+    Vitest.expect(formatKeybinds([Keybinds.showAll()])).toStrictEqual('A all runs');
+  });
 });
 
 Vitest.describe('Keybinds dialog and detail sets', () => {
@@ -124,6 +136,19 @@ Vitest.describe('Keybinds dialog and detail sets', () => {
   Vitest.it('matches the refresh hint', () => {
     Vitest.expect(formatKeybinds([Keybinds.refresh(), Keybinds.quit()])).toStrictEqual(
       'R refresh · q quit',
+    );
+  });
+
+  Vitest.it('matches the dispatched-run jump hint', () => {
+    Vitest.expect(formatKeybinds([Keybinds.goToRun()])).toStrictEqual('g run');
+  });
+
+  Vitest.it('matches the run-detail live controls', () => {
+    Vitest.expect(formatKeybinds([Keybinds.steer(), Keybinds.interrupt()])).toStrictEqual(
+      's steer · x interrupt',
+    );
+    Vitest.expect(formatKeybinds([Keybinds.answer(), Keybinds.interrupt()])).toStrictEqual(
+      'a answer · x interrupt',
     );
   });
 

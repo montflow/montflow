@@ -7,7 +7,9 @@ import { execFile } from 'node:child_process';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: promisify adapts the session probe shell-out; both go away with the Command migration.
 import { promisify } from 'node:util';
 import type { Interactive as ProfilesInteractive, PiProfiles } from '@montflow/pi-profiles';
+import type { RunDetail as EngineRunDetail } from '@montflow/pi-runs';
 import { Data, Effect } from 'effect';
+import * as Runs from '../runs/index.js';
 import * as Skills from '../skills/index.js';
 
 /**
@@ -521,8 +523,8 @@ export const installerFor =
  * Instructions before the user description: the child agent authors
  * exactly one profile, then stops. Mirrors `AUTHOR_PREPROMPT` in
  * `@montflow/pi-profiles`'s extension (not exported through the package
- * index, so the workspace host carries this copy for its headless
- * `pi -p` runs).
+ * index, so the workspace host carries this copy for its dispatched
+ * author runs).
  */
 export const AUTHOR_PREPROMPT = `You are a profile author for a pi coding agent.
 
@@ -592,45 +594,6 @@ Rules:
 export const MODIFY_POSTPROMPT = 'When done, reply with one short line: what changed.';
 
 /**
- * Agentic profile generation for the workspace host: snapshot the store,
- * run the shared author prompt headless, return the fresh profile.
- * New profiles are detected by name diff so agent chatter never parses.
- * @param libs - loaded extension runtime
- * @param root - workspace root (profile store owner)
- * @param description - profile description from the TUI input
- * @param modelLabel - `provider/model-id` pin, if any
- * @param inject - requirement skills to inject into the author prompt
- * @returns Effect resolving to the generated Profile, failing with the reason
- */
-export const generateAgentic = (
-  libs: PiProfilesLib,
-  root: string,
-  description: string,
-  modelLabel: string | undefined,
-  inject: ReadonlyArray<ProfilesInteractive.InstalledSkill>,
-): Effect.Effect<PiProfiles.Profile, string> =>
-  Effect.gen(function* () {
-    const before = yield* storeFor(root).list();
-    const beforeNames = new Set(before.map((profile) => profile.name));
-    yield* Skills.runHeadlessAgent(
-      root,
-      Skills.buildHeadlessPrompt(
-        AUTHOR_PREPROMPT + libs.Interactive.formatInjectedSkills(inject),
-        `Profile description: ${description}`,
-        AUTHOR_POSTPROMPT,
-      ),
-      modelLabel,
-    ).pipe(Effect.mapError((error) => error.message));
-    const after = yield* storeFor(root).list();
-    const fresh = after.find((profile) => !beforeNames.has(profile.name));
-    if (fresh === undefined)
-      return yield* Effect.fail(
-        'The agent finished without creating a profile — try describing it differently.',
-      );
-    return fresh;
-  });
-
-/**
  * Agentic profile modification for the workspace host: run the shared
  * editor prompt headless scoped to the profile name, re-read that profile.
  * @param libs - loaded extension runtime
@@ -672,19 +635,248 @@ export const modifyAgentic = (
   });
 
 /**
- * Agentic generation port for the shared interactive flows: headless
- * `pi -p` over the shared author prompt.
+ * TUI callbacks for a dispatched author run's completion: the fresh
+ * profile was found (refresh + open its detail), or the run settled
+ * without one (surface the reason). The run id lets the TUI clear only
+ * the matching dispatched-run keybind target. Absent in headless tests.
+ */
+export interface CreateFlowHooks {
+  /** Fresh profile found after the author run settled. */
+  readonly onProfileCreated?: ((profile: ProfileSummary, runId: string) => void) | undefined;
+  /** Author run settled without creating a profile. */
+  readonly onProfileFailed?: ((message: string, runId: string) => void) | undefined;
+}
+
+/**
+ * Raw profile directory names under the store, regardless of decode
+ * validity. Used to snapshot the store at dispatch and to distinguish
+ * "nothing written" from "written but invalid" after a run settles.
  * @param root - workspace root (profile store owner)
+ * @returns Effect resolving to directory names (empty when the store is missing)
+ */
+export const rawProfileIds = (root: string): Effect.Effect<ReadonlyArray<string>> =>
+  Effect.promise((): Promise<ReadonlyArray<string>> =>
+    readdir(join(root, ...PROFILES_DIR)).then(
+      (names) => names.filter((name) => !name.startsWith('.')),
+      () => [],
+    ),
+  );
+
+/** Fresh profile directories decoded after a run settled: valid profiles plus ids that failed to decode. */
+export interface FreshProfiles {
+  readonly valid: ReadonlyArray<PiProfiles.Profile>;
+  /** Directory ids with a missing or malformed `PROFILE.md`. */
+  readonly invalid: ReadonlyArray<string>;
+}
+
+/** One decoded fresh directory: a profile, or undefined when it failed to decode. */
+interface FreshEntry {
+  readonly id: string;
+  readonly profile: PiProfiles.Profile | undefined;
+}
+
+/**
+ * Decode the fresh profile directories a settled run added, splitting
+ * valid profiles from ids whose `PROFILE.md` is missing or malformed.
+ * @param libs - loaded extension runtime
+ * @param root - workspace root (profile store owner)
+ * @param ids - fresh directory ids to read
+ * @returns Effect resolving to the valid profiles and invalid ids
+ */
+export const readFreshProfiles = (
+  libs: PiProfilesLib,
+  root: string,
+  ids: ReadonlyArray<string>,
+): Effect.Effect<FreshProfiles> =>
+  Effect.forEach(ids, (id): Effect.Effect<FreshEntry> =>
+    Effect.promise(() =>
+      readFile(join(root, ...PROFILES_DIR, id, 'PROFILE.md'), 'utf8').then(
+        (raw) => raw,
+        () => undefined,
+      ),
+    ).pipe(
+      Effect.flatMap((raw): Effect.Effect<FreshEntry> =>
+        raw === undefined
+          ? Effect.succeed({ id, profile: undefined })
+          : libs.PiProfiles.decodeProfileFile(id, raw).pipe(
+              Effect.match({
+                onFailure: (): FreshEntry => ({ id, profile: undefined }),
+                onSuccess: (profile): FreshEntry => ({ id, profile }),
+              }),
+            ),
+      ),
+    ),
+  ).pipe(
+    Effect.map((entries) => ({
+      valid: entries.flatMap((entry) => (entry.profile === undefined ? [] : [entry.profile])),
+      invalid: entries.flatMap((entry) => (entry.profile === undefined ? [entry.id] : [])),
+    })),
+  );
+
+/** One transcript line, shared by the engine detail and the dashboard row. */
+interface TranscriptLine {
+  readonly role: string;
+  readonly text: string;
+}
+
+/**
+ * Final assistant text from a settled run's transcript, or undefined when
+ * the run produced no assistant turn.
+ * @param events - stored transcript events
+ * @returns last assistant text, if any
+ */
+export const finalAssistantText = (events: ReadonlyArray<TranscriptLine>): string | undefined =>
+  events.findLast((event) => event.role === 'assistant')?.text;
+
+/** How a settled author run's profile was resolved. */
+export type CreatedProfilePick =
+  | { readonly kind: 'one'; readonly profile: PiProfiles.Profile }
+  | { readonly kind: 'ambiguous'; readonly names: ReadonlyArray<string> }
+  | { readonly kind: 'none' };
+
+/**
+ * Resolve the profile a settled author run authored. Prefers the fresh
+ * profile named in the run's final reply — correlating concurrent creates
+ * to their own run — and falls back to the name diff only when exactly one
+ * fresh profile exists (unambiguous).
+ * @param reply - final assistant text from the run, if any
+ * @param fresh - profiles added since the run was dispatched
+ * @returns the chosen profile, an ambiguity, or none
+ */
+export const pickCreatedProfile = (
+  reply: string | undefined,
+  fresh: ReadonlyArray<PiProfiles.Profile>,
+): CreatedProfilePick => {
+  if (fresh.length === 0) return { kind: 'none' };
+  const named = reply === undefined ? [] : fresh.filter((profile) => reply.includes(profile.name));
+  if (named.length === 1) {
+    const profile = named[0];
+    if (profile !== undefined) return { kind: 'one', profile };
+  }
+  if (fresh.length === 1) {
+    const profile = fresh[0];
+    if (profile !== undefined) return { kind: 'one', profile };
+  }
+  return { kind: 'ambiguous', names: fresh.map((profile) => profile.name) };
+};
+
+/**
+ * Completion hook for a dispatched author run: resolve the profile the run
+ * authored (reply-correlated, name-diff fallback), persist it canonically
+ * through the loaded runtime's decode+encode path, and notify the hooks.
+ * Exported so a resumed author run can re-attach the same hook through
+ * `Runs.resumeRun` after an app restart.
+ * @param root - workspace root (profile store owner)
+ * @param libs - loaded extension runtime
+ * @param runId - the author run id
+ * @param beforeIds - raw store directory ids snapshotted at dispatch, or undefined after a restart
+ * @param hooks - TUI completion callbacks
+ * @returns the `onSettled` hook
+ */
+export const authorCompletion =
+  (
+    root: string,
+    libs: PiProfilesLib,
+    runId: string,
+    beforeIds: ReadonlyArray<string> | undefined,
+    hooks?: CreateFlowHooks,
+  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  (detail) =>
+    Effect.gen(function* () {
+      const afterIds = yield* rawProfileIds(root);
+      const freshIds = afterIds.filter((id) => !(beforeIds ?? []).includes(id));
+      const { valid, invalid } = yield* readFreshProfiles(libs, root, freshIds);
+      const pick = pickCreatedProfile(finalAssistantText(detail.events), valid);
+      if (pick.kind === 'one') {
+        const row = fromProfile(pick.profile);
+        const failure = yield* saveProfile(root, row).pipe(
+          Effect.match({ onFailure: (error) => error.message, onSuccess: () => undefined }),
+        );
+        if (failure !== undefined) {
+          hooks?.onProfileFailed?.(
+            `Run '${runId}' created '${row.id}' but it could not be saved: ${failure}`,
+            runId,
+          );
+          return;
+        }
+        hooks?.onProfileCreated?.(row, runId);
+        return;
+      }
+      if (pick.kind === 'ambiguous') {
+        hooks?.onProfileFailed?.(
+          `Run '${runId}' created several profiles (${pick.names.join(', ')}) — open the one you want from the list.`,
+          runId,
+        );
+        return;
+      }
+      if (invalid.length > 0) {
+        hooks?.onProfileFailed?.(
+          `Run '${runId}' wrote an invalid profile (${invalid.join(', ')}) — check its PROFILE.md and retry.`,
+          runId,
+        );
+        return;
+      }
+      hooks?.onProfileFailed?.(
+        `Run '${runId}' finished without creating a profile — try describing it differently.`,
+        runId,
+      );
+    });
+
+/** Result of a create flow: persisted manually, or dispatched as a run. */
+export type CreateFlowResult =
+  | { readonly kind: 'saved'; readonly profile: ProfileSummary }
+  | { readonly kind: 'dispatched'; readonly runId: string };
+
+/** Run id dispatched by the most recent agentic create, consumed by {@link runCreateFlow}. */
+let dispatchedRunId: string | undefined;
+
+/** Test seam: forget the dispatched-run ref so a fresh create flow starts clean. */
+export const resetDispatchedRun = (): void => {
+  dispatchedRunId = undefined;
+};
+
+/**
+ * Agentic generation port for the shared interactive flows: gate on the
+ * runs extension, snapshot the profile store, dispatch an author run
+ * through the pi-runs engine, then unwind the shared `createProfile`
+ * flow with `CANCELLED` (the run, not this flow, writes the profile).
+ * The run id lands in a module-level ref that {@link runCreateFlow}
+ * reads to distinguish a dispatch from a real cancel. When the run
+ * settles, {@link authorCompletion} correlates the fresh profile to this
+ * run's final reply, so concurrent creates never cross wires.
+ * @param root - workspace root (profile store owner)
+ * @param libs - loaded extension runtime
+ * @param hooks - TUI completion callbacks, if any
  * @returns generator port for the interactive flows
  */
 export const generateFor =
-  (root: string): ProfilesInteractive.ProfileGenerator =>
+  (
+    root: string,
+    libs: PiProfilesLib,
+    hooks?: CreateFlowHooks,
+  ): ProfilesInteractive.ProfileGenerator =>
   (input) =>
-    loadLibs().pipe(
-      Effect.flatMap((libs) =>
-        generateAgentic(libs, root, input.description, input.modelLabel, input.inject),
-      ),
-    );
+    Effect.gen(function* () {
+      const installed = yield* Runs.runsExtensionInstalled(root);
+      if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+      const beforeIds = yield* rawProfileIds(root);
+      const id = yield* Runs.newRunId('create-profile');
+      const name = `Create profile: ${input.description.trim().slice(0, 80)}`;
+      yield* Runs.startRun(root, {
+        id,
+        name,
+        prompt: Skills.buildHeadlessPrompt(
+          AUTHOR_PREPROMPT + libs.Interactive.formatInjectedSkills(input.inject),
+          `Profile description: ${input.description}`,
+          AUTHOR_POSTPROMPT,
+        ),
+        model: input.modelLabel,
+        tools: [...Runs.DEFAULT_RUN_TOOLS],
+        onSettled: authorCompletion(root, libs, id, beforeIds, hooks),
+      });
+      dispatchedRunId = id;
+      return yield* Effect.fail(libs.Interactive.CANCELLED);
+    });
 
 /**
  * Agentic modification port for the shared interactive flows: headless
@@ -715,25 +907,30 @@ export interface FlowPorts {
 /**
  * Workspace host for the shared create flow: load the extension,
  * resolve picker models, run `createProfile` (manual or agentic behind
- * the overlays), persist. Cancellations resolve undefined so the TUI
- * needs no `CANCELLED` knowledge — only real failures reject.
+ * the overlays). Manual creates persist and resolve `saved`; agentic
+ * creates dispatch a run and resolve `dispatched`; real cancels resolve
+ * undefined. The TUI needs no `CANCELLED` knowledge — only real
+ * failures reject.
  * @param root - workspace root (profile store owner)
  * @param ports - TUI overlay ports
- * @returns Effect resolving to the saved row, or undefined on cancel
+ * @param hooks - completion callbacks for a dispatched author run
+ * @returns Effect resolving to the create outcome, or undefined on cancel
  */
 export const runCreateFlow = (
   root: string,
   ports: FlowPorts,
-): Effect.Effect<ProfileSummary | undefined, string> =>
+  hooks?: CreateFlowHooks,
+): Effect.Effect<CreateFlowResult | undefined, string> =>
   loadLibs().pipe(
     Effect.flatMap((libs) =>
       Effect.gen(function* () {
         const refs = yield* Skills.listModelLabels();
         const fallback = yield* Skills.listDefaultModel();
+        dispatchedRunId = undefined;
         const profile = yield* libs.Interactive.createProfile(
           ports.ui,
           libs.Interactive.modelOptions(fallback, refs),
-          generateFor(root),
+          generateFor(root, libs, hooks),
           skillInventoryFor(root),
           installerFor(root),
           undefined,
@@ -742,11 +939,18 @@ export const runCreateFlow = (
         );
         const row = fromProfile(profile);
         yield* saveProfile(root, row).pipe(Effect.mapError((failure) => failure.message));
-        return row;
+        return { kind: 'saved', profile: row } satisfies CreateFlowResult;
       }).pipe(
-        Effect.catch((error) =>
-          error === libs.Interactive.CANCELLED ? Effect.succeed(undefined) : Effect.fail(error),
-        ),
+        Effect.catch((error) => {
+          if (error !== libs.Interactive.CANCELLED) return Effect.fail(error);
+          const runId = dispatchedRunId;
+          dispatchedRunId = undefined;
+          return Effect.succeed(
+            runId === undefined
+              ? undefined
+              : ({ kind: 'dispatched', runId } satisfies CreateFlowResult),
+          );
+        }),
       ),
     ),
   );

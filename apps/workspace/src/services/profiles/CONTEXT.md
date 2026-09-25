@@ -48,15 +48,22 @@ Consequences:
 - `storeFor` / `skillInventoryFor` / `installerFor` ports for the shared
   `Interactive` flows (inventory and installer reuse the skills service:
   `getSkills` rows as `InstalledSkill`, named installs via the skills CLI)
-- Headless agentic runs reuse the skills service (`buildHeadlessPrompt`,
-  `runHeadlessAgent`, `listModelLabels`) over workspace-carried copies of
-  the author/editor prompts (`AUTHOR_PREPROMPT`, `MODIFY_PREPROMPT`) —
-  the extension module owns the canonicals, which are not exported
-  through the package index
-- `generateFor` / `modifyFor` ports plus `generateAgentic` /
-  `modifyAgentic` (name-diff detection, so agent chatter never parses)
+- Headless agentic modify reuses the skills service
+  (`buildHeadlessPrompt`, `runHeadlessAgent`, `listModelLabels`) over
+  workspace-carried copies of the editor prompt (`MODIFY_PREPROMPT`) —
+  the extension module owns the canonical, which is not exported through
+  the package index
+- `generateFor` dispatches agentic creation through the runs engine
+  (`Runs.runsExtensionInstalled` gate, `Runs.startRun` with the author
+  prompt and the `read/write/edit` allowlist), records the run id, and
+  unwinds the shared flow with `CANCELLED`; `authorCompletion` correlates
+  the fresh profile to the run's final reply, re-encodes it via
+  `saveProfile`, and fires `CreateFlowHooks`. Re-usable as the `onSettled`
+  hook passed to `Runs.resumeRun` after a restart.
+- `modifyFor` plus `modifyAgentic` (name-diff detection, so agent chatter
+  never parses)
 - `runCreateFlow` / `runModifyFlow` workspace hosts (manual or agentic
-  behind the TUI overlays)
+  behind the TUI overlays); create resolves `saved` or `dispatched`
 
 ## Does not belong here
 

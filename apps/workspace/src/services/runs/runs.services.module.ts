@@ -2,11 +2,32 @@
 import { mkdir, stat } from 'node:fs/promises';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for run files; both go away with the FileSystem migration.
 import { join } from 'node:path';
-// eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: spawns the headless pi child for agent execution; migrate to Command when the app moves onto the platform layer graph.
-import { spawn } from 'node:child_process';
+// eslint-disable-next-line montflow/no-node-platform-imports -- platform adapter at the TUI composition-root boundary: shells out to the pi CLI for the extension probe; migrate to Command when the app moves onto the platform layer graph.
+import { execFile } from 'node:child_process';
+// eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: promisify adapts the extension probe shell-out; both go away with the Command migration.
+import { promisify } from 'node:util';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Clock, Data, Effect, Layer } from 'effect';
-import type { Run, Store } from '@montflow/pi-runs';
+import * as ManagedRuntime from 'effect/ManagedRuntime';
+import type {
+  Run,
+  RunDetail as EngineRunDetail,
+  Runner,
+  RunnerImpl,
+  SessionFactory,
+  Store,
+  WorkspaceBridge,
+} from '@montflow/pi-runs';
+
+/**
+ * Default tool allowlist for workspace-dispatched runs. Restores the
+ * `pi -p --tools read,write,edit` capability set the in-process engine
+ * replaced — without it Pi's session default also enables `bash`. The Pi
+ * factory unions the interaction tools (`ask_user`/`notify_user`) into
+ * whatever allowlist is passed, so a restricted run can still park and
+ * notify.
+ */
+export const DEFAULT_RUN_TOOLS = ['read', 'write', 'edit'] as const;
 
 /**
  * Lazy handle to the runs extension runtime. Static imports from
@@ -77,10 +98,16 @@ export const classifyLoadError = (cause: unknown): ExtensionLoadError => {
 /** Cached extension module promise. Cleared on failure so retrying reloads it. */
 let cachedLib: Promise<PiRunsLib> | undefined;
 
+/** The resolved extension runtime, once a flow has loaded it. */
+let liveLib: PiRunsLib | undefined;
+
 /** Single import attempt: resolves the runtime, or rejects with a classified load error. */
 const importOnce = (): Promise<PiRunsLib> => {
   cachedLib ??= import('@montflow/pi-runs').then(
-    (libs) => libs,
+    (libs) => {
+      liveLib = libs;
+      return libs;
+    },
     (cause: unknown) => {
       cachedLib = undefined;
       throw cause instanceof ExtensionLoadError ? cause : classifyLoadError(cause);
@@ -92,7 +119,14 @@ const importOnce = (): Promise<PiRunsLib> => {
 /** Test hook: drop the cached runtime so the next load re-imports. */
 export const resetExtensionCache = (): void => {
   cachedLib = undefined;
+  liveLib = undefined;
 };
+
+/**
+ * The loaded extension runtime, if any flow has loaded it yet.
+ * @returns the extension module namespace, or undefined before first load
+ */
+export const loadedPiRuns = (): PiRunsLib | undefined => liveLib;
 
 /**
  * Load the runs extension runtime as an Effect, caching the module
@@ -110,12 +144,25 @@ const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 /**
  * Absolute runs directory for a working directory:
- * `<cwd>/.agents/@montflow/pi-runs/runs`.
+ * `<cwd>/.agents/@montflow/pi-runs/runs`. Mirrors the extension's
+ * `Store.RUNS_SEGMENTS`; the pre-load fs checks (`runsInstalled`,
+ * `ensureRunsStore`) cannot import the runtime, so engine paths derive
+ * from the loaded segments via {@link runsDirFor} instead.
  * @param root - workspace root
  * @returns absolute runs directory
  */
 export const runsDir = (root: string): string =>
   join(root, '.agents', '@montflow', 'pi-runs', 'runs');
+
+/**
+ * Absolute runs directory derived from the loaded extension's segments,
+ * so the engine's store location can never drift from pi-runs.
+ * @param libs - loaded pi-runs namespace
+ * @param root - workspace root
+ * @returns absolute runs directory
+ */
+const runsDirFor = (libs: PiRunsLib, root: string): string =>
+  join(root, ...libs.Store.RUNS_SEGMENTS);
 
 /**
  * Run one store operation against the file backend rooted at the
@@ -133,7 +180,7 @@ const withStore = <A>(
   loadPiRuns().pipe(
     Effect.mapError((error) => error.message),
     Effect.flatMap((libs) =>
-      libs.Store.makeWithRoot(runsDir(root)).pipe(
+      libs.Store.makeWithRoot(runsDirFor(libs, root)).pipe(
         Effect.provide(NodeLive),
         Effect.flatMap((store) => use(store)),
       ),
@@ -148,6 +195,8 @@ export interface RunSummary {
   readonly status: string;
   readonly model: string;
   readonly prompt: string;
+  /** Latest agent-posted progress line; empty when none. */
+  readonly progress: string;
   readonly updated: string;
 }
 
@@ -175,6 +224,7 @@ export const fromRun = (run: Run.Run): RunSummary => ({
   status: run.status,
   model: run.model ?? '',
   prompt: run.prompt ?? '',
+  progress: run.progress ?? '',
   updated: run.updated,
 });
 
@@ -206,8 +256,19 @@ export const slugifyName = (name: string, now: number): string => {
     .slice(0, 48)
     .replace(/-+$/g, '');
   const base = slug === '' ? 'run' : slug;
-  return `${base}-${(now % 36 ** 4).toString(36).padStart(4, '0')}`;
+  // Full millisecond timestamp in base36 — a modulo suffix wrapped every
+  // ~28 minutes, colliding same-named runs created a cycle apart.
+  return `${base}-${now.toString(36)}`;
 };
+
+/**
+ * Slug a fresh run id from a display name using the Effect `Clock` (no
+ * wall-clock reads, so tests can drive time).
+ * @param name - display name from the create modal
+ * @returns Effect resolving to a directory-safe run id
+ */
+export const newRunId = (name: string): Effect.Effect<string> =>
+  Clock.currentTimeMillis.pipe(Effect.map((now) => slugifyName(name, now)));
 
 /**
  * True when the runs store directory exists.
@@ -221,6 +282,72 @@ export const runsInstalled = (root: string): Effect.Effect<boolean, never> =>
       () => false,
     ),
   );
+
+/**
+ * Parse `pi list` stdout. True when the pi-runs package is registered in
+ * the pi session — its name appears as a path segment (project-local
+ * `../packages/pi-runs`, absolute path) or as the `@montflow/pi-runs`
+ * package on its own line. The segment match keeps lookalikes
+ * (`not-pi-runs-x`) from reading as installed.
+ * @param stdout - raw command stdout
+ * @returns true when pi-runs is listed
+ */
+export const parseListOutput = (stdout: string): boolean =>
+  stdout.split(/\r?\n/).some((line) => /(?:^|[/@\s])pi-runs(?:$|[/@\s])/.test(line));
+
+/**
+ * Toast copy when an agentic flow needs the runs extension but `pi list`
+ * does not register it. The caller compares against this exact value to
+ * route the failure to a toast instead of the flow-error modal. The
+ * workspace engine imports `@montflow/pi-runs` directly; `pi list`
+ * registration is what the Pi session needs to load the extension.
+ */
+export const RUNS_EXTENSION_INSTALL_HINT =
+  'Runs extension not installed — register `@montflow/pi-runs` in `.pi/settings.json` (or reinstall the workspace dependencies), then retry.';
+
+/**
+ * True when a flow failure is the runs-extension install hint, so the TUI
+ * routes it to a warning toast instead of the flow-error modal.
+ * @param message - flow failure message
+ * @returns true for the install hint
+ */
+export const isRunsExtensionInstallError = (message: string): boolean =>
+  message === RUNS_EXTENSION_INSTALL_HINT;
+
+/** Overridable extension probe: tests inject a fake so the gate is deterministic without a Pi install. */
+let extensionProbe: ((root: string) => Effect.Effect<boolean, never>) | undefined;
+
+/**
+ * Test seam: replace the runs-extension probe, or clear it to restore the
+ * `pi list` shell-out.
+ * @param probe - probe to use, or undefined to restore the real one
+ */
+export const setExtensionProbe = (
+  probe: ((root: string) => Effect.Effect<boolean, never>) | undefined,
+): void => {
+  extensionProbe = probe;
+};
+
+/** Default probe: shell out to `pi list` in the workspace root. */
+const defaultExtensionProbe = (root: string): Effect.Effect<boolean, never> =>
+  Effect.promise(() =>
+    promisify(execFile)('pi', ['list'], { cwd: root, timeout: 8000 }).then(
+      ({ stdout }) => parseListOutput(stdout.toString()),
+      () => false,
+    ),
+  );
+
+/**
+ * True when pi-runs is installed in the pi session (`pi list` registers
+ * it). The probe runs in the workspace root so project-local packages
+ * resolve — from anywhere else `pi list` reports nothing. Slow or
+ * failing probes read as missing, so an agentic flow gates instead of
+ * dispatching against a runtime the session cannot see.
+ * @param root - workspace root (pi project directory)
+ * @returns installed flag, never fails
+ */
+export const runsExtensionInstalled = (root: string): Effect.Effect<boolean, never> =>
+  (extensionProbe ?? defaultExtensionProbe)(root);
 
 /**
  * Create the runs store directory (the install path behind `⏎`).
@@ -254,43 +381,6 @@ export const fetchRuns = (root: string): Effect.Effect<RunSummary[], string> =>
     ),
   );
 
-/** Inputs for creating a run: display name, initial agent prompt, optional model pin. */
-export interface CreateRunInput {
-  readonly name: string;
-  readonly prompt: string;
-  readonly model?: string | undefined;
-}
-
-/**
- * Create a run: slug an id from the name, `Store.create` with the
- * prompt/model capture, `start` it, and append the initial user prompt
- * as the first transcript event. Returns the dashboard row.
- * @param root - workspace root (runs store owner)
- * @param input - name, prompt, and optional model pin from the create modal
- * @returns Effect resolving to the created row, failing with displayable message
- */
-export const createRun = (root: string, input: CreateRunInput): Effect.Effect<RunSummary, string> =>
-  withStore(root, (store) =>
-    Effect.gen(function* () {
-      const id = slugifyName(input.name, yield* Clock.currentTimeMillis);
-      if (!isValidRunId(id)) return yield* Effect.fail(`Unsafe run id '${id}'.`);
-      if (input.model !== undefined && input.model !== '') {
-        yield* store
-          .create({ id, name: input.name, prompt: input.prompt, model: input.model })
-          .pipe(Effect.mapError((error) => error.reason));
-      } else {
-        yield* store
-          .create({ id, name: input.name, prompt: input.prompt })
-          .pipe(Effect.mapError((error) => error.reason));
-      }
-      const started = yield* store.start(id).pipe(Effect.mapError((error) => error.reason));
-      yield* store
-        .append({ runId: id, role: 'user', text: input.prompt })
-        .pipe(Effect.mapError((error) => error.reason));
-      return fromRun(started);
-    }),
-  );
-
 /**
  * Load one run for the detail page: run plus transcript events plus
  * settlement receipt (if any).
@@ -318,170 +408,281 @@ export const loadRun = (root: string, id: string): Effect.Effect<RunDetail, stri
     }),
   );
 
+/** Workspace callbacks the run engine forwards to: a toast and a notification. */
+export interface RunNotifier {
+  readonly toast: (message: string, variant?: 'info' | 'success' | 'error') => void;
+  readonly notify: (title: string, body: string) => void;
+}
+
 /**
- * Interrupt a live run: `Store.cancel` writes the cancelled receipt.
- * The in-flight agent fiber is stopped by the caller (fiber interrupt
- * kills the headless child) — the store transition lands either way.
- * @param root - workspace root (runs store owner)
+ * Module-level notifier the TUI installs once on mount. The engine's
+ * `WorkspaceBridge` forwards toasts and notifications here; when unset
+ * (tests, headless import) both calls are silent.
+ */
+let notifier: RunNotifier | undefined;
+
+/**
+ * Install the TUI notifier the run engine's bridge forwards to.
+ * @param next - notifier, or undefined to clear
+ */
+export const setRunNotifier = (next: RunNotifier | undefined): void => {
+  notifier = next;
+};
+
+/**
+ * Overridable Pi session factory layer: production uses the real
+ * `PiSessionFactory`, tests inject a fake so the engine runs without a
+ * Pi install.
+ */
+let sessionFactoryLayer: Layer.Layer<SessionFactory> | undefined;
+
+/**
+ * Per-repo-root engine runtimes. The engine's live-run registry must
+ * survive across dispatches, so one runtime is built per root and
+ * reused — mirroring `createRunnerHost` in `@montflow/pi-runs`.
+ */
+const runtimes = new Map<string, ManagedRuntime.ManagedRuntime<Runner, never>>();
+
+/**
+ * Dispose and forget every cached engine runtime, awaiting each disposal
+ * so layer finalizers (and detached consumer fibers) finish before the
+ * caller proceeds. Called by tests that swap the session factory and by
+ * the TUI on unmount.
+ * @returns promise resolving once every runtime is disposed
+ */
+export const resetRunnerRuntimes = async (): Promise<void> => {
+  const disposals = [...runtimes.values()].map((runtime) => runtime.dispose());
+  runtimes.clear();
+  await Promise.all(disposals);
+};
+
+/**
+ * Test seam: replace the Pi session factory the engine builds with, so
+ * lifecycle tests run against a fake `SessionPort`. Clears the cached
+ * runtimes so the next dispatch rebuilds with the injected factory.
+ * @param layer - fake factory layer, or undefined to restore the real Pi factory
+ */
+export const setSessionFactoryLayer = (layer: Layer.Layer<SessionFactory> | undefined): void => {
+  sessionFactoryLayer = layer;
+  void resetRunnerRuntimes();
+};
+
+/** File-backed store layer rooted at the workspace runs directory. */
+const storeLayer = (libs: PiRunsLib, root: string): Layer.Layer<Store.Store> =>
+  Layer.effect(libs.Store.Store, libs.Store.makeWithRoot(runsDirFor(libs, root))).pipe(
+    Layer.provide(NodeLive),
+  );
+
+/** Escape character, built without a literal so the source stays ASCII. */
+const ESCAPE = String.fromCharCode(27);
+
+/**
+ * Strip ANSI escapes and control characters from run-controlled text
+ * before it reaches the TUI. Mirrors the pi-runs `ConsoleBridge`
+ * sanitizer: a prompt-injected agent must not be able to move the
+ * cursor or corrupt the toast layer.
+ * @param text - run-controlled text (toast body, notification title/body)
+ * @returns printable, trimmed text
+ */
+export const sanitizeRunText = (text: string): string => {
+  const chars = [...text];
+  let stripped = '';
+  for (let index = 0; index < chars.length; index++) {
+    const char = chars[index] ?? '';
+    if (char === ESCAPE && chars[index + 1] === '[') {
+      index += 2;
+      while (index < chars.length && !/[A-Za-z]/.test(chars[index] ?? '')) index++;
+      continue;
+    }
+    stripped += char;
+  }
+  let out = '';
+  for (const char of stripped) {
+    const code = char.codePointAt(0) ?? 0;
+    out += code < 0x20 || code === 0x7f ? ' ' : char;
+  }
+  return out.trim();
+};
+
+/** Engine bridge: both calls land on the TUI notifier, sanitized and silent when unset. */
+const bridgeLayer = (libs: PiRunsLib): Layer.Layer<WorkspaceBridge> =>
+  Layer.succeed(libs.WorkspaceBridge, {
+    toast: (message, variant) =>
+      Effect.sync(() => {
+        notifier?.toast(sanitizeRunText(message), variant);
+      }),
+    notify: (title, body) =>
+      Effect.sync(() => {
+        notifier?.notify(sanitizeRunText(title), sanitizeRunText(body));
+      }),
+  });
+
+/** Full engine layer for one repo root: store plus Pi factory plus bridge. */
+const runnerLayer = (libs: PiRunsLib, root: string): Layer.Layer<Runner> =>
+  libs.Default.pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        storeLayer(libs, root),
+        sessionFactoryLayer ?? libs.PiSessionFactory,
+        bridgeLayer(libs),
+      ),
+    ),
+  );
+
+/** Build (once) and cache the engine runtime for a repo root. */
+const runtimeFor = (
+  libs: PiRunsLib,
+  root: string,
+): ManagedRuntime.ManagedRuntime<Runner, never> => {
+  const existing = runtimes.get(root);
+  if (existing !== undefined) return existing;
+  const created = ManagedRuntime.make(runnerLayer(libs, root));
+  runtimes.set(root, created);
+  return created;
+};
+
+/**
+ * Run one engine operation against the root's long-lived runtime: load
+ * the extension, resolve the `Runner` service, and hand it to `use`.
+ * @param root - workspace root (runtime cache key)
+ * @param use - engine operation
+ * @returns Effect resolving to the operation result, failing with displayable message
+ */
+const withRunner = <A>(
+  root: string,
+  use: (runner: RunnerImpl) => Effect.Effect<A, string>,
+): Effect.Effect<A, string> =>
+  loadPiRuns().pipe(
+    Effect.mapError((error) => error.message),
+    Effect.flatMap((libs) =>
+      Effect.promise(() => runtimeFor(libs, root).runPromise(libs.Runner)).pipe(
+        Effect.flatMap((runner) => use(runner)),
+      ),
+    ),
+  );
+
+/** Substrings marking a missing Pi coding-agent install in an engine failure. */
+const PI_MISSING_SIGNALS = [
+  'cannot find module',
+  'cannot find package',
+  'err_module_not_found',
+  'failed to resolve',
+  'module not found',
+];
+
+/** True when an engine failure names a missing Pi coding-agent install. */
+const isMissingPiRuntime = (reason: string): boolean => {
+  const lowered = reason.toLowerCase();
+  return PI_MISSING_SIGNALS.some((signal) => lowered.includes(signal));
+};
+
+/**
+ * Map an engine failure to user-facing copy. A missing Pi coding-agent
+ * install (the factory's dynamic import rejects) surfaces the reinstall
+ * step; every other failure passes through untouched. The caller owns the
+ * display — returning the message (without also toasting) keeps a single
+ * failure from showing twice.
+ * @param reason - engine failure message
+ * @returns displayable message
+ */
+const surfaceRunFailure = (reason: string): string => {
+  if (!isMissingPiRuntime(reason)) return reason;
+  return "Pi runtime not found — reinstall workspace dependencies so '@earendil-works/pi-coding-agent' resolves, then retry.";
+};
+
+/** Inputs for dispatching a fresh run through the engine. */
+export interface StartRunInput {
+  readonly id: string;
+  readonly name?: string | undefined;
+  readonly prompt: string;
+  readonly model?: string | undefined;
+  readonly tools?: ReadonlyArray<string> | undefined;
+  /** Parent run id: this run is a subrun of that run. */
+  readonly parent?: string | undefined;
+  /** Non-parent related run ids (siblings, review target). */
+  readonly related?: ReadonlyArray<string> | undefined;
+  /** Called once when the run settles; the profile-create completion hook lives here. */
+  readonly onSettled?: ((detail: EngineRunDetail) => Effect.Effect<void>) | undefined;
+}
+
+/**
+ * Dispatch a fresh run through the engine: `Store.create` + `start`,
+ * then a live Pi session whose events stream into the store. The engine
+ * detaches the prompt, so this resolves as soon as the run is registered.
+ * Tool allowlists default to {@link DEFAULT_RUN_TOOLS} so a workspace run
+ * never silently regains Pi's `bash` default.
+ * @param root - workspace root (store and session owner)
+ * @param input - run id, display name, prompt, optional model/tools pins, and parentage/hook
+ * @returns Effect resolving to the running row, failing with displayable message
+ */
+export const startRun = (root: string, input: StartRunInput): Effect.Effect<RunSummary, string> =>
+  withRunner(root, (runner) =>
+    runner
+      .start({
+        root,
+        id: input.id,
+        name: input.name,
+        prompt: input.prompt,
+        model: input.model,
+        tools: input.tools ?? DEFAULT_RUN_TOOLS,
+        parent: input.parent,
+        related: input.related,
+        onSettled: input.onSettled,
+      })
+      .pipe(Effect.map(fromRun)),
+  ).pipe(Effect.catch((reason) => Effect.fail(surfaceRunFailure(reason))));
+
+/**
+ * Steer a live run. Pi delivers the steering turn after the in-flight
+ * tool results; the engine mirrors it as a user event.
+ * @param root - workspace root (store and session owner)
+ * @param id - run id
+ * @param text - steering message
+ * @returns Effect completing once forwarded, failing with displayable message
+ */
+export const steerRun = (root: string, id: string, text: string): Effect.Effect<void, string> =>
+  withRunner(root, (runner) => runner.steer(root, id, text));
+
+/**
+ * Answer a parked run: the engine unparks it and resolves the awaiting
+ * `ask_user` call — the answer travels in the tool result, so nothing is
+ * relaunched.
+ * @param root - workspace root (store and session owner)
+ * @param id - run id
+ * @param text - user answer
+ * @returns Effect completing once the ask is released, failing with displayable message
+ */
+export const answerRun = (root: string, id: string, text: string): Effect.Effect<void, string> =>
+  withRunner(root, (runner) => runner.answer(root, id, text));
+
+/**
+ * Interrupt a live run: the engine aborts the session, releases any
+ * parked ask, and writes the cancelled receipt. A stale live run with no
+ * session is cancelled through the store.
+ * @param root - workspace root (store and session owner)
  * @param id - run id
  * @returns Effect completing once cancelled, failing with displayable message
  */
-export const cancelRun = (root: string, id: string): Effect.Effect<void, string> =>
-  withStore(root, (store) =>
-    Effect.gen(function* () {
-      if (!isValidRunId(id)) return yield* Effect.fail(`Unknown run '${id}'.`);
-      yield* store.cancel(id).pipe(Effect.mapError((error) => error.reason));
-    }),
-  );
+export const interruptRun = (root: string, id: string): Effect.Effect<void, string> =>
+  withRunner(root, (runner) => runner.interrupt(root, id));
 
 /**
- * Park a running run while it waits on user answers: `Store.ask`
- * flips `running` to `awaiting-input` (the question itself is appended
- * by the agent before parking).
- * @param root - workspace root (runs store owner)
+ * Resume a settled or interrupted run from its stored transcript,
+ * optionally with a continuation prompt. Pass `onSettled` to re-attach a
+ * completion hook after an app restart — the engine holds hooks in memory
+ * only, so a resumed author run otherwise settles unobserved.
+ * @param root - workspace root (store and session owner)
  * @param id - run id
- * @param question - question the agent is asking
- * @returns Effect completing once parked, failing with displayable message
+ * @param prompt - continuation prompt, if any
+ * @param onSettled - completion hook re-attached for the resumed run
+ * @returns Effect resolving to the resumed row, failing with displayable message
  */
-export const askRun = (root: string, id: string, question: string): Effect.Effect<void, string> =>
-  withStore(root, (store) =>
-    Effect.gen(function* () {
-      if (!isValidRunId(id)) return yield* Effect.fail(`Unknown run '${id}'.`);
-      yield* store.ask({ runId: id, question }).pipe(Effect.mapError((error) => error.reason));
-    }),
-  );
-
-/**
- * Answer a parked run: `Store.answer` appends the user reply and flips
- * `awaiting-input` back to `running`.
- * @param root - workspace root (runs store owner)
- * @param id - run id
- * @param text - user answer
- * @returns Effect completing once resumed, failing with displayable message
- */
-export const answerRun = (root: string, id: string, text: string): Effect.Effect<void, string> =>
-  withStore(root, (store) =>
-    Effect.gen(function* () {
-      if (!isValidRunId(id)) return yield* Effect.fail(`Unknown run '${id}'.`);
-      yield* store.answer({ runId: id, text }).pipe(Effect.mapError((error) => error.reason));
-    }),
-  );
-
-/** Failure when a headless agent run fails. Carries tailed CLI output. */
-export class AgentError extends Data.TaggedError('@montflow/RunsAgentError')<{
-  readonly message: string;
-}> {}
-
-/** Headless runs get ten minutes — agent work is open-ended. */
-const AGENT_TIMEOUT_MS = 600_000;
-
-/**
- * Run a headless child agent via the `pi` CLI (`-p`, ephemeral, tight
- * tools) in the workspace root and settle the run on exit: the reply
- * appends as the assistant event plus `done`; failures settle `failed`
- * and re-fail with the original reason so the flow toast names it.
- * Spawned (not `execFile`) so the Effect stays interruptible — cancelling the fiber kills the child,
- * and the timeout interrupts the wait the same way. The caller
- * interrupts this fiber to implement the detail-page stop key, then
- * `cancelRun` writes the cancelled receipt.
- * @param root - workspace root (child working directory)
- * @param runId - run under execution
- * @param prompt - assembled child prompt
- * @param modelLabel - `provider/model-id` pin, if any
- * @returns Effect resolving to the reply text, failing with the reason
- */
-export const runAgent = (
+export const resumeRun = (
   root: string,
-  runId: string,
-  prompt: string,
-  modelLabel: string | undefined,
-): Effect.Effect<string, string> =>
-  withStore(root, (store) =>
-    Effect.gen(function* () {
-      const reply = yield* Effect.callback<string, AgentError>((resume, signal) => {
-        const args = [
-          '-p',
-          '--no-session',
-          '--tools',
-          'read,write,edit',
-          ...(modelLabel === undefined || modelLabel === '' ? [] : ['--model', modelLabel]),
-          prompt,
-        ];
-        const child = spawn('pi', args, {
-          cwd: root,
-          // Headless agents must never inherit stdin: an interactive
-          // prompt (auth, confirmation) would block forever on the
-          // TUI's pty instead of failing fast on stderr.
-          stdio: ['ignore', 'pipe', 'pipe'],
-        });
-        let stdout = '';
-        let stderr = '';
-        let settled = false;
-        const settle = (finish: () => void): void => {
-          if (settled) return;
-          settled = true;
-          finish();
-        };
-        child.stdout?.on('data', (chunk: Buffer) => {
-          stdout += chunk.toString();
-        });
-        child.stderr?.on('data', (chunk: Buffer) => {
-          stderr += chunk.toString();
-        });
-        child.on('error', (cause) => {
-          settle(() =>
-            resume(
-              Effect.fail(
-                new AgentError({
-                  message: cause instanceof Error ? cause.message.slice(-2000) : String(cause),
-                }),
-              ),
-            ),
-          );
-        });
-        child.on('close', (code) => {
-          // Post-kill `close` must not resume: the fiber already settled
-          // through the interruption that killed the child.
-          if (signal.aborted) return;
-          settle(() => {
-            if (code === 0) resume(Effect.succeed(stdout));
-            else
-              resume(
-                Effect.fail(
-                  new AgentError({
-                    message: (stderr || stdout || `exit ${code}`).slice(-2000),
-                  }),
-                ),
-              );
-          });
-        });
-        signal.addEventListener('abort', () => {
-          child.kill();
-        });
-      }).pipe(
-        Effect.timeout(AGENT_TIMEOUT_MS),
-        Effect.mapError((error) =>
-          error instanceof AgentError ? error.message : 'Agent run timed out after ten minutes.',
-        ),
-        // Agent failures settle the run as failed, then re-fail with
-        // the original reason so the flow toast names it. Only
-        // failures land here — interruptions skip the handler, and the
-        // caller owns the cancelled receipt via `cancelRun`.
-        Effect.catch((reason) =>
-          store.settle({ runId, outcome: 'failed', summary: reason.slice(0, 500) }).pipe(
-            Effect.mapError((error) => error.reason),
-            Effect.ignore,
-            Effect.flatMap(() => Effect.fail(reason)),
-          ),
-        ),
-      );
-      const text = reply.trim() === '' ? '(empty reply)' : reply;
-      yield* store
-        .append({ runId, role: 'assistant', text })
-        .pipe(Effect.mapError((error) => error.reason));
-      yield* store
-        .settle({ runId, outcome: 'done', summary: text.slice(0, 500) })
-        .pipe(Effect.mapError((error) => error.reason));
-      return reply;
-    }),
-  );
+  id: string,
+  prompt?: string,
+  onSettled?: (detail: EngineRunDetail) => Effect.Effect<void>,
+): Effect.Effect<RunSummary, string> =>
+  withRunner(root, (runner) =>
+    runner.resume(root, id, prompt, onSettled).pipe(Effect.map(fromRun)),
+  ).pipe(Effect.catch((reason) => Effect.fail(surfaceRunFailure(reason))));

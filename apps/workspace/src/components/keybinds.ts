@@ -34,8 +34,12 @@ export const Keybinds = {
   search: (): Keybind => ({ key: '/', action: 'search' }),
   /** `⏎ open` — list detail entry. */
   open: (): Keybind => ({ key: '⏎', action: 'open' }),
+  /** `g run` — jump to the dispatched profile-create run's detail. */
+  goToRun: (): Keybind => ({ key: 'g', action: 'run' }),
   /** `j/k move` — list highlight entry. */
   move: (): Keybind => ({ key: 'j/k', action: 'move' }),
+  /** `A all runs` — runs-list section toggle (Active vs full history). */
+  showAll: (): Keybind => ({ key: 'A', action: 'all runs' }),
   /** `j/k scroll` — detail full-view scroll entry. */
   scroll: (): Keybind => ({ key: 'j/k', action: 'scroll' }),
   /** `↑↓ scroll` — read-only scroll-view entry (flow modals, working status). */
@@ -76,6 +80,12 @@ export const Keybinds = {
   clearFilter: (): Keybind => ({ key: 'esc', action: 'clear' }),
   /** `d delete` — detail delete entry. */
   remove: (): Keybind => ({ key: 'd', action: 'delete' }),
+  /** `s steer` — run-detail steering entry (live runs). */
+  steer: (): Keybind => ({ key: 's', action: 'steer' }),
+  /** `a answer` — run-detail parked-question answer entry. */
+  answer: (): Keybind => ({ key: 'a', action: 'answer' }),
+  /** `x interrupt` — run-detail live-run stop entry. */
+  interrupt: (): Keybind => ({ key: 'x', action: 'interrupt' }),
   /** `R refresh` — list refetch entry (panels and details). */
   refresh: (): Keybind => ({ key: 'R', action: 'refresh' }),
   /** `m modify` — detail modify entry. */
@@ -102,19 +112,23 @@ export const Keybinds = {
    * identical except for the panels' own capabilities.
    * @param installed - store presence flag
    * @param total - filtered row count
-   * @param options - capability flags (`quickRemove` for list-level `x`)
+   * @param options - capability flags (`quickRemove` for list-level `x`, `allRuns` for the runs section toggle)
    * @returns footer entries in display order
    */
   listBanner: (
     installed: boolean,
     total: number,
-    options?: { readonly quickRemove?: boolean | undefined },
+    options?: {
+      readonly quickRemove?: boolean | undefined;
+      readonly allRuns?: boolean | undefined;
+    },
   ): ReadonlyArray<Keybind> => {
     if (!installed) return [Keybinds.install()];
     if (total === 0) return [Keybinds.create()];
     const entries: Array<Keybind> = [Keybinds.search(), Keybinds.open(), Keybinds.create()];
     if (options?.quickRemove === true) entries.push(Keybinds.removeFromList());
     entries.push(Keybinds.move());
+    if (options?.allRuns === true) entries.push(Keybinds.showAll());
     return entries;
   },
 };

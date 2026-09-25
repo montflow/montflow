@@ -1,8 +1,15 @@
 import { For } from 'solid-js';
 import { palette } from './palette.js';
 
-/** Selectable detail action id. `toggle-view` flips preview/view, the rest map to existing detail keys. Runs add `interrupt` (stop a live run) and `answer` (reply to a parked run). */
-export type DetailActionId = 'toggle-view' | 'modify' | 'delete' | 'interrupt' | 'answer' | 'back';
+/** Selectable detail action id. `toggle-view` flips preview/view, the rest map to existing detail keys. Runs add `steer` (redirect a live run), `interrupt` (stop a live run), and `answer` (reply to a parked run). */
+export type DetailActionId =
+  | 'toggle-view'
+  | 'modify'
+  | 'delete'
+  | 'steer'
+  | 'interrupt'
+  | 'answer'
+  | 'back';
 
 export interface DetailAction {
   readonly id: DetailActionId;

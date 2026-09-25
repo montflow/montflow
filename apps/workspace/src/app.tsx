@@ -9,7 +9,7 @@ import { useKeyboard, usePaste, useRenderer, useTerminalDimensions } from '@open
 import { createMutation, createQuery, useQueryClient } from '@tanstack/solid-query';
 import { Dashboard, RemoveConfirm, SkillFilter, Workspace } from './modules/index.js';
 import { Cause, Effect, Fiber } from 'effect';
-import { For, Show, createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import {
   DetailActions,
   type DetailAction,
@@ -18,6 +18,9 @@ import {
   FlowErrorModal,
   type FlowErrorFocus,
   FlowModal,
+  FeatureDetail,
+  type FeatureDetailMode,
+  FeaturesPanel,
   InfoPanel,
   InputDialog,
   Keybinds,
@@ -41,11 +44,18 @@ import {
   SkillsPanel,
   StatusBar,
   ToastStack,
+  activeRunRows,
+  featureDetailLines,
   formatKeybinds,
+  isLiveRunStatus,
   palette,
+  runDetailActions,
+  runDetailHint,
+  runDetailIntent,
+  runSelectableRows,
 } from './components/index.js';
 import type { Toast, ToastVariant } from './components/index.js';
-import { GitInfo, Profiles, Prompts, Query, Runs, Skills } from './services/index.js';
+import { Features, GitInfo, Profiles, Prompts, Query, Runs, Skills } from './services/index.js';
 import type { Interactive } from '@montflow/pi-skills';
 
 export interface AppProps {
@@ -287,6 +297,21 @@ const later = (ms: number, task: () => void): void => {
 };
 
 /**
+ * Live run-detail transcript refresh interval (ms). Raw `setInterval`
+ * for the same reason as {@link later}: Effect Clock fibers never
+ * resolve inside the OpenTUI render loop.
+ */
+const RUN_DETAIL_POLL_MS = 1000;
+
+/**
+ * Consecutive live-poll failures tolerated before the transcript poll
+ * stops. Transient failures (a torn read while the engine writes) are
+ * silent; a run that fails this many times in a row is treated as
+ * unreadable and polling stops until the user reopens or refreshes.
+ */
+const RUN_DETAIL_POLL_MAX_FAILURES = 3;
+
+/**
  * Fixed skills row budget from the terminal height alone — never read
  * back from the laid-out card. The left rail owns two fifths of the
  * column (minus chrome); the estimate stays conservative so the pinned
@@ -397,24 +422,51 @@ export const App = (props: AppProps) => {
   const runsQuery = createQuery(() => ({
     queryKey: Query.runsKey,
     queryFn: () => Query.fetchRunsList(root, setRunsPhase),
+    // Live-refresh the list while any run is still progressing; idle lists
+    // stay cache-first (no background churn).
+    refetchInterval: (query) =>
+      (query.state.data?.rows ?? []).some((row) => isLiveRunStatus(row.status)) ? 1500 : false,
   }));
   const runRows = createMemo(() => runsQuery.data?.rows ?? []);
   const runsStoreInstalled = createMemo(() => runsQuery.data?.installed ?? false);
   const runsLoaded = createMemo(() => !runsQuery.isPending);
   const [runQuery, setRunQuery] = createSignal('');
   const [runTyping, setRunTyping] = createSignal(false);
+  /** Whether the runs panel's All-runs section is expanded; hidden by default. */
+  const [runShowAll, setRunShowAll] = createSignal(false);
   const [runHighlight, setRunHighlight] = createSignal(0);
   const [runDetailId, setRunDetailId] = createSignal<string | undefined>(undefined);
   const [runDetailData, setRunDetailData] = createSignal<Runs.RunDetail | undefined>(undefined);
   const [runDetailLoading, setRunDetailLoading] = createSignal(false);
+  const [runDetailPollFailures, setRunDetailPollFailures] = createSignal(0);
   const [runDetailMode, setRunDetailMode] = createSignal<RunDetailMode>('preview');
   const [runDetailScroll, setRunDetailScroll] = createSignal(0);
   const [runDetailAction, setRunDetailAction] = createSignal(0);
   const [runsCard, setRunsCard] = createSignal<BoxRenderable | undefined>(undefined);
   const [measuredRunRows, setMeasuredRunRows] = createSignal<number | undefined>(undefined);
   const [runsInstalling, setRunsInstalling] = createSignal(false);
-  /** Run id with an in-flight agent fiber: the esc-interrupt path cancels its store receipt. */
-  const [pendingAgentRunId, setPendingAgentRunId] = createSignal<string | undefined>(undefined);
+  /** Run id from the most recent profile-create dispatch: the `g` keybind target. */
+  const [lastDispatchedRunId, setLastDispatchedRunId] = createSignal<string | undefined>(undefined);
+  const [featuresPhase, setFeaturesPhase] = createSignal<Features.FeaturesPhase>('extension');
+  const featuresQuery = createQuery(() => ({
+    queryKey: Query.featuresKey,
+    queryFn: () => Query.fetchFeaturesList(root, setFeaturesPhase),
+  }));
+  const featureRows = createMemo(() => featuresQuery.data?.rows ?? []);
+  const featuresInstalled = createMemo(() => featuresQuery.data?.installed ?? false);
+  const featuresLoaded = createMemo(() => !featuresQuery.isPending);
+  const [featureQuery, setFeatureQuery] = createSignal('');
+  const [featureTyping, setFeatureTyping] = createSignal(false);
+  const [featureHighlight, setFeatureHighlight] = createSignal(0);
+  const [featureDetailId, setFeatureDetailId] = createSignal<string | undefined>(undefined);
+  const [featureDetailData, setFeatureDetailData] = createSignal<
+    Features.FeatureDetail | undefined
+  >(undefined);
+  const [featureDetailLoading, setFeatureDetailLoading] = createSignal(false);
+  const [featureDetailMode, setFeatureDetailMode] = createSignal<FeatureDetailMode>('preview');
+  const [featureDetailScroll, setFeatureDetailScroll] = createSignal(0);
+  const [featuresCard, setFeaturesCard] = createSignal<BoxRenderable | undefined>(undefined);
+  const [measuredFeatureRows, setMeasuredFeatureRows] = createSignal<number | undefined>(undefined);
   const [toasts, setToasts] = createSignal<ReadonlyArray<Toast>>([]);
   const [dialog, setDialog] = createSignal<DialogState | undefined>(undefined);
   const [inputEditor, setInputEditor] = createSignal<TextareaRenderable | undefined>(undefined);
@@ -701,6 +753,40 @@ export const App = (props: AppProps) => {
   });
 
   /**
+   * Clear the `g` keybind target only when the settled run is the one it
+   * points at, so an earlier dispatch settling cannot drop the keybind for
+   * a later in-flight one.
+   * @param runId - run that just settled
+   */
+  const clearDispatchedRun = (runId: string): void => {
+    if (lastDispatchedRunId() === runId) setLastDispatchedRunId(undefined);
+  };
+
+  /**
+   * Completion hooks for a dispatched profile-create run: refresh the
+   * profiles and runs lists, open the freshly created profile's detail, and
+   * toast the outcome. The run engine fires these after the author run
+   * settles.
+   */
+  const profileCreateHooks: Profiles.CreateFlowHooks = {
+    onProfileCreated: (profile, runId) => {
+      refreshProfiles();
+      refreshRuns();
+      setProfileDetailId(profile.id);
+      setProfileDetailMode('preview');
+      setProfileDetailScroll(0);
+      setProfileDetailAction(0);
+      clearDispatchedRun(runId);
+      pushToast(`Created profile '${Runs.sanitizeRunText(profile.id)}'.`, { variant: 'success' });
+    },
+    onProfileFailed: (message, runId) => {
+      refreshRuns();
+      clearDispatchedRun(runId);
+      pushToast(message, { variant: 'error' });
+    },
+  };
+
+  /**
    * Overlay ports for the prompts flow runners. The skills, profiles,
    * and prompts `Interactive` surfaces are structurally identical (same
    * dialogs, picker, and loading shapes), so the shared adapters satisfy
@@ -900,20 +986,37 @@ export const App = (props: AppProps) => {
 
   /**
    * Create flow: the service runner lazy-loads the profiles extension,
-   * runs the shared `createProfile` flow behind the overlays, and
-   * persists. Lands on the new profile's detail; cancellations stay silent.
+   * runs the shared `createProfile` flow behind the overlays. Manual
+   * creation persists and lands on the new profile's detail; agentic
+   * creation dispatches a run through the engine, toasts the run with
+   * the `g` keybind, and lets {@link profileCreateHooks} open the fresh
+   * profile when it settles. Cancellations stay silent.
    */
   const createProfileMutation = flowMutation({
-    run: () => Profiles.runCreateFlow(root, profileFlowPorts()),
-    done: (profile) => {
-      pushToast(`Saved profile '${profile.id}'.`, { variant: 'success' });
-      setProfileDetailId(profile.id);
+    run: () => Profiles.runCreateFlow(root, profileFlowPorts(), profileCreateHooks),
+    done: (result) => {
+      if (result.kind === 'dispatched') {
+        setLastDispatchedRunId(result.runId);
+        refreshRuns();
+        pushToast(`Run '${result.runId}' is creating your profile — press g to view`, {
+          variant: 'info',
+        });
+        return;
+      }
+      pushToast(`Saved profile '${Runs.sanitizeRunText(result.profile.id)}'.`, {
+        variant: 'success',
+      });
+      setProfileDetailId(result.profile.id);
       setProfileDetailMode('preview');
       setProfileDetailScroll(0);
       setProfileDetailAction(0);
       refreshProfiles();
     },
     fail: (error) => {
+      if (Runs.isRunsExtensionInstallError(error.message)) {
+        pushToast(error.message, { variant: 'warning' });
+        return;
+      }
       openFlowError('Creating profile failed', error, () => {
         setFlowError(undefined);
         createProfileMutation.mutate(undefined);
@@ -929,7 +1032,21 @@ export const App = (props: AppProps) => {
       createProfileMutation.isPending
     )
       return;
-    createProfileMutation.mutate(undefined);
+    // Gate on the runs engine before opening the dialog: without it the
+    // agentic path cannot run, and discovering that after the mode select,
+    // requirements gate, description, and model picker is too late.
+    void Runs.runsExtensionInstalled(root)
+      .pipe(Effect.runPromise)
+      .then((installed) => {
+        if (!installed) {
+          pushToast(Runs.RUNS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
+          setSelected('runs');
+          return;
+        }
+        // The probe is async; a second `c` may have started the flow first.
+        if (createProfileMutation.isPending || dialog() !== undefined) return;
+        createProfileMutation.mutate(undefined);
+      });
   };
 
   /**
@@ -941,7 +1058,7 @@ export const App = (props: AppProps) => {
   const modifyProfileMutation = flowMutation({
     run: (id: string) => Profiles.runModifyFlow(root, id, profileFlowPorts()),
     done: (profile) => {
-      pushToast(`Saved profile '${profile.id}'.`, { variant: 'success' });
+      pushToast(`Saved profile '${Runs.sanitizeRunText(profile.id)}'.`, { variant: 'success' });
       refreshProfiles();
     },
     fail: (error, id) => {
@@ -1122,11 +1239,14 @@ export const App = (props: AppProps) => {
 
   /**
    * Reload the open run detail from the store: transcript plus receipt.
-   * Failures toast — the detail keeps its last snapshot.
+   * A manual load toasts on failure; the live poll passes `silent` so a
+   * transient torn read does not flood the TUI with one toast per second.
    * @param id - run id under view
+   * @param options - `silent` suppresses the failure toast for poll reads
    */
-  const loadRunDetail = (id: string): void => {
-    setRunDetailLoading(true);
+  const loadRunDetail = (id: string, options?: { readonly silent?: boolean }): void => {
+    const silent = options?.silent === true;
+    if (!silent) setRunDetailLoading(true);
     void Runs.loadRun(root, id)
       .pipe(Effect.runPromise)
       .then(
@@ -1134,11 +1254,16 @@ export const App = (props: AppProps) => {
           // Stale loads (closed while another run opened) never paint.
           if (runDetailId() !== id) return;
           setRunDetailData(data);
-          setRunDetailLoading(false);
+          if (!silent) setRunDetailLoading(false);
+          setRunDetailPollFailures(0);
         },
         (error) => {
           if (runDetailId() !== id) return;
-          setRunDetailLoading(false);
+          if (!silent) setRunDetailLoading(false);
+          if (silent) {
+            setRunDetailPollFailures((count) => count + 1);
+            return;
+          }
           pushToast(
             `Run detail failed: ${error instanceof Error ? error.message : String(error)}`,
             {
@@ -1162,6 +1287,7 @@ export const App = (props: AppProps) => {
     setRunDetailScroll(0);
     setRunDetailAction(0);
     setRunTyping(false);
+    setRunDetailPollFailures(0);
     loadRunDetail(id);
   };
 
@@ -1172,6 +1298,7 @@ export const App = (props: AppProps) => {
     setRunDetailMode('preview');
     setRunDetailScroll(0);
     setRunDetailAction(0);
+    setRunDetailPollFailures(0);
   };
 
   /** Scroll window for the run full view: transcript lines. */
@@ -1180,45 +1307,108 @@ export const App = (props: AppProps) => {
     setRunDetailScroll((offset) => Math.min(Math.max(offset + delta, 0), runDetailMaxScroll()));
   };
 
+  /** True while the open run is live — drives the transcript poll. */
+  const runDetailLive = createMemo(
+    () => runDetailId() !== undefined && isLiveRunStatus(runDetailData()?.summary.status),
+  );
+
+  /** True while the live transcript poll should run: live and not yet backed off. */
+  const runDetailPolling = createMemo(
+    () => runDetailLive() && runDetailPollFailures() < RUN_DETAIL_POLL_MAX_FAILURES,
+  );
+
   /**
-   * Action menu for the open run detail: toggle view/preview plus
-   * interrupt (live runs), answer (parked runs), and back. The actions
-   * mirror the `x`/`a`/`esc` keybinds so menu and keys never drift.
-   * @param status - run status, if loaded
-   * @returns menu actions in display order
+   * Live transcript refresh: while the open run is live, poll the store
+   * on a raw interval so streamed events appear without leaving the
+   * detail. Poll failures are silent and backed off — the interval stops
+   * after {@link RUN_DETAIL_POLL_MAX_FAILURES} consecutive failures rather
+   * than toasting once per second. The interval clears on close or settle
+   * (the live memo flips false) — polling only re-reads, it never
+   * re-opens the detail.
    */
-  const runDetailActionsFor = (status: string | undefined): ReadonlyArray<DetailAction> => {
-    const actions: Array<DetailAction> = [
-      {
-        id: 'toggle-view',
-        label: runDetailMode() === 'view' ? 'Show preview' : 'Show full view',
-        hint: 'v',
-      },
-    ];
-    if (status === 'running' || status === 'awaiting-input')
-      actions.push({ id: 'interrupt', label: 'Interrupt run', hint: 'x' });
-    if (status === 'awaiting-input')
-      actions.push({ id: 'answer', label: 'Answer question', hint: 'a' });
-    actions.push({ id: 'back', label: 'Back', hint: 'esc' });
-    return actions;
+  createEffect(() => {
+    if (!runDetailPolling()) return;
+    const id = runDetailId();
+    if (id === undefined) return;
+    // oxlint-disable-next-line montflow/no-timers -- documented above: Effect Clock hangs here.
+    const timer = setInterval(() => {
+      if (runDetailId() === id) loadRunDetail(id, { silent: true });
+    }, RUN_DETAIL_POLL_MS);
+    onCleanup(() => {
+      // oxlint-disable-next-line montflow/no-timers -- interval teardown for the raw poll above.
+      clearInterval(timer);
+    });
+  });
+
+  /**
+   * Reload the open feature detail from disk: metadata, phases, tasks,
+   * and issues. Failures toast — the detail keeps its last snapshot.
+   * @param id - feature directory name under view
+   */
+  const loadFeatureDetail = (id: string): void => {
+    setFeatureDetailLoading(true);
+    void Features.loadFeature(root, id)
+      .pipe(Effect.runPromise)
+      .then(
+        (data) => {
+          if (featureDetailId() !== id) return;
+          setFeatureDetailData(data);
+          setFeatureDetailLoading(false);
+        },
+        (error) => {
+          if (featureDetailId() !== id) return;
+          setFeatureDetailLoading(false);
+          pushToast(
+            `Feature detail failed: ${error instanceof Error ? error.message : String(error)}`,
+            { variant: 'error' },
+          );
+        },
+      );
   };
 
   /**
-   * Detail status hint for the open run: view toggle plus the live
-   * keys (`x` interrupt while running, `a` answer while parked).
+   * Open a feature's detail page (read-only): reset the view and load
+   * the phases and tasks.
+   * @param id - feature directory name to open
+   */
+  const openFeatureDetail = (id: string): void => {
+    setFeatureDetailId(id);
+    setFeatureDetailData(undefined);
+    setFeatureDetailMode('preview');
+    setFeatureDetailScroll(0);
+    setFeatureTyping(false);
+    loadFeatureDetail(id);
+  };
+
+  const closeFeatureDetail = (): void => {
+    setFeatureDetailId(undefined);
+    setFeatureDetailData(undefined);
+    setFeatureDetailLoading(false);
+    setFeatureDetailMode('preview');
+    setFeatureDetailScroll(0);
+  };
+
+  const toggleFeatureView = (): void => {
+    setFeatureDetailMode((mode) => (mode === 'view' ? 'preview' : 'view'));
+    setFeatureDetailScroll(0);
+  };
+
+  const scrollFeatureDetail = (delta: number): void => {
+    if (featureDetailMode() !== 'view') return;
+    setFeatureDetailScroll((offset) =>
+      Math.min(Math.max(offset + delta, 0), featureDetailMaxScroll()),
+    );
+  };
+
+  /**
+   * Detail status hint for the open feature: view toggle plus refresh and back.
    * @returns one-line hint copy
    */
-  const runDetailHint = (): string => {
-    const mode = runDetailMode();
-    const status = runDetailData()?.summary.status;
+  const featureDetailHint = (): string => {
     const entries = [
-      Keybinds.menuNavigate(),
-      Keybinds.selectRow(),
-      ...(mode === 'view' ? [Keybinds.scroll(), Keybinds.showPreview()] : [Keybinds.showFull()]),
-      ...(status === 'running' || status === 'awaiting-input'
-        ? [{ key: 'x', action: 'interrupt' }]
-        : []),
-      ...(status === 'awaiting-input' ? [{ key: 'a', action: 'answer' }] : []),
+      ...(featureDetailMode() === 'view'
+        ? [Keybinds.scroll(), Keybinds.showPreview()]
+        : [Keybinds.showFull()]),
       Keybinds.refresh(),
       Keybinds.back(),
     ];
@@ -1226,47 +1416,24 @@ export const App = (props: AppProps) => {
   };
 
   /**
-   * Interrupt the open run: when its agent fiber is in flight, esc
-   * semantics apply (interrupt the fiber — the child dies — then write
-   * the cancelled receipt); when the run is live but fiberless (a
-   * stale live run after a restart), cancel the store directly.
-   * Reloads the detail and the list either way.
+   * Interrupt the open run through the engine: abort the live session and
+   * write the cancelled receipt, then reload the detail and the list. A
+   * stale live run with no session is cancelled through the store.
    */
   const interruptRun = (): void => {
     const id = runDetailId();
     if (id === undefined || dialog() !== undefined) return;
-    const fiber = pendingAgentRunId() === id ? flowFiber() : undefined;
-    if (fiber !== undefined) {
-      void Fiber.interrupt(fiber)
-        .pipe(
-          Effect.flatMap(() => Runs.cancelRun(root, id)),
-          Effect.runPromise,
-        )
-        .then(
-          () => {
-            setPendingAgentRunId(undefined);
-            pushToast('Agent run cancelled.', { variant: 'info' });
-            refreshRuns();
-            loadRunDetail(id);
-          },
-          () => {
-            setPendingAgentRunId(undefined);
-            refreshRuns();
-            loadRunDetail(id);
-          },
-        );
-      return;
-    }
-    void Runs.cancelRun(root, id)
+    void Runs.interruptRun(root, id)
       .pipe(Effect.runPromise)
       .then(
         () => {
-          pushToast('Run cancelled.', { variant: 'success' });
+          pushToast('Run interrupted.', { variant: 'info' });
+          clearDispatchedRun(id);
           refreshRuns();
           loadRunDetail(id);
         },
         (error) => {
-          pushToast(`Cancel failed: ${error instanceof Error ? error.message : String(error)}`, {
+          pushToast(`Interrupt failed: ${error instanceof Error ? error.message : String(error)}`, {
             variant: 'error',
           });
         },
@@ -1274,32 +1441,23 @@ export const App = (props: AppProps) => {
   };
 
   /**
-   * Answer a parked run: prompt for the reply, append it through
-   * `Store.answer` (parked back to running), then relaunch the agent
-   * so it continues with the answer in context.
+   * Answer a parked run through the engine: the engine unparks the run and
+   * resolves the awaiting `ask_user` call — the answer travels in the tool
+   * result, so nothing is relaunched.
    */
   const answerRunMutation = flowMutation({
     run: (id: string) =>
       Effect.promise(() => askInput('Answer the agent', 'Type your answer…')).pipe(
         Effect.flatMap((text) => {
           if (text === undefined || text.trim() === '') return Effect.succeed(undefined);
-          return Runs.answerRun(root, id, text.trim()).pipe(
-            Effect.map(() => ({ id, resumed: true as const })),
-          );
+          return Runs.answerRun(root, id, text.trim()).pipe(Effect.map(() => id));
         }),
       ),
-    done: (result) => {
-      if (result === undefined) return;
-      pushToast('Answer sent — resuming run.', { variant: 'success' });
+    done: (id) => {
+      if (id === undefined) return;
+      pushToast('Answer sent.', { variant: 'success' });
       refreshRuns();
-      loadRunDetail(result.id);
-      const data = runDetailData();
-      if (data !== undefined && runDetailId() === result.id)
-        launchAgentMutation.mutate({
-          id: result.id,
-          prompt: `Continue run '${result.id}'. The user answered your question — read the latest transcript in ${data.summary.id} and continue.`,
-          model: data.summary.model === '' ? undefined : data.summary.model,
-        });
+      loadRunDetail(id);
     },
   });
 
@@ -1318,54 +1476,46 @@ export const App = (props: AppProps) => {
   };
 
   /**
-   * Agent execution for one run: the headless `pi -p` child runs on a
-   * forked fiber (tracked in `flowFiber` so esc interrupts it) with
-   * the working overlay up. Completion reloads the detail and the
-   * list; interruptions land silent (the esc path owns the cancelled
-   * receipt); agent failures toast — the store already settled the
-   * run as failed, so no error modal (retry would re-run on a
-   * terminal run).
+   * Steer a running run through the engine: the message is delivered
+   * after the in-flight tool results, so the agent redirects without a
+   * relaunch. Only offered while the run is `running`.
    */
-  const launchAgentMutation = flowMutation({
-    run: (input: {
-      readonly id: string;
-      readonly prompt: string;
-      readonly model: string | undefined;
-    }) =>
-      Effect.acquireUseRelease(
-        Effect.sync(() => {
-          setPendingAgentRunId(input.id);
-          setWorking(`Running ${input.id}…`);
+  const steerRunMutation = flowMutation({
+    run: (id: string) =>
+      Effect.promise(() => askInput('Steer the agent', 'Nudge the agent…')).pipe(
+        Effect.flatMap((text) => {
+          if (text === undefined || text.trim() === '') return Effect.succeed(undefined);
+          return Runs.steerRun(root, id, text.trim()).pipe(Effect.map(() => id));
         }),
-        () => Runs.runAgent(root, input.id, input.prompt, input.model),
-        () =>
-          Effect.sync(() => {
-            setWorking(undefined);
-          }),
       ),
-    done: (reply, variables) => {
-      setPendingAgentRunId(undefined);
-      pushToast(
-        reply.trim() === '' ? `Run '${variables.id}' done.` : `Run '${variables.id}' done.`,
-        { variant: 'success' },
-      );
+    done: (id) => {
+      if (id === undefined) return;
+      pushToast('Steering sent.', { variant: 'success' });
       refreshRuns();
-      if (runDetailId() === variables.id) loadRunDetail(variables.id);
-    },
-    fail: (error, variables) => {
-      setPendingAgentRunId(undefined);
-      pushToast(`Agent run failed: ${error.message}`, { variant: 'error' });
-      refreshRuns();
-      if (runDetailId() === variables.id) loadRunDetail(variables.id);
+      loadRunDetail(id);
     },
   });
+
+  const runSteerFlow = (): void => {
+    const id = runDetailId();
+    const status = runDetailData()?.summary.status;
+    if (
+      id === undefined ||
+      status !== 'running' ||
+      dialog() !== undefined ||
+      working() !== undefined ||
+      steerRunMutation.isPending
+    )
+      return;
+    steerRunMutation.mutate(id);
+  };
 
   /**
    * Create flow: name plus initial prompt through the input dialogs,
    * model through the filter picker (session default pinned, like the
-   * skills flows), then `Store.create` + `start` + first append. Lands
-   * on the new run's detail and launches its agent; cancellations
-   * stay silent.
+   * skills flows), then dispatch through the engine — `Store.create` +
+   * `start` plus a live Pi session. Lands on the new run's detail;
+   * cancellations stay silent.
    */
   const createRunMutation = flowMutation({
     run: () =>
@@ -1398,22 +1548,18 @@ export const App = (props: AppProps) => {
           if (picked === undefined) return undefined;
           model = options.find((option) => displayModelLabel(option) === picked)?.label;
         }
-        const created = yield* Runs.createRun(root, {
+        const id = yield* Runs.newRunId(name.trim());
+        return yield* Runs.startRun(root, {
+          id,
           name: name.trim(),
           prompt: prompt.trim(),
           model,
         });
-        return { created, prompt: prompt.trim(), model };
       }),
-    done: (result) => {
-      pushToast(`Created run '${result.created.id}'.`, { variant: 'success' });
+    done: (created) => {
+      pushToast(`Created run '${created.id}'.`, { variant: 'success' });
       refreshRuns();
-      openRunDetail(result.created.id);
-      launchAgentMutation.mutate({
-        id: result.created.id,
-        prompt: result.prompt,
-        model: result.model,
-      });
+      openRunDetail(created.id);
     },
     fail: (error) => {
       openFlowError('Creating run failed', error, () => {
@@ -1546,7 +1692,7 @@ export const App = (props: AppProps) => {
   };
 
   /** Panels with an independent filter, typing flag, and highlight: skills, profiles, prompts, and runs search separately. */
-  type SearchPanel = 'skills' | 'profiles' | 'prompts' | 'runs';
+  type SearchPanel = 'skills' | 'profiles' | 'prompts' | 'runs' | 'features';
 
   /**
    * Read the typing flag for one panel: true while keystrokes filter
@@ -1561,7 +1707,9 @@ export const App = (props: AppProps) => {
         ? promptTyping()
         : panel === 'runs'
           ? runTyping()
-          : skillTyping();
+          : panel === 'features'
+            ? featureTyping()
+            : skillTyping();
 
   /**
    * Read the filter query for one panel.
@@ -1575,7 +1723,9 @@ export const App = (props: AppProps) => {
         ? promptQuery()
         : panel === 'runs'
           ? runQuery()
-          : skillQuery();
+          : panel === 'features'
+            ? featureQuery()
+            : skillQuery();
 
   const filtered = createMemo(() => SkillFilter.filterByQuery(skillRows(), skillQuery()));
   const detail = createMemo(() => skillRows().find((row) => row.id === detailId()));
@@ -1586,6 +1736,9 @@ export const App = (props: AppProps) => {
   const filteredPrompts = createMemo(() => SkillFilter.filterByQuery(promptRows(), promptQuery()));
   const promptDetail = createMemo(() => promptRows().find((row) => row.id === promptDetailId()));
   const filteredRuns = createMemo(() => SkillFilter.filterByQuery(runRows(), runQuery()));
+  const filteredFeatures = createMemo(() =>
+    SkillFilter.filterByQuery(featureRows(), featureQuery()),
+  );
 
   /** Panel chrome lines: border top/bottom plus padding top/bottom. Owned by `Panel`, constant. */
   const CARD_CHROME_LINES = 4;
@@ -1601,6 +1754,9 @@ export const App = (props: AppProps) => {
 
   /** Reserved lines inside the runs content: search line plus footer line. Owned by `RunsPanel`, constant. */
   const RUNS_RESERVED_LINES = 2;
+
+  /** Reserved lines inside the features content: search line plus footer line. Owned by `FeaturesPanel`, constant. */
+  const FEATURES_RESERVED_LINES = 2;
 
   /**
    * Read the live card height into a row budget: chrome plus the
@@ -1702,6 +1858,30 @@ export const App = (props: AppProps) => {
   });
 
   /**
+   * Read the live features card height into a row budget: same chrome
+   * math as the skills card — the `FeaturesPanel` shares its shape so
+   * the pinned region fills it exactly.
+   */
+  const measureFeaturesCard = (): void => {
+    const node = featuresCard();
+    if (node === undefined) return;
+    const rows = Math.floor(node.height) - CARD_CHROME_LINES - FEATURES_RESERVED_LINES;
+    if (rows >= 1) setMeasuredFeatureRows(rows);
+  };
+
+  /**
+   * Features card measurement triggers: same contract as the skills
+   * card — flex-determined size, content-independent, so measuring
+   * cannot loop.
+   */
+  createEffect(() => {
+    featuresCard();
+    dimensions();
+    featuresLoaded();
+    queueMicrotask(measureFeaturesCard);
+  });
+
+  /**
    * Visible list window: measured from the live card so the pinned
    * region fills it exactly — no spill onto the border, no blank gap.
    * The terminal-height estimate only covers pre-measure frames (the
@@ -1761,15 +1941,73 @@ export const App = (props: AppProps) => {
     const height = dimensions().height;
     return Math.max(2, Math.floor((2 * (height - 6)) / 5) - 6);
   });
-  const runWindowStart = createMemo(() => {
-    const count = runVisibleCount();
-    const length = filteredRuns().length;
-    return Math.min(Math.max(runHighlight() - count + 1, 0), Math.max(length - count, 0));
+  /**
+   * Section header lines inside the runs panel: Active always, All runs
+   * only while expanded. Reserved out of the measured row budget so the
+   * extra lines never spill the list onto the border.
+   */
+  const runSectionHeaderLines = createMemo(() => (runShowAll() ? 2 : 1));
+  /** Row lines left for the runs panel after its section headers. */
+  const runRowBudget = createMemo(() => Math.max(1, runVisibleCount() - runSectionHeaderLines()));
+  /** Active runs (pending/running/awaiting-input), `running` ahead of the queue. */
+  const runActiveRows = createMemo(() => activeRunRows(filteredRuns()));
+  /**
+   * Active rows render unwindowed under their header, capped so a burst
+   * of live runs still cannot overflow the panel. While the All section
+   * is expanded the cap leaves one line for its window, so the toggle is
+   * never blank.
+   */
+  const runVisibleActive = createMemo(() => {
+    const budget = runRowBudget();
+    return runActiveRows().slice(0, runShowAll() ? Math.max(0, budget - 1) : budget);
   });
-  const runVisibleRows = createMemo(() =>
-    filteredRuns().slice(runWindowStart(), runWindowStart() + runVisibleCount()),
+  /** Rows left for the All window after the unwindowed Active section. */
+  const runAllBudget = createMemo(() =>
+    runShowAll() ? Math.max(0, runRowBudget() - runVisibleActive().length) : 0,
   );
-  const runRelativeHighlight = createMemo(() => runHighlight() - runWindowStart());
+  /** Window start for the All section: keeps the highlighted row in view. */
+  const runWindowStart = createMemo(() => {
+    const count = runAllBudget();
+    if (count === 0) return 0;
+    const length = filteredRuns().length;
+    const index = runHighlight() - runVisibleActive().length;
+    return Math.min(Math.max(index - count + 1, 0), Math.max(length - count, 0));
+  });
+  /** Windowed slice of the full filtered list under the All runs header. */
+  const runVisibleAll = createMemo(() =>
+    runShowAll() ? filteredRuns().slice(runWindowStart(), runWindowStart() + runAllBudget()) : [],
+  );
+  /**
+   * Flat selectable list across sections: capped Active rows first, then
+   * the full filtered list while the All section is expanded. Highlight
+   * navigation walks this list, so headers are skipped and movement
+   * crosses sections in one sequence.
+   */
+  const runSelectable = createMemo(() =>
+    runSelectableRows(runVisibleActive(), filteredRuns(), runShowAll()),
+  );
+  /** Panel-relative highlight: Active rows then the windowed All slice. */
+  const runRelativeHighlight = createMemo(() => {
+    const activeLength = runVisibleActive().length;
+    if (!runShowAll() || runHighlight() < activeLength) return runHighlight();
+    return activeLength + (runHighlight() - activeLength - runWindowStart());
+  });
+  /** Visible list window for the features panel: same measured-card contract as skills. */
+  const featureVisibleCount = createMemo(() => {
+    const measured = measuredFeatureRows();
+    if (measured !== undefined) return measured;
+    const height = dimensions().height;
+    return Math.max(2, Math.floor((2 * (height - 6)) / 5) - 6);
+  });
+  const featureWindowStart = createMemo(() => {
+    const count = featureVisibleCount();
+    const length = filteredFeatures().length;
+    return Math.min(Math.max(featureHighlight() - count + 1, 0), Math.max(length - count, 0));
+  });
+  const featureVisibleRows = createMemo(() =>
+    filteredFeatures().slice(featureWindowStart(), featureWindowStart() + featureVisibleCount()),
+  );
+  const featureRelativeHighlight = createMemo(() => featureHighlight() - featureWindowStart());
   const maxBodyLines = createMemo(() => Math.max(5, dimensions().height - 13));
 
   /** Keybinds in canonical panel order for the status hint. */
@@ -1812,6 +2050,10 @@ export const App = (props: AppProps) => {
   const runsInteractive = createMemo(
     () =>
       selected() === 'runs' && runsLoaded() && runsStoreInstalled() && filteredRuns().length > 0,
+  );
+
+  const featuresInteractive = createMemo(
+    () => selected() === 'features' && featuresLoaded() && filteredFeatures().length > 0,
   );
 
   /** Filter picker view: windowed rows plus a relative highlight. */
@@ -1890,7 +2132,9 @@ export const App = (props: AppProps) => {
     if (detail() !== undefined) return detailHint(detailMode());
     if (profileDetail() !== undefined) return detailHint(profileDetailMode());
     if (promptDetail() !== undefined) return detailHint(promptDetailMode());
-    if (runDetailId() !== undefined) return runDetailHint();
+    if (runDetailId() !== undefined)
+      return runDetailHint(runDetailData()?.summary.status, runDetailMode());
+    if (featureDetailId() !== undefined) return featureDetailHint();
     if (
       (selected() === 'skills' && skillTyping()) ||
       (selected() === 'profiles' && profileTyping()) ||
@@ -1907,6 +2151,7 @@ export const App = (props: AppProps) => {
       return formatKeybinds([{ key: 'installing…' }, Keybinds.quit()]);
     const base = formatKeybinds([
       { key: orderedKeybinds().join('/'), action: 'select' },
+      ...(lastDispatchedRunId() !== undefined ? [Keybinds.goToRun()] : []),
       Keybinds.quit(),
     ]);
     if (selectedMissing()) return `${base} · ${formatKeybinds([Keybinds.install()])}`;
@@ -1948,11 +2193,25 @@ export const App = (props: AppProps) => {
     }
     if (selected() === 'runs' && runsLoaded() && runsStoreInstalled()) {
       if (runsInteractive()) {
-        const entries = [Keybinds.search(), Keybinds.open(), Keybinds.create(), Keybinds.refresh()];
+        const entries = [
+          Keybinds.search(),
+          Keybinds.open(),
+          Keybinds.create(),
+          Keybinds.showAll(),
+          Keybinds.refresh(),
+        ];
         if (runQuery() !== '') entries.push(Keybinds.clearFilter());
         return `${base} · ${formatKeybinds(entries)}`;
       }
       return `${base} · ${formatKeybinds([Keybinds.create(), Keybinds.refresh()])}`;
+    }
+    if (selected() === 'features' && featuresLoaded()) {
+      if (featuresInteractive()) {
+        const entries = [Keybinds.search(), Keybinds.open(), Keybinds.refresh()];
+        if (featureQuery() !== '') entries.push(Keybinds.clearFilter());
+        return `${base} · ${formatKeybinds(entries)}`;
+      }
+      return `${base} · ${formatKeybinds([Keybinds.refresh()])}`;
     }
     return base;
   });
@@ -1963,7 +2222,9 @@ export const App = (props: AppProps) => {
     else if (selected() === 'prompts')
       setPromptHighlight((index) => clampHighlight(index + delta, filteredPrompts().length));
     else if (selected() === 'runs')
-      setRunHighlight((index) => clampHighlight(index + delta, filteredRuns().length));
+      setRunHighlight((index) => clampHighlight(index + delta, runSelectable().length));
+    else if (selected() === 'features')
+      setFeatureHighlight((index) => clampHighlight(index + delta, filteredFeatures().length));
     else if (selected() === 'skills')
       setSkillHighlight((index) => clampHighlight(index + delta, filtered().length));
   };
@@ -1992,8 +2253,13 @@ export const App = (props: AppProps) => {
       return;
     }
     if (selected() === 'runs') {
-      const row = filteredRuns()[runHighlight()];
+      const row = runSelectable()[runHighlight()];
       if (row !== undefined) openRunDetail(row.id);
+      return;
+    }
+    if (selected() === 'features') {
+      const row = filteredFeatures()[featureHighlight()];
+      if (row !== undefined) openFeatureDetail(row.id);
       return;
     }
     const row = filtered()[skillHighlight()];
@@ -2004,6 +2270,19 @@ export const App = (props: AppProps) => {
       setDetailAction(0);
       setSkillTyping(false);
     }
+  };
+
+  /**
+   * Toggle the runs panel's All-runs section. The highlight clamps to the
+   * selectable list after the swap, so a hidden index never dangles when
+   * the section closes and the full list stays reachable when it opens.
+   */
+  const toggleRunSections = (): void => {
+    const next = !runShowAll();
+    setRunShowAll(next);
+    const activeLength = runVisibleActive().length;
+    const length = next ? activeLength + filteredRuns().length : activeLength;
+    setRunHighlight((index) => clampHighlight(index, length));
   };
 
   const closeDetail = (): void => {
@@ -2038,6 +2317,7 @@ export const App = (props: AppProps) => {
     setProfileTyping(false);
     setPromptTyping(false);
     setRunTyping(false);
+    setFeatureTyping(false);
   };
 
   /** Scroll window for the profile full view: instructions plus checklist lines. */
@@ -2080,6 +2360,14 @@ export const App = (props: AppProps) => {
   /** Scroll window for the run full view: transcript event count. */
   const runDetailLineCount = createMemo(() => runDetailData()?.events.length ?? 0);
   const runDetailMaxScroll = createMemo(() => Math.max(runDetailLineCount() - maxBodyLines(), 0));
+  /** Scroll window for the feature full view. */
+  const featureDetailLineCount = createMemo(() => {
+    const data = featureDetailData();
+    return data === undefined ? 0 : featureDetailLines(data).length;
+  });
+  const featureDetailMaxScroll = createMemo(() =>
+    Math.max(featureDetailLineCount() - maxBodyLines(), 0),
+  );
 
   /**
    * Delete the open skill: opens the timed remove-confirm modal, and on
@@ -2152,7 +2440,7 @@ export const App = (props: AppProps) => {
       setProfileDetailMode('preview');
       setProfileDetailScroll(0);
       setProfileDetailAction(0);
-      pushToast(`Deleted profile '${target.id}'.`, { variant: 'success' });
+      pushToast(`Deleted profile '${Runs.sanitizeRunText(target.id)}'.`, { variant: 'success' });
       queryClient.setQueryData(Query.profilesKey, (previous: Query.ProfilesList | undefined) =>
         previous === undefined
           ? previous
@@ -2351,30 +2639,12 @@ export const App = (props: AppProps) => {
         if (fiber !== undefined) {
           key.preventDefault();
           // Agent fibers settle silent on interrupt (the flow sees a
-          // cancel, not a failure) — the pending run id owns the
-          // cancelled receipt, written here once the child is dead.
-          const interruptedRunId = pendingAgentRunId();
+          // cancel, not a failure); the flow's own store settle owns
+          // any receipt.
           void Fiber.interrupt(fiber)
             .pipe(Effect.runPromise)
             .then(() => {
-              if (interruptedRunId === undefined) {
-                pushToast('Agent run cancelled.', { variant: 'info' });
-                return;
-              }
-              setPendingAgentRunId(undefined);
-              void Runs.cancelRun(root, interruptedRunId)
-                .pipe(Effect.runPromise)
-                .then(
-                  () => {
-                    pushToast('Agent run cancelled.', { variant: 'info' });
-                    refreshRuns();
-                    if (runDetailId() === interruptedRunId) loadRunDetail(interruptedRunId);
-                  },
-                  () => {
-                    refreshRuns();
-                    if (runDetailId() === interruptedRunId) loadRunDetail(interruptedRunId);
-                  },
-                );
+              pushToast('Agent run cancelled.', { variant: 'info' });
             });
         }
         return;
@@ -2409,37 +2679,34 @@ export const App = (props: AppProps) => {
       return;
     }
     if (runDetailId() !== undefined) {
-      const actions = runDetailActionsFor(runDetailData()?.summary.status);
-      if (key.name === 'escape') closeRunDetail();
-      else if (key.name === 'q') renderer.destroy();
-      else if (key.sequence === 'v') {
+      const actions = runDetailActions(runDetailData()?.summary.status, runDetailMode());
+      const intent = runDetailIntent(key, runDetailMode(), runDetailData()?.summary.status);
+      if (intent === 'close') closeRunDetail();
+      else if (intent === 'quit') renderer.destroy();
+      else if (intent === 'toggle-view') {
         setRunDetailMode((mode) => (mode === 'view' ? 'preview' : 'view'));
         setRunDetailScroll(0);
-      } else if (key.sequence === 'R') {
+      } else if (intent === 'refresh') {
         const id = runDetailId();
         refreshRuns();
         if (id !== undefined) loadRunDetail(id);
-      } else if (key.sequence === 'x') interruptRun();
-      else if (key.sequence === 'a') runAnswerFlow();
-      else if (key.name === 'enter' || key.name === 'return') {
+      } else if (intent === 'interrupt') interruptRun();
+      else if (intent === 'steer') runSteerFlow();
+      else if (intent === 'answer') runAnswerFlow();
+      else if (intent === 'activate') {
         const action = actions[runDetailAction()];
         if (action?.id === 'toggle-view') {
           setRunDetailMode((mode) => (mode === 'view' ? 'preview' : 'view'));
           setRunDetailScroll(0);
-        } else if (action?.id === 'interrupt') interruptRun();
+        } else if (action?.id === 'steer') runSteerFlow();
+        else if (action?.id === 'interrupt') interruptRun();
         else if (action?.id === 'answer') runAnswerFlow();
         else closeRunDetail();
-      } else if (key.name === 'up' || key.name === 'down')
-        setRunDetailAction((index) =>
-          clampHighlight(index + (key.name === 'up' ? -1 : 1), actions.length),
-        );
-      else if (key.sequence === 'j' || key.sequence === 'k') {
-        if (runDetailMode() === 'view') scrollRunDetail(key.sequence === 'j' ? 1 : -1);
-        else
-          setRunDetailAction((index) =>
-            clampHighlight(index + (key.sequence === 'j' ? 1 : -1), actions.length),
-          );
-      }
+      } else if (intent === 'menu-up' || intent === 'menu-down') {
+        const delta = intent === 'menu-up' ? -1 : 1;
+        setRunDetailAction((index) => clampHighlight(index + delta, actions.length));
+      } else if (intent === 'scroll-up' || intent === 'scroll-down')
+        scrollRunDetail(intent === 'scroll-down' ? 1 : -1);
       return;
     }
     if (detail() !== undefined) {
@@ -2510,6 +2777,22 @@ export const App = (props: AppProps) => {
       return;
     }
 
+    if (featureDetailId() !== undefined) {
+      if (key.name === 'escape') closeFeatureDetail();
+      else if (key.name === 'q') renderer.destroy();
+      else if (key.sequence === 'v') toggleFeatureView();
+      else if (key.sequence === 'p') {
+        setFeatureDetailMode('preview');
+        setFeatureDetailScroll(0);
+      } else if (key.sequence === 'R') refreshFeatures();
+      else if (key.name === 'up' || key.sequence === 'k') {
+        if (featureDetailMode() === 'view') scrollFeatureDetail(-1);
+      } else if (key.name === 'down' || key.sequence === 'j') {
+        if (featureDetailMode() === 'view') scrollFeatureDetail(1);
+      }
+      return;
+    }
+
     // Typing mode for the selected panel: every printable keystroke
     // filters that panel's list only — even `j`, `k`, and the rest of
     // the keybind letters, so any query is typeable. Arrows still move;
@@ -2521,7 +2804,8 @@ export const App = (props: AppProps) => {
       selectedPanel === 'skills' ||
       selectedPanel === 'profiles' ||
       selectedPanel === 'prompts' ||
-      selectedPanel === 'runs'
+      selectedPanel === 'runs' ||
+      selectedPanel === 'features'
         ? selectedPanel
         : undefined;
     if (typingPanel !== undefined && typingOf(typingPanel)) {
@@ -2535,6 +2819,9 @@ export const App = (props: AppProps) => {
         } else if (typingPanel === 'runs') {
           setRunQuery(update);
           setRunHighlight(0);
+        } else if (typingPanel === 'features') {
+          setFeatureQuery(update);
+          setFeatureHighlight(0);
         } else {
           setSkillQuery(update);
           setSkillHighlight(0);
@@ -2559,6 +2846,12 @@ export const App = (props: AppProps) => {
             setRunQuery('');
             setRunHighlight(0);
           }
+        } else if (typingPanel === 'features') {
+          setFeatureTyping(false);
+          if (clear) {
+            setFeatureQuery('');
+            setFeatureHighlight(0);
+          }
         } else {
           setSkillTyping(false);
           if (clear) {
@@ -2581,6 +2874,16 @@ export const App = (props: AppProps) => {
       return;
     }
 
+    // Dispatched profile-create run: `g` jumps to its detail from
+    // anywhere the detail stack is closed. Filter typing above owns
+    // printable keys, so `g` stays a query character while searching.
+    if (key.sequence === 'g' && !key.ctrl && !key.meta) {
+      const id = lastDispatchedRunId();
+      if (id !== undefined) {
+        openRunDetail(id);
+        return;
+      }
+    }
     if (key.name === 'q') {
       renderer.destroy();
       return;
@@ -2606,6 +2909,11 @@ export const App = (props: AppProps) => {
       if (selected() === 'runs' && queryOf('runs') !== '') {
         setRunQuery('');
         setRunHighlight(0);
+        return;
+      }
+      if (selected() === 'features' && queryOf('features') !== '') {
+        setFeatureQuery('');
+        setFeatureHighlight(0);
         return;
       }
       renderer.destroy();
@@ -2705,6 +3013,10 @@ export const App = (props: AppProps) => {
         refreshRuns();
         return;
       }
+      if (selected() === 'features' && featuresLoaded()) {
+        refreshFeatures();
+        return;
+      }
     }
     if (selected() === 'profiles' && profilesInteractive()) {
       if (key.sequence === '/') {
@@ -2747,8 +3059,30 @@ export const App = (props: AppProps) => {
       }
     }
     if (selected() === 'runs' && runsInteractive()) {
+      if (key.sequence === 'A') {
+        toggleRunSections();
+        return;
+      }
       if (key.sequence === '/') {
         setRunTyping(true);
+        return;
+      }
+      if (key.name === 'enter' || key.name === 'return') {
+        openHighlighted();
+        return;
+      }
+      if (key.name === 'up' || key.name === 'k') {
+        moveHighlight(-1);
+        return;
+      }
+      if (key.name === 'down' || key.name === 'j') {
+        moveHighlight(1);
+        return;
+      }
+    }
+    if (selected() === 'features' && featuresInteractive()) {
+      if (key.sequence === '/') {
+        setFeatureTyping(true);
         return;
       }
       if (key.name === 'enter' || key.name === 'return') {
@@ -2875,7 +3209,45 @@ export const App = (props: AppProps) => {
       pushToast(`Runs list failed: ${failure.message}`, { variant: 'error' });
   });
 
+  /** Previous live flag, so the settle edge (live → not live) refreshes once. */
+  let runDetailWasLive = false;
+
+  /**
+   * Refresh the runs list when the open run settles on its own: the
+   * transcript poll flips the live memo false while the detail stays
+   * open, so the row underneath updates without leaving the detail.
+   * Closing the detail (id cleared) never refreshes.
+   */
+  createEffect(() => {
+    const live = runDetailLive();
+    if (runDetailWasLive && !live && runDetailId() !== undefined) refreshRuns();
+    runDetailWasLive = live;
+  });
+
+  /**
+   * Schedule a features-list refetch behind the `features` query key:
+   * same stale-while-revalidate contract as `refreshSkills`.
+   */
+  const refreshFeatures = (): void => {
+    void queryClient.invalidateQueries({ queryKey: Query.featuresKey });
+  };
+
+  /**
+   * Toast one features-list failure per query error: mirrors the skills
+   * error effect — fires once when a fetch rejects, never on rerender.
+   */
+  createEffect(() => {
+    const failure = featuresQuery.error;
+    if (failure instanceof Error)
+      pushToast(`Features list failed: ${failure.message}`, { variant: 'error' });
+  });
+
   onMount(() => {
+    Runs.setRunNotifier({
+      toast: (message, variant) =>
+        variant === undefined ? pushToast(message) : pushToast(message, { variant }),
+      notify: (title, body) => pushToast(body, { title }),
+    });
     GitInfo.getInfo(root)
       .pipe(Effect.runPromise)
       .then((next) => {
@@ -2888,6 +3260,11 @@ export const App = (props: AppProps) => {
       });
   });
 
+  onCleanup(() => {
+    Runs.setRunNotifier(undefined);
+    void Runs.resetRunnerRuntimes();
+  });
+
   return (
     <box flexGrow={1} flexDirection="column" backgroundColor={palette.bg}>
       <box backgroundColor={palette.highlight} paddingLeft={1} paddingRight={1} flexShrink={0}>
@@ -2898,7 +3275,8 @@ export const App = (props: AppProps) => {
           detail() === undefined &&
           profileDetail() === undefined &&
           promptDetail() === undefined &&
-          runDetailId() === undefined
+          runDetailId() === undefined &&
+          featureDetailId() === undefined
         }
         fallback={
           <Show
@@ -2908,7 +3286,7 @@ export const App = (props: AppProps) => {
                 <box flexDirection="column" width={30} flexShrink={0} minHeight={0}>
                   <Panel title="Run — Actions" selected={false}>
                     <DetailActions
-                      actions={runDetailActionsFor(runDetailData()?.summary.status)}
+                      actions={runDetailActions(runDetailData()?.summary.status, runDetailMode())}
                       highlight={runDetailAction()}
                     />
                     <box flexShrink={0}>
@@ -2942,31 +3320,27 @@ export const App = (props: AppProps) => {
             }
           >
             <Show
-              when={detail() === undefined}
+              when={featureDetailId() === undefined}
               fallback={
-                <box flexDirection="row" flexGrow={1} minHeight={0} gap={1}>
-                  <box flexDirection="column" width={30} flexShrink={0} minHeight={0}>
-                    <Panel title="Skill — Actions" selected={false}>
-                      <DetailActions
-                        actions={detailActionsFor(detailMode())}
-                        highlight={detailAction()}
-                      />
-                      <box flexShrink={0}>
-                        <text style={{ fg: palette.dim }}>↑↓ navigate · ⏎ select</text>
-                      </box>
-                    </Panel>
-                  </box>
+                <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} padding={1}>
                   <box flexDirection="column" flexGrow={1} flexBasis={0} minHeight={0}>
                     <Panel
-                      title={`Skill — ${detail()?.name ?? ''} · ${detailMode() === 'view' ? 'view' : 'preview'}`}
+                      title={`Feature — ${featureDetailData()?.summary.name ?? ''} · ${featureDetailMode() === 'view' ? 'view' : 'preview'}`}
                       selected={false}
                     >
-                      <Show when={detail()} fallback={<PanelMessage message="No skill." />}>
-                        {(skill: () => Skills.SkillSummary) => (
-                          <SkillDetail
-                            skill={skill()}
-                            mode={detailMode()}
-                            scrollOffset={detailScroll()}
+                      <Show
+                        when={featureDetailData()}
+                        fallback={
+                          <PanelMessage
+                            message={featureDetailLoading() ? 'Loading feature…' : 'No feature.'}
+                          />
+                        }
+                      >
+                        {(view: () => Features.FeatureDetail) => (
+                          <FeatureDetail
+                            detail={view()}
+                            mode={featureDetailMode()}
+                            scrollOffset={featureDetailScroll()}
                             maxBodyLines={maxBodyLines()}
                           />
                         )}
@@ -2977,14 +3351,14 @@ export const App = (props: AppProps) => {
               }
             >
               <Show
-                when={profileDetail() === undefined}
+                when={detail() === undefined}
                 fallback={
                   <box flexDirection="row" flexGrow={1} minHeight={0} gap={1}>
                     <box flexDirection="column" width={30} flexShrink={0} minHeight={0}>
-                      <Panel title="Profile — Actions" selected={false}>
+                      <Panel title="Skill — Actions" selected={false}>
                         <DetailActions
-                          actions={detailActionsFor(profileDetailMode())}
-                          highlight={profileDetailAction()}
+                          actions={detailActionsFor(detailMode())}
+                          highlight={detailAction()}
                         />
                         <box flexShrink={0}>
                           <text style={{ fg: palette.dim }}>↑↓ navigate · ⏎ select</text>
@@ -2993,18 +3367,15 @@ export const App = (props: AppProps) => {
                     </box>
                     <box flexDirection="column" flexGrow={1} flexBasis={0} minHeight={0}>
                       <Panel
-                        title={`Profile — ${profileDetail()?.name ?? ''} · ${profileDetailMode() === 'view' ? 'view' : 'preview'}`}
+                        title={`Skill — ${detail()?.name ?? ''} · ${detailMode() === 'view' ? 'view' : 'preview'}`}
                         selected={false}
                       >
-                        <Show
-                          when={profileDetail()}
-                          fallback={<PanelMessage message="No profile." />}
-                        >
-                          {(profile: () => Profiles.ProfileSummary) => (
-                            <ProfileDetail
-                              profile={profile()}
-                              mode={profileDetailMode()}
-                              scrollOffset={profileDetailScroll()}
+                        <Show when={detail()} fallback={<PanelMessage message="No skill." />}>
+                          {(skill: () => Skills.SkillSummary) => (
+                            <SkillDetail
+                              skill={skill()}
+                              mode={detailMode()}
+                              scrollOffset={detailScroll()}
                               maxBodyLines={maxBodyLines()}
                             />
                           )}
@@ -3014,36 +3385,78 @@ export const App = (props: AppProps) => {
                   </box>
                 }
               >
-                <box flexDirection="row" flexGrow={1} minHeight={0} gap={1}>
-                  <box flexDirection="column" width={30} flexShrink={0} minHeight={0}>
-                    <Panel title="Prompt — Actions" selected={false}>
-                      <DetailActions
-                        actions={detailActionsFor(promptDetailMode())}
-                        highlight={promptDetailAction()}
-                      />
-                      <box flexShrink={0}>
-                        <text style={{ fg: palette.dim }}>↑↓ navigate · ⏎ select</text>
-                      </box>
-                    </Panel>
-                  </box>
-                  <box flexDirection="column" flexGrow={1} flexBasis={0} minHeight={0}>
-                    <Panel
-                      title={`Prompt — ${promptDetail()?.name ?? ''} · ${promptDetailMode() === 'view' ? 'view' : 'preview'}`}
-                      selected={false}
-                    >
-                      <Show when={promptDetail()} fallback={<PanelMessage message="No prompt." />}>
-                        {(prompt: () => Prompts.PromptSummary) => (
-                          <PromptDetail
-                            prompt={prompt()}
-                            mode={promptDetailMode()}
-                            scrollOffset={promptDetailScroll()}
-                            maxBodyLines={maxBodyLines()}
+                <Show
+                  when={profileDetail() === undefined}
+                  fallback={
+                    <box flexDirection="row" flexGrow={1} minHeight={0} gap={1}>
+                      <box flexDirection="column" width={30} flexShrink={0} minHeight={0}>
+                        <Panel title="Profile — Actions" selected={false}>
+                          <DetailActions
+                            actions={detailActionsFor(profileDetailMode())}
+                            highlight={profileDetailAction()}
                           />
-                        )}
-                      </Show>
-                    </Panel>
+                          <box flexShrink={0}>
+                            <text style={{ fg: palette.dim }}>↑↓ navigate · ⏎ select</text>
+                          </box>
+                        </Panel>
+                      </box>
+                      <box flexDirection="column" flexGrow={1} flexBasis={0} minHeight={0}>
+                        <Panel
+                          title={`Profile — ${profileDetail()?.name ?? ''} · ${profileDetailMode() === 'view' ? 'view' : 'preview'}`}
+                          selected={false}
+                        >
+                          <Show
+                            when={profileDetail()}
+                            fallback={<PanelMessage message="No profile." />}
+                          >
+                            {(profile: () => Profiles.ProfileSummary) => (
+                              <ProfileDetail
+                                profile={profile()}
+                                mode={profileDetailMode()}
+                                scrollOffset={profileDetailScroll()}
+                                maxBodyLines={maxBodyLines()}
+                              />
+                            )}
+                          </Show>
+                        </Panel>
+                      </box>
+                    </box>
+                  }
+                >
+                  <box flexDirection="row" flexGrow={1} minHeight={0} gap={1}>
+                    <box flexDirection="column" width={30} flexShrink={0} minHeight={0}>
+                      <Panel title="Prompt — Actions" selected={false}>
+                        <DetailActions
+                          actions={detailActionsFor(promptDetailMode())}
+                          highlight={promptDetailAction()}
+                        />
+                        <box flexShrink={0}>
+                          <text style={{ fg: palette.dim }}>↑↓ navigate · ⏎ select</text>
+                        </box>
+                      </Panel>
+                    </box>
+                    <box flexDirection="column" flexGrow={1} flexBasis={0} minHeight={0}>
+                      <Panel
+                        title={`Prompt — ${promptDetail()?.name ?? ''} · ${promptDetailMode() === 'view' ? 'view' : 'preview'}`}
+                        selected={false}
+                      >
+                        <Show
+                          when={promptDetail()}
+                          fallback={<PanelMessage message="No prompt." />}
+                        >
+                          {(prompt: () => Prompts.PromptSummary) => (
+                            <PromptDetail
+                              prompt={prompt()}
+                              mode={promptDetailMode()}
+                              scrollOffset={promptDetailScroll()}
+                              maxBodyLines={maxBodyLines()}
+                            />
+                          )}
+                        </Show>
+                      </Panel>
+                    </box>
                   </box>
-                </box>
+                </Show>
               </Show>
             </Show>
           </Show>
@@ -3074,7 +3487,9 @@ export const App = (props: AppProps) => {
                               ? setPromptsCard
                               : cell.panel === 'runs'
                                 ? setRunsCard
-                                : undefined
+                                : cell.panel === 'features'
+                                  ? setFeaturesCard
+                                  : undefined
                       }
                     >
                       {cell.panel === 'info' ? (
@@ -3127,13 +3542,28 @@ export const App = (props: AppProps) => {
                           installing={runsInstalling()}
                           loadingVariant={runsPhase()}
                           installed={runsStoreInstalled()}
-                          rows={runVisibleRows()}
+                          activeRows={runVisibleActive()}
+                          allRows={runVisibleAll()}
+                          showAll={runShowAll()}
                           highlight={runRelativeHighlight()}
                           total={filteredRuns().length}
                           query={runQuery()}
                           searching={runTyping()}
                           capacity={runVisibleCount()}
                           selected={selected() === 'runs'}
+                        />
+                      ) : cell.panel === 'features' ? (
+                        <FeaturesPanel
+                          loading={!featuresLoaded()}
+                          loadingVariant={featuresPhase()}
+                          installed={featuresInstalled()}
+                          rows={featureVisibleRows()}
+                          highlight={featureRelativeHighlight()}
+                          total={filteredFeatures().length}
+                          query={featureQuery()}
+                          searching={featureTyping()}
+                          capacity={featureVisibleCount()}
+                          selected={selected() === 'features'}
                         />
                       ) : (
                         <PanelMessage message="No data source yet." />
