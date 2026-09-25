@@ -3,6 +3,7 @@
     "../pi/zi",
     "../packages/pi-prompts",
     "../packages/pi-skills",
-    "../packages/pi-profiles"
+    "../packages/pi-profiles",
+    "../packages/pi-runs"
   ]
 }
