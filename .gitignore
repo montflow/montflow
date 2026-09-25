@@ -263,6 +263,9 @@ tmp/
 # --- montflow loop runtime state ---
 .agents/@montflow/loops
 
+# --- montflow run transcripts (local only) ---
+.agents/@montflow/pi-runs
+
 # --- scratchpad (local only, keep dir shell) ---
 scratchpad/*
 !scratchpad/.gitkeep
