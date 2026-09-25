@@ -44,7 +44,10 @@ Vitest.describe('Store ask/answer runtime', () => {
         Vitest.expect(event.text).toBe('Production.');
         const loaded = yield* store.load('run-1');
         Vitest.expect(loaded.run.status).toBe('running');
-        Vitest.expect(loaded.events.length).toBe(1);
+        Vitest.expect(loaded.events.map((entry) => [entry.role, entry.text])).toStrictEqual([
+          ['system', 'Which env?'],
+          ['user', 'Production.'],
+        ]);
       }),
     ),
   );

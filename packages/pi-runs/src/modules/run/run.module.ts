@@ -46,6 +46,15 @@ export class Run extends Schema.Class<Run>('Run')({
   prompt: Schema.optionalKey(Schema.String),
   /** `provider/model-id` pin for the run, if any. */
   model: Schema.optionalKey(Schema.String),
+  /**
+   * Tool allowlist applied to the run's Pi session. Absent means Pi's default
+   * tool set; persisted so a resumed run keeps the same capabilities.
+   */
+  tools: Schema.optionalKey(Schema.Array(Schema.String)),
+  /** Non-parent related run ids (siblings, review target, coordinator links). */
+  related: Schema.optionalKey(Schema.Array(Id)),
+  /** Latest agent-posted progress line, surfaced in the runs list. */
+  progress: Schema.optionalKey(Schema.String),
 }) {}
 
 /**

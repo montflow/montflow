@@ -1,3 +1,5 @@
+import * as Fs from 'node:fs';
+import * as NodePath from 'node:path';
 import * as Vitest from '@effect/vitest';
 import { Effect } from 'effect';
 import {
@@ -23,6 +25,18 @@ Vitest.describe('Store.create runtime', () => {
     ),
   );
 
+  Vitest.it.live('persists the tools allowlist', () =>
+    provideStore(
+      freshRoot(),
+      Effect.gen(function* () {
+        const store = yield* Store;
+        yield* store.create({ id: 'run-1', tools: ['read', 'grep'] });
+        const loaded = yield* store.load('run-1');
+        Vitest.expect(loaded.run.tools).toStrictEqual(['read', 'grep']);
+      }),
+    ),
+  );
+
   Vitest.it.live('fails on duplicate id', () =>
     provideStore(
       freshRoot(),
@@ -35,4 +49,20 @@ Vitest.describe('Store.create runtime', () => {
       }),
     ),
   );
+
+  Vitest.it.live('serializes creation under the run lock', () => {
+    const root = freshRoot();
+    return provideStore(
+      root,
+      Effect.gen(function* () {
+        const store = yield* Store;
+        yield* Effect.sync(() =>
+          Fs.mkdirSync(NodePath.join(root, 'run-1', '.lock'), { recursive: true }),
+        );
+        const error = yield* store.create({ id: 'run-1' }).pipe(Effect.flip);
+        Vitest.expect(error).toBeInstanceOf(StoreError);
+        Vitest.expect(error.reason).toContain('is locked');
+      }),
+    );
+  });
 });

@@ -20,6 +20,18 @@ Vitest.describe('Store.start runtime', () => {
     ),
   );
 
+  Vitest.it.live('preserves the tools allowlist when moving to running', () =>
+    provideStore(
+      freshRoot(),
+      Effect.gen(function* () {
+        const store = yield* Store;
+        yield* store.create({ id: 'run-1', tools: ['read'] });
+        const started = yield* store.start('run-1');
+        Vitest.expect(started.tools).toStrictEqual(['read']);
+      }),
+    ),
+  );
+
   Vitest.it.live('fails when already running', () =>
     provideStore(
       freshRoot(),

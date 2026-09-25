@@ -5,7 +5,9 @@ Sole file owner for `runs/`. Only code allowed to write `run.md`,
 
 ## Belongs here
 
-- `create`, `start`, `append`, `settle`, `load`, `list` plus `StoreError`
+- `create`, `start`, `append`, `settle`, `load`, `list`, `verify` plus `StoreError`
+- `verify` reads raw files and delegates to the pure verify module (validity + resumability)
+- `append`/`answer` carry the raw Pi `message` for lossless replay; `text` stays the display projection
 - `Backend` interface with file and memory implementations
 - Frontmatter helpers, per-run `.lock` guard (file backend), load invariant
 

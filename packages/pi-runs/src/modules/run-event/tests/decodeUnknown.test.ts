@@ -44,4 +44,37 @@ Vitest.describe('RunEvent.decodeUnknown runtime', () => {
       Vitest.expect(RunEvent.encode(event)).toStrictEqual(valid);
     }),
   );
+
+  Vitest.it.effect('decodes a tool result carrying a raw message', () =>
+    Effect.gen(function* () {
+      const raw = {
+        role: 'toolResult',
+        toolCallId: 'call-1',
+        toolName: 'read',
+        content: [{ type: 'text', text: 'file body' }],
+        isError: false,
+        timestamp: 1,
+      };
+      const event = yield* RunEvent.decodeUnknown({
+        ...valid,
+        seq: 3,
+        role: 'toolResult',
+        text: '',
+        message: raw,
+      });
+      Vitest.expect(event.role).toBe('toolResult');
+      Vitest.expect(event.message).toStrictEqual(raw);
+    }),
+  );
+
+  Vitest.it.effect('allows empty display text when a raw message is present', () =>
+    Effect.gen(function* () {
+      const event = yield* RunEvent.decodeUnknown({
+        ...valid,
+        text: '',
+        message: { role: 'assistant', content: [] },
+      });
+      Vitest.expect(event.text).toBe('');
+    }),
+  );
 });

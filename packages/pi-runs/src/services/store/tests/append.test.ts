@@ -25,6 +25,21 @@ Vitest.describe('Store.append runtime', () => {
     ),
   );
 
+  Vitest.it.live('persists a raw message alongside the display text', () =>
+    provideStore(
+      freshRoot(),
+      Effect.gen(function* () {
+        const store = yield* Store;
+        yield* store.create({ id: 'run-1' });
+        yield* store.start('run-1');
+        const raw = { role: 'assistant', content: [{ type: 'text', text: 'hi' }] };
+        yield* store.append({ runId: 'run-1', role: 'assistant', text: 'hi', message: raw });
+        const loaded = yield* store.load('run-1');
+        Vitest.expect(loaded.events[0]?.message).toStrictEqual(raw);
+      }),
+    ),
+  );
+
   Vitest.it.live('fails before start', () =>
     provideStore(
       freshRoot(),

@@ -1,7 +1,8 @@
-import { Clock, Context, Data, Effect, FileSystem, Layer, Path, Schema } from 'effect';
+import { Clock, Context, Data, Effect, FileSystem, Layer, Option, Path, Schema } from 'effect';
 import * as ReceiptSchema from '../../modules/receipt/receipt.module.ts';
 import * as RunSchema from '../../modules/run/run.module.ts';
 import * as RunEventSchema from '../../modules/run-event/run-event.module.ts';
+import * as VerifySchema from '../../modules/verify/verify.module.ts';
 
 export class StoreError extends Data.TaggedError('@montflow/StoreError')<{
   readonly operation: string;
@@ -39,12 +40,24 @@ export interface Backend {
 const fail = (operation: string, reason: string): Effect.Effect<never, StoreError> =>
   Effect.fail(new StoreError({ operation, reason }));
 
-const ROOT_SEGMENTS = ['.agents', '@montflow', 'pi-runs', 'runs'] as const;
+/** Path segments (under a repo root) owning the runs store. Shared with surfaces. */
+export const RUNS_SEGMENTS = ['.agents', '@montflow', 'pi-runs', 'runs'] as const;
 
-const defaultRoot = (path: Path.Path): string => path.join(process.cwd(), ...ROOT_SEGMENTS);
+/**
+ * A held `.lock` older than this is treated as left behind by a crashed
+ * writer and reclaimed. The lock is an *empty* directory, so it carries no
+ * committable file — only a mid-write crash leaves one behind.
+ */
+const STALE_LOCK_MILLIS = 60_000;
+
+/** Actionable error for a held lock: name the run and the lock directory. */
+const lockedMessage = (id: string, lockDir: string): string =>
+  `run '${id}' is locked by another writer at '${lockDir}'; remove it if no writer is active`;
+
+const defaultRoot = (path: Path.Path): string => path.join(process.cwd(), ...RUNS_SEGMENTS);
 
 const repoRelativeSession = (id: string): string =>
-  [...ROOT_SEGMENTS, id, 'session.jsonl'].join('/');
+  [...RUNS_SEGMENTS, id, 'session.jsonl'].join('/');
 
 const nowIso: Effect.Effect<string> = Clock.currentTimeMillis.pipe(
   Effect.map((millis) => new Date(millis).toISOString()),
@@ -77,6 +90,51 @@ const decodeId = (operation: string, id: string) =>
 
 const fileBackend = (fs: FileSystem.FileSystem, path: Path.Path, root: string): Backend => {
   const lockFor = (id: string): string => path.join(root, id, '.lock');
+  const runDirFor = (id: string): string => path.join(root, id);
+
+  /** True when the lock directory's mtime is older than the stale threshold. */
+  const lockIsStale = (operation: string, lockDir: string): Effect.Effect<boolean, never> =>
+    Effect.gen(function* () {
+      const info = yield* fs.stat(lockDir).pipe(Effect.mapError(toStoreError(operation)));
+      const now = yield* Clock.currentTimeMillis;
+      return Option.match(info.mtime, {
+        onNone: () => false,
+        onSome: (mtime) => now - mtime.getTime() >= STALE_LOCK_MILLIS,
+      });
+    }).pipe(Effect.catch(() => Effect.succeed(false)));
+
+  /**
+   * Acquire the per-run lock directory. A live holder fails the write with an
+   * actionable error; a stale holder (crashed writer) is reclaimed once. The
+   * lock is an empty directory, so git never tracks it.
+   */
+  const acquireLock = (operation: string, id: string): Effect.Effect<void, StoreError> =>
+    Effect.gen(function* () {
+      const lockDir = lockFor(id);
+      yield* fs
+        .makeDirectory(runDirFor(id), { recursive: true })
+        .pipe(Effect.mapError(toStoreError(operation)));
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const acquired = yield* fs.makeDirectory(lockDir).pipe(
+          Effect.matchEffect({
+            onSuccess: () => Effect.succeed(true),
+            onFailure: (error) =>
+              error.reason['_tag'] === 'AlreadyExists'
+                ? Effect.succeed(false)
+                : Effect.fail(toStoreError(operation)(error)),
+          }),
+        );
+        if (acquired) return;
+        if (!(yield* lockIsStale(operation, lockDir))) {
+          return yield* fail(operation, lockedMessage(id, lockDir));
+        }
+        yield* fs
+          .remove(lockDir, { recursive: true })
+          .pipe(Effect.mapError(toStoreError(operation)));
+      }
+      return yield* fail(operation, lockedMessage(id, lockDir));
+    });
+
   return {
     filesFor: (id) => ({
       runMd: path.join(root, id, 'run.md'),
@@ -90,7 +148,12 @@ const fileBackend = (fs: FileSystem.FileSystem, path: Path.Path, root: string): 
         yield* fs
           .makeDirectory(path.dirname(file), { recursive: true })
           .pipe(Effect.mapError(toStoreError(operation)));
-        yield* fs.writeFileString(file, text).pipe(Effect.mapError(toStoreError(operation)));
+        // Atomic replace: write a sibling temp file, then rename over the
+        // target. A concurrent reader (the workspace's 1s detail poll) sees
+        // either the old or the new file, never a truncated mid-write.
+        const temp = `${file}.tmp`;
+        yield* fs.writeFileString(temp, text).pipe(Effect.mapError(toStoreError(operation)));
+        yield* fs.rename(temp, file).pipe(Effect.mapError(toStoreError(operation)));
       }),
     exists: (file) =>
       fs.access(file).pipe(
@@ -116,15 +179,7 @@ const fileBackend = (fs: FileSystem.FileSystem, path: Path.Path, root: string): 
       }),
     withLock: (operation, id, self) =>
       Effect.acquireUseRelease(
-        fs.makeDirectory(lockFor(id)).pipe(
-          Effect.mapError((error) =>
-            // Bracket read: Effect's PlatformError carries the syscall tag on `reason._tag`;
-            // dot access trips no-underscore-dangle, so read the library field by name.
-            error.reason['_tag'] === 'AlreadyExists'
-              ? new StoreError({ operation, reason: `run '${id}' is locked` })
-              : new StoreError({ operation, reason: String(error) }),
-          ),
-        ),
+        acquireLock(operation, id),
         () => self,
         () => fs.remove(lockFor(id), { recursive: true }).pipe(Effect.ignore),
       ),
@@ -177,12 +232,15 @@ interface RunInput {
   name?: string;
   prompt?: string;
   model?: string;
+  tools?: ReadonlyArray<string>;
+  related?: ReadonlyArray<RunSchema.Id>;
+  progress?: string;
 }
 
 /**
- * Rebuild a run over new base fields while keeping its display
- * captures (name, prompt, model). Module scope: pure, so the linter
- * keeps it out of the per-backend builder.
+ * Rebuild a run over new base fields while keeping its display captures
+ * (name, prompt, model) and session-shaping inputs (tools). Module scope:
+ * pure, so the linter keeps it out of the per-backend builder.
  * @param run - run carrying the captures
  * @param base - replacement identity and lifecycle fields
  * @returns rebuilt run
@@ -196,6 +254,7 @@ const withExtras = (
     readonly created: string;
     readonly updated: string;
     readonly sessionFile: string;
+    readonly progress?: string | undefined;
   },
 ): RunSchema.Run => {
   const input: RunInput = {
@@ -209,8 +268,23 @@ const withExtras = (
   if (run.name !== undefined) input.name = run.name;
   if (run.prompt !== undefined) input.prompt = run.prompt;
   if (run.model !== undefined) input.model = run.model;
+  if (run.tools !== undefined) input.tools = run.tools;
+  if (run.related !== undefined) input.related = run.related;
+  if (base.progress !== undefined) input.progress = base.progress;
+  else if (run.progress !== undefined) input.progress = run.progress;
   return new RunSchema.Run(input);
 };
+
+/** Inputs to `Store.create`: id plus optional parent and display captures. */
+export interface CreateArgs {
+  id: string;
+  parent?: string;
+  name?: string;
+  prompt?: string;
+  model?: string;
+  tools?: ReadonlyArray<string>;
+  related?: ReadonlyArray<string>;
+}
 
 const build = (backend: Backend) => {
   const extractFrontmatter = (operation: string, text: string): Effect.Effect<string, StoreError> =>
@@ -284,41 +358,47 @@ const build = (backend: Backend) => {
       return yield* decodeReceipt(operation, json);
     });
 
-  const create = (args: {
-    readonly id: string;
-    readonly parent?: string;
-    readonly name?: string;
-    readonly prompt?: string;
-    readonly model?: string;
-  }) =>
+  const create = (args: CreateArgs) =>
     Effect.gen(function* () {
       const operation = 'Store.create';
       const id = yield* decodeId(operation, args.id);
-      if (yield* backend.exists(backend.filesFor(id).runMd)) {
-        return yield* fail(operation, `run '${id}' already exists`);
-      }
-      const parent = args.parent !== undefined ? yield* decodeId(operation, args.parent) : null;
-      const stamp = yield* nowIso;
-      const input: RunInput = {
-        id,
-        parent,
-        status: 'pending',
-        created: stamp,
-        updated: stamp,
-        sessionFile: repoRelativeSession(id),
-      };
-      if (args.name !== undefined) input.name = args.name;
-      if (args.prompt !== undefined) input.prompt = args.prompt;
-      if (args.model !== undefined) input.model = args.model;
-      const run = new RunSchema.Run(input);
-      const files = backend.filesFor(id);
-      yield* backend.writeText(
+      return yield* backend.withLock(
         operation,
-        files.runMd,
-        frontmatter(RunSchema.encode(run), `# run ${id}\n\n`),
+        id,
+        Effect.gen(function* () {
+          if (yield* backend.exists(backend.filesFor(id).runMd)) {
+            return yield* fail(operation, `run '${id}' already exists`);
+          }
+          const parent = args.parent !== undefined ? yield* decodeId(operation, args.parent) : null;
+          const related =
+            args.related === undefined
+              ? undefined
+              : yield* Effect.forEach(args.related, (entry) => decodeId(operation, entry));
+          const stamp = yield* nowIso;
+          const input: RunInput = {
+            id,
+            parent,
+            status: 'pending',
+            created: stamp,
+            updated: stamp,
+            sessionFile: repoRelativeSession(id),
+          };
+          if (args.name !== undefined) input.name = args.name;
+          if (args.prompt !== undefined) input.prompt = args.prompt;
+          if (args.model !== undefined) input.model = args.model;
+          if (args.tools !== undefined) input.tools = args.tools;
+          if (related !== undefined) input.related = related;
+          const run = new RunSchema.Run(input);
+          const files = backend.filesFor(id);
+          yield* backend.writeText(
+            operation,
+            files.runMd,
+            frontmatter(RunSchema.encode(run), `# run ${id}\n\n`),
+          );
+          yield* backend.writeText(operation, files.session, '');
+          return run;
+        }),
       );
-      yield* backend.writeText(operation, files.session, '');
-      return run;
     });
 
   const start = (runId: string) =>
@@ -351,11 +431,55 @@ const build = (backend: Backend) => {
       }),
     );
 
+  /**
+   * Persist one transcript event under the caller's lock: append it to
+   * `session.jsonl` and rewrite the `run.md` body so both files stay in sync.
+   * `message` carries the raw Pi value for replay; `text` is the display
+   * projection.
+   */
+  const persistEvent = (
+    operation: string,
+    run: RunSchema.Run,
+    events: ReadonlyArray<RunEventSchema.Event>,
+    event: {
+      readonly role: RunEventSchema.Role;
+      readonly text: string;
+      readonly subrunId: RunSchema.Id | undefined;
+      readonly message: unknown;
+    },
+  ): Effect.Effect<RunEventSchema.Event, StoreError> =>
+    Effect.gen(function* () {
+      const input: RunEventSchema.EventInput = {
+        seq: events.length + 1,
+        role: event.role,
+        text: event.text,
+        at: yield* nowIso,
+      };
+      if (event.subrunId !== undefined) input.subrunId = event.subrunId;
+      if (event.message !== undefined) input.message = event.message;
+      const created = new RunEventSchema.Event(input);
+      const prior = events.map((entry) => JSON.stringify(RunEventSchema.encode(entry))).join('\n');
+      const files = backend.filesFor(run.id);
+      yield* backend.writeText(
+        operation,
+        files.session,
+        `${prior}${events.length > 0 ? '\n' : ''}${JSON.stringify(RunEventSchema.encode(created))}\n`,
+      );
+      yield* backend.writeText(
+        operation,
+        files.runMd,
+        frontmatter(RunSchema.encode(run), renderBody(run, [...events, created])),
+      );
+      return created;
+    });
+
   const append = (args: {
     readonly runId: string;
     readonly role: RunEventSchema.Role;
     readonly text: string;
     readonly subrunId?: string;
+    /** Raw Pi `Message` JSON for lossless replay; `text` is the display projection. */
+    readonly message?: unknown;
   }) =>
     backend.withLock(
       'Store.append',
@@ -370,32 +494,12 @@ const build = (backend: Backend) => {
         const events = yield* readEvents(operation, id);
         const subrunId =
           args.subrunId !== undefined ? yield* decodeId(operation, args.subrunId) : undefined;
-        const base = {
-          seq: events.length + 1,
+        return yield* persistEvent(operation, run, events, {
           role: args.role,
           text: args.text,
-          at: yield* nowIso,
-        };
-        const event =
-          subrunId !== undefined
-            ? new RunEventSchema.Event({ ...base, subrunId })
-            : new RunEventSchema.Event(base);
-        const prior = events
-          .map((entry) => JSON.stringify(RunEventSchema.encode(entry)))
-          .join('\n');
-        const files = backend.filesFor(id);
-        yield* backend.writeText(
-          operation,
-          files.session,
-          `${prior}${events.length > 0 ? '\n' : ''}${JSON.stringify(RunEventSchema.encode(event))}\n`,
-        );
-        const next = [...events, event];
-        yield* backend.writeText(
-          operation,
-          files.runMd,
-          frontmatter(RunSchema.encode(run), renderBody(run, next)),
-        );
-        return event;
+          subrunId,
+          message: args.message,
+        });
       }),
     );
 
@@ -467,17 +571,21 @@ const build = (backend: Backend) => {
           sessionFile: run.sessionFile,
         });
         const events = yield* readEvents(operation, id);
-        const files = backend.filesFor(id);
-        yield* backend.writeText(
-          operation,
-          files.runMd,
-          frontmatter(RunSchema.encode(parked), renderBody(parked, events)),
-        );
+        yield* persistEvent(operation, parked, events, {
+          role: 'system',
+          text: args.question,
+          subrunId: undefined,
+          message: undefined,
+        });
         return parked;
       }),
     );
 
-  const answer = (args: { readonly runId: string; readonly text: string }) =>
+  const answer = (args: {
+    readonly runId: string;
+    readonly text: string;
+    readonly message?: unknown;
+  }) =>
     backend.withLock(
       'Store.answer',
       args.runId,
@@ -497,28 +605,47 @@ const build = (backend: Backend) => {
           sessionFile: run.sessionFile,
         });
         const events = yield* readEvents(operation, id);
-        const event = new RunEventSchema.Event({
-          seq: events.length + 1,
-          role: 'user' as const,
+        return yield* persistEvent(operation, resumed, events, {
+          role: 'user',
           text: args.text,
-          at: yield* nowIso,
+          subrunId: undefined,
+          message: args.message,
         });
-        const prior = events
-          .map((entry) => JSON.stringify(RunEventSchema.encode(entry)))
-          .join('\n');
+      }),
+    );
+
+  /**
+   * Leave the parked `awaiting-input` state without recording a turn. The
+   * answer itself lives in the `ask_user` tool result, so the engine must not
+   * wedge a user turn between the assistant tool call and that result.
+   */
+  const unpark = (runId: string) =>
+    backend.withLock(
+      'Store.unpark',
+      runId,
+      Effect.gen(function* () {
+        const operation = 'Store.unpark';
+        const id = yield* decodeId(operation, runId);
+        const run = yield* readRun(operation, id);
+        if (run.status !== 'awaiting-input') {
+          return yield* fail(operation, `cannot unpark run '${id}' from status '${run.status}'`);
+        }
+        const running = withExtras(run, {
+          id: run.id,
+          parent: run.parent,
+          status: 'running' as const,
+          created: run.created,
+          updated: yield* nowIso,
+          sessionFile: run.sessionFile,
+        });
+        const events = yield* readEvents(operation, id);
         const files = backend.filesFor(id);
         yield* backend.writeText(
           operation,
-          files.session,
-          `${prior}${events.length > 0 ? '\n' : ''}${JSON.stringify(RunEventSchema.encode(event))}\n`,
-        );
-        const next = [...events, event];
-        yield* backend.writeText(
-          operation,
           files.runMd,
-          frontmatter(RunSchema.encode(resumed), renderBody(resumed, next)),
+          frontmatter(RunSchema.encode(running), renderBody(running, events)),
         );
-        return event;
+        return running;
       }),
     );
 
@@ -588,6 +715,16 @@ const build = (backend: Backend) => {
           `run '${id}' status '${run.status}' mismatches receipt outcome '${receipt.outcome}'`,
         );
       }
+      if (receipt !== null && receipt.runId !== id) {
+        return yield* fail(operation, `run '${id}' receipt belongs to '${receipt.runId}'`);
+      }
+      const verdict = yield* verify(id);
+      if (!verdict.valid) {
+        const detail = verdict.issues
+          .map((entry) => `[${entry.field}] ${entry.message}`)
+          .join('; ');
+        return yield* fail(operation, `run '${id}' failed verification: ${detail}`);
+      }
       return { run, events, receipt };
     });
 
@@ -597,12 +734,91 @@ const build = (backend: Backend) => {
       const ids = yield* backend.listRunIds(operation);
       const runs: Array<RunSchema.Run> = [];
       for (const id of [...ids].toSorted()) {
-        runs.push(yield* readRun(operation, id));
+        const run = yield* readRun(operation, id).pipe(
+          Effect.matchEffect({
+            onSuccess: (value) => Effect.succeed(value),
+            onFailure: (error) =>
+              Effect.logWarning(
+                `Store.list: skipping unreadable run '${id}': ${error.reason}`,
+              ).pipe(Effect.as(undefined)),
+          }),
+        );
+        if (run !== undefined) runs.push(run);
       }
       return runs;
     });
 
-  return { create, start, append, settle, ask, answer, cancel, load, list } as const;
+  /**
+   * Mechanically verify one run's raw files: validity plus resumability. Pure
+   * checks live in the verify module; this reads the files the backend owns.
+   */
+  /**
+   * Record an agent-posted progress line on a live run. Lifecycle status is
+   * unchanged; the message lands in `run.md` frontmatter for the UI to read.
+   */
+  const progress = (args: { readonly runId: string; readonly message: string }) =>
+    backend.withLock(
+      'Store.progress',
+      args.runId,
+      Effect.gen(function* () {
+        const operation = 'Store.progress';
+        const id = yield* decodeId(operation, args.runId);
+        const run = yield* readRun(operation, id);
+        if (run.status !== 'running' && run.status !== 'awaiting-input') {
+          return yield* fail(
+            operation,
+            `cannot update progress on run '${id}' with status '${run.status}'`,
+          );
+        }
+        const updated = withExtras(run, {
+          id: run.id,
+          parent: run.parent,
+          status: run.status,
+          created: run.created,
+          updated: yield* nowIso,
+          sessionFile: run.sessionFile,
+          progress: args.message,
+        });
+        const events = yield* readEvents(operation, id);
+        const files = backend.filesFor(id);
+        yield* backend.writeText(
+          operation,
+          files.runMd,
+          frontmatter(RunSchema.encode(updated), renderBody(updated, events)),
+        );
+        return updated;
+      }),
+    );
+
+  const verify = (runId: string) =>
+    Effect.gen(function* () {
+      const operation = 'Store.verify';
+      const id = yield* decodeId(operation, runId);
+      const files = backend.filesFor(id);
+      const runMd = yield* backend.readText(operation, files.runMd);
+      const session = (yield* backend.exists(files.session))
+        ? yield* backend.readText(operation, files.session)
+        : '';
+      const receipt = (yield* backend.exists(files.receipt))
+        ? yield* backend.readText(operation, files.receipt)
+        : undefined;
+      return VerifySchema.verifyRun({ id, runMd, session, receipt });
+    });
+
+  return {
+    create,
+    start,
+    append,
+    settle,
+    ask,
+    answer,
+    unpark,
+    cancel,
+    load,
+    list,
+    verify,
+    progress,
+  } as const;
 };
 
 const make = Effect.gen(function* () {
