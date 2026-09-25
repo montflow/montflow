@@ -1,8 +1,8 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createSignal, onCleanup } from 'solid-js';
 import type { Runs } from '../services/index.js';
 import { KeybindBanner } from './keybind-banner.js';
 import { Keybinds } from './keybinds.js';
-import { Loader, type LoaderVariant } from './loader.js';
+import { FRAME_MS, LOADER_FRAMES, Loader, type LoaderVariant } from './loader.js';
 import { palette } from './palette.js';
 
 export interface RunsPanelProps {
@@ -10,26 +10,37 @@ export interface RunsPanelProps {
   readonly installing: boolean;
   readonly loadingVariant?: LoaderVariant | undefined;
   readonly installed: boolean;
-  readonly rows: ReadonlyArray<Runs.RunSummary>;
+  /** Active rows (running first), rendered unwindowed under the Active header. */
+  readonly activeRows: ReadonlyArray<Runs.RunSummary>;
+  /** Windowed slice of the full filtered list, under the All runs header. */
+  readonly allRows: ReadonlyArray<Runs.RunSummary>;
+  /** Whether the full-history section is expanded. */
+  readonly showAll: boolean;
+  /** Flat highlight across `activeRows` then `allRows`. */
   readonly highlight: number;
   readonly total: number;
   readonly query: string;
   readonly searching: boolean;
   readonly capacity: number;
   readonly selected: boolean;
+  /** Fixed spinner frame index. Set in tests for a deterministic snapshot. */
+  readonly frame?: number | undefined;
 }
 
 /**
  * Status glyph for a run row: live runs glow, parked runs warn, terminal
  * runs dim. Single source for the list marker so the panel and detail
- * never drift.
+ * never drift. With a `frame`, a `running` row returns that braille
+ * spinner frame instead of the static marker; without one it stays
+ * static (the run-detail header never animates).
  * @param status - run status
+ * @param frame - optional spinner frame index for `running` rows
  * @returns one-char marker
  */
-export const runMarker = (status: string): string => {
+export const runMarker = (status: string, frame?: number): string => {
   switch (status) {
     case 'running':
-      return '●';
+      return frame === undefined ? '●' : (LOADER_FRAMES[frame % LOADER_FRAMES.length] ?? '●');
     case 'awaiting-input':
       return '◐';
     case 'pending':
@@ -47,17 +58,35 @@ export const runMarker = (status: string): string => {
 
 /**
  * Runs content that FILLS the panel: the loader, missing-store note,
- * empty note, and filterable list all share the same flex chrome, so
- * loading, filtering, install state, and search toggling never shift
- * the grid. Mirrors `SkillsPanel` row for row — the search line stays
- * reserved (blank when idle); the list region grows to absorb slack
- * above a one-line footer pinned to the panel bottom. Each row shows
- * the status marker plus the run name; the footer names the next
- * action (`c` creates, `⏎` installs when missing).
- * @param props - load state, visible rows, highlight, query, capacity, selection
+ * empty note, and the two filterable sections all share the same flex
+ * chrome, so loading, filtering, install state, search toggling, and the
+ * Active/All section toggle never shift the grid. Section headers are
+ * non-selectable plain lines; highlight navigation walks
+ * `activeRows` then `allRows`, so movement crosses sections in one
+ * sequence. Running rows animate the loader's braille spinner; every
+ * other status keeps its static marker.
+ * @param props - load state, section rows, highlight, query, capacity, selection, frame
  * @returns runs content element
  */
 export const RunsPanel = (props: RunsPanelProps) => {
+  const [frame, setFrame] = createSignal(props.frame ?? 0);
+  if (props.frame === undefined) {
+    // oxlint-disable-next-line montflow/no-timers -- documented above: Effect Clock hangs here.
+    const timer = setInterval(() => {
+      setFrame((index) => (index + 1) % LOADER_FRAMES.length);
+    }, FRAME_MS);
+    onCleanup(() => {
+      // oxlint-disable-next-line montflow/no-timers -- spinner teardown for the raw interval above.
+      clearInterval(timer);
+    });
+  }
+
+  /** Row marker with the animated frame for running rows; static otherwise. */
+  const markerFor = (status: string): string => runMarker(status, frame());
+
+  /** Footer count: the windowed All section when expanded, else the Active section. */
+  const shownCount = (): number => (props.showAll ? props.allRows.length : props.activeRows.length);
+
   return (
     <Show
       when={!props.loading && !props.installing}
@@ -111,27 +140,49 @@ export const RunsPanel = (props: RunsPanelProps) => {
                 </box>
               }
             >
-              <For each={props.rows}>
-                {(row, index) => (
-                  <box
-                    backgroundColor={index() === props.highlight ? palette.highlight : palette.bg}
-                  >
-                    <text style={{ fg: palette.text }}>
-                      {index() === props.highlight
-                        ? `▸ ${runMarker(row.status)} ${row.name}`
-                        : `  ${runMarker(row.status)} ${row.name}`}
-                    </text>
-                  </box>
-                )}
-              </For>
+              <box flexDirection="column">
+                <text style={{ fg: palette.dim }}>Active</text>
+                <For each={props.activeRows}>
+                  {(row, index) => (
+                    <box
+                      backgroundColor={index() === props.highlight ? palette.highlight : palette.bg}
+                    >
+                      <text style={{ fg: palette.text }}>
+                        {`${index() === props.highlight ? '▸' : ' '} ${markerFor(row.status)} ${row.name}${row.progress === '' ? '' : ` — ${row.progress}`}`}
+                      </text>
+                    </box>
+                  )}
+                </For>
+                <Show when={props.showAll}>
+                  <text style={{ fg: palette.dim }}>All runs</text>
+                  <For each={props.allRows}>
+                    {(row, index) => {
+                      const position = (): number => props.activeRows.length + index();
+                      return (
+                        <box
+                          backgroundColor={
+                            position() === props.highlight ? palette.highlight : palette.bg
+                          }
+                        >
+                          <text style={{ fg: palette.text }}>
+                            {`${position() === props.highlight ? '▸' : ' '} ${markerFor(row.status)} ${row.name}${row.progress === '' ? '' : ` — ${row.progress}`}`}
+                          </text>
+                        </box>
+                      );
+                    }}
+                  </For>
+                </Show>
+              </box>
             </Show>
           </Show>
         </box>
         <Show when={props.selected} fallback={<text> </text>}>
           <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
-            <KeybindBanner items={Keybinds.listBanner(props.installed, props.total)} />
+            <KeybindBanner
+              items={Keybinds.listBanner(props.installed, props.total, { allRuns: true })}
+            />
             <text style={{ fg: palette.dim }}>
-              {props.installed ? `${props.rows.length}/${props.total}` : ' '}
+              {props.installed ? `${shownCount()}/${props.total}` : ' '}
             </text>
           </box>
         </Show>
