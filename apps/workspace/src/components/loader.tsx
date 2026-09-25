@@ -5,11 +5,18 @@ import { palette } from './palette.js';
  * Loader stage. `extension` covers the lazy runtime import;
  * `skills` covers the skill-list read that follows it; `profiles`
  * covers the profile-list read; `prompts` covers the prompt-list read;
- * `runs` covers the run-list read; `installing` covers the store
- * install. One variant per loading stage so the panel can narrate boot
- * step by step.
+ * `runs` covers the run-list read; `features` covers the feature-list
+ * read; `installing` covers the store install. One variant per loading
+ * stage so the panel can narrate boot step by step.
  */
-export type LoaderVariant = 'extension' | 'skills' | 'profiles' | 'prompts' | 'runs' | 'installing';
+export type LoaderVariant =
+  | 'extension'
+  | 'skills'
+  | 'profiles'
+  | 'prompts'
+  | 'runs'
+  | 'features'
+  | 'installing';
 
 /** One-line copy per loader stage. */
 export const LOADER_MESSAGES = {
@@ -18,6 +25,7 @@ export const LOADER_MESSAGES = {
   profiles: 'Loading Profiles…',
   prompts: 'Loading Prompts…',
   runs: 'Loading Runs…',
+  features: 'Loading Features…',
   installing: 'Installing skills…',
 } satisfies Record<LoaderVariant, string>;
 

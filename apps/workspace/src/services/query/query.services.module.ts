@@ -1,6 +1,12 @@
 import { QueryClient } from '@tanstack/solid-query';
 import { Effect } from 'effect';
 import {
+  featuresInstalled,
+  fetchFeatures,
+  type FeatureSummary,
+  type FeaturesPhase,
+} from '../features/features.services.module.js';
+import {
   fetchProfiles,
   isExtensionInstalled as isProfilesExtensionInstalled,
   type ProfileSummary,
@@ -76,6 +82,19 @@ export interface RunsList {
  * completions update the UI through the cache, never signals.
  */
 export const runsKey = ['runs'] as const;
+
+/** Cached features-list snapshot behind the `features` query key. */
+export interface FeaturesList {
+  readonly installed: boolean;
+  readonly rows: ReadonlyArray<FeatureSummary>;
+}
+
+/**
+ * Query key for the workspace features list. Mirrors `skillsKey` —
+ * the features panel is read-only, so this key only fetches and
+ * invalidates.
+ */
+export const featuresKey = ['features'] as const;
 
 /**
  * TUI-tuned client: cache-first (`staleTime` infinity — the list only
@@ -202,6 +221,34 @@ export const fetchRunsList = (
       }
       onPhase('runs');
       return fetchRuns(root).pipe(
+        Effect.map((rows) => ({ installed, rows })),
+        Effect.mapError((message) => new Error(message)),
+      );
+    }),
+    Effect.runPromise,
+  );
+
+/**
+ * Features-list query bridge: same staged boot as `fetchSkillsList`
+ * (directory check, then the verify/analyze read) as one TanStack
+ * query. Read-only — there is no create/delete/install flow.
+ * @param root - workspace root (features directory owner)
+ * @param onPhase - Loader stage reporter (`extension`, then `features`)
+ * @returns Promise resolving to the list snapshot
+ */
+export const fetchFeaturesList = (
+  root: string,
+  onPhase: (phase: FeaturesPhase) => void,
+): Promise<FeaturesList> =>
+  featuresInstalled(root).pipe(
+    Effect.flatMap((installed) => {
+      onPhase('extension');
+      if (!installed) {
+        const empty: FeaturesList = { installed, rows: [] };
+        return Effect.succeed(empty);
+      }
+      onPhase('features');
+      return fetchFeatures(root).pipe(
         Effect.map((rows) => ({ installed, rows })),
         Effect.mapError((message) => new Error(message)),
       );
