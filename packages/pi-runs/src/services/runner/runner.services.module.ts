@@ -16,12 +16,18 @@ export type SessionEvent =
   | { readonly type: 'settled' }
   | { readonly type: 'ask'; readonly question: string }
   | { readonly type: 'notify'; readonly title: string; readonly body: string }
+  | {
+      readonly type: 'toast';
+      readonly message: string;
+      readonly variant: 'info' | 'success' | 'error' | undefined;
+    }
   | { readonly type: 'progress'; readonly message: string };
 
-/** Callbacks a session can make into its host: ask the user, notify, report progress. */
+/** Callbacks a session can make into its host: ask, notify, toast, report progress. */
 export interface SessionUi {
   readonly input: (title: string) => Promise<string | undefined>;
   readonly notify: (message: string, kind: 'info' | 'warning' | 'error') => void;
+  readonly toast: (message: string, variant?: 'info' | 'success' | 'error') => void;
   readonly progress: (message: string) => void;
 }
 
@@ -255,6 +261,8 @@ const make = Effect.gen(function* () {
         return ask(run, event.question);
       case 'notify':
         return bridge.notify(event.title, event.body).pipe(Effect.asVoid);
+      case 'toast':
+        return bridge.toast(event.message, event.variant).pipe(Effect.asVoid);
       case 'progress':
         return store.progress({ runId: run.id, message: event.message }).pipe(
           Effect.mapError((error) => error.reason),
@@ -309,6 +317,9 @@ const make = Effect.gen(function* () {
       }),
     notify: (message) => {
       Queue.offerUnsafe(queue, { type: 'notify', title: `Run '${id}'`, body: message });
+    },
+    toast: (message, variant) => {
+      Queue.offerUnsafe(queue, { type: 'toast', message, variant });
     },
     progress: (message) => {
       Queue.offerUnsafe(queue, { type: 'progress', message });

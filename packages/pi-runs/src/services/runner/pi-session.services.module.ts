@@ -87,6 +87,22 @@ export const interactionTools = (
     },
   }),
   pi.defineTool({
+    name: 'toast_user',
+    label: 'Toast user',
+    description: 'Show a short toast in the workspace without waiting for a reply.',
+    promptSnippet: 'toast_user — show a short toast in the workspace',
+    parameters: type.Object({
+      message: type.String({ description: 'Toast text.' }),
+      variant: type.Optional(
+        type.Union([type.Literal('info'), type.Literal('success'), type.Literal('error')]),
+      ),
+    }),
+    execute: (_toolCallId, params) => {
+      ui.toast(params.message, params.variant);
+      return Promise.resolve({ content: [{ type: 'text', text: 'Toasted.' }], details: {} });
+    },
+  }),
+  pi.defineTool({
     name: 'update_status',
     label: 'Update status',
     description:

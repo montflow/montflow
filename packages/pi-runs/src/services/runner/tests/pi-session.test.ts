@@ -138,6 +138,7 @@ const sessionRequest = (overrides: Partial<SessionRequest> = {}): SessionRequest
   ui: {
     input: () => Promise.resolve(undefined),
     notify: () => undefined,
+    toast: () => undefined,
     progress: () => undefined,
   },
   ...overrides,
@@ -259,6 +260,7 @@ Vitest.describe('Pi interaction tools runtime', () => {
       const { pi } = makeFakePi();
       const asked: string[] = [];
       const notified: Array<readonly [string, string]> = [];
+      const toasted: Array<readonly [string, string | undefined]> = [];
       const progressed: string[] = [];
       const ui: SessionUi = {
         input: (title) => {
@@ -268,6 +270,9 @@ Vitest.describe('Pi interaction tools runtime', () => {
         notify: (message, kind) => {
           notified.push([message, kind]);
         },
+        toast: (message, variant) => {
+          toasted.push([message, variant]);
+        },
         progress: (message) => {
           progressed.push(message);
         },
@@ -276,12 +281,14 @@ Vitest.describe('Pi interaction tools runtime', () => {
       Vitest.expect(tools.map((tool) => tool.name)).toStrictEqual([
         'ask_user',
         'notify_user',
+        'toast_user',
         'update_status',
       ]);
       const ask = tools[0];
       const notify = tools[1];
-      const update = tools[2];
-      if (ask === undefined || notify === undefined || update === undefined)
+      const toast = tools[2];
+      const update = tools[3];
+      if (ask === undefined || notify === undefined || toast === undefined || update === undefined)
         return yield* Effect.fail('tools missing');
       // SAFETY: the harness `defineTool` is an identity stub, so the execute
       // context is never read; `never` satisfies the unused fifth parameter.
@@ -301,6 +308,17 @@ Vitest.describe('Pi interaction tools runtime', () => {
         notify.execute('call-2', { message: 'heads up' }, undefined, undefined, undefined as never),
       );
       Vitest.expect(notified).toStrictEqual([['heads up', 'info']]);
+      // SAFETY: same identity `defineTool` stub — the execute context is unused.
+      yield* Effect.promise(() =>
+        toast.execute(
+          'call-toast',
+          { message: 'on it', variant: 'success' },
+          undefined,
+          undefined,
+          undefined as never,
+        ),
+      );
+      Vitest.expect(toasted).toStrictEqual([['on it', 'success']]);
       // SAFETY: same identity `defineTool` stub — the execute context is unused.
       yield* Effect.promise(() =>
         update.execute('call-3', { message: 'halfway' }, undefined, undefined, undefined as never),
@@ -334,12 +352,14 @@ Vitest.describe('Pi session factory runtime', () => {
         'bash',
         'ask_user',
         'notify_user',
+        'toast_user',
         'update_status',
       ]);
       Vitest.expect(options?.model).toStrictEqual({ id: 'test-model' });
       Vitest.expect(options?.customTools?.map((tool) => tool.name)).toStrictEqual([
         'ask_user',
         'notify_user',
+        'toast_user',
         'update_status',
       ]);
       yield* port.prompt('continue');
@@ -370,6 +390,7 @@ Vitest.describe('Pi session factory runtime', () => {
         const options = state.options[0];
         Vitest.expect(options?.tools).toContain('ask_user');
         Vitest.expect(options?.tools).toContain('notify_user');
+        Vitest.expect(options?.tools).toContain('toast_user');
         Vitest.expect(options?.tools).toContain('update_status');
         Vitest.expect(options?.tools).toStrictEqual([
           'read',
@@ -377,11 +398,13 @@ Vitest.describe('Pi session factory runtime', () => {
           'edit',
           'ask_user',
           'notify_user',
+          'toast_user',
           'update_status',
         ]);
         Vitest.expect(options?.customTools?.map((tool) => tool.name)).toStrictEqual([
           'ask_user',
           'notify_user',
+          'toast_user',
           'update_status',
         ]);
       }),

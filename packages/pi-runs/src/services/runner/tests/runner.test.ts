@@ -519,6 +519,32 @@ Vitest.describe('Runner runtime', () => {
     }).pipe(Effect.provide(harness.layer));
   });
 
+  Vitest.it.effect('routes a run toast to the workspace toast bridge', () => {
+    const toasts: Array<readonly [string, string | undefined]> = [];
+    const notifies: Array<readonly [string, string]> = [];
+    const bridge: WorkspaceBridgeImpl = {
+      toast: (message, variant) =>
+        Effect.sync(() => {
+          toasts.push([message, variant]);
+        }),
+      notify: (title, body) =>
+        Effect.sync(() => {
+          notifies.push([title, body]);
+        }),
+    };
+    const harness = makeHarness({ bridge });
+    return Effect.gen(function* () {
+      const runner = yield* Runner;
+      yield* runner.start({ root: '/repo', id: 'run-12', prompt: 'go' });
+      const session = harness.sessions[0];
+      if (session === undefined) return yield* Effect.fail('session not created');
+      session.request.ui.toast('working on it', 'success');
+      yield* flush;
+      Vitest.expect(toasts).toStrictEqual([['working on it', 'success']]);
+      Vitest.expect(notifies).toStrictEqual([]);
+    }).pipe(Effect.provide(harness.layer));
+  });
+
   Vitest.it.effect('surfaces a resumed prompt failure as an error toast', () => {
     const toasts: Array<readonly [string, string | undefined]> = [];
     const bridge: WorkspaceBridgeImpl = {
