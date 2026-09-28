@@ -8,7 +8,7 @@ const valid = {
   status: 'pending',
   created: '2026-09-05T00:00:00Z',
   updated: '2026-09-05T00:00:00Z',
-  sessionFile: '.agents/@montflow/pi-runs/runs/run-1/session.jsonl',
+  sessionFile: '.agents/@montflow/runs/run-1/session.jsonl',
 };
 
 Vitest.describe('Run.decodeUnknown runtime', () => {

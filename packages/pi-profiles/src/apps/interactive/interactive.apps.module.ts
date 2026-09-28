@@ -904,7 +904,7 @@ export const completeCreate = (
   Effect.gen(function* () {
     yield* Effect.sync(() =>
       ui.notify(
-        `Saved profile '${profile.name}' — .agents/@montflow/pi-profiles/${profile.name}/PROFILE.md`,
+        `Saved profile '${profile.name}' — .agents/@montflow/profiles/${profile.name}/PROFILE.md`,
         'info',
       ),
     );

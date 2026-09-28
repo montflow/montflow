@@ -11,7 +11,7 @@ const run = (status: Run.Status, id: string): Run.Run =>
     status,
     created: '2026-09-23T00:00:00Z',
     updated: '2026-09-23T00:00:01Z',
-    sessionFile: `.agents/@montflow/pi-runs/runs/${id}/session.jsonl`,
+    sessionFile: `.agents/@montflow/runs/${id}/session.jsonl`,
     name: id,
   });
 

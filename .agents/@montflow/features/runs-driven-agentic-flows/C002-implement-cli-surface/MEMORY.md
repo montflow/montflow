@@ -11,7 +11,7 @@ Task C002: `mf-runs` CLI surface over the run engine.
 ## Done
 
 - `apps/runtime`: `runnerLayer({ root, bridge })`, `storeLayer(root)` (runs dir
-  = `<root>/.agents/@montflow/pi-runs/runs`), `ConsoleBridge`.
+  = `<root>/.agents/@montflow/runs`), `ConsoleBridge`.
 - `apps/commands`: `parseCommand` + `execute` (list/status/verify/start/steer/answer).
 - `apps/cli`: `runCli` + `main.ts` bun bin; `package.json` `bin.mf-runs`.
 - Smoke: `mf-runs help|list|status|verify` work against the real store.

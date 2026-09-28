@@ -14,12 +14,7 @@ Vitest.describe('Runs extension loader', () => {
       Vitest.expect(Runs.loadedPiRuns()).toBe(first);
       const second = yield* Runs.loadPiRuns();
       Vitest.expect(second).toBe(first);
-      Vitest.expect(first.Store.RUNS_SEGMENTS).toStrictEqual([
-        '.agents',
-        '@montflow',
-        'pi-runs',
-        'runs',
-      ]);
+      Vitest.expect(first.Store.RUNS_SEGMENTS).toStrictEqual(['.agents', '@montflow', 'runs']);
     }),
   );
 
@@ -47,7 +42,7 @@ Vitest.describe('Runs extension loader', () => {
       Runs.resetExtensionCache();
       Vitest.expect(Runs.loadedPiRuns()).toBeUndefined();
       const reloaded = yield* Runs.loadPiRuns();
-      Vitest.expect(reloaded.Store.RUNS_SEGMENTS).toContain('pi-runs');
+      Vitest.expect(reloaded.Store.RUNS_SEGMENTS).toContain('runs');
     }),
   );
 });

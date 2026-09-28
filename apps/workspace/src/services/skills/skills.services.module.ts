@@ -148,8 +148,8 @@ export type ExtensionPanel = 'skills' | 'prompts' | 'runs' | 'profiles';
 const PANEL_DIRS = {
   skills: ['.agents', 'skills'],
   prompts: ['.agents', '@montflow', 'pi-prompts'],
-  runs: ['.agents', '@montflow', 'pi-runs'],
-  profiles: ['.agents', '@montflow', 'pi-profiles'],
+  runs: ['.agents', '@montflow', 'runs'],
+  profiles: ['.agents', '@montflow', 'profiles'],
 } satisfies Record<ExtensionPanel, ReadonlyArray<string>>;
 
 /** Copy shown behind the install keybind per panel. */

@@ -24,7 +24,7 @@ SQLite returns when 1,000+ runs make `grep` slow. Then it is a cache rebuilt fro
 4. Commit `session.jsonl`, `run.md`, `receipt.md`; git-LFS for `session.jsonl` over 1 MB.
 
 ```text
-.agents/@montflow/pi-runs/
+.agents/@montflow/runs/
   wiki/                  # this wiki, always committed
   runs/<id>/session.jsonl # the Pi session — committed, resumable
   runs/<id>/run.md        # rendered view — committed

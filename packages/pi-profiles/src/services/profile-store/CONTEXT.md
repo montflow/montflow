@@ -2,7 +2,7 @@
 
 Effect-first file-backed store for agent profiles. Persists one
 `PROFILE.md` per profile under
-`.agents/@montflow/pi-profiles/<name>/PROFILE.md` (same layout the
+`.agents/@montflow/profiles/<name>/PROFILE.md` (same layout the
 `zi` profiles feature used under `.agents/@montflow/profiles/`, now
 namespaced to this extension like `pi-prompts`).
 

@@ -6,7 +6,7 @@ export class StoreError extends Schema.TaggedError<StoreError>()('ProfileStore.S
   message: Schema.String,
 }) {}
 
-const PROFILES_DIR = ['.agents', '@montflow', 'pi-profiles'] as const;
+const PROFILES_DIR = ['.agents', '@montflow', 'profiles'] as const;
 const PROFILE_FILE = 'PROFILE.md';
 const TEMPLATE_FILE = 'TEMPLATE.md';
 
@@ -33,7 +33,7 @@ skills:
 - [ ] <What the reviewer must verify before the work is done>
 `;
 
-/** Profiles root for a working directory: `<cwd>/.agents/@montflow/pi-profiles`. */
+/** Profiles root for a working directory: `<cwd>/.agents/@montflow/profiles`. */
 const profilesRoot = (path: Path.Path, cwd: string): string => path.join(cwd, ...PROFILES_DIR);
 
 const make = Effect.gen(function* () {

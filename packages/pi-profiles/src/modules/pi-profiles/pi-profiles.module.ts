@@ -2,7 +2,7 @@ import { Effect, Schema } from 'effect';
 
 /**
  * A named agent profile. Stored as
- * `.agents/@montflow/pi-profiles/<name>/PROFILE.md`.
+ * `.agents/@montflow/profiles/<name>/PROFILE.md`.
  *
  * Frontmatter holds machine-readable metadata (name, description,
  * preferred model, skills); the body holds the human-readable definition

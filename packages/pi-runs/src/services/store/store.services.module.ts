@@ -41,7 +41,7 @@ const fail = (operation: string, reason: string): Effect.Effect<never, StoreErro
   Effect.fail(new StoreError({ operation, reason }));
 
 /** Path segments (under a repo root) owning the runs store. Shared with surfaces. */
-export const RUNS_SEGMENTS = ['.agents', '@montflow', 'pi-runs', 'runs'] as const;
+export const RUNS_SEGMENTS = ['.agents', '@montflow', 'runs'] as const;
 
 /**
  * A held `.lock` older than this is treated as left behind by a crashed

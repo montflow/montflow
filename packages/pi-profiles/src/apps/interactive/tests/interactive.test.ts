@@ -241,9 +241,7 @@ Vitest.describe('Interactive.run menu status', () => {
         () => Effect.fail('unused'),
         () => Effect.fail('unused'),
       );
-      Vitest.expect(installedNames).toStrictEqual([
-        ['authoring-profiles', 'modifying-profiles'],
-      ]);
+      Vitest.expect(installedNames).toStrictEqual([['authoring-profiles', 'modifying-profiles']]);
       Vitest.expect(titles[0]).toBe('Profiles');
       Vitest.expect(options[0]).toStrictEqual([
         'Browse profiles',
@@ -296,7 +294,7 @@ Vitest.describe('Interactive.run create completion', () => {
       Vitest.expect(saved).toStrictEqual(['code-reviewer']);
       Vitest.expect(messages).toStrictEqual(['Generating profile with the session model…']);
       Vitest.expect(notifies).toStrictEqual([
-        "Saved profile 'code-reviewer' — .agents/@montflow/pi-profiles/code-reviewer/PROFILE.md",
+        "Saved profile 'code-reviewer' — .agents/@montflow/profiles/code-reviewer/PROFILE.md",
         '✓ verified',
       ]);
     }),

@@ -119,7 +119,7 @@ const listInstalledSkills = (
 /**
  * File-backed profile store for a working directory.
  * @param cwd - project working directory
- * @returns store reading/writing `<cwd>/.agents/@montflow/pi-profiles`
+ * @returns store reading/writing `<cwd>/.agents/@montflow/profiles`
  */
 const storeFor = (cwd: string): Interactive.ProfileStore => ({
   list: () =>
@@ -200,7 +200,7 @@ skills:
 - [ ] <What the reviewer must verify before the work is done>
 
 Rules:
-- Write the new profile at .agents/@montflow/pi-profiles/<name>/PROFILE.md (choose a
+- Write the new profile at .agents/@montflow/profiles/<name>/PROFILE.md (choose a
   kebab-case <name> that fits the description), with the frontmatter block exactly as
   shown (name/description required; model/skills optional, blank model when unset).
 - The description must say WHAT the agent is (its role and job — it drives profile selection).
@@ -211,7 +211,7 @@ Rules:
 - The Instructions section holds the custom system prompt; the Review Checklist
   holds at least one verifiable item.
 - If a profile with that name already exists, pick a fresh name instead.
-- Do not touch anything outside .agents/@montflow/pi-profiles/.`;
+- Do not touch anything outside .agents/@montflow/profiles/.`;
 
 /**
  * Instructions after the user description: the reply shape.
@@ -232,7 +232,7 @@ Modify the single profile named in the request, keeping the PROFILE.md schema va
 the change as given.
 
 Rules:
-- Edit only the named profile under .agents/@montflow/pi-profiles/.
+- Edit only the named profile under .agents/@montflow/profiles/.
 - Do not rename the profile directory and do not change the 'name' field.
   Do not touch anything else.
 - Keep the description saying WHAT the agent is (its role and job).
@@ -465,7 +465,7 @@ const menuFor = (ctx: { readonly ui: Interactive.FilterUi; readonly mode: string
  * scripts) with a file-backed store per directory. The loader awaits the
  * returned promise, so load failures surface.
  *
- * Profiles live at `.agents/@montflow/pi-profiles/<name>/PROFILE.md`
+ * Profiles live at `.agents/@montflow/profiles/<name>/PROFILE.md`
  * (namespaced like `pi-prompts`; the legacy `zi` layout was
  * `.agents/@montflow/profiles/`). Creation runs inject the
  * `authoring-profiles` workspace skill and modification runs inject

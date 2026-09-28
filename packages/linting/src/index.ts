@@ -17,7 +17,7 @@ import { noTimersRule } from './rules/no-timers.ts';
  * that do not need human judgment — platform services over raw imports and
  * Effect modules over hand-rolled branching. Anything requiring judgment
  * (error-boundary placement, retry idempotency, layer shape) stays with the
- * reviewer. See `.agents/@montflow/pi-profiles/effect-reviewer/PROFILE.md`.
+ * reviewer. See `.agents/@montflow/profiles/effect-reviewer/PROFILE.md`.
  *
  * Add rules under `src/rules/` and register them here.
  * See vendored anti-slop at `tooling/oxlint/anti-slop/` for rule authoring

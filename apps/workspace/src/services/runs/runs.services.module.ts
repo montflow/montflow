@@ -1,4 +1,4 @@
-// eslint-disable-next-line montflow/no-node-platform-imports -- platform adapter at the TUI composition-root boundary: runs store lives under .agents/@montflow/pi-runs; migrate to FileSystem when the app moves onto the platform layer graph.
+// eslint-disable-next-line montflow/no-node-platform-imports -- platform adapter at the TUI composition-root boundary: runs store lives under .agents/@montflow/runs; migrate to FileSystem when the app moves onto the platform layer graph.
 import { mkdir, stat } from 'node:fs/promises';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for run files; both go away with the FileSystem migration.
 import { join } from 'node:path';
@@ -144,15 +144,14 @@ const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 /**
  * Absolute runs directory for a working directory:
- * `<cwd>/.agents/@montflow/pi-runs/runs`. Mirrors the extension's
+ * `<cwd>/.agents/@montflow/runs`. Mirrors the extension's
  * `Store.RUNS_SEGMENTS`; the pre-load fs checks (`runsInstalled`,
  * `ensureRunsStore`) cannot import the runtime, so engine paths derive
  * from the loaded segments via {@link runsDirFor} instead.
  * @param root - workspace root
  * @returns absolute runs directory
  */
-export const runsDir = (root: string): string =>
-  join(root, '.agents', '@montflow', 'pi-runs', 'runs');
+export const runsDir = (root: string): string => join(root, '.agents', '@montflow', 'runs');
 
 /**
  * Absolute runs directory derived from the loaded extension's segments,

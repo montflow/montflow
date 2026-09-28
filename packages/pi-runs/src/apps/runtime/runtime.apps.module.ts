@@ -17,7 +17,7 @@ import {
 
 const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-/** File-backed store rooted at `<root>/.agents/@montflow/pi-runs/runs`. */
+/** File-backed store rooted at `<root>/.agents/@montflow/runs`. */
 export const storeLayer = (root: string): Layer.Layer<Store.Store> =>
   Layer.effect(
     Store.Store,

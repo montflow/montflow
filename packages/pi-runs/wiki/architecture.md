@@ -4,10 +4,10 @@ Choose where pi-runs sessions live and how they override default Pi behavior.
 
 ## Location
 
-Store everything under `.agents/@montflow/pi-runs/` in the current repo. One run equals one Pi session — no mirror copy.
+Store everything under `.agents/@montflow/runs/` in the current repo. One run equals one Pi session — no mirror copy.
 
 ```text
-.agents/@montflow/pi-runs/
+.agents/@montflow/runs/
   runs/<run-id>/session.jsonl
   runs/<run-id>/run.md
   runs/<run-id>/receipt.md

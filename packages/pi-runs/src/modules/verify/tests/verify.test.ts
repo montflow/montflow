@@ -11,7 +11,7 @@ const runMd = (status: Run.Status, id = 'run-1'): string => {
     status,
     created: '2026-09-05T00:00:00Z',
     updated: '2026-09-05T00:00:01Z',
-    sessionFile: `.agents/@montflow/pi-runs/runs/${id}/session.jsonl`,
+    sessionFile: `.agents/@montflow/runs/${id}/session.jsonl`,
   });
   return `---\n${JSON.stringify(Run.encode(run))}\n---\n# run ${id}\n`;
 };

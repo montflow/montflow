@@ -264,7 +264,7 @@ tmp/
 .agents/@montflow/loops
 
 # --- montflow run transcripts (local only) ---
-.agents/@montflow/pi-runs
+.agents/@montflow/runs
 
 # --- scratchpad (local only, keep dir shell) ---
 scratchpad/*

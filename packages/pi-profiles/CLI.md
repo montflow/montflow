@@ -16,7 +16,7 @@ pi --mode rpc
 Send one JSON line per command, read notify text from event stream:
 
 ```json
-{"id": "req-1", "type": "prompt", "message": "/mf-profiles-cli list"}
+{ "id": "req-1", "type": "prompt", "message": "/mf-profiles-cli list" }
 ```
 
 Extension commands execute immediately, even mid-stream. Confirm via `{"type": "get_commands"}`
@@ -27,7 +27,7 @@ Extension commands execute immediately, even mid-stream. Confirm via `{"type": "
 One directory per profile, one file per profile:
 
 ```text
-.agents/@montflow/pi-profiles/<kebab-case-name>/PROFILE.md
+.agents/@montflow/profiles/<kebab-case-name>/PROFILE.md
 ```
 
 `<name>` must match `^[a-z0-9]+(-[a-z0-9]+)*$`, else commands fail — slugify first

@@ -3,7 +3,7 @@
 Montflow oxlint plugin for custom lint rules. It mechanically enforces the
 parts of the effect-reviewer profile that need no human judgment — platform
 services over raw imports, and Effect modules over hand-rolled branching.
-See `.agents/@montflow/pi-profiles/effect-reviewer/PROFILE.md`.
+See `.agents/@montflow/profiles/effect-reviewer/PROFILE.md`.
 
 Complementary to the vendored anti-slop plugin (`tooling/oxlint/anti-slop/`,
 MIT, dmmulroy/anti-slop): anti-slop rejects low-evidence patterns
