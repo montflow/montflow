@@ -4,8 +4,11 @@ import { KeybindBanner } from './keybind-banner.js';
 import { Keybinds } from './keybinds.js';
 import { Loader, type LoaderVariant } from './loader.js';
 import { palette } from './palette.js';
+import { ProfileVerifyIcon } from './profile-verify-icon.js';
 
 export interface ProfilesPanelProps {
+  /** Workspace root: the verify icon's query needs it. */
+  readonly root: string;
   readonly loading: boolean;
   readonly installing: boolean;
   readonly loadingVariant?: LoaderVariant | undefined;
@@ -17,6 +20,8 @@ export interface ProfilesPanelProps {
   readonly searching: boolean;
   readonly capacity: number;
   readonly selected: boolean;
+  /** Fixed verify-spinner frame index. Set in tests for a deterministic snapshot. */
+  readonly frame?: number | undefined;
 }
 
 /**
@@ -33,7 +38,7 @@ export interface ProfilesPanelProps {
  * windowing contract; height comes from the grid, never from row
  * counts. `loadingVariant` narrates the boot stage (`extension` for the
  * runtime import, `profiles` for the list read) while `loading` is true.
- * @param props - load state, visible rows, highlight, query, capacity, selection
+ * @param props - workspace root, load state, visible rows, highlight, query, capacity, selection, frame
  * @returns profiles content element
  */
 export const ProfilesPanel = (props: ProfilesPanelProps) => {
@@ -93,11 +98,14 @@ export const ProfilesPanel = (props: ProfilesPanelProps) => {
               <For each={props.rows}>
                 {(row, index) => (
                   <box
+                    flexDirection="row"
+                    justifyContent="space-between"
                     backgroundColor={index() === props.highlight ? palette.highlight : palette.bg}
                   >
                     <text style={{ fg: palette.text }}>
                       {index() === props.highlight ? `▸ ${row.name}` : `  ${row.name}`}
                     </text>
+                    <ProfileVerifyIcon root={props.root} id={row.id} frame={props.frame} />
                   </box>
                 )}
               </For>

@@ -1,7 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 import { testRender } from '@opentui/solid';
+import { QueryClientProvider } from '@tanstack/solid-query';
 import { afterEach, describe, test } from 'bun:test';
-import type { Profiles } from '../../services/index.js';
+import { Query, type Profiles } from '../../services/index.js';
 import { Panel } from '../panel.js';
 import { ProfilesPanel, type ProfilesPanelProps } from '../profiles-panel.js';
 
@@ -31,24 +32,28 @@ const row = (id: string): Profiles.ProfileSummary => ({
 const renderState = async (panel: Partial<ProfilesPanelProps>): Promise<Setup> => {
   const setup = await testRender(
     () => (
-      <box width={WIDTH} height={HEIGHT} flexDirection="column">
-        <Panel title="[f] Profiles" selected={false}>
-          <ProfilesPanel
-            loading={false}
-            installing={false}
-            installed
-            rows={[]}
-            highlight={0}
-            total={0}
-            query=""
-            searching={false}
-            capacity={CAPACITY}
-            selected={false}
-            {...panel}
-          />
-        </Panel>
-        <text>SENTINEL</text>
-      </box>
+      <QueryClientProvider client={Query.makeQueryClient()}>
+        <box width={WIDTH} height={HEIGHT} flexDirection="column">
+          <Panel title="[f] Profiles" selected={false}>
+            <ProfilesPanel
+              root="/tmp/workspace-profiles"
+              loading={false}
+              installing={false}
+              installed
+              rows={[]}
+              highlight={0}
+              total={0}
+              query=""
+              searching={false}
+              capacity={CAPACITY}
+              selected={false}
+              frame={0}
+              {...panel}
+            />
+          </Panel>
+          <text>SENTINEL</text>
+        </box>
+      </QueryClientProvider>
     ),
     { width: WIDTH, height: HEIGHT },
   );

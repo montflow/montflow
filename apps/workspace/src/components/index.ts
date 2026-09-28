@@ -13,6 +13,7 @@ export * from './modal.tsx';
 export * from './palette.ts';
 export * from './panel.tsx';
 export * from './profile-detail.tsx';
+export * from './profile-verify-icon.tsx';
 export * from './prompt-detail.tsx';
 export * from './prompts-panel.tsx';
 export * from './run-detail.tsx';

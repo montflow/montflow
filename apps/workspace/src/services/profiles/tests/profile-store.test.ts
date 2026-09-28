@@ -7,13 +7,38 @@ import * as Profiles from '../index.js';
 
 const makeRoot = (): Promise<string> =>
   mkdtemp(join(tmpdir(), 'workspace-profiles-')).then((root) =>
-    mkdir(join(root, '.agents', '@montflow', 'pi-profiles', 'demo'), { recursive: true })
+    mkdir(join(root, '.agents', '@montflow', 'profiles', 'demo'), { recursive: true })
       .then(() =>
         writeFile(
-          join(root, '.agents', '@montflow', 'pi-profiles', 'demo', 'PROFILE.md'),
+          join(root, '.agents', '@montflow', 'profiles', 'demo', 'PROFILE.md'),
           '---\nname: demo\ndescription: demo profile\n---\n',
         ),
       )
+      .then(() => root),
+  );
+
+/** Canonical, fully valid `PROFILE.md` contents for the verify tests. */
+const VALID_PROFILE = `---
+name: demo
+description: demo profile
+---
+
+# Demo
+
+## Instructions
+
+Do the thing.
+
+## Review Checklist
+
+- [ ] Check it.
+`;
+
+/** Seed a store root with one raw `PROFILE.md` written verbatim. */
+const makeRawRoot = (id: string, raw: string): Promise<string> =>
+  mkdtemp(join(tmpdir(), 'workspace-profiles-')).then((root) =>
+    mkdir(join(root, '.agents', '@montflow', 'profiles', id), { recursive: true })
+      .then(() => writeFile(join(root, '.agents', '@montflow', 'profiles', id, 'PROFILE.md'), raw))
       .then(() => root),
   );
 
@@ -44,7 +69,7 @@ Vitest.describe('Profiles.installProfiles runtime', () => {
       const root = yield* Effect.promise(() => mkdtemp(join(tmpdir(), 'workspace-profiles-')));
       yield* Profiles.installProfiles(root);
       const present = yield* Effect.promise(() =>
-        stat(join(root, '.agents', '@montflow', 'pi-profiles')).then(
+        stat(join(root, '.agents', '@montflow', 'profiles')).then(
           () => true,
           () => false,
         ),
@@ -63,13 +88,48 @@ Vitest.describe('Profiles.installProfiles runtime', () => {
   );
 });
 
+Vitest.describe('Profiles.verifyProfile runtime', () => {
+  Vitest.it.effect('reports a canonical profile as valid with no issues', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(() => makeRawRoot('demo', VALID_PROFILE));
+      const result = yield* Profiles.verifyProfile(root, 'demo');
+      Vitest.expect(result).toStrictEqual({ valid: true, issues: [] });
+    }),
+  );
+
+  Vitest.it.effect('reports a malformed profile as invalid with issues', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(() => makeRawRoot('demo', 'not a profile'));
+      const result = yield* Profiles.verifyProfile(root, 'demo');
+      Vitest.expect(result.valid).toBe(false);
+      Vitest.expect(result.issues.length).toBeGreaterThan(0);
+    }),
+  );
+
+  Vitest.it.effect('fails on an unknown id', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(() => makeRawRoot('demo', VALID_PROFILE));
+      const error = yield* Profiles.verifyProfile(root, 'missing').pipe(Effect.flip);
+      Vitest.expect(error).toContain("Unknown profile 'missing'");
+    }),
+  );
+
+  Vitest.it.effect('fails on an unsafe id without reading the store', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(() => makeRawRoot('demo', VALID_PROFILE));
+      const error = yield* Profiles.verifyProfile(root, '../escape').pipe(Effect.flip);
+      Vitest.expect(error).toContain("Unknown profile '../escape'");
+    }),
+  );
+});
+
 Vitest.describe('Profiles.deleteProfile runtime', () => {
   Vitest.it('removes the profile directory', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(makeRoot);
       yield* Profiles.deleteProfile(root, 'demo');
       const missing = yield* Effect.promise(() =>
-        stat(join(root, '.agents', '@montflow', 'pi-profiles', 'demo')).then(
+        stat(join(root, '.agents', '@montflow', 'profiles', 'demo')).then(
           () => false,
           () => true,
         ),
@@ -84,7 +144,7 @@ Vitest.describe('Profiles.deleteProfile runtime', () => {
       const error = yield* Profiles.deleteProfile(root, '../escape').pipe(Effect.flip);
       Vitest.expect(error.message).toContain('unsafe');
       const kept = yield* Effect.promise(() =>
-        stat(join(root, '.agents', '@montflow', 'pi-profiles', 'demo')).then(
+        stat(join(root, '.agents', '@montflow', 'profiles', 'demo')).then(
           () => true,
           () => false,
         ),

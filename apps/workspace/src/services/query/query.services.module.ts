@@ -10,7 +10,9 @@ import {
   fetchProfiles,
   isExtensionInstalled as isProfilesExtensionInstalled,
   type ProfileSummary,
+  type ProfileVerify,
   type ProfilesPhase,
+  verifyProfile,
 } from '../profiles/profiles.services.module.js';
 import {
   fetchPrompts,
@@ -56,6 +58,16 @@ export interface ProfilesList {
  * flow completions update the UI through the cache, never signals.
  */
 export const profilesKey = ['profiles'] as const;
+
+/**
+ * Query key for one profile's verification result. Stable per id — the
+ * key collapses to `['profile-verify', id]`, so the cache-first client
+ * reuses the cached result when the same profile is revisited and never
+ * refetches behind the user's back.
+ * @param id - profile slug
+ * @returns stable cache key
+ */
+export const profileVerifyKey = (id: string) => ['profile-verify', id] as const;
 
 /** Cached prompts-list snapshot behind the `prompts` query key. */
 export interface PromptsList {
@@ -171,6 +183,22 @@ export const fetchProfilesList = (
         Effect.mapError((message) => new Error(message)),
       );
     }),
+    Effect.runPromise,
+  );
+
+/**
+ * Profile-verification query bridge: read one raw `PROFILE.md` and run
+ * the extension's mechanical check through {@link verifyProfile}. The
+ * key is `['profile-verify', id]` and the client is cache-first, so
+ * navigating away and back reuses the cached result instead of
+ * re-reading the file.
+ * @param root - workspace root (profile store owner)
+ * @param id - profile slug
+ * @returns Promise resolving to the verify result, rejecting with a displayable Error
+ */
+export const fetchProfileVerify = (root: string, id: string): Promise<ProfileVerify> =>
+  verifyProfile(root, id).pipe(
+    Effect.mapError((message) => new Error(message)),
     Effect.runPromise,
   );
 

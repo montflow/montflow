@@ -1,4 +1,4 @@
-// eslint-disable-next-line montflow/no-node-platform-imports -- platform adapter at the TUI composition-root boundary: reads .agents/@montflow/pi-profiles; migrate to FileSystem when the app moves onto the platform layer graph.
+// eslint-disable-next-line montflow/no-node-platform-imports -- platform adapter at the TUI composition-root boundary: reads .agents/@montflow/profiles; migrate to FileSystem when the app moves onto the platform layer graph.
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for profile files; both go away with the FileSystem migration.
 import { join } from 'node:path';
@@ -221,7 +221,7 @@ export const isExtensionInstalled = (root: string): Effect.Effect<boolean, never
   );
 
 /** Directory segments (under the workspace root) owning the profile store. */
-const PROFILES_DIR = ['.agents', '@montflow', 'pi-profiles'] as const;
+const PROFILES_DIR = ['.agents', '@montflow', 'profiles'] as const;
 
 /** Failure when the profiles CLI install (directory seed) fails. Carries the reason. */
 export class InstallError extends Data.TaggedError('@montflow/ProfilesInstallError')<{
@@ -242,7 +242,7 @@ export const isStoreInstalled = (root: string): Effect.Effect<boolean, never> =>
   );
 
 /**
- * Seed the profiles store directory (`<root>/.agents/@montflow/pi-profiles/`).
+ * Seed the profiles store directory (`<root>/.agents/@montflow/profiles/`).
  * The file store writes its `TEMPLATE.md` on first save — install only
  * ensures the directory exists.
  * @param root - workspace root (install target)
@@ -275,7 +275,7 @@ export class DeleteError extends Data.TaggedError('@montflow/ProfilesDeleteError
 
 /**
  * Delete a workspace profile by removing its directory under
- * `<root>/.agents/@montflow/pi-profiles/`. Refuses blank or traversing
+ * `<root>/.agents/@montflow/profiles/`. Refuses blank or traversing
  * ids so a bad keybind target can never escape the store.
  * @param root - workspace root (profile store owner)
  * @param id - profile directory name
@@ -301,7 +301,7 @@ export class SaveError extends Data.TaggedError('@montflow/ProfilesSaveError')<{
 }> {}
 
 /**
- * Persist a profile row to `<root>/.agents/@montflow/pi-profiles/<id>/PROFILE.md`,
+ * Persist a profile row to `<root>/.agents/@montflow/profiles/<id>/PROFILE.md`,
  * creating the directory as needed. Encodes through the lazily loaded
  * runtime so both hosts produce identical files.
  * @param root - workspace root (profile store owner)
@@ -351,6 +351,32 @@ export const readRawProfile = (root: string, id: string): Effect.Effect<string, 
     ),
   );
 };
+
+/**
+ * Mechanical verification outcome for one profile. Alias of the
+ * extension's `VerifyResult` so the reported shape never drifts from
+ * the check that produced it.
+ */
+export type ProfileVerify = PiProfiles.VerifyResult;
+
+/**
+ * Verify one workspace profile: read its raw `PROFILE.md` and delegate
+ * the mechanical check to the loaded extension runtime's
+ * `PiProfiles.verifyProfileFile`. The check itself stays in
+ * `@montflow/pi-profiles` — this host only supplies the bytes. Fails on
+ * unknown, unsafe, or unreadable ids.
+ * @param root - workspace root (profile store owner)
+ * @param id - profile directory name
+ * @returns Effect resolving to the verify result, failing with a displayable message
+ */
+export const verifyProfile = (root: string, id: string): Effect.Effect<ProfileVerify, string> =>
+  loadLibs().pipe(
+    Effect.flatMap((libs) =>
+      readRawProfile(root, id).pipe(
+        Effect.map((raw) => libs.PiProfiles.verifyProfileFile(id, raw)),
+      ),
+    ),
+  );
 
 /** Staged boot phase behind the profiles-panel Loader: extension import, then the profile-list read. */
 export type ProfilesPhase = 'extension' | 'profiles';
@@ -551,7 +577,7 @@ skills:
 - [ ] <What the reviewer must verify before the work is done>
 
 Rules:
-- Write the new profile at .agents/@montflow/pi-profiles/<name>/PROFILE.md (choose a
+- Write the new profile at .agents/@montflow/profiles/<name>/PROFILE.md (choose a
   kebab-case <name> that fits the description), with the frontmatter block exactly as
   shown (name/description required; model/skills optional, blank model when unset).
 - The description must say WHAT the agent is (its role and job — it drives profile selection).
@@ -581,7 +607,7 @@ Modify the single profile named in the request, keeping the PROFILE.md schema va
 the change as given.
 
 Rules:
-- Edit only the named profile under .agents/@montflow/pi-profiles/.
+- Edit only the named profile under .agents/@montflow/profiles/.
 - Do not rename the profile directory and do not change the 'name' field.
   Do not touch anything else.
 - Keep the description saying WHAT the agent is (its role and job).
