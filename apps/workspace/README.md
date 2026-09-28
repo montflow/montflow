@@ -41,15 +41,16 @@ unknown panel ids render as placeholders under their own id.
   catalogue, working overlay while headless `pi -p` runs). A missing
   skills dir offers `i` to install every montflow skill into pi
   project-local via the skills CLI.
-- Profiles lists `.agents/@montflow/pi-profiles/` with the same `/`
+- Profiles lists `.agents/@montflow/profiles/` with the same `/`
   filter, `j/k` move, enter for details, esc back, `c` create treatment
   as skills. The detail offers `v` view, `d` delete, `m` modify. Create
   and modify run the shared `@montflow/pi-profiles` flows — manual or
-  agentic (filterable model picker from the pi catalogue, working
-  overlay while headless `pi -p` runs, requirements gate over installed
-  skills). A missing store dir offers `⏎` to seed it. The runtime loads
+  agentic (filterable model picker from the pi catalogue, requirements
+  gate over installed skills). Agentic create and modify dispatch an
+  in-process `@montflow/pi-runs` run; the modify run's detail opens
+  directly. A missing store dir offers `⏎` to seed it. The runtime loads
   lazily via dynamic `import()` — never at boot.
-- Runs lists `.agents/@montflow/pi-runs/runs/` with the same `/`
+- Runs lists `.agents/@montflow/runs/` with the same `/`
   filter, `j/k` move, enter for details, esc back, `c` create treatment
   as skills. Create asks for a name, an initial prompt, and a model
   (filterable picker from the pi catalogue), then dispatches the

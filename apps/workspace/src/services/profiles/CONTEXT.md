@@ -48,22 +48,23 @@ Consequences:
 - `storeFor` / `skillInventoryFor` / `installerFor` ports for the shared
   `Interactive` flows (inventory and installer reuse the skills service:
   `getSkills` rows as `InstalledSkill`, named installs via the skills CLI)
-- Headless agentic modify reuses the skills service
-  (`buildHeadlessPrompt`, `runHeadlessAgent`, `listModelLabels`) over
-  workspace-carried copies of the editor prompt (`MODIFY_PREPROMPT`) —
-  the extension module owns the canonical, which is not exported through
-  the package index
-- `generateFor` dispatches agentic creation through the runs engine
-  (`Runs.runsExtensionInstalled` gate, `Runs.startRun` with the author
-  prompt and the `read/write/edit` allowlist), records the run id, and
-  unwinds the shared flow with `CANCELLED`; `authorCompletion` correlates
-  the fresh profile to the run's final reply, re-encodes it via
-  `saveProfile`, and fires `CreateFlowHooks`. Re-usable as the `onSettled`
-  hook passed to `Runs.resumeRun` after a restart.
-- `modifyFor` plus `modifyAgentic` (name-diff detection, so agent chatter
-  never parses)
+- Headless agentic modify reuses the skills service prompt builder
+  (`buildHeadlessPrompt`, `listModelLabels`) over workspace-carried
+  copies of the author/editor prompts (`AUTHOR_PREPROMPT`,
+  `MODIFY_PREPROMPT`) — the extension module owns the canonical, which
+  is not exported through the package index
+- `generateFor` / `modifyFor` dispatch agentic create/modify through the
+  runs engine (`Runs.runsExtensionInstalled` gate, `Runs.startRun` with
+  the author/editor prompt and the `read/write/edit` allowlist), record
+  the run id, and unwind the shared flow with `CANCELLED`;
+  `authorCompletion` correlates the fresh profile to the run's final
+  reply and `modifyCompletion` re-reads the named profile (raw-snapshot
+  no-op check), re-encodes it via `saveProfile`, and fires the flow
+  hooks. Both are re-usable as the `onSettled` hook passed to
+  `Runs.resumeRun` after a restart.
 - `runCreateFlow` / `runModifyFlow` workspace hosts (manual or agentic
-  behind the TUI overlays); create resolves `saved` or `dispatched`
+  behind the TUI overlays); create and modify each resolve `saved` or
+  `dispatched`
 
 ## Does not belong here
 

@@ -588,11 +588,13 @@ Rules:
 - The Instructions section holds the custom system prompt; the Review Checklist
   holds at least one verifiable item.
 - If a profile with that name already exists, pick a fresh name instead.
-- Do not touch anything outside .agents/@montflow/pi-profiles/.`;
+- Post short progress with the 'update_status' tool as you work (e.g. "scouting skills",
+  "writing PROFILE.md") so the run's row shows what it is doing.
+- Do not touch anything outside .agents/@montflow/profiles/.`;
 
 /** Instructions after the user description: the reply shape. Mirrors the extension's `AUTHOR_POSTPROMPT`. */
 export const AUTHOR_POSTPROMPT =
-  'When done, reply with one short line: the profile name and what it does.';
+  'When done, call `notify_user` with a short completion message, then reply with one short line: the profile name and what it does.';
 
 /**
  * Instructions before the change request: the child agent edits the single
@@ -620,45 +622,77 @@ Rules:
 export const MODIFY_POSTPROMPT = 'When done, reply with one short line: what changed.';
 
 /**
- * Agentic profile modification for the workspace host: run the shared
- * editor prompt headless scoped to the profile name, re-read that profile.
- * @param libs - loaded extension runtime
- * @param root - workspace root (profile store owner)
- * @param profile - profile under edit
- * @param instruction - change request from the TUI input
- * @param modelLabel - `provider/model-id` pin, if any
- * @param inject - requirement skills to inject into the editor prompt
- * @returns Effect resolving to the updated Profile, failing with the reason
+ * TUI callbacks for a dispatched editor run's completion: the named
+ * profile was found and persisted (refresh + toast), or the run settled
+ * without a usable change (surface the reason). Absent in headless tests.
  */
-export const modifyAgentic = (
-  libs: PiProfilesLib,
-  root: string,
-  profile: PiProfiles.Profile,
-  instruction: string,
-  modelLabel: string | undefined,
-  inject: ReadonlyArray<ProfilesInteractive.InstalledSkill>,
-): Effect.Effect<PiProfiles.Profile, string> =>
-  Effect.gen(function* () {
-    yield* Skills.runHeadlessAgent(
-      root,
-      Skills.buildHeadlessPrompt(
-        MODIFY_PREPROMPT +
-          '\n\nProfile to edit: ' +
-          profile.name +
-          libs.Interactive.formatInjectedSkills(inject),
-        `Change request: ${instruction}`,
-        MODIFY_POSTPROMPT,
-      ),
-      modelLabel,
-    ).pipe(Effect.mapError((error) => error.message));
-    const after = yield* storeFor(root).list();
-    const updated = after.find((candidate) => candidate.name === profile.name);
-    if (updated === undefined)
-      return yield* Effect.fail(
-        'The agent finished without updating the profile — try describing the change differently.',
+export interface ModifyFlowHooks {
+  /** Named profile found after the editor run settled. */
+  readonly onProfileModified?: ((profile: ProfileSummary, runId: string) => void) | undefined;
+  /** Editor run settled without updating the profile. */
+  readonly onProfileFailed?: ((message: string, runId: string) => void) | undefined;
+}
+
+/**
+ * Completion hook for a dispatched editor run: re-read the named profile,
+ * refuse a no-op settle by comparing the raw file to the dispatch
+ * snapshot, persist it canonically through the loaded runtime's
+ * decode+encode path, and notify the hooks. Exported so a resumed editor
+ * run can re-attach the same hook through `Runs.resumeRun` after an app
+ * restart.
+ * @param root - workspace root (profile store owner)
+ * @param libs - loaded extension runtime
+ * @param runId - the editor run id
+ * @param profileId - profile directory name under edit
+ * @param beforeRaw - raw `PROFILE.md` snapshotted at dispatch, or undefined when unreadable
+ * @param hooks - TUI completion callbacks
+ * @returns the `onSettled` hook
+ */
+export const modifyCompletion =
+  (
+    root: string,
+    libs: PiProfilesLib,
+    runId: string,
+    profileId: string,
+    beforeRaw: string | undefined,
+    hooks?: ModifyFlowHooks,
+  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  (_detail) =>
+    Effect.gen(function* () {
+      const { valid, invalid } = yield* readFreshProfiles(libs, root, [profileId]);
+      const updated = valid.find((profile) => profile.name === profileId);
+      if (updated === undefined) {
+        hooks?.onProfileFailed?.(
+          invalid.length > 0
+            ? `Run '${runId}' wrote an invalid profile '${profileId}' — check its PROFILE.md and retry.`
+            : `Run '${runId}' finished without updating profile '${profileId}' — try describing the change differently.`,
+          runId,
+        );
+        return;
+      }
+      const afterRaw = yield* readRawProfile(root, profileId).pipe(
+        Effect.match({ onFailure: () => undefined, onSuccess: (raw) => raw }),
       );
-    return updated;
-  });
+      if (beforeRaw !== undefined && afterRaw === beforeRaw) {
+        hooks?.onProfileFailed?.(
+          `Run '${runId}' finished without updating profile '${profileId}' — try describing the change differently.`,
+          runId,
+        );
+        return;
+      }
+      const row = fromProfile(updated);
+      const failure = yield* saveProfile(root, row).pipe(
+        Effect.match({ onFailure: (error) => error.message, onSuccess: () => undefined }),
+      );
+      if (failure !== undefined) {
+        hooks?.onProfileFailed?.(
+          `Run '${runId}' updated '${profileId}' but it could not be saved: ${failure}`,
+          runId,
+        );
+        return;
+      }
+      hooks?.onProfileModified?.(row, runId);
+    });
 
 /**
  * TUI callbacks for a dispatched author run's completion: the fresh
@@ -853,12 +887,25 @@ export type CreateFlowResult =
   | { readonly kind: 'saved'; readonly profile: ProfileSummary }
   | { readonly kind: 'dispatched'; readonly runId: string };
 
+/** Result of a modify flow: persisted manually, or dispatched as a run. */
+export type ModifyFlowResult =
+  | { readonly kind: 'saved'; readonly profile: ProfileSummary }
+  | { readonly kind: 'dispatched'; readonly runId: string };
+
 /** Run id dispatched by the most recent agentic create, consumed by {@link runCreateFlow}. */
 let dispatchedRunId: string | undefined;
+
+/** Run id dispatched by the most recent agentic modify, consumed by {@link runModifyFlow}. */
+let dispatchedModifyRunId: string | undefined;
 
 /** Test seam: forget the dispatched-run ref so a fresh create flow starts clean. */
 export const resetDispatchedRun = (): void => {
   dispatchedRunId = undefined;
+};
+
+/** Test seam: forget the dispatched-modify-run ref so a fresh modify flow starts clean. */
+export const resetDispatchedModifyRun = (): void => {
+  dispatchedModifyRunId = undefined;
 };
 
 /**
@@ -905,17 +952,48 @@ export const generateFor =
     });
 
 /**
- * Agentic modification port for the shared interactive flows: headless
- * `pi -p` over the shared editor prompt.
+ * Agentic modification port for the shared interactive flows: gate on the
+ * runs extension, snapshot the named profile's raw file, dispatch an
+ * editor run through the pi-runs engine, then unwind the shared
+ * `modifyProfile` flow with `CANCELLED` (the run, not this flow, writes
+ * the profile). The run id lands in a module-level ref that
+ * {@link runModifyFlow} reads to distinguish a dispatch from a real
+ * cancel. When the run settles, {@link modifyCompletion} re-reads and
+ * persists the named profile.
  * @param root - workspace root (profile store owner)
+ * @param hooks - TUI completion callbacks, if any
  * @returns modifier port for the interactive flows
  */
 export const modifyFor =
-  (root: string): ProfilesInteractive.ProfileModifier =>
+  (root: string, hooks?: ModifyFlowHooks): ProfilesInteractive.ProfileModifier =>
   (input) =>
     loadLibs().pipe(
       Effect.flatMap((libs) =>
-        modifyAgentic(libs, root, input.profile, input.instruction, input.modelLabel, input.inject),
+        Effect.gen(function* () {
+          const installed = yield* Runs.runsExtensionInstalled(root);
+          if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+          const beforeRaw = yield* readRawProfile(root, input.profile.name).pipe(
+            Effect.match({ onFailure: () => undefined, onSuccess: (raw) => raw }),
+          );
+          const id = yield* Runs.newRunId('modify-profile');
+          yield* Runs.startRun(root, {
+            id,
+            name: `Modify profile: ${input.profile.name}`,
+            prompt: Skills.buildHeadlessPrompt(
+              MODIFY_PREPROMPT +
+                '\n\nProfile to edit: ' +
+                input.profile.name +
+                libs.Interactive.formatInjectedSkills(input.inject),
+              `Change request: ${input.instruction}`,
+              MODIFY_POSTPROMPT,
+            ),
+            model: input.modelLabel,
+            tools: [...Runs.DEFAULT_RUN_TOOLS],
+            onSettled: modifyCompletion(root, libs, id, input.profile.name, beforeRaw, hooks),
+          });
+          dispatchedModifyRunId = id;
+          return yield* Effect.fail(libs.Interactive.CANCELLED);
+        }),
       ),
     );
 
@@ -984,30 +1062,35 @@ export const runCreateFlow = (
 /**
  * Workspace host for the shared modify flow for one profile: load the
  * extension, run `modifyProfile` (manual description edit or agentic
- * rewrite), persist. Cancellations resolve undefined; the detail stays
- * open on the updated row.
+ * rewrite). Manual edits persist and resolve `saved`; agentic edits
+ * dispatch an editor run and resolve `dispatched`; real cancels resolve
+ * undefined. The TUI needs no `CANCELLED` knowledge — only real failures
+ * reject.
  * @param root - workspace root (profile store owner)
  * @param id - profile name under edit
  * @param ports - TUI overlay ports
- * @returns Effect resolving to the saved row, or undefined on cancel
+ * @param hooks - completion callbacks for a dispatched editor run
+ * @returns Effect resolving to the modify outcome, or undefined on cancel
  */
 export const runModifyFlow = (
   root: string,
   id: string,
   ports: FlowPorts,
-): Effect.Effect<ProfileSummary | undefined, string> =>
+  hooks?: ModifyFlowHooks,
+): Effect.Effect<ModifyFlowResult | undefined, string> =>
   loadLibs().pipe(
     Effect.flatMap((libs) =>
       Effect.gen(function* () {
         const profiles = yield* storeFor(root).list();
         const refs = yield* Skills.listModelLabels();
         const fallback = yield* Skills.listDefaultModel();
+        dispatchedModifyRunId = undefined;
         const profile = yield* libs.Interactive.modifyProfile(
           ports.ui,
           profiles,
           id,
           libs.Interactive.modelOptions(fallback, refs),
-          modifyFor(root),
+          modifyFor(root, hooks),
           skillInventoryFor(root),
           installerFor(root),
           ports.modelPicker,
@@ -1015,11 +1098,18 @@ export const runModifyFlow = (
         );
         const row = fromProfile(profile);
         yield* saveProfile(root, row).pipe(Effect.mapError((failure) => failure.message));
-        return row;
+        return { kind: 'saved', profile: row } satisfies ModifyFlowResult;
       }).pipe(
-        Effect.catch((error) =>
-          error === libs.Interactive.CANCELLED ? Effect.succeed(undefined) : Effect.fail(error),
-        ),
+        Effect.catch((error) => {
+          if (error !== libs.Interactive.CANCELLED) return Effect.fail(error);
+          const runId = dispatchedModifyRunId;
+          dispatchedModifyRunId = undefined;
+          return Effect.succeed(
+            runId === undefined
+              ? undefined
+              : ({ kind: 'dispatched', runId } satisfies ModifyFlowResult),
+          );
+        }),
       ),
     ),
   );

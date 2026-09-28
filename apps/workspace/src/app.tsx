@@ -787,6 +787,23 @@ export const App = (props: AppProps) => {
   };
 
   /**
+   * Completion hooks for a dispatched profile-modify run: refresh the
+   * profiles and runs lists and toast the outcome. The run engine fires
+   * these after the editor run settles.
+   */
+  const profileModifyHooks: Profiles.ModifyFlowHooks = {
+    onProfileModified: (profile) => {
+      refreshProfiles();
+      refreshRuns();
+      pushToast(`Updated profile '${Runs.sanitizeRunText(profile.id)}'.`, { variant: 'success' });
+    },
+    onProfileFailed: (message) => {
+      refreshRuns();
+      pushToast(message, { variant: 'error' });
+    },
+  };
+
+  /**
    * Overlay ports for the prompts flow runners. The skills, profiles,
    * and prompts `Interactive` surfaces are structurally identical (same
    * dialogs, picker, and loading shapes), so the shared adapters satisfy
@@ -1052,16 +1069,29 @@ export const App = (props: AppProps) => {
   /**
    * Modify flow for the open profile detail: the service runner
    * lazy-loads the extension, runs the shared `modifyProfile` flow, and
-   * persists. The detail stays open on the updated row; cancellations
-   * stay silent.
+   * persists. Manual edits stay on the detail; agentic edits dispatch an
+   * editor run and open its detail page directly. Cancellations stay
+   * silent.
    */
   const modifyProfileMutation = flowMutation({
-    run: (id: string) => Profiles.runModifyFlow(root, id, profileFlowPorts()),
-    done: (profile) => {
-      pushToast(`Saved profile '${Runs.sanitizeRunText(profile.id)}'.`, { variant: 'success' });
+    run: (id: string) => Profiles.runModifyFlow(root, id, profileFlowPorts(), profileModifyHooks),
+    done: (result) => {
+      if (result.kind === 'dispatched') {
+        refreshRuns();
+        pushToast(`Run '${result.runId}' is updating your profile.`, { variant: 'info' });
+        openRunDetail(result.runId);
+        return;
+      }
+      pushToast(`Saved profile '${Runs.sanitizeRunText(result.profile.id)}'.`, {
+        variant: 'success',
+      });
       refreshProfiles();
     },
     fail: (error, id) => {
+      if (Runs.isRunsExtensionInstallError(error.message)) {
+        pushToast(error.message, { variant: 'warning' });
+        return;
+      }
       openFlowError('Modifying profile failed', error, () => {
         setFlowError(undefined);
         modifyProfileMutation.mutate(id);
@@ -1078,7 +1108,21 @@ export const App = (props: AppProps) => {
       modifyProfileMutation.isPending
     )
       return;
-    modifyProfileMutation.mutate(target.id);
+    const id = target.id;
+    // Gate on the runs engine before opening the dialog, mirroring the
+    // create flow: the agentic path cannot dispatch without it, and
+    // discovering that after the mode select and prompts is too late.
+    void Runs.runsExtensionInstalled(root)
+      .pipe(Effect.runPromise)
+      .then((installed) => {
+        if (!installed) {
+          pushToast(Runs.RUNS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
+          setSelected('runs');
+          return;
+        }
+        if (modifyProfileMutation.isPending || dialog() !== undefined) return;
+        modifyProfileMutation.mutate(id);
+      });
   };
 
   /**
@@ -3510,6 +3554,7 @@ export const App = (props: AppProps) => {
                         />
                       ) : cell.panel === 'profiles' ? (
                         <ProfilesPanel
+                          root={root}
                           loading={!profilesLoaded()}
                           installing={profileInstalling()}
                           loadingVariant={profilesPhase()}
