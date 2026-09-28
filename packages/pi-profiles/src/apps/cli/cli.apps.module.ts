@@ -198,9 +198,9 @@ export const run = (
         return;
       }
       case 'Verify': {
-        const raw = yield* store.readRaw(cwd, action.name).pipe(
-          Effect.mapError((error) => error.message),
-        );
+        const raw = yield* store
+          .readRaw(cwd, action.name)
+          .pipe(Effect.mapError((error) => error.message));
         const result = PiProfiles.verifyProfileFile(action.name, raw);
         yield* Interactive.notifyVerifyResult(ui, action.name, result);
         if (!result.valid) {
