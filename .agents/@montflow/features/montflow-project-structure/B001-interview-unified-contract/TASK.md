@@ -5,7 +5,7 @@ type: planning
 originator: user
 depends-on: A005
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task B001: Interview the user on the unified contract
@@ -29,4 +29,4 @@ for them.
 
 ## Completion
 
-- [ ] Decisions captured in MEMORY.md
+- [x] Decisions captured in MEMORY.md

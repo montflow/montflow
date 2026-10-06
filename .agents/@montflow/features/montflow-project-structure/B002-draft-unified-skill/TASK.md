@@ -5,7 +5,7 @@ type: planning
 originator: user
 depends-on: B001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task B002: Draft the unified skill
@@ -29,4 +29,4 @@ step explicit.
 
 ## Completion
 
-- [ ] Contract and implementation outline captured in MEMORY.md
+- [x] Contract and implementation outline captured in MEMORY.md

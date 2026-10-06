@@ -5,7 +5,7 @@ type: review
 originator: user
 depends-on: B002
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task B099: Review Phase B
@@ -26,4 +26,4 @@ defers, or dismisses each before implementation tasks are authored.
 
 ## Completion
 
-- [ ] Findings written to `.agents/@montflow/reviews/montflow-project-structure/B.md` and reviewed by human
+- [x] Findings written to `.agents/@montflow/reviews/montflow-project-structure/B.md` and reviewed by human

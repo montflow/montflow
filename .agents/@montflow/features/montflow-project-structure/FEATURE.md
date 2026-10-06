@@ -4,7 +4,7 @@ status: in-progress
 workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-06
-locked-phases: A
+locked-phases: A, B
 ---
 
 # Montflow project structure
@@ -52,6 +52,6 @@ open-ended until the user decides the contract in Phase B.
 | A004 | explore-docs-conventions    | exploratory | complete | No    |
 | A005 | synthesize-current-rules    | exploratory | complete | No    |
 | A099 | review-phase                | review      | complete | No    |
-| B001 | interview-unified-contract  | planning    | pending | No    |
-| B002 | draft-unified-skill         | planning    | pending | No    |
-| B099 | review-phase                | review      | pending | No    |
+| B001 | interview-unified-contract  | planning    | complete | No    |
+| B002 | draft-unified-skill         | planning    | complete | No    |
+| B099 | review-phase                | review      | complete | No    |
