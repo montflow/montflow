@@ -18,12 +18,18 @@
     "url": "git+https://github.com/montflow/montflow.git",
     "directory": "packages/pi-prompts"
   },
+  "bin": {
+    "mf-prompts": "./src/apps/cli/main.ts"
+  },
   "type": "module",
   "exports": {
     "./package.json": "./package.json",
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build:cli": "bun run scripts/generate-embedded-skills.ts && bun build src/apps/cli/main.ts --compile --outfile dist/mf-prompts",
+    "cli": "bun run src/apps/cli/main.ts",
+    "generate:payload": "bun run scripts/generate-embedded-skills.ts",
     "format:check": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "lint:check": "oxlint --deny-warnings .",
@@ -34,7 +40,8 @@
   "dependencies": {
     "@effect/platform-node": "4.0.0-rc.112",
     "@montflow/pi-effect": "workspace:*",
-    "@montflow/pi-interactive": "workspace:*"
+    "@montflow/pi-interactive": "workspace:*",
+    "handlebars": "4.7.9"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.84.0",
@@ -43,6 +50,7 @@
     "effect": "^4.0.0-rc.112",
     "oxfmt": "0.63.0",
     "oxlint": "1.78.0",
+    "typebox": "*",
     "typescript": "^7.0.2",
     "vitest": "^4.0.15"
   },

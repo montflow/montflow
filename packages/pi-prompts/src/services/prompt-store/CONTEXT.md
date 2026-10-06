@@ -6,8 +6,9 @@ in `make` and hidden behind `Default` — consumers only see `PromptStore`.
 
 ## Belongs here
 
-- Service tag, `Id`, `Impl`, `Default` layer (`list`, `save` via
-  `Effect.fn` with span names)
+- Service tag, `Id`, `Impl`, `Default` layer (`list`, `save`, `remove`,
+  `readRaw` via `Effect.fn` with span names; names validated as slugs; each
+  method takes an optional `dir` to override the default store directory)
 - Typed failures (`StoreError` as `Schema.TaggedError`)
 
 ## Does not belong here
