@@ -4,12 +4,11 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { DynamicBorder } from '@earendil-works/pi-coding-agent';
 import { Container, Input, Key, SelectList, Text, matchesKey } from '@earendil-works/pi-tui';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
-import { AgentRun } from '@montflow/pi-effect';
 import { Loading, Menu, ModelPicker } from '@montflow/pi-interactive';
 import { Effect, Layer } from 'effect';
 import { FileSystem } from 'effect/FileSystem';
 import { Path } from 'effect/Path';
-import { Interactive } from './apps/index.js';
+import { Interactive, Runs } from './apps/index.js';
 import { Skill } from './modules/index.js';
 
 /** Node live layer for the services the store needs. Provided once per run. */
@@ -201,141 +200,15 @@ const storeFor = (cwd: string): Interactive.SkillStore => ({
 
 /**
  * Agent prompts shared by every host. Re-exported from the interactive
- * flows module (single source of truth) — the pi extension and the
- * workspace TUI headless runner both build child prompts from these.
+ * flows module (single source of truth) — the run dispatcher and the
+ * workspace TUI both build child prompts from these.
  */
 export const AUTHOR_PREPROMPT = Interactive.AUTHOR_PREPROMPT;
 export const AUTHOR_POSTPROMPT = Interactive.AUTHOR_POSTPROMPT;
-
-/**
- * Shared model runtime for child agents: one per process. Provided to
- * every {@link AgentRun.runAgent} call by this extension.
- */
-const AgentRuntimeLive = Layer.effect(
-  AgentRun.AgentModelRuntime,
-  Effect.promise(() =>
-    import('@earendil-works/pi-coding-agent').then((pi) => pi.ModelRuntime.create()),
-  ).pipe(Effect.mapError((error) => `Failed to start the model runtime: ${String(error)}`)),
-);
-
-/**
- * Agentic skill generation for a working directory: runs the generic
- * {@link AgentRun.runAgent} with the skill-authoring preprompt,
- * then loads the new SKILL.md. New skills are detected by directory diff,
- * so agent chatter never parses.
- * @param cwd - project working directory
- * @returns generator port for the interactive flows
- */
-const generateFor =
-  (cwd: string): Interactive.SkillGenerator =>
-  (input) =>
-    Effect.gen(function* () {
-      const path = yield* Path;
-      const dir = skillsDir(path, cwd);
-      const before = yield* list(dir);
-      const beforeIds = new Set(before.map((skill) => skill.id));
-      yield* AgentRun.runAgent({
-        cwd,
-        preprompt: AUTHOR_PREPROMPT + Skill.formatInjectedSkills(input.inject),
-        prompt: `Skill description: ${input.description}`,
-        postprompt: AUTHOR_POSTPROMPT,
-        modelLabel: input.modelLabel,
-        tools: ['read', 'write', 'edit'],
-      }).pipe(
-        Effect.mapError((error) => error.message),
-        Effect.provide(AgentRuntimeLive),
-      );
-      const after = yield* list(dir);
-      const fresh = after.find((skill) => !beforeIds.has(skill.id));
-      if (fresh === undefined) {
-        return yield* Effect.fail(
-          'The agent finished without creating a skill — try describing it differently.',
-        );
-      }
-      return fresh;
-    }).pipe(Effect.provide(NodeLive));
-
 export const MODIFY_PREPROMPT = Interactive.MODIFY_PREPROMPT;
 export const MODIFY_POSTPROMPT = Interactive.MODIFY_POSTPROMPT;
-
-/**
- * Agentic skill modification for a working directory: runs the generic
- * {@link AgentRun.runAgent} scoped to the existing skill directory,
- * then re-reads that SKILL.md. The id is slug-validated on read-back,
- * so the agent cannot redirect the result elsewhere.
- * @param cwd - project working directory
- * @returns modifier port for the interactive flows
- */
-const modifyFor =
-  (cwd: string): Interactive.SkillModifier =>
-  (input) =>
-    Effect.gen(function* () {
-      const path = yield* Path;
-      const dir = skillsDir(path, cwd);
-      yield* AgentRun.runAgent({
-        cwd,
-        preprompt:
-          MODIFY_PREPROMPT +
-          '\n\nSkill to edit: ' +
-          input.skill.id +
-          Skill.formatInjectedSkills(input.inject),
-        prompt: 'Change request: ' + input.instruction,
-        postprompt: MODIFY_POSTPROMPT,
-        modelLabel: input.modelLabel,
-        tools: ['read', 'write', 'edit'],
-      }).pipe(
-        Effect.mapError((error) => error.message),
-        Effect.provide(AgentRuntimeLive),
-      );
-      const after = yield* list(dir);
-      const updated = after.find((skill) => skill.id === input.skill.id);
-      if (updated === undefined) {
-        return yield* Effect.fail(
-          'The agent finished without updating the skill — try describing the change differently.',
-        );
-      }
-      return updated;
-    }).pipe(Effect.provide(NodeLive));
-
 export const TRANSFORM_PREPROMPT = Interactive.TRANSFORM_PREPROMPT;
 export const TRANSFORM_POSTPROMPT = Interactive.TRANSFORM_POSTPROMPT;
-
-/**
- * Agentic skill format-transform for a working directory: runs the generic
- * {@link AgentRun.runAgent} scoped to the existing skill directory with a
- * fixed format-fix instruction, then re-reads that SKILL.md. Same shape as
- * the modify port, so the interactive flows reuse `SkillModifier`.
- * @param cwd - project working directory
- * @returns transformer port for the interactive detail menu
- */
-const transformFor =
-  (cwd: string): Interactive.SkillModifier =>
-  (input) =>
-    Effect.gen(function* () {
-      const path = yield* Path;
-      const dir = skillsDir(path, cwd);
-      yield* AgentRun.runAgent({
-        cwd,
-        preprompt:
-          TRANSFORM_PREPROMPT +
-          '\n\nSkill to fix: ' +
-          input.skill.id +
-          Skill.formatInjectedSkills(input.inject),
-        prompt: 'Fix request: ' + input.instruction,
-        postprompt: TRANSFORM_POSTPROMPT,
-        modelLabel: input.modelLabel,
-        tools: ['read', 'write', 'edit'],
-      }).pipe(
-        Effect.mapError((error) => error.message),
-        Effect.provide(AgentRuntimeLive),
-      );
-      const after = yield* list(dir);
-      const updated = after.find((skill) => skill.id === input.skill.id);
-      if (updated === undefined) {
-        return yield* Effect.fail('The agent finished without updating the skill — try again.');
-      }
-      return updated;
-    }).pipe(Effect.provide(NodeLive));
 
 /**
  * Install skills into the workspace via the `skills` CLI (same mechanism
@@ -462,15 +335,25 @@ export const filterSelectDialog = (
  * Pi extension entry: registers the `/mf-skills` command with a file-backed
  * store per working directory. Skills live in the regular
  * `.agents/skills/` location shared with the `zi` extension.
+ *
+ * Agentic create, modify, and transform dispatch a `@montflow/pi-runs`
+ * run instead of running a child agent inline: the command names the run
+ * id and unwinds, the run writes the `SKILL.md`, and its completion hook
+ * re-encodes the result and reports the outcome. Follow or steer a live
+ * run with `/mf-runs`. One runner runtime is built per repo root and
+ * released on session shutdown, so runs stay steerable for the life of
+ * the session.
  * @param pi - Pi extension API
  * @returns Nothing
  */
 export default function piSkillsExtension(pi: ExtensionAPI): void {
+  const runs = Runs.makeSkillRunPorts({ storeFor });
+  pi.on('session_shutdown', () => runs.shutdown());
   Interactive.register(
     pi,
     storeFor,
-    generateFor,
-    modifyFor,
+    runs.generateFor,
+    runs.modifyFor,
     installerFor,
     (ctx) =>
       ctx.mode === 'tui'
@@ -490,6 +373,6 @@ export default function piSkillsExtension(pi: ExtensionAPI): void {
         ? (title: string, info: ReadonlyArray<string>, options: ReadonlyArray<string>) =>
             Menu.menuDialog(ctx.ui, title, options, info)
         : undefined,
-    transformFor,
+    runs.transformFor,
   );
 }

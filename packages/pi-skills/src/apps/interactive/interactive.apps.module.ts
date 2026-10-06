@@ -17,6 +17,14 @@ export const USAGE =
 export const CANCELLED = 'Cancelled.';
 
 /**
+ * Failure value an agentic port fails with after dispatching a run
+ * instead of editing inline. The run — not this flow — writes the
+ * skill, so the flow unwinds without saving; the port already notified
+ * the session with the run id, so the command stays quiet here.
+ */
+export const DISPATCHED = 'Run dispatched.';
+
+/**
  * Instructions before the user description: the child agent authors
  * exactly one skill, then stops. Transported as the preprompt.
  * Lives here (not the pi extension entry) so every host — the pi
@@ -1453,8 +1461,8 @@ export const run = (
 export const register = (
   api: CommandApi,
   storeFor: (cwd: string) => SkillStore,
-  generateFor: (cwd: string) => SkillGenerator,
-  modifyFor: (cwd: string) => SkillModifier,
+  generateFor: (cwd: string, notify: InteractiveUi['notify']) => SkillGenerator,
+  modifyFor: (cwd: string, notify: InteractiveUi['notify']) => SkillModifier,
   installerFor: (cwd: string) => SkillInstaller,
   searchFor?: (ctx: {
     readonly ui: FilterUi;
@@ -1466,7 +1474,7 @@ export const register = (
   }) => ModelPickerFn | undefined,
   loadingFor?: (ctx: { readonly ui: FilterUi; readonly mode: string }) => LoadingFn | undefined,
   menuFor?: (ctx: { readonly ui: FilterUi; readonly mode: string }) => MenuFn | undefined,
-  transformFor?: (cwd: string) => SkillModifier,
+  transformFor?: (cwd: string, notify: InteractiveUi['notify']) => SkillModifier,
 ): void => {
   api.registerCommand(COMMAND_NAME, {
     description: COMMAND_DESCRIPTION,
@@ -1484,7 +1492,12 @@ export const register = (
         const modelPicker = modelPickerFor?.({ ui: ctx.ui, mode: ctx.mode });
         const loading = loadingFor?.({ ui: ctx.ui, mode: ctx.mode });
         const menu = menuFor?.({ ui: ctx.ui, mode: ctx.mode });
-        const modify = modifyFor(ctx.cwd);
+        // Agentic ports report through this session's notify channel: a
+        // dispatched run names its id there, and the completion hook
+        // reports the outcome from the runner's own runtime.
+        const notify = (message: string, type?: 'info' | 'warning' | 'error'): void =>
+          ctx.ui.notify(message, type);
+        const modify = modifyFor(ctx.cwd, notify);
         return run(
           args,
           {
@@ -1495,17 +1508,22 @@ export const register = (
             loading,
             installer: installerFor(ctx.cwd),
             menu,
-            transform: transformFor?.(ctx.cwd) ?? modify,
+            transform: transformFor?.(ctx.cwd, notify) ?? modify,
           },
           storeFor(ctx.cwd),
-          generateFor(ctx.cwd),
+          generateFor(ctx.cwd, notify),
           modify,
         );
       }).pipe(
         Effect.flatMap((effect) => effect),
         Effect.matchEffect({
           onFailure: (error) =>
-            Effect.sync(() => ctx.ui.notify(error, error === CANCELLED ? 'info' : 'error')),
+            // A dispatched run already announced itself and its id; the
+            // flow unwinding is bookkeeping, not a failure to report.
+            Effect.sync(() => {
+              if (error === DISPATCHED) return;
+              ctx.ui.notify(error, error === CANCELLED ? 'info' : 'error');
+            }),
           onSuccess: () => Effect.void,
         }),
         Effect.runPromise,

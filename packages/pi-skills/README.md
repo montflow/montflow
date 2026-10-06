@@ -7,6 +7,12 @@ interactive `/mf-skills` command.
 Skills live in the regular `.agents/skills/<slug>/SKILL.md` location shared
 with the `zi` extension — this package only inspects and modifies them.
 
+Agentic create, modify, and transform dispatch a `@montflow/pi-runs` run
+instead of running a child agent inline: the command names the run id and
+unwinds, the run writes the `SKILL.md`, and its completion hook re-encodes
+the result and reports the outcome. Follow or steer a live run with
+`/mf-runs`; the workspace skills panel uses the same flow.
+
 ```typescript
 import { Skill } from '@montflow/pi-skills';
 import { Effect } from 'effect';
