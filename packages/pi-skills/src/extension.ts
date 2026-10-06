@@ -3,22 +3,10 @@ import { execFile } from 'node:child_process';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { DynamicBorder } from '@earendil-works/pi-coding-agent';
 import { Container, Input, Key, SelectList, Text, matchesKey } from '@earendil-works/pi-tui';
-import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Loading, Menu, ModelPicker } from '@montflow/pi-interactive';
-import { Effect, Layer } from 'effect';
-import { FileSystem } from 'effect/FileSystem';
-import { Path } from 'effect/Path';
-import { Interactive, Runs } from './apps/index.js';
-import { Skill } from './modules/index.js';
-
-/** Node live layer for the services the store needs. Provided once per run. */
-const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
-
-/** Absolute skills directory for a working directory: `<cwd>/.agents/skills`. */
-export const skillsDir = (path: Path, cwd: string): string => path.join(cwd, '.agents', 'skills');
-
-/** Failure value for store reads/writes. Surfaced through `SkillStore` as strings. */
-export const storeError = (message: string): string => message;
+import { Effect } from 'effect';
+import { Cli, Interactive, Runs } from './apps/index.js';
+import { Skill, SkillStore } from './modules/index.js';
 
 /**
  * Frontmatter parser, re-exported from the pure skill module so the
@@ -28,174 +16,16 @@ export const parseSkillFile = Skill.parseSkillFile;
 export type ParsedSkillFile = Skill.ParsedSkillFile;
 export type FieldValue = Skill.FieldValue;
 
-/**
- * Decode one `SKILL.md` file into a `Skill`. The directory name is the id;
- * frontmatter `name` falls back to it. Malformed files fail.
- * @param dirName - skill directory slug
- * @param markdown - raw SKILL.md contents
- * @returns Effect resolving to the skill, failing on malformed input
- */
-export const decodeSkillFile = (
-  dirName: string,
-  markdown: string,
-): Effect.Effect<Skill.Skill, string> => {
-  const parsed = Skill.parseSkillFile(markdown);
-  if (parsed === null) return Effect.fail(`Malformed SKILL.md in '${dirName}'.`);
-  const { fields, body } = parsed;
-  const rawName = Skill.fieldString(fields, 'name');
-  const name = rawName === undefined || rawName === '' ? dirName : rawName;
-  const description = Skill.fieldString(fields, 'description') ?? '';
-  return Skill.decodeUnknown({
-    id: dirName,
-    name,
-    description,
-    groups: Skill.fieldStrings(fields, 'groups'),
-    dependencies: Skill.fieldStrings(fields, 'dependencies'),
-    body,
-  }).pipe(Effect.mapError(() => `Invalid skill '${dirName}'.`));
-};
+/** The file codec, re-exported so hosts keep one import site. */
+export const decodeSkillFile = Skill.decodeSkillFile;
+export const encodeSkillFile = Skill.encodeSkillFile;
 
-/**
- * Serialize a `Skill` to `SKILL.md` contents: frontmatter plus body.
- * Empty `groups` / `dependencies` drop their keys.
- * @param skill - skill to persist
- * @returns file contents
- */
-export const encodeSkillFile = (skill: Skill.Skill): string => {
-  const lines = ['---', `name: ${skill.name}`, `description: ${skill.description}`];
-  if (skill.groups.length > 0) {
-    lines.push('groups:');
-    for (const group of skill.groups) lines.push(`  - ${group}`);
-  }
-  if (skill.dependencies.length > 0) {
-    lines.push('dependencies:');
-    for (const dependency of skill.dependencies) lines.push(`  - ${dependency}`);
-  }
-  lines.push('---', '');
-  if (skill.body !== '') lines.push(skill.body, '');
-  return lines.join('\n');
-};
-
-/**
- * List stored skills, sorted by name. A missing directory reads as empty;
- * malformed files are skipped so the list stays usable.
- * @param dir - absolute skills directory
- * @returns Effect resolving to the stored skills
- */
-export const list = (
-  dir: string,
-): Effect.Effect<ReadonlyArray<Skill.Skill>, never, FileSystem | Path> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem;
-    const path = yield* Path;
-    const entries = yield* fs.readDirectory(dir).pipe(Effect.orElseSucceed(() => [] as const));
-    const skills = yield* Effect.forEach(entries, (entry) =>
-      fs.readFileString(path.join(dir, entry, 'SKILL.md')).pipe(
-        Effect.flatMap((raw) => decodeSkillFile(entry, raw)),
-        Effect.catch(() => Effect.succeed(undefined)),
-      ),
-    );
-    return skills
-      .filter((skill) => skill !== undefined)
-      .toSorted((a, b) => a.name.localeCompare(b.name));
-  });
-
-/**
- * Write a skill's `SKILL.md` file, creating the directory as needed.
- * @param dir - absolute skills directory
- * @param skill - skill to persist
- * @returns Effect completing once written, failing on write errors
- */
-export const save = (
-  dir: string,
-  skill: Skill.Skill,
-): Effect.Effect<void, string, FileSystem | Path> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem;
-    const path = yield* Path;
-    const skillDir = path.join(dir, skill.id);
-    yield* fs
-      .makeDirectory(skillDir, { recursive: true })
-      .pipe(
-        Effect.mapError((error) => storeError(`Failed to create ${skillDir}: ${String(error)}`)),
-      );
-    const file = path.join(skillDir, 'SKILL.md');
-    yield* fs
-      .writeFileString(file, encodeSkillFile(skill))
-      .pipe(Effect.mapError((error) => storeError(`Failed to write ${file}: ${String(error)}`)));
-  });
-
-/**
- * Delete a skill's directory. The id is slug-validated so it can never
- * escape `.agents/skills/` (no path traversal). Fails on unknown ids.
- * @param dir - absolute skills directory
- * @param id - skill directory slug
- * @returns Effect completing once removed, failing on unknown ids or write errors
- */
-export const remove = (dir: string, id: string): Effect.Effect<void, string, FileSystem | Path> =>
-  Effect.gen(function* () {
-    if (!Skill.isValidName(id)) return yield* Effect.fail(`Unknown skill '${id}'.`);
-    const fs = yield* FileSystem;
-    const path = yield* Path;
-    const skillDir = path.join(dir, id);
-    const exists = yield* fs
-      .exists(path.join(skillDir, 'SKILL.md'))
-      .pipe(Effect.orElseSucceed(() => false as const));
-    if (!exists) return yield* Effect.fail(`Unknown skill '${id}'.`);
-    yield* fs
-      .remove(skillDir, { recursive: true })
-      .pipe(
-        Effect.mapError((error) => storeError(`Failed to delete ${skillDir}: ${String(error)}`)),
-      );
-  });
-
-/**
- * File-backed store for a working directory.
- * @param cwd - project working directory
- * @returns store reading/writing `<cwd>/.agents/skills/<slug>/SKILL.md`
- */
-/**
- * Read one skill's raw `SKILL.md` file for mechanical verification.
- * The id is slug-validated so it can never escape `.agents/skills/`.
- * @param dir - absolute skills directory
- * @param id - skill directory slug
- * @returns Effect resolving to the raw file contents, failing on unknown ids
- */
-export const readRaw = (
-  dir: string,
-  id: string,
-): Effect.Effect<string, string, FileSystem | Path> =>
-  Effect.gen(function* () {
-    if (!Skill.isValidName(id)) return yield* Effect.fail(`Unknown skill '${id}'.`);
-    const fs = yield* FileSystem;
-    const path = yield* Path;
-    const file = path.join(dir, id, 'SKILL.md');
-    const raw = yield* fs.readFileString(file).pipe(Effect.orElseSucceed(() => undefined));
-    if (raw === undefined) return yield* Effect.fail(`Unknown skill '${id}'.`);
-    return raw;
-  });
-
+/** File-backed store for a working directory. */
 const storeFor = (cwd: string): Interactive.SkillStore => ({
-  list: () =>
-    Effect.gen(function* () {
-      const path = yield* Path;
-      return yield* list(skillsDir(path, cwd));
-    }).pipe(Effect.provide(NodeLive)),
-  readRaw: (id) =>
-    Effect.gen(function* () {
-      const path = yield* Path;
-      return yield* readRaw(skillsDir(path, cwd), id);
-    }).pipe(Effect.provide(NodeLive)),
-  save: (skill) =>
-    Effect.gen(function* () {
-      const path = yield* Path;
-      yield* save(skillsDir(path, cwd), skill);
-    }).pipe(Effect.provide(NodeLive)),
-  delete: (id) =>
-    Effect.gen(function* () {
-      const path = yield* Path;
-      yield* remove(skillsDir(path, cwd), id);
-    }).pipe(Effect.provide(NodeLive)),
+  list: () => SkillStore.list(cwd),
+  readRaw: (id) => SkillStore.readRaw(cwd, id),
+  save: (skill) => SkillStore.save(cwd, skill),
+  delete: (id) => SkillStore.remove(cwd, id),
 });
 
 /**
@@ -332,9 +162,10 @@ export const filterSelectDialog = (
   });
 
 /**
- * Pi extension entry: registers the `/mf-skills` command with a file-backed
- * store per working directory. Skills live in the regular
- * `.agents/skills/` location shared with the `zi` extension.
+ * Pi extension entry: registers `/mf-skills` (headless CLI, matching the
+ * `mf-skills` binary), `/mf-skills-tui` (interactive, manual and agentic),
+ * and `/mf-runs`-backed agentic flows, with a file-backed store per working
+ * directory. Skills live in the regular `.agents/skills/` location.
  *
  * Agentic create, modify, and transform dispatch a `@montflow/pi-runs`
  * run instead of running a child agent inline: the command names the run
@@ -349,6 +180,7 @@ export const filterSelectDialog = (
 export default function piSkillsExtension(pi: ExtensionAPI): void {
   const runs = Runs.makeSkillRunPorts({ storeFor });
   pi.on('session_shutdown', () => runs.shutdown());
+  Cli.register(pi).pipe(Effect.runSync);
   Interactive.register(
     pi,
     storeFor,

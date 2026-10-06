@@ -18,12 +18,18 @@
     "url": "git+https://github.com/montflow/montflow.git",
     "directory": "packages/pi-skills"
   },
+  "bin": {
+    "mf-skills": "./src/apps/cli/main.ts"
+  },
   "type": "module",
   "exports": {
     "./package.json": "./package.json",
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build:cli": "bun run scripts/generate-embedded-skills.ts && bun build src/apps/cli/main.ts --compile --outfile dist/mf-skills",
+    "cli": "bun run src/apps/cli/main.ts",
+    "generate:payload": "bun run scripts/generate-embedded-skills.ts",
     "format:check": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "lint:check": "oxlint --deny-warnings .",
