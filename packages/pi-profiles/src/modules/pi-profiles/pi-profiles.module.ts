@@ -229,7 +229,7 @@ const unquote = (value: string): string => {
 };
 
 /**
- * Parse the frontmatter subset `zi` writes: scalar `key: value` lines plus
+ * Parse the PROFILE.md frontmatter subset: scalar `key: value` lines plus
  * blank-value keys followed by `  - item` list lines. `#` comment lines
  * skip. Returns null when no `---` block opens the file.
  * @param markdown - raw PROFILE.md contents

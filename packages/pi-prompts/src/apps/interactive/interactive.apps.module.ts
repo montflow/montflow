@@ -70,7 +70,7 @@ export const tokenize = Dialogs.tokenize;
 
 /**
  * Collect `key=value` pairs from tokens. Supports bare `k=v`, `--set k=v`,
- * and `--set=k=v` (same convention as `/zi prompt`).
+ * and `--set=k=v`.
  * @param tokens - tokens after the action and name
  * @returns collected values by key
  */

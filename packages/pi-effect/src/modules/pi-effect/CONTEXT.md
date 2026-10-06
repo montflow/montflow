@@ -13,5 +13,5 @@ Effect wrappers around Pi extension primitives (`ctx.ui` dialogs,
 ## Does not belong here
 
 - Pi business logic (commands, tools, event handlers) — that lives in the
-  consuming extension (e.g. `pi/zi`)
+  consuming extension
 - Effect services/layers with their own state — add a new module for those

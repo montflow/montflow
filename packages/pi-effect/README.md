@@ -20,6 +20,6 @@ export default function (pi) {
 ## Status
 
 Boilerplate (`0.0.1`, private). Source-only — no build step: Pi loads the
-`.ts` files directly, same as `pi/zi`. Run `bun install` from the repo
+`.ts` files directly. Run `bun install` from the repo
 root for dependencies, then `turbo` `test` / `ts:check` cover this package
 like the rest.

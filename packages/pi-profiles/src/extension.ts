@@ -466,8 +466,7 @@ const menuFor = (ctx: { readonly ui: Interactive.FilterUi; readonly mode: string
  * returned promise, so load failures surface.
  *
  * Profiles live at `.agents/@montflow/profiles/<name>/PROFILE.md`
- * (namespaced like `pi-prompts`; the legacy `zi` layout was
- * `.agents/@montflow/profiles/`). Creation runs inject the
+ * (namespaced like `pi-prompts`). Creation runs inject the
  * `montflow-create-pi-profiles` workspace skill and modification runs inject
  * `montflow-modify-pi-profiles`: the requirements gate offers to
  * install them from this repository (`npx skills add montflow/montflow`)

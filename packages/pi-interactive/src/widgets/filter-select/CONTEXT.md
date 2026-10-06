@@ -16,5 +16,5 @@ Reusable Pi TUI widgets for extensions: a searchable filter-select list
 - Pi UI primitives (`notify`, `confirm`, `select`, `input`) — those live in
   `@montflow/pi-effect`
 - Pi business logic (commands, tools, event handlers) — that lives in the
-  consuming extension (e.g. `pi/zi`, `@montflow/pi-skills` flows)
+  consuming extension (e.g. `@montflow/pi-skills` flows)
 - Persistence or agentic execution — the consuming extension injects those

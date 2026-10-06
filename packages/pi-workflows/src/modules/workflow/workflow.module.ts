@@ -3,10 +3,8 @@ import { Schema } from 'effect';
 /**
  * One step in a workflow pipeline. Deliberately loose — `kind` is a
  * free-form string so hand-written steps with unknown kinds still decode
- * (as generic steps) and are never destroyed. Modeled on the pipeline half
- * of `pi/zi`'s preset schema (`preset-schema.ts`); the review-loop half
- * (`maxLoops`, `deadlock`, reviewer refs) stays in `zi` until a loop
- * module lands here.
+ * (as generic steps) and are never destroyed. The review-loop half
+ * (`maxLoops`, `deadlock`, reviewer refs) waits for a loop module.
  */
 export class Step extends Schema.Class<Step>('WorkflowStep')({
   /** Stable step id within the workflow (e.g. `s1`). */
@@ -32,8 +30,8 @@ export class Step extends Schema.Class<Step>('WorkflowStep')({
 
 /**
  * A named workflow: an ordered step pipeline. A descriptor only — no
- * execution state (no `status`): lifecycle lives with the run, mirroring
- * how `zi` separates preset configs from the run store. Persisted by the
+ * execution state (no `status`): lifecycle lives with the run, not in this
+ * descriptor. Persisted by the
  * consuming extension as a JSON file (see {@link FromJson}).
  */
 export class Workflow extends Schema.Class<Workflow>('Workflow')({

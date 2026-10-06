@@ -10,7 +10,7 @@ Raw files are the source of truth. SQLite is deferred to a derived index.
 Why files win:
 
 1. Human-editable — fix frontmatter with any editor.
-2. Zero native deps — Pi loads the `.ts` sources directly, same as `pi/zi`.
+2. Zero native deps — Pi loads the `.ts` sources directly.
 3. Effect file IO already exists — no new driver to wrap.
 4. Matches the `pi-subagents` file-artifact style.
 

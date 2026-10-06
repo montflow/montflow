@@ -4,8 +4,7 @@ Effect-first workflow primitives for Pi extensions: a `Workflow`
 descriptor holding an ordered pipeline of free-form `Step`s, plus slug
 helpers for workflow names.
 
-Modeled on the pipeline half of `pi/zi`'s preset schema
-(`preset-schema.ts`): steps carry `id`, free-form `kind`, and optional
+Steps carry `id`, free-form `kind`, and optional
 `label` / `prompt` / `model` / `fallbackModel` / `concurrency` /
 `params`. The schema is deliberately loose — unknown kinds decode
 untouched, never destroyed.
@@ -27,7 +26,7 @@ folder convention and the Effect `Schema.Class` identifier (same as
 ## Does not belong here
 
 - Review-loop execution controls (`maxLoops`, `deadlock`, reviewer refs)
-  — those stay in `zi` until a loop module lands here
+  — those wait for a loop module
 - Step execution and lifecycle (`start`, `settle`, run state) — a future
   store module owns that, referencing runs by id
 - File IO — the consuming extension owns reading/writing workflow files

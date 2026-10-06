@@ -80,6 +80,5 @@ issue list, so callers can render or repair.
 
 ## Status
 
-Early (`0.0.1`, private). Targets the pi-features feature contract. The `pi/zi` extension currently uses a different spec layout
-(`.agents/@montflow/specs/`). Source-only — no build step: Pi loads the
-`.ts` files directly, same as `pi/zi`.
+Early (`0.0.1`, private). Targets the pi-features feature contract.
+Source-only — no build step: Pi loads the `.ts` files directly.

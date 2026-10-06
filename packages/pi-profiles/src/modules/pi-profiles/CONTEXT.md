@@ -11,6 +11,6 @@ descriptors, slug names).
 ## Does not belong here
 
 - Pi business logic (commands, tools, event handlers) — that lives in the
-  consuming extension (e.g. `pi/zi`)
+  consuming extension
 - Pi UI primitives (`notify`, `confirm`, `select`, `input`) — those live in
   `@montflow/pi-effect`
