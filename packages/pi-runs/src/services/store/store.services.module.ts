@@ -43,6 +43,9 @@ const fail = (operation: string, reason: string): Effect.Effect<never, StoreErro
 /** Path segments (under a repo root) owning the runs store. Shared with surfaces. */
 export const RUNS_SEGMENTS = ['.agents', '@montflow', 'runs'] as const;
 
+/** File name Pi writes the run's native session to, inside the run directory. */
+export const NATIVE_SESSION_FILE = 'pi-session.jsonl';
+
 /**
  * A held `.lock` older than this is treated as left behind by a crashed
  * writer and reclaimed. The lock is an *empty* directory, so it carries no
@@ -232,8 +235,10 @@ interface RunInput {
   name?: string;
   prompt?: string;
   model?: string;
+  thinking?: RunSchema.ThinkingLevel;
   tools?: ReadonlyArray<string>;
   related?: ReadonlyArray<RunSchema.Id>;
+  feature?: string;
   progress?: string;
 }
 
@@ -268,8 +273,10 @@ const withExtras = (
   if (run.name !== undefined) input.name = run.name;
   if (run.prompt !== undefined) input.prompt = run.prompt;
   if (run.model !== undefined) input.model = run.model;
+  if (run.thinking !== undefined) input.thinking = run.thinking;
   if (run.tools !== undefined) input.tools = run.tools;
   if (run.related !== undefined) input.related = run.related;
+  if (run.feature !== undefined) input.feature = run.feature;
   if (base.progress !== undefined) input.progress = base.progress;
   else if (run.progress !== undefined) input.progress = run.progress;
   return new RunSchema.Run(input);
@@ -282,8 +289,10 @@ export interface CreateArgs {
   name?: string;
   prompt?: string;
   model?: string;
+  thinking?: RunSchema.ThinkingLevel;
   tools?: ReadonlyArray<string>;
   related?: ReadonlyArray<string>;
+  feature?: string;
 }
 
 const build = (backend: Backend) => {
@@ -386,8 +395,10 @@ const build = (backend: Backend) => {
           if (args.name !== undefined) input.name = args.name;
           if (args.prompt !== undefined) input.prompt = args.prompt;
           if (args.model !== undefined) input.model = args.model;
+          if (args.thinking !== undefined) input.thinking = args.thinking;
           if (args.tools !== undefined) input.tools = args.tools;
           if (related !== undefined) input.related = related;
+          if (args.feature !== undefined) input.feature = args.feature;
           const run = new RunSchema.Run(input);
           const files = backend.filesFor(id);
           yield* backend.writeText(

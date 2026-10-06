@@ -23,8 +23,10 @@ const fakeRunner = (overrides: Partial<RunnerImpl>): RunnerImpl => ({
   interrupt: () => Effect.void,
   detail: () => Effect.fail('unused'),
   verify: () => Effect.fail('unused'),
+  verifyStore: () => Effect.succeed({ ignored: true, issues: [] }),
   progress: () => Effect.void,
   list: () => Effect.succeed([]),
+  liveRunIds: () => Effect.succeed(new Set()),
   ...overrides,
 });
 

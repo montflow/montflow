@@ -8,8 +8,13 @@ drift.
 
 - `parseCommand` — quote-aware tokenizer + `--flag value|--flag=value` split
 - `parseArgv` — already-split argv (CLI); never re-joined, so multi-word values survive
-- `execute(action, root, options)` — runs the action, returns display text
+- `execute(action, root, options)` — runs the action, returns display text;
+  `status` also renders the store's git-ignore verdict (`Runner.verifyStore`)
 - `COMMAND_NAME` / `COMMAND_DESCRIPTION` / `USAGE` — single source for both surfaces
+- `start` flags: `--model` (`provider/model-id`) and `--thinking`
+  (`off|minimal|low|medium|high|xhigh|max`); an unknown level is `Help`
+- `Doctor` action — delegates to `apps/doctor` (`runDoctor`), which installs the
+  packaged `montflow-dispatch-pi-runs` skill into `.agents/skills/`
 - `ExecuteOptions.onSettled` — A004 completion seam; E001 composes the
   `/mf-profiles-cli create` invocation here
 

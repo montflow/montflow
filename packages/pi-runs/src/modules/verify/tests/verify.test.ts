@@ -227,3 +227,38 @@ Vitest.describe('Verify runtime', () => {
     }),
   );
 });
+
+Vitest.describe('Verify store ignore', () => {
+  const runsPath = '.agents/@montflow/runs';
+
+  Vitest.it.effect('accepts an active ignore rule', () =>
+    Effect.sync(() => {
+      const result = Verify.verifyStoreIgnored(`# runs\n${runsPath}\n`, runsPath);
+      Vitest.expect(result.ignored).toBe(true);
+      Vitest.expect(result.issues).toStrictEqual([]);
+    }),
+  );
+
+  Vitest.it.effect('accepts a trailing-slash or glob rule', () =>
+    Effect.sync(() => {
+      Vitest.expect(Verify.verifyStoreIgnored(`${runsPath}/\n`, runsPath).ignored).toBe(true);
+      Vitest.expect(Verify.verifyStoreIgnored(`${runsPath}/**\n`, runsPath).ignored).toBe(true);
+    }),
+  );
+
+  Vitest.it.effect('rejects a commented-out or missing rule', () =>
+    Effect.sync(() => {
+      const commented = Verify.verifyStoreIgnored(`# ${runsPath}\n`, runsPath);
+      Vitest.expect(commented.ignored).toBe(false);
+      Vitest.expect(commented.issues.map((entry) => entry.field)).toContain('.gitignore');
+      Vitest.expect(Verify.verifyStoreIgnored('', runsPath).ignored).toBe(false);
+    }),
+  );
+
+  Vitest.it.effect('last matching rule wins, so a negation un-ignores', () =>
+    Effect.sync(() => {
+      const result = Verify.verifyStoreIgnored(`${runsPath}\n!${runsPath}\n`, runsPath);
+      Vitest.expect(result.ignored).toBe(false);
+    }),
+  );
+});

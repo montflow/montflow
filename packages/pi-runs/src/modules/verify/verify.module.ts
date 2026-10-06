@@ -5,10 +5,10 @@ import * as RunEventSchema from '../run-event/run-event.module.ts';
 import { Replay } from '../replay/index.js';
 
 /**
- * Mechanical run verification: a pure check over a run's raw files, mirroring
- * the profile/feature verifiers. `valid` means the run is well-formed;
- * `resumable` means it can be replayed on another machine. Invalid or
- * non-resumable runs must refuse to resume.
+ * Mechanical run verification: a pure check over a run's raw files plus the
+ * store's git-ignore guard, mirroring the profile/feature verifiers. `valid`
+ * means the run is well-formed; `resumable` means it can be replayed on
+ * another machine. Invalid or non-resumable runs must refuse to resume.
  */
 
 /** One verification failure, scoped to a field. */
@@ -30,6 +30,13 @@ export interface VerifyInput {
   readonly runMd: string;
   readonly session: string;
   readonly receipt: string | undefined;
+}
+
+/** Verdict for the runs store's git-ignore guard. */
+export interface StoreIgnoreResult {
+  /** True when the repo ignores the runs store, keeping transcripts local. */
+  readonly ignored: boolean;
+  readonly issues: ReadonlyArray<VerifyIssue>;
 }
 
 /** Terminal statuses that require a receipt. */
@@ -129,4 +136,39 @@ export const verifyRun = (input: VerifyInput): VerifyResult => {
     Replay.canReplay(events);
 
   return { valid: issues.length === 0, resumable, issues };
+};
+
+/**
+ * Verify the repo ignores the runs store so transcripts stay local and out of
+ * git. The last matching rule wins, so a rule that is commented out (or later
+ * re-enabled with `!`) does not count as ignored. Pure — the runner reads
+ * `.gitignore` and calls this.
+ * @param gitignore - contents of the repo `.gitignore` (empty when absent)
+ * @param runsPath - repo-relative runs store path, e.g. `.agents/@montflow/runs`
+ * @returns verdict with a `.gitignore` issue when the path is not ignored
+ */
+export const verifyStoreIgnored = (gitignore: string, runsPath: string): StoreIgnoreResult => {
+  const normalized = runsPath.replace(/^\.\//, '').replace(/\/+$/, '');
+  let ignored = false;
+  for (const raw of gitignore.split('\n')) {
+    const line = raw.trim();
+    if (line === '' || line.startsWith('#')) continue;
+    const negated = line.startsWith('!');
+    const body = negated ? line.slice(1) : line;
+    const pattern = body
+      .replace(/\/\*\*$/, '')
+      .replace(/\/+$/, '')
+      .replace(/^\.\//, '');
+    if (pattern === normalized || pattern === `/${normalized}`) ignored = !negated;
+  }
+  if (ignored) return { ignored: true, issues: [] };
+  return {
+    ignored: false,
+    issues: [
+      issue(
+        '.gitignore',
+        `runs path '${normalized}' is not ignored; transcripts would be git-tracked.`,
+      ),
+    ],
+  };
 };

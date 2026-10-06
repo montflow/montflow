@@ -28,8 +28,10 @@ const fakeRunner = (overrides: Partial<RunnerImpl>): RunnerImpl => ({
   interrupt: () => Effect.void,
   detail: () => Effect.fail('unused'),
   verify: () => Effect.fail('unused'),
+  verifyStore: () => Effect.succeed({ ignored: true, issues: [] }),
   progress: () => Effect.void,
   list: () => Effect.succeed([]),
+  liveRunIds: () => Effect.succeed(new Set()),
   ...overrides,
 });
 
@@ -89,12 +91,13 @@ Vitest.describe('execute runtime', () => {
     ),
   );
 
-  Vitest.it.effect('renders status with a receipt', () =>
+  Vitest.it.effect('renders status with a receipt and the store ignore verdict', () =>
     Effect.gen(function* () {
       const text = yield* execute({ kind: 'Status', id: 'run-1' }, '/repo');
       Vitest.expect(text).toContain('run-1  done');
       Vitest.expect(text).toContain('turns 0');
       Vitest.expect(text).toContain('receipt done: ok');
+      Vitest.expect(text).toContain('store ignored: yes');
     }).pipe(
       Effect.provide(
         layer(
@@ -104,6 +107,28 @@ Vitest.describe('execute runtime', () => {
                 run: run('done', 'run-1'),
                 events: [],
                 receipt: { outcome: 'done', summary: 'ok' },
+              }),
+          }),
+        ),
+      ),
+    ),
+  );
+
+  Vitest.it.effect('reports a store that git would track', () =>
+    Effect.gen(function* () {
+      const text = yield* execute({ kind: 'Status', id: 'run-1' }, '/repo');
+      Vitest.expect(text).toContain('store ignored: no');
+      Vitest.expect(text).toContain('[.gitignore]');
+    }).pipe(
+      Effect.provide(
+        layer(
+          fakeRunner({
+            detail: () =>
+              Effect.succeed({ run: run('running', 'run-1'), events: [], receipt: undefined }),
+            verifyStore: () =>
+              Effect.succeed({
+                ignored: false,
+                issues: [{ field: '.gitignore', message: 'not ignored' }],
               }),
           }),
         ),
@@ -141,6 +166,7 @@ Vitest.describe('execute runtime', () => {
           prompt: 'go',
           name: undefined,
           model: undefined,
+          thinking: undefined,
           parent: undefined,
           related: undefined,
           tools: undefined,
@@ -177,6 +203,7 @@ Vitest.describe('execute runtime', () => {
           prompt: 'go',
           name: undefined,
           model: undefined,
+          thinking: undefined,
           parent: undefined,
           related: undefined,
           tools: undefined,
@@ -206,6 +233,7 @@ Vitest.describe('execute runtime', () => {
           prompt: 'go',
           name: undefined,
           model: undefined,
+          thinking: undefined,
           parent: undefined,
           related: undefined,
           tools: undefined,
@@ -229,6 +257,7 @@ Vitest.describe('execute runtime', () => {
           prompt: 'go',
           name: undefined,
           model: undefined,
+          thinking: undefined,
           parent: undefined,
           related: undefined,
           tools: undefined,

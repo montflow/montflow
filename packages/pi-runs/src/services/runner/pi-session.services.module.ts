@@ -11,11 +11,13 @@ import {
 } from './runner.services.module.js';
 
 /**
- * Real Pi session factory: an `AgentSession` over `SessionManager.inMemory`,
- * seeded from our stored transcript. Interaction is injected as custom tools
- * (`ask_user`, `notify_user`) bound to `SessionUi` — headless runs need no TUI
- * context, and Pi stays lazily imported so a missing install surfaces as a
- * typed load error instead of crashing the process.
+ * Real Pi session factory: an `AgentSession` over a file-backed
+ * `SessionManager` when the run has a native session file (Pi owns the
+ * transcript, so compaction and branches survive resume), else an in-memory
+ * one seeded from the stored transcript. Interaction is injected as custom
+ * tools (`ask_user`, `notify_user`) bound to `SessionUi` — headless runs need
+ * no TUI context, and Pi stays lazily imported so a missing install surfaces
+ * as a typed load error instead of crashing the process.
  */
 
 /** Narrow an `AgentMessage` to the Pi `Message` union our store mirrors. */
@@ -172,12 +174,27 @@ export const createPort = async (
   request: SessionRequest,
 ): Promise<SessionPort> => {
   const runtime = await pi.ModelRuntime.create();
-  const manager = pi.SessionManager.inMemory(request.root);
-  for (const message of request.replay) manager.appendMessage(message);
+  // Pi owns the run transcript when the engine supplies a native session file:
+  // opening it loads existing entries (compaction, branches) and appends new
+  // ones. The in-memory + replay path stays for callers that seed directly.
+  const manager =
+    request.sessionFile !== undefined
+      ? pi.SessionManager.open(request.sessionFile, undefined, request.root)
+      : pi.SessionManager.inMemory(request.root);
+  // Seed the transcript when it is empty: a fresh run has no replay, while a
+  // resume whose native file was never written (crash before the first
+  // assistant turn) falls back to the mirrored transcript.
+  const hasTranscript = manager.getEntries().some((entry) => entry.type === 'message');
+  if (!hasTranscript) {
+    for (const message of request.replay) manager.appendMessage(message);
+  }
   const resolved =
     request.model === undefined || request.model === ''
       ? undefined
-      : pi.resolveCliModel({ cliModel: request.model, modelRuntime: runtime });
+      : pi.resolveCliModel({
+          cliModel: request.model,
+          modelRuntime: runtime,
+        });
   if (resolved?.error !== undefined)
     throw new Error(`Unknown model '${request.model}': ${resolved.error}`);
   const options: CreateAgentSessionOptions = {
@@ -193,6 +210,8 @@ export const createPort = async (
   );
   if (tools !== undefined) options.tools = [...tools];
   if (resolved?.model !== undefined) options.model = resolved.model;
+  const thinking = resolved?.thinkingLevel ?? request.thinking;
+  if (thinking !== undefined) options.thinkingLevel = thinking;
   const { session } = await pi.createAgentSession(options);
   return toPort(session);
 };

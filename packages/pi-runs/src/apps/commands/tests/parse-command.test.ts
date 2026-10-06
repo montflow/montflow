@@ -12,6 +12,13 @@ Vitest.describe('parseCommand runtime', () => {
     }),
   );
 
+  Vitest.it.effect('parses doctor', () =>
+    Effect.sync(() => {
+      Vitest.expect(parseCommand('doctor')).toStrictEqual({ kind: 'Doctor' });
+      Vitest.expect(parseCommand('doctor extra')).toStrictEqual({ kind: 'Help' });
+    }),
+  );
+
   Vitest.it.effect('parses status and verify', () =>
     Effect.sync(() => {
       Vitest.expect(parseCommand('status run-1')).toStrictEqual({ kind: 'Status', id: 'run-1' });
@@ -69,6 +76,7 @@ Vitest.describe('parseCommand runtime', () => {
         prompt: 'fix it',
         name: 'Fix',
         model: undefined,
+        thinking: undefined,
         parent: 'parent-1',
         related: ['a', 'b'],
         tools: ['read', 'edit'],
@@ -88,6 +96,7 @@ Vitest.describe('parseCommand runtime', () => {
         prompt: '--dash leading',
         name: undefined,
         model: undefined,
+        thinking: undefined,
         parent: undefined,
         related: undefined,
         tools: undefined,
@@ -105,6 +114,7 @@ Vitest.describe('parseCommand runtime', () => {
         prompt: 'fix the bug',
         name: 'My Run',
         model: undefined,
+        thinking: undefined,
         parent: undefined,
         related: undefined,
         tools: undefined,

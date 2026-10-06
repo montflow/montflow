@@ -76,6 +76,8 @@ export const runnerLayer = (options: {
 }): Layer.Layer<Runner> =>
   RunnerDefault.pipe(
     Layer.provide(Layer.mergeAll(storeLayer(options.root), PiSessionFactory, options.bridge)),
+    // The engine reads the repo `.gitignore` to verify the store stays local.
+    Layer.provide(NodeLive),
   );
 
 /** Lazily-built, per-repo-root runtimes with a shared disposal path. */

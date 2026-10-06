@@ -37,6 +37,20 @@ Vitest.describe('Store.create runtime', () => {
     ),
   );
 
+  Vitest.it.live('persists the feature binding', () =>
+    provideStore(
+      freshRoot(),
+      Effect.gen(function* () {
+        const store = yield* Store;
+        yield* store.create({ id: 'run-1', feature: 'ship-login' });
+        const loaded = yield* store.load('run-1');
+        Vitest.expect(loaded.run.feature).toBe('ship-login');
+        const listed = yield* store.list();
+        Vitest.expect(listed[0]?.feature).toBe('ship-login');
+      }),
+    ),
+  );
+
   Vitest.it.live('fails on duplicate id', () =>
     provideStore(
       freshRoot(),

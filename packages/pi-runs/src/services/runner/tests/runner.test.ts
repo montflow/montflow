@@ -103,6 +103,8 @@ const makeHarness = (options: HarnessOptions = {}) => {
         ),
     Layer.succeed(SessionFactory, factory),
     bridgeLayer,
+    // The engine reads `.gitignore`; provide filesystem/path services.
+    Layer.mergeAll(NodeFileSystem.layer, PlatformPath.layer),
   );
   // `base` is shared so the test can drive the same Store the runner uses.
   const layer = Layer.mergeAll(RunnerDefault.pipe(Layer.provide(base)), base);
@@ -682,6 +684,44 @@ Vitest.describe('Runner runtime', () => {
       settleEvent(session);
       yield* flush;
       Vitest.expect(session.listeners.length).toBe(0);
+    }).pipe(Effect.provide(harness.layer));
+  });
+
+  Vitest.it.effect('reports the store ignore verdict from the repo .gitignore', () => {
+    const root = Fs.mkdtempSync(NodeOsPath.join(Os.tmpdir(), 'pi-runs-runner-ignore-'));
+    const gitignore = NodeOsPath.join(root, '.gitignore');
+    Fs.writeFileSync(gitignore, '# local transcripts\n.agents/@montflow/runs\n');
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const runner = yield* Runner;
+      const ignored = yield* runner.verifyStore(root);
+      Vitest.expect(ignored.ignored).toBe(true);
+      // Commenting the rule out re-enables tracking, so the check must flag it.
+      Fs.writeFileSync(gitignore, '# .agents/@montflow/runs\n');
+      const tracked = yield* runner.verifyStore(root);
+      Vitest.expect(tracked.ignored).toBe(false);
+      Vitest.expect(tracked.issues.map((entry) => entry.field)).toContain('.gitignore');
+    }).pipe(Effect.provide(harness.layer));
+  });
+
+  Vitest.it.effect('liveRunIds lists a started run and drops it after settle', () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const runner = yield* Runner;
+      yield* runner.start({ root: '/repo', id: 'run-1', prompt: 'do it', feature: 'ship-login' });
+      const before = yield* runner.liveRunIds('/repo');
+      Vitest.expect([...before]).toStrictEqual(['run-1']);
+      const session = harness.sessions[0];
+      if (session === undefined) return yield* Effect.fail('session not created');
+      yield* Effect.yieldNow;
+      emit(session, assistant('done'));
+      yield* flush;
+      settleEvent(session);
+      yield* flush;
+      const after = yield* runner.liveRunIds('/repo');
+      Vitest.expect([...after]).toStrictEqual([]);
+      const stored = yield* runner.detail('/repo', 'run-1');
+      Vitest.expect(stored.run.feature).toBe('ship-login');
     }).pipe(Effect.provide(harness.layer));
   });
 });

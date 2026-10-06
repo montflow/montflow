@@ -80,26 +80,46 @@ const makeFakeSession = (messages: ReadonlyArray<{ readonly role: string }> = []
   return { session, listeners, calls, emit };
 };
 
+/** State a fake Pi module exposes to `createPort` tests. */
+interface FakePiState {
+  appended: Message[];
+  cwd: string;
+  manager: {
+    appendMessage: (message: Message) => void;
+    getEntries: () => ReadonlyArray<{ readonly type: string }>;
+  };
+  openedSessionFile: string | undefined;
+  options: CreateAgentSessionOptions[];
+  fake: ReturnType<typeof makeFakeSession>;
+}
+
 /** A fake Pi coding-agent module plus the state `createPort` drives. */
 const makeFakePi = (
   options: {
     readonly resolvedModel?: { readonly id: string };
     readonly resolvedError?: string;
     readonly messages?: ReadonlyArray<{ readonly role: string }>;
+    readonly entries?: ReadonlyArray<{ readonly type: string }>;
   } = {},
 ) => {
   const fake = makeFakeSession(options.messages);
   const appended: Message[] = [];
+  const existingEntries = options.entries ?? [];
   const manager = {
     appendMessage: (message: Message) => {
       appended.push(message);
     },
+    getEntries: (): ReadonlyArray<{ readonly type: string }> => [
+      ...existingEntries,
+      ...appended.map(() => ({ type: 'message' })),
+    ],
   };
   const capturedOptions: CreateAgentSessionOptions[] = [];
-  const state = {
+  const state: FakePiState = {
     appended,
     cwd: '',
     manager,
+    openedSessionFile: undefined,
     options: capturedOptions,
     fake,
   };
@@ -111,6 +131,11 @@ const makeFakePi = (
     SessionManager: {
       inMemory: (cwd: string) => {
         state.cwd = cwd;
+        return manager;
+      },
+      open: (file: string, _sessionDir: string | undefined, cwd: string) => {
+        state.cwd = cwd;
+        state.openedSessionFile = file;
         return manager;
       },
     },
@@ -364,6 +389,43 @@ Vitest.describe('Pi session factory runtime', () => {
       ]);
       yield* port.prompt('continue');
       Vitest.expect(state.fake.calls.prompts).toStrictEqual(['continue']);
+    }),
+  );
+
+  Vitest.it.effect('createPort opens the native session file and seeds an empty transcript', () =>
+    Effect.gen(function* () {
+      const replay: Message[] = [{ role: 'user', content: 'stale', timestamp: 1 }];
+      const { pi, state } = makeFakePi({ resolvedModel: { id: 'test-model' }, messages: replay });
+      const native = '/repo/.agents/@montflow/runs/run-1/pi-session.jsonl';
+      yield* Effect.promise(() =>
+        createPort(pi, Type, sessionRequest({ model: 'test-model', sessionFile: native, replay })),
+      );
+      Vitest.expect(state.openedSessionFile).toBe(native);
+      Vitest.expect(state.cwd).toBe('/repo');
+      // No native entries yet: the mirrored transcript seeds the session.
+      Vitest.expect(state.appended).toStrictEqual(replay);
+    }),
+  );
+
+  Vitest.it.effect('createPort skips replay when the native session already has entries', () =>
+    Effect.gen(function* () {
+      const replay: Message[] = [{ role: 'user', content: 'stale', timestamp: 1 }];
+      const { pi, state } = makeFakePi({
+        resolvedModel: { id: 'test-model' },
+        entries: [{ type: 'message' }],
+      });
+      yield* Effect.promise(() =>
+        createPort(
+          pi,
+          Type,
+          sessionRequest({
+            model: 'test-model',
+            sessionFile: '/repo/run/pi-session.jsonl',
+            replay,
+          }),
+        ),
+      );
+      Vitest.expect(state.appended).toStrictEqual([]);
     }),
   );
 

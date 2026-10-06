@@ -1,6 +1,7 @@
-import { Deferred, Duration, Effect, Option } from 'effect';
-import type { Run } from '../../modules/index.js';
+import { Deferred, Duration, Effect, Option, Schema } from 'effect';
+import { Run } from '../../modules/index.js';
 import { Runner, type RunDetail } from '../../services/index.js';
+import { runDoctor, RUN_SKILL_NAME } from '../doctor/index.js';
 
 /**
  * Shared surface commands: parse `/mf-runs` or `mf-runs` args and execute them
@@ -13,18 +14,21 @@ export const COMMAND_NAME = 'mf-runs';
 
 /** Help text shown for the command. */
 export const COMMAND_DESCRIPTION =
-  'Manage local agent runs: list | status <id> | verify <id> | start --id <id> --prompt "text" | resume <id> [--prompt "text"] | interrupt <id> | steer <id> <text> | answer <id> <text>.';
+  'Manage local agent runs: doctor | list | status <id> | verify <id> | start --id <id> --prompt "text" [--model p/m] [--thinking level] | resume <id> [--prompt "text"] | interrupt <id> | steer <id> <text> | answer <id> <text>.';
 
 /** Help text for the command and the `help` action. */
 export const USAGE = [
+  'mf-runs doctor',
   'mf-runs list',
   'mf-runs status <id>',
   'mf-runs verify <id>',
-  'mf-runs start --id <id> --prompt "text" [--name "n"] [--model p/m] [--parent <id>] [--related a,b] [--tools a,b]',
+  'mf-runs start --id <id> --prompt "text" [--name "n"] [--model p/m] [--thinking off|minimal|low|medium|high|xhigh|max] [--parent <id>] [--related a,b] [--tools a,b]',
   'mf-runs resume <id> [--prompt "text"]',
   'mf-runs interrupt <id>',
   'mf-runs steer <id> <text>',
   'mf-runs answer <id> <text>',
+  '',
+  'Model ids: `pi --list-models [search]` (e.g. opencode-go/deepseek-v4.1-flash).',
 ].join('\n');
 
 /** Parsed surface invocation. */
@@ -33,6 +37,7 @@ export type CommandAction =
   | { readonly kind: 'List' }
   | { readonly kind: 'Status'; readonly id: string }
   | { readonly kind: 'Verify'; readonly id: string }
+  | { readonly kind: 'Doctor' }
   | { readonly kind: 'Resume'; readonly id: string; readonly prompt: string | undefined }
   | { readonly kind: 'Interrupt'; readonly id: string }
   | { readonly kind: 'Steer'; readonly id: string; readonly text: string }
@@ -43,6 +48,7 @@ export type CommandAction =
       readonly prompt: string;
       readonly name: string | undefined;
       readonly model: string | undefined;
+      readonly thinking: Run.ThinkingLevel | undefined;
       readonly parent: string | undefined;
       readonly related: ReadonlyArray<string> | undefined;
       readonly tools: ReadonlyArray<string> | undefined;
@@ -129,7 +135,16 @@ interface SplitFlags {
   readonly flags: Record<string, string>;
 }
 
-const START_FLAGS = ['id', 'prompt', 'name', 'model', 'parent', 'related', 'tools'] as const;
+const START_FLAGS = [
+  'id',
+  'prompt',
+  'name',
+  'model',
+  'thinking',
+  'parent',
+  'related',
+  'tools',
+] as const;
 const RESUME_FLAGS = ['prompt'] as const;
 
 /**
@@ -172,6 +187,18 @@ const splitFlags = (
 const one = (value: string | undefined): string | undefined =>
   value === undefined || value === '' ? undefined : value;
 
+/**
+ * Validate a `--thinking` value against the allowed levels. Absent reads as
+ * undefined; an unknown level reads as null so the caller rejects the input.
+ * @param value - raw `--thinking` flag value
+ * @returns the level, undefined when absent, or null when invalid
+ */
+const thinkingOf = (value: string | undefined): Run.ThinkingLevel | undefined | null => {
+  const candidate = one(value);
+  if (candidate === undefined) return undefined;
+  return Schema.is(Run.ThinkingLevel)(candidate) ? candidate : null;
+};
+
 const csv = (value: string | undefined): ReadonlyArray<string> | undefined => {
   if (value === undefined || value === '') return undefined;
   const parts = value
@@ -198,6 +225,8 @@ const parseTokens = (tokens: ReadonlyArray<string>): CommandAction => {
       return statusAction(tokens, 'Status');
     case 'verify':
       return statusAction(tokens, 'Verify');
+    case 'doctor':
+      return tokens.length === 1 ? { kind: 'Doctor' } : { kind: 'Help' };
     case 'interrupt': {
       const id = tokens[1];
       return id !== undefined && tokens.length === 2 ? { kind: 'Interrupt', id } : { kind: 'Help' };
@@ -214,13 +243,15 @@ const parseTokens = (tokens: ReadonlyArray<string>): CommandAction => {
       if (parsed === undefined || parsed.positionals.length > 0) return { kind: 'Help' };
       const id = one(parsed.flags['id']);
       const prompt = one(parsed.flags['prompt']);
-      if (id === undefined || prompt === undefined) return { kind: 'Help' };
+      const thinking = thinkingOf(parsed.flags['thinking']);
+      if (id === undefined || prompt === undefined || thinking === null) return { kind: 'Help' };
       return {
         kind: 'Start',
         id,
         prompt,
         name: one(parsed.flags['name']),
         model: one(parsed.flags['model']),
+        thinking,
         parent: one(parsed.flags['parent']),
         related: csv(parsed.flags['related']),
         tools: csv(parsed.flags['tools']),
@@ -296,7 +327,11 @@ export const execute = (
           detail.receipt === undefined
             ? ''
             : `\nreceipt ${detail.receipt.outcome}: ${detail.receipt.summary}`;
-        return `${renderRun(detail.run)}\nturns ${countTurns(detail.events)}${receipt}`;
+        const store = yield* runner.verifyStore(root);
+        const storeLine = store.ignored
+          ? 'store ignored: yes'
+          : `store ignored: no${store.issues.map((entry) => `\n  [${entry.field}] ${entry.message}`).join('')}`;
+        return `${renderRun(detail.run)}\nturns ${countTurns(detail.events)}${receipt}\n${storeLine}`;
       }
       case 'Verify': {
         const verdict = yield* runner.verify(root, action.id);
@@ -304,6 +339,12 @@ export const execute = (
           .map((entry) => `  [${entry.field}] ${entry.message}`)
           .join('\n');
         return `valid ${verdict.valid ? 'yes' : 'no'} · resumable ${verdict.resumable ? 'yes' : 'no'}${issues === '' ? '' : `\n${issues}`}`;
+      }
+      case 'Doctor': {
+        const result = yield* runDoctor(root);
+        return result.status === 'present'
+          ? `Run skill '${RUN_SKILL_NAME}' is installed at ${result.target}.`
+          : `Installed run skill '${RUN_SKILL_NAME}' at ${result.target}.`;
       }
       case 'Start': {
         const settled = yield* Deferred.make<{
@@ -316,6 +357,7 @@ export const execute = (
           prompt: action.prompt,
           name: action.name,
           model: action.model,
+          thinking: action.thinking,
           parent: action.parent,
           related: action.related,
           tools: action.tools,

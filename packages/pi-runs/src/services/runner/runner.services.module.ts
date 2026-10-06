@@ -1,4 +1,4 @@
-import { Cause, Context, Effect, Fiber, Layer, Queue, Stream } from 'effect';
+import { Cause, Context, Effect, Fiber, FileSystem, Layer, Path, Queue, Stream } from 'effect';
 import type { Message } from '@earendil-works/pi-ai';
 import { Replay, Run, RunEvent, Verify } from '../../modules/index.js';
 import { Store } from '../store/index.js';
@@ -47,7 +47,15 @@ export interface SessionRequest {
   readonly root: string;
   readonly id: string;
   readonly model: string | undefined;
+  /** Thinking-level pin; undefined keeps Pi's default (settings / current session). */
+  readonly thinking?: Run.ThinkingLevel | undefined;
   readonly tools: ReadonlyArray<string> | undefined;
+  /**
+   * Pi-native session file the run persists to. When set, Pi owns the
+   * transcript (compaction and branches survive resume) and `replay` is
+   * ignored. When absent, the session is in-memory and seeded from `replay`.
+   */
+  readonly sessionFile?: string | undefined;
   /** Transcript to seed before prompting; empty for a fresh run. */
   readonly replay: ReadonlyArray<Message>;
   readonly ui: SessionUi;
@@ -94,11 +102,15 @@ export interface RunnerStartInput {
   readonly name?: string | undefined;
   readonly prompt: string;
   readonly model?: string | undefined;
+  /** Thinking-level pin for the run's Pi session. */
+  readonly thinking?: Run.ThinkingLevel | undefined;
   readonly tools?: ReadonlyArray<string> | undefined;
   /** Parent run id: this run is a subrun of that run. */
   readonly parent?: string | undefined;
   /** Non-parent related run ids (siblings, review target). */
   readonly related?: ReadonlyArray<string> | undefined;
+  /** Feature spec this run works on (`<feature-slug>`), when bound to one. */
+  readonly feature?: string | undefined;
   /** Called once when the run settles; the profile-create hook lives here. */
   readonly onSettled?: ((detail: RunDetail) => Effect.Effect<void>) | undefined;
 }
@@ -117,8 +129,16 @@ export interface RunnerImpl {
   readonly interrupt: (root: string, id: string) => Effect.Effect<void, string>;
   readonly detail: (root: string, id: string) => Effect.Effect<RunDetail, string>;
   readonly verify: (root: string, id: string) => Effect.Effect<Verify.VerifyResult, string>;
+  /** Check the repo ignores the runs store, so transcripts stay local. */
+  readonly verifyStore: (root: string) => Effect.Effect<Verify.StoreIgnoreResult, string>;
   readonly progress: (root: string, id: string, message: string) => Effect.Effect<void, string>;
   readonly list: (root: string) => Effect.Effect<ReadonlyArray<Run.Run>, string>;
+  /**
+   * Ids of runs with a live session in this runtime's registry. Persisted
+   * `running` statuses left behind by a dead process are excluded, so
+   * callers can trust this for "is something actually working".
+   */
+  readonly liveRunIds: (root: string) => Effect.Effect<ReadonlySet<string>, never>;
 }
 
 export const Id = '@montflow/Runner';
@@ -169,6 +189,8 @@ const make = Effect.gen(function* () {
   const store = yield* Store.Store;
   const factory = yield* SessionFactory;
   const bridge = yield* WorkspaceBridge;
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
 
   /** Live runs by id; a run leaves the registry when it settles or is interrupted. */
   const active = new Map<string, ActiveRun>();
@@ -331,11 +353,20 @@ const make = Effect.gen(function* () {
       const createArgs: Store.CreateArgs = { id: input.id, prompt: input.prompt };
       if (input.name !== undefined) createArgs.name = input.name;
       if (input.model !== undefined) createArgs.model = input.model;
+      if (input.thinking !== undefined) createArgs.thinking = input.thinking;
       if (input.tools !== undefined) createArgs.tools = input.tools;
       if (input.parent !== undefined) createArgs.parent = input.parent;
       if (input.related !== undefined) createArgs.related = input.related;
+      if (input.feature !== undefined) createArgs.feature = input.feature;
       yield* store.create(createArgs).pipe(Effect.mapError((error) => error.reason));
       const started = yield* store.start(input.id).pipe(Effect.mapError((error) => error.reason));
+      // Pi owns the run transcript: point the session at its native file.
+      const nativeSession = path.join(
+        input.root,
+        ...Store.RUNS_SEGMENTS,
+        input.id,
+        Store.NATIVE_SESSION_FILE,
+      );
       // The user turn mirrors from Pi's `message_end` in emission order.
       const queue = yield* Queue.unbounded<SessionEvent, Cause.Done>();
       const run = yield* attach(
@@ -343,7 +374,9 @@ const make = Effect.gen(function* () {
           root: input.root,
           id: input.id,
           model: input.model,
+          thinking: input.thinking,
           tools: input.tools,
+          sessionFile: nativeSession,
           replay: [],
           ui: uiFor(input.id, queue),
         },
@@ -376,13 +409,16 @@ const make = Effect.gen(function* () {
       }
       if (!verdict.resumable) return yield* Effect.fail(`Run '${id}' is not resumable.`);
       const loaded = yield* store.load(id).pipe(Effect.mapError((error) => error.reason));
+      const nativeSession = path.join(root, ...Store.RUNS_SEGMENTS, id, Store.NATIVE_SESSION_FILE);
       const queue = yield* Queue.unbounded<SessionEvent, Cause.Done>();
       const run = yield* attach(
         {
           root,
           id,
           model: loaded.run.model,
+          thinking: loaded.run.thinking,
           tools: loaded.run.tools,
+          sessionFile: nativeSession,
           replay: Replay.toMessages(loaded.events),
           ui: uiFor(id, queue),
         },
@@ -453,6 +489,24 @@ const make = Effect.gen(function* () {
   const verify = (_root: string, id: string): Effect.Effect<Verify.VerifyResult, string> =>
     store.verify(id).pipe(Effect.mapError((error) => error.reason));
 
+  /**
+   * Check the repo's `.gitignore` ignores the runs store. The store lives at
+   * `<root>/.agents/@montflow/runs`; an active rule keeps transcripts local.
+   */
+  const verifyStore = (root: string): Effect.Effect<Verify.StoreIgnoreResult, string> =>
+    Effect.gen(function* () {
+      const file = path.join(root, '.gitignore');
+      const exists = yield* fs.exists(file).pipe(Effect.orElseSucceed(() => false));
+      const gitignore = exists
+        ? yield* fs
+            .readFileString(file)
+            .pipe(
+              Effect.mapError((cause) => (cause instanceof Error ? cause.message : String(cause))),
+            )
+        : '';
+      return Verify.verifyStoreIgnored(gitignore, Store.RUNS_SEGMENTS.join('/'));
+    });
+
   const progress = (_root: string, id: string, message: string): Effect.Effect<void, string> =>
     store.progress({ runId: id, message }).pipe(
       Effect.mapError((error) => error.reason),
@@ -462,6 +516,9 @@ const make = Effect.gen(function* () {
   const list = (_root: string): Effect.Effect<ReadonlyArray<Run.Run>, string> =>
     store.list().pipe(Effect.mapError((error) => error.reason));
 
+  const liveRunIds = (_root: string): Effect.Effect<ReadonlySet<string>, never> =>
+    Effect.sync(() => new Set(active.keys()));
+
   return {
     start,
     resume,
@@ -470,10 +527,15 @@ const make = Effect.gen(function* () {
     interrupt,
     detail,
     verify,
+    verifyStore,
     progress,
     list,
+    liveRunIds,
   } satisfies RunnerImpl;
 });
 
-export const Default: Layer.Layer<Runner, never, Store.Store | SessionFactory | WorkspaceBridge> =
-  Layer.effect(Runner, make);
+export const Default: Layer.Layer<
+  Runner,
+  never,
+  Store.Store | SessionFactory | WorkspaceBridge | FileSystem.FileSystem | Path.Path
+> = Layer.effect(Runner, make);
