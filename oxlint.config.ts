@@ -8,7 +8,15 @@ export default defineConfig({
     '.vscode/**',
     '**/build/**',
     '**/dist/**',
+    // Generated code is exempt: it is machine-written, so lint findings in it
+    // are noise a human cannot act on, and reformatting it on every run makes
+    // regenerating produce a spurious diff. Its correctness is asserted by the
+    // tests that consume it (see pi-prompts' embedded-payload test).
+    '**/*.generated.ts',
     '**/node_modules/**',
+    // Build-time scripts are composition roots, not library code: they run
+    // once, never ship, and are free to touch the platform directly.
+    '**/scripts/**',
     'tooling/oxlint/anti-slop/**',
   ],
   env: {

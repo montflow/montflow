@@ -9,6 +9,8 @@
     "node_modules",
     "build",
     "**/build/**",
+    "**/*.generated.ts",
+    "**/scripts/**",
     "tooling/oxlint/anti-slop",
     "pi"
   ]
