@@ -2,11 +2,7 @@ import { Effect } from 'effect';
 import * as Vitest from '@effect/vitest';
 import * as Skill from '../index.js';
 
-const skillInput = (
-  id: string,
-  dependencies: ReadonlyArray<string> = [],
-  name?: string,
-): Record<string, unknown> => ({
+const skillInput = (id: string, dependencies: ReadonlyArray<string> = [], name?: string) => ({
   id,
   name: name ?? id,
   description: `${id} description.`,
