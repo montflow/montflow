@@ -2,14 +2,13 @@ import type { FeatureStatus } from '../feature/index.js';
 import { type TaskStatus, phaseOf, phaseRank } from '../task/index.js';
 import { type Issue, type Result, issue } from '../verify/index.js';
 
-/** Derived lifecycle state of a feature. */
-export const STATES = [
-  'not-started',
-  'in-progress',
-  'blocked',
-  'complete',
-  'inconsistent',
-] as const;
+/**
+ * Derived lifecycle state of a feature. `pending` is idle work (not
+ * complete, no live run bound to it); `in-progress` means a live run is
+ * actively working on it; `blocked` is idle work with blocked tasks and
+ * nothing in progress.
+ */
+export const STATES = ['pending', 'in-progress', 'blocked', 'complete', 'inconsistent'] as const;
 
 /** Derived lifecycle state of a feature. */
 export type State = (typeof STATES)[number];
@@ -28,6 +27,12 @@ export interface Input {
   readonly lockedPhases: ReadonlyArray<string>;
   /** Parsed tasks (tasks whose TASK.md failed to parse are excluded). */
   readonly tasks: ReadonlyArray<TaskEntry>;
+  /**
+   * True when a live run is bound to this feature. Supplied by the caller
+   * (the runs store), never derived from the spec files. Drives the
+   * `pending` vs `in-progress` distinction.
+   */
+  readonly active?: boolean | undefined;
 }
 
 /** Per-phase roll-up used by the status panel. */
@@ -151,7 +156,9 @@ export const verify = (input: Input): Result => {
 
 /**
  * Derive the feature's lifecycle state and roll up task counts per phase.
- * `inconsistent` means {@link verify} found a bookkeeping contradiction.
+ * `inconsistent` means {@link verify} found a bookkeeping contradiction;
+ * `in-progress` means a live run is bound (`active`), otherwise unfinished
+ * work reads as `pending` (idle) or `blocked`.
  * @param input - feature header plus parsed tasks
  * @returns the analysis, including the state and any issues
  */
@@ -163,19 +170,19 @@ export const analyze = (input: Input): Analysis => {
   const allComplete =
     input.tasks.length > 0 && input.tasks.every((task) => task.status === 'complete');
   const allPhasesLocked = phases.length > 0 && phases.every((phase) => phase.locked);
-  const anyStarted = input.tasks.some((task) => task.status !== 'pending');
   const anyInProgress = input.tasks.some((task) => task.status === 'in-progress');
   const anyBlocked = input.tasks.some((task) => task.status === 'blocked');
+  const active = input.active === true;
 
   const state: State = !result.valid
     ? 'inconsistent'
     : input.status === 'complete' && allComplete && allPhasesLocked
       ? 'complete'
-      : !anyStarted
-        ? 'not-started'
+      : active
+        ? 'in-progress'
         : anyBlocked && !anyInProgress
           ? 'blocked'
-          : 'in-progress';
+          : 'pending';
 
   return { state, total: input.tasks.length, counts, phases, issues: result.issues };
 };

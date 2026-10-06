@@ -62,20 +62,23 @@ Vitest.describe('Cli.status runtime', () => {
 Vitest.describe('Cli.status lifecycle states runtime', () => {
   const cases = [
     {
-      label: 'not-started',
+      name: 'pending with nothing started',
+      label: 'pending',
       featureStatus: 'in-progress',
       locked: '',
       a001: 'pending',
       a099: 'pending',
     },
     {
-      label: 'in-progress',
+      name: 'pending with work started but no active run',
+      label: 'pending',
       featureStatus: 'in-progress',
       locked: '',
       a001: 'complete',
       a099: 'pending',
     },
     {
+      name: 'blocked',
       label: 'blocked',
       featureStatus: 'in-progress',
       locked: '',
@@ -83,6 +86,7 @@ Vitest.describe('Cli.status lifecycle states runtime', () => {
       a099: 'pending',
     },
     {
+      name: 'complete',
       label: 'complete',
       featureStatus: 'complete',
       locked: 'A',
@@ -90,6 +94,7 @@ Vitest.describe('Cli.status lifecycle states runtime', () => {
       a099: 'complete',
     },
     {
+      name: 'inconsistent',
       label: 'inconsistent',
       featureStatus: 'complete',
       locked: 'A',
@@ -99,7 +104,7 @@ Vitest.describe('Cli.status lifecycle states runtime', () => {
   ] as const;
 
   for (const testCase of cases) {
-    Vitest.it.effect(`reports ${testCase.label}`, () =>
+    Vitest.it.effect(`reports ${testCase.name}`, () =>
       Effect.gen(function* () {
         const result = yield* runStatus(
           tree(testCase.featureStatus, testCase.locked, testCase.a001, testCase.a099),

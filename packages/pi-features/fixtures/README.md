@@ -5,9 +5,9 @@ without touching a real workspace. They live under a realistic root so the
 default `.agents/@montflow/features` path works when you `cd` into this
 directory.
 
-- `mock-ok` — a fully valid, **not-started** phase: execution task with
+- `mock-ok` — a fully valid, **pending** phase: execution task with
   `GATES.md`, exploratory task depending on it, and a phase-end `review`
-  task. Passes with 0 issues; derived state `not-started`.
+  task. Passes with 0 issues; derived state `pending`.
 - `mock-complete` — a finished, consistent feature: `status: complete`,
   phase A locked, every task complete. Passes; derived state `complete`.
 - `mock-stale` — a bookkeeping contradiction: all tasks complete and phase
@@ -26,7 +26,7 @@ bun run --cwd packages/pi-features build:cli
 cd packages/pi-features/fixtures
 ../dist/mf-features check            # exits 1: mock-bad, mock-stale
 ../dist/mf-features check --verbose  # also lists the passing features
-../dist/mf-features status --name mock-ok        # state not-started
+../dist/mf-features status --name mock-ok        # state pending
 ../dist/mf-features status --name mock-complete  # state complete
 ../dist/mf-features status --name mock-stale     # state inconsistent, exit 1
 ```

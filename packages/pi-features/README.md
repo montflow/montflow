@@ -1,8 +1,8 @@
 # @montflow/pi-features
 
 Feature-spec primitives and a CLI for montflow — schema-backed parsing,
-mechanical verification, and a status panel for the files the
-`authoring-feature-spec` / `executing-feature-spec` skills generate.
+mechanical verification, a status panel, and the authoring/executing skill
+text injected into dispatched runs.
 
 ## CLI
 
@@ -31,7 +31,7 @@ entry with `#!/usr/bin/env bun`, so registry use needs Bun on the
 machine; a Node build would be required for `npx` without Bun.
 
 Built with `effect/unstable/cli`. Sample features for trying the binary
-live in [`fixtures/`](fixtures/README.md): `mock-ok` (not-started),
+live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
 `mock-complete` (complete), `mock-stale` (inconsistent), and `mock-bad`
 (10 issues across every failure class).
 
@@ -47,15 +47,22 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (not-started),
   items, no placeholders).
 - **`Memory`** — `verifyMemoryFile`, `MEMORY_SECTIONS` (title + template
   sections).
-- **`Lifecycle`** — `analyze` / `verify`: derives `not-started` /
+- **`Lifecycle`** — `analyze` / `verify`: derives `pending` /
   `in-progress` / `blocked` / `complete` / `inconsistent` and rejects
   invalid states (e.g. `complete` with pending tasks, all-done but
   `in-progress`, locked phases that are not finished or not a prefix).
+  `analyze` takes an optional `active` flag (a live run is bound) to
+  split idle `pending` from active `in-progress`.
 - **`Structure`** — `verifyFeatureTree` over an in-memory
   `FeatureSnapshot`: required files, task-directory naming and placement,
   id/name agreement, task-table agreement (name/type/status/gates),
   dependency validity (existence, phase order, cycles), one `review` task
   per phase, and `locked-phases` sanity.
+- **`Prompt`** — `AUTHOR_PREPROMPT` / `AUTHOR_POSTPROMPT` + `buildAuthorPrompt`
+  (author one spec) and `RESUME_PREPROMPT` / `RESUME_POSTPROMPT` +
+  `buildResumePrompt` (orchestrate a feature). Each injects its skill.
+- **`SpecSkill`** — `AUTHORING_FEATURE_SPEC` / `EXECUTING_FEATURE_SPEC`,
+  the simplified skill text sent into dispatched runs (not Pi-discovered).
 - **`Verify` / `Frontmatter`** — shared `Issue` / `Result` vocabulary and
   the tolerant frontmatter grammar.
 - **`FeatureStore`** — filesystem reader (`names`, `hasRoot`, `exists`,
@@ -68,7 +75,6 @@ issue list, so callers can render or repair.
 
 ## Status
 
-Early (`0.0.1`, private). Targets the authoring-feature-spec file
-contract. The `pi/zi` extension currently uses a different spec layout
+Early (`0.0.1`, private). Targets the pi-features feature contract. The `pi/zi` extension currently uses a different spec layout
 (`.agents/@montflow/specs/`). Source-only — no build step: Pi loads the
 `.ts` files directly, same as `pi/zi`.

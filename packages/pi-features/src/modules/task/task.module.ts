@@ -189,7 +189,7 @@ const TASK_SECTIONS = [
 ] as const;
 
 /**
- * Mechanically verify a TASK.md file against the authoring-feature-spec
+ * Mechanically verify a TASK.md file against the pi-features contract
  * standard: required frontmatter (`id`, `name`, `type`, `originator`,
  * `depends-on`, `related-tasks`, `status`; `id`/`name` matching the
  * directory) plus the body shape. Pure — no IO.

@@ -7,29 +7,39 @@ const done = { id: 'A001', status: 'complete' } as const;
 const reviewDone = { id: 'A099', status: 'complete' } as const;
 
 Vitest.describe('Lifecycle.analyze runtime', () => {
-  Vitest.it('reports not-started when nothing has moved off pending', () => {
+  Vitest.it('reports pending when nothing has moved off pending', () => {
     const result = Lifecycle.analyze({
       status: 'in-progress',
       lockedPhases: [],
       tasks: [pending, reviewPending],
     });
-    Vitest.expect(result.state).toBe('not-started');
+    Vitest.expect(result.state).toBe('pending');
     Vitest.expect(result.issues).toStrictEqual([]);
   });
 
-  Vitest.it('reports in-progress when some work is done', () => {
+  Vitest.it('reports pending when work has started but no run is active', () => {
     const result = Lifecycle.analyze({
       status: 'in-progress',
       lockedPhases: [],
       tasks: [done, reviewPending],
     });
-    Vitest.expect(result.state).toBe('in-progress');
+    Vitest.expect(result.state).toBe('pending');
     Vitest.expect(result.counts).toStrictEqual({
       pending: 1,
       'in-progress': 0,
       complete: 1,
       blocked: 0,
     });
+  });
+
+  Vitest.it('reports in-progress when a live run is bound', () => {
+    const result = Lifecycle.analyze({
+      status: 'in-progress',
+      lockedPhases: [],
+      tasks: [pending, reviewPending],
+      active: true,
+    });
+    Vitest.expect(result.state).toBe('in-progress');
   });
 
   Vitest.it('reports blocked when nothing is progressing', () => {
@@ -46,6 +56,7 @@ Vitest.describe('Lifecycle.analyze runtime', () => {
       status: 'complete',
       lockedPhases: ['A'],
       tasks: [done, reviewDone],
+      active: true,
     });
     Vitest.expect(result.state).toBe('complete');
     Vitest.expect(result.issues).toStrictEqual([]);

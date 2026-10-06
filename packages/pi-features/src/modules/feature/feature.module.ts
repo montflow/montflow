@@ -154,7 +154,7 @@ const TASK_TYPE_VALUES = new Set([
 const TASK_STATUS_VALUES = new Set(['pending', 'in-progress', 'complete', 'blocked']);
 
 /**
- * Mechanically verify a FEATURE.md file against the authoring-feature-spec
+ * Mechanically verify a FEATURE.md file against the pi-features contract
  * standard: required frontmatter (`name`, `status`, `workspace-type`,
  * `author`, `created`, `locked-phases`; `name` matching the directory)
  * plus the body shape and a well-formed task table. Pure — no IO; the
