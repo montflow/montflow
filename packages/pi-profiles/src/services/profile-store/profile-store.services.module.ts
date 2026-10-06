@@ -1,4 +1,5 @@
-import { Context, Effect, FileSystem, Layer, Path, Schema } from 'effect';
+import { Changes } from '@montflow/pi-effect';
+import { Context, Effect, FileSystem, Layer, Path, Schema, Stream } from 'effect';
 import * as PiProfiles from '../../modules/pi-profiles/index.js';
 
 /** Failure when a profile file cannot be read or written. */
@@ -9,6 +10,9 @@ export class StoreError extends Schema.TaggedError<StoreError>()('ProfileStore.S
 const PROFILES_DIR = ['.agents', '@montflow', 'profiles'] as const;
 const PROFILE_FILE = 'PROFILE.md';
 const TEMPLATE_FILE = 'TEMPLATE.md';
+
+/** Coalescing window for a burst of profile writes, in millis. */
+const WATCH_DEBOUNCE_MILLIS = 100;
 
 /** Canonical `PROFILE.md` skeleton seeded as `TEMPLATE.md` on first use. */
 const TEMPLATE = `---
@@ -35,6 +39,23 @@ skills:
 
 /** Profiles root for a working directory: `<cwd>/.agents/@montflow/profiles`. */
 const profilesRoot = (path: Path.Path, cwd: string): string => path.join(cwd, ...PROFILES_DIR);
+
+/**
+ * The profile directory a watched path belongs to, or undefined when the path
+ * is not a profile entry — the root itself, `TEMPLATE.md`, or something
+ * outside the store. Accepts the relative paths Node's watcher reports and
+ * absolute paths from other backends.
+ * @param path - platform path service
+ * @param root - profiles root directory
+ * @param eventPath - path reported by the filesystem watcher
+ * @returns the profile slug, or undefined to ignore the event
+ */
+export const nameOf = (path: Path.Path, root: string, eventPath: string): string | undefined => {
+  const relative = path.isAbsolute(eventPath) ? path.relative(root, eventPath) : eventPath;
+  if (relative === '' || relative.startsWith('..')) return undefined;
+  const first = relative.split(/[\\/]/)[0] ?? '';
+  return first !== '' && PiProfiles.isValidName(first) ? first : undefined;
+};
 
 const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
@@ -135,7 +156,53 @@ const make = Effect.gen(function* () {
     return raw;
   });
 
-  return { list, read, save, remove, readRaw } as const;
+  /**
+   * Read one filesystem event into a profile change. Non-profile paths are
+   * dropped; a removed profile reports its id only; a created/updated one
+   * carries the decoded profile when it reads back, or just the id when it
+   * does not (the consumer then refetches).
+   */
+  const resolveChange =
+    (cwd: string) =>
+    (
+      event: FileSystem.WatchEvent,
+    ): Effect.Effect<ReadonlyArray<Changes.Change<PiProfiles.Profile>>> =>
+      Effect.gen(function* () {
+        const root = profilesRoot(path, cwd);
+        const name = nameOf(path, root, event.path);
+        if (name === undefined) return [];
+        const kind = Changes.kindOf(event);
+        if (kind === 'removed') return [{ kind, id: name }];
+        const raw = yield* fs
+          .readFileString(path.join(root, name, PROFILE_FILE))
+          .pipe(Effect.orElseSucceed(() => undefined));
+        if (raw === undefined) return [{ kind, id: name }];
+        const value = yield* PiProfiles.decodeProfileFile(name, raw).pipe(
+          Effect.orElseSucceed(() => undefined),
+        );
+        return [{ kind, id: name, value }];
+      });
+
+  /**
+   * Watch the profiles directory for changes. Shared across hosts: the
+   * workspace subscribes and patches its cache; the Pi extension may too.
+   * A missing store yields an empty stream rather than failing.
+   */
+  const watch = (cwd: string): Stream.Stream<Changes.Change<PiProfiles.Profile>, never> =>
+    Stream.unwrap(
+      Effect.gen(function* () {
+        const root = profilesRoot(path, cwd);
+        const exists = yield* fs.exists(root).pipe(Effect.orElseSucceed(() => false));
+        if (!exists) return Stream.empty;
+        return Changes.changesFrom(
+          fs.watch(root, { recursive: true }).pipe(Stream.ignore),
+          resolveChange(cwd),
+          WATCH_DEBOUNCE_MILLIS,
+        );
+      }),
+    );
+
+  return { list, read, save, remove, readRaw, watch } as const;
 });
 
 export const Id = '@montflow/ProfileStore';

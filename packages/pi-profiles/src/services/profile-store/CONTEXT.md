@@ -8,7 +8,10 @@ namespaced to this extension like `pi-prompts`).
 
 ## Belongs here
 
-- `ProfileStore` context service (`list`, `read`, `save`, `remove`)
+- `ProfileStore` context service (`list`, `read`, `save`, `remove`, `readRaw`, `watch`)
+- `watch` — the store's change stream (`@montflow/pi-effect` `Changes`), so
+  consumers subscribe instead of watching the filesystem; `nameOf` maps a
+  watched path to its profile slug
 - Seeding `TEMPLATE.md` into the profiles root on first use
 
 ## Does not belong here
