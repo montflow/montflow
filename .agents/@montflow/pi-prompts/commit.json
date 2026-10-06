@@ -1,0 +1,14 @@
+{
+  "name": "commit",
+  "description": "Execute an approved planning-git-commits plan: commit grouped changes in order, then optionally push.",
+  "template": "You have an approved commit plan from the planning-git-commits skill. Execute it exactly as approved.\n\nRequired scope — these files MUST appear in the commits: {{scope}}\n\nThe plan may contain more than the scope. If it omits any file listed above, stop before committing and say which ones are missing.\n\n1. Check for pre-commit hooks.\n   - No hooks: commit every planned commit normally, in plan order, each with its grouped files and message.\n   - Hooks present: commit all but the last planned commit with --no-verify, then commit the last one normally. That runs the hooks once instead of once per commit.\n\n2. If the hooks pass, offer to push (planning-git-commits step 5, optional): determine the remote and branch, confirm with the user, then push. Never force-push.\n\n3. If the hooks fail:\n   - Simple failure (lint or auto-format): fix it, re-stage with `git add --`, retry once.\n   - Anything else (test or type failures), or the retry fails: stop, show the log, and ask the user. Never loop.",
+  "variables": [
+    {
+      "name": "scope"
+    }
+  ],
+  "skills": [
+    "planning-git-commits"
+  ],
+  "model": ""
+}
