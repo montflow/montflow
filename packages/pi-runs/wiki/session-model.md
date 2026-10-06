@@ -1,82 +1,121 @@
 # Session model
 
-Create repo-local runs where the data file is the Pi session.
+Create repo-local runs where the data file is our own transcript, not Pi's.
 
 ## Run directory
 
-One run is one Pi session:
+Flat — one directory per run. A subrun is the same shape with `parent` set; it
+is not nested under its parent.
 
 ```text
-runs/2026-09-05-fix-login/
-  session.jsonl  # Pi session file — appended live, git-tracked
-  run.md         # rendered chat history (derived from session.jsonl)
-  receipt.md     # settlement proof on done/failed
-  subruns/
-    01-scout-auth/session.jsonl
-    01-scout-auth/run.md
+runs/
+  fix-login/
+    run.md
+    session.jsonl
+    receipt.md
+  scout-auth/          # a subrun: parent: "fix-login"
+    run.md
+    session.jsonl
 ```
 
-Lifecycle:
+## Lifecycle
+
+Statuses: `pending`, `running`, `awaiting-input`, `done`, `failed`,
+`cancelled`.
 
 ```mermaid
 stateDiagram-v2
-  [*] --> pending: PiRuns.make
-  pending --> running: start + open session.jsonl
-  running --> done: settle + receipt.md
-  running --> failed: settle + receipt.md with error
+  [*] --> pending: Store.create
+  pending --> running: Store.start
+  running --> awaiting-input: Store.ask (ask_user)
+  awaiting-input --> running: Store.unpark
+  running --> done: Store.settle
+  running --> failed: Store.settle
+  running --> cancelled: Store.cancel (interrupt)
+  awaiting-input --> cancelled: Store.cancel
 ```
+
+- `done` / `failed` / `cancelled` are terminal and **require** a receipt.
+- `pending` / `running` / `awaiting-input` must **not** have one.
+- `Store.load` rejects any status/receipt mismatch, so drift is never silent.
+
+## Store verbs
+
+| Verb       | From → To                              | Notes                                                   |
+| ---------- | -------------------------------------- | ------------------------------------------------------- |
+| `create`   | ∅ → pending                            | writes `run.md` + an empty `session.jsonl`              |
+| `start`    | pending → running                      |                                                         |
+| `append`   | running / awaiting-input               | one mirrored Pi message; `seq` = events + 1             |
+| `ask`      | running → awaiting-input               | writes a `system` event carrying the question           |
+| `unpark`   | awaiting-input → running               | no event; the answer rides the `ask_user` result        |
+| `answer`   | awaiting-input → running               | records a user turn (store-level; engine uses `unpark`) |
+| `settle`   | running / awaiting-input → done/failed | writes the receipt                                      |
+| `cancel`   | running / awaiting-input → cancelled   | writes the receipt                                      |
+| `progress` | same status                            | updates the `progress` frontmatter only                 |
 
 ## run.md format
 
-```markdown
+`run.md` is a frontmatter block followed by a rendered body. The frontmatter is
+a single-line JSON `Run` descriptor between `---` fences; the body is derived
+from the events (shown expanded):
+
+```text
 ---
-run: 2026-09-05-fix-login
-parent: null
-status: running
-created: 2026-09-05T00:00:00Z
+{"id":"fix-login","parent":null,"status":"running","created":"...","updated":"...","sessionFile":".agents/@montflow/runs/fix-login/session.jsonl"}
 ---
 
-# run 2026-09-05-fix-login
+# run fix-login
 
 ## turn 1 — user
 
 Fix login.
 
-## turn 1 — assistant
+## turn 2 — assistant
 
 Scouting auth code.
 ```
 
 Frontmatter keys:
 
-1. `run` — stable id, matches directory name.
+1. `id` — stable id, matches the directory name.
 2. `parent` — `null` for main runs, `<run-id>` for subruns.
-3. `status` — `pending` / `running` / `done` / `failed`.
-4. `created` — ISO timestamp, never changes.
-
-## Subruns
-
-1. Create `subruns/<subrun-id>/` under the parent run with its own `session.jsonl`.
-2. Set `parent: <parent-run-id>` in the subrun frontmatter.
-3. Append one pointer event to the parent session: `{"subrun-started": "<subrun-id>"}`.
-4. Settle subruns before settling the parent — see [pi-subagents lessons](./pi-subagents-lessons.md).
-
-Subrun depth caps at 2 (run → subrun). Deeper nesting becomes a new top-level run.
+3. `status` — one of the lifecycle statuses.
+4. `created` / `updated` — ISO timestamps; `created` never changes.
+5. `sessionFile` — advisory path to `session.jsonl` (Pi's in-memory manager
+   does not write it).
+6. Optional captures: `name`, `prompt`, `model`, `tools`, `related`, `feature`,
+   `progress`. All survive every status rewrite.
 
 ## session.jsonl
 
-One JSON object per line, appended live by Pi. This file is the session — git-tracked, resumable:
+One JSON object per line, appended as Pi emits each message. This file is the
+session — it is what resume replays.
 
 ```json
-{ "seq": 1, "role": "user", "text": "Fix login.", "at": "2026-09-05T00:00:01Z" }
+{
+  "seq": 1,
+  "role": "user",
+  "text": "Fix login.",
+  "at": "...",
+  "message": { "role": "user", "content": "Fix login.", "timestamp": 0 }
+}
 ```
 
 - `run.md` renders from `session.jsonl` — never edit `run.md` by hand.
 - Resume reopens `session.jsonl` in `seq` order.
+- Event shape and the API-persistence delta: [storage](./storage.md).
+
+## Subruns
+
+1. Create a normal run with `parent: <parent-run-id>`; it lands as a sibling
+   directory, not inside the parent.
+2. The engine appends the subrun's own transcript to its own directory.
+3. On settle, the runner notifies the parent via `followUp` if the parent is
+   live in the same process.
 
 ## See also
 
-- [Architecture](./architecture.md) for store location and Pi override.
-- [Storage](./storage.md) for git and file-write rules.
-- [Pi-subagents lessons](./pi-subagents-lessons.md) for settlement receipts.
-- [Index](./index.md) for page map.
+- [Architecture](./architecture.md) for the store location and session flow.
+- [Storage](./storage.md) for file formats and the Pi-format delta.
+- [Process and recovery](./process-and-recovery.md) for resume and crash paths.
+- [Index](./index.md) for the page map.

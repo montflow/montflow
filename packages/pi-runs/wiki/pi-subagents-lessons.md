@@ -1,13 +1,16 @@
 # Pi-subagents lessons
 
-Copy 4 proven patterns from `pi-subagents` instead of inventing new ones.
+Patterns borrowed from `pi-subagents` instead of inventing new ones. All four
+are now realized in code, as noted per item.
 
 ## What to reuse
 
-1. Settlement receipts — `workflow-settlement.ts` + `workflow-receipt.ts` prove `done` / `failed` with child evidence. Copy the shape into `receipt.md`.
-2. Session lease — `session-lease.ts` enforces one writer per session. Copy it for one writer per run directory.
-3. Structured output — `structured-output.ts` keeps child results as plain JSON. Require `(runId, index)` keys on subrun results.
-4. Event-bus RPC — `subagents:rpc:v1:request` / `reply:<id>` lets other extensions spawn and steer runs. Expose `spawn`, `status`, `stop` first.
+1. Settlement receipts — realized as `receipt.md` in the `receipt` module.
+2. Session lease — realized as the per-run `.lock/` directory in `Store`.
+3. Structured output — subrun results are pointers (`parent` frontmatter + a
+   `subrunId` on the parent's event), not inline blobs.
+4. Event-bus RPC — _not_ used; surfaces call the in-process `Runner` directly
+   instead. Revisit only if a separate process needs to spawn/steer runs.
 
 ## What to skip
 
@@ -19,17 +22,18 @@ Reference source lives at `.pi/git/github.com/nicobailon/pi-subagents/src/` — 
 
 ## Mapping
 
-| pi-subagents                            | pi-runs                                   |
-| --------------------------------------- | ----------------------------------------- |
-| async run + `runId`                     | `runs/<run-id>/` directory                |
-| `details.results[]` with stable `index` | `subruns/<id>/` with `parent` frontmatter |
-| file lifecycle artifacts                | `run.md` + `session.jsonl`                |
-| settlement receipt                      | `receipt.md`                              |
-| `status` RPC                            | read `run.md` frontmatter                 |
+| pi-subagents                            | pi-runs                                     |
+| --------------------------------------- | ------------------------------------------- |
+| async run + `runId`                     | `runs/<run-id>/` directory                  |
+| `details.results[]` with stable `index` | flat `runs/<id>/` with `parent` frontmatter |
+| file lifecycle artifacts                | `run.md` + `session.jsonl`                  |
+| settlement receipt                      | `receipt.md`                                |
+| `status` RPC                            | in-process `Runner.list` / read `run.md`    |
 
 ## See also
 
-- [Architecture](./architecture.md) for components that consume these patterns.
-- [Session model](./session-model.md) for subrun depth cap and settle order.
-- [Storage](./storage.md) for artifact commit rules.
-- [Index](./index.md) for page map.
+- [Architecture](./architecture.md) for the components that consume these patterns.
+- [Session model](./session-model.md) for the flat subrun layout and settle order.
+- [Storage](./storage.md) for file formats and the git-ignore rule.
+- [Process and recovery](./process-and-recovery.md) for the in-process model.
+- [Index](./index.md) for the page map.
