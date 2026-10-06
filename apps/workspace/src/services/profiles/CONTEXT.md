@@ -65,6 +65,10 @@ Consequences:
 - `runCreateFlow` / `runModifyFlow` workspace hosts (manual or agentic
   behind the TUI overlays); create and modify each resolve `saved` or
   `dispatched`
+- `watchProfileChanges` — subscribes to the extension's `ProfileStore.watch`
+  stream (building the store over the Node platform layers) and forwards each
+  change as a dashboard row; `applyProfileChange` (pure, tested) patches a
+  cached list snapshot for created/updated/removed
 
 ## Does not belong here
 

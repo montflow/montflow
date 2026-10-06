@@ -3654,7 +3654,28 @@ export const App = (props: AppProps) => {
       pushToast(`Features list failed: ${failure.message}`, { variant: 'error' });
   });
 
+  /** Canceller for the profiles change subscription; set once the extension loads. */
+  let cancelProfileChanges: (() => void) | undefined;
+  let profileChangesStopped = false;
+
   onMount(() => {
+    void Profiles.watchProfileChanges(root, (change) => {
+      queryClient.setQueryData(Query.profilesKey, (previous: Query.ProfilesList | undefined) =>
+        Profiles.applyProfileChange(previous, change),
+      );
+      if (change.kind !== 'removed' && change.value === undefined) {
+        void queryClient.invalidateQueries({ queryKey: Query.profilesKey });
+      }
+    })
+      .pipe(Effect.runPromise)
+      .then((cancel) => {
+        if (profileChangesStopped) cancel();
+        else cancelProfileChanges = cancel;
+      })
+      .catch(() => {
+        // Extension unavailable: the profiles boot already surfaced it.
+        return undefined;
+      });
     Runs.setRunNotifier({
       toast: (message, variant) =>
         variant === undefined ? pushToast(message) : pushToast(message, { variant }),
@@ -3673,6 +3694,8 @@ export const App = (props: AppProps) => {
   });
 
   onCleanup(() => {
+    profileChangesStopped = true;
+    cancelProfileChanges?.();
     Runs.setRunNotifier(undefined);
     void Runs.resetRunnerRuntimes();
   });

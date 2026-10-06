@@ -6,9 +6,11 @@ import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: promisify adapts the session probe shell-out; both go away with the Command migration.
 import { promisify } from 'node:util';
+import type { Changes } from '@montflow/pi-effect';
 import type { Interactive as ProfilesInteractive, PiProfiles } from '@montflow/pi-profiles';
 import type { RunDetail as EngineRunDetail } from '@montflow/pi-runs';
-import { Data, Effect } from 'effect';
+import { NodeFileSystem, NodePath } from '@effect/platform-node';
+import { Data, Effect, Fiber, Layer, Stream } from 'effect';
 import * as Runs from '../runs/index.js';
 import * as Skills from '../skills/index.js';
 
@@ -378,6 +380,75 @@ export const verifyProfile = (root: string, id: string): Effect.Effect<ProfileVe
     ),
   );
 
+/** Node platform layers for building the extension's `ProfileStore` service. */
+const ProfileStoreLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
+
+/** Bridge one extension profile change into a dashboard-row change. */
+const toSummaryChange = (
+  change: Changes.Change<PiProfiles.Profile>,
+): Changes.Change<ProfileSummary> =>
+  change.value === undefined
+    ? { kind: change.kind, id: change.id }
+    : { kind: change.kind, id: change.id, value: fromProfile(change.value) };
+
+/**
+ * Subscribe to the profile store's change stream and forward each change as a
+ * dashboard row. Resolves to a canceller the caller uses on teardown; fails
+ * only when the extension runtime cannot load. A missing store simply yields
+ * no events, so this is safe to start before the store is installed.
+ * @param root - workspace root (profile store owner)
+ * @param onChange - receives each profile change
+ * @returns Effect resolving to a subscription canceller
+ */
+export const watchProfileChanges = (
+  root: string,
+  onChange: (change: Changes.Change<ProfileSummary>) => void,
+): Effect.Effect<() => void, string> =>
+  Effect.gen(function* () {
+    const libs = yield* loadLibs();
+    const store = yield* libs.ProfileStore.ProfileStore.pipe(
+      Effect.provide(Layer.provide(libs.ProfileStore.Default, ProfileStoreLive)),
+    );
+    const fiber = Stream.runForEach(store.watch(root), (change) =>
+      Effect.sync(() => onChange(toSummaryChange(change))),
+    ).pipe(Effect.runFork);
+    return () => {
+      Fiber.interrupt(fiber).pipe(Effect.runFork);
+    };
+  });
+
+/** Cached profile-list shape the change bridge patches (mirrors `Query.ProfilesList`). */
+export interface ProfilesSnapshot {
+  readonly installed: boolean;
+  readonly rows: ReadonlyArray<ProfileSummary>;
+}
+
+/**
+ * Apply one profile change to a cached list snapshot: insert/replace on
+ * created/updated, drop on removed, leave untouched when the change carries no
+ * value (the caller then refetches). Sorts by name so the list order matches
+ * `fetchProfiles`.
+ * @param previous - cached snapshot, or undefined before first load
+ * @param change - profile change to apply
+ * @returns the patched snapshot
+ */
+export const applyProfileChange = (
+  previous: ProfilesSnapshot | undefined,
+  change: Changes.Change<ProfileSummary>,
+): ProfilesSnapshot | undefined => {
+  if (previous === undefined) return previous;
+  if (change.kind === 'removed') {
+    return { ...previous, rows: previous.rows.filter((row) => row.id !== change.id) };
+  }
+  if (change.value === undefined) return previous;
+  const value = change.value;
+  const rows = previous.rows.filter((row) => row.id !== change.id);
+  return {
+    ...previous,
+    rows: [...rows, value].toSorted((a, b) => a.name.localeCompare(b.name)),
+  };
+};
+
 /** Staged boot phase behind the profiles-panel Loader: extension import, then the profile-list read. */
 export type ProfilesPhase = 'extension' | 'profiles';
 
@@ -584,7 +655,7 @@ Rules:
 - List .agents/skills/ and read each SKILL.md frontmatter 'name:' before
   listing a skill — reference existing skills only, otherwise leave skills
   empty (or omit the key).
-- If .agents/skills/authoring-profiles/SKILL.md exists, follow its standards.
+- If .agents/skills/montflow-create-pi-profiles/SKILL.md exists, follow its standards.
 - The Instructions section holds the custom system prompt; the Review Checklist
   holds at least one verifiable item.
 - If a profile with that name already exists, pick a fresh name instead.
@@ -615,7 +686,7 @@ Rules:
 - Keep the description saying WHAT the agent is (its role and job).
 - Reference existing skills only (check .agents/skills/ SKILL.md frontmatter
   'name:' values); drop unknown names instead of inventing them.
-- If .agents/skills/authoring-profiles/SKILL.md exists, follow its standards.
+- If .agents/skills/montflow-create-pi-profiles/SKILL.md exists, follow its standards.
 - Keep at least one Review Checklist item.`;
 
 /** Instructions after the change request: the reply shape. Mirrors the extension's `MODIFY_POSTPROMPT`. */
