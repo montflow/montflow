@@ -11,6 +11,7 @@ description: Performs a hostile, bug-hunting code review that assumes the author
 id: a1b2c3d4e5f6a7b8
 author: Your Name
 version: 1.0.0
+license: MIT
 groups:
   - refactoring
   - testing
@@ -24,8 +25,9 @@ dependencies:
 3. `id` — exactly 16 lowercase hex chars, immutable once set.
 4. `author` — who maintains the skill.
 5. `version` — SemVer string.
-6. `groups` — browse tags. Omit the key when empty.
-7. `dependencies` — frontmatter names of skills to load first. Omit the key when empty.
+6. `license` — optional; defaults to MIT.
+7. `groups` — browse tags. Omit the key when empty.
+8. `dependencies` — frontmatter names of skills to load first. Omit the key when empty.
 
 ## Body
 
@@ -53,18 +55,22 @@ Links to files in the skill directory the agent can look up on demand.
 2. Short sections with concrete steps — inputs, outputs, edge cases.
 3. No filler — the body loads into agent context on every use.
 
-1. Short sections with concrete steps — inputs, outputs, edge cases.
-2. No filler — the body loads into agent context on every use.
-
 ## Verify
 
-`/mf-skills` browse opens each skill's detail menu with a verify status
-panel between the heading and the options: `✓ verified` or
-`✗ not verified — N issues`. The check is mechanical
-(`Skill.verifySkillFile`): required frontmatter fields, `name` matching
-the directory, and the three body sections above. `Re-verify` re-runs it
-on the file; `Transform to standard` (shown only while unverified) spawns
-an agent to fix the shape without changing what the skill teaches.
+Check the mechanical shape from the shell — one skill, or every skill when the
+name is omitted:
+
+```bash
+mf-skills verify <name>          # the binary, scriptable — non-zero on failure
+/mf-skills verify <name>         # the same command inside a Pi session
+```
+
+The interactive `/mf-skills-tui` browse opens each skill's detail menu with the
+same verdict: `✓ verified` or `✗ not verified — N issues`. The check is
+mechanical (`Skill.verifySkillFile`): required frontmatter fields, `name`
+matching the directory, and the three body sections above. `Re-verify` re-runs
+it on the file; `Transform to standard` (shown only while unverified) spawns an
+agent to fix the shape without changing what the skill teaches.
 
 ## Parse rules that bite
 
@@ -72,7 +78,7 @@ an agent to fix the shape without changing what the skill teaches.
 2. Missing `description` reads as empty — the skill still lists.
 3. `groups` / `dependencies` keep string items only; blank entries drop.
 4. Malformed files are skipped from listings, never fatal.
-5. `/mf-skills` round-trips the five modeled fields — extra frontmatter keys stay on disk only when edited by hand.
+5. The store round-trips `name`, `description`, `id`, `author`, `version`, `license`, `groups`, and `dependencies` — extra frontmatter keys stay on disk only when edited by hand.
 6. A skill can list fine while failing verification — listing is lenient, verification is strict.
 
 ## See also

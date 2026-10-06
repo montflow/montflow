@@ -24,13 +24,13 @@ Storage only. This extension inspects and edits skills on disk; execution lives 
 
 ```mermaid
 flowchart LR
-    S["SKILL.md on disk"] --> I["/mf-skills: inspect or modify"]
+    S["SKILL.md on disk"] --> I["mf-skills: inspect or modify"]
     I --> C["Consumer loads body into agent context"]
     C --> D["Dependencies load first, in listed order"]
 ```
 
-1. Author under `.agents/skills/` — by hand, or let `/mf-skills create` spawn an agent from your description.
-2. Browse with `/mf-skills` — pick a skill, then Show, Modify, or Delete (delete confirms first).
+1. Author under `.agents/skills/` — by hand, with the `mf-skills` CLI, or let `/mf-skills-tui create` spawn an agent from your description.
+2. Browse with `/mf-skills-tui` — pick a skill, then Show, Modify, or Delete (delete confirms first). Check shape with `mf-skills verify`.
 3. Reference by name from profiles (`skills:`) or prompts.
 4. Import the Effect helpers instead of reimplementing slugs — see [package](./package.md).
 

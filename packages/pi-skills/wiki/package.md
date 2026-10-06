@@ -1,14 +1,6 @@
 Import skill primitives into a Pi extension in 1 minute.
 
-`@montflow/pi-skills` is the Effect-first home for [skill](./skills.md) descriptors and the interactive `/mf-skills` command. Pi business logic (router, web UI) stays in `@montflow/zi`.
-
-## What lives here vs in zi
-
-| Here (`pi-skills`)            | In zi (`pi/zi/`)                     |
-| ----------------------------- | ------------------------------------ |
-| `Skill` Schema Class + codecs | `skill-run.ts` agentic authoring     |
-| `isValidName`, `slugify`      | `router.ts` skills listing endpoints |
-| `/mf-skills` command flows    | `useSkills.ts` web UI hooks          |
+`@montflow/pi-skills` is the Effect-first home for [skill](./skills.md) descriptors, the `mf-skills` CLI (also `/mf-skills` inside Pi), the `/mf-skills-tui` interactive menu, and the `doctor` that installs the authoring skills.
 
 ## Use it
 
@@ -21,6 +13,10 @@ const program = Effect.gen(function* () {
     id: 'adversarial-review',
     name: 'adversarial-review',
     description: 'Hostile, bug-hunting code review.',
+    skillId: 'a1b2c3d4e5f6a7b8',
+    author: 'montflow',
+    version: '1.0.0',
+    license: 'MIT',
     groups: ['testing'],
     dependencies: [],
     body: 'Assume the code is broken. Prove otherwise.',
@@ -29,18 +25,25 @@ const program = Effect.gen(function* () {
 });
 ```
 
-1. `Skill` — the Class: `id`, `name`, `description`, `groups`, `dependencies`, `body`.
-2. `decodeUnknown` / `encode` — boundary codecs for `SKILL.md` frontmatter.
-3. `isValidName(name)` — slug check.
-4. `slugify(raw)` — display name → slug.
-5. `/mf-skills` — `browse`, `list`, manual or agentic `create`, `show`, `modify`, `delete` over `.agents/skills/`.
-   Agentic runs go through the generic `AgentRun` runner in `@montflow/pi-effect` — preprompt, description, postprompt in, reply text out.
+1. `Skill` — the Class: `id` (directory slug), `skillId` (16-hex frontmatter id),
+   `name`, `description`, `author`, `version`, `license`, `groups`,
+   `dependencies`, `body`.
+2. `decodeUnknown` / `encode` — class codecs; `decodeSkillFile` /
+   `encodeSkillFile` handle the whole `SKILL.md` file.
+3. `isValidName(name)` — slug check. `slugify(raw)` — display name → slug.
+4. `verifySkillFile(dirName, markdown)` — mechanical shape check (`mf-skills verify`).
+5. `mf-skills` (binary) / `/mf-skills` (Pi) — `doctor`, `list`, `show`,
+   `verify`, `create`, `modify`, `delete` over `.agents/skills/`.
+6. `/mf-skills-tui` — the interactive menu: browse, list, manual or agentic
+   create, show, modify, delete, re-verify.
+   Agentic runs dispatch through `@montflow/pi-runs`; `doctor` installs the
+   `montflow-create-pi-skills` / `montflow-modify-pi-skills` authoring skills.
 
 Storage paths and file shape are documented separately — see [storage](./storage.md) and [format](./format.md).
 
 ## Status
 
-Private `0.0.1`, source-only — Pi loads `.ts` directly, same as `pi/zi`. `bun install` from root, then `turbo test` / `ts:check` cover it.
+Private `0.0.1`, source-only — Pi loads `.ts` directly. `bun install` from root, then `turbo test` / `ts:check` cover it.
 
 ## See also
 
