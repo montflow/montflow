@@ -269,3 +269,7 @@ tmp/
 # --- scratchpad (local only, keep dir shell) ---
 scratchpad/*
 !scratchpad/.gitkeep
+
+# --- direnv / nix-direnv (machine-local) ---
+.direnv/
+.envrc
