@@ -2,7 +2,7 @@
 
 - [ ] All intended edits were written to `PROFILE.md` in the correct profile directory
 - [ ] No unintended side-effects or unrelated changes in the modified file
-- [ ] Nothing outside `.agents/@montflow/pi-profiles/<name>/` was modified
+- [ ] Nothing outside `.agents/@montflow/profiles/<name>/` was modified
 
 ## Phase 2: Structure Valid
 
@@ -18,4 +18,4 @@
 - [ ] Description still says WHAT the agent is (role and job)
 - [ ] Instructions remain concrete behavior, focus areas, and avoidances — no fluff
 - [ ] Terminology is consistent with the profile's existing voice
-- [ ] Changes follow [authoring-profiles](../authoring-profiles/SKILL.md) conventions
+- [ ] Changes follow [montflow-create-pi-profiles](../montflow-create-pi-profiles/SKILL.md) conventions

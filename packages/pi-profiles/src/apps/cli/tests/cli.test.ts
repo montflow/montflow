@@ -84,7 +84,7 @@ Vitest.describe('Cli.run', () => {
       yield* withTempDir((dir) =>
         Effect.gen(function* () {
           yield* Cli.run(
-            'create code-reviewer --description "Reviews code" --model anthropic/m --skills authoring-profiles --instructions "Be strict." --checklist "Flag issues; Cite files"',
+            'create code-reviewer --description "Reviews code" --model anthropic/m --skills montflow-create-pi-profiles --instructions "Be strict." --checklist "Flag issues; Cite files"',
             ui,
             dir,
           );
@@ -98,7 +98,7 @@ Vitest.describe('Cli.run', () => {
       Vitest.expect(notifies[0]).toBe("Saved profile 'code-reviewer'.");
       Vitest.expect(notifies[1]).toContain('code-reviewer — Reviews code');
       Vitest.expect(notifies[1]).toContain('model: anthropic/m');
-      Vitest.expect(notifies[1]).toContain('skills: authoring-profiles');
+      Vitest.expect(notifies[1]).toContain('skills: montflow-create-pi-profiles');
       Vitest.expect(notifies[2]).toBe("Saved profile 'code-reviewer'.");
       Vitest.expect(notifies[3]).toContain('• code-reviewer — Reviews code fast');
       Vitest.expect(notifies[4]).toBe("Deleted profile 'code-reviewer'.");

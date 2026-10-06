@@ -9,7 +9,9 @@ Vitest.describe('Profiles extension loader', () => {
       const second = yield* Profiles.loadPiProfiles();
       Vitest.expect(second).toBe(first);
       Vitest.expect(first.Interactive.CANCELLED).toBe('Cancelled.');
-      Vitest.expect(first.PiProfiles.GENERATION_REQUIREMENTS).toContain('authoring-profiles');
+      Vitest.expect(first.PiProfiles.GENERATION_REQUIREMENTS).toContain(
+        'montflow-create-pi-profiles',
+      );
     }),
   );
 

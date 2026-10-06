@@ -1,6 +1,10 @@
 ---
-name: authoring-profiles
+name: montflow-create-pi-profiles
 description: Guides the creation, formatting, and refinement of agent profiles (PROFILE.md). Use when the user wants to write a new profile, convert a role description into a profile, or audit an existing profile.
+id: 34d1cf4fc4c93cc8
+author: Daniel Montilla
+version: 1.2.0
+license: MIT
 groups:
   - profiles
 dependencies:
@@ -13,7 +17,7 @@ Use when the user asks to create a new agent profile, convert a role description
 
 # Profile Format
 
-A profile is one directory, `.agents/@montflow/pi-profiles/<name>/`, holding a single `PROFILE.md`:
+A profile is one directory, `.agents/@montflow/profiles/<name>/`, holding a single `PROFILE.md`:
 
 ```markdown
 ---
@@ -61,7 +65,7 @@ If anything is still unclear, **ask the user** before proceeding.
 
 ## 2. Scaffold
 
-Create `.agents/@montflow/pi-profiles/<name>/PROFILE.md` with the format above. If a profile with that name already exists, pick a fresh name instead. Do not touch anything outside `.agents/@montflow/pi-profiles/`.
+Create `.agents/@montflow/profiles/<name>/PROFILE.md` with the format above. If a profile with that name already exists, pick a fresh name instead. Do not touch anything outside `.agents/@montflow/profiles/`.
 
 ## 3. Verify
 
@@ -71,11 +75,11 @@ Create `.agents/@montflow/pi-profiles/<name>/PROFILE.md` with the format above. 
 - [ ] `## Review Checklist` has at least one item
 - [ ] Nothing outside the profile directory was modified
 
-# Mechanical Reference
+# Reference
 
-For exact commands, paths, and schema, see [CLI.md](../../../packages/pi-profiles/CLI.md) —
-headless `/mf-profiles-cli` reference for agents and scripts (RPC invocation,
-command flags, `PROFILE.md` schema). Prefer the CLI over hand-writing files.
+- **Store**: `.agents/@montflow/profiles/<name>/PROFILE.md` — the frontmatter and sections above are the whole contract; author the file directly.
+- **Modifying an existing profile**: skill [montflow-modify-pi-profiles](../montflow-modify-pi-profiles/SKILL.md)
+- **Format source**: `packages/pi-profiles/src/modules/pi-profiles/` (`parseProfileFile`, `verifyProfileFile`)
 
 # What a Profile Never Does
 

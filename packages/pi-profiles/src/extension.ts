@@ -155,8 +155,8 @@ const storeFor = (cwd: string): Interactive.ProfileStore => ({
 
 /**
  * Skill inventory for a working directory: `<cwd>/.agents/skills`.
- * Drives the requirements gate — creation runs inject `authoring-profiles`,
- * modification runs inject `modifying-profiles`, format-fix runs inject both.
+ * Drives the requirements gate — creation runs inject `montflow-create-pi-profiles`,
+ * modification runs inject `montflow-modify-pi-profiles`, format-fix runs inject both.
  * @param cwd - project working directory
  * @returns inventory port for the requirements gate
  */
@@ -207,7 +207,7 @@ Rules:
 - List .agents/skills/ and read each SKILL.md frontmatter 'name:' before
   listing a skill — reference existing skills only, otherwise leave skills
   empty (or omit the key).
-- If .agents/skills/authoring-profiles/SKILL.md exists, follow its standards.
+- If .agents/skills/montflow-create-pi-profiles/SKILL.md exists, follow its standards.
 - The Instructions section holds the custom system prompt; the Review Checklist
   holds at least one verifiable item.
 - If a profile with that name already exists, pick a fresh name instead.
@@ -238,7 +238,7 @@ Rules:
 - Keep the description saying WHAT the agent is (its role and job).
 - Reference existing skills only (check .agents/skills/ SKILL.md frontmatter
   'name:' values); drop unknown names instead of inventing them.
-- If .agents/skills/authoring-profiles/SKILL.md exists, follow its standards.
+- If .agents/skills/montflow-create-pi-profiles/SKILL.md exists, follow its standards.
 - Keep at least one Review Checklist item.`;
 
 /**
@@ -342,7 +342,7 @@ export const FIX_PREPROMPT =
   'name (matching the directory), description (one line: role and job), ' +
   'plus model/skills when non-empty; ' +
   'the body must have `# Title`, `## Instructions`, and `## Review Checklist` with at least one item. ' +
-  'If .agents/skills/authoring-profiles/SKILL.md exists, follow its standards. ' +
+  'If .agents/skills/montflow-create-pi-profiles/SKILL.md exists, follow its standards. ' +
   'Do not rename the profile directory. Do not touch anything outside that profile directory.';
 
 /** Instructions after the fix request: the reply shape. */
@@ -386,7 +386,7 @@ const fixFor =
 /**
  * Install skills into the workspace via the `skills` CLI (same mechanism
  * as the skills extension): `npx skills add montflow/montflow`. This is
- * how a missing `authoring-profiles` dependency arrives — from this
+ * how a missing `montflow-create-pi-profiles` dependency arrives — from this
  * repository, through the existing skill tooling.
  * @param cwd - project working directory (project-local install target)
  * @param names - skill names to install
@@ -468,8 +468,8 @@ const menuFor = (ctx: { readonly ui: Interactive.FilterUi; readonly mode: string
  * Profiles live at `.agents/@montflow/profiles/<name>/PROFILE.md`
  * (namespaced like `pi-prompts`; the legacy `zi` layout was
  * `.agents/@montflow/profiles/`). Creation runs inject the
- * `authoring-profiles` workspace skill and modification runs inject
- * `modifying-profiles`: the requirements gate offers to
+ * `montflow-create-pi-profiles` workspace skill and modification runs inject
+ * `montflow-modify-pi-profiles`: the requirements gate offers to
  * install them from this repository (`npx skills add montflow/montflow`)
  * and injects them into agentic runs.
  * @param pi - Pi extension API

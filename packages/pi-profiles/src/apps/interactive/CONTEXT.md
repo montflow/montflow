@@ -5,8 +5,8 @@ with an agent), show, modify (manually or with an agent), and delete
 workspace profiles. Mirrors the `pi-prompts` interactive interface —
 same menu loop, same model picker, same requirements gate, same
 loading modal and TUI menu ports. Creation runs inject the
-`authoring-profiles` workspace skill, modification runs inject
-`modifying-profiles`, and format-fix runs inject both (installable from this repository
+`montflow-create-pi-profiles` workspace skill, modification runs inject
+`montflow-modify-pi-profiles`, and format-fix runs inject both (installable from this repository
 via the existing `skills` CLI); the gate injects them into agentic runs
 so authors follow the profile standards.
 

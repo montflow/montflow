@@ -92,15 +92,15 @@ export const titleFromName = (name: string): string =>
     .join(' ');
 
 /** Skills an agentic creation run needs injected to author well. */
-export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['authoring-profiles'];
+export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-create-pi-profiles'];
 
 /** Skills an agentic modification run needs injected to edit well. */
-export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['modifying-profiles'];
+export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-modify-pi-profiles'];
 
 /** Skills an agentic format-fix run needs injected to fix well. */
 export const TRANSFORM_REQUIREMENTS: ReadonlyArray<string> = [
-  'authoring-profiles',
-  'modifying-profiles',
+  'montflow-create-pi-profiles',
+  'montflow-modify-pi-profiles',
 ];
 
 /** One mechanical check failure: which field broke, and why. */
@@ -118,7 +118,7 @@ export interface VerifyResult {
 const verifyIssue = (field: string, message: string): VerifyIssue => ({ field, message });
 
 /**
- * Mechanically verify a `PROFILE.md` file against the authoring-profiles
+ * Mechanically verify a `PROFILE.md` file against the montflow-create-pi-profiles
  * standard: frontmatter `name` (valid slug, matching the directory) +
  * non-empty `description`, plus body `# Title`, `## Instructions`, and
  * `## Review Checklist` with at least one item. Pure — no IO.
