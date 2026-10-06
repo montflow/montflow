@@ -30,13 +30,13 @@ export interface ToastStackProps {
   readonly toasts: ReadonlyArray<Toast>;
 }
 
-/** Variant accent color: info/success/error reuse the palette, warning is Tokyo-Night yellow. */
+/** Variant accent color: every variant maps onto a shared palette semantic. */
 const variantColor = (variant: ToastVariant): string => {
   switch (variant) {
     case 'success':
       return palette.good;
     case 'warning':
-      return '#e0af68';
+      return palette.warn;
     case 'error':
       return palette.bad;
     default:

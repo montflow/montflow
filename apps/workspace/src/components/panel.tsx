@@ -11,11 +11,12 @@ export interface PanelProps {
 }
 
 /**
- * Grid cell chrome: rounded border with a `[key] Title` binding affordance,
+ * Grid cell chrome: square border with a `[key] Title` binding affordance,
  * accent border when selected. Content is the caller's (info rows, skill
- * lists, placeholders) — this panel owns all border and padding.
- * `flexBasis={0}` (opencode's stack-trace panel pattern) grows the panel
- * from a zero base so grid shares split the cell exactly — with the
+ * lists, placeholders) — this panel owns all border and padding. Vertical
+ * padding is zero and only one column sits either side, keeping the grid
+ * tight. `flexBasis={0}` (opencode's stack-trace panel pattern) grows the
+ * panel from a zero base so grid shares split the cell exactly — with the
  * default `auto` basis, heights leak content size and every state swap
  * (loading to loaded, empty to full) shifts the grid.
  * @param props - title, selection, flex share, and content
@@ -29,10 +30,11 @@ export const Panel = (props: PanelProps) => (
     flexDirection="column"
     minHeight={0}
     border
-    borderStyle="rounded"
+    borderStyle="single"
     borderColor={props.selected ? palette.accent : palette.border}
+    backgroundColor={palette.bg}
     title={props.title}
-    padding={1}
+    paddingX={1}
   >
     {props.children}
   </box>

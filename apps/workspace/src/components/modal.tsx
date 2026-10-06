@@ -11,7 +11,8 @@ export interface ModalProps {
 
 /**
  * Shared modal shell: dimmed fullscreen backdrop with a centered
- * frame (accent border, standard padding and gap). The frame is capped
+ * frame (accent square border, one column of horizontal padding and a
+ * gap). The frame is capped
  * (`maxWidth` 64, `maxHeight` 18) with clipped overflow, so dictated
  * or pasted user input can never stretch a dialog past the terminal —
  * growing regions (input values, option lists) scroll or window
@@ -35,10 +36,10 @@ export const Modal = (props: ModalProps) => (
     <box
       flexDirection="column"
       border
-      borderStyle="rounded"
+      borderStyle="single"
       borderColor={palette.accent}
       backgroundColor={palette.bg}
-      padding={1}
+      paddingX={1}
       gap={1}
       minWidth={props.minWidth ?? 48}
       maxWidth={props.maxWidth ?? 64}
