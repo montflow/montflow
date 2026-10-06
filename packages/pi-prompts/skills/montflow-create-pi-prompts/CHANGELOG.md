@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.0] - 2026-10-06
+
+### Changed
+
+- The skill now authors prompt files directly from its own rules: no CLI calls and no run dispatch
+- Removed the `doctor` step, the CLI create/modify/delete commands, the `verify` step, and the interactive-menu surface; the seven `verifyPromptFile` checks stay inline as a self-check
+
 ## [2.2.0]
 
 ### Changed
