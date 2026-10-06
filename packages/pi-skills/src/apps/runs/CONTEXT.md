@@ -1,6 +1,6 @@
 # Runs app
 
-Run dispatch for the agentic `/mf-skills` flows. An agentic port never
+Run dispatch for the agentic `/mf-skills-tui` flows. An agentic port never
 runs a child agent inline: it dispatches a `@montflow/pi-runs` run,
 notifies the dispatching session, and unwinds the shared interactive
 flow with `Interactive.DISPATCHED`. The run writes the `SKILL.md`; its

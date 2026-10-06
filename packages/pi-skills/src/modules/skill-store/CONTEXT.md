@@ -1,26 +1,25 @@
 # Skill-store module
 
-Async file-backed skill listing for hosts that lazy-load pi-skills.
-One `Skill` instance equals one `SKILL.md` file under
-`<root>/.agents/skills/` — decoded with the shared `Skill`
-frontmatter grammar, so every host lists identically.
+Node-fs-backed skill IO for every host. One `Skill` instance equals one
+`SKILL.md` file under `<root>/.agents/skills/` — decoded with the shared
+`Skill.decodeSkillFile` grammar, so every host reads identically.
 
 Singular name per the TypeScript modules skill (`skill-store` →
 `SkillStore`).
 
 ## Belongs here
 
-- `skillsDir(root)` plus `list(root)`: Effect-wrapped async reads,
-  sorted by name, never failing (missing directory reads as empty,
-  malformed files skip)
-- File decoding over `Skill.parseSkillFile` / `Skill.decodeUnknown`
-  (directory name is the id, frontmatter `name` falls back to it)
+- `skillsDir(root)` — the `<root>/.agents/skills` directory
+- `names(root)` / `list(root)` — Effect-wrapped async reads, sorted by name,
+  never failing (missing directory reads as empty, malformed files skip)
+- `readRaw(root, id)` — one raw `SKILL.md`, slug-guarded, failing on unknown ids
+- `save(root, skill)` / `remove(root, id)` — writes and deletes, slug-guarded
+  so a name can never escape `.agents/skills/`
 
 ## Does not belong here
 
-- The `Skill` schema, slug helpers, and verification — those live in
+- The `Skill` schema, slug helpers, codecs, and verification — those live in
   the `skill` module
-- The pi extension entry (`storeFor`, prompts, agent ports) — that
-  lives in `extension.ts`, which keeps its FileSystem-service store
+- CLI rendering — `../../apps/cli/renderers.apps.module.ts`
 - Interactive flows (`create`, `modify`, `show`) — those live in the
   `interactive` app

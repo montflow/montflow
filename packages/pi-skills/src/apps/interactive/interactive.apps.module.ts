@@ -2,16 +2,16 @@ import { Effect } from 'effect';
 import type { ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 import * as Skill from '../../modules/skill/index.js';
 
-/** Slash-command name registered by {@link register} (invoke as `/mf-skills`). */
-export const COMMAND_NAME = 'mf-skills';
+/** Slash-command name registered by {@link register} (invoke as `/mf-skills-tui`). */
+export const COMMAND_NAME = 'mf-skills-tui';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Browse, create (manually or with an agent), show, modify (manually or with an agent), and delete workspace skills.';
+  'Interactive menu: browse, create (manually or with an agent), show, modify (manually or with an agent), and delete workspace skills.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-skills [browse | list | create [name] | show <name> | modify [name] | delete [name] | help]';
+  '/mf-skills-tui [browse | list | create [name] | show <name> | modify [name] | delete [name] | help]';
 
 /** Failure value when the user cancels a dialog. Notified as info, not an error. */
 export const CANCELLED = 'Cancelled.';
@@ -289,7 +289,7 @@ export const listSkills = (
 ): Effect.Effect<void> =>
   Effect.sync(() => {
     if (skills.length === 0) {
-      ui.notify('No skills yet — create one with `/mf-skills create <name>`.', 'info');
+      ui.notify('No skills yet — create one with `/mf-skills-tui create <name>`.', 'info');
       return;
     }
     ui.notify(skills.map((skill) => `• ${skill.id} — ${skill.description}`).join('\n'), 'info');
@@ -347,6 +347,10 @@ export const createManual = (
       id,
       name: resolved,
       description,
+      skillId: Skill.generateSkillId(),
+      author: Skill.DEFAULT_AUTHOR,
+      version: Skill.DEFAULT_VERSION,
+      license: Skill.DEFAULT_LICENSE,
       groups: [],
       dependencies: [],
       body: '',

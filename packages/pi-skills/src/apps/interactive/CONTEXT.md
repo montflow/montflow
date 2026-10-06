@@ -1,8 +1,11 @@
 # Interactive app
 
-Interactive `/mf-skills` command for the skills extension. App layer:
+Interactive `/mf-skills-tui` command for the skills extension. App layer:
 dialog-driven flows (browse, create manually or with an agent, show,
 modify manually or with an agent, delete). Pure shapes, codecs, and slug helpers stay in `modules/`.
+
+The headless CLI is a separate command and app: `/mf-skills` in a Pi session
+and the `mf-skills` binary, both in [../cli](../cli/CONTEXT.md).
 
 ## Belongs here
 

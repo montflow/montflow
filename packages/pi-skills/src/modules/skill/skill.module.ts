@@ -1,4 +1,4 @@
-import { Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 
 /**
  * Directory-safe identifier. Matches the skill directory name under
@@ -28,6 +28,14 @@ export class Skill extends Schema.Class<Skill>('Skill')({
   id: Id,
   name: Schema.String,
   description: Schema.String,
+  /**
+   * Frontmatter `id`: 16 lowercase hex chars, immutable once set. Distinct
+   * from {@link Skill.id}, which is the directory slug (`name` matches it).
+   */
+  skillId: Schema.optional(Schema.String),
+  author: Schema.optional(Schema.String),
+  version: Schema.optional(Schema.String),
+  license: Schema.optional(Schema.String),
   groups: Schema.Array(Schema.String),
   dependencies: Schema.Array(Schema.String),
   body: Schema.String,
@@ -64,16 +72,36 @@ export const slugify = (name: string): string =>
     .replace(/^-+|-+$/g, '');
 
 /** Skills an agentic creation run needs injected to author well. */
-export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['authoring-skills'];
+export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-create-pi-skills'];
 
 /** Skills an agentic modification run needs injected to edit well. */
-export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['modifying-skills'];
+export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-modify-pi-skills'];
 
 /** Skills an agentic format-transform run needs injected to fix well. */
 export const TRANSFORM_REQUIREMENTS: ReadonlyArray<string> = [
-  'authoring-skills',
-  'modifying-skills',
+  'montflow-create-pi-skills',
+  'montflow-modify-pi-skills',
 ];
+
+/** Default frontmatter author when a flow cannot infer one. */
+export const DEFAULT_AUTHOR = 'montflow';
+
+/** Default frontmatter version for a newly authored skill. */
+export const DEFAULT_VERSION = '1.0.0';
+
+/** Default frontmatter license for a newly authored skill. */
+export const DEFAULT_LICENSE = 'MIT';
+
+/**
+ * Generate an immutable 16-lowercase-hex frontmatter `id`. Random, not
+ * derived from the name, so it stays stable across renames.
+ * @returns a fresh 16-hex skill id
+ */
+export const generateSkillId = (): string => {
+  const bytes = new Uint8Array(8);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+};
 
 /** One frontmatter value: a scalar `key: value` line or a `- item` list. */
 export type FieldValue = string | Array<string>;
@@ -166,6 +194,61 @@ export const parseSkillFile = (markdown: string): ParsedSkillFile | null => {
   };
 };
 
+/**
+ * Decode one `SKILL.md` file into a `Skill`. The directory name is the
+ * `id`; frontmatter `name` falls back to it. Malformed files fail.
+ * @param dirName - skill directory slug
+ * @param markdown - raw SKILL.md contents
+ * @returns Effect resolving to the skill, failing on malformed input
+ */
+export const decodeSkillFile = (
+  dirName: string,
+  markdown: string,
+): Effect.Effect<Skill, string> => {
+  const parsed = parseSkillFile(markdown);
+  if (parsed === null) return Effect.fail(`Malformed SKILL.md in '${dirName}'.`);
+  const { fields, body } = parsed;
+  const rawName = fieldString(fields, 'name');
+  const name = rawName === undefined || rawName === '' ? dirName : rawName;
+  return decodeUnknown({
+    id: dirName,
+    name,
+    description: fieldString(fields, 'description') ?? '',
+    skillId: fieldString(fields, 'id'),
+    author: fieldString(fields, 'author'),
+    version: fieldString(fields, 'version'),
+    license: fieldString(fields, 'license'),
+    groups: fieldStrings(fields, 'groups'),
+    dependencies: fieldStrings(fields, 'dependencies'),
+    body,
+  }).pipe(Effect.mapError(() => `Invalid skill '${dirName}'.`));
+};
+
+/**
+ * Serialize a `Skill` to `SKILL.md` contents: frontmatter plus body.
+ * Optional scalars and empty `groups` / `dependencies` drop their keys.
+ * @param skill - skill to persist
+ * @returns file contents
+ */
+export const encodeSkillFile = (skill: Skill): string => {
+  const lines = ['---', `name: ${skill.name}`, `description: ${skill.description}`];
+  if (skill.skillId !== undefined && skill.skillId !== '') lines.push(`id: ${skill.skillId}`);
+  if (skill.author !== undefined && skill.author !== '') lines.push(`author: ${skill.author}`);
+  if (skill.version !== undefined && skill.version !== '') lines.push(`version: ${skill.version}`);
+  if (skill.license !== undefined && skill.license !== '') lines.push(`license: ${skill.license}`);
+  if (skill.groups.length > 0) {
+    lines.push('groups:');
+    for (const group of skill.groups) lines.push(`  - ${group}`);
+  }
+  if (skill.dependencies.length > 0) {
+    lines.push('dependencies:');
+    for (const dependency of skill.dependencies) lines.push(`  - ${dependency}`);
+  }
+  lines.push('---', '');
+  if (skill.body !== '') lines.push(skill.body, '');
+  return lines.join('\n');
+};
+
 /** Slug pattern for skill directory names and the `name` field. */
 export const NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -190,9 +273,9 @@ export interface VerifyResult {
 const issue = (field: string, message: string): VerifyIssue => ({ field, message });
 
 /**
- * Mechanically verify a `SKILL.md` file against the authoring-skills
- * standard: required frontmatter (`name`, `description`, `id`, `author`,
- * `version`; `name` matching the directory) plus the expected body shape
+ * Mechanically verify a `SKILL.md` file against the pi-skills schema:
+ * required frontmatter (`name`, `description`, `id`, `author`, `version`;
+ * `name` matching the directory) plus the expected body shape
  * (`# When To Use`, `# Pipeline`, `# Reference`). Pure — no IO; the
  * caller supplies the raw file contents. Style (third person, trigger
  * terms, no filler) stays a human/agent review concern.
