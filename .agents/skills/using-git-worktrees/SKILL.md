@@ -45,7 +45,7 @@ git rev-parse --show-superproject-working-tree 2>/dev/null
 
 **If `GIT_DIR != GIT_COMMON` (and not submodule):** Already in linked worktree.
 
-**Exception (branch/location only — never nesting)**: A calling skill (e.g., `authoring-feature-spec-in-worktree`) may request a specific branch name or worktree location. Honor that request **only when NOT already in a linked worktree**. If you are already in a linked worktree, do NOT create a nested worktree — the calling skill must author in the current (already isolated) workspace instead. The calling skill must delegate creation to this skill (Step 1); it must never run `git worktree add` directly.
+**Exception (branch/location only — never nesting)**: A calling skill (e.g., an authoring skill) may request a specific branch name or worktree location. Honor that request **only when NOT already in a linked worktree**. If you are already in a linked worktree, do NOT create a nested worktree — the calling skill must author in the current (already isolated) workspace instead. The calling skill must delegate creation to this skill (Step 1); it must never run `git worktree add` directly.
 
 **Otherwise**: Skip to Step 2. Do NOT create another worktree.
 
@@ -121,7 +121,7 @@ fi
 # Determine branch name for new worktree
 # Use current branch as base, append feature suffix or derive from context
 BRANCH_NAME="${1:-$(git branch --show-current)-worktree}"
-  # Default `<branch>-worktree` is NOT recognized as a feature worktree by authoring-feature-spec (which requires a `feat/` prefix). Calling skills that need feature classification must set `BRANCH_NAME=feat/<feature-name>` explicitly before Step 1b (a loaded skill receives no `$1` argument)..
+  # Default `<branch>-worktree` is NOT recognized as a feature worktree by feature-authoring workflows (which require a `feat/` prefix). Calling skills that need feature classification must set `BRANCH_NAME=feat/<feature-name>` explicitly before Step 1b (a loaded skill receives no `$1` argument)..
 
 path="$LOCATION/$BRANCH_NAME"
 git worktree add "$path" -b "$BRANCH_NAME"

@@ -182,13 +182,12 @@ The `groups` field in frontmatter categorizes skills for discovery. Each skill s
 
 | Group | Purpose | Example Skills |
 |---|---|---|
-| `planning` | Design-phase activities: scoping, spec writing, plan review | creating-feature-spec, grilling |
+| `planning` | Design-phase activities: scoping, spec writing, plan review | grilling |
 | `scaffolding` | Code generation and project/package/module setup | setup-typescript-package, typescript-modules |
 | `refactoring` | Code improvement, restructuring, and cleanup | applying-solid, detecting-duplication, simplifying-code |
 | `documentation` | Doc/rule/schema authoring | writting-jsdoc, authoring-rules |
 | `workflow` | Process-oriented git and reference operations | planning-git-commits, using-git-worktrees, adding-references |
 | `skills` | Meta-skills about the skill system itself | authoring-skills, finding-skills, executing-skills |
-| `feature-spec` | Skills within the feature spec subsystem | creating-feature-spec, executing-feature-spec |
 | `typescript` | TypeScript-specific | typescript-conventions, typescript-modules |
 | `javascript` | JavaScript-specific | simplifying-code, detecting-duplication |
 | `conventions` | Code style and convention enforcement | leaving-it-cleaner, favoring-composition |
