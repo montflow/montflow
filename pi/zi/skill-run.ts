@@ -410,7 +410,7 @@ ${idea.trim()}`;
 /**
  * System prompt: the spec kickoff agent (wiki feature-specs.md §6). Plans a
  * feature spec as phases + typed tasks under `.agents/@montflow/specs/`.
- * Pointers adapted from the authoring-feature-spec skill (grilling loop,
+ * Pointers adapted from the pi-features authoring skill (grilling loop,
  * sequential phases, backward-only deps) but bound to the zi 3-type format.
  * It scaffolds files only — status transitions stay with the orchestrator
  * and its bookkeeper, never the kickoff agent.

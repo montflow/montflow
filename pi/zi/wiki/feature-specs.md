@@ -8,7 +8,7 @@ Planning source — no code exists yet. This plans the **feature-specs**
 section of the workspace page.
 
 Inspired by the [authoring-feature-spec
-skill](../../../.agents/skills/authoring-feature-spec/SKILL.md), but **not
+skill](../../../packages/pi-features/src/skills/authoring-feature-spec.ts), but **not
 bound to it**. That skill is an agent convention held in prose. A zi spec
 is a product artifact: 3 task types instead of 6, frontmatter the UI reads
 directly, bookkeeping done by a configured LLM agent.
@@ -134,7 +134,7 @@ breaks the loop). Refuses to start while the scope prompt is empty.
   tasks that de-risk before committing; later phases proposed by a later
   planning task). A `full` end-to-end option is deferred — the `guidance`
   and `fallbackModels` backend params already exist for it.
-- Pointers taken from authoring-feature-spec (sequential phases,
+- Pointers taken from the pi-features authoring skill (sequential phases,
   backward-only deps, compressed concrete task bodies), deliberately NOT
   bound to it — zi specs stay a standalone artifact.
 

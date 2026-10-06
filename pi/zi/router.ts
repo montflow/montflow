@@ -1338,7 +1338,7 @@ const deletePromptFile = async (cwd: string, name: string): Promise<void> => {
 // Frontmatter is THE machine contract (wiki feature-specs.md §4). Status
 // transitions are orchestrated: the orchestrator instructs the bookkeeper
 // agent, which rewrites frontmatter — nothing derives statuses
-// programmatically. Completely independent of the authoring-feature-spec
+// programmatically. Completely independent of the pi-features authoring
 // skill (different format, location, and lifecycle).
 // ---------------------------------------------------------------------------
 
