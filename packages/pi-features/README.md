@@ -22,6 +22,9 @@ bun run --cwd packages/pi-features cli check
 - `status --name <feature>` — lifecycle, task counts, per-phase task
   list, and verification verdict. Exits non-zero when the feature fails
   verification.
+- `doctor` — checks `<root>/.agents/skills/montflow-create-pi-features`
+  and installs the packaged skill when missing. Idempotent; resolves the
+  repo root from the working directory.
 
 `npx`/`bunx` resolve the workspace `bin` link inside this repo (the root
 `devDependencies` entry is what creates it). From a registry
@@ -69,6 +72,8 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
   `snapshot`) backing the CLI.
 - **`Cli`** — pure engines (`check`, `status`), pure renderers
   (`renderCheck`, `renderStatus`), and the `effect/unstable/cli` commands.
+- **`Doctor`** — `runDoctor(root)` / `runDoctorAt(startDir)` install the
+  feature-creation skill into `.agents/skills/`.
 
 All verification is pure and non-throwing: it returns a `Result` with an
 issue list, so callers can render or repair.

@@ -1,7 +1,7 @@
 # CLI app
 
 Standalone `mf-features` command built with `effect/unstable/cli`, plus
-the slash-command form the Pi extension reuses. Two subcommands for
+the slash-command form the Pi extension reuses. Three subcommands for
 agents and humans:
 
 - `check` — mechanically verify the whole feature root (default
@@ -11,13 +11,16 @@ agents and humans:
 - `status --name <feature>` — readable status panel for one feature:
   lifecycle, counts, per-phase task list, verification verdict. Exits
   non-zero when that feature fails verification.
+- `doctor` — install the packaged feature-creation skill into
+  `<repo>/.agents/skills/montflow-create-pi-features/`. Idempotent; the
+  repo root is resolved from the working directory (`apps/doctor`).
 
 ## Belongs here
 
 - Pure engines (`check`, `status`) over the `FeatureStore` service
 - Pure renderers (`renderCheck`, `renderStatus`) — the token-efficiency
   contract lives here
-- `Command`/`Flag` wiring (`checkCommand`, `statusCommand`, `rootCommand`)
+- `Command`/`Flag` wiring (`checkCommand`, `statusCommand`, `doctorCommand`, `rootCommand`)
 - The slash-command form (`runSlash`, `SlashReport`) reused by `extension.ts`
 - The `main.ts` binary entry
 
@@ -36,6 +39,9 @@ npx mf-features check --name ship-feature --verbose
 
 # or by package script
 bun run --cwd packages/pi-features cli check
+
+# install the feature-creation skill into the repo
+bun run --cwd packages/pi-features cli doctor
 ```
 
 From a registry, `npx @montflow/pi-features` / `bunx @montflow/pi-features`

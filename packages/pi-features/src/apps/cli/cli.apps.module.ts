@@ -8,6 +8,7 @@ import { verifyFeatureTree } from '../../modules/structure/index.js';
 import { type Task, parseTaskFile } from '../../modules/task/index.js';
 import type { Issue, Result } from '../../modules/verify/index.js';
 import { FeatureStore } from '../../services/index.js';
+import { CREATE_FEATURE_SKILL_NAME, runDoctorAt } from '../doctor/index.js';
 
 /** Default feature root, relative to the working directory. */
 export const DEFAULT_ROOT = '.agents/@montflow/features';
@@ -317,10 +318,29 @@ const statusCommand = Command.make('status', { dir: dirFlag, name: nameFlag }, (
   Command.provide(FeatureStore.Default),
 );
 
-/** Root command: `mf-features <check|status>`. */
+/**
+ * `doctor` command: install the feature-creation skill into the repo's
+ * `.agents/skills/`. Resolves the repo root from the working directory.
+ */
+const doctorCommand = Command.make('doctor', {}, () =>
+  Effect.gen(function* () {
+    const result = yield* runDoctorAt(process.cwd());
+    yield* Console.log(
+      result.status === 'present'
+        ? `Feature skill '${CREATE_FEATURE_SKILL_NAME}' is installed at ${result.target}.`
+        : `Installed feature skill '${CREATE_FEATURE_SKILL_NAME}' into ${result.target}.`,
+    );
+  }).pipe(
+    Effect.catch((reason) =>
+      Effect.fail(new CliError.UserError({ cause: reason, userMessage: reason })),
+    ),
+  ),
+).pipe(Command.withDescription('Install the feature-creation skill into .agents/skills/.'));
+
+/** Root command: `mf-features <check|status|doctor>`. */
 export const rootCommand = Command.make('mf-features').pipe(
-  Command.withDescription('Verify montflow feature specs.'),
-  Command.withSubcommands([checkCommand, statusCommand]),
+  Command.withDescription('Verify and set up montflow feature specs.'),
+  Command.withSubcommands([checkCommand, statusCommand, doctorCommand]),
 );
 
 // ─── Slash-command form ───────────────────────────────────────────────
