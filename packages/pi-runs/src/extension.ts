@@ -47,6 +47,25 @@ export interface PiRunsExtensionOptions {
 const notifyType = (variant: 'info' | 'success' | 'error' | undefined): 'info' | 'error' =>
   variant === 'error' ? 'error' : 'info';
 
+/** Thinking levels a `run_start` call may pin; mirrors Pi's `ThinkingLevel`. */
+const THINKING_LEVEL = Type.Union(
+  [
+    Type.Literal('off'),
+    Type.Literal('minimal'),
+    Type.Literal('low'),
+    Type.Literal('medium'),
+    Type.Literal('high'),
+    Type.Literal('xhigh'),
+    Type.Literal('max'),
+  ],
+  { description: 'Thinking level; defaults to the current session thinking level.' },
+);
+
+/** `provider/model-id` for a Pi model, or undefined when no model is active. */
+const modelLabelOf = (
+  model: { readonly provider: string; readonly id: string } | undefined,
+): string | undefined => (model === undefined ? undefined : `${model.provider}/${model.id}`);
+
 /** Tool result shape for a rendered command output. */
 const textResult = (text: string) => ({
   content: [{ type: 'text' as const, text }],
@@ -167,13 +186,18 @@ export const makePiRunsExtension =
       name: 'run_start',
       label: 'Start run',
       description:
-        'Start a local agent run for the given id and prompt. Returns as soon as the run is started; use run_status/run_steer/run_answer to follow it. Optionally set a parent run, related run ids, a model, or a tool allowlist.',
+        'Start a local agent run for the given id and prompt. Returns as soon as the run is started; use run_status/run_steer/run_answer to follow it. Optionally set a parent run, related run ids, a model, a thinking level, or a tool allowlist. Defaults to the current session model and thinking level.',
       promptSnippet: 'run_start — start a local agent run',
       parameters: Type.Object({
         id: Type.String({ description: 'Directory-safe run id.' }),
         prompt: Type.String({ description: 'The prompt for the run.' }),
         name: Type.Optional(Type.String({ description: 'Display name.' })),
-        model: Type.Optional(Type.String({ description: 'provider/model-id pin.' })),
+        model: Type.Optional(
+          Type.String({
+            description: 'provider/model-id pin; defaults to the current session model.',
+          }),
+        ),
+        thinking: Type.Optional(THINKING_LEVEL),
         parent: Type.Optional(Type.String({ description: 'Parent run id.' })),
         related: Type.Optional(Type.Array(Type.String(), { description: 'Related run ids.' })),
         tools: Type.Optional(Type.Array(Type.String(), { description: 'Tool allowlist.' })),
@@ -187,7 +211,8 @@ export const makePiRunsExtension =
             id: params.id,
             prompt: params.prompt,
             name: params.name,
-            model: params.model,
+            model: params.model ?? modelLabelOf(ctx.model),
+            thinking: params.thinking ?? ctx.thinkingLevel,
             parent: params.parent,
             related: params.related,
             tools: params.tools,

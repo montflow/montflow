@@ -13,6 +13,8 @@ stutter becomes painful — that rename is one `mv` plus index edits.
 
 - `Id`, `Status`, `Run` class plus boundary helpers
 - `decodeUnknown`, `encode` for frontmatter and `session.jsonl` headers
+- Run identity helpers every dispatching host shares: `isValidId`,
+  `slugifyName`, `newId` (Clock-driven, no wall-clock reads)
 
 ## Does not belong here
 

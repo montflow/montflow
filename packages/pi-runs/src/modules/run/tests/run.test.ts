@@ -41,3 +41,30 @@ Vitest.describe('Run.Run runtime', () => {
     ).toThrow();
   });
 });
+
+Vitest.describe('Run.newId runtime', () => {
+  Vitest.it('slugs a display name into a directory-safe id', () => {
+    Vitest.expect(Run.slugifyName('Create profile: a reviewer', 1000)).toBe(
+      'create-profile-a-reviewer-rs',
+    );
+  });
+
+  Vitest.it('falls back to `run` when the name slugs to nothing', () => {
+    Vitest.expect(Run.slugifyName('***', 1000)).toBe('run-rs');
+  });
+
+  Vitest.it.effect('reads the clock for the suffix', () =>
+    Effect.gen(function* () {
+      const id = yield* Run.newId('Modify skill');
+      Vitest.expect(id.startsWith('modify-skill-')).toBe(true);
+      Vitest.expect(Run.isValidId(id)).toBe(true);
+    }),
+  );
+
+  Vitest.it('refuses traversal and blank ids', () => {
+    Vitest.expect(Run.isValidId('run-1')).toBe(true);
+    Vitest.expect(Run.isValidId('../run')).toBe(false);
+    Vitest.expect(Run.isValidId('')).toBe(false);
+    Vitest.expect(Run.isValidId('Run-1')).toBe(false);
+  });
+});
