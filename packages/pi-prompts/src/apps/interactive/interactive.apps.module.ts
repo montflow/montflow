@@ -2,19 +2,27 @@ import { PiEffect } from '@montflow/pi-effect';
 import { Dialogs, ModelOptions } from '@montflow/pi-interactive';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Effect, Layer } from 'effect';
+import * as PromptExecute from '../../modules/prompt-execute/index.js';
 import * as Prompts from '../../modules/prompts/index.js';
+import * as Doctor from '../doctor/index.js';
 import { PromptStore } from '../../services/index.js';
 
-/** Slash-command name registered by {@link register} (invoke as `/mf-prompts`). */
-export const COMMAND_NAME = 'mf-prompts';
+/** Slash-command name registered by {@link register} (invoke as `/mf-prompts-tui`). */
+export const COMMAND_NAME = 'mf-prompts-tui';
 
-/** Help text shown for the command and the `help` action. */
+/**
+ * Help text shown for the command and the `help` action.
+ *
+ * Named `mf-prompts-tui` rather than `mf-prompts` so that the headless CLI
+ * keeps the plain name: `mf-prompts` is the binary, and `/mf-prompts` is the
+ * same command inside a Pi session. This one is the human-facing menu.
+ */
 export const COMMAND_DESCRIPTION =
-  'Browse, create (manually or with an agent), show, modify (manually or with an agent), fill & render workspace prompts.';
+  'Browse, create (manually or with an agent), show, inspect, modify (manually or with an agent), fill & render, or execute workspace prompts, or install the prompt skills (doctor). For the headless CLI use /mf-prompts.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-prompts [browse | list | create [name] | show <name> | modify [name] | render <name> [key=value ...] | help]';
+  '/mf-prompts-tui [browse | list | doctor | create [name] | show <name> | inspect <name> | modify [name] | render <name> [key=value ...] | execute <name> [key=value ...] | help]';
 
 /**
  * Failure value when the user cancels a dialog. Shared with the other
@@ -45,10 +53,17 @@ export type Action =
   | { readonly kind: 'Browse' }
   | { readonly kind: 'List' }
   | { readonly kind: 'Help' }
+  | { readonly kind: 'Doctor' }
   | { readonly kind: 'Create'; readonly name: string | undefined }
   | { readonly kind: 'Show'; readonly name: string }
+  | { readonly kind: 'Inspect'; readonly name: string; readonly values: Record<string, string> }
   | { readonly kind: 'Modify'; readonly name: string | undefined }
-  | { readonly kind: 'Render'; readonly name: string; readonly values: Record<string, string> };
+  | { readonly kind: 'Render'; readonly name: string; readonly values: Record<string, string> }
+  | {
+      readonly kind: 'Execute';
+      readonly name: string;
+      readonly values: Record<string, string>;
+    };
 
 /** Split args on whitespace. Shared with the other `/mf-*` commands. */
 export const tokenize = Dialogs.tokenize;
@@ -92,10 +107,20 @@ export const parseAction = (args: string): Action => {
       return { kind: 'Browse' };
     case 'list':
       return { kind: 'List' };
+    case 'doctor':
+      return { kind: 'Doctor' };
     case 'create':
       return { kind: 'Create', name: tokens[1] };
     case 'show':
       return tokens[1] === undefined ? { kind: 'Menu' } : { kind: 'Show', name: tokens[1] };
+    case 'inspect':
+      return tokens[1] === undefined
+        ? { kind: 'Menu' }
+        : { kind: 'Inspect', name: tokens[1], values: collectValues(tokens.slice(2)) };
+    case 'execute':
+      return tokens[1] === undefined
+        ? { kind: 'Menu' }
+        : { kind: 'Execute', name: tokens[1], values: collectValues(tokens.slice(2)) };
     case 'modify':
       return { kind: 'Modify', name: tokens[1] };
     case 'render':
@@ -112,18 +137,13 @@ export const parseAction = (args: string): Action => {
 };
 
 /**
- * Unique `{{variable}}` names in first-appearance order.
+ * Unique `{{variable}}` names in first-appearance order. Delegates to the
+ * prompts module so the interactive flows and the verifier agree on the
+ * template's tokens.
  * @param template - prompt template with `{{variable}}` placeholders
  * @returns variable names
  */
-export const variables = (template: string): readonly string[] => {
-  const seen = new Set<string>();
-  for (const match of template.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)) {
-    const name = (match[1] ?? '').trim();
-    if (name !== '') seen.add(name);
-  }
-  return [...seen];
-};
+export const variables = Prompts.templateVariables;
 
 /**
  * Notify the prompt list, or a hint when empty.
@@ -164,6 +184,20 @@ export const showPrompt = (
     );
   });
 };
+
+/**
+ * Notify a verify outcome: one line when valid, the full fix-oriented report
+ * otherwise (issue, `Fix:` line, and the `variables` JSON to paste).
+ * @param ui - Pi ui dialogs
+ * @param name - verified prompt name
+ * @param result - result from `Prompts.verifyPromptFile`
+ * @returns Effect completing once notified
+ */
+export const notifyVerifyResult = (
+  ui: InteractiveUi,
+  name: string,
+  result: Prompts.VerifyResult,
+): Effect.Effect<void> => Effect.sync(() => ui.notify(Prompts.verifyReport(name, result), 'info'));
 
 /** One model offered for agentic runs. Shared with the other `/mf-*` commands. */
 export type ModelOption = Dialogs.ModelOption;
@@ -382,7 +416,9 @@ export const modifyPrompt = (
   });
 
 /**
- * Render a prompt, prompting for each missing variable via dialogs.
+ * Render a prompt, prompting for each missing value via dialogs. Variables
+ * that already have a value (supplied or defaulted) are not asked for, and an
+ * optional variable may be left blank.
  * @param ui - Pi ui dialogs
  * @param prompt - prompt descriptor
  * @param provided - values already collected (e.g. CLI `key=value` pairs)
@@ -394,13 +430,7 @@ export const renderValues = (
   provided: Readonly<Record<string, string>>,
 ): Effect.Effect<string, string> =>
   Effect.gen(function* () {
-    const collected = { ...provided };
-    for (const name of variables(prompt.template)) {
-      if (collected[name] !== undefined && collected[name] !== '') continue;
-      const entered = yield* Effect.promise(() => ui.input(`Value for ${name}`));
-      if (entered === undefined) return yield* Effect.fail(CANCELLED);
-      collected[name] = entered;
-    }
+    const collected = yield* fillInputs(ui, prompt, provided);
     return yield* Prompts.renderPrompt(prompt, collected);
   });
 
@@ -413,9 +443,18 @@ const findOrFail = (
 };
 
 /**
- * Collect every template variable through numbered dialogs. Blank keeps the
- * previous value when re-filling; blank with no previous value fails so the
- * result never carries unfilled tokens.
+ * Collect values for every declared variable through numbered dialogs.
+ *
+ * Three rules, straight from the variable schema:
+ *
+ * - a variable with a `default` is never asked for when the value is blank —
+ *   the default is the answer
+ * - a `required` variable with no default must get a non-blank answer
+ * - an optional variable with no default may be left blank, and renders as
+ *   empty (which is what makes an `{{#if}}` guard take its `{{else}}` branch)
+ *
+ * Blank re-keeps the previous value, so a second pass can change one field
+ * without retyping the rest.
  * @param ui - Pi ui dialogs
  * @param prompt - prompt descriptor
  * @param initial - previously collected values (re-fill), if any
@@ -427,25 +466,82 @@ export const fillInputs = (
   initial: Readonly<Record<string, string>>,
 ): Effect.Effect<Record<string, string>, string> =>
   Effect.gen(function* () {
-    const names = variables(prompt.template);
+    const declared = prompt.variables;
     const collected = { ...initial };
     let index = 0;
-    for (const name of names) {
+    for (const variable of declared) {
+      const previous = collected[variable.name] ?? '';
+      if (previous !== '' || variable.default !== '') continue;
       index++;
-      const previous = collected[name] ?? '';
+      const hint = variable.required === true ? 'required' : 'optional — leave blank to skip';
       const entered = yield* Effect.promise(() =>
         ui.input(
-          `Value for '${name}' (${index} of ${names.length})`,
-          previous === '' ? 'required' : previous,
+          `${variable.label} (${index} of ${declared.length})`,
+          previous === '' ? hint : previous,
         ),
       );
       if (entered === undefined) return yield* Effect.fail(CANCELLED);
-      if (entered === '' && previous === '') {
-        return yield* Effect.fail(`Value for '${name}' must not be empty.`);
+      if (entered === '' && variable.required === true) {
+        return yield* Effect.fail(`Value for '${variable.name}' must not be empty.`);
       }
-      collected[name] = entered === '' ? previous : entered;
+      collected[variable.name] = entered === '' ? previous : entered;
     }
     return collected;
+  });
+
+/**
+ * Interactive execute: gate on doctor, fill the required values, pick a
+ * model, then run.
+ *
+ * Order is deliberate. The doctor gate comes first, because a run started on
+ * stale skill guidance is worse than no run — the agent will follow rules the
+ * verifier no longer enforces. `fillInputs` comes before the model picker so
+ * a cancel on a variable is cheap, and so the table shown afterwards already
+ * reflects the answers.
+ *
+ * The model falls back to the prompt's own `model`; only a prompt that pins
+ * none asks the user. `PromptExecute.execute` is then the authority on
+ * whether the run may go ahead, so the TUI and the CLI cannot disagree.
+ * @param ui - Pi ui dialogs
+ * @param cwd - project working directory
+ * @param prompt - prompt to run
+ * @param models - picker options from {@link resolveModelOptions}
+ * @param initial - values already supplied on the command line
+ * @param execute - injected port that runs the agent
+ * @param modelPicker - TUI model picker, if available
+ * @returns Effect completing once the run settles
+ */
+export const executeFlow = (
+  ui: InteractiveUi,
+  cwd: string,
+  prompt: Prompts.Prompt,
+  models: ReadonlyArray<ModelOption>,
+  initial: Readonly<Record<string, string>>,
+  execute: PromptExecute.PromptExecutor,
+  modelPicker?: ModelPickerFn | undefined,
+): Effect.Effect<void, string> =>
+  Effect.gen(function* () {
+    const gate = yield* Doctor.runDoctor(cwd, { check: true });
+    if (!gate.healthy) return yield* Effect.fail(Doctor.doctorGateMessage(gate));
+
+    const values = yield* fillInputs(ui, prompt, initial);
+    const model =
+      prompt.model !== ''
+        ? prompt.model
+        : yield* pickAgenticModel(ui, models, modelPicker, 'Running prompt');
+    if (model === undefined) return yield* Effect.fail(CANCELLED);
+
+    const plan = PromptExecute.execute({ prompt, model, values });
+    if (!plan.ok) return yield* Effect.fail(plan.message);
+
+    const reply = yield* execute({
+      cwd,
+      name: prompt.name,
+      model: plan.model,
+      text: plan.text,
+      skills: plan.skills,
+    });
+    yield* Effect.sync(() => ui.notify(reply, 'info'));
   });
 
 /**
@@ -479,6 +575,7 @@ const renderLoop = (
  * @param models - picker options from resolveModelOptions
  * @param generate - injected agentic generation port
  * @param modify - injected agentic modification port
+ * @param execute - injected port that runs a resolved prompt
  * @param name - prompt under action
  * @returns Effect completing once the user goes back
  */
@@ -489,39 +586,65 @@ const promptMenu = (
   models: ReadonlyArray<ModelOption>,
   generate: PromptGenerator,
   modify: PromptModifier,
+  execute: PromptExecute.PromptExecutor,
   modelPicker: ModelPickerFn | undefined,
 ): Effect.Effect<void, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const store = yield* PromptStore.PromptStore;
+    // Suspended, not called: re-entering the menu must wait for the current
+    // action to finish, not run ahead of it.
+    const again = Effect.suspend(() =>
+      promptMenu(ui, cwd, name, models, generate, modify, execute, modelPicker),
+    );
     const chosen = yield* Effect.promise(() =>
-      ui.select(`Prompt '${name}'`, ['Show', 'Fill & render', 'Modify', 'Delete', '← Back']),
+      ui.select(`Prompt '${name}'`, [
+        'Show',
+        'Inspect',
+        'Fill & render',
+        'Execute',
+        'Modify',
+        'Delete',
+        '← Back',
+      ]),
     );
     if (chosen === undefined || chosen === '← Back') return;
     switch (chosen) {
       case 'Show': {
         const prompts = yield* store.list(cwd);
         yield* showPrompt(ui, prompts, name);
-        return yield* promptMenu(ui, cwd, name, models, generate, modify, modelPicker);
+        return yield* again;
+      }
+      case 'Inspect': {
+        const prompts = yield* store.list(cwd);
+        const prompt = yield* findOrFail(prompts, name);
+        const summary = PromptExecute.inspect({ prompt });
+        yield* Effect.sync(() => ui.notify(PromptExecute.table(summary), 'info'));
+        return yield* again;
       }
       case 'Fill & render': {
         const prompts = yield* store.list(cwd);
         const prompt = yield* findOrFail(prompts, name);
         yield* renderLoop(ui, prompt, {});
-        return yield* promptMenu(ui, cwd, name, models, generate, modify, modelPicker);
+        return yield* again;
+      }
+      case 'Execute': {
+        const prompts = yield* store.list(cwd);
+        const prompt = yield* findOrFail(prompts, name);
+        yield* executeFlow(ui, cwd, prompt, models, {}, execute, modelPicker);
+        return yield* again;
       }
       case 'Modify': {
         const prompts = yield* store.list(cwd);
         const prompt = yield* modifyPrompt(ui, prompts, models, modify, name, modelPicker);
         yield* store.save(cwd, prompt).pipe(Effect.mapError((error) => error.message));
         yield* Effect.sync(() => ui.notify(`Saved prompt '${prompt.name}'.`, 'info'));
-        return yield* promptMenu(ui, cwd, name, models, generate, modify, modelPicker);
+        return yield* again;
       }
       case 'Delete': {
         const confirmed = yield* Effect.promise(() =>
           ui.confirm(`Delete prompt '${name}'?`, `'${name}.json' will be removed permanently.`),
         );
-        if (!confirmed)
-          return yield* promptMenu(ui, cwd, name, models, generate, modify, modelPicker);
+        if (!confirmed) return yield* again;
         yield* store.remove(cwd, name).pipe(Effect.mapError((error) => error.message));
         yield* Effect.sync(() => ui.notify(`Deleted prompt '${name}'.`, 'info'));
         return;
@@ -548,6 +671,7 @@ const browseMenu = (
   models: ReadonlyArray<ModelOption>,
   generate: PromptGenerator,
   modify: PromptModifier,
+  execute: PromptExecute.PromptExecutor,
   modelPicker: ModelPickerFn | undefined,
 ): Effect.Effect<void, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
@@ -561,7 +685,7 @@ const browseMenu = (
         const prompt = yield* createPrompt(ui, models, generate, undefined, modelPicker);
         yield* store.save(cwd, prompt).pipe(Effect.mapError((error) => error.message));
         yield* Effect.sync(() => ui.notify(`Saved prompt '${prompt.name}'.`, 'info'));
-        return yield* browseMenu(ui, cwd, models, generate, modify, modelPicker);
+        return yield* browseMenu(ui, cwd, models, generate, modify, execute, modelPicker);
       }
       return;
     }
@@ -578,8 +702,8 @@ const browseMenu = (
     if (prompts.every((prompt) => prompt.name !== chosen)) {
       return yield* Effect.fail(`Unknown prompt '${chosen}'.`);
     }
-    yield* promptMenu(ui, cwd, chosen, models, generate, modify, modelPicker);
-    return yield* browseMenu(ui, cwd, models, generate, modify, modelPicker);
+    yield* promptMenu(ui, cwd, chosen, models, generate, modify, execute, modelPicker);
+    return yield* browseMenu(ui, cwd, models, generate, modify, execute, modelPicker);
   });
 
 /**
@@ -589,6 +713,7 @@ const browseMenu = (
  * @param models - picker options from resolveModelOptions
  * @param generate - injected agentic generation port
  * @param modify - injected agentic modification port
+ * @param execute - injected port that runs a resolved prompt
  * @returns Effect completing once the user exits
  */
 const mainMenu = (
@@ -597,6 +722,7 @@ const mainMenu = (
   models: ReadonlyArray<ModelOption>,
   generate: PromptGenerator,
   modify: PromptModifier,
+  execute: PromptExecute.PromptExecutor,
   modelPicker: ModelPickerFn | undefined,
 ): Effect.Effect<void, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
@@ -610,11 +736,11 @@ const mainMenu = (
       yield* store.save(cwd, prompt).pipe(Effect.mapError((error) => error.message));
       yield* Effect.sync(() => ui.notify(`Saved prompt '${prompt.name}'.`, 'info'));
     } else if (chosen === 'Browse prompts') {
-      yield* browseMenu(ui, cwd, models, generate, modify, modelPicker);
+      yield* browseMenu(ui, cwd, models, generate, modify, execute, modelPicker);
     } else {
       return yield* Effect.fail(`Unknown menu choice '${chosen}'.`);
     }
-    return yield* mainMenu(ui, cwd, models, generate, modify, modelPicker);
+    return yield* mainMenu(ui, cwd, models, generate, modify, execute, modelPicker);
   });
 
 /**
@@ -623,6 +749,7 @@ const mainMenu = (
  * @param env - command environment (dialogs, cwd, models)
  * @param generate - injected agentic generation port
  * @param modify - injected agentic modification port
+ * @param execute - injected port that runs a resolved prompt
  * @returns Effect completing once done, failing with displayable message
  */
 export const run = (
@@ -630,6 +757,7 @@ export const run = (
   env: CommandEnv,
   generate: PromptGenerator,
   modify: PromptModifier,
+  execute: PromptExecute.PromptExecutor,
 ): Effect.Effect<void, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const store = yield* PromptStore.PromptStore;
@@ -643,8 +771,14 @@ export const run = (
         yield* Effect.sync(() => ui.notify(USAGE, 'info'));
         return;
       }
+      case 'Doctor': {
+        const result = yield* Doctor.runDoctor(cwd);
+        yield* Effect.sync(() => ui.notify(Doctor.doctorMessage(result), 'info'));
+        if (!result.healthy) return yield* Effect.fail(Doctor.doctorGateMessage(result));
+        return;
+      }
       case 'Browse': {
-        yield* browseMenu(ui, cwd, models, generate, modify, modelPicker);
+        yield* browseMenu(ui, cwd, models, generate, modify, execute, modelPicker);
         return;
       }
       case 'List': {
@@ -655,6 +789,19 @@ export const run = (
         const prompt = yield* createPrompt(ui, models, generate, action.name, modelPicker);
         yield* store.save(cwd, prompt).pipe(Effect.mapError((error) => error.message));
         yield* Effect.sync(() => ui.notify(`Saved prompt '${prompt.name}'.`, 'info'));
+        return;
+      }
+      case 'Inspect': {
+        const prompts = yield* store.list(cwd);
+        const prompt = yield* findOrFail(prompts, action.name);
+        const summary = PromptExecute.inspect({ prompt, values: action.values });
+        yield* Effect.sync(() => ui.notify(PromptExecute.table(summary), 'info'));
+        return;
+      }
+      case 'Execute': {
+        const prompts = yield* store.list(cwd);
+        const prompt = yield* findOrFail(prompts, action.name);
+        yield* executeFlow(ui, cwd, prompt, models, action.values, execute, modelPicker);
         return;
       }
       case 'Show': {
@@ -677,7 +824,7 @@ export const run = (
         return;
       }
       case 'Menu': {
-        yield* mainMenu(ui, cwd, models, generate, modify, modelPicker);
+        yield* mainMenu(ui, cwd, models, generate, modify, execute, modelPicker);
         return;
       }
     }
@@ -690,6 +837,7 @@ export const run = (
  * @param live - store layer provided to the handler at invocation
  * @param generateFor - agentic generation port for the command's working directory
  * @param modifyFor - agentic modification port for the command's working directory
+ * @param executeFor - port that runs a resolved prompt for the working directory
  * @param searchFor - TUI filter picker factory, if available
  * @param modelPickerFor - TUI model picker factory, if available
  * @returns Effect completing once the command is registered
@@ -699,6 +847,7 @@ export const register = (
   live: Layer.Layer<PromptStore.PromptStore>,
   generateFor: (cwd: string) => PromptGenerator,
   modifyFor: (cwd: string) => PromptModifier,
+  executeFor: (cwd: string) => PromptExecute.PromptExecutor,
   searchFor?: (ctx: {
     readonly ui: FilterUi;
     readonly mode: string;
@@ -733,6 +882,7 @@ export const register = (
         },
         generateFor(ctx.cwd),
         modifyFor(ctx.cwd),
+        executeFor(ctx.cwd),
       ).pipe(Effect.provide(live));
     },
     (error) => (error === CANCELLED ? 'info' : 'error'),
