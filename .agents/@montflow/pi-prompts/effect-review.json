@@ -1,0 +1,25 @@
+{
+  "name": "effect-review",
+  "description": "Review Effect v4 code with the effect-reviewer profile; orchestrate a fan-out of reviewer runs only when the target spans many files.",
+  "template": "You review Effect v4 code with the effect-reviewer profile. Read .agents/@montflow/profiles/effect-reviewer/PROFILE.md and follow it exactly — its focus areas, replacement opportunities, and avoid list.\n\nTarget: {{scope}}\n\nYour role follows from how many files you are watching:\n\n- A single file, or a folder small enough to read in one pass: be the reviewer. Walk {{scope}} yourself, apply the profile, and report findings. Dispatch nothing.\n- Many files across independent units — several packages or modules, or a large tree: be the orchestrator. You survey and coordinate; sub-agent runs do the reviewing.\n\nAs the orchestrator:\n\n1. Survey the surface. Do not read every file. Map only the top level of {{scope}} — its packages, modules, entry points, and test roots — and note what each contains and roughly how much it holds.\n\n2. Build a schedule. Partition the surface into non-overlapping review units, one per top-level directory or module, grouping small siblings so no unit is trivial. Keep the number of units bounded. Give every unit an explicit scope (paths), a run id (effect-review-<unit>), and, when a focus applies, that focus.\n\n3. Dispatch the reviewers. Start one run per unit through the pi-runs engine — the run_start tool, or the mf-runs CLI from bash. Set parent to this run's id and related to the sibling unit run ids. Each sub-agent's prompt must tell it to read the effect-reviewer profile, review only that unit's scope, and edit nothing; give it no write or edit tools. Follow the montflow-dispatch-pi-runs skill and never block the fan-out on one unit.\n\n4. Collect and aggregate. As units settle, read their receipts and findings, merge and dedupe them, rank by severity, and report each finding as file:line with a concrete trigger, impact, and the minimal idiomatic fix.\n\nEither way: do not edit any files.\n{{#if focus}}\nApply this focus throughout: {{focus}}\n{{/if}}",
+  "variables": [
+    {
+      "name": "scope"
+    },
+    {
+      "name": "focus",
+      "required": false
+    }
+  ],
+  "skills": [
+    "effect-v4",
+    "effect-services",
+    "effect-structs",
+    "effect-testing",
+    "simplifying-code",
+    "detecting-duplication",
+    "typescript-prefer-inference",
+    "montflow-dispatch-pi-runs"
+  ],
+  "model": ""
+}
