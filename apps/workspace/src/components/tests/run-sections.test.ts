@@ -8,8 +8,12 @@ const row = (id: string, status: string): Runs.RunSummary => ({
   description: '',
   status,
   model: '',
+  thinking: '',
+  tools: [],
   prompt: '',
+  feature: '',
   progress: '',
+  created: '',
   updated: '',
 });
 

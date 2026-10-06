@@ -42,6 +42,14 @@ export const Keybinds = {
   showAll: (): Keybind => ({ key: 'A', action: 'all runs' }),
   /** `j/k scroll` — detail full-view scroll entry. */
   scroll: (): Keybind => ({ key: 'j/k', action: 'scroll' }),
+  /** `tab focus` — cycle which run pane the keys act on. */
+  toggleFocus: (): Keybind => ({ key: 'tab', action: 'focus' }),
+  /** `d details` — focus the run's metadata-and-actions column. */
+  focusDetails: (): Keybind => ({ key: 'd', action: 'details' }),
+  /** `p prompt` — focus the run's prompt pane. */
+  focusPrompt: (): Keybind => ({ key: 'p', action: 'prompt' }),
+  /** `t transcript` — focus the run's transcript pane. */
+  focusTranscript: (): Keybind => ({ key: 't', action: 'transcript' }),
   /** `↑↓ scroll` — read-only scroll-view entry (flow modals, working status). */
   arrowScroll: (): Keybind => ({ key: '↑↓', action: 'scroll' }),
   /** `↑↓←→ move` — text-input cursor entry (arrows drive the cursor, the view follows). */

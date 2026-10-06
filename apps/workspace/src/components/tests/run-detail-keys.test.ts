@@ -1,9 +1,11 @@
 import * as Vitest from '@effect/vitest';
 import {
+  clipStatusHint,
   isLiveRunStatus,
   runDetailActions,
   runDetailHint,
   runDetailIntent,
+  runFocusCycle,
 } from '../run-detail-keys.js';
 
 /** Minimal keypress shape: `name` plus the raw sequence the mapper reads. */
@@ -40,11 +42,22 @@ Vitest.describe('runDetailIntent', () => {
       Vitest.expect(runDetailIntent(key('x'), 'preview', status)).toBeUndefined();
   });
 
-  Vitest.it('scrolls on j/k in full view and moves the menu otherwise', () => {
+  Vitest.it('maps the pane keys to their focus intents', () => {
+    Vitest.expect(runDetailIntent(key('d'), 'preview', 'running')).toBe('focus-details');
+    Vitest.expect(runDetailIntent(key('p'), 'preview', 'running')).toBe('focus-prompt');
+    Vitest.expect(runDetailIntent(key('t'), 'view', 'running')).toBe('focus-transcript');
+  });
+
+  Vitest.it('maps tab to the focus switch', () => {
+    Vitest.expect(runDetailIntent(key('tab'), 'preview', 'running')).toBe('toggle-focus');
+    Vitest.expect(runDetailIntent(key('tab'), 'view', 'done')).toBe('toggle-focus');
+  });
+
+  Vitest.it('scrolls the transcript on j/k in both modes', () => {
     Vitest.expect(runDetailIntent(key('j'), 'view', 'running')).toBe('scroll-down');
     Vitest.expect(runDetailIntent(key('k'), 'view', 'running')).toBe('scroll-up');
-    Vitest.expect(runDetailIntent(key('j'), 'preview', 'running')).toBe('menu-down');
-    Vitest.expect(runDetailIntent(key('k'), 'preview', 'running')).toBe('menu-up');
+    Vitest.expect(runDetailIntent(key('j'), 'preview', 'running')).toBe('scroll-down');
+    Vitest.expect(runDetailIntent(key('k'), 'preview', 'running')).toBe('scroll-up');
   });
 
   Vitest.it('moves the menu on arrows in both modes', () => {
@@ -94,21 +107,72 @@ Vitest.describe('runDetailActions', () => {
 });
 
 Vitest.describe('runDetailHint', () => {
+  Vitest.it('opens on the details column: its menu keys, no scroll keys', () => {
+    Vitest.expect(runDetailHint('done', 'preview')).toStrictEqual(
+      'd details · t transcript · tab focus · ↑↓ navigate · ⏎ select · v view · R refresh · esc back',
+    );
+  });
+
   Vitest.it('adds steer and interrupt while running', () => {
-    Vitest.expect(runDetailHint('running', 'preview')).toStrictEqual(
-      '↑↓ navigate · ⏎ select · v view · s steer · x interrupt · R refresh · esc back',
+    Vitest.expect(runDetailHint('running', 'preview')).toBe(
+      'd details · t transcript · tab focus · ↑↓ navigate · ⏎ select · v view · s steer · x interrupt · R refresh · esc back',
     );
   });
 
   Vitest.it('adds answer and interrupt while parked', () => {
-    Vitest.expect(runDetailHint('awaiting-input', 'preview')).toStrictEqual(
-      '↑↓ navigate · ⏎ select · v view · x interrupt · a answer · R refresh · esc back',
+    Vitest.expect(runDetailHint('awaiting-input', 'preview')).toBe(
+      'd details · t transcript · tab focus · ↑↓ navigate · ⏎ select · v view · x interrupt · a answer · R refresh · esc back',
+    );
+  });
+
+  Vitest.it('gives the scroll keys to whichever scrollable pane holds focus', () => {
+    Vitest.expect(runDetailHint('done', 'preview', 'transcript', true)).toBe(
+      'd details · p prompt · t transcript · tab focus · j/k scroll · v view · R refresh · esc back',
+    );
+    Vitest.expect(runDetailHint('done', 'preview', 'prompt', true)).toBe(
+      'd details · p prompt · t transcript · tab focus · j/k scroll · v view · R refresh · esc back',
+    );
+  });
+
+  Vitest.it('omits the prompt key when there is no prompt pane', () => {
+    Vitest.expect(runDetailHint('done', 'preview', 'transcript', false)).toBe(
+      'd details · t transcript · tab focus · j/k scroll · v view · R refresh · esc back',
     );
   });
 
   Vitest.it('omits live controls once settled', () => {
-    Vitest.expect(runDetailHint('done', 'view')).toStrictEqual(
-      '↑↓ navigate · ⏎ select · j/k scroll · v preview · R refresh · esc back',
+    Vitest.expect(runDetailHint('done', 'view')).toBe(
+      'd details · t transcript · tab focus · ↑↓ navigate · ⏎ select · v preview · R refresh · esc back',
     );
+  });
+});
+
+Vitest.describe('runFocusCycle', () => {
+  Vitest.it('cycles all three panes when the prompt pane exists', () => {
+    Vitest.expect(runFocusCycle(true)).toStrictEqual(['details', 'prompt', 'transcript']);
+  });
+
+  Vitest.it('skips the prompt pane when the terminal is too short', () => {
+    Vitest.expect(runFocusCycle(false)).toStrictEqual(['details', 'transcript']);
+  });
+
+  Vitest.it('never lands on a pane that is not in the cycle', () => {
+    // A stale 'prompt' focus on a short terminal still advances to a real pane.
+    const cycle = runFocusCycle(false);
+    const at = cycle.indexOf('prompt');
+    Vitest.expect(at).toBe(-1);
+    Vitest.expect(cycle[(((at + 1) % cycle.length) + cycle.length) % cycle.length]).toBe('details');
+  });
+});
+
+Vitest.describe('clipStatusHint', () => {
+  Vitest.it('leaves a hint that fits alone', () => {
+    Vitest.expect(clipStatusHint('a · b', 10)).toBe('a · b');
+  });
+
+  Vitest.it('ellipsizes a hint that would run into the trailing size', () => {
+    const clipped = clipStatusHint('↑↓ navigate · ⏎ select · j/k scroll · v view', 20);
+    Vitest.expect(clipped.length).toBeLessThanOrEqual(20);
+    Vitest.expect(clipped.endsWith('…')).toBe(true);
   });
 });

@@ -36,7 +36,7 @@ describe('full grid probe', () => {
       () => (
         <QueryClientProvider client={Query.makeQueryClient()}>
           <box width={WIDTH} height={HEIGHT} flexDirection="column">
-            <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} padding={1}>
+            <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} paddingX={1}>
               <box flexDirection="column" flexGrow={2.4} flexBasis={0} minHeight={0} gap={1}>
                 <Panel title="[i] Info" selected={false} grow={1}>
                   <InfoPanel info={{ name: 'main', root: '/r', branch: 'main', clean: true }} />

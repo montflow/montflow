@@ -7,6 +7,8 @@ export interface StatusBarProps {
 
 /**
  * Footer bar: hints left, terminal size plus workspace summary right.
+ * The caller trims the hint to the columns the bar has — this module
+ * never wraps or elides it, so the two halves never overprint.
  * @param props - hint text and trailing summary
  * @returns status bar element
  */

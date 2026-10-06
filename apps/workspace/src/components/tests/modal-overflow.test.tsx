@@ -155,7 +155,7 @@ describe('modal overflow', () => {
     const text = frame(setup);
     check(text.includes('▸ option-8'), 'highlighted row visible');
     check(text.includes('8/20'), 'count visible');
-    check(text.includes('╰'), 'frame closes inside the viewport');
+    check(text.includes('└'), 'frame closes inside the viewport');
   });
 
   test('flow modal shows status, submitted tail, and scrolls', async () => {
