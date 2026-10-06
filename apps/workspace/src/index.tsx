@@ -38,7 +38,7 @@ const renderer = await createCliRenderer({
   useMouse: false,
   consoleMode: 'disabled',
   externalOutputMode: 'passthrough',
-  backgroundColor: '#1a1b26',
+  backgroundColor: '#141414',
   // Exit here — not on the `destroy` event, which fires before the native
   // teardown (leave alt-screen, restore cursor) completes and leaves a
   // half-painted terminal behind when process.exit cuts it off.

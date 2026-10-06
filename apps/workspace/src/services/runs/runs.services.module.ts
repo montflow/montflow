@@ -193,9 +193,16 @@ export interface RunSummary {
   readonly description: string;
   readonly status: string;
   readonly model: string;
+  /** Thinking-level pin for the run, empty when the session default applies. */
+  readonly thinking: string;
+  /** Tool allowlist for the run's session; empty means Pi's default set. */
+  readonly tools: ReadonlyArray<string>;
   readonly prompt: string;
+  /** Feature slug this run works on, empty when unbound. */
+  readonly feature: string;
   /** Latest agent-posted progress line; empty when none. */
   readonly progress: string;
+  readonly created: string;
   readonly updated: string;
 }
 
@@ -222,8 +229,12 @@ export const fromRun = (run: Run.Run): RunSummary => ({
   description: run.prompt ?? run.name ?? run.id,
   status: run.status,
   model: run.model ?? '',
+  thinking: run.thinking ?? '',
+  tools: run.tools ?? [],
   prompt: run.prompt ?? '',
+  feature: run.feature ?? '',
   progress: run.progress ?? '',
+  created: run.created,
   updated: run.updated,
 });
 
@@ -381,6 +392,16 @@ export const fetchRuns = (root: string): Effect.Effect<RunSummary[], string> =>
   );
 
 /**
+ * Ids of runs with a live in-process session. Persisted `running` statuses
+ * left behind by a dead process are excluded, so this is the trustworthy
+ * "is something actually working" signal for features.
+ * @param root - workspace root (runner runtime owner)
+ * @returns Effect resolving to live run ids, failing with displayable message
+ */
+export const liveRunIds = (root: string): Effect.Effect<ReadonlySet<string>, string> =>
+  withRunner(root, (runner) => runner.liveRunIds(root));
+
+/**
  * Load one run for the detail page: run plus transcript events plus
  * settlement receipt (if any).
  * @param root - workspace root (runs store owner)
@@ -516,7 +537,7 @@ const bridgeLayer = (libs: PiRunsLib): Layer.Layer<WorkspaceBridge> =>
       }),
   });
 
-/** Full engine layer for one repo root: store plus Pi factory plus bridge. */
+/** Full engine layer for one repo root: store plus Pi factory plus bridge plus the platform services `Default` still requires. */
 const runnerLayer = (libs: PiRunsLib, root: string): Layer.Layer<Runner> =>
   libs.Default.pipe(
     Layer.provide(
@@ -524,6 +545,7 @@ const runnerLayer = (libs: PiRunsLib, root: string): Layer.Layer<Runner> =>
         storeLayer(libs, root),
         sessionFactoryLayer ?? libs.PiSessionFactory,
         bridgeLayer(libs),
+        NodeLive,
       ),
     ),
   );
@@ -600,6 +622,8 @@ export interface StartRunInput {
   readonly parent?: string | undefined;
   /** Non-parent related run ids (siblings, review target). */
   readonly related?: ReadonlyArray<string> | undefined;
+  /** Feature slug this run works on, when bound to one. */
+  readonly feature?: string | undefined;
   /** Called once when the run settles; the profile-create completion hook lives here. */
   readonly onSettled?: ((detail: EngineRunDetail) => Effect.Effect<void>) | undefined;
 }
@@ -626,6 +650,7 @@ export const startRun = (root: string, input: StartRunInput): Effect.Effect<RunS
         tools: input.tools ?? DEFAULT_RUN_TOOLS,
         parent: input.parent,
         related: input.related,
+        feature: input.feature,
         onSettled: input.onSettled,
       })
       .pipe(Effect.map(fromRun)),

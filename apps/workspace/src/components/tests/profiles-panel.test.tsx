@@ -74,7 +74,7 @@ const sentinelRowOf = (rows: ReadonlyArray<string>): number => {
 
 /** Interior blank: ignore the Panel border/padding chrome (`│`, `─`, corners). */
 const isBlank = (line: string | undefined): boolean =>
-  (line ?? 'x').replace(/[│╭╮╰╯─]/g, '').trim() === '';
+  (line ?? 'x').replace(/[│┌┐└┘─]/g, '').trim() === '';
 
 /** Boolean assertion with a label (bun:test `expect` takes no message argument). */
 const check = (actual: boolean, label: string): void => {
@@ -150,8 +150,8 @@ describe('ProfilesPanel layout', () => {
     const frames = await renderAll([...states().keys()]);
     for (const [name, rows] of frames) {
       const sentinel = sentinelRowOf(rows);
-      check(rows[0]?.includes('╭') ?? false, `${name}: top border`);
-      check(rows[sentinel - 1]?.includes('╯') ?? false, `${name}: bottom border`);
+      check(rows[0]?.includes('┌') ?? false, `${name}: top border`);
+      check(rows[sentinel - 1]?.includes('└') ?? false, `${name}: bottom border`);
     }
   });
 
@@ -166,9 +166,9 @@ describe('ProfilesPanel layout', () => {
     for (const [name, banner] of banners) {
       const rows = frames.get(name) ?? [];
       const sentinel = sentinelRowOf(rows);
-      // Banner sits on the last content row: bottom border, bottom
-      // padding, then banner (sentinel-3).
-      check(rows[sentinel - 3]?.includes(banner) ?? false, `${name}: banner`);
+      // Banner sits on the last content row: bottom border, then
+      // banner (sentinel-2).
+      check(rows[sentinel - 2]?.includes(banner) ?? false, `${name}: banner`);
     }
   });
 
@@ -176,7 +176,7 @@ describe('ProfilesPanel layout', () => {
     const frames = await renderAll(['missingUnselected', 'emptyUnselected', 'partial']);
     for (const [name, rows] of frames) {
       const sentinel = sentinelRowOf(rows);
-      check(isBlank(rows[sentinel - 3]), `${name}: footer blank`);
+      check(isBlank(rows[sentinel - 2]), `${name}: footer blank`);
     }
   });
 
@@ -212,13 +212,13 @@ describe('ProfilesPanel layout', () => {
       }),
     );
     const sentinel = rows.findIndex((line) => line.includes('SENTINEL'));
-    // Top padding at sentinel-14, search line at sentinel-13, list region
-    // sentinel-12..sentinel-4, banner pinned at sentinel-3.
+    // Search line at sentinel-14, list region sentinel-13..sentinel-3,
+    // banner pinned at sentinel-2.
     names.forEach((name, index) => {
-      check(rows[sentinel - 12 + index]?.includes(name) ?? false, `row ${name}`);
+      check(rows[sentinel - 13 + index]?.includes(name) ?? false, `row ${name}`);
     });
-    check(rows[sentinel - 3]?.includes('/ search') ?? false, 'banner');
-    check(rows[sentinel - 3]?.includes('5/5') ?? false, 'count');
+    check(rows[sentinel - 2]?.includes('/ search') ?? false, 'banner');
+    check(rows[sentinel - 2]?.includes('5/5') ?? false, 'count');
   });
 
   test('partial list keeps rows top-packed with a blank footer when unselected', async () => {
@@ -226,19 +226,19 @@ describe('ProfilesPanel layout', () => {
       await renderState({ installed: true, rows: [row('alpha'), row('beta')], total: 2 }),
     );
     const sentinel = rows.findIndex((line) => line.includes('SENTINEL'));
-    check(rows[sentinel - 12]?.includes('alpha') ?? false, 'first row');
-    check(rows[sentinel - 11]?.includes('beta') ?? false, 'second row');
-    check(isBlank(rows[sentinel - 10]), 'slack row blank');
-    check(isBlank(rows[sentinel - 3]), 'footer blank when unselected');
+    check(rows[sentinel - 13]?.includes('alpha') ?? false, 'first row');
+    check(rows[sentinel - 12]?.includes('beta') ?? false, 'second row');
+    check(isBlank(rows[sentinel - 11]), 'slack row blank');
+    check(isBlank(rows[sentinel - 2]), 'footer blank when unselected');
   });
 
   test('search line is reserved in every state (blank when idle)', async () => {
     const idle = frameRows(await renderState({ installed: true, rows: [row('alpha')], total: 1 }));
     const idleSentinel = idle.findIndex((line) => line.includes('SENTINEL'));
-    check(isBlank(idle[idleSentinel - 13]), 'idle search blank');
+    check(isBlank(idle[idleSentinel - 14]), 'idle search blank');
     const searching = frameRows(await renderState(states().get('searching') ?? {}));
     const searchingSentinel = searching.findIndex((line) => line.includes('SENTINEL'));
-    check(searching[searchingSentinel - 13]?.includes('/al') ?? false, 'query visible');
+    check(searching[searchingSentinel - 14]?.includes('/al') ?? false, 'query visible');
     const applied = frameRows(
       await renderState({
         installed: true,
@@ -250,6 +250,6 @@ describe('ProfilesPanel layout', () => {
       }),
     );
     const appliedSentinel = applied.findIndex((line) => line.includes('SENTINEL'));
-    check(applied[appliedSentinel - 13]?.includes('/al') ?? false, 'applied filter visible');
+    check(applied[appliedSentinel - 14]?.includes('/al') ?? false, 'applied filter visible');
   });
 });

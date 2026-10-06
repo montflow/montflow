@@ -9,7 +9,9 @@ import { execFile, spawn } from 'node:child_process';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: promisify adapts the installer shell-out; both go away with the Command migration.
 import { promisify } from 'node:util';
 import type { Interactive, Skill } from '@montflow/pi-skills';
+import type { RunDetail as EngineRunDetail } from '@montflow/pi-runs';
 import { Data, Effect, Schema } from 'effect';
+import * as Runs from '../runs/index.js';
 
 /**
  * Lazy handle to the skills extension runtime. Static imports from
@@ -784,83 +786,327 @@ export const runHeadlessAgent = (
   );
 
 /**
- * Agentic skill generation for the workspace host: snapshot the store,
- * run the shared author prompt headless, return the fresh directory.
- * New skills are detected by directory diff so agent chatter never parses.
- * @param root - workspace root (skill store owner)
- * @param description - skill description from the TUI input
- * @param modelLabel - `provider/model-id` pin, if any
- * @param inject - requirement skills to inject into the author prompt
- * @returns Effect resolving to the generated Skill, failing with the reason
+ * One transcript line, shared by the engine detail and the dashboard row.
  */
-export const generateAgentic = (
-  libs: PiSkillsLib,
-  root: string,
-  description: string,
-  modelLabel: string | undefined,
-  inject: ReadonlyArray<Skill.Skill>,
-): Effect.Effect<Skill.Skill, string> =>
-  Effect.gen(function* () {
-    const before = yield* getSkills(root);
-    const beforeIds = new Set(before.skills.map((skill) => skill.id));
-    yield* runHeadlessAgent(
-      root,
-      buildHeadlessPrompt(
-        libs.Interactive.AUTHOR_PREPROMPT + libs.Skill.formatInjectedSkills(inject),
-        `Skill description: ${description}`,
-        libs.Interactive.AUTHOR_POSTPROMPT,
-      ),
-      modelLabel,
-    ).pipe(Effect.mapError((error) => error.message));
-    const after = yield* getSkills(root);
-    const fresh = after.skills.find((skill) => !beforeIds.has(skill.id));
-    if (fresh === undefined)
-      return yield* Effect.fail(
-        'The agent finished without creating a skill — try describing it differently.',
-      );
-    return yield* toSkill(libs, fresh);
-  });
+interface TranscriptLine {
+  readonly role: string;
+  readonly text: string;
+}
 
 /**
- * Agentic skill modification for the workspace host: run the shared
- * editor prompt headless scoped to the skill id, re-read that skill.
- * The id is slug-guarded on read-back so the agent cannot redirect.
- * @param root - workspace root (skill store owner)
- * @param skill - skill under edit
- * @param instruction - change request from the TUI input
- * @param modelLabel - `provider/model-id` pin, if any
- * @param inject - requirement skills to inject into the editor prompt
- * @returns Effect resolving to the updated Skill, failing with the reason
+ * Final assistant text from a settled run's transcript, or undefined when
+ * the run produced no assistant turn.
+ * @param events - stored transcript events
+ * @returns last assistant text, if any
  */
-export const modifyAgentic = (
-  libs: PiSkillsLib,
-  root: string,
-  skill: Skill.Skill,
-  instruction: string,
-  modelLabel: string | undefined,
-  inject: ReadonlyArray<Skill.Skill>,
-): Effect.Effect<Skill.Skill, string> =>
-  Effect.gen(function* () {
-    yield* runHeadlessAgent(
-      root,
-      buildHeadlessPrompt(
-        libs.Interactive.MODIFY_PREPROMPT +
-          '\n\nSkill to edit: ' +
-          skill.id +
-          libs.Skill.formatInjectedSkills(inject),
-        `Change request: ${instruction}`,
-        libs.Interactive.MODIFY_POSTPROMPT,
-      ),
-      modelLabel,
-    ).pipe(Effect.mapError((error) => error.message));
-    const after = yield* getSkills(root);
-    const updated = after.skills.find((candidate) => candidate.id === skill.id);
-    if (updated === undefined)
-      return yield* Effect.fail(
-        'The agent finished without updating the skill — try describing the change differently.',
+export const finalAssistantText = (events: ReadonlyArray<TranscriptLine>): string | undefined =>
+  events.findLast((event) => event.role === 'assistant')?.text;
+
+/** How a settled author run's skill was resolved. */
+export type AuthoredSkillPick =
+  | { readonly kind: 'one'; readonly id: string }
+  | { readonly kind: 'ambiguous'; readonly ids: ReadonlyArray<string> }
+  | { readonly kind: 'none' };
+
+/**
+ * Resolve the skill a settled author run authored. Prefers the fresh
+ * skill named in the run's final reply — correlating concurrent creates
+ * to their own run — and falls back to the id diff only when exactly one
+ * fresh skill exists (unambiguous).
+ * @param reply - final assistant text from the run, if any
+ * @param freshIds - skill ids added since the run was dispatched
+ * @returns the chosen id, an ambiguity, or none
+ */
+export const pickAuthoredSkill = (
+  reply: string | undefined,
+  freshIds: ReadonlyArray<string>,
+): AuthoredSkillPick => {
+  if (freshIds.length === 0) return { kind: 'none' };
+  const named = reply === undefined ? [] : freshIds.filter((id) => reply.includes(id));
+  if (named.length === 1) {
+    const id = named[0];
+    if (id !== undefined) return { kind: 'one', id };
+  }
+  if (freshIds.length === 1) {
+    const id = freshIds[0];
+    if (id !== undefined) return { kind: 'one', id };
+  }
+  return { kind: 'ambiguous', ids: freshIds };
+};
+
+/**
+ * TUI callbacks for a dispatched author run's completion: the fresh
+ * skill was found (refresh + open its detail), or the run settled
+ * without one (surface the reason). The run id lets the TUI clear only
+ * the matching dispatched-run keybind target. Absent in headless tests.
+ */
+export interface CreateFlowHooks {
+  /** Fresh skill found after the author run settled. */
+  readonly onSkillCreated?: ((skill: SkillSummary, runId: string) => void) | undefined;
+  /** Author run settled without creating a skill. */
+  readonly onSkillFailed?: ((message: string, runId: string) => void) | undefined;
+}
+
+/**
+ * TUI callbacks for a dispatched editor run's completion: the named
+ * skill was found and persisted (refresh + toast), or the run settled
+ * without a usable change (surface the reason). Absent in headless tests.
+ */
+export interface ModifyFlowHooks {
+  /** Named skill found after the editor run settled. */
+  readonly onSkillModified?: ((skill: SkillSummary, runId: string) => void) | undefined;
+  /** Editor run settled without updating the skill. */
+  readonly onSkillFailed?: ((message: string, runId: string) => void) | undefined;
+}
+
+/**
+ * Raw `SKILL.md` bytes for the dispatch snapshot, or undefined when the
+ * file is missing or the id is unsafe.
+ * @param root - workspace root (skill store owner)
+ * @param id - skill directory slug
+ * @returns Effect resolving to the raw file contents
+ */
+const readRawSkill = (root: string, id: string): Effect.Effect<string | undefined> =>
+  storeFor(root)
+    .readRaw(id)
+    .pipe(Effect.match({ onFailure: () => undefined, onSuccess: (raw) => raw }));
+
+/**
+ * Completion hook for a dispatched author run: resolve the skill the
+ * run authored (reply-correlated, id-diff fallback), persist it
+ * canonically through the loaded runtime's decode+encode path, and
+ * notify the hooks. Exported so a resumed author run can re-attach the
+ * same hook through `Runs.resumeRun` after an app restart.
+ * @param root - workspace root (skill store owner)
+ * @param libs - loaded extension runtime
+ * @param runId - the author run id
+ * @param beforeIds - store ids snapshotted at dispatch, or undefined after a restart
+ * @param hooks - TUI completion callbacks
+ * @returns the `onSettled` hook
+ */
+export const authorCompletion =
+  (
+    root: string,
+    libs: PiSkillsLib,
+    runId: string,
+    beforeIds: ReadonlyArray<string> | undefined,
+    hooks?: CreateFlowHooks,
+  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  (detail) =>
+    Effect.gen(function* () {
+      const { skills } = yield* getSkills(root);
+      const fresh = skills.filter((row) => !(beforeIds ?? []).includes(row.id));
+      const pick = pickAuthoredSkill(
+        finalAssistantText(detail.events),
+        fresh.map((row) => row.id),
       );
-    return yield* toSkill(libs, updated);
-  });
+      if (pick.kind === 'one') {
+        const row = fresh.find((candidate) => candidate.id === pick.id);
+        if (row === undefined) return;
+        const failure = yield* saveSkill(root, row).pipe(
+          Effect.match({ onFailure: (error) => error.message, onSuccess: () => undefined }),
+        );
+        if (failure !== undefined) {
+          hooks?.onSkillFailed?.(
+            `Run '${runId}' created '${row.id}' but it could not be saved: ${failure}`,
+            runId,
+          );
+          return;
+        }
+        hooks?.onSkillCreated?.(row, runId);
+        return;
+      }
+      if (pick.kind === 'ambiguous') {
+        hooks?.onSkillFailed?.(
+          `Run '${runId}' created several skills (${pick.ids.join(', ')}) — open the one you want from the list.`,
+          runId,
+        );
+        return;
+      }
+      hooks?.onSkillFailed?.(
+        `Run '${runId}' finished without creating a skill — try describing it differently.`,
+        runId,
+      );
+    });
+
+/**
+ * Completion hook for a dispatched editor run: re-read the named skill,
+ * refuse a no-op settle by comparing the raw `SKILL.md` to the dispatch
+ * snapshot, persist it canonically through the loaded runtime's
+ * decode+encode path, and notify the hooks. Exported so a resumed
+ * editor run can re-attach the same hook through `Runs.resumeRun` after
+ * an app restart.
+ * @param root - workspace root (skill store owner)
+ * @param libs - loaded extension runtime
+ * @param runId - the editor run id
+ * @param skillId - skill directory slug under edit
+ * @param beforeRaw - raw `SKILL.md` snapshotted at dispatch, or undefined when unreadable
+ * @param hooks - TUI completion callbacks
+ * @returns the `onSettled` hook
+ */
+export const modifyCompletion =
+  (
+    root: string,
+    libs: PiSkillsLib,
+    runId: string,
+    skillId: string,
+    beforeRaw: string | undefined,
+    hooks?: ModifyFlowHooks,
+  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  (_detail) =>
+    Effect.gen(function* () {
+      const afterRaw = yield* readRawSkill(root, skillId);
+      if (afterRaw === undefined) {
+        hooks?.onSkillFailed?.(
+          `Run '${runId}' finished without updating skill '${skillId}' — try describing the change differently.`,
+          runId,
+        );
+        return;
+      }
+      if (beforeRaw !== undefined && afterRaw === beforeRaw) {
+        hooks?.onSkillFailed?.(
+          `Run '${runId}' finished without updating skill '${skillId}' — try describing the change differently.`,
+          runId,
+        );
+        return;
+      }
+      const { skills } = yield* getSkills(root);
+      const updated = skills.find((row) => row.id === skillId);
+      if (updated === undefined) {
+        hooks?.onSkillFailed?.(
+          `Run '${runId}' wrote an unusable skill '${skillId}' — check its SKILL.md and retry.`,
+          runId,
+        );
+        return;
+      }
+      const row = updated;
+      const failure = yield* saveSkill(root, row).pipe(
+        Effect.match({ onFailure: (error) => error.message, onSuccess: () => undefined }),
+      );
+      if (failure !== undefined) {
+        hooks?.onSkillFailed?.(
+          `Run '${runId}' updated '${skillId}' but it could not be saved: ${failure}`,
+          runId,
+        );
+        return;
+      }
+      hooks?.onSkillModified?.(row, runId);
+    });
+
+/** Result of a create flow: persisted manually, or dispatched as a run. */
+export type CreateFlowResult =
+  | { readonly kind: 'saved'; readonly skill: SkillSummary }
+  | { readonly kind: 'dispatched'; readonly runId: string };
+
+/** Result of a modify flow: persisted manually, or dispatched as a run. */
+export type ModifyFlowResult =
+  | { readonly kind: 'saved'; readonly skill: SkillSummary }
+  | { readonly kind: 'dispatched'; readonly runId: string };
+
+/** Run id dispatched by the most recent agentic create, consumed by {@link runCreateFlow}. */
+let dispatchedRunId: string | undefined;
+
+/** Run id dispatched by the most recent agentic modify, consumed by {@link runModifyFlow}. */
+let dispatchedModifyRunId: string | undefined;
+
+/** Test seam: forget the dispatched-run ref so a fresh create flow starts clean. */
+export const resetDispatchedRun = (): void => {
+  dispatchedRunId = undefined;
+};
+
+/** Test seam: forget the dispatched-modify-run ref so a fresh modify flow starts clean. */
+export const resetDispatchedModifyRun = (): void => {
+  dispatchedModifyRunId = undefined;
+};
+
+/** Skill ids currently in the store, regardless of decode validity. */
+const storeIds = (root: string): Effect.Effect<ReadonlyArray<string>> =>
+  getSkills(root).pipe(Effect.map(({ skills }) => skills.map((skill) => skill.id)));
+
+/**
+ * Agentic generation port for the shared interactive flows: gate on the
+ * runs extension, snapshot the store, dispatch an author run through the
+ * pi-runs engine, then unwind the shared `createSkill` flow with
+ * `CANCELLED` (the run, not this flow, writes the skill). The run id
+ * lands in a module-level ref that {@link runCreateFlow} reads to
+ * distinguish a dispatch from a real cancel. When the run settles,
+ * {@link authorCompletion} correlates the fresh skill to this run's final
+ * reply, so concurrent creates never cross wires.
+ * @param root - workspace root (skill store owner)
+ * @param hooks - TUI completion callbacks, if any
+ * @returns generator port for the interactive flows
+ */
+export const generateFor =
+  (root: string, hooks?: CreateFlowHooks): Interactive.SkillGenerator =>
+  (input) =>
+    loadLibs().pipe(
+      Effect.flatMap((libs) =>
+        Effect.gen(function* () {
+          const installed = yield* Runs.runsExtensionInstalled(root);
+          if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+          const beforeIds = yield* storeIds(root);
+          const id = yield* Runs.newRunId('create-skill');
+          yield* Runs.startRun(root, {
+            id,
+            name: `Create skill: ${input.description.trim().slice(0, 80)}`,
+            prompt: buildHeadlessPrompt(
+              libs.Interactive.AUTHOR_PREPROMPT + libs.Skill.formatInjectedSkills(input.inject),
+              `Skill description: ${input.description}`,
+              libs.Interactive.AUTHOR_POSTPROMPT,
+            ),
+            model: input.modelLabel,
+            tools: [...Runs.DEFAULT_RUN_TOOLS],
+            onSettled: authorCompletion(root, libs, id, beforeIds, hooks),
+          });
+          dispatchedRunId = id;
+          return yield* Effect.fail(libs.Interactive.CANCELLED);
+        }),
+      ),
+    );
+
+/**
+ * Agentic modification port for the shared interactive flows: gate on
+ * the runs extension, snapshot the named skill's raw file, dispatch an
+ * editor run through the pi-runs engine, then unwind the shared
+ * `modifySkill` flow with `CANCELLED` (the run, not this flow, writes
+ * the skill). The run id lands in a module-level ref that
+ * {@link runModifyFlow} reads to distinguish a dispatch from a real
+ * cancel. When the run settles, {@link modifyCompletion} re-reads and
+ * persists the named skill.
+ * @param root - workspace root (skill store owner)
+ * @param hooks - TUI completion callbacks, if any
+ * @returns modifier port for the interactive flows
+ */
+export const modifyFor =
+  (root: string, hooks?: ModifyFlowHooks): Interactive.SkillModifier =>
+  (input) =>
+    loadLibs().pipe(
+      Effect.flatMap((libs) =>
+        Effect.gen(function* () {
+          const installed = yield* Runs.runsExtensionInstalled(root);
+          if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+          const beforeRaw = yield* readRawSkill(root, input.skill.id);
+          const id = yield* Runs.newRunId('modify-skill');
+          yield* Runs.startRun(root, {
+            id,
+            name: `Modify skill: ${input.skill.id}`,
+            prompt: buildHeadlessPrompt(
+              libs.Interactive.MODIFY_PREPROMPT +
+                '\n\nSkill to edit: ' +
+                input.skill.id +
+                libs.Skill.formatInjectedSkills(input.inject),
+              `Change request: ${input.instruction}`,
+              libs.Interactive.MODIFY_POSTPROMPT,
+            ),
+            model: input.modelLabel,
+            tools: [...Runs.DEFAULT_RUN_TOOLS],
+            onSettled: modifyCompletion(root, libs, id, input.skill.id, beforeRaw, hooks),
+          });
+          dispatchedModifyRunId = id;
+          return yield* Effect.fail(libs.Interactive.CANCELLED);
+        }),
+      ),
+    );
 
 /**
  * File-backed `SkillStore` port for the shared interactive flows: the
@@ -907,36 +1153,6 @@ export const storeFor = (root: string): Interactive.SkillStore => ({
 });
 
 /**
- * Agentic generation port for the shared interactive flows: headless
- * `pi -p` over the shared author prompt.
- * @param root - workspace root (skill store owner)
- * @returns generator port for the interactive flows
- */
-export const generateFor =
-  (root: string): Interactive.SkillGenerator =>
-  (input) =>
-    loadLibs().pipe(
-      Effect.flatMap((libs) =>
-        generateAgentic(libs, root, input.description, input.modelLabel, input.inject),
-      ),
-    );
-
-/**
- * Agentic modification port for the shared interactive flows: headless
- * `pi -p` over the shared editor prompt.
- * @param root - workspace root (skill store owner)
- * @returns modifier port for the interactive flows
- */
-export const modifyFor =
-  (root: string): Interactive.SkillModifier =>
-  (input) =>
-    loadLibs().pipe(
-      Effect.flatMap((libs) =>
-        modifyAgentic(libs, root, input.skill, input.instruction, input.modelLabel, input.inject),
-      ),
-    );
-
-/**
  * Skill installer port for the shared interactive flows (the
  * requirements gate): named installs via the skills CLI.
  * @param root - workspace root (install target)
@@ -961,39 +1177,50 @@ export interface FlowPorts {
 /**
  * Workspace host for the shared create flow: load the extension,
  * resolve picker models, run `createSkill` (manual or agentic behind
- * the overlays), persist. Cancellations resolve undefined so the TUI
- * needs no `CANCELLED` knowledge — only real failures reject.
+ * the overlays). Manual creation persists and lands on the new skill's
+ * detail; agentic creation dispatches a run through the engine and
+ * resolves `dispatched`; real cancels resolve undefined. The TUI needs
+ * no `CANCELLED` knowledge — only real failures reject.
  * @param root - workspace root (skill store owner)
  * @param ports - TUI overlay ports
- * @returns Effect resolving to the saved row, or undefined on cancel
+ * @param hooks - completion callbacks for a dispatched author run
+ * @returns Effect resolving to the create outcome, or undefined on cancel
  */
 export const runCreateFlow = (
   root: string,
   ports: FlowPorts,
-): Effect.Effect<SkillSummary | undefined, string> =>
+  hooks?: CreateFlowHooks,
+): Effect.Effect<CreateFlowResult | undefined, string> =>
   loadLibs().pipe(
     Effect.flatMap((libs) =>
       Effect.gen(function* () {
         const refs = yield* listModelLabels();
         const fallback = yield* listDefaultModel();
+        dispatchedRunId = undefined;
         const skill = yield* libs.Interactive.createSkill(
           ports.ui,
           libs.Interactive.modelOptions(fallback, refs),
-          generateFor(root),
+          generateFor(root, hooks),
           storeFor(root),
           installerFor(root),
           undefined,
           ports.modelPicker,
           ports.loading,
         );
-        yield* saveSkill(root, fromSkill(libs, skill)).pipe(
-          Effect.mapError((failure) => failure.message),
-        );
-        return fromSkill(libs, skill);
+        const row = fromSkill(libs, skill);
+        yield* saveSkill(root, row).pipe(Effect.mapError((failure) => failure.message));
+        return { kind: 'saved', skill: row } satisfies CreateFlowResult;
       }).pipe(
-        Effect.catch((error) =>
-          error === libs.Interactive.CANCELLED ? Effect.succeed(undefined) : Effect.fail(error),
-        ),
+        Effect.catch((error) => {
+          if (error !== libs.Interactive.CANCELLED) return Effect.fail(error);
+          const runId = dispatchedRunId;
+          dispatchedRunId = undefined;
+          return Effect.succeed(
+            runId === undefined
+              ? undefined
+              : ({ kind: 'dispatched', runId } satisfies CreateFlowResult),
+          );
+        }),
       ),
     ),
   );
@@ -1001,43 +1228,54 @@ export const runCreateFlow = (
 /**
  * Workspace host for the shared modify flow for one skill: load the
  * extension, run `modifySkill` (manual description edit or agentic
- * rewrite), persist. Cancellations resolve undefined; the detail stays
- * open on the updated row.
+ * rewrite). Manual edits persist and resolve `saved`; agentic edits
+ * dispatch an editor run and resolve `dispatched`; real cancels resolve
+ * undefined. The TUI needs no `CANCELLED` knowledge — only real
+ * failures reject.
  * @param root - workspace root (skill store owner)
  * @param id - skill id under edit
  * @param ports - TUI overlay ports
- * @returns Effect resolving to the saved row, or undefined on cancel
+ * @param hooks - completion callbacks for a dispatched editor run
+ * @returns Effect resolving to the modify outcome, or undefined on cancel
  */
 export const runModifyFlow = (
   root: string,
   id: string,
   ports: FlowPorts,
-): Effect.Effect<SkillSummary | undefined, string> =>
+  hooks?: ModifyFlowHooks,
+): Effect.Effect<ModifyFlowResult | undefined, string> =>
   loadLibs().pipe(
     Effect.flatMap((libs) =>
       Effect.gen(function* () {
         const skills = yield* storeFor(root).list();
         const refs = yield* listModelLabels();
         const fallback = yield* listDefaultModel();
+        dispatchedModifyRunId = undefined;
         const skill = yield* libs.Interactive.modifySkill(
           ports.ui,
           skills,
           id,
           libs.Interactive.modelOptions(fallback, refs),
-          modifyFor(root),
+          modifyFor(root, hooks),
           storeFor(root),
           installerFor(root),
           ports.modelPicker,
           ports.loading,
         );
-        yield* saveSkill(root, fromSkill(libs, skill)).pipe(
-          Effect.mapError((failure) => failure.message),
-        );
-        return fromSkill(libs, skill);
+        const row = fromSkill(libs, skill);
+        yield* saveSkill(root, row).pipe(Effect.mapError((failure) => failure.message));
+        return { kind: 'saved', skill: row } satisfies ModifyFlowResult;
       }).pipe(
-        Effect.catch((error) =>
-          error === libs.Interactive.CANCELLED ? Effect.succeed(undefined) : Effect.fail(error),
-        ),
+        Effect.catch((error) => {
+          if (error !== libs.Interactive.CANCELLED) return Effect.fail(error);
+          const runId = dispatchedModifyRunId;
+          dispatchedModifyRunId = undefined;
+          return Effect.succeed(
+            runId === undefined
+              ? undefined
+              : ({ kind: 'dispatched', runId } satisfies ModifyFlowResult),
+          );
+        }),
       ),
     ),
   );

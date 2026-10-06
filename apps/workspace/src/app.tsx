@@ -37,7 +37,11 @@ import {
   PromptsPanel,
   RemoveDialog,
   RunDetail,
+  type RunDetailFocus,
   type RunDetailMode,
+  RunMeta,
+  RUN_PREVIEW_LINES,
+  RunPrompt,
   RunsPanel,
   SkillDetail,
   type SkillDetailMode,
@@ -47,12 +51,21 @@ import {
   activeRunRows,
   featureDetailLines,
   formatKeybinds,
+  clipStatusHint,
   isLiveRunStatus,
   palette,
+  promptPaneColumns,
+  promptPaneRows,
+  promptWindow,
   runDetailActions,
   runDetailHint,
   runDetailIntent,
+  runFocusCycle,
   runSelectableRows,
+  RUN_SIDEBAR_WIDTH,
+  runTranscriptMarkdown,
+  showsPromptPane,
+  detailBodyRows,
 } from './components/index.js';
 import type { Toast, ToastVariant } from './components/index.js';
 import { Features, GitInfo, Profiles, Prompts, Query, Runs, Skills } from './services/index.js';
@@ -440,7 +453,13 @@ export const App = (props: AppProps) => {
   const [runDetailLoading, setRunDetailLoading] = createSignal(false);
   const [runDetailPollFailures, setRunDetailPollFailures] = createSignal(0);
   const [runDetailMode, setRunDetailMode] = createSignal<RunDetailMode>('preview');
+  /** Which pane the scroll keys drive — the transcript or the prompt above it. */
+  const [runDetailFocus, setRunDetailFocus] = createSignal<RunDetailFocus>('details');
+  /** Rows scrolled past in the prompt pane. */
+  const [runPromptScroll, setRunPromptScroll] = createSignal(0);
   const [runDetailScroll, setRunDetailScroll] = createSignal(0);
+  /** True while the reader sits on the newest transcript line — polls follow the tail. */
+  const [runDetailPinned, setRunDetailPinned] = createSignal(true);
   const [runDetailAction, setRunDetailAction] = createSignal(0);
   const [runsCard, setRunsCard] = createSignal<BoxRenderable | undefined>(undefined);
   const [measuredRunRows, setMeasuredRunRows] = createSignal<number | undefined>(undefined);
@@ -451,6 +470,10 @@ export const App = (props: AppProps) => {
   const featuresQuery = createQuery(() => ({
     queryKey: Query.featuresKey,
     queryFn: () => Query.fetchFeaturesList(root, setFeaturesPhase),
+    // Live-refresh while a feature-bound run is progressing, so the
+    // derived `pending` ↔ `in-progress` state tracks the runner.
+    refetchInterval: () =>
+      runRows().some((row) => row.feature !== '' && isLiveRunStatus(row.status)) ? 1500 : false,
   }));
   const featureRows = createMemo(() => featuresQuery.data?.rows ?? []);
   const featuresInstalled = createMemo(() => featuresQuery.data?.installed ?? false);
@@ -804,6 +827,29 @@ export const App = (props: AppProps) => {
   };
 
   /**
+   * Completion hooks for a dispatched feature-author run: refresh the
+   * features and runs lists, open the authored feature's detail, and toast
+   * the outcome. The run engine fires these after the author run settles.
+   */
+  const featureBeginHooks: Features.BeginFlowHooks = {
+    onFeatureCreated: (featureId, runId) => {
+      refreshFeatures();
+      refreshRuns();
+      setFeatureDetailId(featureId);
+      setFeatureDetailMode('preview');
+      setFeatureDetailScroll(0);
+      clearDispatchedRun(runId);
+      pushToast(`Authored feature '${Runs.sanitizeRunText(featureId)}'.`, { variant: 'success' });
+    },
+    onFeatureFailed: (message, runId) => {
+      refreshFeatures();
+      refreshRuns();
+      clearDispatchedRun(runId);
+      pushToast(message, { variant: 'error' });
+    },
+  };
+
+  /**
    * Overlay ports for the prompts flow runners. The skills, profiles,
    * and prompts `Interactive` surfaces are structurally identical (same
    * dialogs, picker, and loading shapes), so the shared adapters satisfy
@@ -814,6 +860,24 @@ export const App = (props: AppProps) => {
     modelPicker: modelPickerFn,
     loading: loadingFn,
   });
+
+  /**
+   * Completion hooks for a dispatched prompt-modify run: refresh the
+   * prompts and runs lists and toast the outcome. The run engine fires
+   * these after the editor run settles. Mirrors
+   * {@link profileModifyHooks}.
+   */
+  const promptModifyHooks: Prompts.ModifyFlowHooks = {
+    onPromptModified: (prompt) => {
+      refreshPrompts();
+      refreshRuns();
+      pushToast(`Updated prompt '${prompt.id}'.`, { variant: 'success' });
+    },
+    onPromptFailed: (message) => {
+      refreshRuns();
+      pushToast(message, { variant: 'error' });
+    },
+  };
 
   /**
    * TanStack mutation for one agent flow (create/modify/delete behind
@@ -889,21 +953,77 @@ export const App = (props: AppProps) => {
   };
 
   /**
+   * Completion hooks for a dispatched skill-create run: refresh the
+   * skills and runs lists, open the authored skill's detail, and toast
+   * the outcome. The run engine fires these after the author run
+   * settles. Mirrors {@link profileCreateHooks}.
+   */
+  const skillCreateHooks: Skills.CreateFlowHooks = {
+    onSkillCreated: (skill, runId) => {
+      refreshSkills();
+      refreshRuns();
+      setDetailId(skill.id);
+      setDetailMode('preview');
+      setDetailScroll(0);
+      setDetailAction(0);
+      clearDispatchedRun(runId);
+      pushToast(`Created skill '${skill.id}'.`, { variant: 'success' });
+    },
+    onSkillFailed: (message, runId) => {
+      refreshSkills();
+      refreshRuns();
+      clearDispatchedRun(runId);
+      pushToast(message, { variant: 'error' });
+    },
+  };
+
+  /**
+   * Completion hooks for a dispatched skill-modify run: refresh the
+   * skills and runs lists and toast the outcome.
+   */
+  const skillModifyHooks: Skills.ModifyFlowHooks = {
+    onSkillModified: (skill) => {
+      refreshSkills();
+      refreshRuns();
+      pushToast(`Updated skill '${Runs.sanitizeRunText(skill.id)}'.`, { variant: 'success' });
+    },
+    onSkillFailed: (message) => {
+      refreshRuns();
+      pushToast(message, { variant: 'error' });
+    },
+  };
+
+  /**
    * Create flow: the service runner lazy-loads the extension, runs the
-   * shared `createSkill` flow behind the overlays, and persists. Lands
-   * on the new skill's detail; cancellations stay silent.
+   * shared `createSkill` flow behind the overlays. Manual creation
+   * persists and lands on the new skill's detail; agentic creation
+   * dispatches a run through the engine, toasts the run with the `g`
+   * keybind, and lets {@link skillCreateHooks} open the fresh skill when
+   * it settles. Cancellations stay silent.
    */
   const createSkillMutation = flowMutation({
-    run: () => Skills.runCreateFlow(root, flowPorts()),
-    done: (skill) => {
-      pushToast(`Saved skill '${skill.id}'.`, { variant: 'success' });
-      setDetailId(skill.id);
+    run: () => Skills.runCreateFlow(root, flowPorts(), skillCreateHooks),
+    done: (result) => {
+      if (result.kind === 'dispatched') {
+        setLastDispatchedRunId(result.runId);
+        refreshRuns();
+        pushToast(`Run '${result.runId}' is creating your skill — press g to view`, {
+          variant: 'info',
+        });
+        return;
+      }
+      pushToast(`Saved skill '${result.skill.id}'.`, { variant: 'success' });
+      setDetailId(result.skill.id);
       setDetailMode('preview');
       setDetailScroll(0);
       setDetailAction(0);
       refreshSkills();
     },
     fail: (error) => {
+      if (Runs.isRunsExtensionInstallError(error.message)) {
+        pushToast(error.message, { variant: 'warning' });
+        return;
+      }
       openFlowError('Creating skill failed', error, () => {
         setFlowError(undefined);
         createSkillMutation.mutate(undefined);
@@ -919,21 +1039,46 @@ export const App = (props: AppProps) => {
       createSkillMutation.isPending
     )
       return;
-    createSkillMutation.mutate(undefined);
+    // Gate on the runs engine before opening the dialog: without it the
+    // agentic path cannot run, and discovering that after the mode select,
+    // requirements gate, description, and model picker is too late.
+    void Runs.runsExtensionInstalled(root)
+      .pipe(Effect.runPromise)
+      .then((installed) => {
+        if (!installed) {
+          pushToast(Runs.RUNS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
+          setSelected('runs');
+          return;
+        }
+        // The probe is async; a second `c` may have started the flow first.
+        if (createSkillMutation.isPending || dialog() !== undefined) return;
+        createSkillMutation.mutate(undefined);
+      });
   };
 
   /**
    * Modify flow for the open detail: the service runner lazy-loads the
-   * extension, runs the shared `modifySkill` flow, and persists. The
-   * detail stays open on the updated row; cancellations stay silent.
+   * extension, runs the shared `modifySkill` flow, and persists. Manual
+   * edits stay on the detail; agentic edits dispatch an editor run and
+   * open its detail page directly. Cancellations stay silent.
    */
   const modifySkillMutation = flowMutation({
-    run: (id: string) => Skills.runModifyFlow(root, id, flowPorts()),
-    done: (skill) => {
-      pushToast(`Saved skill '${skill.id}'.`, { variant: 'success' });
+    run: (id: string) => Skills.runModifyFlow(root, id, flowPorts(), skillModifyHooks),
+    done: (result) => {
+      if (result.kind === 'dispatched') {
+        refreshRuns();
+        pushToast(`Run '${result.runId}' is updating your skill.`, { variant: 'info' });
+        openRunDetail(result.runId);
+        return;
+      }
+      pushToast(`Saved skill '${result.skill.id}'.`, { variant: 'success' });
       refreshSkills();
     },
     fail: (error, id) => {
+      if (Runs.isRunsExtensionInstallError(error.message)) {
+        pushToast(error.message, { variant: 'warning' });
+        return;
+      }
       openFlowError('Modifying skill failed', error, () => {
         setFlowError(undefined);
         modifySkillMutation.mutate(id);
@@ -950,7 +1095,21 @@ export const App = (props: AppProps) => {
       modifySkillMutation.isPending
     )
       return;
-    modifySkillMutation.mutate(target.id);
+    const id = target.id;
+    // Gate on the runs engine before opening the dialog, mirroring the
+    // create flow: the agentic path cannot dispatch without it, and
+    // discovering that after the mode select and prompts is too late.
+    void Runs.runsExtensionInstalled(root)
+      .pipe(Effect.runPromise)
+      .then((installed) => {
+        if (!installed) {
+          pushToast(Runs.RUNS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
+          setSelected('runs');
+          return;
+        }
+        if (modifySkillMutation.isPending || dialog() !== undefined) return;
+        modifySkillMutation.mutate(id);
+      });
   };
 
   /**
@@ -1162,16 +1321,27 @@ export const App = (props: AppProps) => {
   /**
    * Modify flow for the open prompt detail: the service runner
    * lazy-loads the extension, runs the shared `modifyPrompt` flow, and
-   * persists. The detail stays open on the updated row; cancellations
-   * stay silent.
+   * persists. Manual edits stay on the detail; agentic edits dispatch an
+   * editor run and open its detail page directly. Cancellations stay
+   * silent.
    */
   const modifyPromptMutation = flowMutation({
-    run: (id: string) => Prompts.runModifyFlow(root, id, promptFlowPorts()),
-    done: (prompt) => {
-      pushToast(`Saved prompt '${prompt.id}'.`, { variant: 'success' });
+    run: (id: string) => Prompts.runModifyFlow(root, id, promptFlowPorts(), promptModifyHooks),
+    done: (result) => {
+      if (result.kind === 'dispatched') {
+        refreshRuns();
+        pushToast(`Run '${result.runId}' is updating your prompt.`, { variant: 'info' });
+        openRunDetail(result.runId);
+        return;
+      }
+      pushToast(`Saved prompt '${result.prompt.id}'.`, { variant: 'success' });
       refreshPrompts();
     },
     fail: (error, id) => {
+      if (Runs.isRunsExtensionInstallError(error.message)) {
+        pushToast(error.message, { variant: 'warning' });
+        return;
+      }
       openFlowError('Modifying prompt failed', error, () => {
         setFlowError(undefined);
         modifyPromptMutation.mutate(id);
@@ -1188,7 +1358,21 @@ export const App = (props: AppProps) => {
       modifyPromptMutation.isPending
     )
       return;
-    modifyPromptMutation.mutate(target.id);
+    const id = target.id;
+    // Gate on the runs engine before opening the dialog, mirroring the
+    // profile modify flow: the agentic path cannot dispatch without it,
+    // and discovering that after the mode select and prompts is too late.
+    void Runs.runsExtensionInstalled(root)
+      .pipe(Effect.runPromise)
+      .then((installed) => {
+        if (!installed) {
+          pushToast(Runs.RUNS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
+          setSelected('runs');
+          return;
+        }
+        if (modifyPromptMutation.isPending || dialog() !== undefined) return;
+        modifyPromptMutation.mutate(id);
+      });
   };
 
   /**
@@ -1298,6 +1482,11 @@ export const App = (props: AppProps) => {
           // Stale loads (closed while another run opened) never paint.
           if (runDetailId() !== id) return;
           setRunDetailData(data);
+          // Tail-following: a run transcript is a log that grows at the
+          // end, so while the reader sits at the newest line (the
+          // default) every poll keeps them there — new work stays in
+          // view. Scrolling up unpins; scrolling back to the end re-pins.
+          if (runDetailPinned()) setRunDetailScroll(runDetailMaxScroll());
           if (!silent) setRunDetailLoading(false);
           setRunDetailPollFailures(0);
         },
@@ -1328,7 +1517,13 @@ export const App = (props: AppProps) => {
     setRunDetailId(id);
     setRunDetailData(undefined);
     setRunDetailMode('preview');
+    // Start at the top of the transcript like every other list, and
+    // stay there: a poll only follows the tail once the reader has
+    // scrolled into it themselves.
     setRunDetailScroll(0);
+    setRunDetailPinned(false);
+    setRunDetailFocus('details');
+    setRunPromptScroll(0);
     setRunDetailAction(0);
     setRunTyping(false);
     setRunDetailPollFailures(0);
@@ -1341,14 +1536,22 @@ export const App = (props: AppProps) => {
     setRunDetailLoading(false);
     setRunDetailMode('preview');
     setRunDetailScroll(0);
+    setRunDetailPinned(true);
+    setRunDetailFocus('details');
+    setRunPromptScroll(0);
     setRunDetailAction(0);
     setRunDetailPollFailures(0);
   };
 
-  /** Scroll window for the run full view: transcript lines. */
+  /** Scroll window for the run transcript: one line per press, in
+   * both modes — the preview is a small window over the same lines.
+   * Landing on the last line re-pins the tail; leaving it unpins, so a
+   * live poll never yanks the reader away from where they scrolled.
+   */
   const scrollRunDetail = (delta: number): void => {
-    if (runDetailMode() !== 'view') return;
-    setRunDetailScroll((offset) => Math.min(Math.max(offset + delta, 0), runDetailMaxScroll()));
+    const next = Math.min(Math.max(runDetailScroll() + delta, 0), runDetailMaxScroll());
+    setRunDetailScroll(next);
+    setRunDetailPinned(next >= runDetailMaxScroll());
   };
 
   /** True while the open run is live — drives the transcript poll. */
@@ -1625,6 +1828,74 @@ export const App = (props: AppProps) => {
   };
 
   /**
+   * Begin flow: describe the feature, pick a model, then dispatch an author
+   * run through the pi-runs engine. The run authors the spec and may park
+   * on `ask_user` for the user to answer; it lands on the run's detail so
+   * the user can watch the state and answer. Cancellations stay silent.
+   */
+  const beginFeatureMutation = flowMutation({
+    run: () =>
+      Effect.gen(function* () {
+        const description = yield* Effect.promise(() =>
+          askInput('Describe the feature', 'What should this feature do?'),
+        );
+        if (description === undefined || description.trim() === '') return undefined;
+        const refs = yield* Skills.listModelLabels();
+        const fallback = yield* Skills.listDefaultModel();
+        let model: string | undefined;
+        if (refs.length > 0) {
+          const options: Array<Interactive.ModelOption> = refs.map((ref) => ({
+            label: `${ref.provider}/${ref.id}`,
+            current:
+              fallback !== undefined &&
+              fallback.provider === ref.provider &&
+              fallback.id === ref.id,
+          }));
+          const current = options.findIndex((option) => option.current);
+          const rows = options.map(displayModelLabel);
+          const picked = yield* Effect.promise(() =>
+            askFilter(`Model picker · ${options.length} available`, rows, {
+              highlight: current >= 0 ? current : 0,
+              current: current >= 0 ? current : undefined,
+            }),
+          );
+          if (picked === undefined) return undefined;
+          model = options.find((option) => displayModelLabel(option) === picked)?.label;
+        }
+        return yield* Features.beginFeature(root, {
+          description: description.trim(),
+          modelLabel: model,
+          hooks: featureBeginHooks,
+        });
+      }),
+    done: (result) => {
+      pushToast(`Dispatched feature run '${Runs.sanitizeRunText(result.runId)}'.`, {
+        variant: 'success',
+      });
+      setLastDispatchedRunId(result.runId);
+      refreshRuns();
+      openRunDetail(result.runId);
+    },
+    fail: (error) => {
+      if (Runs.isRunsExtensionInstallError(error.message)) {
+        pushToast(error.message, { variant: 'warning' });
+        return;
+      }
+      openFlowError('Beginning feature failed', error, () => {
+        setFlowError(undefined);
+        beginFeatureMutation.mutate(undefined);
+      });
+    },
+  });
+
+  const runBeginFeature = (): void => {
+    if (dialog() !== undefined || working() !== undefined || beginFeatureMutation.isPending) {
+      return;
+    }
+    beginFeatureMutation.mutate(undefined);
+  };
+
+  /**
    * Store install behind a mutation so the installing flag and the
    * list refresh settle together: success toasts and invalidates the
    * runs key; failures toast.
@@ -1784,8 +2055,8 @@ export const App = (props: AppProps) => {
     SkillFilter.filterByQuery(featureRows(), featureQuery()),
   );
 
-  /** Panel chrome lines: border top/bottom plus padding top/bottom. Owned by `Panel`, constant. */
-  const CARD_CHROME_LINES = 4;
+  /** Panel chrome lines: border top/bottom only — `Panel` has no vertical padding, constant. */
+  const CARD_CHROME_LINES = 2;
 
   /** Reserved lines inside the skills content: search line plus footer line. Owned by `SkillsPanel`, constant. */
   const SKILLS_RESERVED_LINES = 2;
@@ -2053,6 +2324,46 @@ export const App = (props: AppProps) => {
   );
   const featureRelativeHighlight = createMemo(() => featureHighlight() - featureWindowStart());
   const maxBodyLines = createMemo(() => Math.max(5, dimensions().height - 13));
+  /**
+   * The prompt pane above the transcript, sized to its own text. Each
+   * of these reads only signals and pure helpers, never another memo:
+   * `createMemo` is eager, so a memo that reads a later one dies with a
+   * temporal-dead-zone `ReferenceError` on boot.
+   */
+  const runPromptPaneRows = createMemo(() =>
+    promptPaneRows(dimensions().height, dimensions().width, runDetailData()?.summary.prompt ?? ''),
+  );
+  const showRunPromptPane = createMemo(() => showsPromptPane(dimensions().height));
+  const runPromptColumns = createMemo(() => promptPaneColumns(dimensions().width));
+  const runPromptBudgetRows = createMemo(() => Math.max(runPromptPaneRows() - 3, 1));
+  const runDetailMaxBodyLines = createMemo(() =>
+    detailBodyRows(dimensions().height, dimensions().width, runDetailData()?.summary.prompt ?? ''),
+  );
+
+  /** Rows of the prompt hidden below the prompt pane's window. */
+  const runPromptMaxScroll = createMemo(
+    () =>
+      promptWindow(
+        runDetailData()?.summary.prompt ?? '',
+        runPromptColumns(),
+        runPromptBudgetRows(),
+        0,
+      ).below,
+  );
+
+  /**
+   * Scroll whichever pane holds focus. Only the focused pane can move:
+   * the intent resolves against `runDetailFocus` before it reaches
+   * either scroll signal.
+   * @param delta - rows to move (positive scrolls down)
+   */
+  const scrollFocusedRunPane = (delta: number): void => {
+    if (runDetailFocus() === 'prompt' && showRunPromptPane()) {
+      setRunPromptScroll((offset) => Math.min(Math.max(offset + delta, 0), runPromptMaxScroll()));
+      return;
+    }
+    scrollRunDetail(delta);
+  };
 
   /** Keybinds in canonical panel order for the status hint. */
   const orderedKeybinds = createMemo(() =>
@@ -2177,13 +2488,19 @@ export const App = (props: AppProps) => {
     if (profileDetail() !== undefined) return detailHint(profileDetailMode());
     if (promptDetail() !== undefined) return detailHint(promptDetailMode());
     if (runDetailId() !== undefined)
-      return runDetailHint(runDetailData()?.summary.status, runDetailMode());
+      return runDetailHint(
+        runDetailData()?.summary.status,
+        runDetailMode(),
+        runDetailFocus(),
+        showRunPromptPane(),
+      );
     if (featureDetailId() !== undefined) return featureDetailHint();
     if (
       (selected() === 'skills' && skillTyping()) ||
       (selected() === 'profiles' && profileTyping()) ||
       (selected() === 'prompts' && promptTyping()) ||
-      (selected() === 'runs' && runTyping())
+      (selected() === 'runs' && runTyping()) ||
+      (selected() === 'features' && featureTyping())
     )
       return formatKeybinds([
         Keybinds.typeToFilter(),
@@ -2251,14 +2568,25 @@ export const App = (props: AppProps) => {
     }
     if (selected() === 'features' && featuresLoaded()) {
       if (featuresInteractive()) {
-        const entries = [Keybinds.search(), Keybinds.open(), Keybinds.refresh()];
+        const entries = [Keybinds.search(), Keybinds.open(), Keybinds.create(), Keybinds.refresh()];
         if (featureQuery() !== '') entries.push(Keybinds.clearFilter());
         return `${base} · ${formatKeybinds(entries)}`;
       }
-      return `${base} · ${formatKeybinds([Keybinds.refresh()])}`;
+      return `${base} · ${formatKeybinds([Keybinds.create(), Keybinds.refresh()])}`;
     }
     return base;
   });
+
+  /**
+   * Status-bar halves. The trailing side is the terminal size plus the
+   * workspace summary; the hint is trimmed to whatever columns are
+   * left, so the two never overprint on a narrow terminal. Declared
+   * here, after `hint`, because both memos are eager.
+   */
+  const statusTrailing = createMemo(() => `${size()} · ${Workspace.summarize(info())}`);
+  const statusHint = createMemo(() =>
+    clipStatusHint(hint(), Math.max(dimensions().width - statusTrailing().length - 4, 12)),
+  );
 
   const moveHighlight = (delta: number): void => {
     if (selected() === 'profiles')
@@ -2401,9 +2729,21 @@ export const App = (props: AppProps) => {
     setDetailScroll((offset) => Math.min(Math.max(offset + delta, 0), detailMaxScroll()));
   };
 
-  /** Scroll window for the run full view: transcript event count. */
-  const runDetailLineCount = createMemo(() => runDetailData()?.events.length ?? 0);
-  const runDetailMaxScroll = createMemo(() => Math.max(runDetailLineCount() - maxBodyLines(), 0));
+  /** Scroll window for the run transcript: rendered markdown source lines. */
+  const runDetailLineCount = createMemo(() => {
+    const data = runDetailData();
+    return data === undefined ? 0 : runTranscriptMarkdown(data).length;
+  });
+  /** Lines the transcript window shows right now: the small preview
+   * window in `preview`, the whole body budget in `view`. The scroll
+   * bound follows it, so the last page always fills the window.
+   */
+  const runDetailWindow = createMemo(() =>
+    runDetailMode() === 'preview' ? RUN_PREVIEW_LINES : runDetailMaxBodyLines(),
+  );
+  const runDetailMaxScroll = createMemo(() =>
+    Math.max(runDetailLineCount() - runDetailWindow(), 0),
+  );
   /** Scroll window for the feature full view. */
   const featureDetailLineCount = createMemo(() => {
     const data = featureDetailData();
@@ -2729,7 +3069,9 @@ export const App = (props: AppProps) => {
       else if (intent === 'quit') renderer.destroy();
       else if (intent === 'toggle-view') {
         setRunDetailMode((mode) => (mode === 'view' ? 'preview' : 'view'));
+        // Both modes open at the top, like the list the detail came from.
         setRunDetailScroll(0);
+        setRunDetailPinned(false);
       } else if (intent === 'refresh') {
         const id = runDetailId();
         refreshRuns();
@@ -2741,16 +3083,36 @@ export const App = (props: AppProps) => {
         const action = actions[runDetailAction()];
         if (action?.id === 'toggle-view') {
           setRunDetailMode((mode) => (mode === 'view' ? 'preview' : 'view'));
+          // Both modes open at the top, like the list the detail came from.
           setRunDetailScroll(0);
+          setRunDetailPinned(false);
         } else if (action?.id === 'steer') runSteerFlow();
         else if (action?.id === 'interrupt') interruptRun();
         else if (action?.id === 'answer') runAnswerFlow();
         else closeRunDetail();
       } else if (intent === 'menu-up' || intent === 'menu-down') {
+        // Arrows belong to the details column while it holds focus, and
+        // to the focused scrollable pane otherwise.
+        if (runDetailFocus() !== 'details') {
+          scrollFocusedRunPane(intent === 'menu-down' ? 1 : -1);
+          return;
+        }
         const delta = intent === 'menu-up' ? -1 : 1;
         setRunDetailAction((index) => clampHighlight(index + delta, actions.length));
       } else if (intent === 'scroll-up' || intent === 'scroll-down')
-        scrollRunDetail(intent === 'scroll-down' ? 1 : -1);
+        scrollFocusedRunPane(intent === 'scroll-down' ? 1 : -1);
+      else if (intent === 'focus-details') setRunDetailFocus('details');
+      else if (intent === 'focus-prompt' && showRunPromptPane()) setRunDetailFocus('prompt');
+      else if (intent === 'focus-transcript') setRunDetailFocus('transcript');
+      else if (intent === 'toggle-focus') {
+        // Cycle only through panes that exist; focus never lands on a
+        // pane the terminal is too small to show.
+        const cycle = runFocusCycle(showRunPromptPane());
+        setRunDetailFocus((focus) => {
+          const at = cycle.indexOf(focus);
+          return cycle[(at + 1) % cycle.length] ?? 'details';
+        });
+      }
       return;
     }
     if (detail() !== undefined) {
@@ -3036,6 +3398,12 @@ export const App = (props: AppProps) => {
         return;
       }
     }
+    if (selected() === 'features' && featuresLoaded()) {
+      if (key.sequence === 'c') {
+        runBeginFeature();
+        return;
+      }
+    }
     // Manual refetch for externally changed stores: stale-while-
     // revalidate keeps the old rows on screen, failures toast through
     // the query error effects. `R` (shift) never collides with the
@@ -3310,10 +3678,7 @@ export const App = (props: AppProps) => {
   });
 
   return (
-    <box flexGrow={1} flexDirection="column" backgroundColor={palette.bg}>
-      <box backgroundColor={palette.highlight} paddingLeft={1} paddingRight={1} flexShrink={0}>
-        <text style={{ fg: palette.text }}>{Workspace.title(info())}</text>
-      </box>
+    <box flexGrow={1} flexDirection="column" backgroundColor={palette.bg} paddingTop={1}>
       <Show
         when={
           detail() === undefined &&
@@ -3326,9 +3691,18 @@ export const App = (props: AppProps) => {
           <Show
             when={runDetailId() === undefined}
             fallback={
-              <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} padding={1}>
-                <box flexDirection="column" width={30} flexShrink={0} minHeight={0}>
-                  <Panel title="Run — Actions" selected={false}>
+              <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} paddingX={1}>
+                <box flexDirection="column" width={RUN_SIDEBAR_WIDTH} flexShrink={0} minHeight={0}>
+                  <Panel
+                    title={`Run — ${runDetailData()?.summary.name ?? ''}`}
+                    selected={runDetailFocus() === 'details'}
+                  >
+                    <Show when={runDetailData()} fallback={<text> </text>}>
+                      {(run: () => Runs.RunDetail) => <RunMeta detail={run()} />}
+                    </Show>
+                    <box flexShrink={0}>
+                      <text style={{ fg: palette.dim }}>actions</text>
+                    </box>
                     <DetailActions
                       actions={runDetailActions(runDetailData()?.summary.status, runDetailMode())}
                       highlight={runDetailAction()}
@@ -3339,26 +3713,46 @@ export const App = (props: AppProps) => {
                   </Panel>
                 </box>
                 <box flexDirection="column" flexGrow={1} flexBasis={0} minHeight={0}>
-                  <Panel
-                    title={`Run — ${runDetailData()?.summary.name ?? ''} · ${runDetailMode() === 'view' ? 'view' : 'preview'}`}
-                    selected={false}
-                  >
-                    <Show
-                      when={runDetailData()}
-                      fallback={
-                        <PanelMessage message={runDetailLoading() ? 'Loading run…' : 'No run.'} />
-                      }
+                  <Show when={showRunPromptPane()}>
+                    <box
+                      flexDirection="column"
+                      flexShrink={0}
+                      height={runPromptPaneRows()}
+                      minHeight={0}
                     >
-                      {(run: () => Runs.RunDetail) => (
-                        <RunDetail
-                          detail={run()}
-                          mode={runDetailMode()}
-                          scrollOffset={runDetailScroll()}
-                          maxBodyLines={maxBodyLines()}
+                      <Panel title="Prompt" selected={runDetailFocus() === 'prompt'}>
+                        <RunPrompt
+                          text={runDetailData()?.summary.prompt ?? ''}
+                          columns={runPromptColumns()}
+                          rows={runPromptBudgetRows()}
+                          offset={runPromptScroll()}
+                          focused={runDetailFocus() === 'prompt'}
                         />
-                      )}
-                    </Show>
-                  </Panel>
+                      </Panel>
+                    </box>
+                  </Show>
+                  <box flexDirection="column" flexGrow={1} flexBasis={0} minHeight={0}>
+                    <Panel
+                      title={`Transcript · ${runDetailMode() === 'view' ? 'view' : 'preview'}`}
+                      selected={runDetailFocus() === 'transcript'}
+                    >
+                      <Show
+                        when={runDetailData()}
+                        fallback={
+                          <PanelMessage message={runDetailLoading() ? 'Loading run…' : 'No run.'} />
+                        }
+                      >
+                        {(run: () => Runs.RunDetail) => (
+                          <RunDetail
+                            detail={run()}
+                            mode={runDetailMode()}
+                            scrollOffset={runDetailScroll()}
+                            maxBodyLines={runDetailMaxBodyLines()}
+                          />
+                        )}
+                      </Show>
+                    </Panel>
+                  </box>
                 </box>
               </box>
             }
@@ -3366,7 +3760,7 @@ export const App = (props: AppProps) => {
             <Show
               when={featureDetailId() === undefined}
               fallback={
-                <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} padding={1}>
+                <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} paddingX={1}>
                   <box flexDirection="column" flexGrow={1} flexBasis={0} minHeight={0}>
                     <Panel
                       title={`Feature — ${featureDetailData()?.summary.name ?? ''} · ${featureDetailMode() === 'view' ? 'view' : 'preview'}`}
@@ -3506,7 +3900,7 @@ export const App = (props: AppProps) => {
           </Show>
         }
       >
-        <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} padding={1}>
+        <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} paddingX={1}>
           <For each={layout.columns}>
             {(column) => (
               <box
@@ -3621,7 +4015,7 @@ export const App = (props: AppProps) => {
           </For>
         </box>
       </Show>
-      <StatusBar hint={hint()} trailing={`${size()} · ${Workspace.summarize(info())}`} />
+      <StatusBar hint={statusHint()} trailing={statusTrailing()} />
       <Show when={!loaded()}>
         <box
           position="absolute"

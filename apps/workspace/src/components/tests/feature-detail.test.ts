@@ -9,6 +9,7 @@ const detail: FeatureDetail = {
     description: 'Ship it.',
     state: 'inconsistent',
     status: 'complete',
+    active: false,
     total: 3,
     complete: 2,
     issues: 1,
@@ -70,7 +71,7 @@ Vitest.describe('featureMarker runtime', () => {
     Vitest.expect(featureMarker('in-progress')).toBe('●');
     Vitest.expect(featureMarker('blocked')).toBe('■');
     Vitest.expect(featureMarker('inconsistent')).toBe('✗');
-    Vitest.expect(featureMarker('not-started')).toBe('○');
+    Vitest.expect(featureMarker('pending')).toBe('○');
     Vitest.expect(featureMarker('weird')).toBe('·');
   });
 });

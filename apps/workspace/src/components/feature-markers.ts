@@ -16,7 +16,7 @@ export const featureMarker = (state: string): string => {
       return '■';
     case 'inconsistent':
       return '✗';
-    case 'not-started':
+    case 'pending':
       return '○';
     default:
       return '·';

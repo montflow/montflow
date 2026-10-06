@@ -2,7 +2,9 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for feature files; both go away with the FileSystem migration.
 import { join } from 'node:path';
+import type { RunDetail as EngineRunDetail } from '@montflow/pi-runs';
 import { Data, Effect } from 'effect';
+import * as Runs from '../runs/index.js';
 
 /**
  * Lazy handle to the pi-features runtime. Static imports are type-only
@@ -99,6 +101,8 @@ export interface FeatureSummary {
   readonly description: string;
   readonly state: string;
   readonly status: string;
+  /** True when a live run is bound to this feature. */
+  readonly active: boolean;
   readonly total: number;
   readonly complete: number;
   readonly issues: number;
@@ -172,7 +176,12 @@ const descriptionOf = (content: string): string => {
 const phaseOf = (id: string): string => id.replace(/\d+$/, '');
 
 /** Parsed pieces shared by the summary and the detail builders. */
-const inspect = (libs: PiFeaturesLib, id: string, files: ReadonlyArray<SnapshotFile>) => {
+const inspect = (
+  libs: PiFeaturesLib,
+  id: string,
+  files: ReadonlyArray<SnapshotFile>,
+  active: boolean,
+) => {
   const featureFile = files.find((file) => file.path === 'FEATURE.md');
   const feature =
     featureFile === undefined ? undefined : libs.Feature.parseFeatureFile(featureFile.content);
@@ -188,6 +197,7 @@ const inspect = (libs: PiFeaturesLib, id: string, files: ReadonlyArray<SnapshotF
           status: feature.status,
           lockedPhases: feature.lockedPhases,
           tasks: tasks.map((task) => ({ id: task.id, status: task.status })),
+          active,
         });
   return { feature, featureFile, tasks, verify, analysis };
 };
@@ -197,14 +207,16 @@ const summarize = (
   libs: PiFeaturesLib,
   id: string,
   files: ReadonlyArray<SnapshotFile>,
+  active: boolean,
 ): FeatureSummary => {
-  const { feature, featureFile, tasks, verify, analysis } = inspect(libs, id, files);
+  const { feature, featureFile, tasks, verify, analysis } = inspect(libs, id, files, active);
   return {
     id,
     name: feature?.name ?? id,
     description: descriptionOf(featureFile?.content ?? '') || (feature?.name ?? id),
     state: analysis?.state ?? 'inconsistent',
     status: feature?.status ?? 'unknown',
+    active,
     total: tasks.length,
     complete: tasks.filter((task) => task.status === 'complete').length,
     issues: verify.issues.length,
@@ -212,10 +224,27 @@ const summarize = (
   };
 };
 
+/**
+ * Feature slugs with a live run bound: persisted runs whose `feature` is
+ * set and whose id is in the runner's live registry. A missing runs store
+ * or an unbuilt runtime reads as empty, never an error.
+ * @param root - workspace root (runs store and runner owner)
+ * @returns Effect resolving to the active feature slugs
+ */
+export const activeFeatureIds = (root: string): Effect.Effect<ReadonlySet<string>> =>
+  Effect.gen(function* () {
+    const runs = yield* Runs.fetchRuns(root).pipe(Effect.orElseSucceed(() => []));
+    const live = yield* Runs.liveRunIds(root).pipe(Effect.orElseSucceed(() => new Set<string>()));
+    return new Set(
+      runs.filter((run) => run.feature !== '' && live.has(run.id)).map((run) => run.feature),
+    );
+  });
+
 /** List every feature directory as a summary row, alphabetical. */
 const readFeatures = async (
   root: string,
   libs: PiFeaturesLib,
+  active: ReadonlySet<string>,
 ): Promise<ReadonlyArray<FeatureSummary>> => {
   const dir = featuresDir(root);
   const entries = await readdir(dir);
@@ -224,7 +253,7 @@ const readFeatures = async (
     names.map(async (name): Promise<FeatureSummary | undefined> => {
       const info = await stat(join(dir, name));
       if (!info.isDirectory()) return undefined;
-      return summarize(libs, name, await readSnapshot(root, name));
+      return summarize(libs, name, await readSnapshot(root, name), active.has(name));
     }),
   );
   return rows.filter((row): row is FeatureSummary => row !== undefined);
@@ -241,9 +270,12 @@ export const fetchFeatures = (root: string): Effect.Effect<ReadonlyArray<Feature
   loadPiFeatures().pipe(
     Effect.mapError((error) => error.message),
     Effect.flatMap((libs) =>
-      Effect.tryPromise({
-        try: () => readFeatures(root, libs),
-        catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
+      Effect.gen(function* () {
+        const active = yield* activeFeatureIds(root);
+        return yield* Effect.tryPromise({
+          try: () => readFeatures(root, libs, active),
+          catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
+        });
       }),
     ),
     Effect.catch((error) =>
@@ -264,43 +296,222 @@ export const loadFeature = (root: string, id: string): Effect.Effect<FeatureDeta
   loadPiFeatures().pipe(
     Effect.mapError((error) => error.message),
     Effect.flatMap((libs) =>
-      Effect.tryPromise({
-        try: async (): Promise<FeatureDetail> => {
-          const files = await readSnapshot(root, id);
-          const { feature, featureFile, tasks, verify, analysis } = inspect(libs, id, files);
-          const phases = (analysis?.phases ?? []).map((phase) => ({
-            phase: phase.phase,
-            locked: phase.locked,
-            tasks: tasks
-              .filter((task) => phaseOf(task.id) === phase.phase)
-              .map((task) => ({
-                id: task.id,
-                name: task.name,
-                type: task.type,
-                status: task.status,
-              })),
-          }));
-          return {
-            summary: summarize(libs, id, files),
-            meta:
-              feature === undefined
-                ? undefined
-                : {
-                    name: feature.name,
-                    status: feature.status,
-                    workspaceType: feature.workspaceType,
-                    author: feature.author,
-                    created: feature.created,
-                    lockedPhases: feature.lockedPhases,
-                    description: descriptionOf(featureFile?.content ?? ''),
-                  },
-            state: analysis?.state ?? 'inconsistent',
-            counts: analysis?.counts ?? EMPTY_COUNTS,
-            phases,
-            issues: verify.issues,
-          };
-        },
-        catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
+      Effect.gen(function* () {
+        const active = yield* activeFeatureIds(root);
+        const isActive = active.has(id);
+        return yield* Effect.tryPromise({
+          try: async (): Promise<FeatureDetail> => {
+            const files = await readSnapshot(root, id);
+            const { feature, featureFile, tasks, verify, analysis } = inspect(
+              libs,
+              id,
+              files,
+              isActive,
+            );
+            const phases = (analysis?.phases ?? []).map((phase) => ({
+              phase: phase.phase,
+              locked: phase.locked,
+              tasks: tasks
+                .filter((task) => phaseOf(task.id) === phase.phase)
+                .map((task) => ({
+                  id: task.id,
+                  name: task.name,
+                  type: task.type,
+                  status: task.status,
+                })),
+            }));
+            return {
+              summary: summarize(libs, id, files, isActive),
+              meta:
+                feature === undefined
+                  ? undefined
+                  : {
+                      name: feature.name,
+                      status: feature.status,
+                      workspaceType: feature.workspaceType,
+                      author: feature.author,
+                      created: feature.created,
+                      lockedPhases: feature.lockedPhases,
+                      description: descriptionOf(featureFile?.content ?? ''),
+                    },
+              state: analysis?.state ?? 'inconsistent',
+              counts: analysis?.counts ?? EMPTY_COUNTS,
+              phases,
+              issues: verify.issues,
+            };
+          },
+          catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
+        });
       }),
     ),
+  );
+
+/**
+ * Raw feature directory names under the features root, regardless of
+ * decode validity. Used to snapshot the store at dispatch and to find the
+ * feature an author run created after it settles. Dotfiles are skipped.
+ * @param root - workspace root (features store owner)
+ * @returns Effect resolving to directory names (empty when the store is missing)
+ */
+export const rawFeatureIds = (root: string): Effect.Effect<ReadonlyArray<string>> =>
+  Effect.promise((): Promise<ReadonlyArray<string>> =>
+    readdir(featuresDir(root)).then(
+      (names) => names.filter((name) => !name.startsWith('.')),
+      () => [],
+    ),
+  );
+
+/**
+ * Tool allowlist for a feature-author run: the standard workspace set plus
+ * `bash`, so the agent can run the mechanical checker before finishing.
+ * `@montflow/pi-runs` unions the interaction tools (`ask_user` /
+ * `notify_user`) into whatever allowlist is passed.
+ */
+export const FEATURE_RUN_TOOLS = ['read', 'write', 'edit', 'bash'] as const;
+
+/** One transcript line, shared by the engine detail and the dashboard row. */
+interface TranscriptLine {
+  readonly role: string;
+  readonly text: string;
+}
+
+/**
+ * Final assistant text from a settled run's transcript, or undefined when
+ * the run produced no assistant turn.
+ * @param events - stored transcript events
+ * @returns last assistant text, if any
+ */
+export const finalAssistantText = (events: ReadonlyArray<TranscriptLine>): string | undefined =>
+  events.findLast((event) => event.role === 'assistant')?.text;
+
+/** How a settled author run's feature was resolved. */
+export type AuthoredFeaturePick =
+  | { readonly kind: 'one'; readonly id: string }
+  | { readonly kind: 'ambiguous'; readonly ids: ReadonlyArray<string> }
+  | { readonly kind: 'none' };
+
+/**
+ * Resolve the feature a settled author run created. Prefers the fresh
+ * feature named in the run's final reply — correlating concurrent authors
+ * to their own run — and falls back to the name diff only when exactly one
+ * fresh feature exists (unambiguous).
+ * @param reply - final assistant text from the run, if any
+ * @param fresh - feature directory ids added since the run was dispatched
+ * @returns the chosen feature, an ambiguity, or none
+ */
+export const pickAuthoredFeature = (
+  reply: string | undefined,
+  fresh: ReadonlyArray<string>,
+): AuthoredFeaturePick => {
+  if (fresh.length === 0) return { kind: 'none' };
+  const named = reply === undefined ? [] : fresh.filter((id) => reply.includes(id));
+  if (named.length === 1) {
+    const id = named[0];
+    if (id !== undefined) return { kind: 'one', id };
+  }
+  if (fresh.length === 1) {
+    const id = fresh[0];
+    if (id !== undefined) return { kind: 'one', id };
+  }
+  return { kind: 'ambiguous', ids: fresh.toSorted() };
+};
+
+/**
+ * TUI callbacks for a dispatched author run's completion: the fresh
+ * feature was found (refresh + open its detail), or the run settled
+ * without one (surface the reason). The run id lets the TUI clear only the
+ * matching dispatched-run keybind target.
+ */
+export interface BeginFlowHooks {
+  /** Fresh feature found after the author run settled. */
+  readonly onFeatureCreated?: ((featureId: string, runId: string) => void) | undefined;
+  /** Author run settled without creating a feature. */
+  readonly onFeatureFailed?: ((message: string, runId: string) => void) | undefined;
+}
+
+/**
+ * Completion hook for a dispatched author run: resolve the feature the run
+ * authored (reply-correlated, name-diff fallback) and notify the hooks.
+ * Exported so a resumed author run can re-attach the same hook through
+ * `Runs.resumeRun` after an app restart.
+ * @param root - workspace root (features store owner)
+ * @param runId - the author run id
+ * @param beforeIds - feature directory ids snapshotted at dispatch, or undefined after a restart
+ * @param hooks - TUI completion callbacks
+ * @returns the `onSettled` hook
+ */
+export const featureAuthorCompletion =
+  (
+    root: string,
+    runId: string,
+    beforeIds: ReadonlyArray<string> | undefined,
+    hooks?: BeginFlowHooks,
+  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  (detail) =>
+    Effect.gen(function* () {
+      const afterIds = yield* rawFeatureIds(root);
+      const freshIds = afterIds.filter((id) => !(beforeIds ?? []).includes(id));
+      const pick = pickAuthoredFeature(finalAssistantText(detail.events), freshIds);
+      if (pick.kind === 'one') {
+        hooks?.onFeatureCreated?.(pick.id, runId);
+        return;
+      }
+      if (pick.kind === 'ambiguous') {
+        hooks?.onFeatureFailed?.(
+          `Run '${runId}' created several features (${pick.ids.join(', ')}) — open the one you want from the list.`,
+          runId,
+        );
+        return;
+      }
+      hooks?.onFeatureFailed?.(
+        `Run '${runId}' finished without creating a feature — try describing it differently.`,
+        runId,
+      );
+    });
+
+/** Inputs for dispatching a feature-author run. */
+export interface BeginFeatureInput {
+  /** The user's feature request. */
+  readonly description: string;
+  /** `provider/model-id` pin for the author run, if any. */
+  readonly modelLabel?: string | undefined;
+  /** TUI completion callbacks, if any. */
+  readonly hooks?: BeginFlowHooks | undefined;
+}
+
+/**
+ * Begin a feature from the workspace: gate on the runs extension, snapshot
+ * the features store, dispatch an author run through the pi-runs engine
+ * with the authoring preprompt, and return its id. The run may park on
+ * `ask_user` for the user to answer; on settle,
+ * {@link featureAuthorCompletion} correlates the fresh feature to this
+ * run's final reply. The run, not this flow, writes the spec.
+ * @param root - workspace root (features store owner)
+ * @param input - feature request, optional model pin, and completion hooks
+ * @returns Effect resolving to the dispatched run id, failing with displayable message
+ */
+export const beginFeature = (
+  root: string,
+  input: BeginFeatureInput,
+): Effect.Effect<{ readonly runId: string }, string> =>
+  loadPiFeatures().pipe(
+    Effect.mapError((error) => error.message),
+    Effect.flatMap((libs) => {
+      const prompt = libs.Prompt.buildAuthorPrompt(input.description);
+      return Effect.gen(function* () {
+        const installed = yield* Runs.runsExtensionInstalled(root);
+        if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+        const beforeIds = yield* rawFeatureIds(root);
+        const runId = yield* Runs.newRunId('author-feature');
+        yield* Runs.startRun(root, {
+          id: runId,
+          name: `Author feature: ${input.description.trim().slice(0, 72)}`,
+          prompt,
+          model: input.modelLabel,
+          tools: [...FEATURE_RUN_TOOLS],
+          onSettled: featureAuthorCompletion(root, runId, beforeIds, input.hooks),
+        });
+        return { runId };
+      });
+    }),
   );

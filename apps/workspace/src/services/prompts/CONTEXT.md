@@ -43,18 +43,29 @@ Consequences:
   `isValidPromptId` (pure, tested) — the delete keybinds behind the
   list (`x`) and the detail (`d`)
 - `savePrompt` (directory create plus `encode` through the loaded
-  runtime, slug-guarded) — the create keybind and the modify path
-- Headless agentic runs reuse the skills service (`buildHeadlessPrompt`,
+  runtime, slug-guarded) — the create keybind and the manual modify path
+- `readRawPrompt` (slug-guarded raw file read) — the dispatch snapshot
+  behind the agentic modify run
+- Headless agentic **create** reuses the skills service (`buildHeadlessPrompt`,
   `runHeadlessAgent`, `listModelLabels`) over workspace-carried copies of
-  the author/editor prompts (`AUTHOR_PREPROMPT`, `MODIFY_PREPROMPT`) —
-  the extension module owns the canonicals, which are not exported
-  through the package index
-- `generateFor` / `modifyFor` ports plus `generateAgentic` /
-  `modifyAgentic` (name-diff detection, so agent chatter never parses).
-  The prompts flows take no loading port of their own, so the ports wrap
-  the headless runs in the TUI working overlay themselves.
+  the author prompts (`AUTHOR_PREPROMPT`) — the extension module owns the
+  canonical, which is not exported through the package index
+- `generateFor` / `generateAgentic` ports (name-diff detection, so agent
+  chatter never parses). The prompts flows take no loading port of their
+  own, so the port wraps the headless run in the TUI working overlay.
+- Agentic **modify dispatches a run** through the pi-runs engine
+  (`modifyFor`): `Runs.runsExtensionInstalled` gate, raw-file snapshot
+  (`readRawPrompt`), `Runs.startRun` with the editor prompt and the
+  `read/write/edit` allowlist, the run id recorded, then the shared flow
+  unwinds with `CANCELLED`. `modifyCompletion` re-reads the named prompt
+  (raw-snapshot no-op check, invalid-JSON split), re-encodes it through
+  `savePrompt`, and fires `ModifyFlowHooks`. Same shape as the profiles
+  service, so the dashboard's modify flows read the same everywhere.
+  `resetDispatchedModifyRun` is the test seam; `modifyCompletion` is
+  re-usable as the `onSettled` hook passed to `Runs.resumeRun` after a
+  restart
 - `runCreateFlow` / `runModifyFlow` workspace hosts (manual or agentic
-  behind the TUI overlays)
+  behind the TUI overlays); modify resolves `saved` or `dispatched`
 
 ## Does not belong here
 

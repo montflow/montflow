@@ -7,7 +7,9 @@ import { execFile } from 'node:child_process';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: promisify adapts the session probe shell-out; both go away with the Command migration.
 import { promisify } from 'node:util';
 import type { Interactive as PromptsInteractive, Prompts } from '@montflow/pi-prompts';
+import type { RunDetail as EngineRunDetail } from '@montflow/pi-runs';
 import { Data, Effect } from 'effect';
+import * as Runs from '../runs/index.js';
 import * as Skills from '../skills/index.js';
 
 /**
@@ -140,13 +142,19 @@ export const loadedMatcher = (): ((label: string, query: string) => boolean) | u
 const loadLibs = (): Effect.Effect<PiPromptsLib, string> =>
   loadPiPrompts().pipe(Effect.mapError((error) => error.message));
 
-/** One prompt row for the dashboard list and detail views. Mirrors `Prompts.Prompt` with an `id` alias (the slug). */
+/**
+ * One prompt row for the dashboard list and detail views. Mirrors
+ * `Prompts.Prompt` with an `id` alias (the slug). `variables` carries the full
+ * `Variable` records rather than bare names, so a row that round-trips through
+ * the editor keeps each variable's `required`, `default`, `label`, and `type`
+ * instead of silently rewriting them to "required, no default".
+ */
 export interface PromptSummary {
   readonly id: string;
   readonly name: string;
   readonly description: string;
   readonly template: string;
-  readonly variables: ReadonlyArray<string>;
+  readonly variables: ReadonlyArray<Prompts.Variable>;
   readonly skills: ReadonlyArray<string>;
   readonly model: string;
 }
@@ -424,36 +432,39 @@ export const fetchPrompts = (root: string): Effect.Effect<PromptSummary[], strin
 
 /**
  * Instructions before the user description: the child agent authors
- * exactly one prompt file, then stops. Mirrors `AUTHOR_PREPROMPT` in
- * `@montflow/pi-prompts`'s extension (not exported through the package
- * index, so the workspace host carries this copy for its headless
- * `pi -p` runs).
+ * exactly one prompt file, then verifies it.
+ *
+ * The rules body is `Prompts.authoringRules()`, read off the lazily loaded
+ * runtime so the workspace host and the extension can never disagree about
+ * the grammar. See `authoringRules` in the extension for the fallback copy
+ * used when the runtime is unavailable.
  */
 export const AUTHOR_PREPROMPT = `You are a prompt author for a pi coding agent.
 
 Create exactly one new prompt file following the format below, then stop. Do not
 ask follow-up questions — work from the description as given.
 
-The file is valid JSON (double quotes, no comments, no trailing commas)
-with these fields:
-- name: kebab-case file slug (also the file name)
-- description: one non-empty line saying what the prompt does
-- template: the prompt text with {{variable}} placeholders for user-supplied values
-- variables: ordered list of variable names used in the template, in
-  first-appearance order
-- skills: list of skill names the run should load (empty when none)
-- model: preferred model as provider/model-id, or '' when unset
+RULES_PLACEHOLDER
 
-Rules:
+Rules for this task:
 - Write the new prompt at .agents/@montflow/pi-prompts/<name>.json (choose a
   kebab-case <name> that fits the description), with all six fields present.
   The file name must equal the name field plus '.json'.
-- Every {{token}} in the template must appear in variables, and vice versa.
+- A variable used only to guard a branch with {{#if}} is still declared;
+  declare it with "required": false and no "default" so leaving it blank takes
+  the {{else}} branch.
 - List .agents/skills/ and read each SKILL.md frontmatter 'name:' before
   listing a skill — reference existing skills only, otherwise leave skills
   empty.
 - If a prompt with that name already exists, pick a fresh name instead.
-- Do not touch anything outside .agents/@montflow/pi-prompts/.`;
+- Do not touch anything outside .agents/@montflow/pi-prompts/.
+
+Before you finish, run \`/mf-prompts verify <name>\`. Fix every issue it
+reports and run it again until it says the file matches the standard format.`;
+
+/** Substitute the runtime's authoring rules into a pre-prompt template. */
+const withRules = (libs: PiPromptsLib, preprompt: string): string =>
+  preprompt.replace('RULES_PLACEHOLDER', libs.Prompts.authoringRules());
 
 /** Instructions after the user description: the reply shape. Mirrors the extension's `AUTHOR_POSTPROMPT`. */
 export const AUTHOR_POSTPROMPT =
@@ -461,7 +472,7 @@ export const AUTHOR_POSTPROMPT =
 
 /**
  * Instructions before the change request: the child agent edits the single
- * named prompt file, then stops. Mirrors `MODIFY_PREPROMPT` in
+ * named prompt file, then verifies it. Mirrors `MODIFY_PREPROMPT` in
  * `@montflow/pi-prompts`'s extension.
  */
 export const MODIFY_PREPROMPT = `You are a prompt author for a pi coding agent.
@@ -470,15 +481,18 @@ Modify the single prompt file named in the request, keeping the JSON schema vali
 (name, description, template, variables, skills, model), then stop. Do not ask
 follow-up questions — work from the change as given.
 
-Rules:
+RULES_PLACEHOLDER
+
+Rules for this task:
 - Edit only the named file under .agents/@montflow/pi-prompts/.
-- Keep every {{token}} in the template covered by variables, and vice versa,
-  with variables in first-appearance order.
 - Do not rename the file and do not change the 'name' field. Do not touch
   anything else.
 - Keep the file valid JSON (double quotes, no comments, no trailing commas).
 - Reference existing skills only (check .agents/skills/ SKILL.md frontmatter
-  'name:' values); drop unknown names instead of inventing them.`;
+  'name:' values); drop unknown names instead of inventing them.
+
+Before you finish, run \`/mf-prompts verify <name>\`. Fix every issue it
+reports and run it again until it says the file matches the standard format.`;
 
 /** Instructions after the change request: the reply shape. Mirrors the extension's `MODIFY_POSTPROMPT`. */
 export const MODIFY_POSTPROMPT = 'When done, reply with one short line: what changed.';
@@ -538,7 +552,7 @@ export const generateAgentic = (
     yield* Skills.runHeadlessAgent(
       root,
       Skills.buildHeadlessPrompt(
-        AUTHOR_PREPROMPT,
+        withRules(libs, AUTHOR_PREPROMPT),
         `Prompt description: ${description}`,
         AUTHOR_POSTPROMPT,
       ),
@@ -554,40 +568,124 @@ export const generateAgentic = (
   });
 
 /**
- * Agentic prompt modification for the workspace host: run the shared
- * editor prompt headless scoped to the prompt name, re-read that prompt.
+ * Read one raw prompt file. Fails on unknown or unsafe names — the
+ * dispatch snapshot compares these bytes against the settled state to
+ * refuse a no-op run.
+ * @param root - workspace root (prompt store owner)
+ * @param id - prompt file slug (without `.json`)
+ * @returns Effect resolving to the raw file contents
+ */
+export const readRawPrompt = (root: string, id: string): Effect.Effect<string, string> => {
+  if (!isValidPromptId(id)) return Effect.fail(`Unknown prompt '${id}'.`);
+  return Effect.promise(() =>
+    readFile(join(root, ...PROMPTS_DIR, `${id}.json`), 'utf8').then(
+      (raw) => raw,
+      () => undefined,
+    ),
+  ).pipe(
+    Effect.flatMap((raw) =>
+      raw === undefined ? Effect.fail(`Unknown prompt '${id}'.`) : Effect.succeed(raw),
+    ),
+  );
+};
+
+/** One settled prompt file: its raw bytes and the decoded dashboard row, if any. */
+interface FreshPrompt {
+  readonly raw: string | undefined;
+  readonly row: PromptSummary | undefined;
+}
+
+/**
+ * Read the settled state of one prompt file the editor run was scoped
+ * to. Never fails: a missing file reads as no bytes and no row, a
+ * malformed one as bytes with no row (so the caller can tell "wrote
+ * nothing" from "wrote something unusable").
  * @param libs - loaded extension runtime
  * @param root - workspace root (prompt store owner)
- * @param prompt - prompt under edit
- * @param change - change request from the TUI input
- * @param modelLabel - `provider/model-id` pin, if any
- * @returns Effect resolving to the updated Prompt, failing with the reason
+ * @param id - prompt file slug
+ * @returns Effect resolving to the raw bytes plus the decoded row
  */
-export const modifyAgentic = (
+const readFreshPrompt = (
   libs: PiPromptsLib,
   root: string,
-  prompt: Prompts.Prompt,
-  change: string,
-  modelLabel: string | undefined,
-): Effect.Effect<Prompts.Prompt, string> =>
-  Effect.gen(function* () {
-    yield* Skills.runHeadlessAgent(
-      root,
-      Skills.buildHeadlessPrompt(
-        `${MODIFY_PREPROMPT}\n\nPrompt file: .agents/@montflow/pi-prompts/${prompt.name}.json`,
-        `Change: ${change}`,
-        MODIFY_POSTPROMPT,
-      ),
-      modelLabel,
-    ).pipe(Effect.mapError((error) => error.message));
-    const after = yield* listRows(libs, root);
-    const updated = after.find((candidate) => candidate.name === prompt.name);
-    if (updated === undefined)
-      return yield* Effect.fail(
-        'The agent finished without updating the prompt — try describing it differently.',
+  id: string,
+): Effect.Effect<FreshPrompt> =>
+  readRawPrompt(root, id).pipe(
+    Effect.match({ onFailure: () => undefined, onSuccess: (raw) => raw }),
+    Effect.flatMap((raw): Effect.Effect<FreshPrompt> =>
+      raw === undefined
+        ? Effect.succeed({ raw: undefined, row: undefined })
+        : decodeRow(libs, `${id}.json`, raw).pipe(Effect.map((row): FreshPrompt => ({ raw, row }))),
+    ),
+  );
+
+/**
+ * TUI callbacks for a dispatched editor run's completion: the named
+ * prompt was found and persisted (refresh + toast), or the run settled
+ * without a usable change (surface the reason). Absent in headless tests.
+ */
+export interface ModifyFlowHooks {
+  /** Named prompt found after the editor run settled. */
+  readonly onPromptModified?: ((prompt: PromptSummary, runId: string) => void) | undefined;
+  /** Editor run settled without updating the prompt. */
+  readonly onPromptFailed?: ((message: string, runId: string) => void) | undefined;
+}
+
+/**
+ * Completion hook for a dispatched editor run: re-read the named
+ * prompt, refuse a no-op settle by comparing the raw file to the
+ * dispatch snapshot, persist it canonically through the loaded
+ * runtime's decode+encode path, and notify the hooks. Exported so a
+ * resumed editor run can re-attach the same hook through
+ * `Runs.resumeRun` after an app restart.
+ * @param root - workspace root (prompt store owner)
+ * @param libs - loaded extension runtime
+ * @param runId - the editor run id
+ * @param promptId - prompt file slug under edit
+ * @param beforeRaw - raw prompt file snapshotted at dispatch, or undefined when unreadable
+ * @param hooks - TUI completion callbacks
+ * @returns the `onSettled` hook
+ */
+export const modifyCompletion =
+  (
+    root: string,
+    libs: PiPromptsLib,
+    runId: string,
+    promptId: string,
+    beforeRaw: string | undefined,
+    hooks?: ModifyFlowHooks,
+  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  (_detail) =>
+    Effect.gen(function* () {
+      const { raw: afterRaw, row: updated } = yield* readFreshPrompt(libs, root, promptId);
+      if (updated === undefined) {
+        hooks?.onPromptFailed?.(
+          afterRaw === undefined
+            ? `Run '${runId}' finished without updating prompt '${promptId}' — try describing the change differently.`
+            : `Run '${runId}' wrote an invalid prompt '${promptId}' — check its JSON and retry.`,
+          runId,
+        );
+        return;
+      }
+      if (beforeRaw !== undefined && afterRaw === beforeRaw) {
+        hooks?.onPromptFailed?.(
+          `Run '${runId}' finished without updating prompt '${promptId}' — try describing the change differently.`,
+          runId,
+        );
+        return;
+      }
+      const failure = yield* savePrompt(root, updated).pipe(
+        Effect.match({ onFailure: (error) => error.message, onSuccess: () => undefined }),
       );
-    return updated;
-  });
+      if (failure !== undefined) {
+        hooks?.onPromptFailed?.(
+          `Run '${runId}' updated '${promptId}' but it could not be saved: ${failure}`,
+          runId,
+        );
+        return;
+      }
+      hooks?.onPromptModified?.(updated, runId);
+    });
 
 /**
  * Agentic generation port for the shared interactive flows: headless
@@ -613,28 +711,59 @@ export const generateFor =
       ),
     );
 
+/** Result of a modify flow: persisted manually, or dispatched as a run. */
+export type ModifyFlowResult =
+  | { readonly kind: 'saved'; readonly prompt: PromptSummary }
+  | { readonly kind: 'dispatched'; readonly runId: string };
+
+/** Run id dispatched by the most recent agentic modify, consumed by {@link runModifyFlow}. */
+let dispatchedModifyRunId: string | undefined;
+
+/** Test seam: forget the dispatched-modify-run ref so a fresh modify flow starts clean. */
+export const resetDispatchedModifyRun = (): void => {
+  dispatchedModifyRunId = undefined;
+};
+
 /**
- * Agentic modification port for the shared interactive flows: headless
- * `pi -p` over the shared editor prompt, wrapped in the TUI working
- * overlay like generation.
+ * Agentic modification port for the shared interactive flows: gate on
+ * the runs extension, snapshot the named prompt's raw file, dispatch an
+ * editor run through the pi-runs engine, then unwind the shared
+ * `modifyPrompt` flow with `CANCELLED` (the run, not this flow, writes
+ * the prompt). The run id lands in a module-level ref that
+ * {@link runModifyFlow} reads to distinguish a dispatch from a real
+ * cancel. When the run settles, {@link modifyCompletion} re-reads and
+ * persists the named prompt. Mirrors the profiles modify port.
  * @param root - workspace root (prompt store owner)
- * @param loading - working-overlay wrapper for the headless run
+ * @param hooks - TUI completion callbacks, if any
  * @returns modifier port for the interactive flows
  */
 export const modifyFor =
-  (root: string, loading: FlowPorts['loading']): PromptsInteractive.PromptModifier =>
+  (root: string, hooks?: ModifyFlowHooks): PromptsInteractive.PromptModifier =>
   (input) =>
     loadLibs().pipe(
       Effect.flatMap((libs) =>
-        loading(
-          'Updating prompt',
-          Effect.gen(function* () {
-            const prompts = yield* listRows(libs, root);
-            const prompt = prompts.find((candidate) => candidate.name === input.name);
-            if (prompt === undefined) return yield* Effect.fail(`Unknown prompt '${input.name}'.`);
-            return yield* modifyAgentic(libs, root, prompt, input.change, input.modelLabel);
-          }),
-        ),
+        Effect.gen(function* () {
+          const installed = yield* Runs.runsExtensionInstalled(root);
+          if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+          const beforeRaw = yield* readRawPrompt(root, input.name).pipe(
+            Effect.match({ onFailure: () => undefined, onSuccess: (raw) => raw }),
+          );
+          const id = yield* Runs.newRunId('modify-prompt');
+          yield* Runs.startRun(root, {
+            id,
+            name: `Modify prompt: ${input.name}`,
+            prompt: Skills.buildHeadlessPrompt(
+              `${withRules(libs, MODIFY_PREPROMPT)}\n\nPrompt file: .agents/@montflow/pi-prompts/${input.name}.json`,
+              `Change: ${input.change}`,
+              MODIFY_POSTPROMPT,
+            ),
+            model: input.modelLabel,
+            tools: [...Runs.DEFAULT_RUN_TOOLS],
+            onSettled: modifyCompletion(root, libs, id, input.name, beforeRaw, hooks),
+          });
+          dispatchedModifyRunId = id;
+          return yield* Effect.fail(libs.Interactive.CANCELLED);
+        }),
       ),
     );
 
@@ -698,41 +827,53 @@ export const runCreateFlow = (
 /**
  * Workspace host for the shared modify flow for one prompt: load the
  * extension, run `modifyPrompt` (manual template edit or agentic
- * rewrite), persist. Cancellations resolve undefined; the detail stays
- * open on the updated row.
+ * rewrite). Manual edits persist and resolve `saved`; agentic edits
+ * dispatch an editor run and resolve `dispatched`; real cancels resolve
+ * undefined. The TUI needs no `CANCELLED` knowledge — only real
+ * failures reject. Mirrors the profiles modify host.
  * @param root - workspace root (prompt store owner)
  * @param id - prompt name under edit
  * @param ports - TUI overlay ports
- * @returns Effect resolving to the saved row, or undefined on cancel
+ * @param hooks - completion callbacks for a dispatched editor run
+ * @returns Effect resolving to the modify outcome, or undefined on cancel
  */
 export const runModifyFlow = (
   root: string,
   id: string,
   ports: FlowPorts,
-): Effect.Effect<PromptSummary | undefined, string> =>
+  hooks?: ModifyFlowHooks,
+): Effect.Effect<ModifyFlowResult | undefined, string> =>
   loadLibs().pipe(
     Effect.flatMap((libs) =>
       Effect.gen(function* () {
         const prompts = yield* listRows(libs, root);
         const refs = yield* Skills.listModelLabels();
         const fallback = yield* Skills.listDefaultModel();
+        dispatchedModifyRunId = undefined;
         // SAFETY: same phantom-`PromptStore` requirement as creation (see
         // above) — the workspace modifier reads files directly.
         const prompt = yield* libs.Interactive.modifyPrompt(
           ports.ui,
           prompts,
           libs.Interactive.modelOptions(fallback, refs),
-          modifyFor(root, ports.loading),
+          modifyFor(root, hooks),
           id,
           ports.modelPicker,
         ) as Effect.Effect<Prompts.Prompt, string, never>;
         const row = fromPrompt(prompt);
         yield* savePrompt(root, row).pipe(Effect.mapError((failure) => failure.message));
-        return row;
+        return { kind: 'saved', prompt: row } satisfies ModifyFlowResult;
       }).pipe(
-        Effect.catch((error) =>
-          error === libs.Interactive.CANCELLED ? Effect.succeed(undefined) : Effect.fail(error),
-        ),
+        Effect.catch((error) => {
+          if (error !== libs.Interactive.CANCELLED) return Effect.fail(error);
+          const runId = dispatchedModifyRunId;
+          dispatchedModifyRunId = undefined;
+          return Effect.succeed(
+            runId === undefined
+              ? undefined
+              : ({ kind: 'dispatched', runId } satisfies ModifyFlowResult),
+          );
+        }),
       ),
     ),
   );

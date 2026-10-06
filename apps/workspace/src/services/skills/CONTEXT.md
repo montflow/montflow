@@ -50,12 +50,26 @@ Consequences:
   create keybind and the manual modify path
 - `toSkill` / `fromSkill` bridges between dashboard rows and
   pi-skills `Skill` (validated one way, total the other)
-- `storeFor` / `generateFor` / `modifyFor` / `installerFor` ports for
-  the shared `Interactive` flows
-- Headless agentic runs via `pi -p` (`headlessArgs`, `runHeadlessAgent`,
-  `buildHeadlessPrompt`, `generateAgentic`, `modifyAgentic`) over the
-  shared `AUTHOR_` / `MODIFY_` prompts — same prompts the pi extension
-  feeds `AgentRun`, transported over the CLI instead
+- `storeFor` / `installerFor` ports for the shared `Interactive` flows
+- `buildHeadlessPrompt` — assembles the child prompt (preprompt, request,
+  postprompt) every dispatched run carries; the prompts themselves are the
+  extension's canonicals, read through the loaded runtime
+- `runHeadlessAgent` (`pi -p`) — still the transport for the profiles and
+  prompts services, which build their own child prompts
+- Agentic create and modify dispatch a run through the pi-runs engine
+  (`generateFor` / `modifyFor`): `Runs.runsExtensionInstalled` gate,
+  store snapshot, `Runs.startRun` with the `read/write/edit` allowlist, the
+  run id recorded, then the shared flow unwinds with `CANCELLED`.
+  `authorCompletion` correlates the fresh skill to the run's final reply
+  and `modifyCompletion` re-reads the named skill (raw-snapshot no-op
+  check), re-encodes it through `saveSkill`, and fires `CreateFlowHooks` /
+  `ModifyFlowHooks`. Same shape as the profiles and prompts services, and
+  the same contract the pi extension's run dispatcher uses. Both are
+  re-usable as the `onSettled` hook passed to `Runs.resumeRun` after a
+  restart; `resetDispatchedRun` / `resetDispatchedModifyRun` are the test
+  seams
+- `runCreateFlow` / `runModifyFlow` workspace hosts (manual or agentic
+  behind the TUI overlays); each resolves `saved` or `dispatched`
 - `listModelLabels` plus `parseModelsStore` (pure, tested) — the model
   picker catalogue from `~/.pi/agent/models-store.json`
 - `installSkillNames` plus `installArgsFor` (pure, tested) — the

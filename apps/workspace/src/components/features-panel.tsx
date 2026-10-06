@@ -20,10 +20,10 @@ export interface FeaturesPanelProps {
 
 /**
  * Features content that FILLS the panel: loader, empty note, and the
- * filterable read-only list share the same flex chrome, so loading and
- * filtering never shift the grid. Mirrors `RunsPanel` row for row —
- * each row shows the lifecycle marker, the feature name, and its
- * derived state. Read-only: no create, no delete, no install.
+ * filterable list share the same flex chrome, so loading and filtering
+ * never shift the grid. Mirrors `RunsPanel` row for row — each row shows
+ * the lifecycle marker, the feature name, and its derived state.
+ * `c` dispatches an author run (handled by the app, not this panel).
  * @param props - load state, visible rows, highlight, query, capacity, selection
  * @returns features content element
  */
@@ -77,7 +77,12 @@ export const FeaturesPanel = (props: FeaturesPanelProps) => {
         <Show when={props.selected} fallback={<text> </text>}>
           <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
             <text style={{ fg: palette.dim }}>
-              {formatKeybinds([Keybinds.search(), Keybinds.open(), Keybinds.refresh()])}
+              {formatKeybinds([
+                Keybinds.search(),
+                Keybinds.open(),
+                Keybinds.create(),
+                Keybinds.refresh(),
+              ])}
             </text>
             <text style={{ fg: palette.dim }}>{`${props.rows.length}/${props.total}`}</text>
           </box>
