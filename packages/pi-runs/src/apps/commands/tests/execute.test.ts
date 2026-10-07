@@ -40,7 +40,7 @@ const layer = (impl: RunnerImpl): Layer.Layer<Runner> => Layer.succeed(Runner, i
 Vitest.describe('execute runtime', () => {
   Vitest.it.effect('renders the run list', () =>
     Effect.gen(function* () {
-      const text = yield* execute({ kind: 'List' }, '/repo');
+      const text = yield* execute({ kind: 'List', status: undefined }, '/repo');
       Vitest.expect(text).toBe('run-1  running  One\nrun-2  done  Two  (parent run-1)');
     }).pipe(
       Effect.provide(
@@ -59,7 +59,7 @@ Vitest.describe('execute runtime', () => {
 
   Vitest.it.effect('omits a name that equals the id', () =>
     Effect.gen(function* () {
-      const text = yield* execute({ kind: 'List' }, '/repo');
+      const text = yield* execute({ kind: 'List', status: undefined }, '/repo');
       Vitest.expect(text).toBe('run-1  running');
     }).pipe(
       Effect.provide(layer(fakeRunner({ list: () => Effect.succeed([run('running', 'run-1')]) }))),

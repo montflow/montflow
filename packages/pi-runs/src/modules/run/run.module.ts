@@ -60,14 +60,16 @@ export const Id = Schema.String.check(
 export type Id = typeof Id.Type;
 
 /** Lifecycle status of a run. `awaiting-input` parks a live run while it waits on user answers; `cancelled` is a terminal interrupt. */
-export const Status = Schema.Literals([
+export const STATUSES = [
   'pending',
   'running',
   'awaiting-input',
   'done',
   'failed',
   'cancelled',
-]);
+] as const;
+
+export const Status = Schema.Literals(STATUSES);
 
 /** Lifecycle status of a run. */
 export type Status = typeof Status.Type;

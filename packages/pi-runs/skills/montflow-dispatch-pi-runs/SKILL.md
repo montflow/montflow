@@ -3,7 +3,7 @@ name: montflow-dispatch-pi-runs
 description: Dispatches, observes, and controls local agent runs through the @montflow/pi-runs engine using the `mf-runs` CLI and the `run_*` tools. Use when an agent must start a run, steer or answer a live run, resume a stopped run, or read run status, verification, and receipts.
 id: e6fc4e127b49f396
 author: Daniel Montilla
-version: 1.0.0
+version: 1.1.0
 license: MIT
 dependencies:
   - executing-skills
@@ -54,11 +54,13 @@ mf-runs start --id scout-auth --prompt "Map the auth code" --model opencode-go/d
 ## 4. Observe
 
 ```bash
-mf-runs list
+mf-runs list [--status <states>]
 mf-runs status <run-id>
 mf-runs verify <run-id>
 ```
 
+- `list --status <states>` keeps only runs in the named states (comma-separated),
+  e.g. `mf-runs list --status running,awaiting-input`. Omit it to list every run.
 - `status` prints id, lifecycle status, turn count, receipt, and whether the
   store is git-ignored.
 - `verify` prints `valid` and `resumable`. A run is resumable when it is valid,

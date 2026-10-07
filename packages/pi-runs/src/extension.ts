@@ -252,11 +252,18 @@ export const makePiRunsExtension =
     pi.registerTool({
       name: 'run_list',
       label: 'List runs',
-      description: 'List local runs.',
-      promptSnippet: 'run_list — list local runs',
-      parameters: Type.Object({}),
-      execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) =>
-        textResult(await dispatch(ctx, { kind: 'List' })),
+      description: 'List local runs, optionally filtered to the given lifecycle statuses.',
+      promptSnippet: 'run_list — list local runs, optionally filtered by status',
+      parameters: Type.Object({
+        status: Type.Optional(
+          Type.String({
+            description:
+              'Comma-separated statuses to keep: pending, running, awaiting-input, done, failed, cancelled.',
+          }),
+        ),
+      }),
+      execute: async (_toolCallId, params, _signal, _onUpdate, ctx) =>
+        textResult(await dispatch(ctx, { kind: 'List', status: params.status })),
     });
 
     pi.registerTool({

@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.0] - 2026-10-07
+
+### Added
+
+- `mf-runs list --status <states>` keeps only runs in the named lifecycle states; the `run_list` tool takes the same optional `status`
+
 ## [1.0.0] - 2026-09-28
 
 ### Added

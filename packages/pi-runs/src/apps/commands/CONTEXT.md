@@ -13,6 +13,9 @@ drift.
 - `COMMAND_NAME` / `COMMAND_DESCRIPTION` / `USAGE` — single source for both surfaces
 - `start` flags: `--model` (`provider/model-id`) and `--thinking`
   (`off|minimal|low|medium|high|xhigh|max`); an unknown level is `Help`
+- `list` flag: `--status` (`pending|running|awaiting-input|done|failed|cancelled`,
+  comma-separated) keeps only matching runs; an unknown status fails with the
+  accepted values
 - `Doctor` action — delegates to `apps/doctor` (`runDoctor`), which installs the
   packaged `montflow-dispatch-pi-runs` skill into `.agents/skills/`
 - `ExecuteOptions.onSettled` — A004 completion seam; E001 composes the

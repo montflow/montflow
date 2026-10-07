@@ -14,12 +14,12 @@ export const COMMAND_NAME = 'mf-runs';
 
 /** Help text shown for the command. */
 export const COMMAND_DESCRIPTION =
-  'Manage local agent runs: doctor | list | status <id> | verify <id> | start --id <id> --prompt "text" [--model p/m] [--thinking level] | resume <id> [--prompt "text"] | interrupt <id> | steer <id> <text> | answer <id> <text>.';
+  'Manage local agent runs: doctor | list [--status <states>] | status <id> | verify <id> | start --id <id> --prompt "text" [--model p/m] [--thinking level] | resume <id> [--prompt "text"] | interrupt <id> | steer <id> <text> | answer <id> <text>.';
 
 /** Help text for the command and the `help` action. */
 export const USAGE = [
   'mf-runs doctor',
-  'mf-runs list',
+  'mf-runs list [--status pending|running|awaiting-input|done|failed|cancelled]',
   'mf-runs status <id>',
   'mf-runs verify <id>',
   'mf-runs start --id <id> --prompt "text" [--name "n"] [--model p/m] [--thinking off|minimal|low|medium|high|xhigh|max] [--parent <id>] [--related a,b] [--tools a,b]',
@@ -34,7 +34,7 @@ export const USAGE = [
 /** Parsed surface invocation. */
 export type CommandAction =
   | { readonly kind: 'Help' }
-  | { readonly kind: 'List' }
+  | { readonly kind: 'List'; readonly status: string | undefined }
   | { readonly kind: 'Status'; readonly id: string }
   | { readonly kind: 'Verify'; readonly id: string }
   | { readonly kind: 'Doctor' }
@@ -146,6 +146,7 @@ const START_FLAGS = [
   'tools',
 ] as const;
 const RESUME_FLAGS = ['prompt'] as const;
+const LIST_FLAGS = ['status'] as const;
 
 /**
  * Split tokens into positionals and known flags. A value flag consumes the next
@@ -208,6 +209,30 @@ const csv = (value: string | undefined): ReadonlyArray<string> | undefined => {
   return parts.length > 0 ? parts : undefined;
 };
 
+/**
+ * Resolve a raw `--status` value into the run statuses to keep. Absent or
+ * empty means "no filter"; an unknown token fails with the accepted values.
+ * @param value - raw flag value, if any
+ * @returns the statuses, or a refusal naming the accepted values
+ */
+const resolveStatuses = (
+  value: string | undefined,
+): Effect.Effect<ReadonlyArray<Run.Status> | undefined, string> => {
+  if (value === undefined || value === '') return Effect.succeed(undefined);
+  const tokens = value
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part !== '');
+  const statuses: Array<Run.Status> = [];
+  for (const token of tokens) {
+    if (!Schema.is(Run.Status)(token)) {
+      return Effect.fail(`Unknown status '${token}'. Use one of: ${Run.STATUSES.join(', ')}.`);
+    }
+    statuses.push(token);
+  }
+  return Effect.succeed(statuses);
+};
+
 const statusAction = (tokens: ReadonlyArray<string>, kind: 'Status' | 'Verify'): CommandAction => {
   const id = tokens[1];
   return id !== undefined && tokens.length === 2 ? { kind, id } : { kind: 'Help' };
@@ -219,8 +244,11 @@ const parseTokens = (tokens: ReadonlyArray<string>): CommandAction => {
   if (head === undefined) return { kind: 'Help' };
   if (tokens.includes('--help') || tokens.includes('-h')) return { kind: 'Help' };
   switch (head) {
-    case 'list':
-      return tokens.length === 1 ? { kind: 'List' } : { kind: 'Help' };
+    case 'list': {
+      const parsed = splitFlags(tokens.slice(1), LIST_FLAGS);
+      if (parsed === undefined || parsed.positionals.length > 0) return { kind: 'Help' };
+      return { kind: 'List', status: one(parsed.flags['status']) };
+    }
     case 'status':
       return statusAction(tokens, 'Status');
     case 'verify':
@@ -319,7 +347,13 @@ export const execute = (
         return USAGE;
       case 'List': {
         const runs = yield* runner.list(root);
-        return runs.length === 0 ? 'No runs.' : runs.map(renderRun).join('\n');
+        const statuses = yield* resolveStatuses(action.status);
+        const shown =
+          statuses === undefined ? runs : runs.filter((run) => statuses.includes(run.status));
+        if (shown.length === 0) {
+          return statuses === undefined ? 'No runs.' : `No runs with status '${action.status}'.`;
+        }
+        return shown.map(renderRun).join('\n');
       }
       case 'Status': {
         const detail = yield* runner.detail(root, action.id);

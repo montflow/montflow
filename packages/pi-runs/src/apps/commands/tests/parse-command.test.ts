@@ -5,7 +5,15 @@ import { parseArgv, parseCommand, tokenize } from '../index.js';
 Vitest.describe('parseCommand runtime', () => {
   Vitest.it.effect('parses list and help', () =>
     Effect.sync(() => {
-      Vitest.expect(parseCommand('list')).toStrictEqual({ kind: 'List' });
+      Vitest.expect(parseCommand('list')).toStrictEqual({ kind: 'List', status: undefined });
+      Vitest.expect(parseCommand('list --status running')).toStrictEqual({
+        kind: 'List',
+        status: 'running',
+      });
+      Vitest.expect(parseCommand('list --status=running,done')).toStrictEqual({
+        kind: 'List',
+        status: 'running,done',
+      });
       Vitest.expect(parseCommand('')).toStrictEqual({ kind: 'Help' });
       Vitest.expect(parseCommand('nope')).toStrictEqual({ kind: 'Help' });
       Vitest.expect(parseCommand('list --bogus x')).toStrictEqual({ kind: 'Help' });

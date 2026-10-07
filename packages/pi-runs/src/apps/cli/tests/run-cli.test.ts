@@ -82,4 +82,38 @@ Vitest.describe('runCli runtime', () => {
       Vitest.expect(seen).toBe('My Run');
     }),
   );
+
+  Vitest.it.effect('list --status keeps only the named run statuses', () =>
+    Effect.gen(function* () {
+      const runner = fakeRunner({
+        list: () => Effect.succeed([run('running', 'live'), run('done', 'old')]),
+      });
+      const text = yield* runCli(['list', '--status', 'running'], '/repo').pipe(
+        Effect.provide(layer(runner)),
+      );
+      Vitest.expect(text).toContain('live');
+      Vitest.expect(text).not.toContain('old');
+    }),
+  );
+
+  Vitest.it.effect('list --status names the filter when nothing matches', () =>
+    Effect.gen(function* () {
+      const runner = fakeRunner({ list: () => Effect.succeed([run('done', 'old')]) });
+      const text = yield* runCli(['list', '--status', 'running'], '/repo').pipe(
+        Effect.provide(layer(runner)),
+      );
+      Vitest.expect(text).toBe("No runs with status 'running'.");
+    }),
+  );
+
+  Vitest.it.effect('list --status refuses an unknown status', () =>
+    Effect.gen(function* () {
+      const runner = fakeRunner({ list: () => Effect.succeed([run('running', 'live')]) });
+      const error = yield* runCli(['list', '--status', 'bogus'], '/repo').pipe(
+        Effect.provide(layer(runner)),
+        Effect.flip,
+      );
+      Vitest.expect(error).toContain("Unknown status 'bogus'");
+    }),
+  );
 });
