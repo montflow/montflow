@@ -1,9 +1,0 @@
-export * as Feature from './feature/index.js';
-export * as Task from './task/index.js';
-export * as Gates from './gates/index.js';
-export * as Memory from './memory/index.js';
-export * as Lifecycle from './lifecycle/index.js';
-export * as Verify from './verify/index.js';
-export * as Frontmatter from './frontmatter/index.js';
-export * as Structure from './structure/index.js';
-export * as Prompt from './prompt/index.js';
