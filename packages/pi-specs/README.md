@@ -22,7 +22,7 @@ bun run --cwd packages/pi-specs cli check
 - `status --name <spec>` — lifecycle, task counts, per-phase task
   list, and verification verdict. Exits non-zero when the spec fails
   verification.
-- `discover [--pending | --status <states>] [--verbose]` — lists every
+- `list [--pending | --status <states>] [--verbose]` — lists every
   spec with its derived lifecycle state and task counts. `--pending`
   keeps every unfinished spec; `--status` takes a comma-separated list
   of `pending`, `in-progress`, `blocked`, `complete`, `inconsistent`
@@ -76,8 +76,8 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
   the tolerant frontmatter grammar.
 - **`SpecStore`** — filesystem reader (`names`, `hasRoot`, `exists`,
   `snapshot`) backing the CLI.
-- **`Cli`** — pure engines (`check`, `status`, `discover`), pure renderers
-  (`renderCheck`, `renderStatus`, `renderDiscover`, `resolveDiscoverOptions`),
+- **`Cli`** — pure engines (`check`, `status`, `list`), pure renderers
+  (`renderCheck`, `renderStatus`, `renderList`, `resolveListOptions`),
   and the `effect/unstable/cli` commands.
 - **`Doctor`** — `runDoctor(root)` / `runDoctorAt(startDir)` install the
   packaged spec skills into `.agents/skills/`, and report one outcome

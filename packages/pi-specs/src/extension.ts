@@ -9,7 +9,7 @@ export const COMMAND_NAME = 'mf-specs';
 
 /** Help text shown for the slash command. */
 export const COMMAND_DESCRIPTION =
-  'Specs: check [--name <spec>] [--verbose] | status --name <spec> | discover [--pending | --status <states>] [--verbose].';
+  'Specs: check [--name <spec>] [--verbose] | status --name <spec> | list [--pending | --status <states>] [--verbose].';
 
 /** File-backed store with its platform dependencies hidden. */
 const Live: Layer.Layer<SpecStore.SpecStore> = Layer.provide(

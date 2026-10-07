@@ -3,7 +3,7 @@ import { Effect, Layer } from 'effect';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import { SpecStore } from '../../../services/index.js';
-import { DISCOVER_STATUSES, discover, renderDiscover, resolveDiscoverOptions } from '../index.js';
+import { LIST_STATUSES, list, renderList, resolveListOptions } from '../index.js';
 import { entry, memory, stubLayer } from './helpers.js';
 
 const root = '.agents/@montflow/specs';
@@ -46,13 +46,12 @@ const specs = new Map([
   ['gamma', specTree('gamma', 'complete', 'complete', 'A')],
 ]);
 
-const runDiscover = (options = {}) =>
-  discover(root, options).pipe(Effect.provide(stubLayer(specs)));
+const runList = (options = {}) => list(root, options).pipe(Effect.provide(stubLayer(specs)));
 
-Vitest.describe('Cli.discover runtime', () => {
+Vitest.describe('Cli.list runtime', () => {
   Vitest.it.effect('lists every spec with its derived state', () =>
     Effect.gen(function* () {
-      const report = yield* runDiscover();
+      const report = yield* runList();
       Vitest.expect(report.total).toBe(4);
       Vitest.expect(report.matched).toBe(4);
       Vitest.expect(report.specs.map((spec) => [spec.name, spec.state?.state])).toStrictEqual([
@@ -66,7 +65,7 @@ Vitest.describe('Cli.discover runtime', () => {
 
   Vitest.it.effect('--pending keeps every unfinished spec', () =>
     Effect.gen(function* () {
-      const report = yield* runDiscover({ pending: true });
+      const report = yield* runList({ pending: true });
       Vitest.expect(report.specs.map((spec) => spec.name)).toStrictEqual([
         'alpha',
         'beta',
@@ -78,7 +77,7 @@ Vitest.describe('Cli.discover runtime', () => {
 
   Vitest.it.effect('--status keeps exact states', () =>
     Effect.gen(function* () {
-      const report = yield* runDiscover({ statuses: ['complete'] });
+      const report = yield* runList({ statuses: ['complete'] });
       Vitest.expect(report.specs.map((spec) => spec.name)).toStrictEqual(['gamma']);
       Vitest.expect(report.total).toBe(4);
     }),
@@ -86,14 +85,14 @@ Vitest.describe('Cli.discover runtime', () => {
 
   Vitest.it.effect('--status matches several states', () =>
     Effect.gen(function* () {
-      const report = yield* runDiscover({ statuses: ['complete', 'pending'] });
+      const report = yield* runList({ statuses: ['complete', 'pending'] });
       Vitest.expect(report.specs.map((spec) => spec.name)).toStrictEqual(['alpha', 'gamma']);
     }),
   );
 
   Vitest.it.effect('fails for a missing root', () =>
     Effect.gen(function* () {
-      const error = yield* discover(root).pipe(
+      const error = yield* list(root).pipe(
         Effect.provide(
           Layer.succeed(
             SpecStore.SpecStore,
@@ -113,11 +112,11 @@ Vitest.describe('Cli.discover runtime', () => {
   );
 });
 
-Vitest.describe('Cli.renderDiscover runtime', () => {
+Vitest.describe('Cli.renderList runtime', () => {
   Vitest.it.effect('shows one line per spec and a matched summary', () =>
     Effect.gen(function* () {
-      const report = yield* runDiscover({ pending: true });
-      const text = renderDiscover(report, false);
+      const report = yield* runList({ pending: true });
+      const text = renderList(report, false);
       Vitest.expect(text).toContain('\u25cb alpha  in-progress \u00b7 pending');
       Vitest.expect(text).toContain('\u2717 beta  in-progress \u00b7 blocked');
       Vitest.expect(text).toContain('4 specs \u00b7 3 matched');
@@ -127,43 +126,43 @@ Vitest.describe('Cli.renderDiscover runtime', () => {
 
   Vitest.it.effect('verbose prepends the root', () =>
     Effect.gen(function* () {
-      const report = yield* runDiscover({ statuses: ['complete'] });
-      Vitest.expect(renderDiscover(report, true).startsWith(`root ${root}`)).toBe(true);
+      const report = yield* runList({ statuses: ['complete'] });
+      Vitest.expect(renderList(report, true).startsWith(`root ${root}`)).toBe(true);
     }),
   );
 });
 
-Vitest.describe('Cli.resolveDiscoverOptions runtime', () => {
+Vitest.describe('Cli.resolveListOptions runtime', () => {
   Vitest.it('defaults to no filter', () => {
-    Vitest.expect(resolveDiscoverOptions(undefined, false)).toStrictEqual({ options: {} });
+    Vitest.expect(resolveListOptions(undefined, false)).toStrictEqual({ options: {} });
   });
 
   Vitest.it('maps --pending to the unfinished shorthand', () => {
-    Vitest.expect(resolveDiscoverOptions(undefined, true)).toStrictEqual({
+    Vitest.expect(resolveListOptions(undefined, true)).toStrictEqual({
       options: { pending: true },
     });
   });
 
   Vitest.it('parses a comma-separated status list', () => {
-    Vitest.expect(resolveDiscoverOptions('pending, in-progress', false)).toStrictEqual({
+    Vitest.expect(resolveListOptions('pending, in-progress', false)).toStrictEqual({
       options: { statuses: ['pending', 'in-progress'] },
     });
   });
 
   Vitest.it('accepts `completed` as an alias for `complete`', () => {
-    Vitest.expect(resolveDiscoverOptions('completed', false)).toStrictEqual({
+    Vitest.expect(resolveListOptions('completed', false)).toStrictEqual({
       options: { statuses: ['complete'] },
     });
   });
 
   Vitest.it('rejects an unknown status', () => {
-    const result = resolveDiscoverOptions('bogus', false);
+    const result = resolveListOptions('bogus', false);
     Vitest.expect('error' in result && result.error).toContain("Unknown status 'bogus'");
-    Vitest.expect(DISCOVER_STATUSES).toContain('inconsistent');
+    Vitest.expect(LIST_STATUSES).toContain('inconsistent');
   });
 
   Vitest.it('rejects --pending combined with --status', () => {
-    const result = resolveDiscoverOptions('pending', true);
+    const result = resolveListOptions('pending', true);
     Vitest.expect('error' in result && result.error).toContain('not both');
   });
 });

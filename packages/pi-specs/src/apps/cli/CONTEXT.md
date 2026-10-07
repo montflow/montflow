@@ -11,7 +11,7 @@ agents and humans:
 - `status --name <spec>` — readable status panel for one spec:
   lifecycle, counts, per-phase task list, verification verdict. Exits
   non-zero when that spec fails verification.
-- `discover` — list every spec with its derived lifecycle state and
+- `list` — list every spec with its derived lifecycle state and
   task counts, filtered by `--pending` (unfinished) or by `--status`
   with an exact state list (`completed` is an alias for `complete`).
 - `doctor` — install the packaged spec skills into
@@ -20,11 +20,11 @@ agents and humans:
 
 ## Belongs here
 
-- Pure engines (`check`, `status`, `discover`) over the `SpecStore`
+- Pure engines (`check`, `status`, `list`) over the `SpecStore`
   service
-- Pure renderers (`renderCheck`, `renderStatus`, `renderDiscover`) — the
+- Pure renderers (`renderCheck`, `renderStatus`, `renderList`) — the
   token-efficiency contract lives here
-- `Command`/`Flag` wiring (`checkCommand`, `statusCommand`, `discoverCommand`, `doctorCommand`, `rootCommand`)
+- `Command`/`Flag` wiring (`checkCommand`, `statusCommand`, `listCommand`, `doctorCommand`, `rootCommand`)
 - The slash-command form (`runSlash`, `SlashReport`) reused by `extension.ts`
 - The `main.ts` binary entry
 
@@ -43,7 +43,7 @@ npx mf-specs check --name ship-spec --verbose
 
 # or by package script
 bun run --cwd packages/pi-specs cli check
-bun run --cwd packages/pi-specs cli discover --pending
+bun run --cwd packages/pi-specs cli list --pending
 
 # install the packaged spec skills into the repo
 bun run --cwd packages/pi-specs cli doctor
@@ -56,7 +56,7 @@ target build would be required for `npx` without Bun.
 
 Inside Pi, the same engines are exposed as `/mf-specs` by
 `src/extension.ts` (`check [--name <spec>] [--verbose]` /
-`status --name <spec>` / `discover [--pending | --status <states>]
+`status --name <spec>` / `list [--pending | --status <states>]
 [--verbose]`).
 
 ## Building & distributing
@@ -75,14 +75,14 @@ Two supported paths — neither needs Node or a model at runtime:
   `#!/usr/bin/env bun`) works with `bun link` for local/agent use where
   Bun is installed.
 
-Everything `check`/`status`/`discover` do is pure filesystem work, so the
+Everything `check`/`status`/`list` do is pure filesystem work, so the
 binary and slash command work fully offline. Only future agentic
 specs would require Pi and a model.
 
 ## Parallelism
 
 `check` verifies specs concurrently with `Effect.forEach` (bounded by
-`--concurrency`, default 8); `discover` reads them concurrently under the
+`--concurrency`, default 8); `list` reads them concurrently under the
 same bound. The per-spec work is a pure `verifySpecTree` / `analyze`
 call, so a `worker_threads`-backed executor can be swapped in behind the
 same engine without touching the rules.

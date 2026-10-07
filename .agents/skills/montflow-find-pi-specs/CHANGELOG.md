@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.0] - 2026-10-07
+
+### Changed
+
+- Renamed the `mf-specs discover` command to `mf-specs list` (same `--pending` / `--status` filters).
+
 ## [1.0.0] - 2026-10-06
 
 ### Added

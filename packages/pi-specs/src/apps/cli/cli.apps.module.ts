@@ -141,7 +141,7 @@ export interface StatusReport {
 
 /**
  * Reduce one spec snapshot to a {@link StatusReport}. Pure over the
- * snapshot, so both `status` and `discover` share the same summarizer.
+ * snapshot, so both `status` and `list` share the same summarizer.
  * `spec` / `state` are undefined when SPEC.md is missing or unparsable.
  * @param name - spec directory name
  * @param snapshot - every file under the spec root
@@ -270,24 +270,24 @@ export const renderStatus = (report: StatusReport): string => {
   return lines.join('\n');
 };
 
-// ─── Discover ─────────────────────────────────────────────────────────
+// ─── List ─────────────────────────────────────────────────────────────
 
 /** Derived spec states accepted by `--status`, with `completed` as an alias. */
-export const DISCOVER_STATUSES: ReadonlyArray<State> = STATES;
+export const LIST_STATUSES: ReadonlyArray<State> = STATES;
 
 const isSpecState = (value: string): value is State =>
-  DISCOVER_STATUSES.some((state) => state === value);
+  LIST_STATUSES.some((state) => state === value);
 
-/** Options for {@link discover}. */
-export interface DiscoverOptions {
+/** Options for {@link list}. */
+export interface ListOptions {
   /** Derived lifecycle states to keep; empty keeps every state. */
   readonly statuses?: ReadonlyArray<State> | undefined;
   /** Keep only unfinished specs (`state !== 'complete'`). */
   readonly pending?: boolean | undefined;
 }
 
-/** Discovery result over a spec root. */
-export interface DiscoverReport {
+/** Listing result over a spec root. */
+export interface ListReport {
   readonly root: string;
   /** Matched specs, in directory order. */
   readonly specs: ReadonlyArray<StatusReport>;
@@ -297,7 +297,7 @@ export interface DiscoverReport {
   readonly matched: number;
 }
 
-const matchesDiscover = (report: StatusReport, options: DiscoverOptions): boolean => {
+const matchesList = (report: StatusReport, options: ListOptions): boolean => {
   const state = report.state?.state;
   if (options.pending === true && state === 'complete') return false;
   const statuses = options.statuses;
@@ -315,16 +315,16 @@ const matchesDiscover = (report: StatusReport, options: DiscoverOptions): boolea
  * @param options - optional state filters
  * @returns the matched specs plus total/matched counts
  */
-export const discover = (
+export const list = (
   root: string,
-  options: DiscoverOptions = {},
-): Effect.Effect<DiscoverReport, SpecStore.StoreError, SpecStore.SpecStore> =>
+  options: ListOptions = {},
+): Effect.Effect<ListReport, SpecStore.StoreError, SpecStore.SpecStore> =>
   Effect.gen(function* () {
     const store = yield* SpecStore.SpecStore;
     if (!(yield* store.hasRoot(root))) {
       return yield* Effect.fail(
         new SpecStore.StoreError({
-          operation: 'SpecDiscover',
+          operation: 'SpecList',
           reason: `Specs directory not found: ${root}`,
         }),
       );
@@ -336,12 +336,12 @@ export const discover = (
         store.snapshot(root, name).pipe(Effect.map((snapshot) => summarize(name, snapshot))),
       { concurrency: DEFAULT_CONCURRENCY },
     );
-    const specs = reports.filter((report) => matchesDiscover(report, options));
+    const specs = reports.filter((report) => matchesList(report, options));
     return { root, specs, total: reports.length, matched: specs.length };
   });
 
-/** Discovery state mark, aligned with {@link STATUS_MARK}. */
-const DISCOVER_MARK = {
+/** Listing state mark, aligned with {@link STATUS_MARK}. */
+const LIST_MARK = {
   complete: '\u2713',
   'in-progress': '\u2022',
   pending: '\u25cb',
@@ -350,18 +350,18 @@ const DISCOVER_MARK = {
 } satisfies Record<State, string>;
 
 /**
- * Render a discovery report: one line per matched spec, then a
+ * Render a listing report: one line per matched spec, then a
  * matched-of-total summary. Token-lean; `verbose` prepends the root.
- * @param report - report from {@link discover}
+ * @param report - report from {@link list}
  * @param verbose - include the root path
  * @returns the display text
  */
-export const renderDiscover = (report: DiscoverReport, verbose: boolean): string => {
+export const renderList = (report: ListReport, verbose: boolean): string => {
   const lines: Array<string> = [];
   if (verbose) lines.push(`root ${report.root}`);
   for (const spec of report.specs) {
     const state = spec.state?.state;
-    const mark = state === undefined ? '\u2717' : DISCOVER_MARK[state];
+    const mark = state === undefined ? '\u2717' : LIST_MARK[state];
     const declared = spec.spec?.status ?? 'unreadable';
     const counts = statusCounts(spec.tasks) || `${spec.tasks.length} tasks`;
     const verdict = spec.verify.valid ? '' : ` \u00b7 \u2717 ${spec.verify.issues.length}`;
@@ -376,21 +376,21 @@ export const renderDiscover = (report: DiscoverReport, verbose: boolean): string
   return lines.join('\n');
 };
 
-/** Parsed discovery filter: options, or a user-facing error. */
-export type DiscoverFilter = { readonly options: DiscoverOptions } | { readonly error: string };
+/** Parsed listing filter: options, or a user-facing error. */
+export type ListFilter = { readonly options: ListOptions } | { readonly error: string };
 
 /**
- * Turn raw `--status`/`--pending` inputs into {@link DiscoverOptions}.
+ * Turn raw `--status`/`--pending` inputs into {@link ListOptions}.
  * `--pending` is shorthand for every unfinished state and cannot combine
  * with `--status`; `completed` is accepted as an alias for `complete`.
  * @param rawStatuses - comma-separated `--status` value, if given
  * @param pending - whether `--pending` was set
  * @returns the options or an error message
  */
-export const resolveDiscoverOptions = (
+export const resolveListOptions = (
   rawStatuses: string | undefined,
   pending: boolean,
-): DiscoverFilter => {
+): ListFilter => {
   const trimmed = rawStatuses?.trim() ?? '';
   if (pending && trimmed !== '') {
     return { error: 'Use --pending or --status, not both.' };
@@ -405,7 +405,7 @@ export const resolveDiscoverOptions = (
     const canonical = token === 'completed' ? 'complete' : token;
     if (!isSpecState(canonical)) {
       return {
-        error: `Unknown status '${token}'. Use one of: ${DISCOVER_STATUSES.join(', ')}.`,
+        error: `Unknown status '${token}'. Use one of: ${LIST_STATUSES.join(', ')}.`,
       };
     }
     states.push(canonical);
@@ -476,13 +476,13 @@ const statusCommand = Command.make('status', { dir: dirFlag, name: nameFlag }, (
   Command.provide(SpecStore.Default),
 );
 
-const discoverCommand = Command.make(
-  'discover',
+const listCommand = Command.make(
+  'list',
   {
     dir: dirFlag,
     status: Flag.optional(
       Flag.string('status').pipe(
-        Flag.withDescription(`Comma-separated states to keep: ${DISCOVER_STATUSES.join(', ')}.`),
+        Flag.withDescription(`Comma-separated states to keep: ${LIST_STATUSES.join(', ')}.`),
       ),
     ),
     pending: Flag.boolean('pending').pipe(
@@ -496,7 +496,7 @@ const discoverCommand = Command.make(
   },
   (config) =>
     Effect.gen(function* () {
-      const filter = resolveDiscoverOptions(
+      const filter = resolveListOptions(
         Option.isSome(config.status) ? config.status.value : undefined,
         config.pending,
       );
@@ -505,8 +505,8 @@ const discoverCommand = Command.make(
           new CliError.UserError({ cause: filter.error, userMessage: filter.error }),
         );
       }
-      const report = yield* discover(config.dir, filter.options);
-      yield* Console.log(renderDiscover(report, config.verbose));
+      const report = yield* list(config.dir, filter.options);
+      yield* Console.log(renderList(report, config.verbose));
     }).pipe(
       Effect.catchTag('@montflow/SpecStoreError', (error) => Effect.fail(toUserError(error))),
     ),
@@ -535,10 +535,10 @@ const doctorCommand = Command.make('doctor', {}, () =>
   ),
 ).pipe(Command.withDescription('Install the packaged spec skills into .agents/skills/.'));
 
-/** Root command: `mf-specs <check|status|discover|doctor>`. */
+/** Root command: `mf-specs <check|status|list|doctor>`. */
 export const rootCommand = Command.make('mf-specs').pipe(
-  Command.withDescription('Discover, verify, and set up montflow specs.'),
-  Command.withSubcommands([checkCommand, statusCommand, discoverCommand, doctorCommand]),
+  Command.withDescription('List, verify, and set up montflow specs.'),
+  Command.withSubcommands([checkCommand, statusCommand, listCommand, doctorCommand]),
 );
 
 // ─── Slash-command form ───────────────────────────────────────────────
@@ -549,9 +549,9 @@ export interface SlashReport {
   readonly ok: boolean;
 }
 
-/** Parsed slash args: `check`/`status`/`discover` plus their flags. */
+/** Parsed slash args: `check`/`status`/`list` plus their flags. */
 interface SlashArgs {
-  readonly command: 'check' | 'status' | 'discover';
+  readonly command: 'check' | 'status' | 'list';
   readonly name: string | undefined;
   readonly dir: string | undefined;
   readonly verbose: boolean;
@@ -563,9 +563,8 @@ const parseSlashArgs = (args: string): SlashArgs => {
   const tokens = args.split(/\s+/).filter((token) => token !== '');
   const head = tokens[0];
   const command: SlashArgs['command'] =
-    head === 'status' ? 'status' : head === 'discover' ? 'discover' : 'check';
-  const rest =
-    head === 'check' || head === 'status' || head === 'discover' ? tokens.slice(1) : tokens;
+    head === 'status' ? 'status' : head === 'list' ? 'list' : 'check';
+  const rest = head === 'check' || head === 'status' || head === 'list' ? tokens.slice(1) : tokens;
   let name: string | undefined;
   let dir: string | undefined;
   let statusFilter: string | undefined;
@@ -627,15 +626,15 @@ export const runSlash = (
       const report = yield* status(dir, parsed.name);
       return { output: renderStatus(report), ok: report.verify.valid };
     }
-    if (parsed.command === 'discover') {
-      const filter = resolveDiscoverOptions(parsed.statusFilter, parsed.pending);
+    if (parsed.command === 'list') {
+      const filter = resolveListOptions(parsed.statusFilter, parsed.pending);
       if ('error' in filter) {
         return yield* Effect.fail(
-          new SpecStore.StoreError({ operation: 'SpecDiscover', reason: filter.error }),
+          new SpecStore.StoreError({ operation: 'SpecList', reason: filter.error }),
         );
       }
-      const report = yield* discover(dir, filter.options);
-      return { output: renderDiscover(report, parsed.verbose), ok: true };
+      const report = yield* list(dir, filter.options);
+      return { output: renderList(report, parsed.verbose), ok: true };
     }
     const options: CheckOptions =
       parsed.name === undefined

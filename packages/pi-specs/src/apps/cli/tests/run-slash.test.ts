@@ -75,19 +75,17 @@ Vitest.describe('Cli.runSlash runtime', () => {
     }),
   );
 
-  Vitest.it.effect('runs discover --pending', () =>
+  Vitest.it.effect('runs list --pending', () =>
     Effect.gen(function* () {
-      const report = yield* runSlash('discover --pending', root).pipe(
-        Effect.provide(stubLayer(specs)),
-      );
+      const report = yield* runSlash('list --pending', root).pipe(Effect.provide(stubLayer(specs)));
       Vitest.expect(report.ok).toBe(true);
       Vitest.expect(report.output).toContain('2 specs');
     }),
   );
 
-  Vitest.it.effect('reports an unknown discover status as an error', () =>
+  Vitest.it.effect('reports an unknown list status as an error', () =>
     Effect.gen(function* () {
-      const error = yield* runSlash('discover --status=bogus', root).pipe(
+      const error = yield* runSlash('list --status=bogus', root).pipe(
         Effect.provide(stubLayer(specs)),
         Effect.flip,
       );
