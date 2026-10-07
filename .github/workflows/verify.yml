@@ -1,0 +1,82 @@
+# Repo-wide verification gate, on every push to `main`.
+#
+# This is the general gate the repository lacked: lint, format, typecheck,
+# tests, and the extension verifications (skills, prompts, specs, profiles,
+# runs). Each matrix cell runs one check through a shared root script
+# (`package.json`) so a failure names a single target and CI, the local
+# `verify:montflow` script, and the Lefthook pre-push hook all execute the
+# same commands.
+#
+# Boundary with `release.yml`: that workflow is intentionally left untouched.
+# Its `checks` job runs per-package test/typecheck/lint/format but only for
+# packages that are about to be published (public, not ignored, version not
+# yet on npm), and it is skipped when there is nothing to release. It gates
+# publishing, not pushes; this workflow gates pushes. On a push that also
+# releases a package the two can overlap; that overlap is accepted, because
+# release gating stays authoritative for publishing.
+#
+# Known limitation: only `push` to `main` triggers this. A pull request merged
+# before the push event runs is checked after it lands, and feature branches
+# get no CI. Adding a `pull_request` trigger or a required `Verify` status
+# check is a follow-up.
+name: Verify
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  verify:
+    name: ${{ matrix.target }} (${{ matrix.script }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: lint
+            script: lint:check
+          - target: format
+            script: format:check
+          - target: typecheck
+            script: ts:check
+          - target: test
+            script: test
+          - target: skills
+            script: verify:montflow:skills
+          - target: prompts
+            script: verify:montflow:prompts
+          - target: specs
+            script: verify:montflow:specs
+          - target: profiles
+            script: verify:montflow:profiles
+          - target: runs
+            script: verify:montflow:runs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.13"
+
+      - name: Cache Bun install store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-install-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run ${{ matrix.target }}
+        run: bun run ${{ matrix.script }}

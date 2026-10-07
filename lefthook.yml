@@ -1,0 +1,27 @@
+# Lefthook configuration.
+#
+# `pre-push` runs the fast verification subset — lint, format, typecheck, and
+# every extension verify (skills, prompts, specs, profiles, runs). It is the
+# same shared entry point (`verify:montflow:fast`) that the `Verify` GitHub
+# Actions workflow calls, so the two cannot drift.
+#
+# Install once per clone:
+#
+#   bun run hooks:install
+#
+# Bypass intentionally with `git push --no-verify` or `LEFTHOOK=0`.
+#
+# The guard matters because Lefthook installs the hook into the shared common
+# hooks directory (`.bare/hooks` in this bare-repo worktree layout), so a push
+# from a sibling worktree that does not contain this script would otherwise
+# fail. This repo's `core.hooksPath` stays unset; Lefthook writes to whatever
+# `git rev-parse --git-path hooks` reports.
+pre-push:
+  commands:
+    verify:
+      run: |
+        if [ -f package.json ] && grep -q '"verify:montflow:fast"' package.json && [ -x node_modules/.bin/turbo ]; then
+          bun run verify:montflow:fast
+        else
+          echo "verify:montflow:fast or node_modules not present in this worktree; skipping pre-push verification"
+        fi
