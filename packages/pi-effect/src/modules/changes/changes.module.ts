@@ -3,7 +3,7 @@ import { Effect, FileSystem, Match, Stream } from 'effect';
 /**
  * The shared change-notification contract for montflow extension stores.
  *
- * Every extension store (runs, profiles, prompts, skills, features) writes to
+ * Every extension store (runs, profiles, prompts, skills, specs) writes to
  * a repo-local directory. A store that can report its own changes implements
  * {@link Watchable}; a consumer (the workspace) subscribes through that
  * interface and patches its query cache — it never watches the filesystem
