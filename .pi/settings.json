@@ -1,8 +1,10 @@
 {
   "packages": [
-    "../packages/pi-prompts",
-    "../packages/pi-skills",
+    "../packages/pi-specs",
+    "../packages/pi-notifications",
     "../packages/pi-profiles",
-    "../packages/pi-runs"
+    "../packages/pi-prompts",
+    "../packages/pi-runs",
+    "../packages/pi-skills"
   ]
 }
