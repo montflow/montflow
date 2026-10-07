@@ -83,7 +83,7 @@ Frontmatter keys:
 4. `created` / `updated` — ISO timestamps; `created` never changes.
 5. `sessionFile` — advisory path to `session.jsonl` (Pi's in-memory manager
    does not write it).
-6. Optional captures: `name`, `prompt`, `model`, `tools`, `related`, `feature`,
+6. Optional captures: `name`, `prompt`, `model`, `tools`, `related`, `spec`,
    `progress`. All survive every status rewrite.
 
 ## session.jsonl

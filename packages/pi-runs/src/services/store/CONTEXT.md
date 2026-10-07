@@ -8,7 +8,7 @@ session factory (see the runner contact).
 
 - `NATIVE_SESSION_FILE` — the file name Pi writes the run's native session to inside the run directory
 - `create`, `start`, `append`, `settle`, `load`, `list`, `verify` plus `StoreError`
-- Display captures (`name`, `prompt`, `model`, `tools`, `related`, `feature`) persist through every rewrite via `withExtras`
+- Display captures (`name`, `prompt`, `model`, `tools`, `related`, `spec`) persist through every rewrite via `withExtras`
 - `verify` reads raw files and delegates to the pure verify module (validity + resumability)
 - `append`/`answer` carry the raw Pi `message` for lossless replay; `text` stays the display projection
 - `Backend` interface with file and memory implementations

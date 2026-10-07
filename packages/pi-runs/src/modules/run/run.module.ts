@@ -115,8 +115,8 @@ export class Run extends Schema.Class<Run>('Run')({
   tools: Schema.optionalKey(Schema.Array(Schema.String)),
   /** Non-parent related run ids (siblings, review target, coordinator links). */
   related: Schema.optionalKey(Schema.Array(Id)),
-  /** Feature spec this run works on (`<feature-slug>`), when bound to one. */
-  feature: Schema.optionalKey(Schema.String),
+  /** Spec this run works on (`<spec-slug>`), when bound to one. */
+  spec: Schema.optionalKey(Schema.String),
   /** Latest agent-posted progress line, surfaced in the runs list. */
   progress: Schema.optionalKey(Schema.String),
 }) {}

@@ -1,7 +1,7 @@
 # Verify module
 
 Mechanical run verification — validity and resumability, like the profile and
-feature verifiers.
+spec verifiers.
 
 ## Belongs here
 

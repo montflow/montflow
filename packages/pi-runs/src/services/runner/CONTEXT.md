@@ -8,7 +8,7 @@ and extension all call this layer.
 ## Belongs here
 
 - `Runner` service (`start`, `resume`, `steer`, `answer`, `interrupt`, `detail`, `verify`, `verifyStore`, `progress`, `list`, `liveRunIds`)
-- `feature` binding: `start` persists the feature slug a run works on; `liveRunIds` reports runs with a live session (stale persisted `running` statuses excluded)
+- `spec` binding: `start` persists the spec slug a run works on; `liveRunIds` reports runs with a live session (stale persisted `running` statuses excluded)
 - `model` / `thinking` pins: `start` persists both on the run and applies them
   to the Pi session; `resume` reuses the persisted pins so replay stays faithful
 - `SessionPort` / `SessionFactory` — live-session abstraction so the engine is testable without Pi

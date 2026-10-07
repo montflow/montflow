@@ -6,7 +6,7 @@ import { Replay } from '../replay/index.js';
 
 /**
  * Mechanical run verification: a pure check over a run's raw files plus the
- * store's git-ignore guard, mirroring the profile/feature verifiers. `valid`
+ * store's git-ignore guard, mirroring the profile/spec verifiers. `valid`
  * means the run is well-formed; `resumable` means it can be replayed on
  * another machine. Invalid or non-resumable runs must refuse to resume.
  */

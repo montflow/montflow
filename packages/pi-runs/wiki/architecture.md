@@ -21,7 +21,7 @@ Why this path:
 
 1. Repo-local — runs sit next to the code, not in `~/.pi`.
 2. The store is git-ignored, so transcripts stay local and off `git diff`.
-3. Namespaced under `.agents/@montflow/` alongside `features/`, `profiles/`,
+3. Namespaced under `.agents/@montflow/` alongside `specs/`, `profiles/`,
    `prompts/`, `runs/`.
 
 ## How Pi flow changes

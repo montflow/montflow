@@ -238,7 +238,7 @@ interface RunInput {
   thinking?: RunSchema.ThinkingLevel;
   tools?: ReadonlyArray<string>;
   related?: ReadonlyArray<RunSchema.Id>;
-  feature?: string;
+  spec?: string;
   progress?: string;
 }
 
@@ -276,7 +276,7 @@ const withExtras = (
   if (run.thinking !== undefined) input.thinking = run.thinking;
   if (run.tools !== undefined) input.tools = run.tools;
   if (run.related !== undefined) input.related = run.related;
-  if (run.feature !== undefined) input.feature = run.feature;
+  if (run.spec !== undefined) input.spec = run.spec;
   if (base.progress !== undefined) input.progress = base.progress;
   else if (run.progress !== undefined) input.progress = run.progress;
   return new RunSchema.Run(input);
@@ -292,7 +292,7 @@ export interface CreateArgs {
   thinking?: RunSchema.ThinkingLevel;
   tools?: ReadonlyArray<string>;
   related?: ReadonlyArray<string>;
-  feature?: string;
+  spec?: string;
 }
 
 const build = (backend: Backend) => {
@@ -398,7 +398,7 @@ const build = (backend: Backend) => {
           if (args.thinking !== undefined) input.thinking = args.thinking;
           if (args.tools !== undefined) input.tools = args.tools;
           if (related !== undefined) input.related = related;
-          if (args.feature !== undefined) input.feature = args.feature;
+          if (args.spec !== undefined) input.spec = args.spec;
           const run = new RunSchema.Run(input);
           const files = backend.filesFor(id);
           yield* backend.writeText(

@@ -37,16 +37,16 @@ Vitest.describe('Store.create runtime', () => {
     ),
   );
 
-  Vitest.it.live('persists the feature binding', () =>
+  Vitest.it.live('persists the spec binding', () =>
     provideStore(
       freshRoot(),
       Effect.gen(function* () {
         const store = yield* Store;
-        yield* store.create({ id: 'run-1', feature: 'ship-login' });
+        yield* store.create({ id: 'run-1', spec: 'ship-login' });
         const loaded = yield* store.load('run-1');
-        Vitest.expect(loaded.run.feature).toBe('ship-login');
+        Vitest.expect(loaded.run.spec).toBe('ship-login');
         const listed = yield* store.list();
-        Vitest.expect(listed[0]?.feature).toBe('ship-login');
+        Vitest.expect(listed[0]?.spec).toBe('ship-login');
       }),
     ),
   );

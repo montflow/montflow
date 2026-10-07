@@ -109,8 +109,8 @@ export interface RunnerStartInput {
   readonly parent?: string | undefined;
   /** Non-parent related run ids (siblings, review target). */
   readonly related?: ReadonlyArray<string> | undefined;
-  /** Feature spec this run works on (`<feature-slug>`), when bound to one. */
-  readonly feature?: string | undefined;
+  /** Spec this run works on (`<spec-slug>`), when bound to one. */
+  readonly spec?: string | undefined;
   /** Called once when the run settles; the profile-create hook lives here. */
   readonly onSettled?: ((detail: RunDetail) => Effect.Effect<void>) | undefined;
 }
@@ -357,7 +357,7 @@ const make = Effect.gen(function* () {
       if (input.tools !== undefined) createArgs.tools = input.tools;
       if (input.parent !== undefined) createArgs.parent = input.parent;
       if (input.related !== undefined) createArgs.related = input.related;
-      if (input.feature !== undefined) createArgs.feature = input.feature;
+      if (input.spec !== undefined) createArgs.spec = input.spec;
       yield* store.create(createArgs).pipe(Effect.mapError((error) => error.reason));
       const started = yield* store.start(input.id).pipe(Effect.mapError((error) => error.reason));
       // Pi owns the run transcript: point the session at its native file.

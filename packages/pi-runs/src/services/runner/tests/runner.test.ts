@@ -708,7 +708,7 @@ Vitest.describe('Runner runtime', () => {
     const harness = makeHarness();
     return Effect.gen(function* () {
       const runner = yield* Runner;
-      yield* runner.start({ root: '/repo', id: 'run-1', prompt: 'do it', feature: 'ship-login' });
+      yield* runner.start({ root: '/repo', id: 'run-1', prompt: 'do it', spec: 'ship-login' });
       const before = yield* runner.liveRunIds('/repo');
       Vitest.expect([...before]).toStrictEqual(['run-1']);
       const session = harness.sessions[0];
@@ -721,7 +721,7 @@ Vitest.describe('Runner runtime', () => {
       const after = yield* runner.liveRunIds('/repo');
       Vitest.expect([...after]).toStrictEqual([]);
       const stored = yield* runner.detail('/repo', 'run-1');
-      Vitest.expect(stored.run.feature).toBe('ship-login');
+      Vitest.expect(stored.run.spec).toBe('ship-login');
     }).pipe(Effect.provide(harness.layer));
   });
 });
