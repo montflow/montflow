@@ -2,11 +2,12 @@
 
 ## Phase 1: Group & File Structure
 
-- [ ] Module lives inside a group folder: `modules/`, `utils/`, `services/`, or `layers/` — never loose
+- [ ] Module lives inside a plural group folder (e.g., `modules/`, `utils/`, `services/`, `structs/`, `components/`, `rules/`, `shared/`) — never loose
+- [ ] The only loose file under `src/` is the package/service entry `src/index.ts`
 - [ ] Directory `src/[group]/[module-name]/` exists
 - [ ] `[module-name].[group].module.ts` exists (or `[module-name].module.ts` when group is `modules`)
-- [ ] `index.ts` exists — re-exports module as namespace with full `.ts` extension in the path
-- [ ] `CONTEXT.md` exists at the module root
+- [ ] `index.ts` exists — re-exports module as namespace with the `.js` extension in the path
+- [ ] `CONTEXT.md` is present only when the module is a leaf and needs one (optional)
 - [ ] `tests/` folder exists; test files named `[module-util-name].test.ts`
 - [ ] No `declare namespace` or TypeScript `namespace` keyword used
 
@@ -30,6 +31,6 @@
 ## Phase 4: Code Quality
 
 - [ ] Prefers exported functions over static classes
-- [ ] Functions have explicit return types
+- [ ] Exported and public-API functions have explicit return types; internal functions infer
 - [ ] Parameters use branded types or well-defined structs where validated input is expected
 - [ ] No side effects at module level

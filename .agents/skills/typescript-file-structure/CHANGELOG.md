@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.0] - 2026-10-07
+
+### Changed
+
+- Re-export specifiers now use the `.js` extension
+- `src/index.ts` is now the documented package/service entry carve-out (the only loose file under `src/`)
+- `layers` dropped from the group examples; plural group folders are open-ended
+
 ## [1.0.1] - 2026-08-28
 
 ### Changed

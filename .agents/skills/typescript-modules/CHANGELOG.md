@@ -1,5 +1,15 @@
 # Changelog
 
+## [3.0.0] - 2026-10-07
+
+### Changed
+
+- Group registry is now open-ended plural folders; `layers/` retired and `structs/` added as an official example
+- The `src/index.ts` entry carve-out is now an explicit exception to "no loose top-level exports"
+- Relative import/export specifiers now use the `.js` extension
+- `CONTEXT.md` is optional and leaf-module-only, with a template, instead of a required file
+- `GATES.md` now scopes explicit return types to exported/public-API functions only
+
 ## [2.1.1] - 2026-08-28
 
 ### Changed

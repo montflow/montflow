@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.0] - 2026-10-07
+
+### Removed
+
+- Dangling `CHECKLIST.md` reference (the file does not exist)
+
 ## [1.1.0] - 2026-07-24
 
 ### Added

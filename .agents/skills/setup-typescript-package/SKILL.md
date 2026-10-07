@@ -3,7 +3,7 @@ name: setup-typescript-package
 description: Scaffolds TypeScript monorepo packages and services with consistent tooling, tsdown bundling, linting, formatting, and typechecking. Use when setting up a new package or service in a monorepo.
 id: 6f46456868d6a664
 author: Daniel Montilla
-version: 1.1.0
+version: 1.2.0
 license: MIT
 dependencies:
   - executing-skills
@@ -62,5 +62,4 @@ Run `lint:check`, `format:check`, `clean`. For packages also run `build` and `ts
 
 # Reference
 
-- **Detailed checklist**: See [CHECKLIST.md](CHECKLIST.md) (MUST READ) — authoritative item-by-item steps for every file and config value
 - **Gates**: See [GATES.md](GATES.md) — end-of-process validation
