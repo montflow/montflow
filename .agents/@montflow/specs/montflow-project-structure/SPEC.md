@@ -1,10 +1,10 @@
 ---
 name: montflow-project-structure
-status: in-progress
+status: complete
 workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-06
-locked-phases: A, B
+locked-phases: A, B, C
 ---
 
 # Montflow project structure
@@ -41,6 +41,8 @@ open-ended until the user decides the contract in Phase B.
 - The eventual unified skill must satisfy the pi-skills schema and the montflow skill-authoring rules.
 - Phases A and B modify no skill or source files — they produce findings and decisions only.
 - Implementation tasks are deliberately not authored until Phase B concludes; this spec is expected to grow after Phase B.
+- Phase C implements the B002 contract: it authors the unified entry-point skill, repoints its inbound references, aligns every depended-on skill (and the cleanup targets) to the B001/B002 decisions, and keeps the workspace skills schema-valid.
+- Phase C modifies only `.agents/skills/` (plus `.agents/@montflow/specs/` bookkeeping); it runs no repo-wide verification and touches no package source.
 
 ## Tasks
 
@@ -55,3 +57,14 @@ open-ended until the user decides the contract in Phase B.
 | B001 | interview-unified-contract  | planning    | complete | No    |
 | B002 | draft-unified-skill         | planning    | complete | No    |
 | B099 | review-phase                | review      | complete | No    |
+| C001 | create-unified-skill        | execution   | complete | Yes   |
+| C002 | repoint-inbound-references  | execution   | complete | No    |
+| C003 | update-typescript-modules   | execution   | complete | Yes   |
+| C004 | update-typescript-file-structure | execution | complete | Yes |
+| C005 | update-effect-services      | execution   | complete | Yes   |
+| C006 | update-effect-structs       | execution   | complete | Yes   |
+| C007 | update-effect-testing       | execution   | complete | Yes   |
+| C008 | update-effect-v4            | execution   | complete | No    |
+| C009 | cleanup-remaining-skills    | execution   | complete | No    |
+| C010 | conformance-and-changelogs  | execution   | complete | Yes   |
+| C099 | review-phase                | review      | complete | No    |
