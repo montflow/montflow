@@ -11,9 +11,13 @@ import type { VerifyReport } from './engines.apps.module.js';
 /** One rendered line per stored skill. */
 export const list = (
   skills: ReadonlyArray<Skill.Skill>,
-  options: { readonly verbose?: boolean } = {},
+  options: { readonly verbose?: boolean; readonly status?: string | undefined } = {},
 ): string => {
-  if (skills.length === 0) return 'No skills.';
+  if (skills.length === 0) {
+    return options.status === undefined
+      ? 'No skills.'
+      : `No skills with status '${options.status}'.`;
+  }
   const lines = skills.map((skill) => {
     const extra =
       options.verbose === true

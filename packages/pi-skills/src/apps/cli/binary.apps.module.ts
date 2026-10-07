@@ -97,10 +97,15 @@ const report = <A, R>(
 
 const doctorCommand = Command.make(
   'doctor',
-  { check: optionalBoolean('check', 'Report only; never write.'), verbose: verboseFlag },
+  {
+    check: optionalBoolean('check', 'Report only; never write.'),
+    dir: dirFlag,
+    verbose: verboseFlag,
+  },
   (config) =>
     Effect.gen(function* () {
-      const result = yield* Doctor.runDoctor(process.cwd(), {
+      const root = opt(config.dir) ?? process.cwd();
+      const result = yield* Doctor.runDoctor(root, {
         check: config.check,
         invocation: 'mf-skills doctor',
       });
@@ -110,10 +115,24 @@ const doctorCommand = Command.make(
     }).pipe(Effect.catch((message) => Console.log(message).pipe(Effect.andThen(exitFailed)))),
 ).pipe(Command.withDescription('Install or verify the packaged skill-authoring skills.'));
 
-const listCommand = Command.make('list', { dir: dirFlag, verbose: verboseFlag }, (config) =>
-  report(Engines.list(scope(config.dir)), (skills) =>
-    Renderers.list(skills, { verbose: config.verbose }),
-  ),
+const listCommand = Command.make(
+  'list',
+  {
+    dir: dirFlag,
+    status: optionalString(
+      'status',
+      'Keep only skills whose file verifies (valid) or fails verification (invalid).',
+    ),
+    verbose: verboseFlag,
+  },
+  (config) =>
+    report(
+      Effect.gen(function* () {
+        const status = yield* Engines.resolveListStatus(opt(config.status));
+        return yield* Engines.list(scope(config.dir), { status });
+      }),
+      (skills) => Renderers.list(skills, { verbose: config.verbose, status: opt(config.status) }),
+    ),
 ).pipe(Command.withDescription('List stored skill names.'));
 
 const showCommand = Command.make('show', { dir: dirFlag, name: nameArg }, (config) =>

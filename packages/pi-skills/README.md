@@ -18,7 +18,9 @@ mf-skills <subcommand> …      # the binary — scriptable, real exit codes
 ```
 
 Subcommands: `doctor`, `list`, `show`, `verify [name]`, `create`, `modify`,
-`delete`. `verify` checks the mechanical `SKILL.md` shape (`Skill.verifySkillFile`)
+`delete`. `list` accepts `--status valid|invalid` to keep only skills whose
+`SKILL.md` passes or fails verification. `verify` checks the mechanical
+`SKILL.md` shape (`Skill.verifySkillFile`)
 and exits non-zero when a skill fails. Store commands accept `--dir` to target a
 workspace root other than the working directory.
 

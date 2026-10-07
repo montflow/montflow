@@ -44,14 +44,62 @@ export interface ModifyInput {
   readonly dependencies: ReadonlyArray<string> | undefined;
 }
 
+/** Verification states accepted by `list --status`. */
+export const LIST_STATUSES = ['valid', 'invalid'] as const;
+
+/** A verification state `list --status` accepts. */
+export type ListStatus = (typeof LIST_STATUSES)[number];
+
+const isListStatus = (value: string): value is ListStatus =>
+  LIST_STATUSES.some((status) => status === value);
+
+/** Options for {@link list}: an optional verification filter. */
+export interface ListOptions {
+  /** Keep only skills whose `SKILL.md` verification result matches. */
+  readonly status?: ListStatus | undefined;
+}
+
+/**
+ * Resolve a raw `--status` value to a {@link ListStatus}. Absent or empty
+ * means "no filter"; anything else must name a state.
+ * @param value - raw flag value, if any
+ * @returns the status, or a refusal naming the accepted values
+ */
+export const resolveListStatus = (
+  value: string | undefined,
+): Effect.Effect<ListStatus | undefined, string> => {
+  if (value === undefined || value === '') return Effect.succeed(undefined);
+  return isListStatus(value)
+    ? Effect.succeed(value)
+    : Effect.fail(`Unknown status '${value}'. Use one of: ${LIST_STATUSES.join(', ')}.`);
+};
+
 /**
  * List stored skills, sorted by name. A missing root reads as empty and
- * malformed files skip, so listing never fails.
+ * malformed files skip, so listing never fails. An optional status filter
+ * keeps only skills whose `SKILL.md` passes (`valid`) or fails (`invalid`)
+ * mechanical verification; an unreadable file counts as invalid.
  * @param scope - store scope
+ * @param options - optional verification filter
  * @returns Effect resolving to the stored skills
  */
-export const list = (scope: StoreScope): Effect.Effect<ReadonlyArray<Skill.Skill>, never> =>
-  SkillStore.list(rootOf(scope));
+export const list = (
+  scope: StoreScope,
+  options: ListOptions = {},
+): Effect.Effect<ReadonlyArray<Skill.Skill>, never> =>
+  Effect.gen(function* () {
+    const skills = yield* SkillStore.list(rootOf(scope));
+    const status = options.status;
+    if (status === undefined) return skills;
+    const wanted = status === 'valid';
+    const verdicts = yield* Effect.forEach(skills, (skill) =>
+      SkillStore.readRaw(rootOf(scope), skill.id).pipe(
+        Effect.map((raw) => ({ skill, valid: Skill.verifySkillFile(skill.id, raw).valid })),
+        Effect.orElseSucceed(() => ({ skill, valid: false })),
+      ),
+    );
+    return verdicts.filter((entry) => entry.valid === wanted).map((entry) => entry.skill);
+  });
 
 /**
  * Read one skill's raw `SKILL.md` text.

@@ -25,14 +25,17 @@ export const COMMAND_NAME = 'mf-skills';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Run the skills CLI headlessly: doctor, list, show, verify, create, modify, or delete a skill. Store operations accept --dir to target a workspace root other than the working directory. For the interactive menu use /mf-skills-tui.';
+  'Run the skills CLI headlessly: doctor, list [--status valid|invalid], show, verify, create, modify, or delete a skill. Store operations accept --dir to target a workspace root other than the working directory. For the interactive menu use /mf-skills-tui.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-skills doctor [--check] | list [--verbose] | show <name> | verify [name] [--verbose] | create <name> --description "text" [--body "markdown"] [--author a] [--version v] [--license l] [--groups a,b] [--dependencies a,b] [--dir path] | modify <name> [--description ... --body ... --author ... --version ... --license ... --groups ... --dependencies ... --dir path] | delete <name> [--dir path] | help';
+  '/mf-skills doctor [--check] | list [--status valid|invalid] [--verbose] | show <name> | verify [name] [--verbose] | create <name> --description "text" [--body "markdown"] [--author a] [--version v] [--license l] [--groups a,b] [--dependencies a,b] [--dir path] | modify <name> [--description ... --body ... --author ... --version ... --license ... --groups ... --dependencies ... --dir path] | delete <name> [--dir path] | help';
 
 /** Flags `doctor` understands. Anything else is usage. */
 const KNOWN_DOCTOR_FLAGS: ReadonlySet<string> = new Set(['check']);
+
+/** Flags `list` understands. Anything else is usage. */
+const KNOWN_LIST_FLAGS: ReadonlySet<string> = new Set(['status', 'verbose', 'dir']);
 
 /** Flags `create` and `modify` understand. Anything else is usage. */
 const KNOWN_EDIT_FLAGS: ReadonlySet<string> = new Set([
@@ -50,7 +53,12 @@ const KNOWN_EDIT_FLAGS: ReadonlySet<string> = new Set([
 export type CliAction =
   | { readonly kind: 'Help' }
   | { readonly kind: 'Doctor'; readonly check: boolean }
-  | { readonly kind: 'List'; readonly verbose: boolean; readonly dir: string | undefined }
+  | {
+      readonly kind: 'List';
+      readonly status: string | undefined;
+      readonly verbose: boolean;
+      readonly dir: string | undefined;
+    }
   | { readonly kind: 'Show'; readonly name: string; readonly dir: string | undefined }
   | {
       readonly kind: 'Verify';
@@ -171,10 +179,11 @@ export const parseCliArgs = (args: string): CliAction => {
       return { kind: 'Doctor', check: split.flags['check'] !== undefined };
     }
     case 'list': {
-      const split = splitTokens(tokens.slice(1), new Set(['verbose', 'dir']));
+      const split = splitTokens(tokens.slice(1), KNOWN_LIST_FLAGS);
       if (split.unknown.length > 0) return { kind: 'Help' };
       return {
         kind: 'List',
+        status: one(split.flags['status']),
         verbose: split.flags['verbose'] !== undefined,
         dir: one(split.flags['dir']),
       };
@@ -260,10 +269,13 @@ export const run = (args: string, ui: CliUi, cwd: string): Effect.Effect<void, s
         if (!result.healthy) return yield* Effect.fail(Renderers.doctor(result));
         return;
       }
-      case 'List':
-        return yield* Engines.list({ cwd, dir: action.dir }).pipe(
-          Effect.flatMap((skills) => say(Renderers.list(skills, { verbose: action.verbose }))),
+      case 'List': {
+        const status = yield* Engines.resolveListStatus(action.status);
+        const skills = yield* Engines.list({ cwd, dir: action.dir }, { status });
+        return yield* say(
+          Renderers.list(skills, { verbose: action.verbose, status: action.status }),
         );
+      }
       case 'Show': {
         const raw = yield* Engines.load({ cwd, dir: action.dir }, action.name);
         return yield* say(Renderers.show(raw));

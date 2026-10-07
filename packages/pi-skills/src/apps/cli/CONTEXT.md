@@ -11,7 +11,8 @@ The interactive menu is a different command: `/mf-skills-tui`,
 ## Belongs here
 
 - `engines.apps.module.ts` — the operations (`list`, `load`, `verify`,
-  `create`, `modify`, `remove`). Structured in, data out: no argv, no output.
+  `create`, `modify`, `remove`) plus `resolveListStatus` for
+  `list --status valid|invalid`. Structured in, data out: no argv, no output.
 - `renderers.apps.module.ts` — pure `data -> text`, carrying the **token
   contract** (lean by default, `--verbose` only adds, failures never suppressed)
 - `binary.apps.module.ts` — the `Command` tree and `rootCommand`

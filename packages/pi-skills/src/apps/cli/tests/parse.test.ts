@@ -21,6 +21,7 @@ Vitest.describe('Slash.parseCliArgs', () => {
     });
     Vitest.expect(Slash.parseCliArgs('list --verbose')).toStrictEqual({
       kind: 'List',
+      status: undefined,
       verbose: true,
       dir: undefined,
     });
