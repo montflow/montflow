@@ -1,7 +1,8 @@
 import { For, Show } from 'solid-js';
 import type { Specs } from '../services/index.js';
 import { specMarker } from './spec-markers.js';
-import { Keybinds, formatKeybinds } from './keybinds.js';
+import { KeybindBanner } from './keybind-banner.js';
+import { Keybinds } from './keybinds.js';
 import { Loader, type LoaderVariant } from './loader.js';
 import { palette } from './palette.js';
 
@@ -74,15 +75,12 @@ export const SpecsPanel = (props: SpecsPanelProps) => {
         </box>
         <Show when={props.selected} fallback={<text> </text>}>
           <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
-            <text style={{ fg: palette.dim }}>
-              {formatKeybinds([
-                Keybinds.search(),
-                Keybinds.open(),
-                Keybinds.create(),
-                Keybinds.refresh(),
-              ])}
+            <KeybindBanner
+              items={[Keybinds.search(), Keybinds.open(), Keybinds.create(), Keybinds.refresh()]}
+            />
+            <text style={{ fg: palette.dim, flexShrink: 0, marginLeft: 1 }}>
+              {`${props.rows.length}/${props.total}`}
             </text>
-            <text style={{ fg: palette.dim }}>{`${props.rows.length}/${props.total}`}</text>
           </box>
         </Show>
       </box>

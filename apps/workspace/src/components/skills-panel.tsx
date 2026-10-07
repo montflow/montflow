@@ -109,7 +109,7 @@ export const SkillsPanel = (props: SkillsPanelProps) => {
             <KeybindBanner
               items={Keybinds.listBanner(props.installed, props.total, { quickRemove: true })}
             />
-            <text style={{ fg: palette.dim }}>
+            <text style={{ fg: palette.dim, flexShrink: 0, marginLeft: 1 }}>
               {props.installed ? `${props.rows.length}/${props.total}` : ' '}
             </text>
           </box>

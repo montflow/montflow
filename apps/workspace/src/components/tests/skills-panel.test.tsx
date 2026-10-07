@@ -28,10 +28,13 @@ const row = (id: string): Skills.SkillSummary => ({
 });
 
 /** Render one SkillsPanel state inside Panel chrome with a sentinel line below. */
-const renderState = async (panel: Partial<SkillsPanelProps>): Promise<Setup> => {
+const renderState = async (
+  panel: Partial<SkillsPanelProps>,
+  width: number = WIDTH,
+): Promise<Setup> => {
   const setup = await testRender(
     () => (
-      <box width={WIDTH} height={HEIGHT} flexDirection="column">
+      <box width={width} height={HEIGHT} flexDirection="column">
         <Panel title="[s] Skills" selected={false}>
           <SkillsPanel
             loading={false}
@@ -50,13 +53,12 @@ const renderState = async (panel: Partial<SkillsPanelProps>): Promise<Setup> => 
         <text>SENTINEL</text>
       </box>
     ),
-    { width: WIDTH, height: HEIGHT },
+    { width, height: HEIGHT },
   );
   await setup.renderOnce();
   setups.push(setup);
   return setup;
 };
-
 const frameRows = (setup: Setup): ReadonlyArray<string> => setup.captureCharFrame().split('\n');
 
 const sentinelRow = (setup: Setup): number => sentinelRowOf(frameRows(setup));
@@ -245,5 +247,29 @@ describe('SkillsPanel layout', () => {
     );
     const appliedSentinel = applied.findIndex((line) => line.includes('SENTINEL'));
     check(applied[appliedSentinel - 14]?.includes('/al') ?? false, 'applied filter visible');
+  });
+
+  test('banner never wraps onto the border when the panel is too narrow for it', async () => {
+    const NARROW = 44;
+    const names = ['alpha', 'beta', 'gamma', 'delta', 'epsilon'];
+    const rows = frameRows(
+      await renderState(
+        {
+          installed: true,
+          rows: names.map(row),
+          highlight: 0,
+          total: 5,
+          selected: true,
+        },
+        NARROW,
+      ),
+    );
+    const sentinel = sentinelRowOf(rows);
+    check(rows[sentinel - 1]?.includes('└') ?? false, 'bottom border intact');
+    // The full banner is wider than the panel here: it must clip onto its
+    // one reserved footer row, head and count together, instead of wrapping
+    // a second line onto the border.
+    check(rows[sentinel - 2]?.includes('/ search') ?? false, 'banner head on the footer row');
+    check(rows[sentinel - 2]?.includes('5/5') ?? false, 'count on the footer row');
   });
 });

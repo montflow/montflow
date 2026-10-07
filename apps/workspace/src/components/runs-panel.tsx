@@ -181,7 +181,7 @@ export const RunsPanel = (props: RunsPanelProps) => {
             <KeybindBanner
               items={Keybinds.listBanner(props.installed, props.total, { allRuns: true })}
             />
-            <text style={{ fg: palette.dim }}>
+            <text style={{ fg: palette.dim, flexShrink: 0, marginLeft: 1 }}>
               {props.installed ? `${shownCount()}/${props.total}` : ' '}
             </text>
           </box>

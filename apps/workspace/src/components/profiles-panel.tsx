@@ -115,7 +115,7 @@ export const ProfilesPanel = (props: ProfilesPanelProps) => {
         <Show when={props.selected} fallback={<text> </text>}>
           <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
             <KeybindBanner items={Keybinds.listBanner(props.installed, props.total)} />
-            <text style={{ fg: palette.dim }}>
+            <text style={{ fg: palette.dim, flexShrink: 0, marginLeft: 1 }}>
               {props.installed ? `${props.rows.length}/${props.total}` : ' '}
             </text>
           </box>
