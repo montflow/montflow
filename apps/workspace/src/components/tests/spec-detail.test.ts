@@ -1,11 +1,11 @@
 import * as Vitest from '@effect/vitest';
-import type { FeatureDetail } from '../../services/features/index.js';
-import { featureDetailLines, featureMarker, featureTaskMarker } from '../feature-markers.js';
+import type { SpecDetail } from '../../services/specs/index.js';
+import { specDetailLines, specMarker, specTaskMarker } from '../spec-markers.js';
 
-const detail: FeatureDetail = {
+const detail: SpecDetail = {
   summary: {
-    id: 'ship-feature',
-    name: 'ship-feature',
+    id: 'ship-spec',
+    name: 'ship-spec',
     description: 'Ship it.',
     state: 'inconsistent',
     status: 'complete',
@@ -16,7 +16,7 @@ const detail: FeatureDetail = {
     valid: false,
   },
   meta: {
-    name: 'ship-feature',
+    name: 'ship-spec',
     status: 'complete',
     workspaceType: 'in-place',
     author: 'Tester',
@@ -44,19 +44,19 @@ const detail: FeatureDetail = {
   issues: [
     {
       field: 'status',
-      message: "Feature status is 'complete' but 1 task is not complete: A002 (pending).",
+      message: "Spec status is 'complete' but 1 task is not complete: A002 (pending).",
     },
   ],
 };
 
-Vitest.describe('featureDetailLines runtime', () => {
+Vitest.describe('specDetailLines runtime', () => {
   Vitest.it('renders the header, issues, and per-phase tasks', () => {
-    const lines = featureDetailLines(detail);
+    const lines = specDetailLines(detail);
     Vitest.expect(lines).toContain('state    inconsistent');
     Vitest.expect(lines).toContain('tasks    2/3 complete');
     Vitest.expect(lines).toContain('issues');
     Vitest.expect(lines).toContain(
-      "  status: Feature status is 'complete' but 1 task is not complete: A002 (pending).",
+      "  status: Spec status is 'complete' but 1 task is not complete: A002 (pending).",
     );
     Vitest.expect(lines).toContain('Phase A · locked');
     Vitest.expect(lines.some((line) => line.includes('A001') && line.includes('✓'))).toBe(true);
@@ -65,23 +65,23 @@ Vitest.describe('featureDetailLines runtime', () => {
   });
 });
 
-Vitest.describe('featureMarker runtime', () => {
+Vitest.describe('specMarker runtime', () => {
   Vitest.it('maps lifecycle states to glyphs', () => {
-    Vitest.expect(featureMarker('complete')).toBe('✓');
-    Vitest.expect(featureMarker('in-progress')).toBe('●');
-    Vitest.expect(featureMarker('blocked')).toBe('■');
-    Vitest.expect(featureMarker('inconsistent')).toBe('✗');
-    Vitest.expect(featureMarker('pending')).toBe('○');
-    Vitest.expect(featureMarker('weird')).toBe('·');
+    Vitest.expect(specMarker('complete')).toBe('✓');
+    Vitest.expect(specMarker('in-progress')).toBe('●');
+    Vitest.expect(specMarker('blocked')).toBe('■');
+    Vitest.expect(specMarker('inconsistent')).toBe('✗');
+    Vitest.expect(specMarker('pending')).toBe('○');
+    Vitest.expect(specMarker('weird')).toBe('·');
   });
 });
 
-Vitest.describe('featureTaskMarker runtime', () => {
+Vitest.describe('specTaskMarker runtime', () => {
   Vitest.it('maps task statuses to glyphs', () => {
-    Vitest.expect(featureTaskMarker('complete')).toBe('✓');
-    Vitest.expect(featureTaskMarker('in-progress')).toBe('●');
-    Vitest.expect(featureTaskMarker('blocked')).toBe('✗');
-    Vitest.expect(featureTaskMarker('pending')).toBe('○');
-    Vitest.expect(featureTaskMarker('weird')).toBe('·');
+    Vitest.expect(specTaskMarker('complete')).toBe('✓');
+    Vitest.expect(specTaskMarker('in-progress')).toBe('●');
+    Vitest.expect(specTaskMarker('blocked')).toBe('✗');
+    Vitest.expect(specTaskMarker('pending')).toBe('○');
+    Vitest.expect(specTaskMarker('weird')).toBe('·');
   });
 });

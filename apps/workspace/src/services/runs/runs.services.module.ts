@@ -198,8 +198,8 @@ export interface RunSummary {
   /** Tool allowlist for the run's session; empty means Pi's default set. */
   readonly tools: ReadonlyArray<string>;
   readonly prompt: string;
-  /** Feature slug this run works on, empty when unbound. */
-  readonly feature: string;
+  /** Spec slug this run works on, empty when unbound. */
+  readonly spec: string;
   /** Latest agent-posted progress line; empty when none. */
   readonly progress: string;
   readonly created: string;
@@ -232,7 +232,7 @@ export const fromRun = (run: Run.Run): RunSummary => ({
   thinking: run.thinking ?? '',
   tools: run.tools ?? [],
   prompt: run.prompt ?? '',
-  feature: run.feature ?? '',
+  spec: run.spec ?? '',
   progress: run.progress ?? '',
   created: run.created,
   updated: run.updated,
@@ -394,7 +394,7 @@ export const fetchRuns = (root: string): Effect.Effect<RunSummary[], string> =>
 /**
  * Ids of runs with a live in-process session. Persisted `running` statuses
  * left behind by a dead process are excluded, so this is the trustworthy
- * "is something actually working" signal for features.
+ * "is something actually working" signal for specs.
  * @param root - workspace root (runner runtime owner)
  * @returns Effect resolving to live run ids, failing with displayable message
  */
@@ -622,8 +622,8 @@ export interface StartRunInput {
   readonly parent?: string | undefined;
   /** Non-parent related run ids (siblings, review target). */
   readonly related?: ReadonlyArray<string> | undefined;
-  /** Feature slug this run works on, when bound to one. */
-  readonly feature?: string | undefined;
+  /** Spec slug this run works on, when bound to one. */
+  readonly spec?: string | undefined;
   /** Called once when the run settles; the profile-create completion hook lives here. */
   readonly onSettled?: ((detail: EngineRunDetail) => Effect.Effect<void>) | undefined;
 }
@@ -650,7 +650,7 @@ export const startRun = (root: string, input: StartRunInput): Effect.Effect<RunS
         tools: input.tools ?? DEFAULT_RUN_TOOLS,
         parent: input.parent,
         related: input.related,
-        feature: input.feature,
+        spec: input.spec,
         onSettled: input.onSettled,
       })
       .pipe(Effect.map(fromRun)),

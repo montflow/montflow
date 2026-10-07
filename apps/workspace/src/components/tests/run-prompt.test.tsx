@@ -43,7 +43,7 @@ const realDetail = {
     thinking: '',
     tools: [],
     prompt: realEvents[0]?.text ?? '',
-    feature: '',
+    spec: '',
     progress: '',
     created: '2026-01-01T00:00:00.000Z',
     updated: '2026-01-01T00:04:00.000Z',

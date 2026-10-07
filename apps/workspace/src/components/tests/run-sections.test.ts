@@ -11,7 +11,7 @@ const row = (id: string, status: string): Runs.RunSummary => ({
   thinking: '',
   tools: [],
   prompt: '',
-  feature: '',
+  spec: '',
   progress: '',
   created: '',
   updated: '',

@@ -18,9 +18,9 @@ import {
   FlowErrorModal,
   type FlowErrorFocus,
   FlowModal,
-  FeatureDetail,
-  type FeatureDetailMode,
-  FeaturesPanel,
+  SpecDetail,
+  type SpecDetailMode,
+  SpecsPanel,
   InfoPanel,
   InputDialog,
   Keybinds,
@@ -49,7 +49,7 @@ import {
   StatusBar,
   ToastStack,
   activeRunRows,
-  featureDetailLines,
+  specDetailLines,
   formatKeybinds,
   clipStatusHint,
   isLiveRunStatus,
@@ -68,7 +68,7 @@ import {
   detailBodyRows,
 } from './components/index.js';
 import type { Toast, ToastVariant } from './components/index.js';
-import { Features, GitInfo, Profiles, Prompts, Query, Runs, Skills } from './services/index.js';
+import { Specs, GitInfo, Profiles, Prompts, Query, Runs, Skills } from './services/index.js';
 import type { Interactive } from '@montflow/pi-skills';
 
 export interface AppProps {
@@ -466,30 +466,28 @@ export const App = (props: AppProps) => {
   const [runsInstalling, setRunsInstalling] = createSignal(false);
   /** Run id from the most recent profile-create dispatch: the `g` keybind target. */
   const [lastDispatchedRunId, setLastDispatchedRunId] = createSignal<string | undefined>(undefined);
-  const [featuresPhase, setFeaturesPhase] = createSignal<Features.FeaturesPhase>('extension');
-  const featuresQuery = createQuery(() => ({
-    queryKey: Query.featuresKey,
-    queryFn: () => Query.fetchFeaturesList(root, setFeaturesPhase),
-    // Live-refresh while a feature-bound run is progressing, so the
+  const [specsPhase, setSpecsPhase] = createSignal<Specs.SpecsPhase>('extension');
+  const specsQuery = createQuery(() => ({
+    queryKey: Query.specsKey,
+    queryFn: () => Query.fetchSpecsList(root, setSpecsPhase),
+    // Live-refresh while a spec-bound run is progressing, so the
     // derived `pending` ↔ `in-progress` state tracks the runner.
     refetchInterval: () =>
-      runRows().some((row) => row.feature !== '' && isLiveRunStatus(row.status)) ? 1500 : false,
+      runRows().some((row) => row.spec !== '' && isLiveRunStatus(row.status)) ? 1500 : false,
   }));
-  const featureRows = createMemo(() => featuresQuery.data?.rows ?? []);
-  const featuresInstalled = createMemo(() => featuresQuery.data?.installed ?? false);
-  const featuresLoaded = createMemo(() => !featuresQuery.isPending);
-  const [featureQuery, setFeatureQuery] = createSignal('');
-  const [featureTyping, setFeatureTyping] = createSignal(false);
-  const [featureHighlight, setFeatureHighlight] = createSignal(0);
-  const [featureDetailId, setFeatureDetailId] = createSignal<string | undefined>(undefined);
-  const [featureDetailData, setFeatureDetailData] = createSignal<
-    Features.FeatureDetail | undefined
-  >(undefined);
-  const [featureDetailLoading, setFeatureDetailLoading] = createSignal(false);
-  const [featureDetailMode, setFeatureDetailMode] = createSignal<FeatureDetailMode>('preview');
-  const [featureDetailScroll, setFeatureDetailScroll] = createSignal(0);
-  const [featuresCard, setFeaturesCard] = createSignal<BoxRenderable | undefined>(undefined);
-  const [measuredFeatureRows, setMeasuredFeatureRows] = createSignal<number | undefined>(undefined);
+  const specRows = createMemo(() => specsQuery.data?.rows ?? []);
+  const specsInstalled = createMemo(() => specsQuery.data?.installed ?? false);
+  const specsLoaded = createMemo(() => !specsQuery.isPending);
+  const [specQuery, setSpecQuery] = createSignal('');
+  const [specTyping, setSpecTyping] = createSignal(false);
+  const [specHighlight, setSpecHighlight] = createSignal(0);
+  const [specDetailId, setSpecDetailId] = createSignal<string | undefined>(undefined);
+  const [specDetailData, setSpecDetailData] = createSignal<Specs.SpecDetail | undefined>(undefined);
+  const [specDetailLoading, setSpecDetailLoading] = createSignal(false);
+  const [specDetailMode, setSpecDetailMode] = createSignal<SpecDetailMode>('preview');
+  const [specDetailScroll, setSpecDetailScroll] = createSignal(0);
+  const [specsCard, setSpecsCard] = createSignal<BoxRenderable | undefined>(undefined);
+  const [measuredSpecRows, setMeasuredSpecRows] = createSignal<number | undefined>(undefined);
   const [toasts, setToasts] = createSignal<ReadonlyArray<Toast>>([]);
   const [dialog, setDialog] = createSignal<DialogState | undefined>(undefined);
   const [inputEditor, setInputEditor] = createSignal<TextareaRenderable | undefined>(undefined);
@@ -827,22 +825,22 @@ export const App = (props: AppProps) => {
   };
 
   /**
-   * Completion hooks for a dispatched feature-author run: refresh the
-   * features and runs lists, open the authored feature's detail, and toast
+   * Completion hooks for a dispatched spec-author run: refresh the
+   * specs and runs lists, open the authored spec's detail, and toast
    * the outcome. The run engine fires these after the author run settles.
    */
-  const featureBeginHooks: Features.BeginFlowHooks = {
-    onFeatureCreated: (featureId, runId) => {
-      refreshFeatures();
+  const specBeginHooks: Specs.BeginFlowHooks = {
+    onSpecCreated: (specId, runId) => {
+      refreshSpecs();
       refreshRuns();
-      setFeatureDetailId(featureId);
-      setFeatureDetailMode('preview');
-      setFeatureDetailScroll(0);
+      setSpecDetailId(specId);
+      setSpecDetailMode('preview');
+      setSpecDetailScroll(0);
       clearDispatchedRun(runId);
-      pushToast(`Authored feature '${Runs.sanitizeRunText(featureId)}'.`, { variant: 'success' });
+      pushToast(`Authored spec '${Runs.sanitizeRunText(specId)}'.`, { variant: 'success' });
     },
-    onFeatureFailed: (message, runId) => {
-      refreshFeatures();
+    onSpecFailed: (message, runId) => {
+      refreshSpecs();
       refreshRuns();
       clearDispatchedRun(runId);
       pushToast(message, { variant: 'error' });
@@ -1588,25 +1586,25 @@ export const App = (props: AppProps) => {
   });
 
   /**
-   * Reload the open feature detail from disk: metadata, phases, tasks,
+   * Reload the open spec detail from disk: metadata, phases, tasks,
    * and issues. Failures toast — the detail keeps its last snapshot.
-   * @param id - feature directory name under view
+   * @param id - spec directory name under view
    */
-  const loadFeatureDetail = (id: string): void => {
-    setFeatureDetailLoading(true);
-    void Features.loadFeature(root, id)
+  const loadSpecDetail = (id: string): void => {
+    setSpecDetailLoading(true);
+    void Specs.loadSpec(root, id)
       .pipe(Effect.runPromise)
       .then(
         (data) => {
-          if (featureDetailId() !== id) return;
-          setFeatureDetailData(data);
-          setFeatureDetailLoading(false);
+          if (specDetailId() !== id) return;
+          setSpecDetailData(data);
+          setSpecDetailLoading(false);
         },
         (error) => {
-          if (featureDetailId() !== id) return;
-          setFeatureDetailLoading(false);
+          if (specDetailId() !== id) return;
+          setSpecDetailLoading(false);
           pushToast(
-            `Feature detail failed: ${error instanceof Error ? error.message : String(error)}`,
+            `Spec detail failed: ${error instanceof Error ? error.message : String(error)}`,
             { variant: 'error' },
           );
         },
@@ -1614,46 +1612,44 @@ export const App = (props: AppProps) => {
   };
 
   /**
-   * Open a feature's detail page (read-only): reset the view and load
+   * Open a spec's detail page (read-only): reset the view and load
    * the phases and tasks.
-   * @param id - feature directory name to open
+   * @param id - spec directory name to open
    */
-  const openFeatureDetail = (id: string): void => {
-    setFeatureDetailId(id);
-    setFeatureDetailData(undefined);
-    setFeatureDetailMode('preview');
-    setFeatureDetailScroll(0);
-    setFeatureTyping(false);
-    loadFeatureDetail(id);
+  const openSpecDetail = (id: string): void => {
+    setSpecDetailId(id);
+    setSpecDetailData(undefined);
+    setSpecDetailMode('preview');
+    setSpecDetailScroll(0);
+    setSpecTyping(false);
+    loadSpecDetail(id);
   };
 
-  const closeFeatureDetail = (): void => {
-    setFeatureDetailId(undefined);
-    setFeatureDetailData(undefined);
-    setFeatureDetailLoading(false);
-    setFeatureDetailMode('preview');
-    setFeatureDetailScroll(0);
+  const closeSpecDetail = (): void => {
+    setSpecDetailId(undefined);
+    setSpecDetailData(undefined);
+    setSpecDetailLoading(false);
+    setSpecDetailMode('preview');
+    setSpecDetailScroll(0);
   };
 
-  const toggleFeatureView = (): void => {
-    setFeatureDetailMode((mode) => (mode === 'view' ? 'preview' : 'view'));
-    setFeatureDetailScroll(0);
+  const toggleSpecView = (): void => {
+    setSpecDetailMode((mode) => (mode === 'view' ? 'preview' : 'view'));
+    setSpecDetailScroll(0);
   };
 
-  const scrollFeatureDetail = (delta: number): void => {
-    if (featureDetailMode() !== 'view') return;
-    setFeatureDetailScroll((offset) =>
-      Math.min(Math.max(offset + delta, 0), featureDetailMaxScroll()),
-    );
+  const scrollSpecDetail = (delta: number): void => {
+    if (specDetailMode() !== 'view') return;
+    setSpecDetailScroll((offset) => Math.min(Math.max(offset + delta, 0), specDetailMaxScroll()));
   };
 
   /**
-   * Detail status hint for the open feature: view toggle plus refresh and back.
+   * Detail status hint for the open spec: view toggle plus refresh and back.
    * @returns one-line hint copy
    */
-  const featureDetailHint = (): string => {
+  const specDetailHint = (): string => {
     const entries = [
-      ...(featureDetailMode() === 'view'
+      ...(specDetailMode() === 'view'
         ? [Keybinds.scroll(), Keybinds.showPreview()]
         : [Keybinds.showFull()]),
       Keybinds.refresh(),
@@ -1828,16 +1824,16 @@ export const App = (props: AppProps) => {
   };
 
   /**
-   * Begin flow: describe the feature, pick a model, then dispatch an author
+   * Begin flow: describe the spec, pick a model, then dispatch an author
    * run through the pi-runs engine. The run authors the spec and may park
    * on `ask_user` for the user to answer; it lands on the run's detail so
    * the user can watch the state and answer. Cancellations stay silent.
    */
-  const beginFeatureMutation = flowMutation({
+  const beginSpecMutation = flowMutation({
     run: () =>
       Effect.gen(function* () {
         const description = yield* Effect.promise(() =>
-          askInput('Describe the feature', 'What should this feature do?'),
+          askInput('Describe the spec', 'What should this spec do?'),
         );
         if (description === undefined || description.trim() === '') return undefined;
         const refs = yield* Skills.listModelLabels();
@@ -1862,14 +1858,14 @@ export const App = (props: AppProps) => {
           if (picked === undefined) return undefined;
           model = options.find((option) => displayModelLabel(option) === picked)?.label;
         }
-        return yield* Features.beginFeature(root, {
+        return yield* Specs.beginSpec(root, {
           description: description.trim(),
           modelLabel: model,
-          hooks: featureBeginHooks,
+          hooks: specBeginHooks,
         });
       }),
     done: (result) => {
-      pushToast(`Dispatched feature run '${Runs.sanitizeRunText(result.runId)}'.`, {
+      pushToast(`Dispatched spec run '${Runs.sanitizeRunText(result.runId)}'.`, {
         variant: 'success',
       });
       setLastDispatchedRunId(result.runId);
@@ -1881,18 +1877,18 @@ export const App = (props: AppProps) => {
         pushToast(error.message, { variant: 'warning' });
         return;
       }
-      openFlowError('Beginning feature failed', error, () => {
+      openFlowError('Beginning spec failed', error, () => {
         setFlowError(undefined);
-        beginFeatureMutation.mutate(undefined);
+        beginSpecMutation.mutate(undefined);
       });
     },
   });
 
-  const runBeginFeature = (): void => {
-    if (dialog() !== undefined || working() !== undefined || beginFeatureMutation.isPending) {
+  const runBeginSpec = (): void => {
+    if (dialog() !== undefined || working() !== undefined || beginSpecMutation.isPending) {
       return;
     }
-    beginFeatureMutation.mutate(undefined);
+    beginSpecMutation.mutate(undefined);
   };
 
   /**
@@ -2007,7 +2003,7 @@ export const App = (props: AppProps) => {
   };
 
   /** Panels with an independent filter, typing flag, and highlight: skills, profiles, prompts, and runs search separately. */
-  type SearchPanel = 'skills' | 'profiles' | 'prompts' | 'runs' | 'features';
+  type SearchPanel = 'skills' | 'profiles' | 'prompts' | 'runs' | 'specs';
 
   /**
    * Read the typing flag for one panel: true while keystrokes filter
@@ -2022,8 +2018,8 @@ export const App = (props: AppProps) => {
         ? promptTyping()
         : panel === 'runs'
           ? runTyping()
-          : panel === 'features'
-            ? featureTyping()
+          : panel === 'specs'
+            ? specTyping()
             : skillTyping();
 
   /**
@@ -2038,8 +2034,8 @@ export const App = (props: AppProps) => {
         ? promptQuery()
         : panel === 'runs'
           ? runQuery()
-          : panel === 'features'
-            ? featureQuery()
+          : panel === 'specs'
+            ? specQuery()
             : skillQuery();
 
   const filtered = createMemo(() => SkillFilter.filterByQuery(skillRows(), skillQuery()));
@@ -2051,9 +2047,7 @@ export const App = (props: AppProps) => {
   const filteredPrompts = createMemo(() => SkillFilter.filterByQuery(promptRows(), promptQuery()));
   const promptDetail = createMemo(() => promptRows().find((row) => row.id === promptDetailId()));
   const filteredRuns = createMemo(() => SkillFilter.filterByQuery(runRows(), runQuery()));
-  const filteredFeatures = createMemo(() =>
-    SkillFilter.filterByQuery(featureRows(), featureQuery()),
-  );
+  const filteredSpecs = createMemo(() => SkillFilter.filterByQuery(specRows(), specQuery()));
 
   /** Panel chrome lines: border top/bottom only — `Panel` has no vertical padding, constant. */
   const CARD_CHROME_LINES = 2;
@@ -2070,8 +2064,8 @@ export const App = (props: AppProps) => {
   /** Reserved lines inside the runs content: search line plus footer line. Owned by `RunsPanel`, constant. */
   const RUNS_RESERVED_LINES = 2;
 
-  /** Reserved lines inside the features content: search line plus footer line. Owned by `FeaturesPanel`, constant. */
-  const FEATURES_RESERVED_LINES = 2;
+  /** Reserved lines inside the specs content: search line plus footer line. Owned by `SpecsPanel`, constant. */
+  const SPECS_RESERVED_LINES = 2;
 
   /**
    * Read the live card height into a row budget: chrome plus the
@@ -2173,27 +2167,27 @@ export const App = (props: AppProps) => {
   });
 
   /**
-   * Read the live features card height into a row budget: same chrome
-   * math as the skills card — the `FeaturesPanel` shares its shape so
+   * Read the live specs card height into a row budget: same chrome
+   * math as the skills card — the `SpecsPanel` shares its shape so
    * the pinned region fills it exactly.
    */
-  const measureFeaturesCard = (): void => {
-    const node = featuresCard();
+  const measureSpecsCard = (): void => {
+    const node = specsCard();
     if (node === undefined) return;
-    const rows = Math.floor(node.height) - CARD_CHROME_LINES - FEATURES_RESERVED_LINES;
-    if (rows >= 1) setMeasuredFeatureRows(rows);
+    const rows = Math.floor(node.height) - CARD_CHROME_LINES - SPECS_RESERVED_LINES;
+    if (rows >= 1) setMeasuredSpecRows(rows);
   };
 
   /**
-   * Features card measurement triggers: same contract as the skills
+   * Specs card measurement triggers: same contract as the skills
    * card — flex-determined size, content-independent, so measuring
    * cannot loop.
    */
   createEffect(() => {
-    featuresCard();
+    specsCard();
     dimensions();
-    featuresLoaded();
-    queueMicrotask(measureFeaturesCard);
+    specsLoaded();
+    queueMicrotask(measureSpecsCard);
   });
 
   /**
@@ -2307,22 +2301,22 @@ export const App = (props: AppProps) => {
     if (!runShowAll() || runHighlight() < activeLength) return runHighlight();
     return activeLength + (runHighlight() - activeLength - runWindowStart());
   });
-  /** Visible list window for the features panel: same measured-card contract as skills. */
-  const featureVisibleCount = createMemo(() => {
-    const measured = measuredFeatureRows();
+  /** Visible list window for the specs panel: same measured-card contract as skills. */
+  const specVisibleCount = createMemo(() => {
+    const measured = measuredSpecRows();
     if (measured !== undefined) return measured;
     const height = dimensions().height;
     return Math.max(2, Math.floor((2 * (height - 6)) / 5) - 6);
   });
-  const featureWindowStart = createMemo(() => {
-    const count = featureVisibleCount();
-    const length = filteredFeatures().length;
-    return Math.min(Math.max(featureHighlight() - count + 1, 0), Math.max(length - count, 0));
+  const specWindowStart = createMemo(() => {
+    const count = specVisibleCount();
+    const length = filteredSpecs().length;
+    return Math.min(Math.max(specHighlight() - count + 1, 0), Math.max(length - count, 0));
   });
-  const featureVisibleRows = createMemo(() =>
-    filteredFeatures().slice(featureWindowStart(), featureWindowStart() + featureVisibleCount()),
+  const specVisibleRows = createMemo(() =>
+    filteredSpecs().slice(specWindowStart(), specWindowStart() + specVisibleCount()),
   );
-  const featureRelativeHighlight = createMemo(() => featureHighlight() - featureWindowStart());
+  const specRelativeHighlight = createMemo(() => specHighlight() - specWindowStart());
   const maxBodyLines = createMemo(() => Math.max(5, dimensions().height - 13));
   /**
    * The prompt pane above the transcript, sized to its own text. Each
@@ -2407,8 +2401,8 @@ export const App = (props: AppProps) => {
       selected() === 'runs' && runsLoaded() && runsStoreInstalled() && filteredRuns().length > 0,
   );
 
-  const featuresInteractive = createMemo(
-    () => selected() === 'features' && featuresLoaded() && filteredFeatures().length > 0,
+  const specsInteractive = createMemo(
+    () => selected() === 'specs' && specsLoaded() && filteredSpecs().length > 0,
   );
 
   /** Filter picker view: windowed rows plus a relative highlight. */
@@ -2494,13 +2488,13 @@ export const App = (props: AppProps) => {
         runDetailFocus(),
         showRunPromptPane(),
       );
-    if (featureDetailId() !== undefined) return featureDetailHint();
+    if (specDetailId() !== undefined) return specDetailHint();
     if (
       (selected() === 'skills' && skillTyping()) ||
       (selected() === 'profiles' && profileTyping()) ||
       (selected() === 'prompts' && promptTyping()) ||
       (selected() === 'runs' && runTyping()) ||
-      (selected() === 'features' && featureTyping())
+      (selected() === 'specs' && specTyping())
     )
       return formatKeybinds([
         Keybinds.typeToFilter(),
@@ -2566,10 +2560,10 @@ export const App = (props: AppProps) => {
       }
       return `${base} · ${formatKeybinds([Keybinds.create(), Keybinds.refresh()])}`;
     }
-    if (selected() === 'features' && featuresLoaded()) {
-      if (featuresInteractive()) {
+    if (selected() === 'specs' && specsLoaded()) {
+      if (specsInteractive()) {
         const entries = [Keybinds.search(), Keybinds.open(), Keybinds.create(), Keybinds.refresh()];
-        if (featureQuery() !== '') entries.push(Keybinds.clearFilter());
+        if (specQuery() !== '') entries.push(Keybinds.clearFilter());
         return `${base} · ${formatKeybinds(entries)}`;
       }
       return `${base} · ${formatKeybinds([Keybinds.create(), Keybinds.refresh()])}`;
@@ -2595,8 +2589,8 @@ export const App = (props: AppProps) => {
       setPromptHighlight((index) => clampHighlight(index + delta, filteredPrompts().length));
     else if (selected() === 'runs')
       setRunHighlight((index) => clampHighlight(index + delta, runSelectable().length));
-    else if (selected() === 'features')
-      setFeatureHighlight((index) => clampHighlight(index + delta, filteredFeatures().length));
+    else if (selected() === 'specs')
+      setSpecHighlight((index) => clampHighlight(index + delta, filteredSpecs().length));
     else if (selected() === 'skills')
       setSkillHighlight((index) => clampHighlight(index + delta, filtered().length));
   };
@@ -2629,9 +2623,9 @@ export const App = (props: AppProps) => {
       if (row !== undefined) openRunDetail(row.id);
       return;
     }
-    if (selected() === 'features') {
-      const row = filteredFeatures()[featureHighlight()];
-      if (row !== undefined) openFeatureDetail(row.id);
+    if (selected() === 'specs') {
+      const row = filteredSpecs()[specHighlight()];
+      if (row !== undefined) openSpecDetail(row.id);
       return;
     }
     const row = filtered()[skillHighlight()];
@@ -2689,7 +2683,7 @@ export const App = (props: AppProps) => {
     setProfileTyping(false);
     setPromptTyping(false);
     setRunTyping(false);
-    setFeatureTyping(false);
+    setSpecTyping(false);
   };
 
   /** Scroll window for the profile full view: instructions plus checklist lines. */
@@ -2744,14 +2738,12 @@ export const App = (props: AppProps) => {
   const runDetailMaxScroll = createMemo(() =>
     Math.max(runDetailLineCount() - runDetailWindow(), 0),
   );
-  /** Scroll window for the feature full view. */
-  const featureDetailLineCount = createMemo(() => {
-    const data = featureDetailData();
-    return data === undefined ? 0 : featureDetailLines(data).length;
+  /** Scroll window for the spec full view. */
+  const specDetailLineCount = createMemo(() => {
+    const data = specDetailData();
+    return data === undefined ? 0 : specDetailLines(data).length;
   });
-  const featureDetailMaxScroll = createMemo(() =>
-    Math.max(featureDetailLineCount() - maxBodyLines(), 0),
-  );
+  const specDetailMaxScroll = createMemo(() => Math.max(specDetailLineCount() - maxBodyLines(), 0));
 
   /**
    * Delete the open skill: opens the timed remove-confirm modal, and on
@@ -3183,18 +3175,18 @@ export const App = (props: AppProps) => {
       return;
     }
 
-    if (featureDetailId() !== undefined) {
-      if (key.name === 'escape') closeFeatureDetail();
+    if (specDetailId() !== undefined) {
+      if (key.name === 'escape') closeSpecDetail();
       else if (key.name === 'q') renderer.destroy();
-      else if (key.sequence === 'v') toggleFeatureView();
+      else if (key.sequence === 'v') toggleSpecView();
       else if (key.sequence === 'p') {
-        setFeatureDetailMode('preview');
-        setFeatureDetailScroll(0);
-      } else if (key.sequence === 'R') refreshFeatures();
+        setSpecDetailMode('preview');
+        setSpecDetailScroll(0);
+      } else if (key.sequence === 'R') refreshSpecs();
       else if (key.name === 'up' || key.sequence === 'k') {
-        if (featureDetailMode() === 'view') scrollFeatureDetail(-1);
+        if (specDetailMode() === 'view') scrollSpecDetail(-1);
       } else if (key.name === 'down' || key.sequence === 'j') {
-        if (featureDetailMode() === 'view') scrollFeatureDetail(1);
+        if (specDetailMode() === 'view') scrollSpecDetail(1);
       }
       return;
     }
@@ -3211,7 +3203,7 @@ export const App = (props: AppProps) => {
       selectedPanel === 'profiles' ||
       selectedPanel === 'prompts' ||
       selectedPanel === 'runs' ||
-      selectedPanel === 'features'
+      selectedPanel === 'specs'
         ? selectedPanel
         : undefined;
     if (typingPanel !== undefined && typingOf(typingPanel)) {
@@ -3225,9 +3217,9 @@ export const App = (props: AppProps) => {
         } else if (typingPanel === 'runs') {
           setRunQuery(update);
           setRunHighlight(0);
-        } else if (typingPanel === 'features') {
-          setFeatureQuery(update);
-          setFeatureHighlight(0);
+        } else if (typingPanel === 'specs') {
+          setSpecQuery(update);
+          setSpecHighlight(0);
         } else {
           setSkillQuery(update);
           setSkillHighlight(0);
@@ -3252,11 +3244,11 @@ export const App = (props: AppProps) => {
             setRunQuery('');
             setRunHighlight(0);
           }
-        } else if (typingPanel === 'features') {
-          setFeatureTyping(false);
+        } else if (typingPanel === 'specs') {
+          setSpecTyping(false);
           if (clear) {
-            setFeatureQuery('');
-            setFeatureHighlight(0);
+            setSpecQuery('');
+            setSpecHighlight(0);
           }
         } else {
           setSkillTyping(false);
@@ -3317,9 +3309,9 @@ export const App = (props: AppProps) => {
         setRunHighlight(0);
         return;
       }
-      if (selected() === 'features' && queryOf('features') !== '') {
-        setFeatureQuery('');
-        setFeatureHighlight(0);
+      if (selected() === 'specs' && queryOf('specs') !== '') {
+        setSpecQuery('');
+        setSpecHighlight(0);
         return;
       }
       renderer.destroy();
@@ -3398,9 +3390,9 @@ export const App = (props: AppProps) => {
         return;
       }
     }
-    if (selected() === 'features' && featuresLoaded()) {
+    if (selected() === 'specs' && specsLoaded()) {
       if (key.sequence === 'c') {
-        runBeginFeature();
+        runBeginSpec();
         return;
       }
     }
@@ -3425,8 +3417,8 @@ export const App = (props: AppProps) => {
         refreshRuns();
         return;
       }
-      if (selected() === 'features' && featuresLoaded()) {
-        refreshFeatures();
+      if (selected() === 'specs' && specsLoaded()) {
+        refreshSpecs();
         return;
       }
     }
@@ -3492,9 +3484,9 @@ export const App = (props: AppProps) => {
         return;
       }
     }
-    if (selected() === 'features' && featuresInteractive()) {
+    if (selected() === 'specs' && specsInteractive()) {
       if (key.sequence === '/') {
-        setFeatureTyping(true);
+        setSpecTyping(true);
         return;
       }
       if (key.name === 'enter' || key.name === 'return') {
@@ -3637,21 +3629,21 @@ export const App = (props: AppProps) => {
   });
 
   /**
-   * Schedule a features-list refetch behind the `features` query key:
+   * Schedule a specs-list refetch behind the `specs` query key:
    * same stale-while-revalidate contract as `refreshSkills`.
    */
-  const refreshFeatures = (): void => {
-    void queryClient.invalidateQueries({ queryKey: Query.featuresKey });
+  const refreshSpecs = (): void => {
+    void queryClient.invalidateQueries({ queryKey: Query.specsKey });
   };
 
   /**
-   * Toast one features-list failure per query error: mirrors the skills
+   * Toast one specs-list failure per query error: mirrors the skills
    * error effect — fires once when a fetch rejects, never on rerender.
    */
   createEffect(() => {
-    const failure = featuresQuery.error;
+    const failure = specsQuery.error;
     if (failure instanceof Error)
-      pushToast(`Features list failed: ${failure.message}`, { variant: 'error' });
+      pushToast(`Specs list failed: ${failure.message}`, { variant: 'error' });
   });
 
   /** Canceller for the profiles change subscription; set once the extension loads. */
@@ -3708,7 +3700,7 @@ export const App = (props: AppProps) => {
           profileDetail() === undefined &&
           promptDetail() === undefined &&
           runDetailId() === undefined &&
-          featureDetailId() === undefined
+          specDetailId() === undefined
         }
         fallback={
           <Show
@@ -3781,27 +3773,27 @@ export const App = (props: AppProps) => {
             }
           >
             <Show
-              when={featureDetailId() === undefined}
+              when={specDetailId() === undefined}
               fallback={
                 <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} paddingX={1}>
                   <box flexDirection="column" flexGrow={1} flexBasis={0} minHeight={0}>
                     <Panel
-                      title={`Feature — ${featureDetailData()?.summary.name ?? ''} · ${featureDetailMode() === 'view' ? 'view' : 'preview'}`}
+                      title={`Spec — ${specDetailData()?.summary.name ?? ''} · ${specDetailMode() === 'view' ? 'view' : 'preview'}`}
                       selected={false}
                     >
                       <Show
-                        when={featureDetailData()}
+                        when={specDetailData()}
                         fallback={
                           <PanelMessage
-                            message={featureDetailLoading() ? 'Loading feature…' : 'No feature.'}
+                            message={specDetailLoading() ? 'Loading spec…' : 'No spec.'}
                           />
                         }
                       >
-                        {(view: () => Features.FeatureDetail) => (
-                          <FeatureDetail
+                        {(view: () => Specs.SpecDetail) => (
+                          <SpecDetail
                             detail={view()}
-                            mode={featureDetailMode()}
-                            scrollOffset={featureDetailScroll()}
+                            mode={specDetailMode()}
+                            scrollOffset={specDetailScroll()}
                             maxBodyLines={maxBodyLines()}
                           />
                         )}
@@ -3948,8 +3940,8 @@ export const App = (props: AppProps) => {
                               ? setPromptsCard
                               : cell.panel === 'runs'
                                 ? setRunsCard
-                                : cell.panel === 'features'
-                                  ? setFeaturesCard
+                                : cell.panel === 'specs'
+                                  ? setSpecsCard
                                   : undefined
                       }
                     >
@@ -4014,18 +4006,18 @@ export const App = (props: AppProps) => {
                           capacity={runVisibleCount()}
                           selected={selected() === 'runs'}
                         />
-                      ) : cell.panel === 'features' ? (
-                        <FeaturesPanel
-                          loading={!featuresLoaded()}
-                          loadingVariant={featuresPhase()}
-                          installed={featuresInstalled()}
-                          rows={featureVisibleRows()}
-                          highlight={featureRelativeHighlight()}
-                          total={filteredFeatures().length}
-                          query={featureQuery()}
-                          searching={featureTyping()}
-                          capacity={featureVisibleCount()}
-                          selected={selected() === 'features'}
+                      ) : cell.panel === 'specs' ? (
+                        <SpecsPanel
+                          loading={!specsLoaded()}
+                          loadingVariant={specsPhase()}
+                          installed={specsInstalled()}
+                          rows={specVisibleRows()}
+                          highlight={specRelativeHighlight()}
+                          total={filteredSpecs().length}
+                          query={specQuery()}
+                          searching={specTyping()}
+                          capacity={specVisibleCount()}
+                          selected={selected() === 'specs'}
                         />
                       ) : (
                         <PanelMessage message="No data source yet." />

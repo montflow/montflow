@@ -333,7 +333,7 @@ export const shortRunTimestamp = (value: string): string =>
 
 /**
  * Sidebar metadata for the detail page: the model's pin, the bound
- * feature, the thinking level, the tool allowlist, both timestamps,
+ * spec, the thinking level, the tool allowlist, both timestamps,
  * and the run id. The status badge, the live progress line, and the
  * initial prompt are rendered by their own components, so they are
  * deliberately absent here. Unset optional values render as
@@ -353,7 +353,7 @@ export const runMetaRows = (summary: Runs.RunSummary): ReadonlyArray<RunMetaRow>
   });
   return [
     row('model', summary.model),
-    row('feature', summary.feature),
+    row('spec', summary.spec),
     row('thinking', summary.thinking),
     row('tools', summary.tools.join(', ')),
     row('created', shortRunTimestamp(summary.created)),

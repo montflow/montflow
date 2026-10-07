@@ -30,7 +30,7 @@ const summary = (overrides?: Partial<Runs.RunSummary>): Runs.RunSummary => ({
   thinking: '',
   tools: [],
   prompt: 'do it',
-  feature: '',
+  spec: '',
   progress: '',
   created: '2026-01-01T00:00:00.000Z',
   updated: '2026-01-01T00:00:00.000Z',

@@ -33,7 +33,7 @@ const detail = (
     model: 'anthropic/claude',
     thinking: '',
     tools: [],
-    feature: '',
+    spec: '',
     progress: '',
     prompt: 'do it',
     created: '2026-01-01T00:00:00.000Z',
@@ -314,13 +314,13 @@ Vitest.describe('shortRunTimestamp', () => {
 Vitest.describe('runMetaRows', () => {
   Vitest.it('lists the sidebar metadata in display order', () => {
     Vitest.expect(runMetaRows(detail('running', []).summary).map((row) => row.label)).toStrictEqual(
-      ['model', 'feature', 'thinking', 'tools', 'created', 'updated', 'id'],
+      ['model', 'spec', 'thinking', 'tools', 'created', 'updated', 'id'],
     );
   });
 
   Vitest.it('keeps unset rows with a placeholder so labels never reflow', () => {
     const rows = runMetaRows(detail('running', []).summary);
-    Vitest.expect(rows.find((row) => row.label === 'feature')?.value).toBe(RUN_META_NONE);
+    Vitest.expect(rows.find((row) => row.label === 'spec')?.value).toBe(RUN_META_NONE);
     Vitest.expect(rows.find((row) => row.label === 'thinking')?.value).toBe(RUN_META_NONE);
     Vitest.expect(rows.find((row) => row.label === 'tools')?.value).toBe(RUN_META_NONE);
     Vitest.expect(rows.find((row) => row.label === 'model')?.value).toBe('anthropic/claude');

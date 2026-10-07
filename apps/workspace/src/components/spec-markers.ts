@@ -1,12 +1,12 @@
-import type { FeatureDetail } from '../services/features/index.js';
+import type { SpecDetail } from '../services/specs/index.js';
 
 /**
- * Status glyph for a feature row, keyed by derived lifecycle state.
+ * Status glyph for a spec row, keyed by derived lifecycle state.
  * Single source for the list marker so the panel and detail never drift.
- * @param state - lifecycle state from the features service
+ * @param state - lifecycle state from the specs service
  * @returns one-char marker
  */
-export const featureMarker = (state: string): string => {
+export const specMarker = (state: string): string => {
   switch (state) {
     case 'complete':
       return '✓';
@@ -24,11 +24,11 @@ export const featureMarker = (state: string): string => {
 };
 
 /**
- * Per-task status marker inside a feature detail phase block.
+ * Per-task status marker inside a spec detail phase block.
  * @param status - canonical task status from TASK.md
  * @returns one-char marker
  */
-export const featureTaskMarker = (status: string): string => {
+export const specTaskMarker = (status: string): string => {
   switch (status) {
     case 'complete':
       return '✓';
@@ -44,13 +44,13 @@ export const featureTaskMarker = (status: string): string => {
 };
 
 /**
- * Flatten a feature detail into display lines: header, issues, then
+ * Flatten a spec detail into display lines: header, issues, then
  * every phase with its tasks. Shared by the detail component and the
  * app scroll-window count so the two never drift.
- * @param detail - feature detail from the service
+ * @param detail - spec detail from the service
  * @returns display lines
  */
-export const featureDetailLines = (detail: FeatureDetail): ReadonlyArray<string> => {
+export const specDetailLines = (detail: SpecDetail): ReadonlyArray<string> => {
   const meta = detail.meta;
   const out: Array<string> = [];
   if (meta !== undefined && meta.description.trim() !== '') out.push(meta.description);
@@ -72,9 +72,7 @@ export const featureDetailLines = (detail: FeatureDetail): ReadonlyArray<string>
     out.push('');
     out.push(`Phase ${phase.phase}${phase.locked ? ' · locked' : ''}`);
     for (const task of phase.tasks) {
-      out.push(
-        `  ${featureTaskMarker(task.status)} ${task.id}  ${task.name.padEnd(22)} ${task.type}`,
-      );
+      out.push(`  ${specTaskMarker(task.status)} ${task.id}  ${task.name.padEnd(22)} ${task.type}`);
     }
   }
   return out;

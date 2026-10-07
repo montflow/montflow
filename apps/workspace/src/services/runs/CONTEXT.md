@@ -39,7 +39,7 @@ reinstall-step message; the caller owns the display (no duplicate toast).
 
 - `RunSummary` rows plus `slugifyName` (pure, tested), `newRunId`, and
   `isValidRunId`. The summary carries every display field the detail
-  sidebar shows — status, model, thinking, tools, feature, progress,
+  sidebar shows — status, model, thinking, tools, spec, progress,
   created, updated — mapped from the engine `Run` by `fromRun`
 - `fetchRuns` (load, then `Store.list` through the loaded runtime)
 - `loadRun` (run plus events plus receipt for the detail page)

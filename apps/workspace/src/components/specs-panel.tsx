@@ -1,15 +1,15 @@
 import { For, Show } from 'solid-js';
-import type { Features } from '../services/index.js';
-import { featureMarker } from './feature-markers.js';
+import type { Specs } from '../services/index.js';
+import { specMarker } from './spec-markers.js';
 import { Keybinds, formatKeybinds } from './keybinds.js';
 import { Loader, type LoaderVariant } from './loader.js';
 import { palette } from './palette.js';
 
-export interface FeaturesPanelProps {
+export interface SpecsPanelProps {
   readonly loading: boolean;
   readonly loadingVariant?: LoaderVariant | undefined;
   readonly installed: boolean;
-  readonly rows: ReadonlyArray<Features.FeatureSummary>;
+  readonly rows: ReadonlyArray<Specs.SpecSummary>;
   readonly highlight: number;
   readonly total: number;
   readonly query: string;
@@ -19,17 +19,17 @@ export interface FeaturesPanelProps {
 }
 
 /**
- * Features content that FILLS the panel: loader, empty note, and the
+ * Specs content that FILLS the panel: loader, empty note, and the
  * filterable list share the same flex chrome, so loading and filtering
  * never shift the grid. Mirrors `RunsPanel` row for row — each row shows
- * the lifecycle marker, the feature name, and its derived state.
+ * the lifecycle marker, the spec name, and its derived state.
  * `c` dispatches an author run (handled by the app, not this panel).
  * @param props - load state, visible rows, highlight, query, capacity, selection
- * @returns features content element
+ * @returns specs content element
  */
-export const FeaturesPanel = (props: FeaturesPanelProps) => {
+export const SpecsPanel = (props: SpecsPanelProps) => {
   return (
-    <Show when={!props.loading} fallback={<Loader variant={props.loadingVariant ?? 'features'} />}>
+    <Show when={!props.loading} fallback={<Loader variant={props.loadingVariant ?? 'specs'} />}>
       <box flexDirection="column" flexGrow={1} minHeight={0}>
         <box flexShrink={0}>
           <Show when={props.searching || props.query !== ''} fallback={<text> </text>}>
@@ -50,14 +50,12 @@ export const FeaturesPanel = (props: FeaturesPanelProps) => {
                 <text style={{ fg: palette.dim }}>
                   {props.query.trim() === ''
                     ? props.installed
-                      ? 'No features found.'
-                      : 'No features directory.'
-                    : 'No features match.'}
+                      ? 'No specs found.'
+                      : 'No specs directory.'
+                    : 'No specs match.'}
                 </text>
                 <Show when={props.selected} fallback={<text> </text>}>
-                  <text style={{ fg: palette.dim }}>
-                    author one under .agents/@montflow/features
-                  </text>
+                  <text style={{ fg: palette.dim }}>author one under .agents/@montflow/specs</text>
                 </Show>
               </box>
             }
@@ -66,7 +64,7 @@ export const FeaturesPanel = (props: FeaturesPanelProps) => {
               {(row, index) => (
                 <box backgroundColor={index() === props.highlight ? palette.highlight : palette.bg}>
                   <text style={{ fg: palette.text }}>
-                    {`${index() === props.highlight ? '▸' : ' '} ${featureMarker(row.state)} ${row.name}  `}
+                    {`${index() === props.highlight ? '▸' : ' '} ${specMarker(row.state)} ${row.name}  `}
                     <span style={{ fg: palette.dim }}>{row.state}</span>
                   </text>
                 </box>

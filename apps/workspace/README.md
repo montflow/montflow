@@ -2,7 +2,7 @@
 
 Fullscreen OpenTUI Solid workspace dashboard. One screen, a configurable
 grid of panels — small info over skills and prompts down the wider
-left rail, tall runs over features and profiles on the right side. Letter keys
+left rail, tall runs over specs and profiles on the right side. Letter keys
 select a panel
 (`[i] Info` titles show the binding), `q` quits.
 
@@ -70,7 +70,7 @@ unknown panel ids render as placeholders under their own id.
   (filterable picker from the pi catalogue), then dispatches the
   in-process `@montflow/pi-runs` engine on the run. The detail splits
   in two columns: a left sidebar with the status badge, the agent's
-  progress line, the model/feature/thinking/tools/timestamps/id
+  progress line, the model/spec/thinking/tools/timestamps/id
   metadata, the receipt, and the action menu; and a right column
   stacked as two panels — the initial prompt on top (sized to its text,
   capped, ellipsized past the cap) and the transcript below, rendered as
@@ -89,18 +89,18 @@ unknown panel ids render as placeholders under their own id.
   tail only once you have scrolled into it. `s` steer a running run, `x`
   interrupt a live run, `a` answer a parked one, `R` reload. A missing
   store dir offers `⏎` to seed it.
-- Features lists `.agents/@montflow/features/` — one row per feature
+- Specs lists `.agents/@montflow/specs/` — one row per spec
   with its derived lifecycle state (`pending`, `in-progress`, `blocked`,
   `complete`, `inconsistent`). `/` filters, `j/k` move,
-  enter opens the detail, esc back, `c` begins a new feature, `R`
-  refetches. `c` asks for a feature description and a model, then
+  enter opens the detail, esc back, `c` begins a new spec, `R`
+  refetches. `c` asks for a spec description and a model, then
   dispatches a `@montflow/pi-runs` author run that writes the spec; the
   run may park on `ask_user` (answer it from the run's detail with `a`),
   and `g` jumps to the dispatched run. The detail shows the header meta,
   verification issues, and every phase with its tasks and per-task
   statuses — `v` full view with `j`/`k` scroll. Verification and state
-  come from `@montflow/pi-features`; `in-progress` vs `pending` comes
-  from live runs bound to the feature.
+  come from `@montflow/pi-specs`; `in-progress` vs `pending` comes
+  from live runs bound to the spec.
 
 Without the `pi` CLI on PATH the dashboard never reaches the grid —
 startup renders a full-screen install pointer instead.

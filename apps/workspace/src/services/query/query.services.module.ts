@@ -1,11 +1,11 @@
 import { QueryClient } from '@tanstack/solid-query';
 import { Effect } from 'effect';
 import {
-  featuresInstalled,
-  fetchFeatures,
-  type FeatureSummary,
-  type FeaturesPhase,
-} from '../features/features.services.module.js';
+  specsInstalled,
+  fetchSpecs,
+  type SpecSummary,
+  type SpecsPhase,
+} from '../specs/specs.services.module.js';
 import {
   fetchProfiles,
   isExtensionInstalled as isProfilesExtensionInstalled,
@@ -95,18 +95,18 @@ export interface RunsList {
  */
 export const runsKey = ['runs'] as const;
 
-/** Cached features-list snapshot behind the `features` query key. */
-export interface FeaturesList {
+/** Cached specs-list snapshot behind the `specs` query key. */
+export interface SpecsList {
   readonly installed: boolean;
-  readonly rows: ReadonlyArray<FeatureSummary>;
+  readonly rows: ReadonlyArray<SpecSummary>;
 }
 
 /**
- * Query key for the workspace features list. Mirrors `skillsKey` —
- * the features panel is read-only, so this key only fetches and
+ * Query key for the workspace specs list. Mirrors `skillsKey` —
+ * the specs panel is read-only, so this key only fetches and
  * invalidates.
  */
-export const featuresKey = ['features'] as const;
+export const specsKey = ['specs'] as const;
 
 /**
  * TUI-tuned client: cache-first (`staleTime` infinity — the list only
@@ -257,26 +257,26 @@ export const fetchRunsList = (
   );
 
 /**
- * Features-list query bridge: same staged boot as `fetchSkillsList`
+ * Specs-list query bridge: same staged boot as `fetchSkillsList`
  * (directory check, then the verify/analyze read) as one TanStack
  * query. Read-only — there is no create/delete/install flow.
- * @param root - workspace root (features directory owner)
- * @param onPhase - Loader stage reporter (`extension`, then `features`)
+ * @param root - workspace root (specs directory owner)
+ * @param onPhase - Loader stage reporter (`extension`, then `specs`)
  * @returns Promise resolving to the list snapshot
  */
-export const fetchFeaturesList = (
+export const fetchSpecsList = (
   root: string,
-  onPhase: (phase: FeaturesPhase) => void,
-): Promise<FeaturesList> =>
-  featuresInstalled(root).pipe(
+  onPhase: (phase: SpecsPhase) => void,
+): Promise<SpecsList> =>
+  specsInstalled(root).pipe(
     Effect.flatMap((installed) => {
       onPhase('extension');
       if (!installed) {
-        const empty: FeaturesList = { installed, rows: [] };
+        const empty: SpecsList = { installed, rows: [] };
         return Effect.succeed(empty);
       }
-      onPhase('features');
-      return fetchFeatures(root).pipe(
+      onPhase('specs');
+      return fetchSpecs(root).pipe(
         Effect.map((rows) => ({ installed, rows })),
         Effect.mapError((message) => new Error(message)),
       );
