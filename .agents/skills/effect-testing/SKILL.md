@@ -6,7 +6,7 @@ description: >-
   runtime patterns. Use when writing, scaffolding, or reviewing tests for a TypeScript module.
 id: b7c2d91e4a3f4021
 author: Daniel Montilla
-version: 2.0.2
+version: 2.1.0
 license: MIT
 dependencies:
   - executing-skills
@@ -32,7 +32,7 @@ Use when writing new tests for a TypeScript module, scaffolding a test file, or 
 4. **Import the module under test through its public API** — the namespace export from `index.ts`, not deep file paths:
 
    ```typescript
-   import * as DateRange from "../index.ts";
+   import * as DateRange from "../index.js";
    ```
 
 5. **At most two suites per test file**, in this order:
@@ -92,7 +92,7 @@ Namespace-import the test library and the module under test:
 
 ```typescript
 import * as Vitest from "@effect/vitest";
-import * as DateRange from "../index.ts";
+import * as DateRange from "../index.js";
 ```
 
 Create the test file `src/[group]/[module-name]/tests/[utility-name].test.ts` if it does not exist yet.
@@ -146,15 +146,20 @@ Vitest.describe("UserAccount.findById runtime", () => {
 
 ### Test Layers
 
-Supply test implementations via `Layer.effectContext(...)` for reusable fakes or `Layer.succeed(...)` for simple stubs:
+Supply test implementations via `Layer.effectContext(...)` for reusable fakes or `Layer.succeed(...)` for simple stubs. `Layer.effectContext` takes an Effect yielding a `Context`:
 
 ```typescript
+import { Context, Effect, Layer } from "effect";
+
+const makeTest = Effect.gen(function* () {
+  return {
+    findById: (id: UserId) => Effect.succeed(userFixture),
+  } as const;
+});
+
 export const testLayer = Layer.effectContext(
-  UserRepo.Test,
-  UserRepo.Test.of({
-    findById: (id) => Effect.succeed(userFixture),
-  }),
-)
+  Effect.map(makeTest, (impl) => Context.make(UserRepo.Test, impl)),
+);
 ```
 
 ### Time Testing
@@ -184,7 +189,7 @@ For module `src/utils/date-range/` exporting `parse`:
 src/utils/date-range/
 ├─ index.ts
 ├─ date-range.utils.module.ts
-├─ CONTEXT.md
+├─ CONTEXT.md                             # optional; leaf modules only
 └─ tests/
    └─ parse.test.ts
 ```
@@ -192,7 +197,7 @@ src/utils/date-range/
 ```typescript
 // src/utils/date-range/tests/parse.test.ts
 import * as Vitest from "@effect/vitest";
-import * as DateRange from "../index.ts";
+import * as DateRange from "../index.js";
 
 Vitest.describe("DateRange.parse types", () => {
   Vitest.it("rejects reversed ranges at compile time", () => {
@@ -228,7 +233,7 @@ Type assertions only fail the suite when Vitest runs with `--typecheck` (see Pip
 ### Conventions
 
 - Test library is always `@effect/vitest`, imported as a namespace (`import * as Vitest from "@effect/vitest"`) — with `vitest` installed alongside it
-- Module under test imported as `* as PascalCase` from `"../index.ts"`
+- Module under test imported as `* as PascalCase` from `"../index.js"`
 - Package `test` script runs type testing: `vitest run --typecheck`, with `typecheck.include` covering `src/**/*.test.ts`
 - Suite names always fully qualified: `"Module.utility kind"` — no bare `describe("parse")`
 - Suites ordered `types` first, then `runtime`; `types` optional

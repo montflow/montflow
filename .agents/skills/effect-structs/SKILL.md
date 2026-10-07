@@ -5,7 +5,8 @@ description: >-
   the structs/ group. Use when creating a new branded type module.
 id: 85949992ca0d93e8
 author: Daniel Montilla
-version: 3.0.2
+version: 3.1.0
+license: MIT
 dependencies:
   - executing-skills
   - typescript-modules
@@ -26,7 +27,7 @@ Use when the user asks to create, scaffold, or add a new branded struct module. 
 
 ## 1. Create Module Directory
 
-Create `src/structs/[struct-name]/` (e.g., `src/structs/uuid/`) plus a `CONTEXT.md` and an empty `tests/` folder — full structure per [typescript-modules](../typescript-modules/SKILL.md). Directory name is kebab-case.
+Create `src/structs/[struct-name]/` (e.g., `src/structs/uuid/`) plus an empty `tests/` folder, and a `CONTEXT.md` only when the module is a leaf and needs one — full structure per [typescript-modules](../typescript-modules/SKILL.md). Directory name is kebab-case.
 
 ## 2. Create Module
 
@@ -36,26 +37,26 @@ Create `[struct-name].structs.module.ts`. Pick the pattern matching the underlyi
 
 See [templates/string.struct.module.ts](templates/string.struct.module.ts) (MUST READ)
 
-Required: `Id` (const + type), `type [Name]` (`string & Brand.Brand<Id>`), `REGEX`, `check`, `makeUnsafe`, `make`, `Blueprint`.
+Required: `Id` (const + type), `type [Name]` (`string & Brand.Brand<Id>`), `REGEX`, `check`, `makeUnsafe`, `make`. Optional: `Blueprint`.
 
 ### Number brand
 
 See [templates/number.struct.module.ts](templates/number.struct.module.ts) (MUST READ)
 
-Required: `Id` (const + type), `type [Name]` (`number & Brand.Brand<Id>`), `check`, `makeUnsafe`, `make`, `fromNumber`, `toNumber`, `Blueprint`.
+Required: `Id` (const + type), `type [Name]` (`number & Brand.Brand<Id>`), `check`, `makeUnsafe`, `make`, `fromNumber`, `toNumber`. Optional: `Blueprint`.
 
 ### Composed brand (Brand.all)
 
 See [templates/composed.struct.module.ts](templates/composed.struct.module.ts) (MUST READ)
 
-Required: `Id` (const + type), `make` (via `Brand.all`), `type [Name]` (`Brand.Brand.FromConstructor<typeof make>`), `makeUnsafe`, `Blueprint`.
+Required: `Id` (const + type), `make` (via `Brand.all`), `type [Name]` (`Brand.Brand.FromConstructor<typeof make>`), `makeUnsafe`. Optional: `Blueprint`.
 
 ## 3. Create Index
 
 Create `index.ts` that re-exports the module as a namespace:
 
 ```typescript
-export * as PascalCase from "./[struct-name].structs.module.ts";
+export * as PascalCase from "./[struct-name].structs.module.js";
 ```
 
 ## 4. Register in Parent
@@ -63,7 +64,7 @@ export * as PascalCase from "./[struct-name].structs.module.ts";
 Update `src/structs/index.ts` (or equivalent aggregator) to re-export:
 
 ```typescript
-export * from "./[struct-name]/index.ts";
+export * from "./[struct-name]/index.js";
 ```
 
 # Reference
@@ -91,7 +92,7 @@ export * from "./[struct-name]/index.ts";
 | `check` | `function` | Returns `true` or error string (omit for `Brand.all` composition) |
 | `makeUnsafe` | `function` | `Brand.nominal<Name>()` without validation |
 | `make` | `function` | `Brand.make<Name>(check)` or `Brand.all(...)` |
-| `Blueprint` | `Schema` | Effect Schema via `Schema.*.pipe(Schema.fromBrand(Id, make))` (optional) |
+| `Blueprint` | `Schema` | Effect Schema via `Schema.*.pipe(Schema.fromBrand(Id, make))` (optional; omit when unused) |
 
 ## Optional Utilities
 
@@ -137,5 +138,9 @@ Examples: **ObjectId** ↔ `DocumentId`, **Decimal128** ↔ `StringNumber`, **Da
 - String brands export `REGEX`; number/composed brands omit
 - Composed brands use `Brand.all(...)` + `Brand.Brand.FromConstructor<typeof make>` instead of inline type + check
 - Some Blueprints use `Schema.revealCodec` (e.g., string-url) when Schema type needs widening
-- Some structs omit `Blueprint` entirely (e.g., Email) when only branding + validation needed
-- Full `.ts` extension in all relative import/export paths
+- Some structs omit `Blueprint` entirely (e.g., Email) when only branding + validation needed — `Blueprint` is optional, omit it when unused
+- Relative import/export paths use the `.js` extension
+
+### Related
+
+- **Structure entry point**: [montflow-typescript-project-structure](../montflow-typescript-project-structure/SKILL.md)

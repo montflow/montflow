@@ -109,16 +109,15 @@ Guidance:
 
 ## Errors
 
-`Schema.TaggedErrorClass` is the explicit class exception for typed Effect errors.
+`Data.TaggedError` is the canonical class for typed Effect errors.
 
 ```ts
-export class PersistenceError extends Schema.TaggedErrorClass<PersistenceError>()(
-  "UserRepo.PersistenceError",
-  {
-    operation: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
+import { Data } from "effect";
+
+export class PersistenceError extends Data.TaggedError("@montflow/UserRepoPersistenceError")<{
+  operation: string;
+  cause: unknown;
+}> {}
 ```
 
 Guidance:

@@ -1,7 +1,7 @@
 import { Macro, type Struct } from "@montflow/core";
-import { Data, Effect, Layer, ServiceMap } from "effect";
+import { Context, Data, Effect, Layer } from "effect";
 
-export class ParseError extends Data.TaggedError("@Json/ParseError")<{
+export class ParseError extends Data.TaggedError("@montflow/JsonParseError")<{
   error: SyntaxError;
 }> {}
 
@@ -26,11 +26,11 @@ const makeDefault = Effect.gen(function* () {
   return { parse, stringify } as const;
 });
 
-export const Id = "@pokerbids/Json";
+export const Id = "@montflow/Json";
 export type Id = typeof Id;
 
 export type Impl = Effect.Success<typeof makeDefault>;
 
-export class Json extends ServiceMap.Service<Json, Impl>()(Id) {}
+export class Json extends Context.Service<Json, Impl>()(Id) {}
 
 export const Default = Layer.effect(Json, makeDefault);

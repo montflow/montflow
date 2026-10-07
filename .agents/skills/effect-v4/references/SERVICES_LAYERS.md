@@ -28,13 +28,18 @@ export const layer = Layer.effect(
   }),
 )
 
-export class NotFound extends Schema.TaggedErrorClass<NotFound>()(
-  "UserRepo.NotFound",
-  { id: UserId },
-) {}
+export class NotFound extends Data.TaggedError("UserRepo.NotFound")<{
+  id: UserId
+}> {}
 
 export * as UserRepo from "./user-repo.js"
 ```
+
+> **Note**: this self-export module-surface style is an Effect API reference, not
+> the montflow module law. The canonical module shape is owned by
+> [typescript-modules](../../typescript-modules/SKILL.md) and the
+> [structure entry point](../../montflow-typescript-project-structure/SKILL.md).
+> Use this self-export pattern only where an Effect API genuinely needs it.
 
 Consumers use the module namespace.
 

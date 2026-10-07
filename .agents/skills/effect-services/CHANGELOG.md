@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.0.0] - 2026-10-07
+
+### Changed
+
+- Service tag API is now `Context.Service` (was `ServiceMap.Service`) across `SKILL.md`, `GATES.md`, templates, and examples
+- Frontmatter description no longer advertises `ServiceMap.Service`
+- Added the service test-layer pattern: layers live in the module next to `Default`, built with `Layer.effectContext`
+- `Id` value changed to the `@montflow/PascalName` form
+- Relative specifiers now use the `.js` extension
+- `CONTEXT.md` is optional and leaf-module-only
+
 ## [2.0.2] - 2026-08-28
 
 ### Changed

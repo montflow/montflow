@@ -17,7 +17,7 @@
 ## Phase 3: Imports
 
 - [ ] Test library imported as a namespace: `import * as Vitest from "@effect/vitest"` — never bare `vitest`, `node:test`, or other libraries
-- [ ] Module under test imported through its public API: `import * as ModuleName from "../index.ts"`
+- [ ] Module under test imported through its public API: `import * as ModuleName from "../index.js"`
 - [ ] No deep imports into internal files, no default/named imports of the module
 
 ## Phase 4: Suites

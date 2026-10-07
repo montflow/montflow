@@ -1,4 +1,4 @@
-import { Effect, Layer, ServiceMap } from "effect";
+import { Context, Effect, Layer } from "effect";
 
 const make = Effect.gen(function* () {
   return {
@@ -6,11 +6,11 @@ const make = Effect.gen(function* () {
   } as const;
 });
 
-export const Id = "@org/ServiceName";
+export const Id = "@montflow/ServiceName";
 export type Id = typeof Id;
 
 export type Impl = Effect.Success<typeof make>;
 
-export class ServiceName extends ServiceMap.Service<ServiceName, Impl>()(Id) {}
+export class ServiceName extends Context.Service<ServiceName, Impl>()(Id) {}
 
 export const Default = Layer.effect(ServiceName, make);

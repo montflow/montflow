@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.0] - 2026-10-07
+
+### Changed
+
+- Relative imports of the module under test now use `../index.js`
+- `Layer.effectContext` example corrected to the Effect-yielding-Context signature
+- `CONTEXT.md` shown as optional in the example tree
+
+### Added
+
+- Test-author separation restated as a hard rule (unchanged behaviour)
+
 ## [2.0.2] - 2026-08-28
 
 ### Changed

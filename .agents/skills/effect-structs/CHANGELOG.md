@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.1.0] - 2026-10-07
+
+### Changed
+
+- `Blueprint` is now explicitly optional: omitted from the required-export lists and omitted when the struct does not use it
+- Relative import/export specifiers now use the `.js` extension
+- `CONTEXT.md` is optional and leaf-module-only
+
 ## [3.0.2] - 2026-08-28
 
 ### Changed
