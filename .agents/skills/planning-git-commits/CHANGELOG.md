@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.1] - 2026-10-07
+
+### Added
+
+- `# Reference` section (schema conformance)
+
 ## [1.2.0] - 2026-07-24
 
 ### Added

@@ -3,7 +3,7 @@ name: planning-git-commits
 description: Creates a commit plan with conventional commits based on file paths. Use when the user wants to push or commit changes to git.
 id: 508488c5515645f2
 author: Daniel Montilla
-version: 1.2.0
+version: 1.2.1
 license: MIT
 dependencies:
   - executing-skills
@@ -134,3 +134,9 @@ After a successful commit, ask the user if they want to push. If yes:
 - On commit failure, report the error and ask the user — never retry automatically
 - Use `git commit -m` with the `-m` flag to supply the message — never open an interactive editor
 - On successful commit, ask the user if they want to push the changes before exiting
+
+# Reference
+
+- **Pre-flight checks**: see `## 0. Check Repository State`.
+- **Commit types and scope rules**: see `## 2. Create Plan`.
+- **Executor skill**: [executing-skills](../executing-skills/SKILL.md).
