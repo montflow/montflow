@@ -102,7 +102,44 @@ const make = Effect.gen(function* () {
     return raw;
   });
 
-  return { list, remove, save, readRaw } as const;
+  /**
+   * Every `*.json` file in the store, as `{ name, raw }`, without decoding.
+   * Unlike {@link list}, this never drops a file the store cannot decode, so a
+   * caller (e.g. `verify --all`) can report a corrupt file instead of missing
+   * it. A missing store is an error rather than an empty pass, so a wrong
+   * `--dir` cannot silently verify nothing. An unreadable file yields empty
+   * raw bytes, which verification rejects.
+   * @param cwd - working directory
+   * @param dir - explicit store directory, if any
+   * @returns every prompt file's name and raw contents, name-sorted
+   */
+  const readAllRaw = Effect.fn('PromptStore.readAllRaw')(function* (cwd: string, dir?: string) {
+    const root = storeDir(path, cwd, dir);
+    const exists = yield* fs.exists(root).pipe(Effect.orElseSucceed(() => false));
+    if (!exists) {
+      return yield* Effect.fail(
+        new StoreError({ message: `Prompts store not found at '${root}'.` }),
+      );
+    }
+    const entries = yield* fs
+      .readDirectory(root)
+      .pipe(
+        Effect.mapError(
+          (cause) => new StoreError({ message: `Cannot read '${root}': ${cause.message}` }),
+        ),
+      );
+    const files = entries.filter((entry) => entry.endsWith('.json')).toSorted();
+    const suffix = '.json'.length;
+    return yield* Effect.forEach(files, (file) => {
+      const name = file.slice(0, -suffix);
+      return fs.readFileString(path.join(root, file)).pipe(
+        Effect.map((raw) => ({ name, raw })),
+        Effect.catch(() => Effect.succeed({ name, raw: '' })),
+      );
+    });
+  });
+
+  return { list, remove, save, readRaw, readAllRaw } as const;
 });
 
 export const Id = '@montflow/PromptStore';

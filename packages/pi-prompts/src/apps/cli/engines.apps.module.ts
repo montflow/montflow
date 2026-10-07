@@ -108,16 +108,66 @@ export const parseVariableSpecs = (
 ): Effect.Effect<ReadonlyArray<Prompts.Variable>, string> =>
   Effect.forEach(specs, (spec) => parseVariableSpec(spec));
 
-/** Every prompt in the store, sorted by name. */
+/** Verification states accepted by `list --status`. */
+export const LIST_STATUSES = ['valid', 'invalid'] as const;
+
+/** A verification state `list --status` accepts. */
+export type ListStatus = (typeof LIST_STATUSES)[number];
+
+const isListStatus = (value: string): value is ListStatus =>
+  LIST_STATUSES.some((status) => status === value);
+
+/** Options for {@link list}: an optional verification filter. */
+export interface ListOptions {
+  /** Keep only prompts whose verification result matches. */
+  readonly status?: ListStatus | undefined;
+}
+
+/**
+ * Resolve a raw `--status` value to a {@link ListStatus}. Absent or empty
+ * means "no filter"; anything else must name a state.
+ * @param value - raw flag value, if any
+ * @returns the status, or a refusal naming the accepted values
+ */
+export const resolveListStatus = (
+  value: string | undefined,
+): Effect.Effect<ListStatus | undefined, string> => {
+  if (value === undefined || value === '') return Effect.succeed(undefined);
+  return isListStatus(value)
+    ? Effect.succeed(value)
+    : Effect.fail(`Unknown status '${value}'. Use one of: ${LIST_STATUSES.join(', ')}.`);
+};
+
+/**
+ * Every prompt in the store, sorted by name, optionally filtered to those
+ * whose file passes (`valid`) or fails (`invalid`) mechanical verification.
+ * The filter verifies each file's raw bytes, so it reports the file's real
+ * state rather than a decoded round-trip of it. Files the store cannot decode
+ * are never listed, with or without a filter.
+ */
 export const list = (
   scope: StoreScope,
+  options: ListOptions = {},
 ): Effect.Effect<ReadonlyArray<Prompts.Prompt>, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const store = yield* PromptStore.PromptStore;
     const prompts = yield* store
       .list(scope.cwd, scope.dir)
       .pipe(Effect.mapError((error: PromptStore.StoreError) => error.message));
-    return [...prompts].toSorted((a, b) => a.name.localeCompare(b.name));
+    const sorted = [...prompts].toSorted((a, b) => a.name.localeCompare(b.name));
+    const status = options.status;
+    if (status === undefined) return sorted;
+    const wanted = status === 'valid';
+    const verdicts = yield* Effect.forEach(sorted, (prompt) =>
+      store.readRaw(scope.cwd, prompt.name, scope.dir).pipe(
+        Effect.mapError((error: PromptStore.StoreError) => error.message),
+        Effect.map((raw) => ({
+          prompt,
+          valid: Prompts.verifyPromptFile(prompt.name, raw).valid,
+        })),
+      ),
+    );
+    return verdicts.filter((entry) => entry.valid === wanted).map((entry) => entry.prompt);
   });
 
 /** One prompt by name, failing with a message that names the fix. */
@@ -160,6 +210,40 @@ export const verify = (
   name: string,
 ): Effect.Effect<Prompts.VerifyResult, string, PromptStore.PromptStore> =>
   readRaw(scope, name).pipe(Effect.map((raw) => Prompts.verifyPromptFile(name, raw)));
+
+/** One prompt's verification result, paired with its name. */
+export interface VerifyAllEntry {
+  readonly name: string;
+  readonly result: Prompts.VerifyResult;
+}
+
+/** A whole-store verification report. */
+export interface VerifyAllReport {
+  readonly entries: ReadonlyArray<VerifyAllEntry>;
+  readonly issueCount: number;
+}
+
+/**
+ * Mechanically verify every prompt file in the store, including files the
+ * store cannot decode. Unlike {@link list}, this enumerates the directory's
+ * raw `*.json` files, so a corrupt file is reported rather than dropped —
+ * which is the whole point of a `verify --all` gate.
+ */
+export const verifyAll = (
+  scope: StoreScope,
+): Effect.Effect<VerifyAllReport, string, PromptStore.PromptStore> =>
+  Effect.gen(function* () {
+    const store = yield* PromptStore.PromptStore;
+    const raws = yield* store
+      .readAllRaw(scope.cwd, scope.dir)
+      .pipe(Effect.mapError((error: PromptStore.StoreError) => error.message));
+    const entries = raws.map(({ name, raw }) => ({
+      name,
+      result: Prompts.verifyPromptFile(name, raw),
+    }));
+    const issueCount = entries.reduce((count, entry) => count + entry.result.issues.length, 0);
+    return { entries, issueCount };
+  });
 
 /** Everything an `inspect` needs: the summary plus the raw template text. */
 export interface InspectResult {

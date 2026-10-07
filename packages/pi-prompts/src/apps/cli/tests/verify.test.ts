@@ -35,6 +35,7 @@ const stubLayer = (raw: string): Layer.Layer<PromptStore.PromptStore> =>
       remove: () => Effect.fail(new PromptStore.StoreError({ message: 'unused' })),
       save: () => Effect.fail(new PromptStore.StoreError({ message: 'unused' })),
       readRaw: () => Effect.succeed(raw),
+      readAllRaw: () => Effect.succeed([{ name: 'commit', raw }]),
     }),
   );
 
@@ -53,11 +54,27 @@ Vitest.describe('Cli.parseCliArgs runtime', () => {
     Vitest.expect(Cli.parseCliArgs('verify commit')).toStrictEqual({
       kind: 'Verify',
       name: 'commit',
+      all: false,
+      dir: undefined,
     });
   });
 
-  Vitest.it('falls back to Help when verify has no name', () => {
-    Vitest.expect(Cli.parseCliArgs('verify')).toStrictEqual({ kind: 'Help' });
+  Vitest.it('parses verify --all without a name', () => {
+    Vitest.expect(Cli.parseCliArgs('verify --all')).toStrictEqual({
+      kind: 'Verify',
+      name: undefined,
+      all: true,
+      dir: undefined,
+    });
+  });
+
+  Vitest.it('treats bare verify as verify --all', () => {
+    Vitest.expect(Cli.parseCliArgs('verify')).toStrictEqual({
+      kind: 'Verify',
+      name: undefined,
+      all: true,
+      dir: undefined,
+    });
   });
 });
 

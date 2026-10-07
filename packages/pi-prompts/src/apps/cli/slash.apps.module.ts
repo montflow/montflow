@@ -30,14 +30,17 @@ export const COMMAND_NAME = 'mf-prompts';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Run the prompts CLI headlessly: doctor, list, inspect, execute, show, verify, render, create, modify, or delete a prompt. Store operations accept --dir to target a folder other than the default. For the interactive menu use /mf-prompts-tui.';
+  'Run the prompts CLI headlessly: doctor, list [--status valid|invalid], inspect, execute, show, verify [<name>|--all], render, create, modify, or delete a prompt. Store operations accept --dir to target a folder other than the default. For the interactive menu use /mf-prompts-tui.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-prompts doctor [--check] | list | inspect <name> [key=value ...] | execute <name> --model p/m [key=value ...] | show <name> | verify <name> | render <name> [key=value ...] | create <name> --template "text" [--description d] [--model p/m] [--skills a,b] [--variable name[:flags]] [--dir path] | modify <name> [--template "text" ...] [--dir path] | delete <name> | help';
+  '/mf-prompts doctor [--check] | list [--status valid|invalid] | inspect <name> [key=value ...] | execute <name> --model p/m [key=value ...] | show <name> | verify [<name>|--all] [--dir path] | render <name> [key=value ...] | create <name> --template "text" [--description d] [--model p/m] [--skills a,b] [--variable name[:flags]] [--dir path] | modify <name> [--template "text" ...] [--dir path] | delete <name> | help';
 
 /** Flags `execute` and `doctor` understand. Anything else is usage. */
 const KNOWN_RUN_FLAGS: ReadonlySet<string> = new Set(['model', 'check']);
+
+/** Flags `list` understands. Anything else is usage. */
+const KNOWN_LIST_FLAGS: ReadonlySet<string> = new Set(['status']);
 
 /** Flags `create` and `modify` understand. Anything else is usage. */
 const KNOWN_EDIT_FLAGS: ReadonlySet<string> = new Set([
@@ -53,7 +56,7 @@ const KNOWN_EDIT_FLAGS: ReadonlySet<string> = new Set([
 export type CliAction =
   | { readonly kind: 'Help' }
   | { readonly kind: 'Doctor'; readonly check: boolean }
-  | { readonly kind: 'List' }
+  | { readonly kind: 'List'; readonly status: string | undefined }
   | {
       readonly kind: 'Inspect';
       readonly name: string;
@@ -66,7 +69,12 @@ export type CliAction =
       readonly values: Record<string, string>;
     }
   | { readonly kind: 'Show'; readonly name: string }
-  | { readonly kind: 'Verify'; readonly name: string }
+  | {
+      readonly kind: 'Verify';
+      readonly name: string | undefined;
+      readonly all: boolean;
+      readonly dir: string | undefined;
+    }
   | { readonly kind: 'Render'; readonly name: string; readonly values: Record<string, string> }
   | {
       readonly kind: 'Create';
@@ -176,8 +184,11 @@ export const parseCliArgs = (args: string): CliAction => {
       if (split.unknown.length > 0) return { kind: 'Help' };
       return { kind: 'Doctor', check: split.flags['check'] !== undefined };
     }
-    case 'list':
-      return { kind: 'List' };
+    case 'list': {
+      const split = splitTokens(tokens.slice(1), KNOWN_LIST_FLAGS);
+      if (split.unknown.length > 0) return { kind: 'Help' };
+      return { kind: 'List', status: one(split.flags['status']) };
+    }
     case 'inspect':
       return tokens[1] === undefined
         ? { kind: 'Help' }
@@ -195,8 +206,17 @@ export const parseCliArgs = (args: string): CliAction => {
     }
     case 'show':
       return tokens[1] === undefined ? { kind: 'Help' } : { kind: 'Show', name: tokens[1] };
-    case 'verify':
-      return tokens[1] === undefined ? { kind: 'Help' } : { kind: 'Verify', name: tokens[1] };
+    case 'verify': {
+      const split = splitTokens(tokens.slice(1), new Set(['all', 'dir']));
+      if (split.unknown.length > 0) return { kind: 'Help' };
+      const name = split.positionals[0];
+      return {
+        kind: 'Verify',
+        name,
+        all: split.flags['all'] !== undefined || name === undefined,
+        dir: one(split.flags['dir']),
+      };
+    }
     case 'render':
       return tokens[1] === undefined
         ? { kind: 'Help' }
@@ -266,10 +286,11 @@ export const run = (
         if (!result.healthy) return yield* Effect.fail(Renderers.gate(result));
         return;
       }
-      case 'List':
-        return yield* Engines.list({ cwd }).pipe(
-          Effect.flatMap((prompts) => say(Renderers.list(prompts))),
-        );
+      case 'List': {
+        const status = yield* Engines.resolveListStatus(action.status);
+        const prompts = yield* Engines.list({ cwd }, { status });
+        return yield* say(Renderers.list(prompts, { verbose: false, status: action.status }));
+      }
       case 'Inspect': {
         const found = yield* Engines.inspect({ cwd }, action.name, action.values);
         return yield* say(Renderers.inspect(found.summary));
@@ -299,7 +320,15 @@ export const run = (
         return yield* say(Renderers.show(prompt));
       }
       case 'Verify': {
-        const result = yield* Engines.verify({ cwd }, action.name);
+        if (action.all || action.name === undefined) {
+          const report = yield* Engines.verifyAll({ cwd, dir: action.dir });
+          yield* say(Renderers.verifyAll(report));
+          if (report.issueCount > 0) {
+            return yield* Effect.fail(`verification failed:\n${Renderers.verifyAll(report)}`);
+          }
+          return;
+        }
+        const result = yield* Engines.verify({ cwd, dir: action.dir }, action.name);
         yield* say(Renderers.verify(action.name, result));
         if (!result.valid) {
           return yield* Effect.fail(

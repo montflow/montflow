@@ -131,21 +131,37 @@ const doctorCommand = Command.make(
       'check',
       'Report only; never write. Non-zero when the skills are unusable.',
     ),
+    dir: dirFlag,
     verbose: verboseFlag,
   },
   (config) =>
     Effect.gen(function* () {
-      const result = yield* Engines.doctor(process.cwd(), config.check, BINARY_DOCTOR_INVOCATION);
+      const root = opt(config.dir) ?? process.cwd();
+      const result = yield* Engines.doctor(root, config.check, BINARY_DOCTOR_INVOCATION);
       yield* Console.log(Renderers.doctor(result));
       if (!result.healthy) yield* exitFailed;
       return yield* Effect.void;
     }).pipe(Effect.catch((message) => Console.log(message).pipe(Effect.andThen(exitFailed)))),
 ).pipe(Command.withDescription('Install or verify the packaged prompt skills.'));
 
-const listCommand = Command.make('list', { dir: dirFlag, verbose: verboseFlag }, (config) =>
-  report(Engines.list(scope(config.dir)), (prompts) =>
-    Renderers.list(prompts, { verbose: config.verbose }),
-  ),
+const listCommand = Command.make(
+  'list',
+  {
+    dir: dirFlag,
+    status: optionalString(
+      'status',
+      'Keep only prompts whose file verifies (valid) or fails verification (invalid).',
+    ),
+    verbose: verboseFlag,
+  },
+  (config) =>
+    report(
+      Effect.gen(function* () {
+        const status = yield* Engines.resolveListStatus(opt(config.status));
+        return yield* Engines.list(scope(config.dir), { status });
+      }),
+      (prompts) => Renderers.list(prompts, { verbose: config.verbose, status: opt(config.status) }),
+    ),
 ).pipe(Command.withDescription('List stored prompt names.'));
 
 const inspectCommand = Command.make(
@@ -201,15 +217,32 @@ const showCommand = Command.make('show', { dir: dirFlag, name: nameArg }, (confi
 
 const verifyCommand = Command.make(
   'verify',
-  { dir: dirFlag, name: nameArg, verbose: verboseFlag },
+  {
+    dir: dirFlag,
+    name: Argument.string('name').pipe(
+      Argument.withDescription('Prompt name. Omit to verify every prompt.'),
+      Argument.optional,
+    ),
+    all: optionalBoolean('all', 'Verify every prompt in the store.'),
+    verbose: verboseFlag,
+  },
   (config) =>
     Effect.gen(function* () {
-      const result = yield* Engines.verify(scope(config.dir), config.name);
-      yield* Console.log(Renderers.verify(config.name, result, { verbose: config.verbose }));
+      const name = opt(config.name);
+      if (config.all || name === undefined) {
+        const all = yield* Engines.verifyAll(scope(config.dir));
+        yield* Console.log(Renderers.verifyAll(all, { verbose: config.verbose }));
+        if (all.issueCount > 0) yield* exitFailed;
+        return yield* Effect.void;
+      }
+      const result = yield* Engines.verify(scope(config.dir), name);
+      yield* Console.log(Renderers.verify(name, result, { verbose: config.verbose }));
       if (!result.valid) yield* exitFailed;
       return yield* Effect.void;
     }).pipe(Effect.catch((message) => Console.log(message).pipe(Effect.andThen(exitFailed)))),
-).pipe(Command.withDescription('Mechanically verify a prompt file. Non-zero when it fails.'));
+).pipe(
+  Command.withDescription('Mechanically verify one or every prompt file. Non-zero when any fails.'),
+);
 
 const renderCommand = Command.make(
   'render',

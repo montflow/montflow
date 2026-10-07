@@ -38,7 +38,7 @@ const program = Effect.gen(function* () {
 ```bash
 # The CLI — the binary, or the same command inside a Pi session
 mf-prompts doctor [--check]                    # install / verify the skills
-mf-prompts list
+mf-prompts list [--status valid|invalid]
 mf-prompts inspect <name> [key=value ...]     # variables table
 mf-prompts execute <name> --model p/m [key=value ...]
 mf-prompts render <name> [key=value ...]      # text only, no agent

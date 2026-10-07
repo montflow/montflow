@@ -1,6 +1,7 @@
 import * as PromptExecute from '../../modules/prompt-execute/index.js';
 import * as Prompts from '../../modules/prompts/index.js';
 import * as Doctor from '../doctor/index.js';
+import type * as Engines from './engines.apps.module.js';
 
 /**
  * Pure `data -> text` renderers, one per engine result.
@@ -29,7 +30,7 @@ Usage:
   mf-prompts inspect <name> [key=value ...] [--dir <path>]
   mf-prompts execute <name> --model <provider/model-id> [key=value ...] [--dir <path>]
   mf-prompts show <name> [--dir <path>]
-  mf-prompts verify <name> [--dir <path>]
+  mf-prompts verify <name>|--all [--dir <path>]
   mf-prompts render <name> [key=value ...] [--dir <path>]
   mf-prompts create <name> --template <text> [--description <d>] [--model <p/m>]
                     [--skills a,b] [--variable name[:flags]] [--dir <path>]
@@ -46,19 +47,27 @@ export interface Verbosity {
   readonly verbose: boolean;
 }
 
+/** `list` options: verbosity plus the active status filter, if any. */
+export interface ListOptions extends Verbosity {
+  /** The `--status` value in effect, so an empty result can say so. */
+  readonly status?: string | undefined;
+}
+
 /**
  * Stored prompt names. Lean by default: names only, one per line, because that
  * is what a caller almost always wants to feed back into the next command.
  * @param prompts - prompts from `engines.list`
- * @param options - verbosity
+ * @param options - verbosity plus the active status filter
  * @returns the rendered list
  */
 export const list = (
   prompts: ReadonlyArray<Prompts.Prompt>,
-  options: Verbosity = { verbose: false },
+  options: ListOptions = { verbose: false },
 ): string => {
   if (prompts.length === 0) {
-    return 'No prompts yet. Create one with: mf-prompts create <name> --template "…"';
+    return options.status === undefined
+      ? 'No prompts yet. Create one with: mf-prompts create <name> --template "…"'
+      : `No prompts with status '${options.status}'.`;
   }
   if (!options.verbose) return prompts.map((prompt) => prompt.name).join('\n');
   return prompts
@@ -98,6 +107,30 @@ export const verify = (
   const report = Prompts.verifyReport(name, result);
   if (!options.verbose) return report;
   return `${report}\n  checked: .agents/@montflow/pi-prompts/${name}.json`;
+};
+
+/**
+ * A whole-store verification report. Failures are never suppressed; a passing
+ * prompt appears only under `verbose`, matching the single-prompt renderer.
+ * @param report - report from `engines.verifyAll`
+ * @param options - include passing prompts
+ * @returns the display text
+ */
+export const verifyAll = (
+  report: Engines.VerifyAllReport,
+  options: Verbosity = { verbose: false },
+): string => {
+  const lines: Array<string> = [];
+  for (const entry of report.entries) {
+    if (entry.result.valid && !options.verbose) continue;
+    lines.push(`${entry.name}: ${Prompts.verifyInfoLine(entry.result)}`);
+    for (const found of entry.result.issues) lines.push(`  ${found.field}: ${found.message}`);
+  }
+  if (report.entries.length === 0) lines.push('No prompts yet.');
+  lines.push(
+    `${report.entries.length} prompt${report.entries.length === 1 ? '' : 's'} \u00b7 ${report.issueCount} issue${report.issueCount === 1 ? '' : 's'}`,
+  );
+  return lines.join('\n');
 };
 
 /** The full doctor report, one line per skill. */

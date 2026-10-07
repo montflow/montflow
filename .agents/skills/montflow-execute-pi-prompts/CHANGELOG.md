@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.4.0] - 2026-10-07
+
+### Added
+
+- `list --status valid|invalid` keeps only prompts whose file passes or fails mechanical verification
+
 ## [3.3.1]
 
 ### Fixed

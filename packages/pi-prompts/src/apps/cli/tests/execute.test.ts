@@ -45,6 +45,7 @@ const stubLayer = (files: Readonly<Record<string, string>>): Layer.Layer<PromptS
           ? Effect.fail(new PromptStore.StoreError({ message: `Unknown prompt '${name}'.` }))
           : Effect.succeed(raw);
       },
+      readAllRaw: () => Effect.succeed(Object.entries(files).map(([name, raw]) => ({ name, raw }))),
     }),
   );
 

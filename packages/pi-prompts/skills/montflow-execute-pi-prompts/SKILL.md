@@ -3,7 +3,7 @@ name: montflow-execute-pi-prompts
 description: Inspects and executes reusable prompt templates stored by @montflow/pi-prompts on a chosen model, then returns the agent's reply. Use when an agent must run a stored prompt — inspect its variables, supply the required ones, pick a model, and execute it.
 id: a7fa5091d2615813
 author: Daniel Montilla
-version: 3.3.1
+version: 3.4.0
 license: MIT
 dependencies:
   - executing-skills
@@ -80,8 +80,10 @@ failing. Run `doctor`, then retry.
 ## 2. Find the Prompt
 
 ```bash
-mf-prompts list             # names only
-mf-prompts list --verbose   # plus description, model, and variable count
+mf-prompts list                   # names only
+mf-prompts list --verbose         # plus description, model, and variable count
+mf-prompts list --status valid    # only files that pass verification
+mf-prompts list --status invalid  # only files that fail verification
 ```
 
 `show <name>` prints a prompt's raw template. In the TUI, `/mf-prompts-tui browse`

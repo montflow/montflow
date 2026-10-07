@@ -9,8 +9,9 @@ below the parser.
 
 - `engines.apps.module.ts` — the operations (`list`, `load`, `verify`,
   `inspect`, `render`, `plan`, `doctor`, `create`, `modify`, `remove`) plus the
-  two input grammars both front ends share: `keyValues` for `key=value`
-  positionals and `parseVariableSpec` for `name[:o|d=…]`
+  shared input grammars: `keyValues` for `key=value` positionals,
+  `parseVariableSpec` for `name[:o|d=…]`, and `resolveListStatus` for
+  `list --status valid|invalid`
 - `renderers.apps.module.ts` — pure `data -> text`, carrying the **token
   contract** (lean by default, `--verbose` only adds, failures never suppressed)
 - `binary.apps.module.ts` — the `Command` tree and `rootCommand`
