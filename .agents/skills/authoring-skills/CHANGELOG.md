@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.1] - 2026-10-07
+
+### Changed
+
+- `typescript` group taxonomy example now points at `montflow-typescript-project-structure`
+
 ## [1.5.0] - 2026-08-30
 
 ### Removed

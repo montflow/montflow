@@ -3,7 +3,7 @@ name: authoring-skills
 description: Guides the creation, formatting, and refinement of Skills. Use when the user wants to write a new Skill, convert documentation into a Skill, or audit an existing Skill.
 id: b186a4a0ab10373c
 author: Daniel Montilla
-version: 1.5.0
+version: 1.5.1
 license: MIT
 dependencies:
   - executing-skills
@@ -188,7 +188,7 @@ The `groups` field in frontmatter categorizes skills for discovery. Each skill s
 | `documentation` | Doc/rule/schema authoring | writting-jsdoc, authoring-rules |
 | `workflow` | Process-oriented git and reference operations | planning-git-commits, using-git-worktrees, adding-references |
 | `skills` | Meta-skills about the skill system itself | authoring-skills, finding-skills, executing-skills |
-| `typescript` | TypeScript-specific | typescript-conventions, typescript-modules |
+| `typescript` | TypeScript-specific | montflow-typescript-project-structure, typescript-modules |
 | `javascript` | JavaScript-specific | simplifying-code, detecting-duplication |
 | `conventions` | Code style and convention enforcement | leaving-it-cleaner, favoring-composition |
 | `testing` | Testing infrastructure and review | effect-testing |
