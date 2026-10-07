@@ -574,6 +574,25 @@ export const App = (props: AppProps) => {
   const dimensions = useTerminalDimensions();
   const size = createMemo(() => `${dimensions().width}×${dimensions().height}`);
 
+  /** Grid rows: terminal height minus the top pad and the one-row status bar. */
+  const gridRows = createMemo(() => Math.max(1, dimensions().height - 2));
+
+  /**
+   * Whole-row height per grid cell, column by column. Pinning each panel
+   * to an integer height keeps Yoga's pixel rounding off the panel border —
+   * fractional flex heights pushed the last row (the keybind footer) onto
+   * the border or clipped it away.
+   */
+  const columnCellHeights = createMemo(() =>
+    layout.columns.map((column) =>
+      Dashboard.cellRows(
+        column.cells.map((cell) => cell.height ?? 1),
+        gridRows(),
+        1,
+      ),
+    ),
+  );
+
   /** Rows shown in the filter picker window. */
   const FILTER_ROWS = 8;
 
@@ -3917,7 +3936,7 @@ export const App = (props: AppProps) => {
       >
         <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} paddingX={1}>
           <For each={layout.columns}>
-            {(column) => (
+            {(column, columnIndex) => (
               <box
                 flexDirection="column"
                 flexGrow={column.width ?? 1}
@@ -3926,11 +3945,11 @@ export const App = (props: AppProps) => {
                 gap={1}
               >
                 <For each={column.cells}>
-                  {(cell) => (
+                  {(cell, cellIndex) => (
                     <Panel
                       title={`[${cell.keybind}] ${Dashboard.titleFor(cell.panel)}`}
                       selected={selected() === cell.panel}
-                      grow={cell.height ?? 1}
+                      height={columnCellHeights()[columnIndex()]?.[cellIndex()]}
                       panelRef={
                         cell.panel === 'skills'
                           ? setSkillsCard

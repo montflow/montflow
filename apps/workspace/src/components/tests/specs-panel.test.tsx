@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { testRender } from '@opentui/solid';
 import { afterEach, describe, test } from 'bun:test';
+import { Dashboard } from '../../modules/index.js';
 import type { Specs } from '../../services/index.js';
 import { Panel } from '../panel.js';
 import { SpecsPanel, type SpecsPanelProps } from '../specs-panel.js';
@@ -110,5 +111,53 @@ describe('SpecsPanel layout', () => {
     // wrapping a second line onto the border.
     check(rows[sentinel - 2]?.includes('/ search') ?? false, 'banner head on the footer row');
     check(rows[sentinel - 2]?.includes('3/3') ?? false, 'count on the footer row');
+  });
+
+  test('whole-row panel heights keep the footer off the border in a mixed column', async () => {
+    const TOTAL = 39;
+    const heights = Dashboard.cellRows([3, 2, 2], TOTAL - 2, 1);
+    const setup = await testRender(
+      () => (
+        <box width={80} height={TOTAL} flexDirection="column" paddingTop={1}>
+          <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} paddingX={1}>
+            <box flexDirection="column" flexGrow={5} flexBasis={0} minHeight={0} gap={1}>
+              <Panel title="[r] Runs" selected={false} height={heights[0]}>
+                <text>runs</text>
+              </Panel>
+              <Panel title="[e] Specs" selected height={heights[1]}>
+                <SpecsPanel
+                  loading={false}
+                  installed
+                  rows={[row('alpha'), row('beta'), row('gamma')]}
+                  highlight={0}
+                  total={3}
+                  query=""
+                  searching={false}
+                  capacity={(heights[1] ?? 4) - 4}
+                  selected
+                />
+              </Panel>
+              <Panel title="[f] Profiles" selected={false} height={heights[2]}>
+                <text>profiles</text>
+              </Panel>
+            </box>
+          </box>
+          <text> status</text>
+        </box>
+      ),
+      { width: 80, height: TOTAL },
+    );
+    await setup.renderOnce();
+    setups.push(setup);
+    const frame = frameRows(setup);
+    const borders = frame
+      .map((line, index) => [line, index] as const)
+      .filter(([line]) => /^\s*└─+┘\s*$/.test(line))
+      .map(([, index]) => index);
+    const specsBottom = borders[1];
+    check(specsBottom !== undefined, 'specs bottom border found');
+    const bottom = specsBottom ?? 0;
+    check(!(frame[bottom]?.includes('/ search') ?? false), 'banner not on the border');
+    check(frame[bottom - 1]?.includes('/ search') ?? false, 'banner one row inside');
   });
 });

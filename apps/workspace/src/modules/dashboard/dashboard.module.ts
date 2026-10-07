@@ -105,6 +105,41 @@ export const flatten = (layout: Layout): ReadonlyArray<Cell> =>
 export const firstPanel = (layout: Layout): string => flatten(layout)[0]?.panel ?? 'info';
 
 /**
+ * Split a column's whole-row budget across its cells by height share.
+ * Largest-remainder apportionment keeps the sum exact and every panel on
+ * the integer pixel grid — fractional flex heights made Yoga round the
+ * last row of a panel onto its bottom border (keybind footers sat on the
+ * border or were clipped away). Each cell gets at least one row.
+ * @param grows - per-cell height shares in render order
+ * @param totalRows - rows available to the column, gaps included
+ * @param gap - rows between adjacent cells
+ * @returns one whole-row height per grow
+ */
+export const cellRows = (
+  grows: ReadonlyArray<number>,
+  totalRows: number,
+  gap: number,
+): ReadonlyArray<number> => {
+  const count = grows.length;
+  if (count === 0) return [];
+  const available = Math.max(count, totalRows - (count - 1) * gap);
+  const extra = available - count;
+  const total = grows.reduce((sum, grow) => sum + grow, 0) || 1;
+  const exact = grows.map((grow) => (extra * grow) / total);
+  const rows = exact.map((share) => 1 + Math.floor(share));
+  let remainder = available - rows.reduce((sum, row) => sum + row, 0);
+  const byShare = exact
+    .map((share, index) => [share - Math.floor(share), index] as const)
+    .toSorted((a, b) => b[0] - a[0]);
+  for (const [, index] of byShare) {
+    if (remainder <= 0) break;
+    rows[index] = (rows[index] ?? 1) + 1;
+    remainder -= 1;
+  }
+  return rows;
+};
+
+/**
  * Panel bound to a pressed key, if any.
  * @param layout - grid layout
  * @param keybind - pressed key name

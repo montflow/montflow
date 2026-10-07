@@ -6,6 +6,8 @@ export interface PanelProps {
   readonly title: string;
   readonly selected: boolean;
   readonly grow?: number;
+  /** Whole-row height. When set, the panel is pinned instead of flex-grown. */
+  readonly height?: number | undefined;
   readonly panelRef?: Ref<BoxRenderable> | undefined;
   readonly children: JSX.Element;
 }
@@ -18,17 +20,24 @@ export interface PanelProps {
  * tight. `flexBasis={0}` (opencode's stack-trace panel pattern) grows the
  * panel from a zero base so grid shares split the cell exactly — with the
  * default `auto` basis, heights leak content size and every state swap
- * (loading to loaded, empty to full) shifts the grid.
- * @param props - title, selection, flex share, and content
+ * (loading to loaded, empty to full) shifts the grid. A `height` pins the
+ * cell to a whole row count the caller computed (keeping Yoga's rounding
+ * off the bottom border); otherwise `flexBasis={0}` grows it. The body is
+ * clipped to the content box (`overflow="hidden"`): a panel too short
+ * for its caller's rows cuts the surplus at the border instead of
+ * painting it over the border.
+ * @param props - title, selection, flex share or fixed height, and content
  * @returns panel element
  */
 export const Panel = (props: PanelProps) => (
   <box
     {...(props.panelRef === undefined ? {} : { ref: props.panelRef })}
-    flexGrow={props.grow ?? 1}
-    flexBasis={0}
+    {...(props.height === undefined
+      ? { flexGrow: props.grow ?? 1, flexBasis: 0 }
+      : { height: props.height })}
     flexDirection="column"
     minHeight={0}
+    overflow="hidden"
     border
     borderStyle="single"
     borderColor={props.selected ? palette.accent : palette.border}
