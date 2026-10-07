@@ -114,7 +114,7 @@ const scope = (dir: Option.Option<string>): Engines.StoreScope => ({
 /**
  * Mark the process as failed without failing the handler.
  *
- * The house idiom (see `mf-features`): print the report, then set
+ * The house idiom (see `mf-specs`): print the report, then set
  * `process.exitCode`. Failing the handler instead would make `Command.run`
  * render its own error report on top of ours, so a caller would read the same
  * failure twice. `process.exitCode` rather than `process.exit` leaves buffered

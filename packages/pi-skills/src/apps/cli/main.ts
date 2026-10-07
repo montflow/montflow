@@ -8,7 +8,7 @@ import { VERSION, rootCommand } from './binary.apps.module.js';
  * `mf-skills` binary entry.
  *
  * The runtime is Bun and the CLI is `effect/unstable/cli`, matching
- * `mf-features` and `mf-prompts`. `bun build --compile` embeds this runtime,
+ * `mf-specs` and `mf-prompts`. `bun build --compile` embeds this runtime,
  * so `dist/mf-skills` is a single file that runs on its target with no install.
  *
  * A failure sets `process.exitCode` rather than calling `process.exit`, so

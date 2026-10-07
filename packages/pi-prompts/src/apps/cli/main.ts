@@ -8,7 +8,7 @@ import { VERSION, rootCommand } from './binary.apps.module.js';
  * `mf-prompts` binary entry.
  *
  * The runtime is Bun and the CLI is `effect/unstable/cli`, matching
- * `mf-features`. `bun build --compile` embeds this runtime, so
+ * `mf-specs`. `bun build --compile` embeds this runtime, so
  * `dist/mf-prompts` is a single file that runs on its target with no install.
  *
  * A failure sets `process.exitCode` rather than calling `process.exit`, so
