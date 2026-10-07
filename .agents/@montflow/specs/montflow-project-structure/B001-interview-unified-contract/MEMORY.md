@@ -35,7 +35,7 @@ conclusions.
 | 19 | Effect error model (B099 F7) | **`Data.TaggedError`** canonical; update `effect-v4` | Code uses `Data.TaggedError` (3 files), `Schema.TaggedErrorClass` (0). |
 | 20 | Struct `Blueprint` (C15, B099 F12) | **Optional; omit when unused** | Matches `effect-structs/GATES.md:21` and repo practice (Email omits it). |
 | 15 | Test author separation (E13) | **Keep as a hard rule** | Unchanged. |
-| 16 | Verification flow (G12) | Package scripts (AGENTS.md) + `mf-features check` for feature specs | Matches AGENTS.md. |
+| 16 | Verification flow (G12) | Package scripts (AGENTS.md) + `mf-specs check` for specs | Matches AGENTS.md. |
 | 17 | Scope | **Structure only** — layout/naming/groups/packages; no runtime behavior, testing content, or task authoring | Keeps the skill a router, not a restatement. |
 
 ### Phase A corrections

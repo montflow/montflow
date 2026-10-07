@@ -13,7 +13,7 @@
       "width": 5,
       "cells": [
         { "panel": "runs", "keybind": "r", "height": 3 },
-        { "panel": "features", "keybind": "e", "height": 2 },
+        { "panel": "specs", "keybind": "e", "height": 2 },
         { "panel": "profiles", "keybind": "f", "height": 2 }
       ]
     }

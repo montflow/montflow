@@ -25,7 +25,7 @@ step explicit.
 - Specify how naming and structural rules from B001 are expressed once, in the entry point, without restating the individual skills.
 - Produce an ordered outline of implementation tasks (create skill, adjust dependent skills, add tests/docs, gates) for authoring in a later phase.
 - Flag anything still undecided as an open question for the next phase.
-- No files outside `.agents/@montflow/features/` are modified.
+- No files outside `.agents/@montflow/specs/` are modified.
 
 ## Completion
 

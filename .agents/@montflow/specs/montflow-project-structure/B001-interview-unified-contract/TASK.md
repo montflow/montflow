@@ -25,7 +25,7 @@ for them.
 - Settle scope: which skills the unified entry point depends on, and what is explicitly out of scope.
 - Settle naming: the unified skill name, any group/module names, and the naming vocabulary the rules use.
 - Record every decision with the user's rationale; leave genuinely deferred questions explicitly open.
-- No files outside `.agents/@montflow/features/` are modified.
+- No files outside `.agents/@montflow/specs/` are modified.
 
 ## Completion
 

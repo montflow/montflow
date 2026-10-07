@@ -59,11 +59,11 @@ dropped from the contract and **not referenced** (B001 #3, B099 F14).
 7. **Relative specifiers use `.js`** (B001 #14) — applies across all dep skills.
 8. **Routing:** Effect modules use typed Effect errors (`Data.TaggedError`,
    B001 #19); plain modules throw typed error classes. No `Result` (B001 #3/#7).
-9. **Verification:** package scripts (AGENTS.md) + `mf-features check`
+9. **Verification:** package scripts (AGENTS.md) + `mf-specs check`
    (B001 #16).
 
 The entry point states these as the law and names the owner for each concrete
-rule; it never copies the owner's rule text (FEATURE requirement, B099 F1).
+rule; it never copies the owner's rule text (SPEC requirement, B099 F1).
 
 #### `# When To Use`
 
@@ -94,7 +94,7 @@ out a new package, or checking an existing tree. Includes the prerequisite
 10. **Cleanup lenses** (referenced): `detecting-duplication` →
     `simplifying-code` → `leaving-it-cleaner`.
 11. **Document only if asked, minimally** (`writting-jsdoc`, optional).
-12. **Verify** — package scripts; `mf-features check` for feature specs.
+12. **Verify** — package scripts; `mf-specs check` for specs.
 
 #### `# Reference`
 
@@ -157,11 +157,11 @@ Resolved decisions added at B099:
 14. Tests/docs: pi-skills schema + `authoring-skills` conformance; CHANGELOG.
     The router ships **no `GATES.md`** — it is verified by `verifySkillFile` +
     package scripts (B099 F15).
-15. Verify: `bun run --cwd packages/pi-skills test`; `mf-features check`.
+15. Verify: `bun run --cwd packages/pi-skills test`; `mf-specs check`.
 
 ### Still open
 
-- Authoring the concrete implementation `TASK.md`s — the FEATURE spec grows
+- Authoring the concrete implementation `TASK.md`s — the SPEC spec grows
   after Phase B. Includes a code-level sweep for any remaining `.ts`
   specifiers and `ServiceMap.Service` usages once the skills are updated.
 

@@ -35,7 +35,7 @@ open-ended until the user decides the contract in Phase B.
 - Phase A inventories every TypeScript-structure-relevant skill and extracts its rules, overlaps, gaps, and conflicts.
 - The inventory covers the structural core, Effect scaffolding, code principles, and docs/conventions helpers named in the description.
 - Phase A ends with a synthesis: a rule matrix, the natural dependency graph between skills, and a candidate shape for the unified entry point.
-- Phase B interviews the user to decide the canonical rules, scope boundaries, and naming (skill name, groups, modules, feature naming).
+- Phase B interviews the user to decide the canonical rules, scope boundaries, and naming (skill name, groups, modules, spec naming).
 - Phase B converts the interview into a concrete unified-skill contract plus an ordered outline of the implementation tasks to be authored later.
 - The eventual unified skill is a single entry point that depends on the individual skills; it must not restate their content.
 - The eventual unified skill must satisfy the pi-skills schema and the montflow skill-authoring rules.

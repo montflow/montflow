@@ -174,10 +174,10 @@ Structural decisions no current skill covers:
 | G8 | **JSDoc canonical style** in this repo | C7 |
 | G9 | `mimicking-conventions` place in the structural dependency graph | Orphan (D10/C8) |
 | G10 | `layers/` **routing** for standalone layers | C6 |
-| G11 | **Naming** for groups, modules, features, packages across the unified story | Phase B explicitly owns naming |
+| G11 | **Naming** for groups, modules, specs, packages across the unified story | Phase B explicitly owns naming |
 | G12 | Aggregate **verification/`GATES.md`** story — per-skill gates exist, no single verify flow | Entry point should say how to verify |
 | G13 | Effect **module-surface filename example** policy (`.js` vs `.ts`) resolved | C3 |
-| G14 | Handling **feature-spec dirs** (TASK/MEMORY) vs module CONTEXT | A004 notes they differ |
+| G14 | Handling **spec dirs** (TASK/MEMORY) vs module CONTEXT | A004 notes they differ |
 | G15 | Cross-group/cross-package **dependency-direction** rule (who may import whom) | SOLID/DIP imply it; nothing states it |
 
 ### Dependency graph
@@ -253,12 +253,12 @@ restates none of their content.
    9. Document on request (`JS`).
    10. Verify via package scripts (AGENTS.md).
 3. `# Reference` — (a) dependency map table with consult order; (b) resolved
-   conflict decisions (from C1–C15); (c) group/module/feature naming registry
+   conflict decisions (from C1–C15); (c) group/module/spec naming registry
    (G1/G11); (d) Effect-vs-Result routing rule (G3).
 
 **Non-restatement rules (proposal):** entry point may state *when/order* and
 *tie-breaks* only; every concrete rule cites the owning skill, never copied.
-Must satisfy pi-skills schema + `authoring-skills` (FEATURE requirement).
+Must satisfy pi-skills schema + `authoring-skills` (SPEC requirement).
 
 **Open-by-design:** exact name, group, whether it is a pure router vs a
 router+decision-tree, whether `MIM` is mandatory, and whether lens skills are
@@ -283,7 +283,7 @@ Decisions Phase B (B001 interview) must settle:
   structure, and where do `TestInterface`/`TestService` layers live?
 - G2/G3: error-module placement + Effect-vs-Result routing rule.
 - G7: adopt a `CONTEXT.md` content contract/template?
-- G11: naming of the unified skill, its group, groups/modules/features.
+- G11: naming of the unified skill, its group, groups/modules/specs.
 - G12: define the single verification flow.
 - Scope: which skills are hard contract deps vs optional lenses; is `MIM`
   mandatory?

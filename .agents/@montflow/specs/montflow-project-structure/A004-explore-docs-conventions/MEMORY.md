@@ -52,13 +52,13 @@ naming the owning module). Optional extra sections when the module needs them:
 
 Path examples:
 - `packages/core/src/structs/uuid/CONTEXT.md` — canonical minimal shape
-- `apps/workspace/src/services/features/CONTEXT.md` — richer intro + explicit owner delegations
+- `apps/workspace/src/services/specs/CONTEXT.md` — richer intro + explicit owner delegations
 - `packages/pi-runs/src/services/store/CONTEXT.md` — adds `## Persistence is a layer choice`, `## Layers`
 - `packages/pi-runs/src/apps/cli/CONTEXT.md` — adds `## Rules`
 - Sibling cross-links by relative path, e.g. `packages/pi-skills/src/apps/cli/CONTEXT.md` links `[../doctor](../doctor/CONTEXT.md)`
 
 Gaps: group folders (`src/modules/`, `src/services/`, …) do **not** carry a
-`CONTEXT.md` — only leaf modules do. Feature-spec dirs use TASK/MEMORY, not
+`CONTEXT.md` — only leaf modules do. Spec dirs use TASK/MEMORY, not
 CONTEXT. No mechanical verifier checks CONTEXT.md *content*; only existence is
 gated. Style is terse agent-facing prose (contrast: `language-quality-reviewer`
 PROFILE classifies `CONTEXT.md` as agent-facing Mode 2).
