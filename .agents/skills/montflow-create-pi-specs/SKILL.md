@@ -1,6 +1,6 @@
 ---
-name: montflow-create-pi-features
-description: Authors a feature spec under .agents/@montflow/features/ — FEATURE.md plus one directory per task (TASK.md, MEMORY.md, GATES.md) — from the rules below. Use when an agent must create a feature spec directly, without dispatching a run or shelling out.
+name: montflow-create-pi-specs
+description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per task (TASK.md, MEMORY.md, GATES.md) — from the rules below. Use when an agent must create a spec directly, without dispatching a run or shelling out.
 id: 6ebf45d24cb3d3a1
 author: Daniel Montilla
 version: 2.0.0
@@ -13,8 +13,8 @@ groups:
 
 # When To Use
 
-Use when a new **feature spec** must be authored under
-`.agents/@montflow/features/<kebab-name>/`. The agent writes the files itself
+Use when a new **spec** must be authored under
+`.agents/@montflow/specs/<kebab-name>/`. The agent writes the files itself
 from the rules below — it does not dispatch a run and does not call a CLI.
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md) skill before running this pipeline. It governs how skills are loaded, executed, and verified.
@@ -23,11 +23,11 @@ from the rules below — it does not dispatch a run and does not call a CLI.
 
 ## 1. Choose the Name
 
-`<kebab-name>` becomes the feature directory and equals the `name` in the
-frontmatter. Create exactly one feature, then stop. Author the spec; do not
+`<kebab-name>` becomes the spec directory and equals the `name` in the
+frontmatter. Create exactly one spec, then stop. Author the spec; do not
 execute it.
 
-## 2. Write `FEATURE.md`
+## 2. Write `SPEC.md`
 
 Frontmatter: `name` (kebab-case, equals the directory), `status: in-progress`,
 `workspace-type: in-place`, `author`, `created` (YYYY-MM-DD), `locked-phases:`
@@ -59,7 +59,7 @@ either `Yes` or `No`.
 
 A phase is the leading letters of a task id (`A001` is phase `A`). End every
 phase with exactly one `review` task named `<PHASE>099-review-phase`. Leave
-`locked-phases:` empty and the feature `status: in-progress`.
+`locked-phases:` empty and the spec `status: in-progress`.
 
 ## 5. Ask Only When the Decision Is the User's
 
@@ -73,10 +73,10 @@ should see. Do not invent extra context.
 - Each `TASK.md` `id` equals its directory id, and `name` equals the directory name after the id.
 - Each phase ends with exactly one `<PHASE>099-review-phase` review task.
 - `depends-on` references stay in the same phase or an earlier phase.
-- `locked-phases:` is empty and the feature is `status: in-progress`.
-- Nothing outside `.agents/@montflow/features/` was touched.
+- `locked-phases:` is empty and the spec is `status: in-progress`.
+- Nothing outside `.agents/@montflow/specs/` was touched.
 
 # Reference
 
-- **Feature specs**: `.agents/@montflow/features/<name>/` — `FEATURE.md` plus one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`).
-- **Contract source**: `packages/pi-features/src/skills/authoring-feature-spec.ts`, `modules/lifecycle`, `modules/structure`.
+- **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`).
+- **Contract source**: `packages/pi-specs/src/skills/authoring-spec.ts`, `modules/lifecycle`, `modules/structure`.
