@@ -3,7 +3,7 @@ name: typescript-prefer-inference
 description: "Prefers TypeScript inference over explicit type annotations on variable declarations. Use when reviewing TypeScript code that overuses `: SomeType` annotations or `as` casts."
 id: b29738dc6b3e9cea
 author: Daniel Montilla
-version: 1.1.0
+version: 1.2.0
 dependencies:
   - executing-skills
 groups:
@@ -47,9 +47,8 @@ For each annotation or cast flagged in steps 1–2, confirm it meets at least on
 Only allow when:
 
 1. **Type is genuinely ambiguous** — first try `satisfies` before adding an annotation
-2. **Constraining public API surface** — function/method return type annotations are fine
-3. **Compiler performance issue** — extremely rare; only accept with a `// perf: reason` comment
+2. **Constraining public API surface** — exported functions and methods use explicit return types; internal functions infer
 
 # Reference
 
-- **TS Skill Index**: [typescript-conventions](../typescript-conventions/SKILL.md)
+- **TS structure entry point**: [montflow-typescript-project-structure](../montflow-typescript-project-structure/SKILL.md)
