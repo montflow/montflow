@@ -31,10 +31,11 @@ const row = (id: string): Skills.SkillSummary => ({
 const renderState = async (
   panel: Partial<SkillsPanelProps>,
   width: number = WIDTH,
+  height: number = HEIGHT,
 ): Promise<Setup> => {
   const setup = await testRender(
     () => (
-      <box width={width} height={HEIGHT} flexDirection="column">
+      <box width={width} height={height} flexDirection="column">
         <Panel title="[s] Skills" selected={false}>
           <SkillsPanel
             loading={false}
@@ -53,7 +54,7 @@ const renderState = async (
         <text>SENTINEL</text>
       </box>
     ),
-    { width, height: HEIGHT },
+    { width, height },
   );
   await setup.renderOnce();
   setups.push(setup);
@@ -271,5 +272,38 @@ describe('SkillsPanel layout', () => {
     // a second line onto the border.
     check(rows[sentinel - 2]?.includes('/ search') ?? false, 'banner head on the footer row');
     check(rows[sentinel - 2]?.includes('5/5') ?? false, 'count on the footer row');
+  });
+
+  test('banner never paints over the bottom border when the panel is too short', async () => {
+    // Panel height = outer height - 1 (the sentinel line). Height 2 leaves
+    // no content row; height 3+ can show the footer once the search line
+    // yields. In every case the border is the last row and stays clean.
+    const outers = [3, 4, 5, 6];
+    const frames = await Promise.all(
+      outers.map((outer) =>
+        renderState(
+          {
+            installed: true,
+            rows: [row('alpha'), row('beta')],
+            total: 2,
+            selected: true,
+          },
+          WIDTH,
+          outer,
+        ).then(frameRows),
+      ),
+    );
+    outers.forEach((outer, index) => {
+      const rows = frames[index] ?? [];
+      const sentinel = sentinelRowOf(rows);
+      check(rows[sentinel - 1]?.includes('└') ?? false, `outer ${outer}: bottom border intact`);
+      check(
+        !(rows[sentinel - 1]?.includes('/ search') ?? false),
+        `outer ${outer}: banner off the border`,
+      );
+      if (outer >= 4) {
+        check(rows[sentinel - 2]?.includes('/ search') ?? false, `outer ${outer}: banner inside`);
+      }
+    });
   });
 });

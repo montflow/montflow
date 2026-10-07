@@ -29,11 +29,14 @@ const row = (id: string): Profiles.ProfileSummary => ({
 });
 
 /** Render one ProfilesPanel state inside Panel chrome with a sentinel line below. */
-const renderState = async (panel: Partial<ProfilesPanelProps>): Promise<Setup> => {
+const renderState = async (
+  panel: Partial<ProfilesPanelProps>,
+  height: number = HEIGHT,
+): Promise<Setup> => {
   const setup = await testRender(
     () => (
       <QueryClientProvider client={Query.makeQueryClient()}>
-        <box width={WIDTH} height={HEIGHT} flexDirection="column">
+        <box width={WIDTH} height={height} flexDirection="column">
           <Panel title="[f] Profiles" selected={false}>
             <ProfilesPanel
               root="/tmp/workspace-profiles"
@@ -55,7 +58,7 @@ const renderState = async (panel: Partial<ProfilesPanelProps>): Promise<Setup> =
         </box>
       </QueryClientProvider>
     ),
-    { width: WIDTH, height: HEIGHT },
+    { width: WIDTH, height },
   );
   await setup.renderOnce();
   setups.push(setup);
@@ -251,5 +254,37 @@ describe('ProfilesPanel layout', () => {
     );
     const appliedSentinel = applied.findIndex((line) => line.includes('SENTINEL'));
     check(applied[appliedSentinel - 14]?.includes('/al') ?? false, 'applied filter visible');
+  });
+
+  test('banner never paints over the bottom border when the panel is too short', async () => {
+    // Panel height = outer height - 1 (the sentinel line). Height 2 leaves
+    // no content row; height 3+ can show the footer once the search line
+    // yields. In every case the border is the last row and stays clean.
+    const outers = [3, 4, 5, 6];
+    const frames = await Promise.all(
+      outers.map((outer) =>
+        renderState(
+          {
+            installed: true,
+            rows: [row('alpha'), row('beta')],
+            total: 2,
+            selected: true,
+          },
+          outer,
+        ).then(frameRows),
+      ),
+    );
+    outers.forEach((outer, index) => {
+      const rows = frames[index] ?? [];
+      const sentinel = sentinelRowOf(rows);
+      check(rows[sentinel - 1]?.includes('└') ?? false, `outer ${outer}: bottom border intact`);
+      check(
+        !(rows[sentinel - 1]?.includes('/ search') ?? false),
+        `outer ${outer}: banner off the border`,
+      );
+      if (outer >= 4) {
+        check(rows[sentinel - 2]?.includes('/ search') ?? false, `outer ${outer}: banner inside`);
+      }
+    });
   });
 });

@@ -22,8 +22,10 @@ export interface SpecsPanelProps {
 /**
  * Specs content that FILLS the panel: loader, empty note, and the
  * filterable list share the same flex chrome, so loading and filtering
- * never shift the grid. Mirrors `RunsPanel` row for row — each row shows
- * the lifecycle marker, the spec name, and its derived state.
+ * never shift the grid; the search line yields first when the panel is
+ * too short, keeping the footer inside the border. Mirrors `RunsPanel`
+ * row for row — each row shows the lifecycle marker, the spec name, and
+ * its derived state.
  * `c` dispatches an author run (handled by the app, not this panel).
  * @param props - load state, visible rows, highlight, query, capacity, selection
  * @returns specs content element
@@ -32,7 +34,7 @@ export const SpecsPanel = (props: SpecsPanelProps) => {
   return (
     <Show when={!props.loading} fallback={<Loader variant={props.loadingVariant ?? 'specs'} />}>
       <box flexDirection="column" flexGrow={1} minHeight={0}>
-        <box flexShrink={0}>
+        <box flexShrink={1} minHeight={0} overflow="hidden">
           <Show when={props.searching || props.query !== ''} fallback={<text> </text>}>
             <text style={{ fg: palette.accent }}>/{props.query}</text>
           </Show>

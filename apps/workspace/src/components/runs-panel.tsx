@@ -64,7 +64,8 @@ export const runMarker = (status: string, frame?: number): string => {
  * non-selectable plain lines; highlight navigation walks
  * `activeRows` then `allRows`, so movement crosses sections in one
  * sequence. Running rows animate the loader's braille spinner; every
- * other status keeps its static marker.
+ * other status keeps its static marker. The search line yields first
+ * when the panel is too short, keeping the footer inside the border.
  * @param props - load state, section rows, highlight, query, capacity, selection, frame
  * @returns runs content element
  */
@@ -95,7 +96,7 @@ export const RunsPanel = (props: RunsPanelProps) => {
       }
     >
       <box flexDirection="column" flexGrow={1} minHeight={0}>
-        <box flexShrink={0}>
+        <box flexShrink={1} minHeight={0} overflow="hidden">
           <Show
             when={props.installed && (props.searching || props.query !== '')}
             fallback={<text> </text>}

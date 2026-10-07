@@ -29,12 +29,13 @@ export interface ProfilesPanelProps {
  * note, empty note, and filterable list all share the same flex chrome,
  * so loading, filtering, install state, and search toggling never shift
  * the grid. Mirrors `SkillsPanel` row for row — the search line stays
- * reserved (blank when idle); the list region grows to absorb slack
- * above a one-line footer pinned to the panel bottom. The footer shows
- * contextual keybinds plus the row count only while selected —
- * unselected panels render the same line blank, so selecting never
- * moves anything. The list arrives pre-windowed (capped at `capacity`
- * rows) — this panel only renders. `capacity` documents the caller's
+ * reserved (blank when idle) but yields first when the panel is too
+ * short; the list region grows to absorb slack above a one-line footer
+ * pinned to the panel bottom, so the keybinds stay inside the border.
+ * The footer shows contextual keybinds plus the row count only while
+ * selected — unselected panels render the same line blank, so
+ * selecting never moves anything. The list arrives pre-windowed
+ * (capped at `capacity` rows) — this panel only renders. `capacity` documents the caller's
  * windowing contract; height comes from the grid, never from row
  * counts. `loadingVariant` narrates the boot stage (`extension` for the
  * runtime import, `profiles` for the list read) while `loading` is true.
@@ -50,7 +51,7 @@ export const ProfilesPanel = (props: ProfilesPanelProps) => {
       }
     >
       <box flexDirection="column" flexGrow={1} minHeight={0}>
-        <box flexShrink={0}>
+        <box flexShrink={1} minHeight={0} overflow="hidden">
           <Show
             when={props.installed && (props.searching || props.query !== '')}
             fallback={<text> </text>}
