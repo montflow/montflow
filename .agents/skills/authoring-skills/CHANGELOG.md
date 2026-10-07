@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.0] - 2026-10-07
+
+### Added
+
+- Naming policy: montflow-owned code rules use `montflow-<language>-<subject>`; generic and vendored skills keep their own names
+
+### Changed
+
+- Group taxonomy examples repointed to the renamed skills
+
 ## [1.5.1] - 2026-10-07
 
 ### Changed

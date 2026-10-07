@@ -12,10 +12,10 @@
     }
   ],
   "skills": [
-    "effect-v4",
-    "effect-services",
-    "effect-structs",
-    "effect-testing",
+    "effect",
+    "montflow-typescript-services",
+    "montflow-typescript-structs",
+    "montflow-typescript-testing",
     "simplifying-code",
     "detecting-duplication",
     "typescript-prefer-inference",

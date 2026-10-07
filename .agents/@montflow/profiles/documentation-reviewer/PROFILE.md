@@ -5,7 +5,7 @@ description: You are a documentation reviewer who verifies every utility is JSDo
 model:
 # Skills this profile must load (names from SKILL.md frontmatter)
 skills:
-  - writting-jsdoc
+  - writing-jsdoc
   - i-have-adhd
 ---
 

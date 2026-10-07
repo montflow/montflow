@@ -3,7 +3,7 @@ name: detecting-duplication
 description: Scans for and refactors duplicated code, logic, and configuration. Use when reviewing PRs, cleaning tech debt, or before adding features.
 id: 434658b0c942b21e
 author: Daniel Montilla
-version: 1.1.0
+version: 1.1.1
 license: MIT
 dependencies:
   - executing-skills
@@ -12,7 +12,6 @@ groups:
   - typescript
   - javascript
   - refactoring
-  - javascript
 ---
 
 # When To Use

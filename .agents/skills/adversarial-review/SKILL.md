@@ -124,7 +124,7 @@ Find where better code was possible:
 ## 6. Assess Test Coverage
 
 - Which branches, error paths, and edge cases have **no** test?
-- Do tests assert real behavior or just restate the implementation (see [effect-testing](../effect-testing/SKILL.md))?
+- Do tests assert real behavior or just restate the implementation (see [montflow-typescript-testing](../montflow-typescript-testing/SKILL.md))?
 - Are boundary values (empty, max, null) exercised?
 - Are failure modes (timeout, thrown error, bad input) covered?
 - Is there flakiness: dependence on time, order, randomness, global state?
@@ -132,7 +132,7 @@ Find where better code was possible:
 
 ## 7. Assess Documentation & Operability
 
-- Misleading, missing, or stale docstrings/README/comments (see [writting-jsdoc](../writting-jsdoc/SKILL.md)).
+- Misleading, missing, or stale docstrings/README/comments (see [writing-jsdoc](../writing-jsdoc/SKILL.md)).
 - Public API undocumented or documented incorrectly.
 - No changelog entry, migration note, or deprecation warning for breaking changes.
 - Missing observability: no logging, metrics, or tracing on failure paths.
@@ -242,5 +242,5 @@ A re-review runs when `.agents/@montflow/reviews/<name>/<code>.md` already exist
 - **Bug-hunting checklist**: Steps 2–7 above (MUST READ for each review).
 - **Duplication**: [detecting-duplication](../detecting-duplication/SKILL.md) — for repeated logic findings
 - **SOLID**: [applying-solid](../applying-solid/SKILL.md) — for design-violation findings
-- **Testing quality**: [effect-testing](../effect-testing/SKILL.md) — for test-coverage findings
-- **Docs**: [writting-jsdoc](../writting-jsdoc/SKILL.md) — for documentation findings
+- **Testing quality**: [montflow-typescript-testing](../montflow-typescript-testing/SKILL.md) — for test-coverage findings
+- **Docs**: [writing-jsdoc](../writing-jsdoc/SKILL.md) — for documentation findings

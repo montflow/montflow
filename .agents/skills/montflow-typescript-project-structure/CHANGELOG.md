@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.1.0] - 2026-10-07
+
+### Changed
+
+- Dependencies and links repointed to the renamed `montflow-typescript-*` skills and `effect`
+- Module law 8 and the resolved-decisions table now state the error split: `Data.TaggedError` internal, `Schema.TaggedError` boundary
+- Lenses/docs pointers updated (`writing-jsdoc`)
+
 ## [3.0.0] - 2026-10-07
 
 ### Changed

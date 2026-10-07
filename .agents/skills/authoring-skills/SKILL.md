@@ -3,7 +3,7 @@ name: authoring-skills
 description: Guides the creation, formatting, and refinement of Skills. Use when the user wants to write a new Skill, convert documentation into a Skill, or audit an existing Skill.
 id: b186a4a0ab10373c
 author: Daniel Montilla
-version: 1.5.1
+version: 1.6.0
 license: MIT
 dependencies:
   - executing-skills
@@ -176,6 +176,17 @@ For error codes, see [ERRORS.md](ERRORS.md).
     └── SKILL.md
 ```
 
+## Naming
+
+The skill `name` equals the directory and must signal **ownership** before **subject**:
+
+- **Montflow-owned code rules** — prefix `montflow-<language>-<subject>`: `montflow-typescript-modules`, `montflow-typescript-file-structure`, `montflow-typescript-services`. The language segment leaves room for other languages later.
+- **Montflow platform tooling** — `montflow-<verb>-pi-<noun>` for skills that drive the montflow CLIs: `montflow-dispatch-pi-runs`, `montflow-create-pi-specs`.
+- **Generic / reusable skills** keep their own namespace and take no prefix: `applying-solid`, `grilling`, `writing-jsdoc`, `typescript-prefer-inference`.
+- **Vendored upstream skills** keep the upstream name: `effect` (from `kitlangton/skills@effect`).
+
+A skill that encodes a montflow **house rule** must be namespaced; a skill that states a generally applicable principle must not.
+
 ## Groups
 
 The `groups` field in frontmatter categorizes skills for discovery. Each skill should belong to at least one group. Use the taxonomy below.
@@ -183,15 +194,15 @@ The `groups` field in frontmatter categorizes skills for discovery. Each skill s
 | Group | Purpose | Example Skills |
 |---|---|---|
 | `planning` | Design-phase activities: scoping, spec writing, plan review | grilling |
-| `scaffolding` | Code generation and project/package/module setup | setup-typescript-package, typescript-modules |
+| `scaffolding` | Code generation and project/package/module setup | montflow-typescript-package-setup, montflow-typescript-modules |
 | `refactoring` | Code improvement, restructuring, and cleanup | applying-solid, detecting-duplication, simplifying-code |
-| `documentation` | Doc/rule/schema authoring | writting-jsdoc, authoring-rules |
+| `documentation` | Doc/rule/schema authoring | writing-jsdoc, authoring-rules |
 | `workflow` | Process-oriented git and reference operations | planning-git-commits, using-git-worktrees, adding-references |
 | `skills` | Meta-skills about the skill system itself | authoring-skills, finding-skills, executing-skills |
-| `typescript` | TypeScript-specific | montflow-typescript-project-structure, typescript-modules |
+| `typescript` | TypeScript-specific | montflow-typescript-project-structure, montflow-typescript-modules |
 | `javascript` | JavaScript-specific | simplifying-code, detecting-duplication |
 | `conventions` | Code style and convention enforcement | leaving-it-cleaner, favoring-composition |
-| `testing` | Testing infrastructure and review | effect-testing |
+| `testing` | Testing infrastructure and review | montflow-typescript-testing |
 | `git` | Git operations | planning-git-commits, adding-references |
 | `references` | Reference code management | finding-references, adding-references |
-| `effect` | Effect TS ecosystem | effect-v4, effect-services, effect-testing, effect-structs |
+| `effect` | Effect TS ecosystem | effect, montflow-typescript-services, montflow-typescript-testing, montflow-typescript-structs |

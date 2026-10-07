@@ -3,7 +3,7 @@ name: favoring-composition
 description: Identifies deep inheritance trees and replaces them with composition-based designs. Use when designing object relationships or refactoring brittle class hierarchies.
 id: 6acf544d594b448b
 author: Daniel Montilla
-version: 1.1.0
+version: 1.1.1
 license: MIT
 dependencies:
   - executing-skills
@@ -12,7 +12,6 @@ groups:
   - typescript
   - javascript
   - refactoring
-  - javascript
 ---
 
 # When To Use

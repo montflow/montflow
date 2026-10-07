@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1] - 2026-10-07
+
+### Fixed
+
+- Removed the duplicated `javascript` group entry
+
+
 ## [1.1.0] - 2026-07-24
 
 ### Added

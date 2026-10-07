@@ -3,10 +3,10 @@ name: effect-reviewer
 description: Effect reviewer that audits TypeScript Effect v4 code for idiomatic patterns, correctness, and test quality and flags higher-leverage replacements
 model: 
 skills:
-  - effect-v4
-  - effect-services
-  - effect-structs
-  - effect-testing
+  - effect
+  - montflow-typescript-services
+  - montflow-typescript-structs
+  - montflow-typescript-testing
   - simplifying-code
   - detecting-duplication
   - typescript-prefer-inference

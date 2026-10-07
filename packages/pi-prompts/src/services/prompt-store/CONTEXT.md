@@ -20,6 +20,5 @@ in `make` and hidden behind `Default` — consumers only see `PromptStore`.
 
 ## Note
 
-The repo `effect-services` skill prescribes `ServiceMap.Service`, but the
-pinned `effect` has no `ServiceMap` export — so the tag extends
-`Context.Service`, the fallback the `effect-v4` skill itself sanctions.
+The repo `montflow-typescript-services` skill prescribes `Context.Service` for
+service tags, so the tag here extends `Context.Service` directly.
