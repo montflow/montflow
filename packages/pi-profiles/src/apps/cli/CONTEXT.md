@@ -8,7 +8,8 @@ scripts can drive it mechanically (e.g. over `pi --mode rpc`).
 
 ## Belongs here
 
-- Headless arg parsing (`parseCliArgs`, `CliAction`, `CliFields`)
+- Headless arg parsing (`parseCliArgs`, `CliAction`, `CliFields`, and
+  `resolveListStatus` for `list --status valid|invalid`)
 - Non-interactive run (`run`) reusing interactive's notify-only flows
   (`listProfiles`, `showProfile`) and shared parsers (`tokenize`)
 - Command registration (`register`, `COMMAND_NAME`)

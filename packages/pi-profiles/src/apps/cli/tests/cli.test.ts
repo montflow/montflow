@@ -1,4 +1,5 @@
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
+import { join } from 'node:path';
 import { Effect, Layer } from 'effect';
 import { FileSystem } from 'effect/FileSystem';
 import * as Vitest from '@effect/vitest';
@@ -129,5 +130,69 @@ Vitest.describe('Cli.run', () => {
         }),
       );
     }),
+  );
+});
+
+Vitest.describe('Cli list --status', () => {
+  Vitest.it('parses --status and rejects unknown flags', () => {
+    Vitest.expect(Cli.parseCliArgs('list --status=invalid')).toStrictEqual({
+      kind: 'List',
+      status: 'invalid',
+    });
+    Vitest.expect(Cli.parseCliArgs('list')).toStrictEqual({ kind: 'List', status: undefined });
+    Vitest.expect(Cli.parseCliArgs('list --bogus')).toStrictEqual({ kind: 'Help' });
+  });
+
+  Vitest.it('treats an absent or empty status as no filter', () => {
+    Vitest.expect(Cli.resolveListStatus(undefined).pipe(Effect.runSync)).toBeUndefined();
+    Vitest.expect(Cli.resolveListStatus('').pipe(Effect.runSync)).toBeUndefined();
+    Vitest.expect(Cli.resolveListStatus('valid').pipe(Effect.runSync)).toBe('valid');
+    Vitest.expect(Cli.resolveListStatus('invalid').pipe(Effect.runSync)).toBe('invalid');
+  });
+
+  Vitest.it.effect('refuses an unknown status, naming the accepted values', () =>
+    Effect.gen(function* () {
+      const error = yield* Cli.resolveListStatus('bogus').pipe(Effect.flip);
+      Vitest.expect(error).toContain("Unknown status 'bogus'");
+      Vitest.expect(error).toContain('valid, invalid');
+    }),
+  );
+
+  Vitest.it.effect('keeps only profiles whose file matches the status', () =>
+    withTempDir((dir) =>
+      Effect.gen(function* () {
+        yield* Cli.run(
+          'create reviewer --description "Reviews code" --instructions "Be strict." --checklist "Flag issues"',
+          scriptedUi([]),
+          dir,
+        );
+        const empty: Array<string> = [];
+        yield* Cli.run('list --status invalid', scriptedUi(empty), dir);
+        Vitest.expect(empty.join('\n')).toBe("No profiles with status 'invalid'.");
+
+        yield* Effect.gen(function* () {
+          const fs = yield* FileSystem;
+          const badDir = join(dir, '.agents', '@montflow', 'profiles', 'bad');
+          yield* fs.makeDirectory(badDir, { recursive: true });
+          yield* fs.writeFileString(
+            join(badDir, 'PROFILE.md'),
+            '---\nname: bad\ndescription: Missing the checklist.\n---\n\n# bad\n\n## Instructions\n\nDo things.\n',
+          );
+        }).pipe(
+          Effect.mapError((error) => String(error)),
+          Effect.provide(NodeLive),
+        );
+
+        const valid: Array<string> = [];
+        yield* Cli.run('list --status valid', scriptedUi(valid), dir);
+        Vitest.expect(valid.join('\n')).toContain('reviewer');
+        Vitest.expect(valid.join('\n')).not.toContain('bad');
+
+        const invalid: Array<string> = [];
+        yield* Cli.run('list --status invalid', scriptedUi(invalid), dir);
+        Vitest.expect(invalid.join('\n')).toContain('bad');
+        Vitest.expect(invalid.join('\n')).not.toContain('reviewer');
+      }),
+    ),
   );
 });

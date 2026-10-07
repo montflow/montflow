@@ -18,12 +18,17 @@
     "url": "git+https://github.com/montflow/montflow.git",
     "directory": "packages/pi-profiles"
   },
+  "bin": {
+    "mf-profiles": "./src/apps/cli/main.ts"
+  },
   "type": "module",
   "exports": {
     "./package.json": "./package.json",
     ".": "./src/index.ts"
   },
   "scripts": {
+    "cli": "bun run src/apps/cli/main.ts",
+    "build:cli": "bun build src/apps/cli/main.ts --compile --outfile dist/mf-profiles",
     "format:check": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "lint:check": "oxlint --deny-warnings .",

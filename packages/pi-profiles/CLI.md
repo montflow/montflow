@@ -36,7 +36,7 @@ One directory per profile, one file per profile:
 ## CLI reference
 
 ```text
-/mf-profiles-cli list
+/mf-profiles-cli list [--status valid|invalid]
 /mf-profiles-cli show <name>
 /mf-profiles-cli create <name> --description "text" [--model p/m] [--skills a,b] [--instructions "text"] [--checklist "item 1; item 2"]
 /mf-profiles-cli modify <name> [--description ...] [--model ...] [--skills ...] [--instructions ...] [--checklist ...]
@@ -45,6 +45,8 @@ One directory per profile, one file per profile:
 ```
 
 - Flags accept `--flag value`, `--flag=value`. Unknown flags print usage.
+- `list --status valid|invalid` keeps only profiles whose `PROFILE.md` passes
+  (`valid`) or fails (`invalid`) mechanical verification; absent lists every profile.
 - `create` requires `--description`. Absent flags mean defaults (create), keep (modify).
   No clear-flags: blank field → `delete` + `create`.
 - `--skills` comma-separated (`--skills reviewer,security`). `--checklist`

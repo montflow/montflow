@@ -10,11 +10,11 @@ export const COMMAND_NAME = 'mf-profiles-cli';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Manage agent profiles non-interactively: list, create, show, modify, or delete a profile.';
+  'Manage agent profiles non-interactively: list [--status valid|invalid], create, show, modify, or delete a profile.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-profiles-cli list | show <name> | verify <name> | create <name> --description "text" [--model p/m] [--skills a,b] [--instructions "text"] [--checklist "item 1; item 2"] | modify <name> [--description ...] [--model ...] [--skills ...] [--instructions ...] [--checklist ...] | delete <name> | help';
+  '/mf-profiles-cli list [--status valid|invalid] | show <name> | verify <name> | create <name> --description "text" [--model p/m] [--skills a,b] [--instructions "text"] [--checklist "item 1; item 2"] | modify <name> [--description ...] [--model ...] [--skills ...] [--instructions ...] [--checklist ...] | delete <name> | help';
 
 /** Optional fields for `create` / `modify`. Absent means default (create) or keep (modify). */
 export interface CliFields {
@@ -28,7 +28,7 @@ export interface CliFields {
 /** Parsed `/mf-profiles-cli` invocation. Never prompts — gaps fail. */
 export type CliAction =
   | { readonly kind: 'Help' }
-  | { readonly kind: 'List' }
+  | { readonly kind: 'List'; readonly status: string | undefined }
   | { readonly kind: 'Show'; readonly name: string }
   | { readonly kind: 'Verify'; readonly name: string }
   | { readonly kind: 'Create'; readonly name: string; readonly fields: CliFields }
@@ -44,6 +44,33 @@ const KNOWN_FLAGS: ReadonlySet<string> = new Set([
   'checklist',
 ]);
 
+/** Flags `list` understands. Anything else is usage. */
+const KNOWN_LIST_FLAGS: ReadonlySet<string> = new Set(['status']);
+
+/** Verification states accepted by `list --status`. */
+export const LIST_STATUSES = ['valid', 'invalid'] as const;
+
+/** A verification state `list --status` accepts. */
+export type ListStatus = (typeof LIST_STATUSES)[number];
+
+const isListStatus = (value: string): value is ListStatus =>
+  LIST_STATUSES.some((status) => status === value);
+
+/**
+ * Resolve a raw `--status` value to a {@link ListStatus}. Absent or empty
+ * means "no filter"; anything else must name a state.
+ * @param value - raw flag value, if any
+ * @returns the status, or a refusal naming the accepted values
+ */
+export const resolveListStatus = (
+  value: string | undefined,
+): Effect.Effect<ListStatus | undefined, string> => {
+  if (value === undefined || value === '') return Effect.succeed(undefined);
+  return isListStatus(value)
+    ? Effect.succeed(value)
+    : Effect.fail(`Unknown status '${value}'. Use one of: ${LIST_STATUSES.join(', ')}.`);
+};
+
 /** Token split: bare positionals plus `--flag value` / `--flag=value` pairs. */
 interface SplitTokens {
   readonly positionals: readonly string[];
@@ -51,7 +78,7 @@ interface SplitTokens {
   readonly unknown: readonly string[];
 }
 
-const splitTokens = (tokens: readonly string[]): SplitTokens => {
+const splitTokens = (tokens: readonly string[], known: ReadonlySet<string>): SplitTokens => {
   const positionals: string[] = [];
   const pairs: Array<[string, string]> = [];
   const unknown: string[] = [];
@@ -77,7 +104,7 @@ const splitTokens = (tokens: readonly string[]): SplitTokens => {
   }
   const flags = Object.fromEntries(pairs);
   for (const key of Object.keys(flags)) {
-    if (!KNOWN_FLAGS.has(key)) unknown.push(`--${key}`);
+    if (!known.has(key)) unknown.push(`--${key}`);
   }
   return { positionals, flags, unknown };
 };
@@ -129,8 +156,11 @@ export const parseCliArgs = (args: string): CliAction => {
   const head = tokens[0];
   if (head === undefined) return { kind: 'Help' };
   switch (head) {
-    case 'list':
-      return { kind: 'List' };
+    case 'list': {
+      const split = splitTokens(tokens.slice(1), KNOWN_LIST_FLAGS);
+      if (split.unknown.length > 0) return { kind: 'Help' };
+      return { kind: 'List', status: one(split.flags['status']) };
+    }
     case 'show':
       return tokens[1] === undefined ? { kind: 'Help' } : { kind: 'Show', name: tokens[1] };
     case 'verify':
@@ -139,7 +169,7 @@ export const parseCliArgs = (args: string): CliAction => {
       return tokens[1] === undefined ? { kind: 'Help' } : { kind: 'Delete', name: tokens[1] };
     case 'create':
     case 'modify': {
-      const split = splitTokens(tokens.slice(1));
+      const split = splitTokens(tokens.slice(1), KNOWN_FLAGS);
       const name = split.positionals[0];
       if (name === undefined || split.unknown.length > 0) return { kind: 'Help' };
       return { kind: head === 'create' ? 'Create' : 'Modify', name, fields: fieldsOf(split) };
@@ -162,6 +192,34 @@ const findOrFail = (
     ? Effect.fail(`Unknown profile '${name}'.`)
     : Effect.succeed(profile);
 };
+
+/**
+ * Keep only profiles whose file passes (`valid`) or fails (`invalid`)
+ * mechanical verification. An unreadable file counts as invalid.
+ * @param cwd - project working directory
+ * @param profiles - profiles to filter
+ * @param status - verification state to keep
+ * @returns Effect resolving to the matching profiles
+ */
+const filterByStatus = (
+  cwd: string,
+  profiles: readonly PiProfiles.Profile[],
+  status: ListStatus,
+): Effect.Effect<ReadonlyArray<PiProfiles.Profile>, never, ProfileStore.ProfileStore> =>
+  Effect.gen(function* () {
+    const store = yield* ProfileStore.ProfileStore;
+    const wanted = status === 'valid';
+    const verdicts = yield* Effect.forEach(profiles, (profile) =>
+      store.readRaw(cwd, profile.name).pipe(
+        Effect.map((raw) => ({
+          profile,
+          valid: PiProfiles.verifyProfileFile(profile.name, raw).valid,
+        })),
+        Effect.orElseSucceed(() => ({ profile, valid: false })),
+      ),
+    );
+    return verdicts.filter((entry) => entry.valid === wanted).map((entry) => entry.profile);
+  });
 
 /**
  * Run one parsed args string end to end: parse, load, execute, save, notify.
@@ -187,9 +245,15 @@ export const run = (
         return;
       }
       case 'List': {
-        yield* store
-          .list(cwd)
-          .pipe(Effect.flatMap((profiles) => Interactive.listProfiles(ui, profiles)));
+        const status = yield* resolveListStatus(action.status);
+        const profiles = yield* store.list(cwd);
+        const shown =
+          status === undefined ? profiles : yield* filterByStatus(cwd, profiles, status);
+        if (shown.length === 0 && status !== undefined) {
+          yield* Effect.sync(() => ui.notify(`No profiles with status '${status}'.`, 'info'));
+          return;
+        }
+        yield* Interactive.listProfiles(ui, shown);
         return;
       }
       case 'Show': {

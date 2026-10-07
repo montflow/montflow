@@ -157,6 +157,40 @@ const make = Effect.gen(function* () {
   });
 
   /**
+   * Every profile file in the store as `{ name, raw }`, without decoding.
+   * Unlike {@link list}, this never drops a file the store cannot decode, so a
+   * caller (e.g. `verify --all`) can report a corrupt file instead of missing
+   * it. Only the known non-profile `TEMPLATE.md` is excluded; an invalid-slug
+   * directory is passed through so verification can flag it. An unreadable
+   * file yields empty raw bytes, which verification rejects.
+   * @param cwd - working directory
+   * @returns every profile's name and raw contents, name-sorted
+   */
+  const readAllRaw = Effect.fn('ProfileStore.readAllRaw')(function* (cwd: string) {
+    const root = profilesRoot(path, cwd);
+    const exists = yield* fs.exists(root).pipe(Effect.orElseSucceed(() => false));
+    if (!exists) {
+      return yield* Effect.fail(
+        new StoreError({ message: `Profiles store not found at '${root}'.` }),
+      );
+    }
+    const entries = yield* fs
+      .readDirectory(root)
+      .pipe(
+        Effect.mapError(
+          (cause) => new StoreError({ message: `Cannot read '${root}': ${cause.message}` }),
+        ),
+      );
+    const names = entries.filter((entry) => entry !== TEMPLATE_FILE).toSorted();
+    return yield* Effect.forEach(names, (name) =>
+      fs.readFileString(path.join(root, name, PROFILE_FILE)).pipe(
+        Effect.map((raw) => ({ name, raw })),
+        Effect.catch(() => Effect.succeed({ name, raw: '' })),
+      ),
+    );
+  });
+
+  /**
    * Read one filesystem event into a profile change. Non-profile paths are
    * dropped; a removed profile reports its id only; a created/updated one
    * carries the decoded profile when it reads back, or just the id when it
@@ -202,7 +236,7 @@ const make = Effect.gen(function* () {
       }),
     );
 
-  return { list, read, save, remove, readRaw, watch } as const;
+  return { list, read, save, remove, readRaw, readAllRaw, watch } as const;
 });
 
 export const Id = '@montflow/ProfileStore';
