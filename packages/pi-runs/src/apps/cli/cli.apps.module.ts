@@ -11,10 +11,14 @@ import {
 
 export { COMMAND_DESCRIPTION, COMMAND_NAME, execute, parseCommand, USAGE };
 
+/** Version reported by `--version` / `-v`. Mirrors the package version. */
+export const VERSION = '0.0.1';
+
 /**
  * Run one CLI invocation: parse argv and execute against the engine. argv is
  * already shell-split, so it is parsed element-by-element — never re-joined —
- * which keeps multi-word prompts and names intact.
+ * which keeps multi-word prompts and names intact. A lone `--version`/`-v`
+ * prints the version without touching the engine.
  * @param argv - args after the command name
  * @param root - repo root (runs store owner)
  * @returns Effect resolving to display text, failing with a message
@@ -22,7 +26,11 @@ export { COMMAND_DESCRIPTION, COMMAND_NAME, execute, parseCommand, USAGE };
 export const runCli = (
   argv: ReadonlyArray<string>,
   root: string,
-): Effect.Effect<string, string, Runner> => execute(parseArgv(argv), root);
+): Effect.Effect<string, string, Runner> => {
+  const head = argv.length === 1 ? argv[0] : undefined;
+  if (head === '--version' || head === '-v') return Effect.succeed(`mf-runs ${VERSION}`);
+  return execute(parseArgv(argv), root);
+};
 
 /**
  * Nearest ancestor of `startDir` containing a `.git` entry, so the runs store

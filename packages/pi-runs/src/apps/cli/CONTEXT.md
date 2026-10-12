@@ -4,7 +4,8 @@
 
 ## Belongs here
 
-- `runCli(argv, root)` — parse (argv-aware) + execute
+- `runCli(argv, root)` — parse (argv-aware) + execute; a lone `--version`/`-v`
+  prints the version without touching the engine
 - `resolveRepoRoot(startDir)` — nearest ancestor with a `.git` entry, so runs
   are always rooted at the repository
 - `COMMAND_NAME` / `COMMAND_DESCRIPTION` / `USAGE` — re-exported from `apps/commands`

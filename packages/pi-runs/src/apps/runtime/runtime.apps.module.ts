@@ -114,3 +114,22 @@ export const createRunnerHost = (options: {
   };
   return { runtimeFor, disposeAll };
 };
+
+/** The runner host the current Pi session is using, if one has been built. */
+let activeHost: RunnerHost | undefined;
+
+/**
+ * Register the session's runner host so sibling extensions (e.g. pi-reviews)
+ * can dispatch runs through the same runtime and share its live-run registry.
+ * @param host - the host built by the runs extension
+ */
+export const setActiveRunnerHost = (host: RunnerHost): void => {
+  activeHost = host;
+};
+
+/**
+ * The session's runner host, or undefined when the runs extension has not
+ * loaded yet. Callers read this lazily (at dispatch time), not at load time.
+ * @returns the active host, if any
+ */
+export const activeRunnerHost = (): RunnerHost | undefined => activeHost;

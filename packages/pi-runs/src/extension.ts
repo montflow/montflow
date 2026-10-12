@@ -9,7 +9,7 @@ import {
   execute,
   parseCommand,
 } from './apps/commands/index.js';
-import { createRunnerHost, runnerLayer } from './apps/runtime/index.js';
+import { createRunnerHost, runnerLayer, setActiveRunnerHost } from './apps/runtime/index.js';
 import { Runner, type RunDetail, WorkspaceBridge } from './services/index.js';
 
 /**
@@ -112,6 +112,7 @@ export const makePiRunsExtension =
       layerFor: options.runnerLayerFor ?? ((root, bridge) => runnerLayer({ root, bridge })),
       bridgeFor,
     });
+    setActiveRunnerHost(host);
 
     const dispatch = (
       ctx: SurfaceContext,
