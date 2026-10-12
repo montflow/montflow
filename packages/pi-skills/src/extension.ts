@@ -5,7 +5,7 @@ import { DynamicBorder } from '@earendil-works/pi-coding-agent';
 import { Container, Input, Key, SelectList, Text, matchesKey } from '@earendil-works/pi-tui';
 import { Loading, Menu, ModelPicker } from '@montflow/pi-interactive';
 import { Effect } from 'effect';
-import { Cli, Interactive, Runs } from './apps/index.js';
+import { Cli, Interactive, Sessions } from './apps/index.js';
 import { Skill, SkillStore } from './modules/index.js';
 
 /**
@@ -30,7 +30,7 @@ const storeFor = (cwd: string): Interactive.SkillStore => ({
 
 /**
  * Agent prompts shared by every host. Re-exported from the interactive
- * flows module (single source of truth) — the run dispatcher and the
+ * flows module (single source of truth) — the session dispatcher and the
  * workspace TUI both build child prompts from these.
  */
 export const AUTHOR_PREPROMPT = Interactive.AUTHOR_PREPROMPT;
@@ -164,28 +164,28 @@ export const filterSelectDialog = (
 /**
  * Pi extension entry: registers `/mf-skills` (headless CLI, matching the
  * `mf-skills` binary), `/mf-skills-tui` (interactive, manual and agentic),
- * and `/mf-runs`-backed agentic flows, with a file-backed store per working
+ * and `/mf-sessions`-backed agentic flows, with a file-backed store per working
  * directory. Skills live in the regular `.agents/skills/` location.
  *
- * Agentic create, modify, and transform dispatch a `@montflow/pi-runs`
- * run instead of running a child agent inline: the command names the run
- * id and unwinds, the run writes the `SKILL.md`, and its completion hook
+ * Agentic create, modify, and transform dispatch a `@montflow/pi-sessions`
+ * session instead of running a child agent inline: the command names the session
+ * id and unwinds, the session writes the `SKILL.md`, and its completion hook
  * re-encodes the result and reports the outcome. Follow or steer a live
- * run with `/mf-runs`. One runner runtime is built per repo root and
- * released on session shutdown, so runs stay steerable for the life of
+ * session with `/mf-sessions`. One session runner runtime is built per repo root and
+ * released on session shutdown, so sessions stay steerable for the life of
  * the session.
  * @param pi - Pi extension API
  * @returns Nothing
  */
 export default function piSkillsExtension(pi: ExtensionAPI): void {
-  const runs = Runs.makeSkillRunPorts({ storeFor });
-  pi.on('session_shutdown', () => runs.shutdown());
+  const sessions = Sessions.makeSkillSessionPorts({ storeFor });
+  pi.on('session_shutdown', () => sessions.shutdown());
   Cli.register(pi).pipe(Effect.runSync);
   Interactive.register(
     pi,
     storeFor,
-    runs.generateFor,
-    runs.modifyFor,
+    sessions.generateFor,
+    sessions.modifyFor,
     installerFor,
     (ctx) =>
       ctx.mode === 'tui'
@@ -205,6 +205,6 @@ export default function piSkillsExtension(pi: ExtensionAPI): void {
         ? (title: string, info: ReadonlyArray<string>, options: ReadonlyArray<string>) =>
             Menu.menuDialog(ctx.ui, title, options, info)
         : undefined,
-    runs.transformFor,
+    sessions.transformFor,
   );
 }

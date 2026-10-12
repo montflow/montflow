@@ -17,12 +17,12 @@ export const USAGE =
 export const CANCELLED = 'Cancelled.';
 
 /**
- * Failure value an agentic port fails with after dispatching a run
- * instead of editing inline. The run — not this flow — writes the
+ * Failure value an agentic port fails with after dispatching a session
+ * instead of editing inline. The session — not this flow — writes the
  * skill, so the flow unwinds without saving; the port already notified
- * the session with the run id, so the command stays quiet here.
+ * the session with the session id, so the command stays quiet here.
  */
-export const DISPATCHED = 'Run dispatched.';
+export const DISPATCHED = 'Session dispatched.';
 
 /**
  * Instructions before the user description: the child agent authors
@@ -127,13 +127,13 @@ export interface SkillStore {
   readonly readRaw: (id: string) => Effect.Effect<string, string>;
 }
 
-/** One model offered for agentic runs: `provider/model-id` plus current-run marker. */
+/** One model offered for agentic sessions: `provider/model-id` plus current-session marker. */
 export interface ModelOption {
   readonly label: string;
   readonly current: boolean;
 }
 
-/** Agentic skill generation port the consuming extension injects (child agent run). */
+/** Agentic skill generation port the consuming extension injects (child agent session). */
 export interface GenerateInput {
   readonly description: string;
   readonly modelLabel: string | undefined;
@@ -142,7 +142,7 @@ export interface GenerateInput {
 
 export type SkillGenerator = (input: GenerateInput) => Effect.Effect<Skill.Skill, string>;
 
-/** Agentic skill modification port the consuming extension injects (child agent run). */
+/** Agentic skill modification port the consuming extension injects (child agent session). */
 export interface ModifyInput {
   readonly skill: Skill.Skill;
   readonly instruction: string;
@@ -391,7 +391,7 @@ export const resolveModifyTarget = (
   });
 
 /**
- * Pick the authoring model for an agentic run: session model when the
+ * Pick the authoring model for an agentic session: session model when the
  * catalogue is empty, the injected TUI widget when provided (current
  * session model pinned first, single-keystroke keep), else the
  * menu-driven `pickModel`. Notifies the chosen runtime, unless the
@@ -491,7 +491,7 @@ export const requirementRow = (status: Skill.RequirementStatus, selected: boolea
 };
 
 /**
- * Requirements gate for an agentic run: checklist every required skill
+ * Requirements gate for an agentic session: checklist every required skill
  * (checked = will inject, toggle by picking), installing the missing
  * ones on request. Present skills start checked; the check itself is the
  * pure {@link Skill.checkRequirements} — this flow only presents it.
@@ -735,7 +735,7 @@ export const matchesFilter = (label: string, query: string): boolean => {
   return true;
 };
 
-/** Display label with the current-run marker. */
+/** Display label with the current-session marker. */
 const displayModel = (option: ModelOption): string =>
   option.current ? `${option.label} (current)` : option.label;
 
@@ -772,7 +772,7 @@ export const pickModel = (
 ): Effect.Effect<string, string> =>
   Effect.gen(function* () {
     const first = yield* Effect.promise(() =>
-      ui.select('Model for the authoring run', [...models.map(displayModel), PICK_ANOTHER]),
+      ui.select('Model for the authoring session', [...models.map(displayModel), PICK_ANOTHER]),
     );
     if (first === undefined) return yield* Effect.fail(CANCELLED);
     if (first !== PICK_ANOTHER) return yield* modelLabelFor(models, first);
@@ -789,7 +789,7 @@ export const pickModel = (
       query === '' ? models : models.filter((option) => matchesFilter(option.label, query));
     if (candidates.length === 0) return yield* Effect.fail(`No models match '${query}'.`);
     const picked = yield* Effect.promise(() =>
-      ui.select('Model for the authoring run', candidates.map(displayModel)),
+      ui.select('Model for the authoring session', candidates.map(displayModel)),
     );
     if (picked === undefined) return yield* Effect.fail(CANCELLED);
     return yield* modelLabelFor(candidates, picked);
@@ -1035,7 +1035,7 @@ export const notifyVerifyResult = (
     );
   });
 
-/** Fixed agent instruction for the format-transform run: keep the teaching, fix the shape. */
+/** Fixed agent instruction for the format-transform session: keep the teaching, fix the shape. */
 export const TRANSFORM_INSTRUCTION =
   'Bring this skill into the standard skill format without changing what it teaches: ' +
   'ensure frontmatter has name (matching the directory), description (1-2 sentences, WHEN to use), ' +
@@ -1497,7 +1497,7 @@ export const register = (
         const loading = loadingFor?.({ ui: ctx.ui, mode: ctx.mode });
         const menu = menuFor?.({ ui: ctx.ui, mode: ctx.mode });
         // Agentic ports report through this session's notify channel: a
-        // dispatched run names its id there, and the completion hook
+        // dispatched session names its id there, and the completion hook
         // reports the outcome from the runner's own runtime.
         const notify = (message: string, type?: 'info' | 'warning' | 'error'): void =>
           ctx.ui.notify(message, type);
@@ -1522,7 +1522,7 @@ export const register = (
         Effect.flatMap((effect) => effect),
         Effect.matchEffect({
           onFailure: (error) =>
-            // A dispatched run already announced itself and its id; the
+            // A dispatched session already announced itself and its id; the
             // flow unwinding is bookkeeping, not a failure to report.
             Effect.sync(() => {
               if (error === DISPATCHED) return;

@@ -28,10 +28,10 @@ accept `--dir` to target a workspace root other than the working directory.
 The interactive menu browses, shows, manually or agentically creates/modifies,
 deletes, and re-verifies skills.
 
-Agentic create, modify, and transform dispatch a `@montflow/pi-runs` run
-instead of running a child agent inline: the command names the run id and
-unwinds, the run writes the `SKILL.md`, and its completion hook re-encodes the
-result and reports the outcome. Follow or steer a live run with `/mf-runs`.
+Agentic create, modify, and transform dispatch a `@montflow/pi-sessions` session
+instead of running a child agent inline: the command names the session id and
+unwinds, the session writes the `SKILL.md`, and its completion hook re-encodes the
+result and reports the outcome. Follow or steer a live session with `/mf-sessions`.
 
 ## Packaged skills
 
@@ -41,7 +41,7 @@ author skills without shelling out:
 - `montflow-create-pi-skills`
 - `montflow-modify-pi-skills`
 
-Agentic runs inject these (`Skill.GENERATION_REQUIREMENTS` /
+Agentic sessions inject these (`Skill.GENERATION_REQUIREMENTS` /
 `MODIFICATION_REQUIREMENTS`). The package ships them under `skills/` and embeds
 them for the compiled binary; regenerate the embed after editing them with
 `bun run --cwd packages/pi-skills generate:payload`.

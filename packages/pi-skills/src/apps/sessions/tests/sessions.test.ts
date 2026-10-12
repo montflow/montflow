@@ -1,15 +1,20 @@
 import { Effect, Layer, Result, Schema } from 'effect';
 import * as Vitest from '@effect/vitest';
-import { Run, Runner, type RunnerImpl, type RunDetail } from '@montflow/pi-runs';
+import {
+  Session,
+  SessionRunner,
+  type SessionRunnerImpl,
+  type SessionDetail,
+} from '@montflow/pi-sessions';
 import { Interactive } from '../../index.js';
-import * as Runs from '../index.js';
+import * as Sessions from '../index.js';
 import * as Skill from '../../../modules/skill/index.js';
 
-/** One dispatched run, as the fake engine recorded it. */
+/** One dispatched session, as the fake engine recorded it. */
 interface Started {
   readonly id: string;
   readonly prompt: string;
-  readonly onSettled: ((detail: RunDetail) => Effect.Effect<void>) | undefined;
+  readonly onSettled: ((detail: SessionDetail) => Effect.Effect<void>) | undefined;
 }
 
 /** A skill in the memory store: the decoded row plus its raw `SKILL.md`. */
@@ -36,7 +41,7 @@ interface MemoryStore {
   readonly entries: Map<string, Entry>;
   /** Skill ids the completion hooks re-encoded. */
   readonly saves: Array<string>;
-  /** Mutate the store the way a run would. */
+  /** Mutate the store the way a session would. */
   readonly write: (id: string, description?: string) => void;
   readonly remove: (id: string) => void;
 }
@@ -71,18 +76,18 @@ const memoryStore = (initial: ReadonlyArray<Entry>): MemoryStore => {
 };
 
 /** Fake engine layer: records dispatches, never opens a Pi session. */
-const fakeRunner = (started: Array<Started>): Layer.Layer<Runner> => {
-  const impl: RunnerImpl = {
+const fakeSessionRunner = (started: Array<Started>): Layer.Layer<SessionRunner> => {
+  const impl: SessionRunnerImpl = {
     start: (input) =>
       Effect.sync(() => {
         started.push({ id: input.id, prompt: input.prompt, onSettled: input.onSettled });
-        return Schema.decodeUnknownSync(Run.Run)({
+        return Schema.decodeUnknownSync(Session.Session)({
           id: input.id,
           parent: null,
           status: 'running',
           created: '2026-09-05T00:00:00Z',
           updated: '2026-09-05T00:00:00Z',
-          sessionFile: `.agents/@montflow/runs/${input.id}/session.jsonl`,
+          sessionFile: `.agents/@montflow/sessions/${input.id}/session.jsonl`,
         });
       }),
     resume: () => Effect.fail('unused'),
@@ -94,9 +99,9 @@ const fakeRunner = (started: Array<Started>): Layer.Layer<Runner> => {
     verifyStore: () => Effect.fail('unused'),
     progress: () => Effect.fail('unused'),
     list: () => Effect.succeed([]),
-    liveRunIds: () => Effect.succeed(new Set()),
+    liveSessionIds: () => Effect.succeed(new Set()),
   };
-  return Layer.succeed(Runner, impl);
+  return Layer.succeed(SessionRunner, impl);
 };
 
 /** Ports over a memory store and the fake engine, plus the recorders. */
@@ -104,9 +109,9 @@ const harness = (initial: ReadonlyArray<Entry>) => {
   const started: Array<Started> = [];
   const messages: Array<string> = [];
   const store = memoryStore(initial);
-  const ports = Runs.makeSkillRunPorts({
+  const ports = Sessions.makeSkillSessionPorts({
     storeFor: () => store.store,
-    layerFor: () => fakeRunner(started),
+    layerFor: () => fakeSessionRunner(started),
   });
   const notify = (message: string): void => {
     messages.push(message);
@@ -114,23 +119,23 @@ const harness = (initial: ReadonlyArray<Entry>) => {
   return { started, messages, store, ports, notify };
 };
 
-/** Settle a recorded run with the given final assistant text. */ const settle = (
-  run: Started,
+/** Settle a recorded session with the given final assistant text. */ const settle = (
+  session: Started,
   reply: string,
 ): Effect.Effect<void> => {
   const detail = {
-    run: Schema.decodeUnknownSync(Run.Run)({
-      id: run.id,
+    session: Schema.decodeUnknownSync(Session.Session)({
+      id: session.id,
       parent: null,
       status: 'done',
       created: '2026-09-05T00:00:00Z',
       updated: '2026-09-05T00:00:00Z',
-      sessionFile: `.agents/@montflow/runs/${run.id}/session.jsonl`,
+      sessionFile: `.agents/@montflow/sessions/${session.id}/session.jsonl`,
     }),
     events: [{ seq: 1, role: 'assistant', text: reply, at: '2026-09-05T00:00:00Z' }],
     receipt: { outcome: 'done', summary: reply },
-  } satisfies RunDetail;
-  return run.onSettled?.(detail) ?? Effect.void;
+  } satisfies SessionDetail;
+  return session.onSettled?.(detail) ?? Effect.void;
 };
 
 /**
@@ -147,9 +152,9 @@ const failureOf = (effect: Effect.Effect<Skill.Skill, string>): Effect.Effect<st
     ),
   );
 
-Vitest.describe('Runs.pickAuthoredSkill', () => {
-  Vitest.it('prefers the skill the run named in its reply', () => {
-    const pick = Runs.pickAuthoredSkill('Created beta.', [
+Vitest.describe('Sessions.pickAuthoredSkill', () => {
+  Vitest.it('prefers the skill the session named in its reply', () => {
+    const pick = Sessions.pickAuthoredSkill('Created beta.', [
       entry('alpha').skill,
       entry('beta').skill,
     ]);
@@ -157,24 +162,24 @@ Vitest.describe('Runs.pickAuthoredSkill', () => {
   });
 
   Vitest.it('falls back to the diff only when it is unambiguous', () => {
-    Vitest.expect(Runs.pickAuthoredSkill(undefined, [entry('alpha').skill])).toStrictEqual({
+    Vitest.expect(Sessions.pickAuthoredSkill(undefined, [entry('alpha').skill])).toStrictEqual({
       kind: 'one',
       id: 'alpha',
     });
   });
 
   Vitest.it('reports several fresh skills as ambiguous', () => {
-    const pick = Runs.pickAuthoredSkill(undefined, [entry('alpha').skill, entry('beta').skill]);
+    const pick = Sessions.pickAuthoredSkill(undefined, [entry('alpha').skill, entry('beta').skill]);
     Vitest.expect(pick).toStrictEqual({ kind: 'ambiguous', ids: ['alpha', 'beta'] });
   });
 
   Vitest.it('reports nothing written', () => {
-    Vitest.expect(Runs.pickAuthoredSkill('nothing', [])).toStrictEqual({ kind: 'none' });
+    Vitest.expect(Sessions.pickAuthoredSkill('nothing', [])).toStrictEqual({ kind: 'none' });
   });
 });
 
-Vitest.describe('Runs generator dispatch', () => {
-  Vitest.it.effect('dispatches an author run, names it, and unwinds the flow', () =>
+Vitest.describe('Sessions generator dispatch', () => {
+  Vitest.it.effect('dispatches an author session, names it, and unwinds the flow', () =>
     Effect.gen(function* () {
       const { started, messages, ports, notify } = harness([]);
       const failure = yield* failureOf(
@@ -188,25 +193,25 @@ Vitest.describe('Runs generator dispatch', () => {
         }),
       );
       Vitest.expect(failure).toBe(Interactive.DISPATCHED);
-      const run = started[0];
-      if (run === undefined) return yield* Effect.fail('no run dispatched');
-      Vitest.expect(run.id.startsWith('create-skill-')).toBe(true);
-      Vitest.expect(run.prompt).toContain('You are a skill author');
-      Vitest.expect(run.prompt).toContain('Skill description: a TypeScript reviewer skill');
-      Vitest.expect(messages[0]).toContain(run.id);
+      const session = started[0];
+      if (session === undefined) return yield* Effect.fail('no session dispatched');
+      Vitest.expect(session.id.startsWith('create-skill-')).toBe(true);
+      Vitest.expect(session.prompt).toContain('You are a skill author');
+      Vitest.expect(session.prompt).toContain('Skill description: a TypeScript reviewer skill');
+      Vitest.expect(messages[0]).toContain(session.id);
     }),
   );
 
-  Vitest.it.effect('re-encodes and reports the skill the run created', () =>
+  Vitest.it.effect('re-encodes and reports the skill the session created', () =>
     Effect.gen(function* () {
       const { started, messages, store, ports, notify } = harness([]);
       yield* failureOf(
         ports.generateFor('/repo', notify)({ description: 'x', modelLabel: undefined, inject: [] }),
       );
-      const run = started[0];
-      if (run === undefined) return yield* Effect.fail('no run dispatched');
+      const session = started[0];
+      if (session === undefined) return yield* Effect.fail('no session dispatched');
       store.write('reviewer', 'reviews TypeScript');
-      yield* settle(run, 'Created reviewer.');
+      yield* settle(session, 'Created reviewer.');
       Vitest.expect(store.saves).toStrictEqual(['reviewer']);
       Vitest.expect(messages[1]).toBe("Created skill 'reviewer'.");
     }),
@@ -218,16 +223,16 @@ Vitest.describe('Runs generator dispatch', () => {
       yield* failureOf(
         ports.generateFor('/repo', notify)({ description: 'x', modelLabel: undefined, inject: [] }),
       );
-      const run = started[0];
-      if (run === undefined) return yield* Effect.fail('no run dispatched');
-      yield* settle(run, 'I could not do it.');
+      const session = started[0];
+      if (session === undefined) return yield* Effect.fail('no session dispatched');
+      yield* settle(session, 'I could not do it.');
       Vitest.expect(messages[1]).toContain('without creating a skill');
     }),
   );
 });
 
-Vitest.describe('Runs modifier dispatch', () => {
-  Vitest.it.effect('dispatches an editor run scoped to the skill and unwinds', () =>
+Vitest.describe('Sessions modifier dispatch', () => {
+  Vitest.it.effect('dispatches an editor session scoped to the skill and unwinds', () =>
     Effect.gen(function* () {
       const { started, messages, ports, notify } = harness([entry('reviewer')]);
       const failure = yield* failureOf(
@@ -242,12 +247,12 @@ Vitest.describe('Runs modifier dispatch', () => {
         }),
       );
       Vitest.expect(failure).toBe(Interactive.DISPATCHED);
-      const run = started[0];
-      if (run === undefined) return yield* Effect.fail('no run dispatched');
-      Vitest.expect(run.id.startsWith('modify-skill-')).toBe(true);
-      Vitest.expect(run.prompt).toContain('Skill to edit: reviewer');
-      Vitest.expect(run.prompt).toContain('Change request: add a checklist item');
-      Vitest.expect(messages[0]).toContain(run.id);
+      const session = started[0];
+      if (session === undefined) return yield* Effect.fail('no session dispatched');
+      Vitest.expect(session.id.startsWith('modify-skill-')).toBe(true);
+      Vitest.expect(session.prompt).toContain('Skill to edit: reviewer');
+      Vitest.expect(session.prompt).toContain('Change request: add a checklist item');
+      Vitest.expect(messages[0]).toContain(session.id);
     }),
   );
 
@@ -265,10 +270,10 @@ Vitest.describe('Runs modifier dispatch', () => {
           inject: [],
         }),
       );
-      const run = started[0];
-      if (run === undefined) return yield* Effect.fail('no run dispatched');
+      const session = started[0];
+      if (session === undefined) return yield* Effect.fail('no session dispatched');
       store.write('reviewer', 'reviews TypeScript and tests');
-      yield* settle(run, 'Updated.');
+      yield* settle(session, 'Updated.');
       Vitest.expect(store.saves).toStrictEqual(['reviewer']);
       Vitest.expect(messages[1]).toBe("Updated skill 'reviewer'.");
     }),
@@ -288,9 +293,9 @@ Vitest.describe('Runs modifier dispatch', () => {
           inject: [],
         }),
       );
-      const run = started[0];
-      if (run === undefined) return yield* Effect.fail('no run dispatched');
-      yield* settle(run, 'done');
+      const session = started[0];
+      if (session === undefined) return yield* Effect.fail('no session dispatched');
+      yield* settle(session, 'done');
       Vitest.expect(messages[1]).toContain('without updating');
     }),
   );
@@ -309,17 +314,17 @@ Vitest.describe('Runs modifier dispatch', () => {
           inject: [],
         }),
       );
-      const run = started[0];
-      if (run === undefined) return yield* Effect.fail('no run dispatched');
+      const session = started[0];
+      if (session === undefined) return yield* Effect.fail('no session dispatched');
       store.remove('reviewer');
-      yield* settle(run, 'done');
+      yield* settle(session, 'done');
       Vitest.expect(messages[1]).toContain('without updating');
     }),
   );
 });
 
-Vitest.describe('Runs transform dispatch', () => {
-  Vitest.it.effect('dispatches a transform run with its own prompt and id prefix', () =>
+Vitest.describe('Sessions transform dispatch', () => {
+  Vitest.it.effect('dispatches a transform session with its own prompt and id prefix', () =>
     Effect.gen(function* () {
       const { started, ports, notify } = harness([entry('reviewer')]);
       yield* failureOf(
@@ -333,10 +338,10 @@ Vitest.describe('Runs transform dispatch', () => {
           inject: [],
         }),
       );
-      const run = started[0];
-      if (run === undefined) return yield* Effect.fail('no run dispatched');
-      Vitest.expect(run.id.startsWith('transform-skill-')).toBe(true);
-      Vitest.expect(run.prompt).toContain('Skill to fix: reviewer');
+      const session = started[0];
+      if (session === undefined) return yield* Effect.fail('no session dispatched');
+      Vitest.expect(session.id.startsWith('transform-skill-')).toBe(true);
+      Vitest.expect(session.prompt).toContain('Skill to fix: reviewer');
     }),
   );
 });

@@ -13,10 +13,10 @@ and the `mf-skills` binary, both in [../cli](../cli/CONTEXT.md).
 - Interactive Effect flows over injected ports (`browse`, `createManual`,
   `createAgentic`, `modifyManual`, `modifyAgentic`, `modifySkill`, `showSkill`, `deleteSkill`, `run`)
 - `DISPATCHED` — the sentinel an agentic port fails with after starting a
-  run. The run writes the file, so the flow unwinds without saving; the
-  port already named the run id, so `register` stays quiet on that failure
+  session. The session writes the file, so the flow unwinds without saving; the
+  port already named the session id, so `register` stays quiet on that failure
   (a cancel still notifies as info, a real failure as an error)
-- Agentic runs execute behind the loading modal when injected (`LoadingFn` →
+- Agentic sessions execute behind the loading modal when injected (`LoadingFn` →
   `Loading.run`: spinner locks input, message names the runtime);
   without it the Effect runs directly after a pre-run notify
 - Main menu renders through the injected `MenuFn` widget when available
@@ -24,7 +24,7 @@ and the `mf-skills` binary, both in [../cli](../cli/CONTEXT.md).
   generic dependency line — `✓ dependencies installed` or
   `✗ dependencies missing` — then options); without it a Pi-native
   `select` on the plain heading
-- Requirements gate (`ensureRequirements`): before an agentic run, checklist
+- Requirements gate (`ensureRequirements`): before an agentic session, checklist
   the `Skill.*_REQUIREMENTS` (checked = will inject, toggle by picking;
   missing installs via the injected `SkillInstaller`). The check itself is
   the pure modules API — this flow only presents it and returns the skills
@@ -47,7 +47,7 @@ and the `mf-skills` binary, both in [../cli](../cli/CONTEXT.md).
   provided (`searchSelect` port), else input-then-select
 - Command registration (`register`, `COMMAND_NAME`) on a structural Pi API.
   The agentic port factories take the command context's `notify` channel so
-  the run dispatcher can report dispatch and outcome to that session
+  the session dispatcher can report dispatch and outcome to that session
 
 ## Does not belong here
 
@@ -60,6 +60,6 @@ and the `mf-skills` binary, both in [../cli](../cli/CONTEXT.md).
   (`list`/`save`/`delete` Effects); this package holds no filesystem code
 - Agentic execution — the consuming extension injects a `SkillGenerator` /
   `SkillModifier`; this module only collects the description and model
-  choice. The `../runs` app supplies the dispatching ports
+  choice. The `../sessions` app supplies the dispatching ports
 - Full body editing — manual `modify` edits the description only; bodies stay in
   the editor or the agentic modify flow until a consumer needs more

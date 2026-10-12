@@ -1,6 +1,6 @@
 ---
 name: montflow-modify-pi-skills
-description: Modifies, updates, extends, or audits an existing workspace skill under .agents/skills/<name>/ while keeping the pi-skills schema valid. Use when an agent must edit a skill, add to it, or fix its shape without dispatching a run.
+description: Modifies, updates, extends, or audits an existing workspace skill under .agents/skills/<name>/ while keeping the pi-skills schema valid. Use when an agent must edit a skill, add to it, or fix its shape without dispatching a session.
 id: c0eec01fb3fdeac6
 author: montflow
 version: 1.0.0
@@ -15,7 +15,7 @@ dependencies:
 
 Use when an existing **workspace skill** under `.agents/skills/<name>/` must be
 modified, extended, audited, or brought back into the standard shape. The agent
-edits the files itself — it does not dispatch a run.
+edits the files itself — it does not dispatch a session.
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md)
 > skill before running this pipeline. It governs how skills are loaded,

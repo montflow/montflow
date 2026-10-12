@@ -38,7 +38,7 @@ const program = Effect.gen(function* () {
    `verify`, `create`, `modify`, `delete` over `.agents/skills/`.
 6. `/mf-skills-tui` — the interactive menu: browse, list, manual or agentic
    create, show, modify, delete, re-verify.
-   Agentic runs dispatch through `@montflow/pi-runs`; `doctor` installs the
+   Agentic sessions dispatch through `@montflow/pi-sessions`; `doctor` installs the
    `montflow-create-pi-skills` / `montflow-modify-pi-skills` authoring skills.
 
 Storage paths and file shape are documented separately — see [storage](./storage.md) and [format](./format.md).

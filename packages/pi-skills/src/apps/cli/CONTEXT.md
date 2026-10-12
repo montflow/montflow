@@ -42,7 +42,7 @@ The interactive menu is a different command: `/mf-skills-tui`,
 - File IO — `../../modules/skill-store/`
 - Doctor — [../doctor](../doctor/CONTEXT.md)
 - Dialog flows — [../interactive](../interactive/CONTEXT.md)
-- Agentic runs — [../runs](../runs/CONTEXT.md)
+- Agentic sessions — [../sessions](../sessions/CONTEXT.md)
 
 ## Running
 

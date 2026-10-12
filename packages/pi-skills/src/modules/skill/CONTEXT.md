@@ -26,7 +26,7 @@ Effect `Schema.Class` identifier.
 - Slug helpers for skill names (`isValidName`, `slugify`)
 - New-skill defaults (`generateSkillId`, `DEFAULT_AUTHOR`, `DEFAULT_VERSION`,
   `DEFAULT_LICENSE`) — the manual/CLI create paths fill what the caller omits
-- Requirement verification for agentic runs (`GENERATION_REQUIREMENTS`,
+- Requirement verification for agentic sessions (`GENERATION_REQUIREMENTS`,
   `MODIFICATION_REQUIREMENTS`, `TRANSFORM_REQUIREMENTS`, `checkRequirements`,
   `missingRequirements`, `findInstalled`, `resolveInjection`,
   `formatInjectedSkills`) — pure, adapter-agnostic. They name the shipped
