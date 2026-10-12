@@ -22,9 +22,10 @@ completion. Work one phase at a time.
   dependencies are all complete may run in parallel.
 - A task with \`Gates: Yes\` must run and pass its \`GATES.md\` before it is marked complete.
 - Never mark a task \`complete\` while any \`depends-on\` target is pending or in-progress.
-- Close the phase with its \`review\` task: spawn an independent run to run \`adversarial-review\`
-  over the phase and write \`.agents/@montflow/reviews/<name>/<code>.md\`, then resolve accepted
-  findings as \`defect\` or \`execution\` tasks.
+- Close the phase with its \`review\` task: spawn an independent run to run \`montflow-adversarial-review\`
+  over the phase and write round \`<NNN>/REVIEW.md\` of the review series that shares the spec's name
+  (\`.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md\`, phase \`A\` → \`001\`, \`B\` → \`002\`, …), keeping the
+  series ledger in step, then resolve accepted findings as \`defect\` or \`execution\` tasks.
 
 ## Finish
 
