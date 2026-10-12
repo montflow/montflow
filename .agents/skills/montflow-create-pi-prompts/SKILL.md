@@ -16,7 +16,7 @@ groups:
 Use when an agent must create or change a reusable prompt template for
 `@montflow/pi-prompts`: a parameterized instruction stored as JSON under
 `.agents/@montflow/pi-prompts/`. The agent authors the file itself from the
-rules below — it does not call a CLI, and it does not dispatch a run.
+rules below — it does not call a CLI, and it does not dispatch a session.
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md) skill before running this pipeline. It governs how skills are loaded, executed, and verified.
 

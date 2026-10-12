@@ -1,6 +1,6 @@
 ---
 name: montflow-create-pi-skills
-description: Authors a workspace skill under .agents/skills/<name>/ — a SKILL.md with the required frontmatter and `# When To Use` / `# Pipeline` / `# Reference` body — from the rules below. Use when an agent must create a skill directly, without dispatching a run or shelling out.
+description: Authors a workspace skill under .agents/skills/<name>/ — a SKILL.md with the required frontmatter and `# When To Use` / `# Pipeline` / `# Reference` body — from the rules below. Use when an agent must create a skill directly, without dispatching a session or shelling out.
 id: 94b1651acdb76a86
 author: montflow
 version: 1.1.0
@@ -15,7 +15,7 @@ dependencies:
 
 Use when a new **workspace skill** must be authored under
 `.agents/skills/<name>/`. The agent writes `SKILL.md` itself from the rules
-below — it does not dispatch a run and does not call a CLI to create the file.
+below — it does not dispatch a session and does not call a CLI to create the file.
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md)
 > skill before running this pipeline. It governs how skills are loaded,

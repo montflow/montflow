@@ -48,7 +48,7 @@ The fixer NEVER rewrites reviewer-authored content. If the fixer disagrees with 
 
 1. Resolve the target. If the user named a series (`<name>` or a path), use it. If unspecified, ask. The series lives at `.agents/@montflow/reviews/<name>/`; the round to fix is the **latest** round directory (`001`, `002`, …). `mf-reviews resume <name>` prints that latest round and the open-finding count.
 2. Read the latest round in full (`.agents/@montflow/reviews/<name>/<latest>/REVIEW.md`). Parse `## Metadata` (`Max Attempts`, `Round`) and every finding (`ID`, `Severity`, `Location`, `Status`, `Attempts`, and the `#### Discussion` thread). Read the series ledger `<name>/REVIEW.md` for the overall index.
-3. Establish **Max Attempts**: read `Max Attempts` from Metadata; default to **3** if missing or unparseable, and add the field so subsequent runs see it.
+3. Establish **Max Attempts**: read `Max Attempts` from Metadata; default to **3** if missing or unparseable, and add the field so subsequent sessions see it.
 4. **Format validation gate**: every finding must have an `ID`, a `Status`, an `Attempts` integer, and a `#### Discussion` heading. Normalize a legacy finding in place before proceeding: assign the next free `F<n>`, set `Attempts: 0`, `Status: Open` (unless clearly resolved), and add an empty `#### Discussion` block. Log the normalization in a top `[Fixer]` turn under `## Metadata` (not per-finding) so the reviewer sees what was changed.
 
 ## 2. Triage Findings
@@ -115,7 +115,7 @@ Give a short summary, then stop:
 - **Fixed** (`In Review`): list IDs.
 - **Won't Fix**: list IDs with the one-line reason.
 - **Escalated**: list IDs with the impasse summary.
-- **Still Open** (not acted on this run — e.g. budget left but no decision yet, or pending reviewer): list IDs.
+- **Still Open** (not acted on this session — e.g. budget left but no decision yet, or pending reviewer): list IDs.
 - **Verification failures**: call out any finding where local checks failed so the user can decide.
 
 End with the single recommended next step: **re-run `montflow-adversarial-review` against the same `<name>` so the reviewer verifies the `In Review` findings and either `Resolves` them or reopens with a `[Reviewer]` turn.** Do not automatically invoke the reviewer; the user initiates that loop.
