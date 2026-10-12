@@ -30,6 +30,23 @@ import type {
 export const DEFAULT_RUN_TOOLS = ['read', 'write', 'edit'] as const;
 
 /**
+ * The `run_*` tools the pi-runs extension registers (`extension.ts`). An
+ * explicit `tools` allowlist filters *extension* tools too — Pi keeps only
+ * the listed names — so an orchestrator run that must spawn workers has to
+ * name these, or `run_start` is filtered out of its session.
+ */
+export const RUN_TOOL_NAMES = [
+  'run_start',
+  'run_status',
+  'run_verify',
+  'run_list',
+  'run_resume',
+  'run_interrupt',
+  'run_steer',
+  'run_answer',
+] as const;
+
+/**
  * Lazy handle to the runs extension runtime. Static imports from
  * `@montflow/pi-runs` are type-only (erased at build) — the runtime
  * resolves here, on first use, never at dashboard boot. A broken or

@@ -755,6 +755,30 @@ export const App = (props: AppProps) => {
     );
   };
 
+  /** Model choice for a dispatched spec run: a pinned label, the session default, or a cancelled picker. */
+  type ModelChoice = { kind: 'label'; label: string } | { kind: 'default' } | { kind: 'cancel' };
+
+  /**
+   * Prompt for a model pin from the catalogue. An empty catalogue runs on
+   * the session default (`default`); esc on the picker cancels the flow.
+   * @returns the choice the caller turns into a `modelLabel` or a back-out
+   */
+  const chooseModel = (): Effect.Effect<ModelChoice> =>
+    Effect.gen(function* () {
+      const refs = yield* Skills.listModelLabels();
+      if (refs.length === 0) return { kind: 'default' } satisfies ModelChoice;
+      const fallback = yield* Skills.listDefaultModel();
+      const options: Array<Interactive.ModelOption> = refs.map((ref) => ({
+        label: `${ref.provider}/${ref.id}`,
+        current:
+          fallback !== undefined && fallback.provider === ref.provider && fallback.id === ref.id,
+      }));
+      const picked = yield* Effect.promise(() => modelPickerFn(options));
+      return picked === undefined
+        ? ({ kind: 'cancel' } satisfies ModelChoice)
+        : ({ kind: 'label', label: picked } satisfies ModelChoice);
+    });
+
   /**
    * `LoadingFn` over the working overlay: status line up while the
    * closed Effect runs, cleared on every exit path.
@@ -863,6 +887,21 @@ export const App = (props: AppProps) => {
       refreshRuns();
       clearDispatchedRun(runId);
       pushToast(message, { variant: 'error' });
+    },
+  };
+
+  /**
+   * Completion hook for a dispatched spec-execution run: refresh the specs
+   * and runs lists, reload the open detail when it is the executed spec, and
+   * toast the outcome. The run writes the spec files; the TUI only reads.
+   */
+  const specExecuteHooks: Specs.ExecuteFlowHooks = {
+    onSpecSettled: (specId, runId, message) => {
+      refreshSpecs();
+      refreshRuns();
+      if (specDetailId() === specId) loadSpecDetail(specId);
+      clearDispatchedRun(runId);
+      pushToast(Runs.sanitizeRunText(message), { variant: 'success' });
     },
   };
 
@@ -1667,7 +1706,11 @@ export const App = (props: AppProps) => {
    * @returns one-line hint copy
    */
   const specDetailHint = (): string => {
+    const detail = specDetailData();
+    const canExecute =
+      detail !== undefined && detail.state !== 'complete' && !detail.summary.active;
     const entries = [
+      ...(canExecute ? [Keybinds.execute()] : []),
       ...(specDetailMode() === 'view'
         ? [Keybinds.scroll(), Keybinds.showPreview()]
         : [Keybinds.showFull()]),
@@ -1855,31 +1898,11 @@ export const App = (props: AppProps) => {
           askInput('Describe the spec', 'What should this spec do?'),
         );
         if (description === undefined || description.trim() === '') return undefined;
-        const refs = yield* Skills.listModelLabels();
-        const fallback = yield* Skills.listDefaultModel();
-        let model: string | undefined;
-        if (refs.length > 0) {
-          const options: Array<Interactive.ModelOption> = refs.map((ref) => ({
-            label: `${ref.provider}/${ref.id}`,
-            current:
-              fallback !== undefined &&
-              fallback.provider === ref.provider &&
-              fallback.id === ref.id,
-          }));
-          const current = options.findIndex((option) => option.current);
-          const rows = options.map(displayModelLabel);
-          const picked = yield* Effect.promise(() =>
-            askFilter(`Model picker · ${options.length} available`, rows, {
-              highlight: current >= 0 ? current : 0,
-              current: current >= 0 ? current : undefined,
-            }),
-          );
-          if (picked === undefined) return undefined;
-          model = options.find((option) => displayModelLabel(option) === picked)?.label;
-        }
+        const choice = yield* chooseModel();
+        if (choice.kind === 'cancel') return undefined;
         return yield* Specs.beginSpec(root, {
           description: description.trim(),
-          modelLabel: model,
+          modelLabel: choice.kind === 'label' ? choice.label : undefined,
           hooks: specBeginHooks,
         });
       }),
@@ -1908,6 +1931,57 @@ export const App = (props: AppProps) => {
       return;
     }
     beginSpecMutation.mutate(undefined);
+  };
+
+  /**
+   * Execute flow: from an open spec detail, pick a model, then dispatch a
+   * resume run that orchestrates the spec's phases (closing each with its
+   * review round). The run lands on the run's detail so the user can watch
+   * it and answer any parked question. Cancellations stay silent.
+   */
+  const executeSpecMutation = flowMutation({
+    run: () =>
+      Effect.gen(function* () {
+        const id = specDetailId();
+        if (id === undefined) return undefined;
+        const choice = yield* chooseModel();
+        if (choice.kind === 'cancel') return undefined;
+        return yield* Specs.executeSpec(root, {
+          id,
+          modelLabel: choice.kind === 'label' ? choice.label : undefined,
+          hooks: specExecuteHooks,
+        });
+      }),
+    done: (result) => {
+      pushToast(`Dispatched execute run '${Runs.sanitizeRunText(result.runId)}'.`, {
+        variant: 'success',
+      });
+      setLastDispatchedRunId(result.runId);
+      refreshRuns();
+      openRunDetail(result.runId);
+    },
+    fail: (error) => {
+      if (Runs.isRunsExtensionInstallError(error.message)) {
+        pushToast(error.message, { variant: 'warning' });
+        return;
+      }
+      openFlowError('Executing spec failed', error, () => {
+        setFlowError(undefined);
+        executeSpecMutation.mutate(undefined);
+      });
+    },
+  });
+
+  const runExecuteSpec = (): void => {
+    if (
+      specDetailId() === undefined ||
+      dialog() !== undefined ||
+      working() !== undefined ||
+      executeSpecMutation.isPending
+    ) {
+      return;
+    }
+    executeSpecMutation.mutate(undefined);
   };
 
   /**
@@ -3202,6 +3276,7 @@ export const App = (props: AppProps) => {
         setSpecDetailMode('preview');
         setSpecDetailScroll(0);
       } else if (key.sequence === 'R') refreshSpecs();
+      else if (key.sequence === 'e') runExecuteSpec();
       else if (key.name === 'up' || key.sequence === 'k') {
         if (specDetailMode() === 'view') scrollSpecDetail(-1);
       } else if (key.name === 'down' || key.sequence === 'j') {

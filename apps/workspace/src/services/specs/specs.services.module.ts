@@ -63,6 +63,35 @@ export interface SnapshotFile {
  */
 export const specsDir = (root: string): string => join(root, '.agents', '@montflow', 'specs');
 
+/** Absolute reviews directory for a working directory: `<cwd>/.agents/@montflow/reviews`. */
+export const reviewsDir = (root: string): string => join(root, '.agents', '@montflow', 'reviews');
+
+/** A spec's linked review series, as the review store lays it out. */
+export interface ReviewSeries {
+  /** Series directory name (the convention is the spec name). */
+  readonly name: string;
+  /** Round directory names under the series, e.g. `['001', '002']`. */
+  readonly rounds: ReadonlyArray<string>;
+}
+
+/**
+ * Read the review series linked to a spec. By convention the series shares
+ * the spec's name; an absent series reads as undefined, never an error.
+ * Only three-digit round directories count, so a stray `README.md` or a
+ * legacy `<code>.md` file never masquerades as a round.
+ * @param root - workspace root (review store owner)
+ * @param name - spec directory slug
+ * @returns the series snapshot, or undefined when the series does not exist
+ */
+export const readReviewSeries = async (
+  root: string,
+  name: string,
+): Promise<ReviewSeries | undefined> => {
+  const entries = await readdir(join(reviewsDir(root), name)).catch(() => undefined);
+  if (entries === undefined) return undefined;
+  return { name, rounds: entries.filter((entry) => /^\d{3}$/.test(entry)).toSorted() };
+};
+
 /**
  * True when the specs directory exists.
  * @param root - workspace root
@@ -181,6 +210,7 @@ const inspect = (
   id: string,
   files: ReadonlyArray<SnapshotFile>,
   active: boolean,
+  review?: ReviewSeries,
 ) => {
   const specFile = files.find((file) => file.path === 'SPEC.md');
   const spec = specFile === undefined ? undefined : libs.Spec.parseSpecFile(specFile.content);
@@ -188,7 +218,10 @@ const inspect = (
     .filter((file) => file.path.endsWith('/TASK.md'))
     .map((file) => libs.Task.parseTaskFile(file.content))
     .filter((task) => task !== undefined);
-  const verify = libs.Structure.verifySpecTree({ name: id, files });
+  const verify = libs.Structure.verifySpecTree(
+    { name: id, files },
+    review ?? { name: libs.ReviewLink.seriesName(id), rounds: [] },
+  );
   const analysis =
     spec === undefined
       ? undefined
@@ -207,8 +240,9 @@ const summarize = (
   id: string,
   files: ReadonlyArray<SnapshotFile>,
   active: boolean,
+  review?: ReviewSeries,
 ): SpecSummary => {
-  const { spec, specFile, tasks, verify, analysis } = inspect(libs, id, files, active);
+  const { spec, specFile, tasks, verify, analysis } = inspect(libs, id, files, active, review);
   return {
     id,
     name: spec?.name ?? id,
@@ -252,7 +286,9 @@ const readSpecs = async (
     names.map(async (name): Promise<SpecSummary | undefined> => {
       const info = await stat(join(dir, name));
       if (!info.isDirectory()) return undefined;
-      return summarize(libs, name, await readSnapshot(root, name), active.has(name));
+      const files = await readSnapshot(root, name);
+      const review = await readReviewSeries(root, name);
+      return summarize(libs, name, files, active.has(name), review);
     }),
   );
   return rows.filter((row): row is SpecSummary => row !== undefined);
@@ -301,7 +337,14 @@ export const loadSpec = (root: string, id: string): Effect.Effect<SpecDetail, st
         return yield* Effect.tryPromise({
           try: async (): Promise<SpecDetail> => {
             const files = await readSnapshot(root, id);
-            const { spec, specFile, tasks, verify, analysis } = inspect(libs, id, files, isActive);
+            const review = await readReviewSeries(root, id);
+            const { spec, specFile, tasks, verify, analysis } = inspect(
+              libs,
+              id,
+              files,
+              isActive,
+              review,
+            );
             const phases = (analysis?.phases ?? []).map((phase) => ({
               phase: phase.phase,
               locked: phase.locked,
@@ -315,7 +358,7 @@ export const loadSpec = (root: string, id: string): Effect.Effect<SpecDetail, st
                 })),
             }));
             return {
-              summary: summarize(libs, id, files, isActive),
+              summary: summarize(libs, id, files, isActive, review),
               meta:
                 spec === undefined
                   ? undefined
@@ -508,4 +551,163 @@ export const beginSpec = (
         return { runId };
       });
     }),
+  );
+
+/**
+ * Tool allowlist for a spec-execution run. Same shape as the author run —
+ * `bash` so the orchestrator can run the mechanical checker — plus the
+ * `run_*` tools it needs to spawn and supervise worker runs. An explicit
+ * allowlist filters extension tools too, so {@link Runs.RUN_TOOL_NAMES}
+ * must be named or the orchestrator cannot dispatch.
+ */
+export const SPEC_EXECUTE_TOOLS = ['read', 'write', 'edit', 'bash'] as const;
+
+/**
+ * Render the state context a resume run needs: derived state, the active
+ * phase, every task with its type and status, and the convention link of
+ * each phase's review task to its round (marking a missing round). Built
+ * from the on-disk snapshot so the orchestrator starts from the files,
+ * never from conversation memory.
+ * @param libs - loaded extension runtime
+ * @param id - spec directory slug
+ * @param files - the spec's files as read from disk
+ * @param review - the linked review series, when it exists
+ * @returns the context block injected under `Spec: <name>`
+ */
+export const buildResumeContext = (
+  libs: PiSpecsLib,
+  id: string,
+  files: ReadonlyArray<SnapshotFile>,
+  review?: ReviewSeries,
+): string => {
+  const specFile = files.find((file) => file.path === 'SPEC.md');
+  const spec = specFile === undefined ? undefined : libs.Spec.parseSpecFile(specFile.content);
+  const tasks = files
+    .filter((file) => file.path.endsWith('/TASK.md'))
+    .map((file) => libs.Task.parseTaskFile(file.content))
+    .filter((task) => task !== undefined)
+    .toSorted((a, b) => a.id.localeCompare(b.id));
+  const analysis =
+    spec === undefined
+      ? undefined
+      : libs.Lifecycle.analyze({
+          status: spec.status,
+          lockedPhases: spec.lockedPhases,
+          tasks: tasks.map((task) => ({ id: task.id, status: task.status })),
+        });
+
+  const lines: Array<string> = [];
+  lines.push(`State: ${analysis?.state ?? 'unreadable'}.`);
+  if (spec !== undefined) {
+    lines.push(`Status: ${spec.status}.`);
+    lines.push(
+      `Locked phases: ${spec.lockedPhases.length === 0 ? 'none' : spec.lockedPhases.join(', ')}.`,
+    );
+  }
+  const active = analysis?.phases.find((phase) => !phase.locked && phase.complete < phase.total);
+  lines.push(`Active phase: ${active?.phase ?? 'none'}.`);
+  lines.push('', 'Tasks:');
+  for (const task of tasks) {
+    lines.push(`- ${task.id} [${task.type}] ${task.status} — ${task.name}`);
+  }
+
+  const reviewTasks = tasks.map((task) => ({ id: task.id, type: task.type }));
+  lines.push('', 'Phase reviews (convention: series shares the spec name):');
+  for (const phase of libs.ReviewLink.reviewPhases(reviewTasks)) {
+    const round = libs.ReviewLink.roundForPhase(phase);
+    const path = `${libs.ReviewLink.seriesName(id)}/${round}`;
+    const present = review?.rounds.includes(round) ?? false;
+    lines.push(
+      `- phase ${phase} → .agents/@montflow/reviews/${path}${present ? '' : ' (missing)'}`,
+    );
+  }
+
+  return lines.join('\n');
+};
+
+/**
+ * TUI callback for a dispatched execute run's completion: the run settled,
+ * so the TUI refreshes the spec and toasts the outcome. Absent in headless
+ * tests.
+ */
+export interface ExecuteFlowHooks {
+  /** Resume run settled; `message` is a one-line outcome for the toast. */
+  readonly onSpecSettled?: ((specId: string, runId: string, message: string) => void) | undefined;
+}
+
+/**
+ * Completion hook for a dispatched resume run: report the outcome to the
+ * TUI so the spec detail and runs list refresh. The run writes the spec
+ * files; this hook never touches them.
+ * @param specId - the spec the run executes
+ * @param runId - the resume run id
+ * @param hooks - TUI completion callbacks
+ * @returns the `onSettled` hook
+ */
+export const specExecuteCompletion =
+  (
+    specId: string,
+    runId: string,
+    hooks?: ExecuteFlowHooks,
+  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  (detail) =>
+    Effect.sync(() => {
+      const outcome = detail.receipt?.outcome ?? 'done';
+      const summary = detail.receipt?.summary ?? '';
+      hooks?.onSpecSettled?.(specId, runId, `Run '${runId}' ${outcome}: ${summary}`.trim());
+    });
+
+/** Inputs for dispatching a spec-execution run. */
+export interface ExecuteSpecInput {
+  /** Spec directory slug to execute. */
+  readonly id: string;
+  /** `provider/model-id` pin for the resume run, if any. */
+  readonly modelLabel?: string | undefined;
+  /** TUI completion callbacks, if any. */
+  readonly hooks?: ExecuteFlowHooks | undefined;
+}
+
+/**
+ * Execute a spec from the workspace: gate on the runs extension, read the
+ * spec snapshot, build the resume prompt from its state, and dispatch a
+ * resume run through the pi-runs engine tagged with `spec` so the lifecycle
+ * reads `in-progress`. The run orchestrates the phases (closing each with its
+ * review round) and may park on `ask_user`; on settle,
+ * {@link specExecuteCompletion} refreshes the TUI.
+ * @param root - workspace root (specs and runs store owner)
+ * @param input - spec id, optional model pin, and completion hooks
+ * @returns Effect resolving to the dispatched run id, failing with displayable message
+ */
+export const executeSpec = (
+  root: string,
+  input: ExecuteSpecInput,
+): Effect.Effect<{ readonly runId: string }, string> =>
+  loadPiSpecs().pipe(
+    Effect.mapError((error) => error.message),
+    Effect.flatMap((libs) =>
+      Effect.gen(function* () {
+        const installed = yield* Runs.runsExtensionInstalled(root);
+        if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+        const files = yield* Effect.tryPromise({
+          try: () => readSnapshot(root, input.id),
+          catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
+        });
+        const review = yield* Effect.promise(() => readReviewSeries(root, input.id));
+        const prompt = libs.Prompt.buildResumePrompt(
+          input.id,
+          buildResumeContext(libs, input.id, files, review),
+        );
+        const runId = yield* Runs.newRunId(`execute-${input.id}`);
+        yield* Runs.startRun(root, {
+          id: runId,
+          name: `Execute spec: ${input.id}`,
+          prompt,
+          model: input.modelLabel,
+          tools: [...SPEC_EXECUTE_TOOLS, ...Runs.RUN_TOOL_NAMES],
+          spec: input.id,
+          onSettled: specExecuteCompletion(input.id, runId, input.hooks),
+        });
+        return { runId };
+      }),
+    ),
   );

@@ -98,6 +98,8 @@ export const Keybinds = {
   refresh: (): Keybind => ({ key: 'R', action: 'refresh' }),
   /** `m modify` — detail modify entry. */
   modify: (): Keybind => ({ key: 'm', action: 'modify' }),
+  /** `e execute` — spec-detail execute entry (dispatch the resume run). */
+  execute: (): Keybind => ({ key: 'e', action: 'execute' }),
   /** `v view` — detail preview-mode entry. */
   showFull: (): Keybind => ({ key: 'v', action: 'view' }),
   /** `v preview` — detail full-view entry. */
