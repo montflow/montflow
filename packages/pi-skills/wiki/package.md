@@ -31,7 +31,9 @@ const program = Effect.gen(function* () {
 2. `decodeUnknown` / `encode` — class codecs; `decodeSkillFile` /
    `encodeSkillFile` handle the whole `SKILL.md` file.
 3. `isValidName(name)` — slug check. `slugify(raw)` — display name → slug.
-4. `verifySkillFile(dirName, markdown)` — mechanical shape check (`mf-skills verify`).
+4. `verifySkillFile(dirName, markdown)` — ownership-aware shape check
+   (`mf-skills verify`): `montflow-*` skills must satisfy the full standard
+   (`verifyStandardSkillFile`); generic and vendored skills only have to exist.
 5. `mf-skills` (binary) / `/mf-skills` (Pi) — `doctor`, `list`, `show`,
    `verify`, `create`, `modify`, `delete` over `.agents/skills/`.
 6. `/mf-skills-tui` — the interactive menu: browse, list, manual or agentic

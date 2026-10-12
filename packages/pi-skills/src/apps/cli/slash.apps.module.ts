@@ -9,7 +9,7 @@ import * as Renderers from './renderers.apps.module.js';
  * The `/mf-skills` slash-command front end: a hand-rolled parser over the
  * same engines the `mf-skills` binary uses.
  *
- * A bespoke parser rather than `effect/unstable/cli` because a Pi slash
+ * A bespoke parser rather than `effect/cli` because a Pi slash
  * command receives a single argument *string*, not an argv array. Everything
  * below the parser is shared; only the tokenizing differs.
  */

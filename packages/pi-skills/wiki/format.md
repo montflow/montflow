@@ -66,11 +66,18 @@ mf-skills verify <name>          # the binary, scriptable — non-zero on failur
 ```
 
 The interactive `/mf-skills-tui` browse opens each skill's detail menu with the
-same verdict: `✓ verified` or `✗ not verified — N issues`. The check is
-mechanical (`Skill.verifySkillFile`): required frontmatter fields, `name`
-matching the directory, and the three body sections above. `Re-verify` re-runs
-it on the file; `Transform to standard` (shown only while unverified) spawns an
-agent to fix the shape without changing what the skill teaches.
+same verdict: `✓ verified` or `✗ not verified — N issues`. What "verified"
+means depends on ownership:
+
+- **Montflow skills** (`montflow-*`) are held to the full standard
+  (`Skill.verifyStandardSkillFile`): required frontmatter fields, `name`
+  matching the directory, and the three body sections above.
+- **Generic and vendored skills** keep their own name and only have to exist —
+  a directory with a `SKILL.md` verifies, whatever its shape.
+
+`Re-verify` re-runs the check on the file; `Transform to standard` (shown only
+while a montflow skill is unverified) spawns an agent to fix the shape without
+changing what the skill teaches.
 
 ## Parse rules that bite
 

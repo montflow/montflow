@@ -19,10 +19,11 @@ mf-skills <subcommand> …      # the binary — scriptable, real exit codes
 
 Subcommands: `doctor`, `list`, `show`, `verify [name]`, `create`, `modify`,
 `delete`. `list` accepts `--status valid|invalid` to keep only skills whose
-`SKILL.md` passes or fails verification. `verify` checks the mechanical
-`SKILL.md` shape (`Skill.verifySkillFile`)
-and exits non-zero when a skill fails. Store commands accept `--dir` to target a
-workspace root other than the working directory.
+`SKILL.md` passes or fails verification. `verify` checks each `SKILL.md`
+against its ownership class (`Skill.verifySkillFile`): montflow skills
+(`montflow-*`) must satisfy the full standard, while generic and vendored
+skills only have to exist. It exits non-zero when a skill fails. Store commands
+accept `--dir` to target a workspace root other than the working directory.
 
 The interactive menu browses, shows, manually or agentically creates/modifies,
 deletes, and re-verifies skills.

@@ -17,10 +17,12 @@ Effect `Schema.Class` identifier.
   `encodeSkillFile` for the `SKILL.md` file (frontmatter + body)
 - Frontmatter parser (`parseSkillFile`, `fieldString`, `fieldStrings`) — one
   grammar shared by the store and the verifier
-- Mechanical verification (`verifySkillFile`, `verifyInfoLine`): required
-  frontmatter (`name`, `description`, `id`, `author`, `version`) plus the
-  `# When To Use` / `# Pipeline` / `# Reference` body shape; style stays a
-  review concern
+- Mechanical verification (`verifySkillFile`, `verifyStandardSkillFile`,
+  `verifyInfoLine`, `kindOf`): montflow skills (`montflow-*`) must satisfy the
+  full standard (required frontmatter `name`, `description`, `id`, `author`,
+  `version` plus the `# When To Use` / `# Pipeline` / `# Reference` body
+  shape); generic and vendored skills only have to exist. Style stays a
+  review concern.
 - Slug helpers for skill names (`isValidName`, `slugify`)
 - New-skill defaults (`generateSkillId`, `DEFAULT_AUTHOR`, `DEFAULT_VERSION`,
   `DEFAULT_LICENSE`) — the manual/CLI create paths fill what the caller omits

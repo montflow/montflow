@@ -1,7 +1,7 @@
 # CLI app
 
 Two front ends over one set of engines: the `mf-skills` binary (Bun +
-`effect/unstable/cli`) and the Pi slash command of the same name. A hand-rolled
+`effect/cli`) and the Pi slash command of the same name. A hand-rolled
 parser for the slash form, a `Command` tree for the binary, and nothing shared
 below the parser.
 

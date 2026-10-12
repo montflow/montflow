@@ -4,7 +4,7 @@ import * as Interactive from '../index.js';
 import * as Skill from '../../../modules/skill/index.js';
 
 const validRaw = `---
-name: test-skill
+name: montflow-test-skill
 description: Does X when Y shows up. Use when testing skills.
 id: a1b2c3d4e5f6a7b8
 author: Tester
@@ -25,7 +25,7 @@ Nothing.
 `;
 
 const invalidRaw = `---
-name: test-skill
+name: montflow-test-skill
 description: Does X.
 ---
 
@@ -48,8 +48,8 @@ const scriptedUi = (answers: {
 };
 
 const testSkill = Skill.decodeUnknown({
-  id: 'test-skill',
-  name: 'test-skill',
+  id: 'montflow-test-skill',
+  name: 'montflow-test-skill',
   description: 'Does X.',
   groups: [],
   dependencies: [],
@@ -124,7 +124,7 @@ Vitest.describe('Interactive.detail verify panel', () => {
         readonly info: ReadonlyArray<string>;
         readonly options: ReadonlyArray<string>;
       }> = [];
-      const ui = scriptedUi({ selects: ['test-skill', 'Back'] });
+      const ui = scriptedUi({ selects: ['montflow-test-skill', 'Back'] });
       yield* Interactive.run(
         'browse',
         envFor(ui, menuQueue(seen, ['Back'])),
@@ -134,7 +134,7 @@ Vitest.describe('Interactive.detail verify panel', () => {
       );
       Vitest.expect(seen).toStrictEqual([
         {
-          title: "Skill 'test-skill'",
+          title: "Skill 'montflow-test-skill'",
           info: ['✗ not verified — 6 issues'],
           options: ['Show', 'Modify', 'Re-verify', 'Delete', 'Transform to standard', 'Back'],
         },
@@ -149,7 +149,7 @@ Vitest.describe('Interactive.detail verify panel', () => {
         readonly info: ReadonlyArray<string>;
         readonly options: ReadonlyArray<string>;
       }> = [];
-      const ui = scriptedUi({ selects: ['test-skill', 'Back'] });
+      const ui = scriptedUi({ selects: ['montflow-test-skill', 'Back'] });
       yield* Interactive.run(
         'browse',
         envFor(ui, menuQueue(seen, ['Back'])),
@@ -159,7 +159,7 @@ Vitest.describe('Interactive.detail verify panel', () => {
       );
       Vitest.expect(seen).toStrictEqual([
         {
-          title: "Skill 'test-skill'",
+          title: "Skill 'montflow-test-skill'",
           info: ['✓ verified'],
           options: ['Show', 'Modify', 'Re-verify', 'Delete', 'Back'],
         },
@@ -175,7 +175,7 @@ Vitest.describe('Interactive.detail verify panel', () => {
         readonly info: ReadonlyArray<string>;
         readonly options: ReadonlyArray<string>;
       }> = [];
-      const ui = scriptedUi({ selects: ['test-skill', 'Back'], notifies });
+      const ui = scriptedUi({ selects: ['montflow-test-skill', 'Back'], notifies });
       yield* Interactive.run(
         'browse',
         envFor(ui, menuQueue(seen, ['Re-verify', 'Back'])),
@@ -185,7 +185,7 @@ Vitest.describe('Interactive.detail verify panel', () => {
       );
       Vitest.expect(seen.length).toBe(2);
       Vitest.expect(notifies.length).toBe(1);
-      Vitest.expect(notifies[0]).toContain("✗ 'test-skill' has 6 issues:");
+      Vitest.expect(notifies[0]).toContain("✗ 'montflow-test-skill' has 6 issues:");
       Vitest.expect(notifies[0]).toContain('[id]');
     }),
   );
@@ -201,7 +201,7 @@ Vitest.describe('Interactive.detail verify panel', () => {
         readonly options: ReadonlyArray<string>;
       }> = [];
       const ui = scriptedUi({
-        selects: ['test-skill', 'Continue with checked skills', 'Back'],
+        selects: ['montflow-test-skill', 'Continue with checked skills', 'Back'],
         notifies,
       });
       const env: Interactive.CommandEnv = {
@@ -220,8 +220,8 @@ Vitest.describe('Interactive.detail verify panel', () => {
       );
       Vitest.expect(received.length).toBe(1);
       Vitest.expect(received[0]?.instruction).toBe(Interactive.TRANSFORM_INSTRUCTION);
-      Vitest.expect(saved).toStrictEqual(['test-skill']);
-      Vitest.expect(notifies).toContain("Saved skill 'test-skill'.");
+      Vitest.expect(saved).toStrictEqual(['montflow-test-skill']);
+      Vitest.expect(notifies).toContain("Saved skill 'montflow-test-skill'.");
       Vitest.expect(seen.length).toBe(2);
     }),
   );

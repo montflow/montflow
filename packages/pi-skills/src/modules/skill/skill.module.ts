@@ -249,6 +249,29 @@ export const encodeSkillFile = (skill: Skill): string => {
   return lines.join('\n');
 };
 
+/** Ownership class: montflow house rules vs generic/vendored skills. */
+export type SkillKind = 'montflow' | 'normal';
+
+/**
+ * Namespace marking a montflow-owned skill. House rules and montflow
+ * tooling skills are prefixed `montflow-`; generic and vendored skills
+ * keep their own name.
+ */
+export const MONTFLOW_PREFIX = 'montflow-';
+
+/**
+ * Classify a skill by directory name. Montflow-owned skills carry the
+ * `montflow-` namespace and are held to the full standard; every other
+ * skill is generic/vendored and only has to exist.
+ * @param name - skill directory slug
+ * @returns the ownership class
+ */
+export const kindOf = (name: string): SkillKind =>
+  name.startsWith(MONTFLOW_PREFIX) ? 'montflow' : 'normal';
+
+/** True when the skill is montflow-owned (held to the full standard). */
+export const isMontflow = (name: string): boolean => kindOf(name) === 'montflow';
+
 /** Slug pattern for skill directory names and the `name` field. */
 export const NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -273,9 +296,9 @@ export interface VerifyResult {
 const issue = (field: string, message: string): VerifyIssue => ({ field, message });
 
 /**
- * Mechanically verify a `SKILL.md` file against the pi-skills schema:
- * required frontmatter (`name`, `description`, `id`, `author`, `version`;
- * `name` matching the directory) plus the expected body shape
+ * Mechanically verify a `SKILL.md` file against the full montflow
+ * standard: required frontmatter (`name`, `description`, `id`, `author`,
+ * `version`; `name` matching the directory) plus the expected body shape
  * (`# When To Use`, `# Pipeline`, `# Reference`). Pure — no IO; the
  * caller supplies the raw file contents. Style (third person, trigger
  * terms, no filler) stays a human/agent review concern.
@@ -283,7 +306,7 @@ const issue = (field: string, message: string): VerifyIssue => ({ field, message
  * @param markdown - raw SKILL.md contents
  * @returns the result; `valid` is true only with zero issues
  */
-export const verifySkillFile = (dirName: string, markdown: string): VerifyResult => {
+export const verifyStandardSkillFile = (dirName: string, markdown: string): VerifyResult => {
   const issues: Array<VerifyIssue> = [];
   const parsed = parseSkillFile(markdown);
   if (parsed === null) {
@@ -339,6 +362,18 @@ export const verifySkillFile = (dirName: string, markdown: string): VerifyResult
   }
   return { valid: issues.length === 0, issues };
 };
+
+/**
+ * Mechanically verify one `SKILL.md`, dispatching on ownership. Montflow
+ * skills (`montflow-*`) are held to the full standard
+ * ({@link verifyStandardSkillFile}); generic and vendored skills only
+ * have to exist, so they verify as long as the caller read the file.
+ * @param dirName - skill directory slug (the skill id)
+ * @param markdown - raw SKILL.md contents
+ * @returns the result; `valid` is true only with zero issues
+ */
+export const verifySkillFile = (dirName: string, markdown: string): VerifyResult =>
+  isMontflow(dirName) ? verifyStandardSkillFile(dirName, markdown) : { valid: true, issues: [] };
 
 /**
  * One generic verify status line for the detail-menu info panel, verdict

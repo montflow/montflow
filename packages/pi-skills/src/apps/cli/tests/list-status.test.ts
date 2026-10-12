@@ -15,13 +15,13 @@ const freshRoot = (): Promise<string> => mkdtemp(join(tmpdir(), 'mf-skills-list-
 const cleanup = (root: string): Effect.Effect<void> =>
   Effect.promise(() => rm(root, { recursive: true, force: true }));
 
-/** Seed one verifying skill and one that decodes but fails verification. */
+/** Seed one verifying montflow skill and one that decodes but fails verification. */
 const seed = (root: string): Effect.Effect<void, string> =>
   Effect.gen(function* () {
     yield* Engines.create(
       { cwd: root },
       {
-        name: 'good',
+        name: 'montflow-good',
         description: 'A skill that verifies clean.',
         body: BODY,
         author: undefined,
@@ -31,12 +31,12 @@ const seed = (root: string): Effect.Effect<void, string> =>
         dependencies: [],
       },
     );
-    const dir = join(root, '.agents', 'skills', 'bad');
+    const dir = join(root, '.agents', 'skills', 'montflow-bad');
     yield* Effect.promise(() => mkdir(dir, { recursive: true }));
     yield* Effect.promise(() =>
       writeFile(
         join(dir, 'SKILL.md'),
-        '---\nname: bad\ndescription: A skill missing the required sections.\n---\n\nno sections here\n',
+        '---\nname: montflow-bad\ndescription: A skill missing the required sections.\n---\n\nno sections here\n',
       ),
     );
   });
@@ -55,7 +55,10 @@ Vitest.describe('Engines.list status filter', () => {
     withRoot((root) =>
       Effect.gen(function* () {
         const skills = yield* Engines.list({ cwd: root });
-        Vitest.expect(skills.map((skill) => skill.id)).toStrictEqual(['bad', 'good']);
+        Vitest.expect(skills.map((skill) => skill.id)).toStrictEqual([
+          'montflow-bad',
+          'montflow-good',
+        ]);
       }),
     ),
   );
@@ -64,7 +67,7 @@ Vitest.describe('Engines.list status filter', () => {
     withRoot((root) =>
       Effect.gen(function* () {
         const skills = yield* Engines.list({ cwd: root }, { status: 'valid' });
-        Vitest.expect(skills.map((skill) => skill.id)).toStrictEqual(['good']);
+        Vitest.expect(skills.map((skill) => skill.id)).toStrictEqual(['montflow-good']);
       }),
     ),
   );
@@ -73,7 +76,7 @@ Vitest.describe('Engines.list status filter', () => {
     withRoot((root) =>
       Effect.gen(function* () {
         const skills = yield* Engines.list({ cwd: root }, { status: 'invalid' });
-        Vitest.expect(skills.map((skill) => skill.id)).toStrictEqual(['bad']);
+        Vitest.expect(skills.map((skill) => skill.id)).toStrictEqual(['montflow-bad']);
       }),
     ),
   );

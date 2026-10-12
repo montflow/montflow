@@ -22,7 +22,7 @@ Vitest.describe('Engines.create', () => {
       const skill = yield* Engines.create(
         { cwd: root },
         {
-          name: 'demo-skill',
+          name: 'montflow-demo-skill',
           description: 'A demo skill used in tests.',
           body: BODY,
           author: undefined,
@@ -32,20 +32,20 @@ Vitest.describe('Engines.create', () => {
           dependencies: [],
         },
       );
-      Vitest.expect(skill.id).toBe('demo-skill');
+      Vitest.expect(skill.id).toBe('montflow-demo-skill');
       Vitest.expect(skill.skillId).toMatch(/^[0-9a-f]{16}$/);
       Vitest.expect(skill.author).toBe('montflow');
       Vitest.expect(skill.version).toBe('1.0.0');
       Vitest.expect(skill.license).toBe('MIT');
 
       const raw = yield* Effect.promise(() =>
-        readFile(join(root, '.agents', 'skills', 'demo-skill', 'SKILL.md'), 'utf8'),
+        readFile(join(root, '.agents', 'skills', 'montflow-demo-skill', 'SKILL.md'), 'utf8'),
       );
       Vitest.expect(raw).toContain('id: ');
       Vitest.expect(raw).toContain('author: montflow');
       Vitest.expect(raw).toContain('version: 1.0.0');
 
-      const report = yield* Engines.verify({ cwd: root }, 'demo-skill');
+      const report = yield* Engines.verify({ cwd: root }, 'montflow-demo-skill');
       Vitest.expect(report.valid).toBe(true);
       Vitest.expect(report.issueCount).toBe(0);
       yield* cleanup(root);
@@ -140,18 +140,32 @@ Vitest.describe('Engines.list / load / modify / remove', () => {
 });
 
 Vitest.describe('Engines.verify', () => {
-  Vitest.it.effect('reports malformed files as invalid when verifying every skill', () =>
+  Vitest.it.effect('reports malformed montflow files as invalid when verifying every skill', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
-      const dir = join(root, '.agents', 'skills', 'broken');
+      const dir = join(root, '.agents', 'skills', 'montflow-broken');
       yield* Effect.promise(() => mkdir(dir, { recursive: true }));
       yield* Effect.promise(() => writeFile(join(dir, 'SKILL.md'), '# no frontmatter\n', 'utf8'));
 
       const report = yield* Engines.verify({ cwd: root }, undefined);
       Vitest.expect(report.valid).toBe(false);
-      Vitest.expect(report.entries.map((entry) => entry.name)).toStrictEqual(['broken']);
+      Vitest.expect(report.entries.map((entry) => entry.name)).toStrictEqual(['montflow-broken']);
       Vitest.expect(report.issueCount).toBeGreaterThan(0);
       Vitest.expect(Renderers.verify(report)).toContain('frontmatter');
+      yield* cleanup(root);
+    }),
+  );
+
+  Vitest.it.effect('passes a generic skill that only exists, however malformed', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const dir = join(root, '.agents', 'skills', 'effect');
+      yield* Effect.promise(() => mkdir(dir, { recursive: true }));
+      yield* Effect.promise(() => writeFile(join(dir, 'SKILL.md'), '# upstream shape\n', 'utf8'));
+
+      const report = yield* Engines.verify({ cwd: root }, 'effect');
+      Vitest.expect(report.valid).toBe(true);
+      Vitest.expect(report.issueCount).toBe(0);
       yield* cleanup(root);
     }),
   );

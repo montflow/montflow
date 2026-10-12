@@ -2,7 +2,7 @@ import * as Vitest from '@effect/vitest';
 import * as Skill from '../index.js';
 
 const validFile = `---
-name: test-skill
+name: montflow-test-skill
 description: Does X when Y shows up. Use when testing skills.
 id: a1b2c3d4e5f6a7b8
 author: Tester
@@ -27,14 +27,34 @@ Nothing.
 `;
 
 Vitest.describe('Skill.verifySkillFile', () => {
-  Vitest.it('accepts a standard-shaped file', () => {
-    const result = Skill.verifySkillFile('test-skill', validFile);
+  Vitest.it('accepts a standard-shaped montflow file', () => {
+    const result = Skill.verifySkillFile('montflow-test-skill', validFile);
     Vitest.expect(result.valid).toBe(true);
     Vitest.expect(result.issues).toStrictEqual([]);
   });
 
+  Vitest.it('accepts any generic or vendored skill that exists', () => {
+    // A generic skill is only required to exist; its contents are not held
+    // to the montflow standard.
+    Vitest.expect(Skill.verifySkillFile('effect', '# just a body\n')).toStrictEqual({
+      valid: true,
+      issues: [],
+    });
+    Vitest.expect(Skill.verifySkillFile('applying-solid', '')).toStrictEqual({
+      valid: true,
+      issues: [],
+    });
+  });
+
+  Vitest.it('classifies ownership from the name', () => {
+    Vitest.expect(Skill.kindOf('montflow-typescript-services')).toBe('montflow');
+    Vitest.expect(Skill.kindOf('effect')).toBe('normal');
+    Vitest.expect(Skill.isMontflow('montflow-create-pi-profiles')).toBe(true);
+    Vitest.expect(Skill.isMontflow('simplifying-code')).toBe(false);
+  });
+
   Vitest.it('fails without a frontmatter block', () => {
-    const result = Skill.verifySkillFile('test-skill', '# Just a body\n');
+    const result = Skill.verifySkillFile('montflow-test-skill', '# Just a body\n');
     Vitest.expect(result.valid).toBe(false);
     Vitest.expect(result.issues).toStrictEqual([
       { field: 'frontmatter', message: 'Missing frontmatter block.' },
@@ -43,8 +63,8 @@ Vitest.describe('Skill.verifySkillFile', () => {
 
   Vitest.it('flags missing required fields', () => {
     const result = Skill.verifySkillFile(
-      'test-skill',
-      '---\nname: test-skill\ndescription: Does X.\n---\n\nBody.\n',
+      'montflow-test-skill',
+      '---\nname: montflow-test-skill\ndescription: Does X.\n---\n\nBody.\n',
     );
     Vitest.expect(result.valid).toBe(false);
     Vitest.expect(result.issues.map((found) => found.field).toSorted()).toStrictEqual([
@@ -59,10 +79,10 @@ Vitest.describe('Skill.verifySkillFile', () => {
 
   Vitest.it('flags a malformed id and version', () => {
     const result = Skill.verifySkillFile(
-      'test-skill',
+      'montflow-test-skill',
       [
         '---',
-        'name: test-skill',
+        'name: montflow-test-skill',
         'description: Does X.',
         'id: NOT-HEX',
         'author: Tester',
@@ -92,7 +112,7 @@ Vitest.describe('Skill.verifySkillFile', () => {
 
   Vitest.it('flags a name that mismatches the directory', () => {
     const result = Skill.verifySkillFile(
-      'test-skill',
+      'montflow-test-skill',
       [
         '---',
         'name: other-name',
@@ -118,16 +138,16 @@ Vitest.describe('Skill.verifySkillFile', () => {
     );
     Vitest.expect(result.valid).toBe(false);
     Vitest.expect(result.issues).toStrictEqual([
-      { field: 'name', message: "Must match the directory name 'test-skill'." },
+      { field: 'name', message: "Must match the directory name 'montflow-test-skill'." },
     ]);
   });
 
   Vitest.it('flags scalar groups and an overlong description', () => {
     const result = Skill.verifySkillFile(
-      'test-skill',
+      'montflow-test-skill',
       [
         '---',
-        'name: test-skill',
+        'name: montflow-test-skill',
         `description: ${'x'.repeat(1025)}`,
         'id: a1b2c3d4e5f6a7b8',
         'author: Tester',
