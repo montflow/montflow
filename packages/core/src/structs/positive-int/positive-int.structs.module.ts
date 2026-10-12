@@ -11,4 +11,7 @@ export type PositiveInt = Brand.Brand.FromConstructor<typeof make>;
 
 export const makeUnsafe = Brand.nominal<PositiveInt>();
 
-export const Blueprint = Schema.Number.pipe(Schema.fromBrand(Id, make));
+export const Blueprint = Schema.Number.pipe(
+  Schema.fromBrand(Int.Id, Int.make),
+  Schema.fromBrand(PositiveNumber.Id, PositiveNumber.make),
+);
