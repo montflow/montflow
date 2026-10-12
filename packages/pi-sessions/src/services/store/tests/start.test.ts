@@ -1,0 +1,48 @@
+import * as Vitest from '@effect/vitest';
+import { Effect } from 'effect';
+import {
+  StoreTag as Store,
+  StoreErrorClass as StoreError,
+  freshRoot,
+  provideStore,
+} from './helpers.js';
+
+Vitest.describe('Store.start runtime', () => {
+  Vitest.it.live('moves pending to running', () =>
+    provideStore(
+      freshRoot(),
+      Effect.gen(function* () {
+        const store = yield* Store;
+        yield* store.create({ id: 'session-1' });
+        const started = yield* store.start('session-1');
+        Vitest.expect(started.status).toBe('running');
+      }),
+    ),
+  );
+
+  Vitest.it.live('preserves the tools allowlist when moving to running', () =>
+    provideStore(
+      freshRoot(),
+      Effect.gen(function* () {
+        const store = yield* Store;
+        yield* store.create({ id: 'session-1', tools: ['read'] });
+        const started = yield* store.start('session-1');
+        Vitest.expect(started.tools).toStrictEqual(['read']);
+      }),
+    ),
+  );
+
+  Vitest.it.live('fails when already running', () =>
+    provideStore(
+      freshRoot(),
+      Effect.gen(function* () {
+        const store = yield* Store;
+        yield* store.create({ id: 'session-1' });
+        yield* store.start('session-1');
+        const error = yield* store.start('session-1').pipe(Effect.flip);
+        Vitest.expect(error).toBeInstanceOf(StoreError);
+        Vitest.expect(error.reason).toContain("from status 'running'");
+      }),
+    ),
+  );
+});
