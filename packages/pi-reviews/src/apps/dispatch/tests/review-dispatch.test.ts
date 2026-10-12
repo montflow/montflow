@@ -27,11 +27,11 @@ Vitest.describe('review dispatch', () => {
     Vitest.expect(prompt).toContain('- Workspace root: /repo');
   });
 
-  Vitest.it.effect('ensures the series, then fails cleanly without a runner host', () =>
+  Vitest.it.effect('ensures the series, then fails cleanly without a session runner host', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
       const error = yield* Dispatch.startReview({ root, name: 'demo' }).pipe(Effect.flip);
-      Vitest.expect(error).toContain('runs extension');
+      Vitest.expect(error).toContain('sessions extension');
       const ledger = yield* Effect.promise(() =>
         readFile(join(root, '.agents', '@montflow', 'reviews', 'demo', 'REVIEW.md'), 'utf8'),
       );

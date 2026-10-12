@@ -46,7 +46,7 @@
 
 - Removed `montflow-adversarial-review-feature-spec` from `dependencies:` (montflow-adversarial-review C1) — the dependency direction is one-way (spec skill depends on base), resolving the circular dependency that broke deterministic topological loading.
 - Step 1 "Map the Change" no longer demands author-only "why"; reworded to derive intent from allowed inputs (spec/goals/public docs) (M1).
-- Isolation Requirement now structurally enforced via independent subagent/session; non-isolated runs explicitly labeled in Review Metadata (M2). GATES Phase 0 mirrors this.
+- Isolation Requirement now structurally enforced via independent subagent/session; non-isolated sessions explicitly labeled in Review Metadata (M2). GATES Phase 0 mirrors this.
 - File-output isolation rule clarified: listing directory entries is permitted; only file _contents_ are off-limits (M3).
 - Step 2 bug-hunt checklist gaps closed: float equality without epsilon, memory ordering/visibility across threads, log injection / CRLF in log input (Step 3), Unicode normalization (NFC/NFD) and BOM handling (Step 4), signed underflow → UB distinguished from unsigned wraparound (m9).
 - Step 8 "Report" now handles the no-findings case: state `No defects found.` and list coverage areas re-checked (m10).

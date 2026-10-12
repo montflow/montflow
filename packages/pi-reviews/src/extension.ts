@@ -24,8 +24,8 @@ const textResult = (text: string) => ({
 
 /**
  * Pi extension entry: the `/mf-reviews` slash command, plus the in-session
- * `review_create` tool that spawns an isolated reviewer run through the session's
- * runner host (a short-lived CLI process cannot keep a run alive). The loader
+ * `review_create` tool that spawns an isolated reviewer session through the session's
+ * session runner host (a short-lived CLI process cannot keep a session alive). The loader
  * awaits the returned promise, so load failures surface.
  * @param pi - Pi extension API
  * @returns Promise settling once registration completes
@@ -35,13 +35,13 @@ export default function piReviewsExtension(pi: ExtensionAPI): Promise<void> {
     name: 'review_create',
     label: 'Create review',
     description:
-      'Start an adversarial review run for a review series (e.g. a spec phase review). Ensures the series exists, then spawns the isolated reviewer and returns its run id. Follow it with run_status; resume a stopped reviewer with run_resume.',
-    promptSnippet: 'review_create — start a review run for a spec phase',
+      'Start an adversarial review session for a review series (e.g. a spec phase review). Ensures the series exists, then spawns the isolated reviewer and returns its session id. Follow it with session_status; resume a stopped reviewer with session_resume.',
+    promptSnippet: 'review_create — start a review session for a spec phase',
     parameters: Type.Object({
       name: Type.String({ description: 'Review series name (kebab-case slug).' }),
       target: Type.Optional(Type.String({ description: 'What the review targets.' })),
       spec: Type.Optional(Type.String({ description: 'Spec slug this review belongs to.' })),
-      parent: Type.Optional(Type.String({ description: 'Parent run id (the orchestrator).' })),
+      parent: Type.Optional(Type.String({ description: 'Parent session id (the orchestrator).' })),
       model: Type.Optional(Type.String({ description: 'provider/model-id pin for the reviewer.' })),
       dir: Type.Optional(
         Type.String({ description: 'Workspace root; defaults to the session working directory.' }),
@@ -61,7 +61,9 @@ export default function piReviewsExtension(pi: ExtensionAPI): Promise<void> {
         Effect.matchEffect({
           onFailure: (error) => Effect.succeed(`Error: ${error}`),
           onSuccess: (result) =>
-            Effect.succeed(`Started review run '${result.runId}' for series '${result.series}'.`),
+            Effect.succeed(
+              `Started review session '${result.sessionId}' for series '${result.series}'.`,
+            ),
         }),
         Effect.runPromise,
       );

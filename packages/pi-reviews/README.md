@@ -62,21 +62,22 @@ Inside Pi, the slash form is `/mf-reviews …`; everywhere else it is
 
 ## Dispatch (in-session)
 
-A short-lived CLI process cannot keep a spawned Pi run alive, so a _spawned_
+A short-lived CLI process cannot keep a spawned Pi session alive, so a _spawned_
 review is started from **inside the Pi session**. The extension registers a
 `review_create` tool:
 
 ```
-review_create  name=<series>  [target=<what>]  [spec=<spec-slug>]  [parent=<run-id>]  [model=<p/m>]
+review_create  name=<series>  [target=<what>]  [spec=<spec-slug>]  [parent=<session-id>]  [model=<p/m>]
 ```
 
 It ensures the series ledger exists and starts the `montflow-adversarial-review`
-reviewer run through the session's runner host (the same host `@montflow/pi-runs`
-built, so the live-run registry is shared), returning the run id. Follow it with
-`run_status`; resume a stopped reviewer with `run_resume`.
+reviewer session through the session's session runner host (the same host
+`@montflow/pi-sessions` built, so the live-session registry is shared), returning the
+session id. Follow it with `session_status`; resume a stopped reviewer with
+`session_resume`.
 
 The `mf-reviews` **CLI**'s `create`/`new` only scaffold a series; the tool (or the
-`/mf-reviews` command in-session) is what actually spawns a reviewer run.
+`/mf-reviews` command in-session) is what actually spawns a reviewer session.
 
 `create` scaffolds a series and its first round; `resume` reports the latest
 round and the open-finding count so an agent can pick a review back up. A series

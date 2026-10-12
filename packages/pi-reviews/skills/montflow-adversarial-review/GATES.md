@@ -1,6 +1,6 @@
 ## Phase 0: Independence
 
-- [ ] The reviewer did not author, edit, or execute the code under review (independent subagent in pipelines; fresh session/subagent for direct invocation; if neither is available, the run is explicitly marked non-isolated in Metadata `Isolation`)
+- [ ] The reviewer did not author, edit, or execute the code under review (independent subagent in pipelines; fresh session/subagent for direct invocation; if neither is available, the session is explicitly marked non-isolated in Metadata `Isolation`)
 - [ ] The reviewer had no access to the original implementer's thoughts, notes, commit messages, design commentary, or any context beyond the code, spec, and goals
 - [ ] On a re-review, the reviewer read ONLY the latest round file and the series ledger; no older round file was opened
 - [ ] `[Fixer]` Discussion turns were treated as unverified assertions; every `In Review` finding was verified by reading the actual code, not by trusting the fixer's narrative

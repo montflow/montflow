@@ -1,19 +1,19 @@
 import { Clock, Effect } from 'effect';
-import { Run, Runner, Runtime } from '@montflow/pi-runs';
+import { Session, SessionRunner, Runtime } from '@montflow/pi-sessions';
 import * as Review from '../../modules/review/index.js';
 import { ReviewStore } from '../../services/index.js';
 
 /**
- * In-session dispatch of an adversarial review run.
+ * In-session dispatch of an adversarial review session.
  *
- * `mf-reviews create` scaffolds a series; a *spawned* review run is what
+ * `mf-reviews create` scaffolds a series; a *spawned* review session is what
  * actually performs the pass. A short-lived CLI process cannot keep an
- * in-process Pi run alive, so the spawn happens here — inside the Pi session,
- * through the runner host the runs extension built
- * ({@link Runtime.activeRunnerHost}) — and the reviewer writes the round.
+ * in-process Pi session alive, so the spawn happens here — inside the Pi session,
+ * through the session runner host the sessions extension built
+ * ({@link Runtime.activeSessionRunnerHost}) — and the reviewer writes the round.
  */
 
-/** Inputs for starting one review run. */
+/** Inputs for starting one review session. */
 export interface ReviewDispatchInput {
   /** Workspace root that owns `.agents/@montflow/reviews`. */
   readonly root: string;
@@ -23,21 +23,21 @@ export interface ReviewDispatchInput {
   readonly target?: string | undefined;
   /** Spec this review belongs to (`<spec-slug>`), when bound to one. */
   readonly spec?: string | undefined;
-  /** Parent run id (the dispatching orchestrator), when there is one. */
+  /** Parent session id (the dispatching orchestrator), when there is one. */
   readonly parent?: string | undefined;
-  /** `provider/model-id` pin for the reviewer run. */
+  /** `provider/model-id` pin for the reviewer session. */
   readonly model?: string | undefined;
-  /** Thinking level for the reviewer run. */
-  readonly thinking?: Run.ThinkingLevel | undefined;
+  /** Thinking level for the reviewer session. */
+  readonly thinking?: Session.ThinkingLevel | undefined;
 }
 
 /** What {@link startReview} started. */
 export interface ReviewDispatchResult {
-  readonly runId: string;
+  readonly sessionId: string;
   readonly series: string;
 }
 
-/** The prompt the reviewer run receives. */
+/** The prompt the reviewer session receives. */
 export const reviewerPrompt = (input: ReviewDispatchInput): string =>
   [
     `Run one pass of the adversarial review series '${input.name}'.`,
@@ -55,7 +55,7 @@ export const reviewerPrompt = (input: ReviewDispatchInput): string =>
     'Do not edit spec state, task status, or locks; the orchestrator owns those.',
   ].join('\n');
 
-/** Reviewer run tools: read the code under review, write the round file. */
+/** Reviewer session tools: read the code under review, write the round file. */
 const REVIEW_TOOLS = ['read', 'write', 'edit', 'bash'] as const;
 
 /** Ensure the series ledger exists (0 rounds); the reviewer writes the rounds. */
@@ -88,31 +88,31 @@ const ensureSeries = (
   });
 
 /**
- * Ensure the series exists and start the reviewer run through the session's
- * runner host. Fails with a displayable message when the runs extension is not
+ * Ensure the series exists and start the reviewer session through the session's
+ * session runner host. Fails with a displayable message when the sessions extension is not
  * loaded (no host) — a missing tooling problem to surface, not to improvise.
- * @param input - series, context, and optional run pins
- * @returns the started run id and its series
+ * @param input - series, context, and optional session pins
+ * @returns the started session id and its series
  */
 export const startReview = (
   input: ReviewDispatchInput,
 ): Effect.Effect<ReviewDispatchResult, string, ReviewStore.ReviewStore> =>
   Effect.gen(function* () {
     yield* ensureSeries(input);
-    const host = Runtime.activeRunnerHost();
+    const host = Runtime.activeSessionRunnerHost();
     if (host === undefined) {
       return yield* Effect.fail(
-        'The runs extension (mf-runs) is not loaded in this session; cannot spawn the reviewer run.',
+        'The sessions extension (mf-sessions) is not loaded in this session; cannot spawn the reviewer session.',
       );
     }
     const runtime = host.runtimeFor(input.root);
-    const id = yield* Run.newId(`${input.name}-review`);
+    const id = yield* Session.newId(`${input.name}-review`);
     const prompt = reviewerPrompt(input);
-    const run = yield* Effect.promise(() =>
+    const session = yield* Effect.promise(() =>
       runtime.runPromise(
         Effect.gen(function* () {
-          const runner = yield* Runner;
-          return yield* runner.start({
+          const sessionRunner = yield* SessionRunner;
+          return yield* sessionRunner.start({
             root: input.root,
             id,
             name: `Review: ${input.name}`,
@@ -126,5 +126,5 @@ export const startReview = (
         }),
       ),
     );
-    return { runId: run.id, series: input.name };
+    return { sessionId: session.id, series: input.name };
   });

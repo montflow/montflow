@@ -37,9 +37,9 @@ This prevents anchoring bias and ensures the review judges only what the code _a
 Isolation is a _structural_ property of the orchestration, not a self-attested checkbox. The review MUST be performed by a reviewer that did not author, edit, or execute the code under review:
 
 - **Inside an orchestration pipeline** (any orchestrator that runs an end-of-phase review): the orchestrator MUST spawn an independent subagent for the review, distinct from any agent that authored or executed the phase. The principle applies to any orchestrator.
-- **Direct invocation by the user**: if the hosting environment supports subagents/sessions, run the review in a fresh subagent or session that has not seen the implementer's context. If the host has no such capability, the reviewer MUST discard the implementer's context from working memory before starting (state this explicitly before the review), and the user MUST be warned that structural isolation is unavailable for that run.
+- **Direct invocation by the user**: if the hosting environment supports subagents/sessions, run the review in a fresh subagent or session that has not seen the implementer's context. If the host has no such capability, the reviewer MUST discard the implementer's context from working memory before starting (state this explicitly before the review), and the user MUST be warned that structural isolation is unavailable for that session.
 
-A reviewer that already saw the author's intent (e.g. from an earlier conversation turn) cannot self-certify forgetting it; treat such a run as non-isolated and mark it so in the report's Review Metadata.
+A reviewer that already saw the author's intent (e.g. from an earlier conversation turn) cannot self-certify forgetting it; treat such a session as non-isolated and mark it so in the report's Review Metadata.
 
 > **File output restriction**: Every round is ALWAYS written to `.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md` (see Step 0). When picking the next round number you may list directory entries (`ls`, `glob`), but you must NOT read the _contents_ of any round other than the one being iterated on (see Step 9). The series ledger `.agents/@montflow/reviews/<name>/REVIEW.md` is the one file you read and rewrite to index the rounds — never to gather findings.
 
