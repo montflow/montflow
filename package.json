@@ -9,6 +9,9 @@
     "tooling/*",
     "apps/*"
   ],
+  "overrides": {
+    "effect": "4.0.3"
+  },
   "scripts": {
     "changeset": "changeset",
     "changeset:version": "changeset version",
@@ -20,11 +23,12 @@
     "lint:check": "turbo lint:check",
     "lint:fix": "turbo lint:fix",
     "verify:montflow:skills": "bun run --cwd packages/pi-skills cli verify --dir $PWD && bun run --cwd packages/pi-skills cli doctor --check --dir $PWD",
-    "verify:montflow:prompts": "bun run --cwd packages/pi-prompts cli verify --all --dir $PWD/.agents/@montflow/pi-prompts && bun run --cwd packages/pi-prompts cli doctor --check --dir $PWD",
-    "verify:montflow:specs": "bun run --cwd packages/pi-specs cli check --dir $PWD/.agents/@montflow/specs",
-    "verify:montflow:profiles": "bun run --cwd packages/pi-profiles cli --dir $PWD",
+    "verify:montflow:prompts": "bun run --cwd packages/pi-prompts cli verify --all --dir $PWD && bun run --cwd packages/pi-prompts cli doctor --check --dir $PWD",
+    "verify:montflow:specs": "bun run --cwd packages/pi-specs cli check --dir $PWD",
+    "verify:montflow:profiles": "bun run --cwd packages/pi-profiles cli verify --dir $PWD",
     "verify:montflow:runs": "bun run --cwd packages/pi-runs cli doctor",
-    "verify:montflow:extensions": "bun run verify:montflow:skills && bun run verify:montflow:prompts && bun run verify:montflow:specs && bun run verify:montflow:profiles && bun run verify:montflow:runs",
+    "verify:montflow:reviews": "bun run --cwd packages/pi-reviews cli verify --all --dir $PWD && bun run --cwd packages/pi-reviews cli doctor --check --dir $PWD",
+    "verify:montflow:extensions": "bun run verify:montflow:skills && bun run verify:montflow:prompts && bun run verify:montflow:specs && bun run verify:montflow:profiles && bun run verify:montflow:runs && bun run verify:montflow:reviews",
     "verify:montflow:fast": "turbo lint:check && turbo format:check && turbo ts:check && bun run verify:montflow:extensions",
     "verify:montflow": "turbo lint:check && turbo format:check && turbo ts:check && turbo test && bun run verify:montflow:extensions",
     "hooks:install": "lefthook install",

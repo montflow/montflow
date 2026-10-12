@@ -60,6 +60,8 @@ jobs:
             script: verify:montflow:profiles
           - target: runs
             script: verify:montflow:runs
+          - target: reviews
+            script: verify:montflow:reviews
     steps:
       - uses: actions/checkout@v4
 

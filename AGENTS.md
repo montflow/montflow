@@ -45,10 +45,10 @@ bun@1.3.13 — lockfile is source of truth
   hook runs it; install once per clone with `bun run hooks:install`, bypass with
   `git push --no-verify` or `LEFTHOOK=0`.
 - Extension verifies, each runnable alone: `verify:montflow:skills`,
-  `:prompts`, `:specs`, `:profiles`, `:runs`. They verify this repo's own
-  artifacts (`.agents/skills`, `.agents/@montflow/pi-prompts`,
-  `.agents/@montflow/specs`, `.agents/@montflow/profiles`) plus packaged-skill
-  freshness.
+  `:prompts`, `:specs`, `:profiles`, `:runs`, `:reviews`. They verify this repo's
+  own artifacts (`.agents/skills`, `.agents/@montflow/pi-prompts`,
+  `.agents/@montflow/specs`, `.agents/@montflow/profiles`,
+  `.agents/@montflow/reviews`) plus packaged-skill freshness.
 - `release.yml` is separate: it gates publishing, not pushes, and keeps its own
   per-package conditions.
 

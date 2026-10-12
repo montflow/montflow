@@ -12,6 +12,7 @@
     "@montflow/pi-effect",
     "@montflow/pi-profiles",
     "@montflow/pi-prompts",
+    "@montflow/pi-reviews",
     "@montflow/pi-runs",
     "@montflow/pi-skills",
     "@montflow/tooling-oxfmt",
