@@ -1,13 +1,13 @@
 import { Console, Effect, Option } from 'effect';
-import * as Argument from 'effect/unstable/cli/Argument';
-import * as Command from 'effect/unstable/cli/Command';
-import * as Flag from 'effect/unstable/cli/Flag';
+import * as Argument from 'effect/cli/Argument';
+import * as Command from 'effect/cli/Command';
+import * as Flag from 'effect/cli/Flag';
 import { PromptStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
 
 /**
- * The `mf-prompts` binary's command tree, built with `effect/unstable/cli`.
+ * The `mf-prompts` binary's command tree, built with `effect/cli`.
  *
  * Every handler is a one-liner over `engines` plus a renderer, so the binary
  * and the `/mf-prompts` slash command cannot disagree about behaviour — the
@@ -31,25 +31,25 @@ const opt = (value: Option.Option<string>): string | undefined => Option.getOrUn
 
 /** Optional string flag. */
 const optionalString = (name: string, description: string) =>
-  Flag.string(name).pipe(Flag.withDescription(description), Flag.optional);
+  Flag.String(name).pipe(Flag.withDescription(description), Flag.optional);
 
 /** Boolean flag, defaulting to false. */
 const optionalBoolean = (name: string, description: string) =>
-  Flag.boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
+  Flag.Boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
 
-/** Store directory override, on every store-touching command. */
-const dirFlag = optionalString('dir', 'Store directory, resolved against the working directory.');
+/** Workspace-root override, on every store-touching command. */
+const dirFlag = optionalString('dir', 'Workspace root. Defaults to the working directory.');
 
 /** `--verbose`: add per-item detail without hiding anything. */
 const verboseFlag = optionalBoolean('verbose', 'Show per-item detail. Default is token-lean.');
 
 /** The `name` positional every prompt command takes. */
-const nameArg = Argument.string('name').pipe(
+const nameArg = Argument.String('name').pipe(
   Argument.withDescription('Prompt name (the file slug).'),
 );
 
 /** Trailing `key=value` positionals, shared with the slash command. */
-const valuesArg = Argument.string('values').pipe(
+const valuesArg = Argument.String('values').pipe(
   Argument.variadic,
   Argument.map(Engines.keyValues),
   Argument.withDescription('Variable values, as key=value pairs.'),
@@ -105,10 +105,9 @@ const report = <A, R>(
 const BINARY_EXECUTE_INVOCATION = 'mf-prompts execute';
 const BINARY_DOCTOR_INVOCATION = 'mf-prompts doctor';
 
-/** Where the store lives for this invocation. */
+/** Where the workspace root is for this invocation: `--dir` overrides the cwd. */
 const scope = (dir: Option.Option<string>): Engines.StoreScope => ({
-  cwd: process.cwd(),
-  dir: opt(dir),
+  cwd: opt(dir) ?? process.cwd(),
 });
 
 /**
@@ -219,7 +218,7 @@ const verifyCommand = Command.make(
   'verify',
   {
     dir: dirFlag,
-    name: Argument.string('name').pipe(
+    name: Argument.String('name').pipe(
       Argument.withDescription('Prompt name. Omit to verify every prompt.'),
       Argument.optional,
     ),
@@ -255,7 +254,7 @@ const createCommand = Command.make(
   {
     ...editFlags,
     name: nameArg,
-    template: Flag.string('template').pipe(Flag.withDescription('Prompt text. Required.')),
+    template: Flag.String('template').pipe(Flag.withDescription('Prompt text. Required.')),
   },
   (config) =>
     report(

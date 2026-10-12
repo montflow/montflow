@@ -183,7 +183,7 @@ undeclared variables included, which would otherwise render as nothing.
 - **Renderers** and the token contract (lean by default, `--verbose` only adds,
   failures never suppressed):
   `packages/pi-prompts/src/apps/cli/renderers.apps.module.ts`
-- **Binary command tree** (`effect/unstable/cli`) and `main.ts`:
+- **Binary command tree** (`effect/cli`) and `main.ts`:
   `packages/pi-prompts/src/apps/cli/binary.apps.module.ts`
 - **Slash parser** (registered as `/mf-prompts`):
   `packages/pi-prompts/src/apps/cli/slash.apps.module.ts`

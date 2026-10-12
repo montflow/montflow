@@ -1,13 +1,13 @@
 #!/usr/bin/env bun
 import { NodeServices } from '@effect/platform-node';
 import { Effect } from 'effect';
-import * as Command from 'effect/unstable/cli/Command';
+import * as Command from 'effect/cli/Command';
 import { VERSION, rootCommand } from './binary.apps.module.js';
 
 /**
  * `mf-prompts` binary entry.
  *
- * The runtime is Bun and the CLI is `effect/unstable/cli`, matching
+ * The runtime is Bun and the CLI is `effect/cli`, matching
  * `mf-specs`. `bun build --compile` embeds this runtime, so
  * `dist/mf-prompts` is a single file that runs on its target with no install.
  *

@@ -10,7 +10,7 @@ import * as Renderers from './renderers.apps.module.js';
  * The `/mf-prompts` slash-command front end: a hand-rolled parser over the
  * same engines the `mf-prompts` binary uses.
  *
- * A bespoke parser rather than `effect/unstable/cli` for one reason — a Pi
+ * A bespoke parser rather than `effect/cli` for one reason — a Pi
  * slash command receives a single argument *string*, not an argv array, so the
  * bin's `Command` tree cannot be reused here. Everything below the parser is
  * shared; only the tokenizing differs, which is exactly the seam worth
@@ -30,7 +30,7 @@ export const COMMAND_NAME = 'mf-prompts';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Run the prompts CLI headlessly: doctor, list [--status valid|invalid], inspect, execute, show, verify [<name>|--all], render, create, modify, or delete a prompt. Store operations accept --dir to target a folder other than the default. For the interactive menu use /mf-prompts-tui.';
+  'Run the prompts CLI headlessly: doctor, list [--status valid|invalid], inspect, execute, show, verify [<name>|--all], render, create, modify, or delete a prompt. Store operations accept --dir to target a workspace root other than the working directory. For the interactive menu use /mf-prompts-tui.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
@@ -321,14 +321,14 @@ export const run = (
       }
       case 'Verify': {
         if (action.all || action.name === undefined) {
-          const report = yield* Engines.verifyAll({ cwd, dir: action.dir });
+          const report = yield* Engines.verifyAll({ cwd: action.dir ?? cwd });
           yield* say(Renderers.verifyAll(report));
           if (report.issueCount > 0) {
             return yield* Effect.fail(`verification failed:\n${Renderers.verifyAll(report)}`);
           }
           return;
         }
-        const result = yield* Engines.verify({ cwd, dir: action.dir }, action.name);
+        const result = yield* Engines.verify({ cwd: action.dir ?? cwd }, action.name);
         yield* say(Renderers.verify(action.name, result));
         if (!result.valid) {
           return yield* Effect.fail(
@@ -339,34 +339,32 @@ export const run = (
       }
       case 'Create': {
         const prompt = yield* Engines.create({
-          cwd,
+          cwd: action.dir ?? cwd,
           name: action.name,
           template: action.template,
           description: action.description,
           model: action.model,
           skills: action.skills,
           variables: action.variables,
-          dir: action.dir,
         });
         return yield* say(Renderers.created(prompt));
       }
       case 'Modify': {
         const prompt = yield* Engines.modify({
-          cwd,
+          cwd: action.dir ?? cwd,
           name: action.name,
           template: action.template,
           description: action.description,
           model: action.model,
           skills: action.skills,
           variables: action.variables,
-          dir: action.dir,
         });
         return yield* say(Renderers.saved(prompt));
       }
       case 'Render':
         return yield* say(yield* Engines.render({ cwd }, action.name, action.values));
       case 'Delete': {
-        yield* Engines.remove({ cwd, dir: action.dir }, action.name);
+        yield* Engines.remove({ cwd: action.dir ?? cwd }, action.name);
         return yield* say(Renderers.deleted(action.name));
       }
     }
