@@ -70,6 +70,59 @@ Vitest.describe('Engines.verifyAll', () => {
     }).pipe(Effect.provide(NodeLive), Effect.scoped),
   );
 
+  Vitest.it.effect('verifies declared skills: missing and off-standard fail, generic passes', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-verify-' });
+      const root = `${dir}/.agents/@montflow/profiles`;
+      const skills = `${dir}/.agents/skills`;
+      yield* fs.makeDirectory(`${root}/effect-reviewer`, { recursive: true });
+      yield* fs.makeDirectory(`${skills}/effect`, { recursive: true });
+      yield* fs.makeDirectory(`${skills}/montflow-bad`, { recursive: true });
+      yield* fs.writeFileString(
+        `${root}/effect-reviewer/PROFILE.md`,
+        `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - montflow-bad\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
+      );
+      yield* fs.writeFileString(`${skills}/effect/SKILL.md`, '# upstream shape, no frontmatter\n');
+      yield* fs.writeFileString(`${skills}/montflow-bad/SKILL.md`, '# no frontmatter\n');
+
+      const report = yield* Engines.verifyAll(dir).pipe(Effect.provide(TestLive));
+      Vitest.expect(report.entries[0]?.result.valid).toBe(false);
+      const messages =
+        report.entries[0]?.result.issues.map((issue) => issue.message).join('\n') ?? '';
+      Vitest.expect(messages).toContain("'missing-skill' is not installed under .agents/skills/.");
+      Vitest.expect(messages).toContain("'montflow-bad' failed verification");
+      Vitest.expect(messages).not.toContain("'effect'");
+      Vitest.expect(report.warnings).toStrictEqual([]);
+    }).pipe(Effect.provide(NodeLive), Effect.scoped),
+  );
+
+  Vitest.it.effect('verifies only the named profiles, reporting absent names', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-verify-' });
+      const root = `${dir}/.agents/@montflow/profiles`;
+      yield* fs.makeDirectory(`${root}/alpha`, { recursive: true });
+      yield* fs.makeDirectory(`${root}/beta`, { recursive: true });
+      yield* fs.writeFileString(`${root}/alpha/PROFILE.md`, validProfile('alpha'));
+      yield* fs.writeFileString(`${root}/beta/PROFILE.md`, brokenProfile);
+
+      const report = yield* Engines.verifyAll(dir, ['beta', 'missing']).pipe(
+        Effect.provide(TestLive),
+      );
+      Vitest.expect(report.entries.map((entry) => entry.name)).toStrictEqual(['beta', 'missing']);
+      Vitest.expect(report.entries[1]?.result.issues).toStrictEqual([
+        { field: 'profile', message: 'Profile not found.' },
+      ]);
+      Vitest.expect(report.issueCount).toBeGreaterThan(0);
+      Vitest.expect(report.entries.some((entry) => entry.name === 'alpha')).toBe(false);
+
+      const named = yield* Engines.verifyAll(dir, ['alpha']).pipe(Effect.provide(TestLive));
+      Vitest.expect(named.entries.map((entry) => entry.name)).toStrictEqual(['alpha']);
+      Vitest.expect(named.issueCount).toBe(0);
+    }).pipe(Effect.provide(NodeLive), Effect.scoped),
+  );
+
   Vitest.it.effect('fails when the store directory is missing', () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem;

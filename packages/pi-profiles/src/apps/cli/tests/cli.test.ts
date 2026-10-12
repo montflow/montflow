@@ -75,6 +75,18 @@ Vitest.describe('Cli.parseCliArgs', () => {
     Vitest.expect(Cli.parseCliArgs('show')).toStrictEqual({ kind: 'Help' });
     Vitest.expect(Cli.parseCliArgs('create reviewer --bogus x')).toStrictEqual({ kind: 'Help' });
   });
+
+  Vitest.it('parses verify as the whole store or a list of names', () => {
+    Vitest.expect(Cli.parseCliArgs('verify')).toStrictEqual({ kind: 'Verify', names: [] });
+    Vitest.expect(Cli.parseCliArgs('verify alpha')).toStrictEqual({
+      kind: 'Verify',
+      names: ['alpha'],
+    });
+    Vitest.expect(Cli.parseCliArgs('verify alpha beta')).toStrictEqual({
+      kind: 'Verify',
+      names: ['alpha', 'beta'],
+    });
+  });
 });
 
 Vitest.describe('Cli.run', () => {
@@ -130,6 +142,42 @@ Vitest.describe('Cli.run', () => {
         }),
       );
     }),
+  );
+});
+
+Vitest.describe('Cli verify', () => {
+  Vitest.it.effect('verifies only the named profile', () =>
+    withTempDir((dir) =>
+      Effect.gen(function* () {
+        const create =
+          'create %s --description "Does X." --instructions "Do X." --checklist "Done"';
+        yield* Cli.run(create.replace('%s', 'alpha'), scriptedUi([]), dir);
+        yield* Cli.run(create.replace('%s', 'beta'), scriptedUi([]), dir);
+
+        const notifies: Array<string> = [];
+        yield* Cli.run('verify alpha', scriptedUi(notifies), dir);
+        Vitest.expect(notifies.some((message) => message.includes("'alpha'"))).toBe(true);
+        Vitest.expect(notifies.some((message) => message.includes("'beta'"))).toBe(false);
+      }),
+    ),
+  );
+
+  Vitest.it.effect('fails when a named profile is missing', () =>
+    withTempDir((dir) =>
+      Effect.gen(function* () {
+        yield* Cli.run(
+          'create alpha --description "Does X." --instructions "Do X." --checklist "Done"',
+          scriptedUi([]),
+          dir,
+        );
+        const error = yield* Cli.run('verify ghost', scriptedUi([]), dir).pipe(
+          Effect.flip,
+          Effect.mapError(() => 'should have failed'),
+        );
+        Vitest.expect(error).toContain('[ghost]');
+        Vitest.expect(error).toContain('Profile not found.');
+      }),
+    ),
   );
 });
 

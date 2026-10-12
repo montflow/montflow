@@ -1,0 +1,104 @@
+import { Effect } from 'effect';
+import * as PiProfiles from '../pi-profiles/index.js';
+
+/**
+ * Check the skills a profile declares by delegating to the pi-skills
+ * `verify` engine — the same engine the `mf-skills` CLI runs, so a
+ * profile and the skills CLI can never disagree. Montflow skills
+ * (`montflow-*`) are held to the full standard; generic and vendored
+ * skills only have to exist.
+ *
+ * `@montflow/pi-skills` is imported lazily: verifying profiles must not
+ * pull the whole skills extension into every session. When it cannot be
+ * loaded, the check is skipped and the caller surfaces a warning rather
+ * than failing the profile.
+ */
+
+/** The skills extension runtime, resolved lazily. */
+type PiSkillsLib = typeof import('@montflow/pi-skills');
+
+/** Warning surfaced when the skills engine cannot be loaded. */
+export const SKILLS_ENGINE_WARNING =
+  'Skill verification skipped: could not load @montflow/pi-skills.';
+
+let cached: Promise<PiSkillsLib> | undefined;
+
+/** Single lazy import: a failure clears the cache so the next check retries. */
+const importOnce = (): Promise<PiSkillsLib> => {
+  cached ??= import('@montflow/pi-skills').catch((cause: unknown) => {
+    cached = undefined;
+    throw cause;
+  });
+  return cached;
+};
+
+/** The skills runtime, or undefined when it is unavailable — never fails. */
+const load = (): Effect.Effect<PiSkillsLib | undefined> =>
+  Effect.tryPromise(() => importOnce()).pipe(Effect.orElseSucceed(() => undefined));
+
+/** One declared skill's verify outcome. `issue` is undefined when it passes. */
+export interface SkillVerdict {
+  readonly name: string;
+  readonly issue: PiProfiles.VerifyIssue | undefined;
+}
+
+/** Outcome of checking a profile's declared skills. */
+export interface SkillCheck {
+  readonly verdicts: ReadonlyArray<SkillVerdict>;
+  /** Set when the check could not run at all. */
+  readonly warning: string | undefined;
+}
+
+/** One-line rendering of a skill's verify issues. */
+const summarize = (
+  issues: ReadonlyArray<{ readonly field: string; readonly message: string }>,
+): string => issues.map((found) => `[${found.field}] ${found.message}`).join('; ');
+
+/**
+ * Verify one declared skill. An unknown name (no `SKILL.md`) reads as a
+ * missing-skill issue; a montflow skill that fails the standard carries
+ * its issues.
+ * @param libs - loaded skills runtime
+ * @param cwd - workspace root owning `.agents/skills`
+ * @param name - declared skill name
+ * @returns Effect resolving to the verdict, never failing
+ */
+const checkOne = (libs: PiSkillsLib, cwd: string, name: string): Effect.Effect<SkillVerdict> =>
+  libs.Cli.Engines.verify({ cwd }, name).pipe(
+    Effect.map((report): SkillVerdict => {
+      const entry = report.entries[0];
+      if (entry === undefined || entry.result.valid) return { name, issue: undefined };
+      return {
+        name,
+        issue: {
+          field: 'skills',
+          message: `Skill '${name}' failed verification: ${summarize(entry.result.issues)}`,
+        },
+      };
+    }),
+    Effect.orElseSucceed((): SkillVerdict => ({
+      name,
+      issue: {
+        field: 'skills',
+        message: `Skill '${name}' is not installed under .agents/skills/.`,
+      },
+    })),
+  );
+
+/**
+ * Verify the declared skills of one or more profiles. Deduplicates names
+ * and verifies each once. Empty input short-circuits without loading the
+ * skills engine.
+ * @param cwd - workspace root owning `.agents/skills`
+ * @param names - declared skill names, across every profile being checked
+ * @returns Effect resolving to the verdicts plus an optional warning
+ */
+export const checkSkills = (cwd: string, names: ReadonlyArray<string>): Effect.Effect<SkillCheck> =>
+  Effect.gen(function* () {
+    const unique = [...new Set(names)];
+    if (unique.length === 0) return { verdicts: [], warning: undefined };
+    const libs = yield* load();
+    if (libs === undefined) return { verdicts: [], warning: SKILLS_ENGINE_WARNING };
+    const verdicts = yield* Effect.forEach(unique, (name) => checkOne(libs, cwd, name));
+    return { verdicts, warning: undefined };
+  });

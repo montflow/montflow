@@ -118,6 +118,34 @@ export interface VerifyResult {
 const verifyIssue = (field: string, message: string): VerifyIssue => ({ field, message });
 
 /**
+ * Append extra issues (e.g. from declared-skill verification) to a
+ * mechanical result. Zero extra issues returns the result unchanged.
+ * @param result - base result from {@link verifyProfileFile}
+ * @param extra - additional issues to fold in
+ * @returns the combined result; `valid` is false when any issue remains
+ */
+export const withIssues = (
+  result: VerifyResult,
+  extra: ReadonlyArray<VerifyIssue>,
+): VerifyResult => {
+  if (extra.length === 0) return result;
+  const issues = [...result.issues, ...extra];
+  return { valid: false, issues };
+};
+
+/**
+ * Skill names declared in a `PROFILE.md` `skills:` list. Pure; a file
+ * with no frontmatter block declares none.
+ * @param markdown - raw PROFILE.md contents
+ * @returns non-blank skill names, in listed order
+ */
+export const declaredSkills = (markdown: string): ReadonlyArray<string> => {
+  const parsed = parseProfileFile(markdown);
+  if (parsed === null) return [];
+  return fieldStrings(parsed.fields, 'skills');
+};
+
+/**
  * Mechanically verify a `PROFILE.md` file against the montflow-create-pi-profiles
  * standard: frontmatter `name` (valid slug, matching the directory) +
  * non-empty `description`, plus body `# Title`, `## Instructions`, and

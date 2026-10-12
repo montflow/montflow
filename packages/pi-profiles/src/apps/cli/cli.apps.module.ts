@@ -1,9 +1,32 @@
 import { PiEffect } from '@montflow/pi-effect';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Effect, Layer } from 'effect';
-import * as PiProfiles from '../../modules/pi-profiles/index.js';
 import { ProfileStore } from '../../services/index.js';
 import * as Interactive from '../interactive/index.js';
+import {
+  LIST_STATUSES,
+  create,
+  filterByStatus,
+  list,
+  modify,
+  remove,
+  resolveListStatus,
+  show,
+  verifyAll,
+  type ProfileFields,
+} from './engines.apps.module.js';
+import * as Renderers from './renderers.apps.module.js';
+
+export { LIST_STATUSES, resolveListStatus };
+
+/**
+ * The `/mf-profiles-cli` slash front end: a hand-rolled parser over the same
+ * engines the `mf-profiles` binary uses.
+ *
+ * A bespoke parser rather than `effect/cli` because a Pi slash command
+ * receives a single argument *string*, not an argv array, so the bin's
+ * `Command` tree cannot be reused here. Everything below the parser is shared.
+ */
 
 /** Slash-command name registered by {@link register} (invoke as `/mf-profiles-cli`). */
 export const COMMAND_NAME = 'mf-profiles-cli';
@@ -14,25 +37,19 @@ export const COMMAND_DESCRIPTION =
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-profiles-cli list [--status valid|invalid] | show <name> | verify <name> | create <name> --description "text" [--model p/m] [--skills a,b] [--instructions "text"] [--checklist "item 1; item 2"] | modify <name> [--description ...] [--model ...] [--skills ...] [--instructions ...] [--checklist ...] | delete <name> | help';
+  '/mf-profiles-cli list [--status valid|invalid] | show <name> | verify [<name>...] | create <name> --description "text" [--model p/m] [--skills a,b] [--instructions "text"] [--checklist "item 1; item 2"] | modify <name> [--description ...] [--model ...] [--skills ...] [--instructions ...] [--checklist ...] | delete <name> | help';
 
-/** Optional fields for `create` / `modify`. Absent means default (create) or keep (modify). */
-export interface CliFields {
-  readonly description: string | undefined;
-  readonly model: string | undefined;
-  readonly skills: readonly string[] | undefined;
-  readonly instructions: string | undefined;
-  readonly checklist: readonly string[] | undefined;
-}
+/** Fields for `create` / `modify`, re-exported under the historical name. */
+export type CliFields = ProfileFields;
 
 /** Parsed `/mf-profiles-cli` invocation. Never prompts — gaps fail. */
 export type CliAction =
   | { readonly kind: 'Help' }
   | { readonly kind: 'List'; readonly status: string | undefined }
   | { readonly kind: 'Show'; readonly name: string }
-  | { readonly kind: 'Verify'; readonly name: string }
-  | { readonly kind: 'Create'; readonly name: string; readonly fields: CliFields }
-  | { readonly kind: 'Modify'; readonly name: string; readonly fields: CliFields }
+  | { readonly kind: 'Verify'; readonly names: ReadonlyArray<string> }
+  | { readonly kind: 'Create'; readonly name: string; readonly fields: ProfileFields }
+  | { readonly kind: 'Modify'; readonly name: string; readonly fields: ProfileFields }
   | { readonly kind: 'Delete'; readonly name: string };
 
 /** Flags this CLI understands on `create` / `modify`. Anything else is usage. */
@@ -46,30 +63,6 @@ const KNOWN_FLAGS: ReadonlySet<string> = new Set([
 
 /** Flags `list` understands. Anything else is usage. */
 const KNOWN_LIST_FLAGS: ReadonlySet<string> = new Set(['status']);
-
-/** Verification states accepted by `list --status`. */
-export const LIST_STATUSES = ['valid', 'invalid'] as const;
-
-/** A verification state `list --status` accepts. */
-export type ListStatus = (typeof LIST_STATUSES)[number];
-
-const isListStatus = (value: string): value is ListStatus =>
-  LIST_STATUSES.some((status) => status === value);
-
-/**
- * Resolve a raw `--status` value to a {@link ListStatus}. Absent or empty
- * means "no filter"; anything else must name a state.
- * @param value - raw flag value, if any
- * @returns the status, or a refusal naming the accepted values
- */
-export const resolveListStatus = (
-  value: string | undefined,
-): Effect.Effect<ListStatus | undefined, string> => {
-  if (value === undefined || value === '') return Effect.succeed(undefined);
-  return isListStatus(value)
-    ? Effect.succeed(value)
-    : Effect.fail(`Unknown status '${value}'. Use one of: ${LIST_STATUSES.join(', ')}.`);
-};
 
 /** Token split: bare positionals plus `--flag value` / `--flag=value` pairs. */
 interface SplitTokens {
@@ -137,7 +130,7 @@ const checklistOf = (value: string | undefined): readonly string[] | undefined =
   return parts.length > 0 ? parts : undefined;
 };
 
-const fieldsOf = (split: SplitTokens): CliFields => ({
+const fieldsOf = (split: SplitTokens): ProfileFields => ({
   description: one(split.flags['description']),
   model: one(split.flags['model']),
   skills: csv(split.flags['skills']),
@@ -164,7 +157,7 @@ export const parseCliArgs = (args: string): CliAction => {
     case 'show':
       return tokens[1] === undefined ? { kind: 'Help' } : { kind: 'Show', name: tokens[1] };
     case 'verify':
-      return tokens[1] === undefined ? { kind: 'Help' } : { kind: 'Verify', name: tokens[1] };
+      return { kind: 'Verify', names: tokens.slice(1).filter((token) => token !== '') };
     case 'delete':
       return tokens[1] === undefined ? { kind: 'Help' } : { kind: 'Delete', name: tokens[1] };
     case 'create':
@@ -183,44 +176,6 @@ export const parseCliArgs = (args: string): CliAction => {
   }
 };
 
-const findOrFail = (
-  profiles: readonly PiProfiles.Profile[],
-  name: string,
-): Effect.Effect<PiProfiles.Profile, string> => {
-  const profile = profiles.find((candidate) => candidate.name === name);
-  return profile === undefined
-    ? Effect.fail(`Unknown profile '${name}'.`)
-    : Effect.succeed(profile);
-};
-
-/**
- * Keep only profiles whose file passes (`valid`) or fails (`invalid`)
- * mechanical verification. An unreadable file counts as invalid.
- * @param cwd - project working directory
- * @param profiles - profiles to filter
- * @param status - verification state to keep
- * @returns Effect resolving to the matching profiles
- */
-const filterByStatus = (
-  cwd: string,
-  profiles: readonly PiProfiles.Profile[],
-  status: ListStatus,
-): Effect.Effect<ReadonlyArray<PiProfiles.Profile>, never, ProfileStore.ProfileStore> =>
-  Effect.gen(function* () {
-    const store = yield* ProfileStore.ProfileStore;
-    const wanted = status === 'valid';
-    const verdicts = yield* Effect.forEach(profiles, (profile) =>
-      store.readRaw(cwd, profile.name).pipe(
-        Effect.map((raw) => ({
-          profile,
-          valid: PiProfiles.verifyProfileFile(profile.name, raw).valid,
-        })),
-        Effect.orElseSucceed(() => ({ profile, valid: false })),
-      ),
-    );
-    return verdicts.filter((entry) => entry.valid === wanted).map((entry) => entry.profile);
-  });
-
 /**
  * Run one parsed args string end to end: parse, load, execute, save, notify.
  * Never opens a dialog — missing input fails with a message. No agentic
@@ -228,98 +183,71 @@ const filterByStatus = (
  * drive it mechanically.
  * @param args - raw slash-command args
  * @param ui - Pi ui surface (notify only; dialogs never called)
- * @param cwd - project working directory
+ * @param cwd - workspace root owning the profiles and skills stores
  * @returns Effect completing once done, failing with displayable message
  */
 export const run = (
   args: string,
   ui: Interactive.InteractiveUi,
   cwd: string,
-): Effect.Effect<void, string, ProfileStore.ProfileStore> =>
-  Effect.gen(function* () {
-    const store = yield* ProfileStore.ProfileStore;
-    const action = parseCliArgs(args);
+): Effect.Effect<void, string, ProfileStore.ProfileStore> => {
+  const action = parseCliArgs(args);
+  const say = (text: string): Effect.Effect<void> => Effect.sync(() => ui.notify(text, 'info'));
+  return Effect.gen(function* () {
     switch (action.kind) {
-      case 'Help': {
-        yield* Effect.sync(() => ui.notify(USAGE, 'info'));
-        return;
-      }
+      case 'Help':
+        return yield* say(USAGE);
       case 'List': {
         const status = yield* resolveListStatus(action.status);
-        const profiles = yield* store.list(cwd);
+        const profiles = yield* list(cwd);
         const shown =
           status === undefined ? profiles : yield* filterByStatus(cwd, profiles, status);
         if (shown.length === 0 && status !== undefined) {
-          yield* Effect.sync(() => ui.notify(`No profiles with status '${status}'.`, 'info'));
-          return;
+          return yield* say(`No profiles with status '${status}'.`);
         }
-        yield* Interactive.listProfiles(ui, shown);
-        return;
+        return yield* say(Renderers.list(shown));
       }
       case 'Show': {
-        const profiles = yield* store.list(cwd);
-        yield* Interactive.showProfile(ui, profiles, action.name);
-        return;
+        const profile = yield* show(cwd, action.name);
+        return yield* say(Renderers.show(profile));
       }
       case 'Verify': {
-        const raw = yield* store
-          .readRaw(cwd, action.name)
-          .pipe(Effect.mapError((error) => error.message));
-        const result = PiProfiles.verifyProfileFile(action.name, raw);
-        yield* Interactive.notifyVerifyResult(ui, action.name, result);
-        if (!result.valid) {
+        const report = yield* verifyAll(cwd, action.names.length > 0 ? action.names : undefined);
+        for (const entry of report.entries) {
+          yield* say(Renderers.verify(entry.name, entry.result));
+        }
+        for (const warning of report.warnings) {
+          yield* Effect.sync(() => ui.notify(`! ${warning}`, 'warning'));
+        }
+        const failed = report.entries.filter((entry) => !entry.result.valid);
+        if (failed.length > 0) {
           return yield* Effect.fail(
-            `'${action.name}' failed verification: ${result.issues.map((found) => `[${found.field}] ${found.message}`).join('; ')}`,
+            `Verification failed: ${failed
+              .flatMap((entry) =>
+                entry.result.issues.map(
+                  (found) => `[${entry.name}] [${found.field}] ${found.message}`,
+                ),
+              )
+              .join('; ')}`,
           );
         }
         return;
       }
       case 'Create': {
-        if (action.fields.description === undefined) {
-          return yield* Effect.fail('create requires --description "text".');
-        }
-        if (!PiProfiles.isValidName(action.name)) {
-          return yield* Effect.fail(
-            `Invalid profile name '${action.name}' — use kebab-case (lowercase, hyphen-separated).`,
-          );
-        }
-        const profile = yield* PiProfiles.decodeUnknown({
-          name: action.name,
-          description: action.fields.description,
-          model: action.fields.model ?? '',
-          skills: action.fields.skills ?? [],
-          instructions: action.fields.instructions ?? '',
-          checklist: action.fields.checklist ?? [],
-        }).pipe(Effect.mapError(() => `Invalid profile fields for '${action.name}'.`));
-        yield* store.save(cwd, profile).pipe(Effect.mapError((error) => error.message));
-        yield* Effect.sync(() => ui.notify(`Saved profile '${profile.name}'.`, 'info'));
-        return;
+        const profile = yield* create(cwd, action.name, action.fields);
+        return yield* say(Renderers.saved(profile));
       }
       case 'Modify': {
-        const profiles = yield* store.list(cwd);
-        const profile = yield* findOrFail(profiles, action.name);
-        const encoded = PiProfiles.encode(profile);
-        const updated = yield* PiProfiles.decodeUnknown({
-          ...encoded,
-          description: action.fields.description ?? encoded.description,
-          model: action.fields.model ?? encoded.model,
-          skills: action.fields.skills ?? encoded.skills,
-          instructions: action.fields.instructions ?? encoded.instructions,
-          checklist: action.fields.checklist ?? encoded.checklist,
-        }).pipe(Effect.mapError(() => `Invalid profile fields for '${action.name}'.`));
-        yield* store.save(cwd, updated).pipe(Effect.mapError((error) => error.message));
-        yield* Effect.sync(() => ui.notify(`Saved profile '${updated.name}'.`, 'info'));
-        return;
+        const profile = yield* modify(cwd, action.name, action.fields);
+        return yield* say(Renderers.saved(profile));
       }
       case 'Delete': {
-        const profiles = yield* store.list(cwd);
-        const profile = yield* findOrFail(profiles, action.name);
-        yield* store.remove(cwd, profile.name).pipe(Effect.mapError((error) => error.message));
-        yield* Effect.sync(() => ui.notify(`Deleted profile '${profile.name}'.`, 'info'));
-        return;
+        const profile = yield* remove(cwd, action.name);
+        return yield* say(Renderers.deleted(profile.name));
       }
     }
   });
+};
 
 /**
  * Register the `/mf-profiles-cli` slash command as an Effect. Failures notify.

@@ -38,6 +38,7 @@ One directory per profile, one file per profile:
 ```text
 /mf-profiles-cli list [--status valid|invalid]
 /mf-profiles-cli show <name>
+/mf-profiles-cli verify [<name>...]
 /mf-profiles-cli create <name> --description "text" [--model p/m] [--skills a,b] [--instructions "text"] [--checklist "item 1; item 2"]
 /mf-profiles-cli modify <name> [--description ...] [--model ...] [--skills ...] [--instructions ...] [--checklist ...]
 /mf-profiles-cli delete <name>
@@ -47,6 +48,17 @@ One directory per profile, one file per profile:
 - Flags accept `--flag value`, `--flag=value`. Unknown flags print usage.
 - `list --status valid|invalid` keeps only profiles whose `PROFILE.md` passes
   (`valid`) or fails (`invalid`) mechanical verification; absent lists every profile.
+- `verify [<name>...]` checks the `PROFILE.md` shape **and** every declared skill
+  against `.agents/skills/`. Montflow skills (`montflow-*`) must satisfy the
+  full skill standard; generic and vendored skills only have to exist. Name one
+  or more profiles to narrow the check; omit names for the whole store. A named
+  profile with no file is reported as `Profile not found.` Fails with the issue
+  list when anything is off. The headless half is
+  `mf-profiles verify [--all] [<name>...] [--dir <path>]`.
+- The `mf-profiles` binary exposes the same verbs as `/mf-profiles-cli`
+  (`list`, `show`, `verify`, `create`, `modify`, `delete`) and adds the
+  `effect/cli` `--help`/`--version`/`--completions`. On both,
+  `--dir` is the **workspace root**; the store is `<root>/.agents/@montflow/profiles`.
 - `create` requires `--description`. Absent flags mean defaults (create), keep (modify).
   No clear-flags: blank field → `delete` + `create`.
 - `--skills` comma-separated (`--skills reviewer,security`). `--checklist`
