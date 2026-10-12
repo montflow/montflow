@@ -4,7 +4,7 @@
 
 ### Changed
 
-- The skill now authors prompt files directly from its own rules: no CLI calls and no run dispatch
+- The skill now authors prompt files directly from its own rules: no CLI calls and no session dispatch
 - Removed the `doctor` step, the CLI create/modify/delete commands, the `verify` step, and the interactive-menu surface; the seven `verifyPromptFile` checks stay inline as a self-check
 
 ## [2.2.0]

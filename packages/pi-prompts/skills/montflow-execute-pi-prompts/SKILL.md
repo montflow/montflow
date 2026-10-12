@@ -164,7 +164,7 @@ Do not guess — read the message.
 ## 5. Use the Reply
 
 `execute` returns the agent's final text. Send it onward, or dispatch it as a
-separate run with `@montflow/pi-runs` (see skill `montflow-dispatch-pi-runs`).
+separate session with `@montflow/pi-sessions` (see skill `montflow-dispatch-pi-sessions`).
 
 To see the rendered text _without_ running an agent, use
 `mf-prompts render <name> key=value ...`.

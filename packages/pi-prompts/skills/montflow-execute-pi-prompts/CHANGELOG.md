@@ -102,4 +102,4 @@
 
 - Initial release of montflow-execute-pi-prompts
 - List, show, fill, and render guidance for `@montflow/pi-prompts` prompt templates
-- Execution handoff to the current session or a `@montflow/pi-runs` run
+- Execution handoff to the current session or a dispatched `@montflow/pi-sessions` session
