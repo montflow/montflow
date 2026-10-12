@@ -1,6 +1,6 @@
 # Prompt module
 
-Authoring and resume prompts for dispatched spec runs. Pure strings — no
+Authoring and resume prompts for dispatched spec sessions. Pure strings — no
 IO, no runtime. Each builder injects the matching skill body from
 `src/skills/` so the agent gets the pi-specs contract inline.
 
@@ -15,6 +15,6 @@ IO, no runtime. Each builder injects the matching skill body from
 
 ## Does not belong here
 
-- Run dispatch — the workspace owns `Runs.startRun`
+- Session dispatch — the workspace owns `Sessions.startSession`
 - Verification rules — `structure` / `lifecycle` own those
-- The `ask_user`/`notify_user` transport — `@montflow/pi-runs` owns it
+- The `ask_user`/`notify_user` transport — `@montflow/pi-sessions` owns it

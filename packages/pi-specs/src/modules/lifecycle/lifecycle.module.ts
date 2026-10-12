@@ -4,7 +4,7 @@ import { type Issue, type Result, issue } from '../verify/index.js';
 
 /**
  * Derived lifecycle state of a spec. `pending` is idle work (not
- * complete, no live run bound to it); `in-progress` means a live run is
+ * complete, no live session bound to it); `in-progress` means a live session is
  * actively working on it; `blocked` is idle work with blocked tasks and
  * nothing in progress.
  */
@@ -28,8 +28,8 @@ export interface Input {
   /** Parsed tasks (tasks whose TASK.md failed to parse are excluded). */
   readonly tasks: ReadonlyArray<TaskEntry>;
   /**
-   * True when a live run is bound to this spec. Supplied by the caller
-   * (the runs store), never derived from the spec files. Drives the
+   * True when a live session is bound to this spec. Supplied by the caller
+   * (the sessions store), never derived from the spec files. Drives the
    * `pending` vs `in-progress` distinction.
    */
   readonly active?: boolean | undefined;
@@ -157,7 +157,7 @@ export const verify = (input: Input): Result => {
 /**
  * Derive the spec's lifecycle state and roll up task counts per phase.
  * `inconsistent` means {@link verify} found a bookkeeping contradiction;
- * `in-progress` means a live run is bound (`active`), otherwise unfinished
+ * `in-progress` means a live session is bound (`active`), otherwise unfinished
  * work reads as `pending` (idle) or `blocked`.
  * @param input - spec header plus parsed tasks
  * @returns the analysis, including the state and any issues

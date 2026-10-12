@@ -1,6 +1,6 @@
 ---
 name: montflow-create-pi-specs
-description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per task (TASK.md, MEMORY.md, GATES.md) — from the rules below. Use when an agent must create a spec directly, without dispatching a run or shelling out.
+description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per task (TASK.md, MEMORY.md, GATES.md) — from the rules below. Use when an agent must create a spec directly, without dispatching a session or shelling out.
 id: 6ebf45d24cb3d3a1
 author: Daniel Montilla
 version: 2.0.0
@@ -15,7 +15,7 @@ groups:
 
 Use when a new **spec** must be authored under
 `.agents/@montflow/specs/<kebab-name>/`. The agent writes the files itself
-from the rules below — it does not dispatch a run and does not call a CLI.
+from the rules below — it does not dispatch a session and does not call a CLI.
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md) skill before running this pipeline. It governs how skills are loaded, executed, and verified.
 

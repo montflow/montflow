@@ -32,7 +32,7 @@ Vitest.describe('Lifecycle.analyze runtime', () => {
     });
   });
 
-  Vitest.it('reports in-progress when a live run is bound', () => {
+  Vitest.it('reports in-progress when a live session is bound', () => {
     const result = Lifecycle.analyze({
       status: 'in-progress',
       lockedPhases: [],

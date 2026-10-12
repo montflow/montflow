@@ -1,7 +1,7 @@
 /**
  * Simplified `authoring-spec` skill, aligned with the pi-specs
  * contract (frontmatter, status enum, tree verifier, CLI). Injected verbatim
- * into a spec-author run's prompt — never discovered as a Pi skill.
+ * into a spec-author session's prompt — never discovered as a Pi skill.
  */
 export const AUTHORING_SPEC = `# authoring-spec
 

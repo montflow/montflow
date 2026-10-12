@@ -2,7 +2,7 @@
 
 Spec primitives and a CLI for montflow — schema-backed parsing,
 mechanical verification, a status panel, and the authoring/executing skill
-text injected into dispatched runs.
+text injected into dispatched sessions.
 
 ## CLI
 
@@ -60,7 +60,7 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
   `in-progress` / `blocked` / `complete` / `inconsistent` and rejects
   invalid states (e.g. `complete` with pending tasks, all-done but
   `in-progress`, locked phases that are not finished or not a prefix).
-  `analyze` takes an optional `active` flag (a live run is bound) to
+  `analyze` takes an optional `active` flag (a live session is bound) to
   split idle `pending` from active `in-progress`.
 - **`Structure`** — `verifySpecTree` over an in-memory
   `SpecSnapshot`: required files, task-directory naming and placement,
@@ -71,7 +71,7 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
   (author one spec) and `RESUME_PREPROMPT` / `RESUME_POSTPROMPT` +
   `buildResumePrompt` (orchestrate a spec). Each injects its skill.
 - **`SpecSkill`** — `AUTHORING_SPEC` / `EXECUTING_SPEC`,
-  the simplified skill text sent into dispatched runs (not Pi-discovered).
+  the simplified skill text sent into dispatched sessions (not Pi-discovered).
 - **`Verify` / `Frontmatter`** — shared `Issue` / `Result` vocabulary and
   the tolerant frontmatter grammar.
 - **`SpecStore`** — filesystem reader (`names`, `hasRoot`, `exists`,
