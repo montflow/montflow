@@ -35,7 +35,7 @@ Source: github.com/montflow/montflow.
      @montflow/pi-specs     -> montflow-create-pi-specs, montflow-find-pi-specs
      @montflow/pi-profiles  -> montflow-create-pi-profiles, montflow-modify-pi-profiles
      @montflow/pi-prompts   -> montflow-create-pi-prompts, montflow-execute-pi-prompts
-     @montflow/pi-runs      -> montflow-dispatch-pi-runs
+     @montflow/pi-sessions  -> montflow-dispatch-pi-sessions
      @montflow/pi-reviews   -> montflow-adversarial-review, montflow-addressing-adversarial-review
 
 4. Install with repeated -s, e.g.
@@ -53,7 +53,7 @@ Source: github.com/montflow/montflow.
    git clone https://github.com/montflow/montflow ~/.montflow && cd ~/.montflow && bun install
 
 2. Install every extension project-locally:
-   for p in pi-skills pi-specs pi-profiles pi-prompts pi-runs pi-reviews; do
+   for p in pi-skills pi-specs pi-profiles pi-prompts pi-sessions pi-reviews; do
      pi install ~/.montflow/packages/$p -l
    done
 
@@ -66,7 +66,7 @@ Source: github.com/montflow/montflow.
    bun run --cwd "$M/packages/pi-prompts"  cli verify --all --dir "$PWD"
    bun run --cwd "$M/packages/pi-specs"    cli check        --dir "$PWD"
    bun run --cwd "$M/packages/pi-profiles" cli verify       --dir "$PWD"
-   bun run --cwd "$M/packages/pi-runs"     cli doctor
+   bun run --cwd "$M/packages/pi-sessions" cli doctor
    bun run --cwd "$M/packages/pi-reviews"  cli verify --all --dir "$PWD"
 
 5. Report what changed.

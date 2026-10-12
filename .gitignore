@@ -263,8 +263,8 @@ tmp/
 # --- montflow loop runtime state ---
 .agents/@montflow/loops
 
-# --- montflow run transcripts (local only) ---
-.agents/@montflow/runs
+# --- montflow session transcripts (local only) ---
+.agents/@montflow/sessions
 
 # --- scratchpad (local only, keep dir shell) ---
 scratchpad/*
