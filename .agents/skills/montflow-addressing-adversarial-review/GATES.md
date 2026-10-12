@@ -1,7 +1,7 @@
 ## Phase 1: Triage & Scope
 
-- [ ] The review file was located at `.agents/@montflow/reviews/<name>/<code>.md` and parsed successfully
-- [ ] `Max Attempts` resolved (defaults to 3 if missing/unparseable, and the field was backfilled into Review Metadata)
+- [ ] The latest round was located at `.agents/@montflow/reviews/<name>/<latest>/REVIEW.md` and parsed successfully
+- [ ] `Max Attempts` resolved (defaults to 3 if missing/unparseable, and the field was backfilled into Metadata)
 - [ ] `Resolved` findings were skipped entirely
 - [ ] `Won't Fix` findings were skipped unless the reviewer reopened them with a `[Reviewer]` turn flipping Status to `Open`
 - [ ] `Escalated` findings were not re-attempted; re-engagement only happened after a `[Human]` turn (and did not increment Attempts)
@@ -19,9 +19,10 @@
 
 - [ ] `Attempts` was incremented by exactly 1 per fix attempt (pass or fail) — never reset, never decremented, never touched by a `Won't Fix` or `[Human]` action
 - [ ] No `Status` transition went past the attempt ceiling without escalation (an attempt was not made when `Attempts >= Max Attempts`)
-- [ ] `Iteration` was NOT modified
-- [ ] Every `### Discussion` thread is append-only relative to the prior file state — no `[Reviewer]`, `[Fixer]`, or `[Human]` turn was edited or deleted
+- [ ] No round directory was created, renamed, or deleted by the fixer
+- [ ] Every `#### Discussion` thread is append-only relative to the prior round state — no `[Reviewer]`, `[Fixer]`, or `[Human]` turn was edited or deleted
 - [ ] `## Summary` counts match the actual finding statuses written
+- [ ] The series ledger `Findings` index and `Rounds` counts stay consistent with the round file
 
 ## Phase 4: Escalation
 
