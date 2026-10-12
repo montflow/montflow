@@ -30,7 +30,7 @@ export class Step extends Schema.Class<Step>('WorkflowStep')({
 
 /**
  * A named workflow: an ordered step pipeline. A descriptor only — no
- * execution state (no `status`): lifecycle lives with the run, not in this
+ * execution state (no `status`): lifecycle lives with the session, not in this
  * descriptor. Persisted by the
  * consuming extension as a JSON file (see {@link FromJson}).
  */

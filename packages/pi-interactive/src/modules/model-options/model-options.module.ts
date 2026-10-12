@@ -123,7 +123,7 @@ export const pickModel = (
 ): Effect.Effect<string, string> =>
   Effect.gen(function* () {
     const first = yield* Effect.promise(() =>
-      ui.select('Model for the authoring run', [...models.map(displayModel), PICK_ANOTHER]),
+      ui.select('Model for the authoring session', [...models.map(displayModel), PICK_ANOTHER]),
     );
     if (first === undefined) return yield* Effect.fail(CANCELLED);
     if (first !== PICK_ANOTHER) return yield* modelLabelFor(models, first);
@@ -140,14 +140,14 @@ export const pickModel = (
       query === '' ? models : models.filter((option) => matchesFilter(option.label, query));
     if (candidates.length === 0) return yield* Effect.fail(`No models match '${query}'.`);
     const picked = yield* Effect.promise(() =>
-      ui.select('Model for the authoring run', candidates.map(displayModel)),
+      ui.select('Model for the authoring session', candidates.map(displayModel)),
     );
     if (picked === undefined) return yield* Effect.fail(CANCELLED);
     return yield* modelLabelFor(candidates, picked);
   });
 
 /**
- * Pick the authoring model for an agentic run: session model when the
+ * Pick the authoring model for an agentic session: session model when the
  * catalogue is empty, the injected TUI widget when provided (current
  * session model pinned first, single-keystroke keep), else the
  * menu-driven `pickModel`. Notifies the chosen runtime, unless the

@@ -14,7 +14,7 @@ Singular name per the TypeScript modules skill (`workflow` → `Workflow`).
 Note: namespace + class share the name, so call-site reads
 `Workflow.Workflow`. This stutter is the cost of matching the skill's
 folder convention and the Effect `Schema.Class` identifier (same as
-`Run.Run`, `Skill.Skill`).
+`Session.Session`, `Skill.Skill`).
 
 ## Belongs here
 
