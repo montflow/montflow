@@ -21,7 +21,7 @@ hand-copied.
 ## Requirements
 
 - Generator verbs `new-phase`, `new-task`, `stamp`, `init`, `claim`, `lock`, `state`, `next`, `gate run`, `mail`: for each, its arguments, what it writes, and what makes it fail. State the rule that anything a verifier checks has a generator.
-- `next` computes the ready set from derived state so no agent reasons about scheduling from a markdown table. `claim` binds a run to a task and is the only atomic status write.
+- `next` computes the ready set from derived state so no agent reasons about scheduling from a markdown table. `claim` binds a session to a task and is the only atomic status write.
 - A per-package payload manifest of artifact kinds replacing the hardcoded name arrays, read by repair mode, report-only mode, and every verify script.
 - Verb split between diagnose-and-repair and report-only, with report-only what CI uses. Decide whether a separate sync name is an alias, a root script, or absent, and say which CI and compiled-binary defects it fixes.
 - Which packages ship which payload kinds, including the profiles and prompts this overhaul authored, and how a fresh clone obtains them.

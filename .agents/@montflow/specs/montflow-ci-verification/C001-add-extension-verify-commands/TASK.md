@@ -22,7 +22,7 @@ the profiles RPC-only gap before the entry point depends on them.
 
 - `mf-prompts`: add `verify --all` that enumerates raw `*.json` files and fails when any file is missing, unparseable, or invalid; it must not rely on `list`, which silently drops undecodable files and always exits 0.
 - `mf-profiles`: add a headless verify (a CLI entry or `verify-all` action runnable without a Pi session) that fails non-zero on an invalid profile.
-- Confirm the existing verifies run against the repo root: `mf-skills verify --dir <root>`, `mf-specs check --dir <specs>`, `mf-runs doctor`.
+- Confirm the existing verifies run against the repo root: `mf-skills verify --dir <root>`, `mf-specs check --dir <specs>`, `mf-sessions doctor`.
 - Add tests for the new commands, including a store containing an unparseable file.
 - Keep the house exit convention: print the report, set `process.exitCode`, never call `process.exit`.
 

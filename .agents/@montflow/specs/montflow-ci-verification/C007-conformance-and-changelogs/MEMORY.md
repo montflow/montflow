@@ -16,7 +16,7 @@ release.
 `bun run verify:montflow` → exit 0. 15 turbo tasks successful; then every
 extension verify green: skills `46 skills · 0 issues` + `up to date`, prompts
 `2 prompts · 0 issues` + `up to date`, specs `2 specs · 0 failed · 0 issues`,
-profiles `5 profiles · 0 issues`, runs skill installed.
+profiles `5 profiles · 0 issues`, sessions skill installed.
 
 Failures found and fixed while running the gate:
 

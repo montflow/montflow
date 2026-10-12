@@ -7,5 +7,5 @@
 
 ## Stage 1: Behaviour
 
-- [ ] mail to a live bound run steers it
+- [ ] mail to a live bound session steers it
 - [ ] mail to a non-live task persists and is readable at task start

@@ -11,5 +11,5 @@
 
 ## Stage 2: Regression
 
-- [ ] existing verifies (`skills`, `specs`, `runs doctor`) still pass against this repo
+- [ ] existing verifies (`skills`, `specs`, `sessions doctor`) still pass against this repo
 - [ ] package tests green for the changed packages

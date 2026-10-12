@@ -20,7 +20,7 @@ workspace.
 
 ## Requirements
 
-- Enumerate each verification command: `mf-skills verify`, `mf-prompts verify`, `mf-specs check`, `mf-profiles verify`, `mf-runs verify`, and each `doctor --check` (skills, prompts, specs, runs).
+- Enumerate each verification command: `mf-skills verify`, `mf-prompts verify`, `mf-specs check`, `mf-profiles verify`, `mf-sessions verify`, and each `doctor --check` (skills, prompts, specs, sessions).
 - For each: the exact invocation, required arguments and defaults, exit-code semantics, and whether it runs as a plain process or needs a Pi session over RPC.
 - Run each against this workspace and record the baseline pass/fail and output.
 - Determine what "verify all prompts" and "verify all profiles" require, given the per-name commands and their `list --status invalid` companion.

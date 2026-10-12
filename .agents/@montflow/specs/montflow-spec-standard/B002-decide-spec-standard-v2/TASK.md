@@ -26,7 +26,7 @@ build them without asking anything.
 - Gate stage kinds mechanical and subjective: the recognizable `GATES.md` shape stays, each stage declares its kind, mechanical stages are executed with results recorded, subjective stages are consumed by a reviewer role. State what a recorded gate result looks like on disk.
 - `SPEC.md` version field: read as 1 when absent, warn below current, error above, accept current and previous.
 - `migrate` must transform the tree, and a version bump without transformation must be rejected.
-- `BOARD.md` broadcast and `MAILBOX.md` targeted entry grammar, both append-only, with the parse rules the verifier enforces and the delivery path for a live run.
+- `BOARD.md` broadcast and `MAILBOX.md` targeted entry grammar, both append-only, with the parse rules the verifier enforces and the delivery path for a live session.
 - The single-writer rule: which agent may write which field, and how a worker escalates instead of asking the user.
 - What happens to an existing v1 spec when v2 lands, and the stated rule for reading the two frozen complete specs.
 

@@ -45,7 +45,7 @@ Per-package scripts (full enumeration):
 | `@montflow/stlx`    | `build`, `build-esm`, `build-annotate`, `build-cjs`                               |
 | `@montflow/pi-*`    | —                                                                                 |
 | `@montflow/pi-prompts` | `build:cli`, `cli`, `generate:payload`                                         |
-| `@montflow/pi-runs` | `cli`, `build:cli`                                                                |
+| `@montflow/pi-sessions` | `cli`, `build:cli`                                                                |
 | `@montflow/pi-skills` | `build:cli`, `cli`, `generate:payload`                                          |
 | `@montflow/pi-specs` | `cli`, `build:cli`, `fixtures:check`                                             |
 | `@montflow/workspace` | `start`, `dev`, `test:tui`                                                      |
@@ -77,7 +77,7 @@ which the check matrix does not cover.
 `.changeset/config.json` `ignore`, and whose local version is not yet on npm.
 The `ignore` list has nine entries: `@montflow/stlx`, `@montflow/linting`,
 `@montflow/pi-effect`, `@montflow/pi-profiles`, `@montflow/pi-prompts`,
-`@montflow/pi-runs`, `@montflow/pi-skills`, `@montflow/tooling-oxfmt`,
+`@montflow/pi-sessions`, `@montflow/pi-skills`, `@montflow/tooling-oxfmt`,
 `@montflow/tooling-oxlint`. Every `@montflow/pi-*` package is additionally
 `private: true`. So only `@montflow/core` and `@montflow/format` are ever
 eligible — and only while their version is unpublished. When the eligible set

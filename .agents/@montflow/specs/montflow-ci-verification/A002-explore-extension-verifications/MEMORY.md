@@ -29,7 +29,7 @@ are added or removed — treat pass/fail, not the counts, as the stable signal.
 | specs doctor       | `… cli doctor` (no `--check`)                                               | no       | writes skills; not a verification              |
 | profiles (one)     | `/mf-profiles-cli verify <name>` over `pi --mode rpc`                       | no       | fails non-zero on an invalid profile           |
 | profiles (all)     | `/mf-profiles-cli list --status invalid` over `pi --mode rpc`               | no       | 5 profiles; see count below                    |
-| runs freshness     | `bun run --cwd packages/pi-runs cli doctor`                                 | yes      | checks/installs the dispatch skill             |
+| sessions freshness     | `bun run --cwd packages/pi-sessions cli doctor`                                 | yes      | checks/installs the dispatch skill             |
 
 ### The prompts enumeration flaw — do not trust `list`
 
@@ -63,7 +63,7 @@ Consequences:
   (`.agents/@montflow/specs`).
 - **profiles** is a slash command only; it has no `--dir` flag.
 
-### `doctor` is cwd-relative — except runs
+### `doctor` is cwd-relative — except sessions
 
 `mf-skills doctor` and `mf-prompts doctor` resolve `<cwd>/.agents/skills`.
 Invoked via `bun run --cwd packages/<pkg> cli`, the child cwd is the package
@@ -74,9 +74,9 @@ freshness checks against the repo root except a root script that invokes the
 package module with the repo root as cwd. `mf-specs doctor` has no `--check`
 flag at all and installs rather than verifies.
 
-`mf-runs doctor` is the exception: it resolves the repo root by walking
-ancestors for a `.git` entry, so `bun run --cwd packages/pi-runs cli doctor`
-correctly targets `<repo>/.agents/skills/montflow-dispatch-pi-runs`. The cwd
+`mf-sessions doctor` is the exception: it resolves the repo root by walking
+ancestors for a `.git` entry, so `bun run --cwd packages/pi-sessions cli doctor`
+correctly targets `<repo>/.agents/skills/montflow-dispatch-pi-sessions`. The cwd
 caveat therefore applies to the skills and prompts doctors only.
 
 ### Profile count

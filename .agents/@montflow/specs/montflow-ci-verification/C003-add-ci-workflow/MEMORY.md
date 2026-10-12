@@ -23,7 +23,7 @@ per-artifact verifications plus repo checks (B001 decisions 1–2).
   lint→`lint:check`, format→`format:check`, typecheck→`ts:check`, test→`test`,
   skills→`verify:montflow:skills`, prompts→`verify:montflow:prompts`,
   specs→`verify:montflow:specs`, profiles→`verify:montflow:profiles`,
-  runs→`verify:montflow:runs`.
+  sessions→`verify:montflow:sessions`.
 - Job `name: ${{ matrix.target }} (${{ matrix.script }})`.
 - Each cell repeats the release.yml preamble: checkout, setup-bun `1.3.13`,
   cache `~/.bun/install/cache` on `bun.lock`, `bun install --frozen-lockfile`.

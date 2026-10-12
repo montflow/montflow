@@ -17,12 +17,12 @@ Task C099: adversarial review of the Phase C implementation, written to
   `readAllRaw` tests), F7 (C003 completion wording), F8 (missing `bin`), F9
   (`mf-profiles` verb/`--dir=` parsing and silent failures), F11 (release-push
   overlap wording).
-- Accepted as `Won't Fix` with rationale: F2 (specs/runs doctor byte-freshness
+- Accepted as `Won't Fix` with rationale: F2 (specs/sessions doctor byte-freshness
   is a follow-up; skills/prompts do compare), F4 (CI matrix mirrors per-target
   scripts for attribution), F10 (changeset config is the release-notes
   mechanism).
 - After the fixes, `bun run verify:montflow` is green: 15 turbo tasks, then
-  skills/prompts/specs/profiles/runs verifies all pass.
+  skills/prompts/specs/profiles/sessions verifies all pass.
 
 ## Open Questions
 

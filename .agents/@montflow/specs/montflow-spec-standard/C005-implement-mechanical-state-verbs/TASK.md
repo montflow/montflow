@@ -22,7 +22,7 @@ claims, locks, derived state, the ready set, and the v1-to-v2 migration.
 - `new-phase`, `new-task`, `stamp`, `init`, `claim`, `lock`, `state`, `next` exist with the signatures B003 decided, taking ids from disk rather than from caller arithmetic.
 - `init` writes a whole spec tree from a tier file, leaving only prose for the agent to fill, and an unknown tier fails listing the enum.
 - `next` returns the ready set from derived state, honoring dependency ordering and per-phase numbering.
-- `claim` is the only atomic status write and records the run binding; `lock` refuses when the phase is not derivably complete.
+- `claim` is the only atomic status write and records the session binding; `lock` refuses when the phase is not derivably complete.
 - `migrate` transforms a v1 tree into v2, re-ids tasks, creates phase directories, converts locks to derived state, and refuses a bump that would not transform.
 - Nothing in the authoring or execution skills asks an agent to type an id, timestamp, status, or lock afterward.
 

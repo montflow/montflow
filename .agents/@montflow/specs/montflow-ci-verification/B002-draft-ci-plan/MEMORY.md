@@ -20,7 +20,7 @@ to match the code already landed by C001/C002.
 | `verify:montflow:prompts` | `bun run --cwd packages/pi-prompts cli verify --all --dir $PWD/.agents/@montflow/pi-prompts && bun run --cwd packages/pi-prompts cli doctor --check --dir $PWD` |
 | `verify:montflow:specs` | `bun run --cwd packages/pi-specs cli check --dir $PWD/.agents/@montflow/specs` |
 | `verify:montflow:profiles` | `bun run --cwd packages/pi-profiles cli --dir $PWD` |
-| `verify:montflow:runs` | `bun run --cwd packages/pi-runs cli doctor` |
+| `verify:montflow:sessions` | `bun run --cwd packages/pi-sessions cli doctor` |
 | `verify:montflow:extensions` | the five above, fail-fast |
 | `verify:montflow:fast` | `turbo lint:check && turbo format:check && turbo ts:check` + `verify:montflow:extensions` |
 | `verify:montflow` | `verify:montflow:fast` + `turbo test` |
@@ -61,7 +61,7 @@ the repo root rather than the package cwd.
   | prompts | `verify:montflow:prompts` |
   | specs | `verify:montflow:specs` |
   | profiles | `verify:montflow:profiles` |
-  | runs | `verify:montflow:runs` |
+  | sessions | `verify:montflow:sessions` |
 
 - Header comment: `release.yml` keeps its own publish-candidate conditions and
   is intentionally untouched; also records the push-to-main-only limitation.
@@ -82,7 +82,7 @@ the repo root rather than the package cwd.
 
 - `mf-skills doctor --check` and `mf-prompts doctor --check` do byte-freshness
   against the package payload.
-- `mf-specs doctor` and `mf-runs doctor` are **presence-only installers** (they
+- `mf-specs doctor` and `mf-sessions doctor` are **presence-only installers** (they
   copy the skill when missing and never compare). Freshness for those two
   skills is not checked today; recorded as a follow-up. `mf-skills verify`
   still schema-validates the installed bytes.

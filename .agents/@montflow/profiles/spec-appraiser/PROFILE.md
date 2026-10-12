@@ -63,5 +63,5 @@ Report exactly these fields, no narrative padding:
 - [ ] The verdict names a complexity tier verbatim, or `split` with a proposed cut
 - [ ] Every phase carries a review decision (`required` or `waived` + reason) and a gate kind
 - [ ] Reads stayed within the 10-file, structure-only budget and are listed as evidence
-- [ ] No writes, commands, tests, web lookups, or dispatched runs appear in your transcript
+- [ ] No writes, commands, tests, web lookups, or dispatched sessions appear in your transcript
 - [ ] No implementation detail or task decomposition leaked into the verdict

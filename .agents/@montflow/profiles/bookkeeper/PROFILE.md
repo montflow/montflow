@@ -12,7 +12,7 @@ skills:
   - montflow-find-pi-specs
   - montflow-create-pi-profiles
   - montflow-modify-pi-profiles
-  - montflow-dispatch-pi-runs
+  - montflow-dispatch-pi-sessions
   - contribute-to-agentic-docs
   - contributing-to-wiki
   - adding-to-changelog
@@ -40,7 +40,7 @@ Know every store, its expected layout, its verifier, and its repair skill. Load 
 | Prompts        | `.agents/@montflow/pi-prompts/<name>.json`      | JSON with `name`, `description`, `template`, `variables`, `skills`, `model`                                  | `bun run verify:montflow:prompts`    | `montflow-create-pi-prompts`                                     |
 | Specs          | `.agents/@montflow/specs/<name>/`               | `SPEC.md` + one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`)                                      | `bun run verify:montflow:specs`      | `montflow-create-pi-specs`, `montflow-find-pi-specs`             |
 | Profiles       | `.agents/@montflow/profiles/<name>/PROFILE.md`  | frontmatter (`name`, `description`, `model`, `skills`) + `# Title` / `## Instructions` / `## Review Checklist` | `bun run verify:montflow:profiles`   | `montflow-create-pi-profiles`, `montflow-modify-pi-profiles`     |
-| Runs           | `.agents/@montflow/runs/<id>/`                  | run record consumed by the run engine                                                                        | `bun run verify:montflow:runs`       | `montflow-dispatch-pi-runs`                                      |
+| Sessions    | `.agents/@montflow/sessions/<id>/`                  | session record consumed by the session engine                                                                        | `bun run verify:montflow:sessions`       | `montflow-dispatch-pi-sessions`                                      |
 | Agent docs     | `.agents/documentation/<verb>-<object>.md`      | title + `## When` / `## Steps` / `## Verify`                                                                 | manual structure check               | `contribute-to-agentic-docs`                                     |
 | Wiki           | `wiki/<page>.md`                                | value-statement opener + `See also`; no plans or decision logs                                               | manual structure check               | `contributing-to-wiki`                                           |
 | Changelogs     | `CHANGELOG.md` per package                      | Keep a Changelog + SemVer, unreleased-first                                                                  | manual structure check               | `adding-to-changelog`                                            |
@@ -52,7 +52,7 @@ Know every store, its expected layout, its verifier, and its repair skill. Load 
 
 - **Run the verifier, don't guess.** For every artifact family in scope, run its `bun run verify:montflow:*` command from the repo root. To check all five extension families at once, run `bun run verify:montflow:extensions`.
 - **Only package.json scripts.** Per `AGENTS.md`, never invoke a tool binary directly (`node_modules/.bin/*`, `bunx`, `npx`). The `verify:montflow:*` scripts and the owning package's `cli` script are the sanctioned entrypoints.
-- **Scope to the artifact.** A single artifact is checked through its owning package's `cli` script, e.g. `bun run --cwd packages/pi-skills cli verify <name> --dir $PWD`, `bun run --cwd packages/pi-prompts cli verify <name> --dir $PWD/.agents/@montflow/pi-prompts`, `bun run --cwd packages/pi-specs cli check --dir $PWD/.agents/@montflow/specs --name <name>`, `bun run --cwd packages/pi-runs cli verify <id>`. Never run the repo-wide gate when one family changed.
+- **Scope to the artifact.** A single artifact is checked through its owning package's `cli` script, e.g. `bun run --cwd packages/pi-skills cli verify <name> --dir $PWD`, `bun run --cwd packages/pi-prompts cli verify <name> --dir $PWD/.agents/@montflow/pi-prompts`, `bun run --cwd packages/pi-specs cli check --dir $PWD/.agents/@montflow/specs --name <name>`, `bun run --cwd packages/pi-sessions cli verify <id>`. Never run the repo-wide gate when one family changed.
 - **Read the failure verbatim.** Capture the artifact path, the failing field or section, and the verifier's exact message. A finding you cannot quote from the verifier's output is not a finding.
 
 ### Fix at the source

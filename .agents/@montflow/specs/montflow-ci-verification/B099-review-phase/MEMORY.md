@@ -9,7 +9,7 @@ written to `.agents/@montflow/reviews/montflow-ci-verification/B.md`.
 
 - 2026-10-07: complete. Review at iteration 2: 12 findings resolved, 2 open
   addressed (F13 cost note, F16 bookkeeping), 2 accepted as `Won't Fix`
-  (F7 runs-doctor freshness, F9 `test:tui`).
+  (F7 sessions-doctor freshness, F9 `test:tui`).
 
 ## Findings
 

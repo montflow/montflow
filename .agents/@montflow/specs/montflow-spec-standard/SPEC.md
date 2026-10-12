@@ -58,7 +58,7 @@ hand-written mechanics.
 - A gate stage declares `kind: mechanical` or `kind: subjective`; mechanical stages are executed by the CLI with the result recorded, subjective stages are consumed by a reviewer role.
 - `SPEC.md` carries a spec-version read as 1 when absent, warning below the current standard, erroring above it, and accepting current and previous so a spec is never stranded mid-migration.
 - `migrate` transforms a v1 tree into the v2 shape; relabeling the version field without transforming the structure is rejected.
-- `BOARD.md` is the phase broadcast and `MAILBOX.md` the per-task targeted channel, both append-only with an entry grammar the verifier parses; delivery to a live task runs goes through steering the bound run.
+- `BOARD.md` is the phase broadcast and `MAILBOX.md` the per-task targeted channel, both append-only with an entry grammar the verifier parses; delivery to a live task session goes through steering the bound session.
 - Spec state is written by one orchestrator per spec; workers write only their own memory, never status or locks, and escalate questions instead of asking the user directly.
 - Ids, timestamps, status transitions, locks, and the whole tree come from CLI verbs (`new-phase`, `new-task`, `stamp`, `init`, `claim`, `lock`, `state`, `next`, `gate run`, `mail`); the rule is that anything a verifier checks has a generator.
 - `doctor` diagnoses and repairs a manifest of shipped payload kinds, `--check` reports without writing, and `sync:montflow` runs every package's doctor; report-only mode is what every `verify:montflow:*` script uses.

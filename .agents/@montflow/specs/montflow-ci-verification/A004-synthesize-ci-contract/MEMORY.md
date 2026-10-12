@@ -26,7 +26,7 @@ shape, and the open decisions Phase B must put to the user.
 | prompts verify    | per-file `mf-prompts verify <name> --dir <store>`                       | low  | none                   | yes | yes  |
 | prompts freshness | `mf-prompts doctor --check` (needs repo root as cwd)                    | low  | none                   | yes | yes  |
 | specs check       | `mf-specs check --dir "$PWD/.agents/@montflow/specs"`                   | low  | none                   | yes | yes  |
-| runs freshness    | `mf-runs doctor` (repo-root aware)                                      | low  | none                   | yes | yes  |
+| sessions freshness    | `mf-sessions doctor` (repo-root aware)                                      | low  | none                   | yes | yes  |
 | profiles verify   | `/mf-profiles-cli verify <name>` over `pi --mode rpc`                   | high | none                   | ?   | ?    |
 
 \* whether the hook runs the full test suite (slow) or a fast subset is a
@@ -88,7 +88,7 @@ Root script `verify` running, in order and failing fast:
 2. `turbo format:check`
 3. `turbo ts:check`
 4. `turbo test`
-5. extension verifications (skills + doctor, prompts per-file, specs, runs;
+5. extension verifications (skills + doctor, prompts per-file, specs, sessions;
 
    profiles optional)
 

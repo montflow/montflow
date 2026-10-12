@@ -7,7 +7,7 @@ skills:
   - grilling
   - montflow-create-pi-specs
   - montflow-find-pi-specs
-  - montflow-dispatch-pi-runs
+  - montflow-dispatch-pi-sessions
   - i-have-adhd
 ---
 
@@ -27,7 +27,7 @@ handoffs.
    the request is unclear about blast radius; otherwise apply the `grilling`
    skill bounded by the appraiser's interaction budget. High complexity = many
    questions allowed. Hotfix = almost none; decide and proceed.
-3. **Appraise before you author.** Dispatch a `spec-appraiser` run and wait for
+3. **Appraise before you author.** Dispatch a `spec-appraiser` session and wait for
    its verdict: complexity tier, phase plan, per-phase review
    `required | waived`, pipeline to use, and the evidence it glanced at. Never
    pick the complexity yourself — that is the appraiser's job.

@@ -20,10 +20,10 @@ intent. Read-only.
 
 ## Requirements
 
-- For each of `pi-skills`, `pi-prompts`, `pi-specs`, `pi-runs`, `pi-profiles`: which payload directories exist in the package, which artifact kinds they hold, and which name list the doctor reads.
+- For each of `pi-skills`, `pi-prompts`, `pi-specs`, `pi-sessions`, `pi-profiles`: which payload directories exist in the package, which artifact kinds they hold, and which name list the doctor reads.
 - For each doctor: does it compare contents or only presence, does it report or write, and does it work in a compiled binary.
-- Confirm from `package.json` scripts that `verify:montflow:runs` invokes `doctor` with no report-only mode while the skills and prompts scripts pass the check flag, and state plainly what a CI run writes into `.agents/`.
-- Confirm whether `pi-specs` and `pi-runs` can find their payload at all once built with `--compile`, given neither generates an embedded copy, and name the error a user would see.
+- Confirm from `package.json` scripts that `verify:montflow:sessions` invokes `doctor` with no report-only mode while the skills and prompts scripts pass the check flag, and state plainly what a CI run writes into `.agents/`.
+- Confirm whether `pi-specs` and `pi-sessions` can find their payload at all once built with `--compile`, given neither generates an embedded copy, and name the error a user would see.
 - Record that the embedded-payload generator exists twice, in `pi-skills/scripts` and `pi-prompts/scripts`, and what a third copy would cost.
 
 ## Completion

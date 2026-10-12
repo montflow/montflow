@@ -22,7 +22,7 @@ report-only become explicit so verification never writes.
 
 - A per-package payload manifest covering every artifact kind the package ships, skills, profiles, prompts, and tier files, read by repair mode, report-only mode, and the verify scripts.
 - Report-only mode reaches parity across all packages, and every `verify:montflow:*` script uses it, closing the defect where one script repaired during CI while its siblings reported.
-- One shared embedded-payload generator replaces the two copies and is wired into each package build, so a compiled `mf-specs` or `mf-runs` keeps a working doctor instead of failing on a nonexistent payload directory.
+- One shared embedded-payload generator replaces the two copies and is wired into each package build, so a compiled `mf-specs` or `mf-sessions` keeps a working doctor instead of failing on a nonexistent payload directory.
 - The two packages that ship no payload gain one: profiles and prompts get installable payload directories.
 - A stale or missing payload is reported with its artifact name and the repair command, and a fresh repair of a clean clone produces the same tree this repo has.
 - The pre-push fast gate still passes without the test suite.
