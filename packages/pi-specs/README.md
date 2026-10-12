@@ -39,7 +39,7 @@ must be published first — it is `private` today. The `bin` is a `.ts`
 entry with `#!/usr/bin/env bun`, so registry use needs Bun on the
 machine; a Node build would be required for `npx` without Bun.
 
-Built with `effect/unstable/cli`. Sample specs for trying the binary
+Built with `effect/cli`. Sample specs for trying the binary
 live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
 `mock-complete` (complete), `mock-stale` (inconsistent), and `mock-bad`
 (10 issues across every failure class).
@@ -78,7 +78,7 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
   `snapshot`) backing the CLI.
 - **`Cli`** — pure engines (`check`, `status`, `list`), pure renderers
   (`renderCheck`, `renderStatus`, `renderList`, `resolveListOptions`),
-  and the `effect/unstable/cli` commands.
+  and the `effect/cli` commands.
 - **`Doctor`** — `runDoctor(root)` / `runDoctorAt(startDir)` install the
   packaged spec skills into `.agents/skills/`, and report one outcome
   per skill (`SPEC_SKILL_NAMES`).

@@ -1,7 +1,7 @@
 import { Console, Effect, Option } from 'effect';
-import * as CliError from 'effect/unstable/cli/CliError';
-import * as Command from 'effect/unstable/cli/Command';
-import * as Flag from 'effect/unstable/cli/Flag';
+import * as CliError from 'effect/cli/CliError';
+import * as Command from 'effect/cli/Command';
+import * as Flag from 'effect/cli/Flag';
 import { type Spec, parseSpecFile } from '../../modules/spec/index.js';
 import {
   type Analysis,
@@ -10,13 +10,22 @@ import {
   analyze as analyzeLifecycle,
 } from '../../modules/lifecycle/index.js';
 import { type SpecSnapshot, verifySpecTree } from '../../modules/structure/index.js';
-import { type Task, parseTaskFile } from '../../modules/task/index.js';
+import { type Task, parseTaskDirName, parseTaskFile, phaseOf } from '../../modules/task/index.js';
 import type { Issue, Result } from '../../modules/verify/index.js';
 import { SpecStore } from '../../services/index.js';
 import { runDoctorAt } from '../doctor/index.js';
 
-/** Default spec root, relative to the working directory. */
+/** Spec store directory, relative to the workspace root. */
 export const DEFAULT_ROOT = '.agents/@montflow/specs';
+
+/**
+ * Resolve the spec store directory from a workspace-root argument. `.` (the
+ * default) reads the store directly under the working directory.
+ * @param root - workspace root passed via `--dir`
+ * @returns the store directory
+ */
+export const storeDirOf = (root: string): string =>
+  root === '.' ? DEFAULT_ROOT : `${root.replace(/\/+$/, '')}/${DEFAULT_ROOT}`;
 
 /** How many specs are verified in parallel by default. */
 export const DEFAULT_CONCURRENCY = 8;
@@ -270,13 +279,177 @@ export const renderStatus = (report: StatusReport): string => {
   return lines.join('\n');
 };
 
+// ─── State / Next ─────────────────────────────────────────────────────
+
+/** Compact derived-state report the orchestrator reads before acting. */
+export interface StateReport {
+  readonly name: string;
+  readonly declared: string;
+  readonly state: State;
+  /** Active phase: the first unlocked phase with unfinished work, if any. */
+  readonly phase: string | undefined;
+  readonly lockedPhases: ReadonlyArray<string>;
+}
+
+/**
+ * Reduce one spec to the derived state an orchestrator acts on: the
+ * declared status, the derived lifecycle state, the active phase, and the
+ * locked phases. `inconsistent` means the bookkeeping contradicts itself,
+ * which the caller repairs before dispatching anything.
+ * @param root - spec root directory
+ * @param name - spec directory name
+ * @returns the compact state report
+ */
+export const state = (
+  root: string,
+  name: string,
+): Effect.Effect<StateReport, SpecStore.StoreError, SpecStore.SpecStore> =>
+  Effect.gen(function* () {
+    const report = yield* status(root, name);
+    return {
+      name,
+      declared: report.spec?.status ?? 'unreadable',
+      state: report.state?.state ?? 'inconsistent',
+      phase: activePhaseOf(report),
+      lockedPhases: report.spec?.lockedPhases ?? [],
+    };
+  });
+
+/** The active phase from a status report: first unlocked phase with unfinished work. */
+const activePhaseOf = (report: StatusReport): string | undefined =>
+  report.state?.phases.find((phase) => !phase.locked && phase.complete < phase.total)?.phase;
+
+/**
+ * Render the compact state line the orchestrator reads.
+ * @param report - report from {@link state}
+ * @returns one status line
+ */
+export const renderState = (report: StateReport): string => {
+  const phase = report.phase === undefined ? 'none' : report.phase;
+  const locked = report.lockedPhases.length === 0 ? 'none' : report.lockedPhases.join(',');
+  return `${report.name} · ${report.declared} · state ${report.state} · phase ${phase} · locked ${locked}`;
+};
+
+/** One task the orchestrator may start now. */
+export interface ReadyTask {
+  readonly id: string;
+  readonly name: string;
+  readonly type: string;
+  /** True when the task carries a per-task `GATES.md` that must pass first. */
+  readonly gates: boolean;
+}
+
+/** The ready set for the active phase, plus the state it was derived from. */
+export interface NextReport {
+  readonly name: string;
+  readonly state: State;
+  readonly phase: string | undefined;
+  /** Tasks ready to start: pending, dependencies complete, review last. */
+  readonly ready: ReadonlyArray<ReadyTask>;
+}
+
+/** Task ids carrying a `GATES.md`, read from the snapshot. */
+const gatedTaskIds = (snapshot: SpecSnapshot): ReadonlySet<string> => {
+  const ids = new Set<string>();
+  for (const file of snapshot.files) {
+    const slash = file.path.indexOf('/');
+    if (slash === -1) continue;
+    const dir = file.path.slice(0, slash);
+    if (file.path !== `${dir}/GATES.md`) continue;
+    const parsed = parseTaskDirName(dir);
+    if (parsed !== undefined) ids.add(parsed.id);
+  }
+  return ids;
+};
+
+/**
+ * Compute the ready set for a spec's active phase: pending tasks whose
+ * `depends-on` targets are all complete, in id order. A `review` task is
+ * ready only once every other task in its phase is complete. An
+ * `inconsistent` or `complete` spec has no ready set — the caller repairs or
+ * stops rather than guessing.
+ * @param root - spec root directory
+ * @param name - spec directory name
+ * @returns the ready set plus the derived state
+ */
+export const next = (
+  root: string,
+  name: string,
+): Effect.Effect<NextReport, SpecStore.StoreError, SpecStore.SpecStore> =>
+  Effect.gen(function* () {
+    const store = yield* SpecStore.SpecStore;
+    if (!(yield* store.hasRoot(root))) {
+      return yield* Effect.fail(
+        new SpecStore.StoreError({
+          operation: 'SpecNext',
+          reason: `Specs directory not found: ${root}`,
+        }),
+      );
+    }
+    if (!(yield* store.exists(root, name))) {
+      return yield* Effect.fail(
+        new SpecStore.StoreError({
+          operation: 'SpecNext',
+          reason: `Spec '${name}' not found under ${root}.`,
+        }),
+      );
+    }
+    const snapshot = yield* store.snapshot(root, name);
+    const report = summarize(name, snapshot);
+    const derived = report.state?.state ?? 'inconsistent';
+    const phase = activePhaseOf(report);
+    if (derived === 'inconsistent' || derived === 'complete' || phase === undefined) {
+      return { name, state: derived, phase: undefined, ready: [] };
+    }
+    const byId = new Map(report.tasks.map((task) => [task.id, task]));
+    const gates = gatedTaskIds(snapshot);
+    const inPhase = report.tasks.filter((task) => phaseOf(task.id) === phase);
+    const ready: Array<ReadyTask> = [];
+    for (const task of inPhase) {
+      if (task.status !== 'pending') continue;
+      const entry: ReadyTask = {
+        id: task.id,
+        name: task.name,
+        type: task.type,
+        gates: gates.has(task.id),
+      };
+      if (task.type === 'review') {
+        const open = inPhase.some(
+          (other) => other.type !== 'review' && other.status !== 'complete',
+        );
+        if (!open) ready.push(entry);
+        continue;
+      }
+      if (task.dependsOn.every((dep) => byId.get(dep)?.status === 'complete')) ready.push(entry);
+    }
+    ready.sort((a, b) => a.id.localeCompare(b.id));
+    return { name, state: derived, phase, ready };
+  });
+
+/**
+ * Render the ready set for an orchestrator. A gated task is marked `gated`
+ * so the caller runs its `GATES.md` before marking it complete.
+ * @param report - report from {@link next}
+ * @returns the phase header plus one line per ready task
+ */
+export const renderNext = (report: NextReport): string => {
+  const head = `state ${report.state}${report.phase === undefined ? '' : ` · phase ${report.phase}`}`;
+  if (report.ready.length === 0) return `${head}\nready none`;
+  return [
+    head,
+    ...report.ready.map(
+      (task) => `${task.id}  ${task.gates ? 'gated  ' : ''}${task.type}  ${task.name}`,
+    ),
+  ].join('\n');
+};
+
 // ─── List ─────────────────────────────────────────────────────────────
 
 /** Derived spec states accepted by `--status`, with `completed` as an alias. */
 export const LIST_STATUSES: ReadonlyArray<State> = STATES;
 
 const isSpecState = (value: string): value is State =>
-  LIST_STATUSES.some((state) => state === value);
+  LIST_STATUSES.some((candidate) => candidate === value);
 
 /** Options for {@link list}. */
 export interface ListOptions {
@@ -298,11 +471,11 @@ export interface ListReport {
 }
 
 const matchesList = (report: StatusReport, options: ListOptions): boolean => {
-  const state = report.state?.state;
-  if (options.pending === true && state === 'complete') return false;
+  const derived = report.state?.state;
+  if (options.pending === true && derived === 'complete') return false;
   const statuses = options.statuses;
   if (statuses !== undefined && statuses.length > 0) {
-    if (state === undefined || !statuses.includes(state)) return false;
+    if (derived === undefined || !statuses.includes(derived)) return false;
   }
   return true;
 };
@@ -360,13 +533,13 @@ export const renderList = (report: ListReport, verbose: boolean): string => {
   const lines: Array<string> = [];
   if (verbose) lines.push(`root ${report.root}`);
   for (const spec of report.specs) {
-    const state = spec.state?.state;
-    const mark = state === undefined ? '\u2717' : LIST_MARK[state];
+    const derived = spec.state?.state;
+    const mark = derived === undefined ? '\u2717' : LIST_MARK[derived];
     const declared = spec.spec?.status ?? 'unreadable';
     const counts = statusCounts(spec.tasks) || `${spec.tasks.length} tasks`;
     const verdict = spec.verify.valid ? '' : ` \u00b7 \u2717 ${spec.verify.issues.length}`;
     lines.push(
-      `${mark} ${spec.name}  ${declared} \u00b7 ${state ?? 'unreadable'} \u00b7 ${counts}${verdict}`,
+      `${mark} ${spec.name}  ${declared} \u00b7 ${derived ?? 'unreadable'} \u00b7 ${counts}${verdict}`,
     );
   }
   if (lines.length > 0) lines.push('');
@@ -415,12 +588,12 @@ export const resolveListOptions = (
 
 // ─── Commands ─────────────────────────────────────────────────────────
 
-const dirFlag = Flag.string('dir').pipe(
-  Flag.withDescription('Spec root directory.'),
-  Flag.withDefault(DEFAULT_ROOT),
+const dirFlag = Flag.String('dir').pipe(
+  Flag.withDescription('Workspace root. Defaults to the working directory.'),
+  Flag.withDefault('.'),
 );
 
-const nameFlag = Flag.string('name').pipe(Flag.withDescription('Spec directory name.'));
+const nameFlag = Flag.String('name').pipe(Flag.withDescription('Spec directory name.'));
 
 const toUserError = (error: SpecStore.StoreError): CliError.UserError =>
   new CliError.UserError({ cause: error, userMessage: error.reason });
@@ -430,11 +603,11 @@ const checkCommand = Command.make(
   {
     dir: dirFlag,
     name: Flag.optional(nameFlag),
-    verbose: Flag.boolean('verbose').pipe(
+    verbose: Flag.Boolean('verbose').pipe(
       Flag.withDescription('Show passing specs and the root path.'),
       Flag.withDefault(false),
     ),
-    concurrency: Flag.integer('concurrency').pipe(
+    concurrency: Flag.Int('concurrency').pipe(
       Flag.withDescription('Specs verified in parallel.'),
       Flag.withDefault(DEFAULT_CONCURRENCY),
     ),
@@ -446,7 +619,7 @@ const checkCommand = Command.make(
         name === undefined
           ? { concurrency: config.concurrency }
           : { name, concurrency: config.concurrency };
-      const report = yield* check(config.dir, options);
+      const report = yield* check(storeDirOf(config.dir), options);
       yield* Console.log(renderCheck(report, config.verbose));
       if (report.failed > 0) {
         yield* Effect.sync(() => {
@@ -463,7 +636,7 @@ const checkCommand = Command.make(
 
 const statusCommand = Command.make('status', { dir: dirFlag, name: nameFlag }, (config) =>
   Effect.gen(function* () {
-    const report = yield* status(config.dir, config.name);
+    const report = yield* status(storeDirOf(config.dir), config.name);
     yield* Console.log(renderStatus(report));
     if (!report.verify.valid) {
       yield* Effect.sync(() => {
@@ -476,20 +649,40 @@ const statusCommand = Command.make('status', { dir: dirFlag, name: nameFlag }, (
   Command.provide(SpecStore.Default),
 );
 
+const stateCommand = Command.make('state', { dir: dirFlag, name: nameFlag }, (config) =>
+  Effect.gen(function* () {
+    const report = yield* state(storeDirOf(config.dir), config.name);
+    yield* Console.log(renderState(report));
+  }).pipe(Effect.catchTag('@montflow/SpecStoreError', (error) => Effect.fail(toUserError(error)))),
+).pipe(
+  Command.withDescription('Print a spec derived state: status, state, active phase, locks.'),
+  Command.provide(SpecStore.Default),
+);
+
+const nextCommand = Command.make('next', { dir: dirFlag, name: nameFlag }, (config) =>
+  Effect.gen(function* () {
+    const report = yield* next(storeDirOf(config.dir), config.name);
+    yield* Console.log(renderNext(report));
+  }).pipe(Effect.catchTag('@montflow/SpecStoreError', (error) => Effect.fail(toUserError(error)))),
+).pipe(
+  Command.withDescription('Print the ready task set for a spec active phase.'),
+  Command.provide(SpecStore.Default),
+);
+
 const listCommand = Command.make(
   'list',
   {
     dir: dirFlag,
     status: Flag.optional(
-      Flag.string('status').pipe(
+      Flag.String('status').pipe(
         Flag.withDescription(`Comma-separated states to keep: ${LIST_STATUSES.join(', ')}.`),
       ),
     ),
-    pending: Flag.boolean('pending').pipe(
+    pending: Flag.Boolean('pending').pipe(
       Flag.withDescription('Keep only unfinished specs (state is not `complete`).'),
       Flag.withDefault(false),
     ),
-    verbose: Flag.boolean('verbose').pipe(
+    verbose: Flag.Boolean('verbose').pipe(
       Flag.withDescription('Show the root path.'),
       Flag.withDefault(false),
     ),
@@ -505,7 +698,7 @@ const listCommand = Command.make(
           new CliError.UserError({ cause: filter.error, userMessage: filter.error }),
         );
       }
-      const report = yield* list(config.dir, filter.options);
+      const report = yield* list(storeDirOf(config.dir), filter.options);
       yield* Console.log(renderList(report, config.verbose));
     }).pipe(
       Effect.catchTag('@montflow/SpecStoreError', (error) => Effect.fail(toUserError(error))),
@@ -535,10 +728,17 @@ const doctorCommand = Command.make('doctor', {}, () =>
   ),
 ).pipe(Command.withDescription('Install the packaged spec skills into .agents/skills/.'));
 
-/** Root command: `mf-specs <check|status|list|doctor>`. */
+/** Root command: `mf-specs <check|status|state|next|list|doctor>`. */
 export const rootCommand = Command.make('mf-specs').pipe(
   Command.withDescription('List, verify, and set up montflow specs.'),
-  Command.withSubcommands([checkCommand, statusCommand, listCommand, doctorCommand]),
+  Command.withSubcommands([
+    checkCommand,
+    statusCommand,
+    stateCommand,
+    nextCommand,
+    listCommand,
+    doctorCommand,
+  ]),
 );
 
 // ─── Slash-command form ───────────────────────────────────────────────
@@ -549,9 +749,9 @@ export interface SlashReport {
   readonly ok: boolean;
 }
 
-/** Parsed slash args: `check`/`status`/`list` plus their flags. */
+/** Parsed slash args: `check`/`status`/`state`/`next`/`list` plus their flags. */
 interface SlashArgs {
-  readonly command: 'check' | 'status' | 'list';
+  readonly command: 'check' | 'status' | 'state' | 'next' | 'list';
   readonly name: string | undefined;
   readonly dir: string | undefined;
   readonly verbose: boolean;
@@ -563,8 +763,19 @@ const parseSlashArgs = (args: string): SlashArgs => {
   const tokens = args.split(/\s+/).filter((token) => token !== '');
   const head = tokens[0];
   const command: SlashArgs['command'] =
-    head === 'status' ? 'status' : head === 'list' ? 'list' : 'check';
-  const rest = head === 'check' || head === 'status' || head === 'list' ? tokens.slice(1) : tokens;
+    head === 'status'
+      ? 'status'
+      : head === 'state'
+        ? 'state'
+        : head === 'next'
+          ? 'next'
+          : head === 'list'
+            ? 'list'
+            : 'check';
+  const rest =
+    head === 'check' || head === 'status' || head === 'state' || head === 'next' || head === 'list'
+      ? tokens.slice(1)
+      : tokens;
   let name: string | undefined;
   let dir: string | undefined;
   let statusFilter: string | undefined;
@@ -613,7 +824,7 @@ export const runSlash = (
 ): Effect.Effect<SlashReport, SpecStore.StoreError, SpecStore.SpecStore> =>
   Effect.gen(function* () {
     const parsed = parseSlashArgs(args);
-    const dir = parsed.dir ?? root;
+    const dir = parsed.dir === undefined ? root : storeDirOf(parsed.dir);
     if (parsed.command === 'status') {
       if (parsed.name === undefined || parsed.name === '') {
         return yield* Effect.fail(
@@ -625,6 +836,30 @@ export const runSlash = (
       }
       const report = yield* status(dir, parsed.name);
       return { output: renderStatus(report), ok: report.verify.valid };
+    }
+    if (parsed.command === 'state') {
+      if (parsed.name === undefined || parsed.name === '') {
+        return yield* Effect.fail(
+          new SpecStore.StoreError({
+            operation: 'SpecState',
+            reason: 'state requires --name <spec>.',
+          }),
+        );
+      }
+      const report = yield* state(dir, parsed.name);
+      return { output: renderState(report), ok: report.state !== 'inconsistent' };
+    }
+    if (parsed.command === 'next') {
+      if (parsed.name === undefined || parsed.name === '') {
+        return yield* Effect.fail(
+          new SpecStore.StoreError({
+            operation: 'SpecNext',
+            reason: 'next requires --name <spec>.',
+          }),
+        );
+      }
+      const report = yield* next(dir, parsed.name);
+      return { output: renderNext(report), ok: report.state !== 'inconsistent' };
     }
     if (parsed.command === 'list') {
       const filter = resolveListOptions(parsed.statusFilter, parsed.pending);

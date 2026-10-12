@@ -1,11 +1,12 @@
 # CLI app
 
-Standalone `mf-specs` command built with `effect/unstable/cli`, plus
+Standalone `mf-specs` command built with `effect/cli`, plus
 the slash-command form the Pi extension reuses. Four subcommands for
 agents and humans:
 
-- `check` — mechanically verify the whole spec root (default
-  `.agents/@montflow/specs`) or one `--name`. Token-lean by default
+- `check` — mechanically verify the whole spec store (`--dir` selects the
+  workspace root, default cwd; the store is `<root>/.agents/@montflow/specs`)
+  or one `--name`. Token-lean by default
   (failures + summary); `--verbose` also lists passing specs and the
   root. Exits non-zero when any spec fails.
 - `status --name <spec>` — readable status panel for one spec:
