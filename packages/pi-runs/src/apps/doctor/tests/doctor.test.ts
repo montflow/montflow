@@ -50,7 +50,9 @@ Vitest.describe('runDoctor runtime', () => {
     Effect.gen(function* () {
       const root = freshRoot();
       yield* runDoctor(root);
-      const text = yield* execute({ kind: 'Doctor' }, root).pipe(Effect.provide(fakeRunner()));
+      const text = yield* execute({ kind: 'Doctor', check: false }, root).pipe(
+        Effect.provide(fakeRunner()),
+      );
       Vitest.expect(text).toBe(
         `Run skill '${RUN_SKILL_NAME}' is installed at ${NodePath.join(root, '.agents', 'skills', RUN_SKILL_NAME)}.`,
       );

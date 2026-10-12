@@ -22,7 +22,8 @@ Vitest.describe('parseCommand runtime', () => {
 
   Vitest.it.effect('parses doctor', () =>
     Effect.sync(() => {
-      Vitest.expect(parseCommand('doctor')).toStrictEqual({ kind: 'Doctor' });
+      Vitest.expect(parseCommand('doctor')).toStrictEqual({ kind: 'Doctor', check: false });
+      Vitest.expect(parseCommand('doctor --check')).toStrictEqual({ kind: 'Doctor', check: true });
       Vitest.expect(parseCommand('doctor extra')).toStrictEqual({ kind: 'Help' });
     }),
   );

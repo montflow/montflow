@@ -14,11 +14,11 @@ export const COMMAND_NAME = 'mf-runs';
 
 /** Help text shown for the command. */
 export const COMMAND_DESCRIPTION =
-  'Manage local agent runs: doctor | list [--status <states>] | status <id> | verify <id> | start --id <id> --prompt "text" [--model p/m] [--thinking level] | resume <id> [--prompt "text"] | interrupt <id> | steer <id> <text> | answer <id> <text>.';
+  'Manage local agent runs: doctor [--check] | list [--status <states>] | status <id> | verify <id> | start --id <id> --prompt "text" [--model p/m] [--thinking level] | resume <id> [--prompt "text"] | interrupt <id> | steer <id> <text> | answer <id> <text>.';
 
 /** Help text for the command and the `help` action. */
 export const USAGE = [
-  'mf-runs doctor',
+  'mf-runs doctor [--check]',
   'mf-runs list [--status pending|running|awaiting-input|done|failed|cancelled]',
   'mf-runs status <id>',
   'mf-runs verify <id>',
@@ -37,7 +37,7 @@ export type CommandAction =
   | { readonly kind: 'List'; readonly status: string | undefined }
   | { readonly kind: 'Status'; readonly id: string }
   | { readonly kind: 'Verify'; readonly id: string }
-  | { readonly kind: 'Doctor' }
+  | { readonly kind: 'Doctor'; readonly check: boolean }
   | { readonly kind: 'Resume'; readonly id: string; readonly prompt: string | undefined }
   | { readonly kind: 'Interrupt'; readonly id: string }
   | { readonly kind: 'Steer'; readonly id: string; readonly text: string }
@@ -253,8 +253,12 @@ const parseTokens = (tokens: ReadonlyArray<string>): CommandAction => {
       return statusAction(tokens, 'Status');
     case 'verify':
       return statusAction(tokens, 'Verify');
-    case 'doctor':
-      return tokens.length === 1 ? { kind: 'Doctor' } : { kind: 'Help' };
+    case 'doctor': {
+      const rest = tokens.slice(1);
+      if (rest.length === 0) return { kind: 'Doctor', check: false };
+      if (rest.length === 1 && rest[0] === '--check') return { kind: 'Doctor', check: true };
+      return { kind: 'Help' };
+    }
     case 'interrupt': {
       const id = tokens[1];
       return id !== undefined && tokens.length === 2 ? { kind: 'Interrupt', id } : { kind: 'Help' };
@@ -375,7 +379,12 @@ export const execute = (
         return `valid ${verdict.valid ? 'yes' : 'no'} · resumable ${verdict.resumable ? 'yes' : 'no'}${issues === '' ? '' : `\n${issues}`}`;
       }
       case 'Doctor': {
-        const result = yield* runDoctor(root);
+        const result = yield* runDoctor(root, { check: action.check });
+        if (result.status === 'missing') {
+          return yield* Effect.fail(
+            `Run skill '${RUN_SKILL_NAME}' is not installed at ${result.target}.`,
+          );
+        }
         return result.status === 'present'
           ? `Run skill '${RUN_SKILL_NAME}' is installed at ${result.target}.`
           : `Installed run skill '${RUN_SKILL_NAME}' at ${result.target}.`;

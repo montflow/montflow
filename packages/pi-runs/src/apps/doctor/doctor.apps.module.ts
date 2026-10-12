@@ -24,19 +24,30 @@ const reasonOf = (cause: unknown): string =>
 
 /** Outcome of a doctor run. */
 export interface DoctorResult {
-  readonly status: 'present' | 'installed';
+  readonly status: 'present' | 'installed' | 'missing';
   readonly source: string;
   readonly target: string;
+}
+
+/** Per-run controls. */
+export interface DoctorOptions {
+  /** Report only: never write, and report `missing` when the skill is absent. */
+  readonly check?: boolean;
 }
 
 /**
  * Check `<root>/.agents/skills/montflow-dispatch-pi-runs` and copy the skill
  * from the package payload when it is missing. Idempotent: an installed skill
- * is left untouched.
+ * is left untouched. With `check`, nothing is written and a missing skill
+ * reports `missing` rather than being installed.
  * @param root - repo root that owns `.agents/skills/`
+ * @param options - report-only controls
  * @returns the outcome plus source and target directories
  */
-export const runDoctor = (root: string): Effect.Effect<DoctorResult, string> =>
+export const runDoctor = (
+  root: string,
+  options: DoctorOptions = {},
+): Effect.Effect<DoctorResult, string> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -55,6 +66,10 @@ export const runDoctor = (root: string): Effect.Effect<DoctorResult, string> =>
 
     if (yield* exists(path.join(target, 'SKILL.md'))) {
       return { status: 'present' as const, source, target };
+    }
+
+    if (options.check === true) {
+      return { status: 'missing' as const, source, target };
     }
 
     const entries = yield* fs
