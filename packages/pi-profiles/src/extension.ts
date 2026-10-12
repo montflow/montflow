@@ -155,8 +155,8 @@ const storeFor = (cwd: string): Interactive.ProfileStore => ({
 
 /**
  * Skill inventory for a working directory: `<cwd>/.agents/skills`.
- * Drives the requirements gate — creation runs inject `montflow-create-pi-profiles`,
- * modification runs inject `montflow-modify-pi-profiles`, format-fix runs inject both.
+ * Drives the requirements gate — creation sessions inject `montflow-create-pi-profiles`,
+ * modification sessions inject `montflow-modify-pi-profiles`, format-fix sessions inject both.
  * @param cwd - project working directory
  * @returns inventory port for the requirements gate
  */
@@ -466,11 +466,11 @@ const menuFor = (ctx: { readonly ui: Interactive.FilterUi; readonly mode: string
  * returned promise, so load failures surface.
  *
  * Profiles live at `.agents/@montflow/profiles/<name>/PROFILE.md`
- * (namespaced like `pi-prompts`). Creation runs inject the
- * `montflow-create-pi-profiles` workspace skill and modification runs inject
+ * (namespaced like `pi-prompts`). Creation sessions inject the
+ * `montflow-create-pi-profiles` workspace skill and modification sessions inject
  * `montflow-modify-pi-profiles`: the requirements gate offers to
  * install them from this repository (`npx skills add montflow/montflow`)
- * and injects them into agentic runs.
+ * and injects them into agentic sessions.
  * @param pi - Pi extension API
  * @returns Promise settling once registration completes
  */

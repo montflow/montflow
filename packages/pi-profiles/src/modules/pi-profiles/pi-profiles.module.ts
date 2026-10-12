@@ -91,13 +91,13 @@ export const titleFromName = (name: string): string =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
-/** Skills an agentic creation run needs injected to author well. */
+/** Skills an agentic creation session needs injected to author well. */
 export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-create-pi-profiles'];
 
-/** Skills an agentic modification run needs injected to edit well. */
+/** Skills an agentic modification session needs injected to edit well. */
 export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-modify-pi-profiles'];
 
-/** Skills an agentic format-fix run needs injected to fix well. */
+/** Skills an agentic format-fix session needs injected to fix well. */
 export const TRANSFORM_REQUIREMENTS: ReadonlyArray<string> = [
   'montflow-create-pi-profiles',
   'montflow-modify-pi-profiles',

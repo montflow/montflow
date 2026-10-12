@@ -70,13 +70,13 @@ export const formatInjectedSkills = (skills: readonly InstalledSkill[]): string 
   return `\n\n## Injected skill context\n\nFollow these loaded skills while you work.\n\n${sections.join('\n\n')}`;
 };
 
-/** One model offered for agentic runs: `provider/model-id` plus current-run marker. */
+/** One model offered for agentic sessions: `provider/model-id` plus current-session marker. */
 export interface ModelOption {
   readonly label: string;
   readonly current: boolean;
 }
 
-/** Agentic profile generation port the consuming extension injects (child agent run). */
+/** Agentic profile generation port the consuming extension injects (child agent session). */
 export interface GenerateInput {
   readonly description: string;
   readonly modelLabel: string | undefined;
@@ -85,7 +85,7 @@ export interface GenerateInput {
 
 export type ProfileGenerator = (input: GenerateInput) => Effect.Effect<PiProfiles.Profile, string>;
 
-/** Agentic profile modification port the consuming extension injects (child agent run). */
+/** Agentic profile modification port the consuming extension injects (child agent session). */
 export interface ModifyInput {
   readonly profile: PiProfiles.Profile;
   readonly instruction: string;
@@ -342,7 +342,7 @@ export const resolveModifyTarget = (
   });
 
 /**
- * Pick the authoring model for an agentic run: session model when the
+ * Pick the authoring model for an agentic session: session model when the
  * catalogue is empty, the injected TUI widget when provided (current
  * session model pinned first, single-keystroke keep), else the
  * menu-driven `pickModel`. Notifies the chosen runtime, unless the
@@ -500,7 +500,7 @@ export const requirementRow = (status: RequirementStatus, selected: boolean): st
 };
 
 /**
- * Requirements gate for an agentic run: checklist every required skill
+ * Requirements gate for an agentic session: checklist every required skill
  * (checked = will inject, toggle by picking), installing the missing
  * ones on request. Present skills start checked; the check itself is the
  * pure {@link checkRequirements} — this flow only presents it.
@@ -743,7 +743,7 @@ export const matchesFilter = (label: string, query: string): boolean => {
   return true;
 };
 
-/** Display label with the current-run marker. */
+/** Display label with the current-session marker. */
 const displayModel = (option: ModelOption): string =>
   option.current ? `${option.label} (current)` : option.label;
 
@@ -780,7 +780,7 @@ export const pickModel = (
 ): Effect.Effect<string, string> =>
   Effect.gen(function* () {
     const first = yield* Effect.promise(() =>
-      ui.select('Model for the authoring run', [...models.map(displayModel), PICK_ANOTHER]),
+      ui.select('Model for the authoring session', [...models.map(displayModel), PICK_ANOTHER]),
     );
     if (first === undefined) return yield* Effect.fail(CANCELLED);
     if (first !== PICK_ANOTHER) return yield* modelLabelFor(models, first);
@@ -797,7 +797,7 @@ export const pickModel = (
       query === '' ? models : models.filter((option) => matchesFilter(option.label, query));
     if (candidates.length === 0) return yield* Effect.fail(`No models match '${query}'.`);
     const picked = yield* Effect.promise(() =>
-      ui.select('Model for the authoring run', candidates.map(displayModel)),
+      ui.select('Model for the authoring session', candidates.map(displayModel)),
     );
     if (picked === undefined) return yield* Effect.fail(CANCELLED);
     return yield* modelLabelFor(candidates, picked);
@@ -1082,7 +1082,7 @@ export const notifyVerifyResult = (
     );
   });
 
-/** Fixed agent instruction for the format-fix run: keep the role, fix the shape. */
+/** Fixed agent instruction for the format-fix session: keep the role, fix the shape. */
 export const FIX_INSTRUCTION =
   'Bring this profile into the standard profile format without changing what it teaches: ' +
   'ensure frontmatter has name (matching the directory), description (one line: role and job), ' +

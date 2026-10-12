@@ -2,7 +2,7 @@
 
 Effect-first Pi extension owns agent profiles. Two commands, two audiences:
 
-- `/mf-profiles` — interactive TUI (humans): browse, create, modify via dialogs, agentic runs.
+- `/mf-profiles` — interactive TUI (humans): browse, create, modify via dialogs, agentic sessions.
 - `/mf-profiles-cli` — headless, manual-only (agents/scripts): same operations as flags. **Use this one.**
 
 ## Invoking from bash

@@ -17,7 +17,7 @@ extension like `pi-prompts`).
 
 - Profile shapes and `PROFILE.md` parsing — those live in
   `modules/pi-profiles`
-- Interactive flows (menus, dialogs, agentic runs) — those live in
+- Interactive flows (menus, dialogs, agentic sessions) — those live in
   `apps/interactive`
 - Pi extension wiring (preprompts, model runtime) — that lives in
   `extension.ts`
