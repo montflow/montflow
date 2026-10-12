@@ -3,7 +3,7 @@ import { testRender } from '@opentui/solid';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { FRAME_MS, LOADER_FRAMES } from '../loader.js';
 import { palette } from '../palette.js';
-import { RunStatusIcon, runStatusColor } from '../run-status-icon.js';
+import { SessionStatusIcon, sessionStatusColor } from '../session-status-icon.js';
 
 type Setup = Awaited<ReturnType<typeof testRender>>;
 
@@ -24,7 +24,7 @@ const renderBadge = async (
   const setup = await testRender(
     () => (
       <box width={WIDTH} height={HEIGHT} flexDirection="column">
-        <RunStatusIcon
+        <SessionStatusIcon
           status={status}
           {...(options?.note === undefined ? {} : { note: options.note })}
           {...(options?.frame === undefined ? {} : { frame: options.frame })}
@@ -40,26 +40,26 @@ const renderBadge = async (
 
 const frameText = (setup: Setup): string => setup.captureCharFrame();
 
-describe('runStatusColor', () => {
+describe('sessionStatusColor', () => {
   test('maps every status onto a semantic colour', () => {
-    expect(runStatusColor('running')).toBe(palette.accent);
-    expect(runStatusColor('awaiting-input')).toBe(palette.warn);
-    expect(runStatusColor('done')).toBe(palette.good);
-    expect(runStatusColor('failed')).toBe(palette.bad);
-    expect(runStatusColor('cancelled')).toBe(palette.dim);
-    expect(runStatusColor('weird')).toBe(palette.dim);
+    expect(sessionStatusColor('running')).toBe(palette.accent);
+    expect(sessionStatusColor('awaiting-input')).toBe(palette.warn);
+    expect(sessionStatusColor('done')).toBe(palette.good);
+    expect(sessionStatusColor('failed')).toBe(palette.bad);
+    expect(sessionStatusColor('cancelled')).toBe(palette.dim);
+    expect(sessionStatusColor('weird')).toBe(palette.dim);
   });
 });
 
-describe('RunStatusIcon', () => {
-  test('a running run shows the injected spinner frame beside the status', async () => {
+describe('SessionStatusIcon', () => {
+  test('a running session shows the injected spinner frame beside the status', async () => {
     const frame = frameText(await renderBadge('running', { note: 'live', frame: 3 }));
     expect(frame).toContain(LOADER_FRAMES[3] ?? '');
     expect(frame).toContain('running');
     expect(frame).toContain('live');
   });
 
-  test('a parked run shows its marker and the waiting note', async () => {
+  test('a parked session shows its marker and the waiting note', async () => {
     const frame = frameText(
       await renderBadge('awaiting-input', { note: 'waiting for your answer', frame: 0 }),
     );
@@ -68,7 +68,7 @@ describe('RunStatusIcon', () => {
     expect(frame).toContain('waiting for your answer');
   });
 
-  test('a settled run shows its marker with no note', async () => {
+  test('a settled session shows its marker with no note', async () => {
     const frame = frameText(await renderBadge('done', { frame: 0 }));
     expect(frame).toContain('✓');
     expect(frame).toContain('done');

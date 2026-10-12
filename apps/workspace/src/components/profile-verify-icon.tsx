@@ -46,12 +46,12 @@ export const verifyColor = (pending: boolean, result: ProfileVerify | undefined)
 
 /**
  * Per-row profile-verification glyph: pending shows the animated braille
- * spinner (same frames and cadence as the runs-panel markers), resolved
+ * spinner (same frames and cadence as the sessions-panel markers), resolved
  * shows `✓` when valid or `✗ n` with the issue count when invalid. Owns
  * the `createQuery` keyed by `['profile-verify', id]` — the client is
  * cache-first, so revisiting a profile reuses its cached result. The
  * interval is raw: Effect Clock fibers never resolve inside the OpenTUI
- * render loop, mirroring `RunsPanel` and `Loader`.
+ * render loop, mirroring `SessionsPanel` and `Loader`.
  * @param props - workspace root, profile slug, optional fixed frame
  * @returns verification glyph element
  */

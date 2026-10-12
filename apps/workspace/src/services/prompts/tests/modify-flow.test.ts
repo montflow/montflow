@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import * as Vitest from '@effect/vitest';
 import { Effect } from 'effect';
 import * as Prompts from '../index.js';
-import * as Runs from '../../runs/index.js';
-import { makeHarness, poll, settleEvent } from '../../runs/tests/harness.js';
+import * as Sessions from '../../sessions/index.js';
+import { makeHarness, poll, settleEvent } from '../../sessions/tests/harness.js';
 
 /** Unique scratch root per test — no shared state across files. */
 const freshRoot = (): Promise<string> => mkdtemp(join(tmpdir(), 'workspace-prompt-modify-'));
@@ -14,7 +14,7 @@ const freshRoot = (): Promise<string> => mkdtemp(join(tmpdir(), 'workspace-promp
 const promptFile = (root: string, id: string): string =>
   join(root, '.agents', '@montflow', 'pi-prompts', `${id}.json`);
 
-/** One prompt file as the editor run would leave it. */
+/** One prompt file as the editor session would leave it. */
 const promptJson = (id: string, template: string): string =>
   `${JSON.stringify(
     {
@@ -29,7 +29,7 @@ const promptJson = (id: string, template: string): string =>
     2,
   )}\n`;
 
-/** Seed one prompt file the way the editor run would. */
+/** Seed one prompt file the way the editor session would. */
 const writePrompt = (root: string, id: string, template: string): Promise<void> =>
   mkdir(join(root, '.agents', '@montflow', 'pi-prompts'), { recursive: true }).then(() =>
     writeFile(promptFile(root, id), promptJson(id, template), 'utf8'),
@@ -72,40 +72,40 @@ const ports = (
 });
 
 Vitest.afterEach(async () => {
-  await Runs.resetRunnerRuntimes();
-  Runs.setSessionFactoryLayer(undefined);
-  Runs.setExtensionProbe(undefined);
-  Prompts.resetDispatchedModifyRun();
+  await Sessions.resetSessionRuntimes();
+  Sessions.setSessionFactoryLayer(undefined);
+  Sessions.setExtensionProbe(undefined);
+  Prompts.resetDispatchedModifySession();
 });
 
 Vitest.describe('Prompts.runModifyFlow agentic dispatch', () => {
-  Vitest.it.live('gates on the runs extension without dispatching', () =>
+  Vitest.it.live('gates on the sessions extension without dispatching', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(false));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(false));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writePrompt(root, 'review', 'Review {{files}}'));
       const error = yield* Prompts.runModifyFlow(root, 'review', ports('agent')).pipe(Effect.flip);
-      Vitest.expect(error).toBe(Runs.RUNS_EXTENSION_INSTALL_HINT);
+      Vitest.expect(error).toBe(Sessions.SESSIONS_EXTENSION_INSTALL_HINT);
       Vitest.expect(harness.sessions.length).toBe(0);
     }),
   );
 
-  Vitest.it.live('dispatches an editor run and resolves the dispatched result', () =>
+  Vitest.it.live('dispatches an editor session and resolves the dispatched result', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writePrompt(root, 'review', 'Review {{files}}'));
       const result = yield* Prompts.runModifyFlow(root, 'review', ports('agent'));
       Vitest.expect(result?.kind).toBe('dispatched');
-      const runId = result?.kind === 'dispatched' ? result.runId : '';
-      Vitest.expect(runId).toMatch(/^modify-prompt-/);
+      const sessionId = result?.kind === 'dispatched' ? result.sessionId : '';
+      Vitest.expect(sessionId).toMatch(/^modify-prompt-/);
       const session = harness.sessions[0];
       if (session === undefined) return yield* Effect.fail('session not created');
-      Vitest.expect(session.request.tools).toStrictEqual([...Runs.DEFAULT_RUN_TOOLS]);
+      Vitest.expect(session.request.tools).toStrictEqual([...Sessions.DEFAULT_SESSION_TOOLS]);
       const prompt = yield* poll(
         Effect.sync(() => session.prompts[0]),
         (value) => value !== undefined,
@@ -117,21 +117,21 @@ Vitest.describe('Prompts.runModifyFlow agentic dispatch', () => {
     }),
   );
 
-  Vitest.it.live('fires the completion hook with the updated prompt and run id on settle', () =>
+  Vitest.it.live('fires the completion hook with the updated prompt and session id on settle', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writePrompt(root, 'review', 'Review {{files}}'));
       const modified: Array<readonly [string, string]> = [];
       const failed: Array<string> = [];
       const result = yield* Prompts.runModifyFlow(root, 'review', ports('agent'), {
-        onPromptModified: (prompt, runId) => modified.push([prompt.id, runId]),
+        onPromptModified: (prompt, sessionId) => modified.push([prompt.id, sessionId]),
         onPromptFailed: (message) => failed.push(message),
       });
       Vitest.expect(result?.kind).toBe('dispatched');
-      const runId = result?.kind === 'dispatched' ? result.runId : '';
+      const sessionId = result?.kind === 'dispatched' ? result.sessionId : '';
       yield* Effect.promise(() =>
         writePrompt(root, 'review', 'Review {{files}} with the reviewer'),
       );
@@ -142,7 +142,7 @@ Vitest.describe('Prompts.runModifyFlow agentic dispatch', () => {
         Effect.sync(() => modified.length + failed.length),
         (count) => count > 0,
       );
-      Vitest.expect(modified).toStrictEqual([['review', runId]]);
+      Vitest.expect(modified).toStrictEqual([['review', sessionId]]);
       Vitest.expect(failed).toStrictEqual([]);
     }),
   );
@@ -150,8 +150,8 @@ Vitest.describe('Prompts.runModifyFlow agentic dispatch', () => {
   Vitest.it.live('reports a settle that left the prompt unchanged', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writePrompt(root, 'review', 'Review {{files}}'));
       const failed: Array<string> = [];
@@ -173,8 +173,8 @@ Vitest.describe('Prompts.runModifyFlow agentic dispatch', () => {
   Vitest.it.live('reports an invalid prompt file distinctly from nothing written', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writePrompt(root, 'review', 'Review {{files}}'));
       const failed: Array<string> = [];
@@ -197,8 +197,8 @@ Vitest.describe('Prompts.runModifyFlow agentic dispatch', () => {
   Vitest.it.live('resolves undefined on a real cancel without dispatching', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writePrompt(root, 'review', 'Review {{files}}'));
       const result = yield* Prompts.runModifyFlow(root, 'review', ports('cancel'));
@@ -211,7 +211,7 @@ Vitest.describe('Prompts.runModifyFlow agentic dispatch', () => {
 Vitest.describe('Prompts.runModifyFlow manual modify', () => {
   Vitest.it.live('persists the manual edit and resolves the saved result', () =>
     Effect.gen(function* () {
-      Runs.setExtensionProbe(() => Effect.succeed(false));
+      Sessions.setExtensionProbe(() => Effect.succeed(false));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writePrompt(root, 'review', 'Review {{files}}'));
       const result = yield* Prompts.runModifyFlow(

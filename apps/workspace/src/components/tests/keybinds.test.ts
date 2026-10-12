@@ -36,16 +36,16 @@ Vitest.describe('Keybinds.listBanner', () => {
     ).toStrictEqual('/ search · ⏎ open · c create · x remove · j/k move');
   });
 
-  Vitest.it('adds the section toggle for runs panels', () => {
-    Vitest.expect(formatKeybinds(Keybinds.listBanner(true, 2, { allRuns: true }))).toStrictEqual(
-      '/ search · ⏎ open · c create · j/k move · A all runs',
-    );
+  Vitest.it('adds the section toggle for sessions panels', () => {
+    Vitest.expect(
+      formatKeybinds(Keybinds.listBanner(true, 2, { allSessions: true })),
+    ).toStrictEqual('/ search · ⏎ open · c create · j/k move · A all sessions');
   });
 });
 
-Vitest.describe('Keybinds runs section toggle', () => {
-  Vitest.it('binds A to the full run history', () => {
-    Vitest.expect(formatKeybinds([Keybinds.showAll()])).toStrictEqual('A all runs');
+Vitest.describe('Keybinds sessions section toggle', () => {
+  Vitest.it('binds A to the full session history', () => {
+    Vitest.expect(formatKeybinds([Keybinds.showAll()])).toStrictEqual('A all sessions');
   });
 });
 
@@ -139,11 +139,11 @@ Vitest.describe('Keybinds dialog and detail sets', () => {
     );
   });
 
-  Vitest.it('matches the dispatched-run jump hint', () => {
-    Vitest.expect(formatKeybinds([Keybinds.goToRun()])).toStrictEqual('g run');
+  Vitest.it('matches the dispatched-session jump hint', () => {
+    Vitest.expect(formatKeybinds([Keybinds.goToSession()])).toStrictEqual('g session');
   });
 
-  Vitest.it('matches the run-detail live controls', () => {
+  Vitest.it('matches the session-detail live controls', () => {
     Vitest.expect(formatKeybinds([Keybinds.steer(), Keybinds.interrupt()])).toStrictEqual(
       's steer · x interrupt',
     );

@@ -8,10 +8,10 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Changes } from '@montflow/pi-effect';
 import type { Interactive as ProfilesInteractive, PiProfiles } from '@montflow/pi-profiles';
-import type { RunDetail as EngineRunDetail } from '@montflow/pi-runs';
+import type { SessionDetail as EngineSessionDetail } from '@montflow/pi-sessions';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Data, Effect, Fiber, Layer, Stream } from 'effect';
-import * as Runs from '../runs/index.js';
+import * as Sessions from '../sessions/index.js';
 import * as Skills from '../skills/index.js';
 
 /**
@@ -584,7 +584,7 @@ export const storeFor = (root: string): ProfilesInteractive.ProfileStore => ({
 });
 
 /**
- * Skill inventory port for the requirements gate behind agentic runs:
+ * Skill inventory port for the requirements gate behind agentic sessions:
  * installed workspace skills as `InstalledSkill` rows. Never fails —
  * an unreadable store reads as empty.
  * @param root - workspace root (skill store owner)
@@ -621,7 +621,7 @@ export const installerFor =
  * exactly one profile, then stops. Mirrors `AUTHOR_PREPROMPT` in
  * `@montflow/pi-profiles`'s extension (not exported through the package
  * index, so the workspace host carries this copy for its dispatched
- * author runs).
+ * author sessions).
  */
 export const AUTHOR_PREPROMPT = `You are a profile author for a pi coding agent.
 
@@ -660,7 +660,7 @@ Rules:
   holds at least one verifiable item.
 - If a profile with that name already exists, pick a fresh name instead.
 - Post short progress with the 'update_status' tool as you work (e.g. "scouting skills",
-  "writing PROFILE.md") so the run's row shows what it is doing.
+  "writing PROFILE.md") so the session's row shows what it is doing.
 - Do not touch anything outside .agents/@montflow/profiles/.`;
 
 /** Instructions after the user description: the reply shape. Mirrors the extension's `AUTHOR_POSTPROMPT`. */
@@ -693,27 +693,27 @@ Rules:
 export const MODIFY_POSTPROMPT = 'When done, reply with one short line: what changed.';
 
 /**
- * TUI callbacks for a dispatched editor run's completion: the named
- * profile was found and persisted (refresh + toast), or the run settled
+ * TUI callbacks for a dispatched editor session's completion: the named
+ * profile was found and persisted (refresh + toast), or the session settled
  * without a usable change (surface the reason). Absent in headless tests.
  */
 export interface ModifyFlowHooks {
-  /** Named profile found after the editor run settled. */
-  readonly onProfileModified?: ((profile: ProfileSummary, runId: string) => void) | undefined;
-  /** Editor run settled without updating the profile. */
-  readonly onProfileFailed?: ((message: string, runId: string) => void) | undefined;
+  /** Named profile found after the editor session settled. */
+  readonly onProfileModified?: ((profile: ProfileSummary, sessionId: string) => void) | undefined;
+  /** Editor session settled without updating the profile. */
+  readonly onProfileFailed?: ((message: string, sessionId: string) => void) | undefined;
 }
 
 /**
- * Completion hook for a dispatched editor run: re-read the named profile,
+ * Completion hook for a dispatched editor session: re-read the named profile,
  * refuse a no-op settle by comparing the raw file to the dispatch
  * snapshot, persist it canonically through the loaded runtime's
  * decode+encode path, and notify the hooks. Exported so a resumed editor
- * run can re-attach the same hook through `Runs.resumeRun` after an app
+ * session can re-attach the same hook through `Sessions.resumeSession` after an app
  * restart.
  * @param root - workspace root (profile store owner)
  * @param libs - loaded extension runtime
- * @param runId - the editor run id
+ * @param sessionId - the editor session id
  * @param profileId - profile directory name under edit
  * @param beforeRaw - raw `PROFILE.md` snapshotted at dispatch, or undefined when unreadable
  * @param hooks - TUI completion callbacks
@@ -723,11 +723,11 @@ export const modifyCompletion =
   (
     root: string,
     libs: PiProfilesLib,
-    runId: string,
+    sessionId: string,
     profileId: string,
     beforeRaw: string | undefined,
     hooks?: ModifyFlowHooks,
-  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  ): ((detail: EngineSessionDetail) => Effect.Effect<void>) =>
   (_detail) =>
     Effect.gen(function* () {
       const { valid, invalid } = yield* readFreshProfiles(libs, root, [profileId]);
@@ -735,9 +735,9 @@ export const modifyCompletion =
       if (updated === undefined) {
         hooks?.onProfileFailed?.(
           invalid.length > 0
-            ? `Run '${runId}' wrote an invalid profile '${profileId}' — check its PROFILE.md and retry.`
-            : `Run '${runId}' finished without updating profile '${profileId}' — try describing the change differently.`,
-          runId,
+            ? `Session '${sessionId}' wrote an invalid profile '${profileId}' — check its PROFILE.md and retry.`
+            : `Session '${sessionId}' finished without updating profile '${profileId}' — try describing the change differently.`,
+          sessionId,
         );
         return;
       }
@@ -746,8 +746,8 @@ export const modifyCompletion =
       );
       if (beforeRaw !== undefined && afterRaw === beforeRaw) {
         hooks?.onProfileFailed?.(
-          `Run '${runId}' finished without updating profile '${profileId}' — try describing the change differently.`,
-          runId,
+          `Session '${sessionId}' finished without updating profile '${profileId}' — try describing the change differently.`,
+          sessionId,
         );
         return;
       }
@@ -757,31 +757,31 @@ export const modifyCompletion =
       );
       if (failure !== undefined) {
         hooks?.onProfileFailed?.(
-          `Run '${runId}' updated '${profileId}' but it could not be saved: ${failure}`,
-          runId,
+          `Session '${sessionId}' updated '${profileId}' but it could not be saved: ${failure}`,
+          sessionId,
         );
         return;
       }
-      hooks?.onProfileModified?.(row, runId);
+      hooks?.onProfileModified?.(row, sessionId);
     });
 
 /**
- * TUI callbacks for a dispatched author run's completion: the fresh
- * profile was found (refresh + open its detail), or the run settled
- * without one (surface the reason). The run id lets the TUI clear only
- * the matching dispatched-run keybind target. Absent in headless tests.
+ * TUI callbacks for a dispatched author session's completion: the fresh
+ * profile was found (refresh + open its detail), or the session settled
+ * without one (surface the reason). The session id lets the TUI clear only
+ * the matching dispatched-session keybind target. Absent in headless tests.
  */
 export interface CreateFlowHooks {
-  /** Fresh profile found after the author run settled. */
-  readonly onProfileCreated?: ((profile: ProfileSummary, runId: string) => void) | undefined;
-  /** Author run settled without creating a profile. */
-  readonly onProfileFailed?: ((message: string, runId: string) => void) | undefined;
+  /** Fresh profile found after the author session settled. */
+  readonly onProfileCreated?: ((profile: ProfileSummary, sessionId: string) => void) | undefined;
+  /** Author session settled without creating a profile. */
+  readonly onProfileFailed?: ((message: string, sessionId: string) => void) | undefined;
 }
 
 /**
  * Raw profile directory names under the store, regardless of decode
  * validity. Used to snapshot the store at dispatch and to distinguish
- * "nothing written" from "written but invalid" after a run settles.
+ * "nothing written" from "written but invalid" after a session settles.
  * @param root - workspace root (profile store owner)
  * @returns Effect resolving to directory names (empty when the store is missing)
  */
@@ -793,7 +793,7 @@ export const rawProfileIds = (root: string): Effect.Effect<ReadonlyArray<string>
     ),
   );
 
-/** Fresh profile directories decoded after a run settled: valid profiles plus ids that failed to decode. */
+/** Fresh profile directories decoded after a session settled: valid profiles plus ids that failed to decode. */
 export interface FreshProfiles {
   readonly valid: ReadonlyArray<PiProfiles.Profile>;
   /** Directory ids with a missing or malformed `PROFILE.md`. */
@@ -807,7 +807,7 @@ interface FreshEntry {
 }
 
 /**
- * Decode the fresh profile directories a settled run added, splitting
+ * Decode the fresh profile directories a settled session added, splitting
  * valid profiles from ids whose `PROFILE.md` is missing or malformed.
  * @param libs - loaded extension runtime
  * @param root - workspace root (profile store owner)
@@ -851,27 +851,27 @@ interface TranscriptLine {
 }
 
 /**
- * Final assistant text from a settled run's transcript, or undefined when
- * the run produced no assistant turn.
+ * Final assistant text from a settled session's transcript, or undefined when
+ * the session produced no assistant turn.
  * @param events - stored transcript events
  * @returns last assistant text, if any
  */
 export const finalAssistantText = (events: ReadonlyArray<TranscriptLine>): string | undefined =>
   events.findLast((event) => event.role === 'assistant')?.text;
 
-/** How a settled author run's profile was resolved. */
+/** How a settled author session's profile was resolved. */
 export type CreatedProfilePick =
   | { readonly kind: 'one'; readonly profile: PiProfiles.Profile }
   | { readonly kind: 'ambiguous'; readonly names: ReadonlyArray<string> }
   | { readonly kind: 'none' };
 
 /**
- * Resolve the profile a settled author run authored. Prefers the fresh
- * profile named in the run's final reply — correlating concurrent creates
- * to their own run — and falls back to the name diff only when exactly one
+ * Resolve the profile a settled author session authored. Prefers the fresh
+ * profile named in the session's final reply — correlating concurrent creates
+ * to their own session — and falls back to the name diff only when exactly one
  * fresh profile exists (unambiguous).
- * @param reply - final assistant text from the run, if any
- * @param fresh - profiles added since the run was dispatched
+ * @param reply - final assistant text from the session, if any
+ * @param fresh - profiles added since the session was dispatched
  * @returns the chosen profile, an ambiguity, or none
  */
 export const pickCreatedProfile = (
@@ -892,14 +892,14 @@ export const pickCreatedProfile = (
 };
 
 /**
- * Completion hook for a dispatched author run: resolve the profile the run
+ * Completion hook for a dispatched author session: resolve the profile the session
  * authored (reply-correlated, name-diff fallback), persist it canonically
  * through the loaded runtime's decode+encode path, and notify the hooks.
- * Exported so a resumed author run can re-attach the same hook through
- * `Runs.resumeRun` after an app restart.
+ * Exported so a resumed author session can re-attach the same hook through
+ * `Sessions.resumeSession` after an app restart.
  * @param root - workspace root (profile store owner)
  * @param libs - loaded extension runtime
- * @param runId - the author run id
+ * @param sessionId - the author session id
  * @param beforeIds - raw store directory ids snapshotted at dispatch, or undefined after a restart
  * @param hooks - TUI completion callbacks
  * @returns the `onSettled` hook
@@ -908,10 +908,10 @@ export const authorCompletion =
   (
     root: string,
     libs: PiProfilesLib,
-    runId: string,
+    sessionId: string,
     beforeIds: ReadonlyArray<string> | undefined,
     hooks?: CreateFlowHooks,
-  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  ): ((detail: EngineSessionDetail) => Effect.Effect<void>) =>
   (detail) =>
     Effect.gen(function* () {
       const afterIds = yield* rawProfileIds(root);
@@ -925,69 +925,69 @@ export const authorCompletion =
         );
         if (failure !== undefined) {
           hooks?.onProfileFailed?.(
-            `Run '${runId}' created '${row.id}' but it could not be saved: ${failure}`,
-            runId,
+            `Session '${sessionId}' created '${row.id}' but it could not be saved: ${failure}`,
+            sessionId,
           );
           return;
         }
-        hooks?.onProfileCreated?.(row, runId);
+        hooks?.onProfileCreated?.(row, sessionId);
         return;
       }
       if (pick.kind === 'ambiguous') {
         hooks?.onProfileFailed?.(
-          `Run '${runId}' created several profiles (${pick.names.join(', ')}) — open the one you want from the list.`,
-          runId,
+          `Session '${sessionId}' created several profiles (${pick.names.join(', ')}) — open the one you want from the list.`,
+          sessionId,
         );
         return;
       }
       if (invalid.length > 0) {
         hooks?.onProfileFailed?.(
-          `Run '${runId}' wrote an invalid profile (${invalid.join(', ')}) — check its PROFILE.md and retry.`,
-          runId,
+          `Session '${sessionId}' wrote an invalid profile (${invalid.join(', ')}) — check its PROFILE.md and retry.`,
+          sessionId,
         );
         return;
       }
       hooks?.onProfileFailed?.(
-        `Run '${runId}' finished without creating a profile — try describing it differently.`,
-        runId,
+        `Session '${sessionId}' finished without creating a profile — try describing it differently.`,
+        sessionId,
       );
     });
 
-/** Result of a create flow: persisted manually, or dispatched as a run. */
+/** Result of a create flow: persisted manually, or dispatched as a session. */
 export type CreateFlowResult =
   | { readonly kind: 'saved'; readonly profile: ProfileSummary }
-  | { readonly kind: 'dispatched'; readonly runId: string };
+  | { readonly kind: 'dispatched'; readonly sessionId: string };
 
-/** Result of a modify flow: persisted manually, or dispatched as a run. */
+/** Result of a modify flow: persisted manually, or dispatched as a session. */
 export type ModifyFlowResult =
   | { readonly kind: 'saved'; readonly profile: ProfileSummary }
-  | { readonly kind: 'dispatched'; readonly runId: string };
+  | { readonly kind: 'dispatched'; readonly sessionId: string };
 
-/** Run id dispatched by the most recent agentic create, consumed by {@link runCreateFlow}. */
-let dispatchedRunId: string | undefined;
+/** Session id dispatched by the most recent agentic create, consumed by {@link runCreateFlow}. */
+let dispatchedSessionId: string | undefined;
 
-/** Run id dispatched by the most recent agentic modify, consumed by {@link runModifyFlow}. */
-let dispatchedModifyRunId: string | undefined;
+/** Session id dispatched by the most recent agentic modify, consumed by {@link runModifyFlow}. */
+let dispatchedModifySessionId: string | undefined;
 
-/** Test seam: forget the dispatched-run ref so a fresh create flow starts clean. */
-export const resetDispatchedRun = (): void => {
-  dispatchedRunId = undefined;
+/** Test seam: forget the dispatched-session ref so a fresh create flow starts clean. */
+export const resetDispatchedSession = (): void => {
+  dispatchedSessionId = undefined;
 };
 
-/** Test seam: forget the dispatched-modify-run ref so a fresh modify flow starts clean. */
-export const resetDispatchedModifyRun = (): void => {
-  dispatchedModifyRunId = undefined;
+/** Test seam: forget the dispatched-modify-session ref so a fresh modify flow starts clean. */
+export const resetDispatchedModifySession = (): void => {
+  dispatchedModifySessionId = undefined;
 };
 
 /**
  * Agentic generation port for the shared interactive flows: gate on the
- * runs extension, snapshot the profile store, dispatch an author run
- * through the pi-runs engine, then unwind the shared `createProfile`
- * flow with `CANCELLED` (the run, not this flow, writes the profile).
- * The run id lands in a module-level ref that {@link runCreateFlow}
- * reads to distinguish a dispatch from a real cancel. When the run
+ * sessions extension, snapshot the profile store, dispatch an author session
+ * through the pi-sessions engine, then unwind the shared `createProfile`
+ * flow with `CANCELLED` (the session, not this flow, writes the profile).
+ * The session id lands in a module-level ref that {@link runCreateFlow}
+ * reads to distinguish a dispatch from a real cancel. When the session
  * settles, {@link authorCompletion} correlates the fresh profile to this
- * run's final reply, so concurrent creates never cross wires.
+ * session's final reply, so concurrent creates never cross wires.
  * @param root - workspace root (profile store owner)
  * @param libs - loaded extension runtime
  * @param hooks - TUI completion callbacks, if any
@@ -1001,12 +1001,12 @@ export const generateFor =
   ): ProfilesInteractive.ProfileGenerator =>
   (input) =>
     Effect.gen(function* () {
-      const installed = yield* Runs.runsExtensionInstalled(root);
-      if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+      const installed = yield* Sessions.sessionsExtensionInstalled(root);
+      if (!installed) return yield* Effect.fail(Sessions.SESSIONS_EXTENSION_INSTALL_HINT);
       const beforeIds = yield* rawProfileIds(root);
-      const id = yield* Runs.newRunId('create-profile');
+      const id = yield* Sessions.newSessionId('create-profile');
       const name = `Create profile: ${input.description.trim().slice(0, 80)}`;
-      yield* Runs.startRun(root, {
+      yield* Sessions.startSession(root, {
         id,
         name,
         prompt: Skills.buildHeadlessPrompt(
@@ -1015,21 +1015,21 @@ export const generateFor =
           AUTHOR_POSTPROMPT,
         ),
         model: input.modelLabel,
-        tools: [...Runs.DEFAULT_RUN_TOOLS],
+        tools: [...Sessions.DEFAULT_SESSION_TOOLS],
         onSettled: authorCompletion(root, libs, id, beforeIds, hooks),
       });
-      dispatchedRunId = id;
+      dispatchedSessionId = id;
       return yield* Effect.fail(libs.Interactive.CANCELLED);
     });
 
 /**
  * Agentic modification port for the shared interactive flows: gate on the
- * runs extension, snapshot the named profile's raw file, dispatch an
- * editor run through the pi-runs engine, then unwind the shared
- * `modifyProfile` flow with `CANCELLED` (the run, not this flow, writes
- * the profile). The run id lands in a module-level ref that
+ * sessions extension, snapshot the named profile's raw file, dispatch an
+ * editor session through the pi-sessions engine, then unwind the shared
+ * `modifyProfile` flow with `CANCELLED` (the session, not this flow, writes
+ * the profile). The session id lands in a module-level ref that
  * {@link runModifyFlow} reads to distinguish a dispatch from a real
- * cancel. When the run settles, {@link modifyCompletion} re-reads and
+ * cancel. When the session settles, {@link modifyCompletion} re-reads and
  * persists the named profile.
  * @param root - workspace root (profile store owner)
  * @param hooks - TUI completion callbacks, if any
@@ -1041,13 +1041,13 @@ export const modifyFor =
     loadLibs().pipe(
       Effect.flatMap((libs) =>
         Effect.gen(function* () {
-          const installed = yield* Runs.runsExtensionInstalled(root);
-          if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+          const installed = yield* Sessions.sessionsExtensionInstalled(root);
+          if (!installed) return yield* Effect.fail(Sessions.SESSIONS_EXTENSION_INSTALL_HINT);
           const beforeRaw = yield* readRawProfile(root, input.profile.name).pipe(
             Effect.match({ onFailure: () => undefined, onSuccess: (raw) => raw }),
           );
-          const id = yield* Runs.newRunId('modify-profile');
-          yield* Runs.startRun(root, {
+          const id = yield* Sessions.newSessionId('modify-profile');
+          yield* Sessions.startSession(root, {
             id,
             name: `Modify profile: ${input.profile.name}`,
             prompt: Skills.buildHeadlessPrompt(
@@ -1059,10 +1059,10 @@ export const modifyFor =
               MODIFY_POSTPROMPT,
             ),
             model: input.modelLabel,
-            tools: [...Runs.DEFAULT_RUN_TOOLS],
+            tools: [...Sessions.DEFAULT_SESSION_TOOLS],
             onSettled: modifyCompletion(root, libs, id, input.profile.name, beforeRaw, hooks),
           });
-          dispatchedModifyRunId = id;
+          dispatchedModifySessionId = id;
           return yield* Effect.fail(libs.Interactive.CANCELLED);
         }),
       ),
@@ -1083,12 +1083,12 @@ export interface FlowPorts {
  * Workspace host for the shared create flow: load the extension,
  * resolve picker models, run `createProfile` (manual or agentic behind
  * the overlays). Manual creates persist and resolve `saved`; agentic
- * creates dispatch a run and resolve `dispatched`; real cancels resolve
+ * creates dispatch a session and resolve `dispatched`; real cancels resolve
  * undefined. The TUI needs no `CANCELLED` knowledge — only real
  * failures reject.
  * @param root - workspace root (profile store owner)
  * @param ports - TUI overlay ports
- * @param hooks - completion callbacks for a dispatched author run
+ * @param hooks - completion callbacks for a dispatched author session
  * @returns Effect resolving to the create outcome, or undefined on cancel
  */
 export const runCreateFlow = (
@@ -1101,7 +1101,7 @@ export const runCreateFlow = (
       Effect.gen(function* () {
         const refs = yield* Skills.listModelLabels();
         const fallback = yield* Skills.listDefaultModel();
-        dispatchedRunId = undefined;
+        dispatchedSessionId = undefined;
         const profile = yield* libs.Interactive.createProfile(
           ports.ui,
           libs.Interactive.modelOptions(fallback, refs),
@@ -1118,12 +1118,12 @@ export const runCreateFlow = (
       }).pipe(
         Effect.catch((error) => {
           if (error !== libs.Interactive.CANCELLED) return Effect.fail(error);
-          const runId = dispatchedRunId;
-          dispatchedRunId = undefined;
+          const sessionId = dispatchedSessionId;
+          dispatchedSessionId = undefined;
           return Effect.succeed(
-            runId === undefined
+            sessionId === undefined
               ? undefined
-              : ({ kind: 'dispatched', runId } satisfies CreateFlowResult),
+              : ({ kind: 'dispatched', sessionId } satisfies CreateFlowResult),
           );
         }),
       ),
@@ -1134,13 +1134,13 @@ export const runCreateFlow = (
  * Workspace host for the shared modify flow for one profile: load the
  * extension, run `modifyProfile` (manual description edit or agentic
  * rewrite). Manual edits persist and resolve `saved`; agentic edits
- * dispatch an editor run and resolve `dispatched`; real cancels resolve
+ * dispatch an editor session and resolve `dispatched`; real cancels resolve
  * undefined. The TUI needs no `CANCELLED` knowledge — only real failures
  * reject.
  * @param root - workspace root (profile store owner)
  * @param id - profile name under edit
  * @param ports - TUI overlay ports
- * @param hooks - completion callbacks for a dispatched editor run
+ * @param hooks - completion callbacks for a dispatched editor session
  * @returns Effect resolving to the modify outcome, or undefined on cancel
  */
 export const runModifyFlow = (
@@ -1155,7 +1155,7 @@ export const runModifyFlow = (
         const profiles = yield* storeFor(root).list();
         const refs = yield* Skills.listModelLabels();
         const fallback = yield* Skills.listDefaultModel();
-        dispatchedModifyRunId = undefined;
+        dispatchedModifySessionId = undefined;
         const profile = yield* libs.Interactive.modifyProfile(
           ports.ui,
           profiles,
@@ -1173,12 +1173,12 @@ export const runModifyFlow = (
       }).pipe(
         Effect.catch((error) => {
           if (error !== libs.Interactive.CANCELLED) return Effect.fail(error);
-          const runId = dispatchedModifyRunId;
-          dispatchedModifyRunId = undefined;
+          const sessionId = dispatchedModifySessionId;
+          dispatchedModifySessionId = undefined;
           return Effect.succeed(
-            runId === undefined
+            sessionId === undefined
               ? undefined
-              : ({ kind: 'dispatched', runId } satisfies ModifyFlowResult),
+              : ({ kind: 'dispatched', sessionId } satisfies ModifyFlowResult),
           );
         }),
       ),

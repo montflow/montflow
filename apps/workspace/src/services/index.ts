@@ -4,5 +4,5 @@ export * as Pi from './pi/index.js';
 export * as Profiles from './profiles/index.js';
 export * as Query from './query/index.js';
 export * as Prompts from './prompts/index.js';
-export * as Runs from './runs/index.js';
+export * as Sessions from './sessions/index.js';
 export * as Skills from './skills/index.js';

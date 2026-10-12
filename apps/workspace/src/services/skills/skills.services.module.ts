@@ -9,9 +9,9 @@ import { execFile, spawn } from 'node:child_process';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: promisify adapts the installer shell-out; both go away with the Command migration.
 import { promisify } from 'node:util';
 import type { Interactive, Skill } from '@montflow/pi-skills';
-import type { RunDetail as EngineRunDetail } from '@montflow/pi-runs';
+import type { SessionDetail as EngineSessionDetail } from '@montflow/pi-sessions';
 import { Data, Effect, Schema } from 'effect';
-import * as Runs from '../runs/index.js';
+import * as Sessions from '../sessions/index.js';
 
 /**
  * Lazy handle to the skills extension runtime. Static imports from
@@ -144,13 +144,13 @@ const loadLibs = (): Effect.Effect<PiSkillsLib, string> =>
   loadPiSkills().pipe(Effect.mapError((error) => error.message));
 
 /** Panel ids with an installable backing extension. */
-export type ExtensionPanel = 'skills' | 'prompts' | 'runs' | 'profiles';
+export type ExtensionPanel = 'skills' | 'prompts' | 'sessions' | 'profiles';
 
 /** Directory segments (under the workspace root) proving a panel installed. */
 const PANEL_DIRS = {
   skills: ['.agents', 'skills'],
   prompts: ['.agents', '@montflow', 'pi-prompts'],
-  runs: ['.agents', '@montflow', 'runs'],
+  sessions: ['.agents', '@montflow', 'sessions'],
   profiles: ['.agents', '@montflow', 'profiles'],
 } satisfies Record<ExtensionPanel, ReadonlyArray<string>>;
 
@@ -158,7 +158,7 @@ const PANEL_DIRS = {
 const INSTALL_HINTS = {
   skills: 'npx skills add montflow/montflow -a pi -y',
   prompts: 'prompt packs land next',
-  runs: 'run history lands next',
+  sessions: 'session history lands next',
   profiles: 'profile sync lands next',
 } satisfies Record<ExtensionPanel, string>;
 
@@ -623,7 +623,7 @@ export const listModelLabels = (
     ),
   );
 
-/** The pi session defaults: the provider/model pair headless runs fall back to. */
+/** The pi session defaults: the provider/model pair headless sessions fall back to. */
 const PiDefaults = Schema.Struct({
   defaultProvider: Schema.optional(Schema.String),
   defaultModel: Schema.optional(Schema.String),
@@ -686,7 +686,7 @@ export const buildHeadlessPrompt = (
     .join('\n\n');
 
 /**
- * `pi -p` arguments for a headless agentic run: ephemeral session, tight
+ * `pi -p` arguments for a headless agentic session: ephemeral session, tight
  * tool allowlist, optional model pin. Mirrors the tool scope the pi
  * extension grants its child agents (`read`, `write`, `edit`).
  * @param prompt - assembled child prompt
@@ -705,12 +705,12 @@ export const headlessArgs = (
   prompt,
 ];
 
-/** Failure when a headless agent run fails. Carries tailed CLI output. */
+/** Failure when a headless agent session fails. Carries tailed CLI output. */
 export class AgentError extends Data.TaggedError('@montflow/SkillsAgentError')<{
   readonly message: string;
 }> {}
 
-/** Headless runs get five minutes — skill authoring is one file plus thought. */
+/** Headless sessions get five minutes — skill authoring is one file plus thought. */
 const AGENT_TIMEOUT_MS = 300_000;
 
 /**
@@ -781,7 +781,7 @@ export const runHeadlessAgent = (
     Effect.mapError((error) =>
       error instanceof AgentError
         ? error
-        : new AgentError({ message: 'Agent run timed out after five minutes.' }),
+        : new AgentError({ message: 'Agent session timed out after five minutes.' }),
     ),
   );
 
@@ -794,27 +794,27 @@ interface TranscriptLine {
 }
 
 /**
- * Final assistant text from a settled run's transcript, or undefined when
- * the run produced no assistant turn.
+ * Final assistant text from a settled session's transcript, or undefined when
+ * the session produced no assistant turn.
  * @param events - stored transcript events
  * @returns last assistant text, if any
  */
 export const finalAssistantText = (events: ReadonlyArray<TranscriptLine>): string | undefined =>
   events.findLast((event) => event.role === 'assistant')?.text;
 
-/** How a settled author run's skill was resolved. */
+/** How a settled author session's skill was resolved. */
 export type AuthoredSkillPick =
   | { readonly kind: 'one'; readonly id: string }
   | { readonly kind: 'ambiguous'; readonly ids: ReadonlyArray<string> }
   | { readonly kind: 'none' };
 
 /**
- * Resolve the skill a settled author run authored. Prefers the fresh
- * skill named in the run's final reply — correlating concurrent creates
- * to their own run — and falls back to the id diff only when exactly one
+ * Resolve the skill a settled author session authored. Prefers the fresh
+ * skill named in the session's final reply — correlating concurrent creates
+ * to their own session — and falls back to the id diff only when exactly one
  * fresh skill exists (unambiguous).
- * @param reply - final assistant text from the run, if any
- * @param freshIds - skill ids added since the run was dispatched
+ * @param reply - final assistant text from the session, if any
+ * @param freshIds - skill ids added since the session was dispatched
  * @returns the chosen id, an ambiguity, or none
  */
 export const pickAuthoredSkill = (
@@ -835,28 +835,28 @@ export const pickAuthoredSkill = (
 };
 
 /**
- * TUI callbacks for a dispatched author run's completion: the fresh
- * skill was found (refresh + open its detail), or the run settled
- * without one (surface the reason). The run id lets the TUI clear only
- * the matching dispatched-run keybind target. Absent in headless tests.
+ * TUI callbacks for a dispatched author session's completion: the fresh
+ * skill was found (refresh + open its detail), or the session settled
+ * without one (surface the reason). The session id lets the TUI clear only
+ * the matching dispatched-session keybind target. Absent in headless tests.
  */
 export interface CreateFlowHooks {
-  /** Fresh skill found after the author run settled. */
-  readonly onSkillCreated?: ((skill: SkillSummary, runId: string) => void) | undefined;
-  /** Author run settled without creating a skill. */
-  readonly onSkillFailed?: ((message: string, runId: string) => void) | undefined;
+  /** Fresh skill found after the author session settled. */
+  readonly onSkillCreated?: ((skill: SkillSummary, sessionId: string) => void) | undefined;
+  /** Author session settled without creating a skill. */
+  readonly onSkillFailed?: ((message: string, sessionId: string) => void) | undefined;
 }
 
 /**
- * TUI callbacks for a dispatched editor run's completion: the named
- * skill was found and persisted (refresh + toast), or the run settled
+ * TUI callbacks for a dispatched editor session's completion: the named
+ * skill was found and persisted (refresh + toast), or the session settled
  * without a usable change (surface the reason). Absent in headless tests.
  */
 export interface ModifyFlowHooks {
-  /** Named skill found after the editor run settled. */
-  readonly onSkillModified?: ((skill: SkillSummary, runId: string) => void) | undefined;
-  /** Editor run settled without updating the skill. */
-  readonly onSkillFailed?: ((message: string, runId: string) => void) | undefined;
+  /** Named skill found after the editor session settled. */
+  readonly onSkillModified?: ((skill: SkillSummary, sessionId: string) => void) | undefined;
+  /** Editor session settled without updating the skill. */
+  readonly onSkillFailed?: ((message: string, sessionId: string) => void) | undefined;
 }
 
 /**
@@ -872,14 +872,14 @@ const readRawSkill = (root: string, id: string): Effect.Effect<string | undefine
     .pipe(Effect.match({ onFailure: () => undefined, onSuccess: (raw) => raw }));
 
 /**
- * Completion hook for a dispatched author run: resolve the skill the
- * run authored (reply-correlated, id-diff fallback), persist it
+ * Completion hook for a dispatched author session: resolve the skill the
+ * session authored (reply-correlated, id-diff fallback), persist it
  * canonically through the loaded runtime's decode+encode path, and
- * notify the hooks. Exported so a resumed author run can re-attach the
- * same hook through `Runs.resumeRun` after an app restart.
+ * notify the hooks. Exported so a resumed author session can re-attach the
+ * same hook through `Sessions.resumeSession` after an app restart.
  * @param root - workspace root (skill store owner)
  * @param libs - loaded extension runtime
- * @param runId - the author run id
+ * @param sessionId - the author session id
  * @param beforeIds - store ids snapshotted at dispatch, or undefined after a restart
  * @param hooks - TUI completion callbacks
  * @returns the `onSettled` hook
@@ -888,10 +888,10 @@ export const authorCompletion =
   (
     root: string,
     libs: PiSkillsLib,
-    runId: string,
+    sessionId: string,
     beforeIds: ReadonlyArray<string> | undefined,
     hooks?: CreateFlowHooks,
-  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  ): ((detail: EngineSessionDetail) => Effect.Effect<void>) =>
   (detail) =>
     Effect.gen(function* () {
       const { skills } = yield* getSkills(root);
@@ -908,37 +908,37 @@ export const authorCompletion =
         );
         if (failure !== undefined) {
           hooks?.onSkillFailed?.(
-            `Run '${runId}' created '${row.id}' but it could not be saved: ${failure}`,
-            runId,
+            `Session '${sessionId}' created '${row.id}' but it could not be saved: ${failure}`,
+            sessionId,
           );
           return;
         }
-        hooks?.onSkillCreated?.(row, runId);
+        hooks?.onSkillCreated?.(row, sessionId);
         return;
       }
       if (pick.kind === 'ambiguous') {
         hooks?.onSkillFailed?.(
-          `Run '${runId}' created several skills (${pick.ids.join(', ')}) — open the one you want from the list.`,
-          runId,
+          `Session '${sessionId}' created several skills (${pick.ids.join(', ')}) — open the one you want from the list.`,
+          sessionId,
         );
         return;
       }
       hooks?.onSkillFailed?.(
-        `Run '${runId}' finished without creating a skill — try describing it differently.`,
-        runId,
+        `Session '${sessionId}' finished without creating a skill — try describing it differently.`,
+        sessionId,
       );
     });
 
 /**
- * Completion hook for a dispatched editor run: re-read the named skill,
+ * Completion hook for a dispatched editor session: re-read the named skill,
  * refuse a no-op settle by comparing the raw `SKILL.md` to the dispatch
  * snapshot, persist it canonically through the loaded runtime's
  * decode+encode path, and notify the hooks. Exported so a resumed
- * editor run can re-attach the same hook through `Runs.resumeRun` after
+ * editor session can re-attach the same hook through `Sessions.resumeSession` after
  * an app restart.
  * @param root - workspace root (skill store owner)
  * @param libs - loaded extension runtime
- * @param runId - the editor run id
+ * @param sessionId - the editor session id
  * @param skillId - skill directory slug under edit
  * @param beforeRaw - raw `SKILL.md` snapshotted at dispatch, or undefined when unreadable
  * @param hooks - TUI completion callbacks
@@ -948,25 +948,25 @@ export const modifyCompletion =
   (
     root: string,
     libs: PiSkillsLib,
-    runId: string,
+    sessionId: string,
     skillId: string,
     beforeRaw: string | undefined,
     hooks?: ModifyFlowHooks,
-  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  ): ((detail: EngineSessionDetail) => Effect.Effect<void>) =>
   (_detail) =>
     Effect.gen(function* () {
       const afterRaw = yield* readRawSkill(root, skillId);
       if (afterRaw === undefined) {
         hooks?.onSkillFailed?.(
-          `Run '${runId}' finished without updating skill '${skillId}' — try describing the change differently.`,
-          runId,
+          `Session '${sessionId}' finished without updating skill '${skillId}' — try describing the change differently.`,
+          sessionId,
         );
         return;
       }
       if (beforeRaw !== undefined && afterRaw === beforeRaw) {
         hooks?.onSkillFailed?.(
-          `Run '${runId}' finished without updating skill '${skillId}' — try describing the change differently.`,
-          runId,
+          `Session '${sessionId}' finished without updating skill '${skillId}' — try describing the change differently.`,
+          sessionId,
         );
         return;
       }
@@ -974,8 +974,8 @@ export const modifyCompletion =
       const updated = skills.find((row) => row.id === skillId);
       if (updated === undefined) {
         hooks?.onSkillFailed?.(
-          `Run '${runId}' wrote an unusable skill '${skillId}' — check its SKILL.md and retry.`,
-          runId,
+          `Session '${sessionId}' wrote an unusable skill '${skillId}' — check its SKILL.md and retry.`,
+          sessionId,
         );
         return;
       }
@@ -985,38 +985,38 @@ export const modifyCompletion =
       );
       if (failure !== undefined) {
         hooks?.onSkillFailed?.(
-          `Run '${runId}' updated '${skillId}' but it could not be saved: ${failure}`,
-          runId,
+          `Session '${sessionId}' updated '${skillId}' but it could not be saved: ${failure}`,
+          sessionId,
         );
         return;
       }
-      hooks?.onSkillModified?.(row, runId);
+      hooks?.onSkillModified?.(row, sessionId);
     });
 
-/** Result of a create flow: persisted manually, or dispatched as a run. */
+/** Result of a create flow: persisted manually, or dispatched as a session. */
 export type CreateFlowResult =
   | { readonly kind: 'saved'; readonly skill: SkillSummary }
-  | { readonly kind: 'dispatched'; readonly runId: string };
+  | { readonly kind: 'dispatched'; readonly sessionId: string };
 
-/** Result of a modify flow: persisted manually, or dispatched as a run. */
+/** Result of a modify flow: persisted manually, or dispatched as a session. */
 export type ModifyFlowResult =
   | { readonly kind: 'saved'; readonly skill: SkillSummary }
-  | { readonly kind: 'dispatched'; readonly runId: string };
+  | { readonly kind: 'dispatched'; readonly sessionId: string };
 
-/** Run id dispatched by the most recent agentic create, consumed by {@link runCreateFlow}. */
-let dispatchedRunId: string | undefined;
+/** Session id dispatched by the most recent agentic create, consumed by {@link runCreateFlow}. */
+let dispatchedSessionId: string | undefined;
 
-/** Run id dispatched by the most recent agentic modify, consumed by {@link runModifyFlow}. */
-let dispatchedModifyRunId: string | undefined;
+/** Session id dispatched by the most recent agentic modify, consumed by {@link runModifyFlow}. */
+let dispatchedModifySessionId: string | undefined;
 
-/** Test seam: forget the dispatched-run ref so a fresh create flow starts clean. */
-export const resetDispatchedRun = (): void => {
-  dispatchedRunId = undefined;
+/** Test seam: forget the dispatched-session ref so a fresh create flow starts clean. */
+export const resetDispatchedSession = (): void => {
+  dispatchedSessionId = undefined;
 };
 
-/** Test seam: forget the dispatched-modify-run ref so a fresh modify flow starts clean. */
-export const resetDispatchedModifyRun = (): void => {
-  dispatchedModifyRunId = undefined;
+/** Test seam: forget the dispatched-modify-session ref so a fresh modify flow starts clean. */
+export const resetDispatchedModifySession = (): void => {
+  dispatchedModifySessionId = undefined;
 };
 
 /** Skill ids currently in the store, regardless of decode validity. */
@@ -1025,12 +1025,12 @@ const storeIds = (root: string): Effect.Effect<ReadonlyArray<string>> =>
 
 /**
  * Agentic generation port for the shared interactive flows: gate on the
- * runs extension, snapshot the store, dispatch an author run through the
- * pi-runs engine, then unwind the shared `createSkill` flow with
- * `CANCELLED` (the run, not this flow, writes the skill). The run id
+ * sessions extension, snapshot the store, dispatch an author session through the
+ * pi-sessions engine, then unwind the shared `createSkill` flow with
+ * `CANCELLED` (the session, not this flow, writes the skill). The session id
  * lands in a module-level ref that {@link runCreateFlow} reads to
- * distinguish a dispatch from a real cancel. When the run settles,
- * {@link authorCompletion} correlates the fresh skill to this run's final
+ * distinguish a dispatch from a real cancel. When the session settles,
+ * {@link authorCompletion} correlates the fresh skill to this session's final
  * reply, so concurrent creates never cross wires.
  * @param root - workspace root (skill store owner)
  * @param hooks - TUI completion callbacks, if any
@@ -1042,11 +1042,11 @@ export const generateFor =
     loadLibs().pipe(
       Effect.flatMap((libs) =>
         Effect.gen(function* () {
-          const installed = yield* Runs.runsExtensionInstalled(root);
-          if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+          const installed = yield* Sessions.sessionsExtensionInstalled(root);
+          if (!installed) return yield* Effect.fail(Sessions.SESSIONS_EXTENSION_INSTALL_HINT);
           const beforeIds = yield* storeIds(root);
-          const id = yield* Runs.newRunId('create-skill');
-          yield* Runs.startRun(root, {
+          const id = yield* Sessions.newSessionId('create-skill');
+          yield* Sessions.startSession(root, {
             id,
             name: `Create skill: ${input.description.trim().slice(0, 80)}`,
             prompt: buildHeadlessPrompt(
@@ -1055,10 +1055,10 @@ export const generateFor =
               libs.Interactive.AUTHOR_POSTPROMPT,
             ),
             model: input.modelLabel,
-            tools: [...Runs.DEFAULT_RUN_TOOLS],
+            tools: [...Sessions.DEFAULT_SESSION_TOOLS],
             onSettled: authorCompletion(root, libs, id, beforeIds, hooks),
           });
-          dispatchedRunId = id;
+          dispatchedSessionId = id;
           return yield* Effect.fail(libs.Interactive.CANCELLED);
         }),
       ),
@@ -1066,12 +1066,12 @@ export const generateFor =
 
 /**
  * Agentic modification port for the shared interactive flows: gate on
- * the runs extension, snapshot the named skill's raw file, dispatch an
- * editor run through the pi-runs engine, then unwind the shared
- * `modifySkill` flow with `CANCELLED` (the run, not this flow, writes
- * the skill). The run id lands in a module-level ref that
+ * the sessions extension, snapshot the named skill's raw file, dispatch an
+ * editor session through the pi-sessions engine, then unwind the shared
+ * `modifySkill` flow with `CANCELLED` (the session, not this flow, writes
+ * the skill). The session id lands in a module-level ref that
  * {@link runModifyFlow} reads to distinguish a dispatch from a real
- * cancel. When the run settles, {@link modifyCompletion} re-reads and
+ * cancel. When the session settles, {@link modifyCompletion} re-reads and
  * persists the named skill.
  * @param root - workspace root (skill store owner)
  * @param hooks - TUI completion callbacks, if any
@@ -1083,11 +1083,11 @@ export const modifyFor =
     loadLibs().pipe(
       Effect.flatMap((libs) =>
         Effect.gen(function* () {
-          const installed = yield* Runs.runsExtensionInstalled(root);
-          if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+          const installed = yield* Sessions.sessionsExtensionInstalled(root);
+          if (!installed) return yield* Effect.fail(Sessions.SESSIONS_EXTENSION_INSTALL_HINT);
           const beforeRaw = yield* readRawSkill(root, input.skill.id);
-          const id = yield* Runs.newRunId('modify-skill');
-          yield* Runs.startRun(root, {
+          const id = yield* Sessions.newSessionId('modify-skill');
+          yield* Sessions.startSession(root, {
             id,
             name: `Modify skill: ${input.skill.id}`,
             prompt: buildHeadlessPrompt(
@@ -1099,10 +1099,10 @@ export const modifyFor =
               libs.Interactive.MODIFY_POSTPROMPT,
             ),
             model: input.modelLabel,
-            tools: [...Runs.DEFAULT_RUN_TOOLS],
+            tools: [...Sessions.DEFAULT_SESSION_TOOLS],
             onSettled: modifyCompletion(root, libs, id, input.skill.id, beforeRaw, hooks),
           });
-          dispatchedModifyRunId = id;
+          dispatchedModifySessionId = id;
           return yield* Effect.fail(libs.Interactive.CANCELLED);
         }),
       ),
@@ -1178,12 +1178,12 @@ export interface FlowPorts {
  * Workspace host for the shared create flow: load the extension,
  * resolve picker models, run `createSkill` (manual or agentic behind
  * the overlays). Manual creation persists and lands on the new skill's
- * detail; agentic creation dispatches a run through the engine and
+ * detail; agentic creation dispatches a session through the engine and
  * resolves `dispatched`; real cancels resolve undefined. The TUI needs
  * no `CANCELLED` knowledge — only real failures reject.
  * @param root - workspace root (skill store owner)
  * @param ports - TUI overlay ports
- * @param hooks - completion callbacks for a dispatched author run
+ * @param hooks - completion callbacks for a dispatched author session
  * @returns Effect resolving to the create outcome, or undefined on cancel
  */
 export const runCreateFlow = (
@@ -1196,7 +1196,7 @@ export const runCreateFlow = (
       Effect.gen(function* () {
         const refs = yield* listModelLabels();
         const fallback = yield* listDefaultModel();
-        dispatchedRunId = undefined;
+        dispatchedSessionId = undefined;
         const skill = yield* libs.Interactive.createSkill(
           ports.ui,
           libs.Interactive.modelOptions(fallback, refs),
@@ -1213,12 +1213,12 @@ export const runCreateFlow = (
       }).pipe(
         Effect.catch((error) => {
           if (error !== libs.Interactive.CANCELLED) return Effect.fail(error);
-          const runId = dispatchedRunId;
-          dispatchedRunId = undefined;
+          const sessionId = dispatchedSessionId;
+          dispatchedSessionId = undefined;
           return Effect.succeed(
-            runId === undefined
+            sessionId === undefined
               ? undefined
-              : ({ kind: 'dispatched', runId } satisfies CreateFlowResult),
+              : ({ kind: 'dispatched', sessionId } satisfies CreateFlowResult),
           );
         }),
       ),
@@ -1229,13 +1229,13 @@ export const runCreateFlow = (
  * Workspace host for the shared modify flow for one skill: load the
  * extension, run `modifySkill` (manual description edit or agentic
  * rewrite). Manual edits persist and resolve `saved`; agentic edits
- * dispatch an editor run and resolve `dispatched`; real cancels resolve
+ * dispatch an editor session and resolve `dispatched`; real cancels resolve
  * undefined. The TUI needs no `CANCELLED` knowledge — only real
  * failures reject.
  * @param root - workspace root (skill store owner)
  * @param id - skill id under edit
  * @param ports - TUI overlay ports
- * @param hooks - completion callbacks for a dispatched editor run
+ * @param hooks - completion callbacks for a dispatched editor session
  * @returns Effect resolving to the modify outcome, or undefined on cancel
  */
 export const runModifyFlow = (
@@ -1250,7 +1250,7 @@ export const runModifyFlow = (
         const skills = yield* storeFor(root).list();
         const refs = yield* listModelLabels();
         const fallback = yield* listDefaultModel();
-        dispatchedModifyRunId = undefined;
+        dispatchedModifySessionId = undefined;
         const skill = yield* libs.Interactive.modifySkill(
           ports.ui,
           skills,
@@ -1268,12 +1268,12 @@ export const runModifyFlow = (
       }).pipe(
         Effect.catch((error) => {
           if (error !== libs.Interactive.CANCELLED) return Effect.fail(error);
-          const runId = dispatchedModifyRunId;
-          dispatchedModifyRunId = undefined;
+          const sessionId = dispatchedModifySessionId;
+          dispatchedModifySessionId = undefined;
           return Effect.succeed(
-            runId === undefined
+            sessionId === undefined
               ? undefined
-              : ({ kind: 'dispatched', runId } satisfies ModifyFlowResult),
+              : ({ kind: 'dispatched', sessionId } satisfies ModifyFlowResult),
           );
         }),
       ),

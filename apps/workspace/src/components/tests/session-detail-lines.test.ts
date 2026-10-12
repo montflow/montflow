@@ -1,33 +1,33 @@
 import * as Vitest from '@effect/vitest';
-import type { Runs } from '../../services/index.js';
+import type { Sessions } from '../../services/index.js';
 import {
-  RUN_META_COLUMNS,
-  RUN_META_NONE,
-  clipRunMetaValue,
-  clipRunPrompt,
+  SESSION_META_COLUMNS,
+  SESSION_META_NONE,
+  clipSessionMetaValue,
+  clipSessionPrompt,
   liveNote,
   parkedQuestion,
-  runMetaRows,
+  sessionMetaRows,
   detailBodyRows,
   promptPaneColumns,
   promptPaneRows,
   promptPaneTextRows,
   promptWindow,
-  runPromptRows,
+  sessionPromptRows,
   showsPromptPane,
-  runRoleMarker,
-  runTranscriptMarkdown,
-  shortRunTimestamp,
-} from '../run-detail-lines.js';
+  sessionRoleMarker,
+  sessionTranscriptMarkdown,
+  shortSessionTimestamp,
+} from '../session-detail-lines.js';
 
-/** Build a run detail with the fields the line helpers read. */
+/** Build a session detail with the fields the line helpers read. */
 const detail = (
   status: string,
   events: ReadonlyArray<{ readonly seq: number; readonly role: string; readonly text: string }>,
-): Runs.RunDetail => ({
+): Sessions.SessionDetail => ({
   summary: {
-    id: 'run-1',
-    name: 'Run One',
+    id: 'session-1',
+    name: 'Session One',
     description: 'do it',
     status,
     model: 'anthropic/claude',
@@ -43,19 +43,19 @@ const detail = (
   receipt: undefined,
 });
 
-Vitest.describe('runRoleMarker', () => {
+Vitest.describe('sessionRoleMarker', () => {
   Vitest.it('maps user, assistant, and everything else to glyphs', () => {
-    Vitest.expect(runRoleMarker('user')).toBe('›');
-    Vitest.expect(runRoleMarker('assistant')).toBe('◈');
-    Vitest.expect(runRoleMarker('system')).toBe('·');
-    Vitest.expect(runRoleMarker('toolResult')).toBe('·');
-    Vitest.expect(runRoleMarker('weird')).toBe('·');
+    Vitest.expect(sessionRoleMarker('user')).toBe('›');
+    Vitest.expect(sessionRoleMarker('assistant')).toBe('◈');
+    Vitest.expect(sessionRoleMarker('system')).toBe('·');
+    Vitest.expect(sessionRoleMarker('toolResult')).toBe('·');
+    Vitest.expect(sessionRoleMarker('weird')).toBe('·');
   });
 });
 
-Vitest.describe('runTranscriptMarkdown', () => {
+Vitest.describe('sessionTranscriptMarkdown', () => {
   Vitest.it('prefixes each event with its role glyph in seq order', () => {
-    const lines = runTranscriptMarkdown(
+    const lines = sessionTranscriptMarkdown(
       detail('running', [
         { seq: 1, role: 'user', text: 'do it' },
         { seq: 2, role: 'assistant', text: 'on it' },
@@ -66,11 +66,11 @@ Vitest.describe('runTranscriptMarkdown', () => {
   });
 
   Vitest.it('returns no lines for an empty transcript', () => {
-    Vitest.expect(runTranscriptMarkdown(detail('running', []))).toStrictEqual([]);
+    Vitest.expect(sessionTranscriptMarkdown(detail('running', []))).toStrictEqual([]);
   });
 
   Vitest.it('moves the glyph onto its own line when the event opens a markdown block', () => {
-    const lines = runTranscriptMarkdown(
+    const lines = sessionTranscriptMarkdown(
       detail('running', [
         { seq: 1, role: 'assistant', text: '## Plan\n- one\n- two' },
         { seq: 2, role: 'assistant', text: '```ts\nconst a = 1;\n```' },
@@ -91,7 +91,7 @@ Vitest.describe('runTranscriptMarkdown', () => {
 
   Vitest.it('keeps the rest of a multi-line event unprefixed', () => {
     Vitest.expect(
-      runTranscriptMarkdown(
+      sessionTranscriptMarkdown(
         detail('running', [{ seq: 1, role: 'user', text: 'line one\nline two' }]),
       ),
     ).toStrictEqual(['› line one', 'line two']);
@@ -99,7 +99,7 @@ Vitest.describe('runTranscriptMarkdown', () => {
 
   Vitest.it('bounds a long tool result to its head, an elision note, and its tail', () => {
     const dump = Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join('\n');
-    const lines = runTranscriptMarkdown(
+    const lines = sessionTranscriptMarkdown(
       detail('running', [{ seq: 1, role: 'toolResult', text: dump }]),
     );
     Vitest.expect(lines[0]).toBe('· line 1');
@@ -114,20 +114,22 @@ Vitest.describe('runTranscriptMarkdown', () => {
 
   Vitest.it('leaves a short tool result whole', () => {
     Vitest.expect(
-      runTranscriptMarkdown(detail('running', [{ seq: 1, role: 'toolResult', text: 'a\nb\nc' }])),
+      sessionTranscriptMarkdown(
+        detail('running', [{ seq: 1, role: 'toolResult', text: 'a\nb\nc' }]),
+      ),
     ).toStrictEqual(['· a', 'b', 'c']);
   });
 
   Vitest.it('never clips assistant or user prose', () => {
     const prose = Array.from({ length: 40 }, (_, index) => `prose ${index + 1}`).join('\n');
     Vitest.expect(
-      runTranscriptMarkdown(detail('running', [{ seq: 1, role: 'assistant', text: prose }])),
+      sessionTranscriptMarkdown(detail('running', [{ seq: 1, role: 'assistant', text: prose }])),
     ).toHaveLength(40);
   });
 
   Vitest.it('renders a glyph alone for an empty event', () => {
     Vitest.expect(
-      runTranscriptMarkdown(
+      sessionTranscriptMarkdown(
         detail('running', [
           { seq: 1, role: 'assistant', text: 'on it' },
           { seq: 2, role: 'toolResult', text: '' },
@@ -148,13 +150,13 @@ Vitest.describe('parkedQuestion', () => {
     Vitest.expect(question).toBe('Which branch should I use?');
   });
 
-  Vitest.it('returns undefined when the run is not parked', () => {
+  Vitest.it('returns undefined when the session is not parked', () => {
     Vitest.expect(
       parkedQuestion(detail('running', [{ seq: 1, role: 'system', text: 'Which branch?' }])),
     ).toBeUndefined();
   });
 
-  Vitest.it('returns undefined when a parked run has no system line', () => {
+  Vitest.it('returns undefined when a parked session has no system line', () => {
     Vitest.expect(
       parkedQuestion(detail('awaiting-input', [{ seq: 1, role: 'assistant', text: 'hmm' }])),
     ).toBeUndefined();
@@ -170,14 +172,14 @@ Vitest.describe('liveNote', () => {
   });
 });
 
-Vitest.describe('clipRunPrompt', () => {
+Vitest.describe('clipSessionPrompt', () => {
   Vitest.it('leaves a prompt that fits the pane alone', () => {
-    Vitest.expect(clipRunPrompt('short prompt', 40)).toBe('short prompt');
+    Vitest.expect(clipSessionPrompt('short prompt', 40)).toBe('short prompt');
   });
 
   Vitest.it('clips a specification-sized prompt at a line break with an ellipsis row', () => {
     const prompt = Array.from({ length: 40 }, (_, index) => `line ${index + 1}`).join('\n');
-    Vitest.expect(clipRunPrompt(prompt, 20, 6)).toBe(
+    Vitest.expect(clipSessionPrompt(prompt, 20, 6)).toBe(
       'line 1\nline 2\nline 3\nline 4\nline 5\nline 6\n…',
     );
   });
@@ -186,32 +188,35 @@ Vitest.describe('clipRunPrompt', () => {
     // One 100-char line at 20 columns wraps to five rows, so a six-row
     // pane fits one line and an ellipsis — not three.
     const prompt = `${'x'.repeat(100)}\n${'y'.repeat(100)}\n${'z'.repeat(100)}`;
-    Vitest.expect(clipRunPrompt(prompt, 20, 6).split('\n')).toStrictEqual(['x'.repeat(100), '…']);
+    Vitest.expect(clipSessionPrompt(prompt, 20, 6).split('\n')).toStrictEqual([
+      'x'.repeat(100),
+      '…',
+    ]);
   });
 
   Vitest.it('always leaves an ellipsis when nothing fits', () => {
-    Vitest.expect(clipRunPrompt('a long first line', 10, 0)).toBe('…');
+    Vitest.expect(clipSessionPrompt('a long first line', 10, 0)).toBe('…');
   });
 });
 
-Vitest.describe('runPromptRows', () => {
+Vitest.describe('sessionPromptRows', () => {
   Vitest.it('counts one row per source line when lines fit the pane', () => {
-    Vitest.expect(runPromptRows('one\ntwo\nthree', 40, 10)).toBe(3);
+    Vitest.expect(sessionPromptRows('one\ntwo\nthree', 40, 10)).toBe(3);
   });
 
   Vitest.it('counts the wrapped rows a long line really takes', () => {
-    Vitest.expect(runPromptRows('x'.repeat(100), 20, 10)).toBe(5);
+    Vitest.expect(sessionPromptRows('x'.repeat(100), 20, 10)).toBe(5);
   });
 
   Vitest.it('never exceeds the cap', () => {
-    Vitest.expect(runPromptRows('x'.repeat(400), 20, 4)).toBe(4);
+    Vitest.expect(sessionPromptRows('x'.repeat(400), 20, 4)).toBe(4);
   });
 
   Vitest.it('agrees with the clip: the clipped text needs no more rows than the budget', () => {
     const prompt = Array.from({ length: 30 }, () => 'y'.repeat(30)).join('\n');
     const budget = 6;
-    const clipped = clipRunPrompt(prompt, 20, budget);
-    const rows = runPromptRows(clipped, 20, budget);
+    const clipped = clipSessionPrompt(prompt, 20, budget);
+    const rows = sessionPromptRows(clipped, 20, budget);
     Vitest.expect(rows).toBeLessThanOrEqual(budget);
     Vitest.expect(clipped.endsWith('…')).toBe(true);
   });
@@ -292,44 +297,44 @@ Vitest.describe('prompt pane sizing', () => {
   });
 });
 
-Vitest.describe('clipRunMetaValue', () => {
+Vitest.describe('clipSessionMetaValue', () => {
   Vitest.it('leaves short values alone and ellipsizes long ones', () => {
-    Vitest.expect(clipRunMetaValue('short', 10)).toBe('short');
-    const clipped = clipRunMetaValue('x'.repeat(20), 10);
+    Vitest.expect(clipSessionMetaValue('short', 10)).toBe('short');
+    const clipped = clipSessionMetaValue('x'.repeat(20), 10);
     Vitest.expect(clipped).toHaveLength(10);
     Vitest.expect(clipped.endsWith('…')).toBe(true);
   });
 });
 
-Vitest.describe('shortRunTimestamp', () => {
+Vitest.describe('shortSessionTimestamp', () => {
   Vitest.it('drops the seconds and keeps the date readable', () => {
-    Vitest.expect(shortRunTimestamp('2026-01-01T10:04:12.000Z')).toBe('2026-01-01 10:04');
+    Vitest.expect(shortSessionTimestamp('2026-01-01T10:04:12.000Z')).toBe('2026-01-01 10:04');
   });
 
   Vitest.it('returns anything unparseable as-is', () => {
-    Vitest.expect(shortRunTimestamp('yesterday')).toBe('yesterday');
+    Vitest.expect(shortSessionTimestamp('yesterday')).toBe('yesterday');
   });
 });
 
-Vitest.describe('runMetaRows', () => {
+Vitest.describe('sessionMetaRows', () => {
   Vitest.it('lists the sidebar metadata in display order', () => {
-    Vitest.expect(runMetaRows(detail('running', []).summary).map((row) => row.label)).toStrictEqual(
-      ['model', 'spec', 'thinking', 'tools', 'created', 'updated', 'id'],
-    );
+    Vitest.expect(
+      sessionMetaRows(detail('running', []).summary).map((row) => row.label),
+    ).toStrictEqual(['model', 'spec', 'thinking', 'tools', 'created', 'updated', 'id']);
   });
 
   Vitest.it('keeps unset rows with a placeholder so labels never reflow', () => {
-    const rows = runMetaRows(detail('running', []).summary);
-    Vitest.expect(rows.find((row) => row.label === 'spec')?.value).toBe(RUN_META_NONE);
-    Vitest.expect(rows.find((row) => row.label === 'thinking')?.value).toBe(RUN_META_NONE);
-    Vitest.expect(rows.find((row) => row.label === 'tools')?.value).toBe(RUN_META_NONE);
+    const rows = sessionMetaRows(detail('running', []).summary);
+    Vitest.expect(rows.find((row) => row.label === 'spec')?.value).toBe(SESSION_META_NONE);
+    Vitest.expect(rows.find((row) => row.label === 'thinking')?.value).toBe(SESSION_META_NONE);
+    Vitest.expect(rows.find((row) => row.label === 'tools')?.value).toBe(SESSION_META_NONE);
     Vitest.expect(rows.find((row) => row.label === 'model')?.value).toBe('anthropic/claude');
-    Vitest.expect(rows.find((row) => row.label === 'id')?.value).toBe('run-1');
+    Vitest.expect(rows.find((row) => row.label === 'id')?.value).toBe('session-1');
   });
 
-  Vitest.it('joins the tool allowlist and shows the pins the run carries', () => {
+  Vitest.it('joins the tool allowlist and shows the pins the session carries', () => {
     const summary = { ...detail('running', []).summary, thinking: 'high', tools: ['read', 'edit'] };
-    const rows = runMetaRows(summary);
+    const rows = sessionMetaRows(summary);
     Vitest.expect(rows.find((row) => row.label === 'thinking')?.value).toBe('high');
     Vitest.expect(rows.find((row) => row.label === 'tools')?.value).toBe('read, edit');
   });
@@ -339,7 +344,7 @@ Vitest.describe('runMetaRows', () => {
       ...detail('running', []).summary,
       model: 'anthropic/claude-sonnet-4-with-a-very-long-provider-prefix',
     };
-    for (const row of runMetaRows(summary))
-      Vitest.expect(`${row.label} ${row.value}`.length).toBeLessThanOrEqual(RUN_META_COLUMNS);
+    for (const row of sessionMetaRows(summary))
+      Vitest.expect(`${row.label} ${row.value}`.length).toBeLessThanOrEqual(SESSION_META_COLUMNS);
   });
 });

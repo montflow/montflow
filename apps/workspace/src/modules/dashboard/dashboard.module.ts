@@ -5,7 +5,7 @@ export const PANELS: ReadonlyArray<{ readonly id: string; readonly title: string
   { id: 'info', title: 'Info' },
   { id: 'skills', title: 'Skills' },
   { id: 'prompts', title: 'Prompts' },
-  { id: 'runs', title: 'Runs' },
+  { id: 'sessions', title: 'Sessions' },
   { id: 'specs', title: 'Specs' },
   { id: 'profiles', title: 'Profiles' },
 ];
@@ -45,7 +45,7 @@ export class Layout extends Schema.Class<Layout>('DashboardLayout')({
 
 /**
  * Default grid: wider left rail (info, skills, prompts) beside the
- * right side (tall runs over specs and profiles). The left rail owns just under
+ * right side (tall sessions over specs and profiles). The left rail owns just under
  * half the width (4.8/5 share ratio — twice compounded ~20% wider than
  * the old 2/3) so the skills keybind banner fits on one line.
  */
@@ -63,7 +63,7 @@ export const DEFAULT_LAYOUT: Layout = Schema.decodeUnknownSync(Layout)({
     {
       width: 5,
       cells: [
-        { panel: 'runs', keybind: 'r', height: 3 },
+        { panel: 'sessions', keybind: 'r', height: 3 },
         { panel: 'specs', keybind: 'e', height: 2 },
         { panel: 'profiles', keybind: 'f', height: 2 },
       ],

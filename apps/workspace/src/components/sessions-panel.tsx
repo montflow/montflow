@@ -1,19 +1,19 @@
 import { For, Show, createSignal, onCleanup } from 'solid-js';
-import type { Runs } from '../services/index.js';
+import type { Sessions } from '../services/index.js';
 import { KeybindBanner } from './keybind-banner.js';
 import { Keybinds } from './keybinds.js';
 import { FRAME_MS, LOADER_FRAMES, Loader, type LoaderVariant } from './loader.js';
 import { palette } from './palette.js';
 
-export interface RunsPanelProps {
+export interface SessionsPanelProps {
   readonly loading: boolean;
   readonly installing: boolean;
   readonly loadingVariant?: LoaderVariant | undefined;
   readonly installed: boolean;
   /** Active rows (running first), rendered unwindowed under the Active header. */
-  readonly activeRows: ReadonlyArray<Runs.RunSummary>;
-  /** Windowed slice of the full filtered list, under the All runs header. */
-  readonly allRows: ReadonlyArray<Runs.RunSummary>;
+  readonly activeRows: ReadonlyArray<Sessions.SessionSummary>;
+  /** Windowed slice of the full filtered list, under the All sessions header. */
+  readonly allRows: ReadonlyArray<Sessions.SessionSummary>;
   /** Whether the full-history section is expanded. */
   readonly showAll: boolean;
   /** Flat highlight across `activeRows` then `allRows`. */
@@ -28,16 +28,16 @@ export interface RunsPanelProps {
 }
 
 /**
- * Status glyph for a run row: live runs glow, parked runs warn, terminal
- * runs dim. Single source for the list marker so the panel and detail
+ * Status glyph for a session row: live sessions glow, parked sessions warn, terminal
+ * sessions dim. Single source for the list marker so the panel and detail
  * never drift. With a `frame`, a `running` row returns that braille
  * spinner frame instead of the static marker; without one it stays
- * static (the run-detail header never animates).
- * @param status - run status
+ * static (the session-detail header never animates).
+ * @param status - session status
  * @param frame - optional spinner frame index for `running` rows
  * @returns one-char marker
  */
-export const runMarker = (status: string, frame?: number): string => {
+export const sessionMarker = (status: string, frame?: number): string => {
   switch (status) {
     case 'running':
       return frame === undefined ? '●' : (LOADER_FRAMES[frame % LOADER_FRAMES.length] ?? '●');
@@ -57,7 +57,7 @@ export const runMarker = (status: string, frame?: number): string => {
 };
 
 /**
- * Runs content that FILLS the panel: the loader, missing-store note,
+ * Sessions content that FILLS the panel: the loader, missing-store note,
  * empty note, and the two filterable sections all share the same flex
  * chrome, so loading, filtering, install state, search toggling, and the
  * Active/All section toggle never shift the grid. Section headers are
@@ -67,9 +67,9 @@ export const runMarker = (status: string, frame?: number): string => {
  * other status keeps its static marker. The search line yields first
  * when the panel is too short, keeping the footer inside the border.
  * @param props - load state, section rows, highlight, query, capacity, selection, frame
- * @returns runs content element
+ * @returns sessions content element
  */
-export const RunsPanel = (props: RunsPanelProps) => {
+export const SessionsPanel = (props: SessionsPanelProps) => {
   const [frame, setFrame] = createSignal(props.frame ?? 0);
   if (props.frame === undefined) {
     // oxlint-disable-next-line montflow/no-timers -- documented above: Effect Clock hangs here.
@@ -83,7 +83,7 @@ export const RunsPanel = (props: RunsPanelProps) => {
   }
 
   /** Row marker with the animated frame for running rows; static otherwise. */
-  const markerFor = (status: string): string => runMarker(status, frame());
+  const markerFor = (status: string): string => sessionMarker(status, frame());
 
   /** Footer count: the windowed All section when expanded, else the Active section. */
   const shownCount = (): number => (props.showAll ? props.allRows.length : props.activeRows.length);
@@ -92,7 +92,7 @@ export const RunsPanel = (props: RunsPanelProps) => {
     <Show
       when={!props.loading && !props.installing}
       fallback={
-        <Loader variant={props.installing ? 'installing' : (props.loadingVariant ?? 'runs')} />
+        <Loader variant={props.installing ? 'installing' : (props.loadingVariant ?? 'sessions')} />
       }
     >
       <box flexDirection="column" flexGrow={1} minHeight={0}>
@@ -115,7 +115,7 @@ export const RunsPanel = (props: RunsPanelProps) => {
                 justifyContent="center"
                 gap={1}
               >
-                <text style={{ fg: palette.dim }}>Runs extension not installed.</text>
+                <text style={{ fg: palette.dim }}>Sessions extension not installed.</text>
                 <Show when={props.selected} fallback={<text> </text>}>
                   <text style={{ fg: palette.accent }}>press ⏎ to install</text>
                 </Show>
@@ -133,7 +133,7 @@ export const RunsPanel = (props: RunsPanelProps) => {
                   gap={1}
                 >
                   <text style={{ fg: palette.dim }}>
-                    {props.query.trim() === '' ? 'No runs found.' : 'No runs match.'}
+                    {props.query.trim() === '' ? 'No sessions found.' : 'No sessions match.'}
                   </text>
                   <Show when={props.selected} fallback={<text> </text>}>
                     <text style={{ fg: palette.accent }}>press c to create</text>
@@ -155,7 +155,7 @@ export const RunsPanel = (props: RunsPanelProps) => {
                   )}
                 </For>
                 <Show when={props.showAll}>
-                  <text style={{ fg: palette.dim }}>All runs</text>
+                  <text style={{ fg: palette.dim }}>All sessions</text>
                   <For each={props.allRows}>
                     {(row, index) => {
                       const position = (): number => props.activeRows.length + index();
@@ -180,7 +180,7 @@ export const RunsPanel = (props: RunsPanelProps) => {
         <Show when={props.selected} fallback={<text> </text>}>
           <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
             <KeybindBanner
-              items={Keybinds.listBanner(props.installed, props.total, { allRuns: true })}
+              items={Keybinds.listBanner(props.installed, props.total, { allSessions: true })}
             />
             <text style={{ fg: palette.dim, flexShrink: 0, marginLeft: 1 }}>
               {props.installed ? `${shownCount()}/${props.total}` : ' '}

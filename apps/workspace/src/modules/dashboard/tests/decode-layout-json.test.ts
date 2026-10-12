@@ -26,7 +26,7 @@ Vitest.describe('Dashboard.decodeLayoutJson runtime', () => {
           },
           {
             width: 5,
-            cells: [{ panel: 'runs', keybind: '2', height: 1 }],
+            cells: [{ panel: 'sessions', keybind: '2', height: 1 }],
           },
         ],
       }),

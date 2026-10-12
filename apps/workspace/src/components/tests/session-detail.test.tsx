@@ -2,11 +2,11 @@
 import { testRender } from '@opentui/solid';
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { JSX } from 'solid-js';
-import type { Runs } from '../../services/index.js';
+import type { Sessions } from '../../services/index.js';
 import { Panel } from '../panel.js';
-import { RUN_PREVIEW_LINES, RunDetail } from '../run-detail.js';
-import { RUN_SIDEBAR_WIDTH } from '../run-detail-lines.js';
-import { RunMeta } from '../run-meta.js';
+import { SESSION_PREVIEW_LINES, SessionDetail } from '../session-detail.js';
+import { SESSION_SIDEBAR_WIDTH } from '../session-detail-lines.js';
+import { SessionMeta } from '../session-meta.js';
 
 type Setup = Awaited<ReturnType<typeof testRender>>;
 
@@ -21,9 +21,9 @@ const HEIGHT = 24;
 /** Wall-clock the markdown worker needs before the transcript lands. */
 const PARSE_SETTLE_MS = 800;
 
-const summary = (overrides?: Partial<Runs.RunSummary>): Runs.RunSummary => ({
-  id: 'run-1',
-  name: 'Run One',
+const summary = (overrides?: Partial<Sessions.SessionSummary>): Sessions.SessionSummary => ({
+  id: 'session-1',
+  name: 'Session One',
   description: 'do it',
   status: 'running',
   model: 'anthropic/claude',
@@ -37,8 +37,11 @@ const summary = (overrides?: Partial<Runs.RunSummary>): Runs.RunSummary => ({
   ...overrides,
 });
 
-/** A run with `count` transcript events, each a plain assistant line. */
-const detail = (overrides?: Partial<Runs.RunSummary>, count = 40): Runs.RunDetail => ({
+/** A session with `count` transcript events, each a plain assistant line. */
+const detail = (
+  overrides?: Partial<Sessions.SessionSummary>,
+  count = 40,
+): Sessions.SessionDetail => ({
   summary: summary(overrides),
   events: Array.from({ length: count }, (_, index) => ({
     seq: index + 1,
@@ -70,7 +73,7 @@ const frameRows = (setup: Setup): ReadonlyArray<string> =>
 
 /** Render the transcript pane the way the app does, inside Panel chrome. */
 const renderTranscript = (
-  run: Runs.RunDetail,
+  sessionDetail: Sessions.SessionDetail,
   mode: 'preview' | 'view',
   scrollOffset = 0,
   bodyRows = HEIGHT - 8,
@@ -78,17 +81,22 @@ const renderTranscript = (
   render(() => (
     <box width={WIDTH} height={HEIGHT} flexDirection="column">
       <Panel title={`Transcript · ${mode}`} selected={false}>
-        <RunDetail detail={run} mode={mode} scrollOffset={scrollOffset} maxBodyLines={bodyRows} />
+        <SessionDetail
+          detail={sessionDetail}
+          mode={mode}
+          scrollOffset={scrollOffset}
+          maxBodyLines={bodyRows}
+        />
       </Panel>
     </box>
   ));
 
 /** Render the sidebar the way the app does, inside Panel chrome. */
-const renderSidebar = (run: Runs.RunDetail): Promise<Setup> =>
+const renderSidebar = (sessionDetail: Sessions.SessionDetail): Promise<Setup> =>
   render(() => (
-    <box width={RUN_SIDEBAR_WIDTH} height={HEIGHT} flexDirection="column">
-      <Panel title="Run — Run One" selected={false}>
-        <RunMeta detail={run} />
+    <box width={SESSION_SIDEBAR_WIDTH} height={HEIGHT} flexDirection="column">
+      <Panel title="Session — Session One" selected={false}>
+        <SessionMeta detail={sessionDetail} />
       </Panel>
     </box>
   ));
@@ -100,7 +108,7 @@ const valueColumn = (frame: string, value: string): number =>
     .find((row) => row.includes(value))
     ?.indexOf(value) ?? -1;
 
-describe('RunMeta', () => {
+describe('SessionMeta', () => {
   test('leads with the status badge and lists the metadata rows', async () => {
     const frame = frameText(
       await renderSidebar(detail({ thinking: 'high', tools: ['read', 'edit'] })),
@@ -113,14 +121,14 @@ describe('RunMeta', () => {
     expect(frame).toContain('high');
     expect(frame).toContain('read, edit');
     expect(frame).toContain('id');
-    expect(frame).toContain('run-1');
+    expect(frame).toContain('session-1');
   });
 
   test('aligns every value on one column so labels read at a glance', async () => {
     const frame = frameText(
       await renderSidebar(detail({ thinking: 'high', tools: ['read', 'edit'] })),
     );
-    const columns = ['anthropic/claude', 'high', 'read, edit', '2026-01-01 00:00', 'run-1'].map(
+    const columns = ['anthropic/claude', 'high', 'read, edit', '2026-01-01 00:00', 'session-1'].map(
       (value) => valueColumn(frame, value),
     );
     expect(columns.every((column) => column === columns[0])).toBe(true);
@@ -144,7 +152,7 @@ describe('RunMeta', () => {
   });
 });
 
-describe('RunDetail preview', () => {
+describe('SessionDetail preview', () => {
   test('renders the transcript unframed inside its own panel', async () => {
     const frame = frameText(await renderTranscript(detail(), 'preview'));
     // The panel is the container: no nested sections, and no clipped
@@ -164,7 +172,7 @@ describe('RunDetail preview', () => {
     // transcript never grows into a wall of text on a tall panel.
     expect(rows.slice(footer + 1, rows.length - 1).join('\n')).not.toContain('line');
     expect(frameText(setup)).toContain('line 1');
-    expect(frameText(setup)).not.toContain(`line ${RUN_PREVIEW_LINES + 2}`);
+    expect(frameText(setup)).not.toContain(`line ${SESSION_PREVIEW_LINES + 2}`);
   });
 
   test('preview pages with the scroll offset and reports its window', async () => {

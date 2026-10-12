@@ -121,8 +121,8 @@ describe('SpecsPanel layout', () => {
         <box width={80} height={TOTAL} flexDirection="column" paddingTop={1}>
           <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} paddingX={1}>
             <box flexDirection="column" flexGrow={5} flexBasis={0} minHeight={0} gap={1}>
-              <Panel title="[r] Runs" selected={false} height={heights[0]}>
-                <text>runs</text>
+              <Panel title="[r] Sessions" selected={false} height={heights[0]}>
+                <text>sessions</text>
               </Panel>
               <Panel title="[e] Specs" selected height={heights[1]}>
                 <SpecsPanel

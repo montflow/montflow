@@ -1,9 +1,9 @@
 import { palette } from './palette.js';
 import { Keybinds, formatKeybinds } from './keybinds.js';
-import { promptWindow } from './run-detail-lines.js';
+import { promptWindow } from './session-detail-lines.js';
 
-export interface RunPromptProps {
-  /** Full run prompt — the request that started the run. */
+export interface SessionPromptProps {
+  /** Full session prompt — the request that started the session. */
   readonly text: string;
   /** Columns the pane gives the prompt (its width minus panel chrome). */
   readonly columns: number;
@@ -16,7 +16,7 @@ export interface RunPromptProps {
 }
 
 /**
- * Prompt pane: one windowed slice of the run prompt — whole source
+ * Prompt pane: one windowed slice of the session prompt — whole source
  * lines only, so the pane can never render past its own rows — with a
  * dim footer that reports how much sits above and below and names the
  * scroll keys. Chromeless: the caller owns the panel border and title,
@@ -25,7 +25,7 @@ export interface RunPromptProps {
  * @param props - prompt text, pane columns and rows, scroll offset, and focus flag
  * @returns prompt pane content element
  */
-export const RunPrompt = (props: RunPromptProps) => {
+export const SessionPrompt = (props: SessionPromptProps) => {
   const view = () => promptWindow(props.text, props.columns, props.rows, props.offset);
   /** Footer copy: only the sides that actually have hidden rows. */
   const footer = (): string => {

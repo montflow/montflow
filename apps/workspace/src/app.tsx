@@ -36,39 +36,39 @@ import {
   type PromptDetailMode,
   PromptsPanel,
   RemoveDialog,
-  RunDetail,
-  type RunDetailFocus,
-  type RunDetailMode,
-  RunMeta,
-  RUN_PREVIEW_LINES,
-  RunPrompt,
-  RunsPanel,
+  SessionDetail,
+  type SessionDetailFocus,
+  type SessionDetailMode,
+  SessionMeta,
+  SESSION_PREVIEW_LINES,
+  SessionPrompt,
+  SessionsPanel,
   SkillDetail,
   type SkillDetailMode,
   SkillsPanel,
   StatusBar,
   ToastStack,
-  activeRunRows,
+  activeSessionRows,
   specDetailLines,
   formatKeybinds,
   clipStatusHint,
-  isLiveRunStatus,
+  isLiveSessionStatus,
   palette,
   promptPaneColumns,
   promptPaneRows,
   promptWindow,
-  runDetailActions,
-  runDetailHint,
-  runDetailIntent,
-  runFocusCycle,
-  runSelectableRows,
-  RUN_SIDEBAR_WIDTH,
-  runTranscriptMarkdown,
+  sessionDetailActions,
+  sessionDetailHint,
+  sessionDetailIntent,
+  sessionFocusCycle,
+  sessionSelectableRows,
+  SESSION_SIDEBAR_WIDTH,
+  sessionTranscriptMarkdown,
   showsPromptPane,
   detailBodyRows,
 } from './components/index.js';
 import type { Toast, ToastVariant } from './components/index.js';
-import { Specs, GitInfo, Profiles, Prompts, Query, Runs, Skills } from './services/index.js';
+import { Specs, GitInfo, Profiles, Prompts, Query, Sessions, Skills } from './services/index.js';
 import type { Interactive } from '@montflow/pi-skills';
 
 export interface AppProps {
@@ -119,10 +119,10 @@ interface RemoveState {
   readonly resolve: (confirmed: boolean) => void;
 }
 
-/** One open flow dialog, if any. Working runs lock input separately. */
+/** One open flow dialog, if any. Working sessions lock input separately. */
 type DialogState = MenuState | InputState | FilterState | RemoveState;
 
-/** Failed agent flow awaiting retry or back: run title, error, and the retry thunk. */
+/** Failed agent flow awaiting retry or back: session title, error, and the retry thunk. */
 interface FlowFailure {
   readonly title: string;
   readonly error: string;
@@ -272,7 +272,7 @@ const syncScrollOverflow = (
 };
 
 /**
- * Display label with the current-run marker, mirroring the pi picker.
+ * Display label with the current-session marker, mirroring the pi picker.
  * Module scope: pure.
  * @param option - picker option
  * @returns display label
@@ -310,19 +310,19 @@ const later = (ms: number, task: () => void): void => {
 };
 
 /**
- * Live run-detail transcript refresh interval (ms). Raw `setInterval`
+ * Live session-detail transcript refresh interval (ms). Raw `setInterval`
  * for the same reason as {@link later}: Effect Clock fibers never
  * resolve inside the OpenTUI render loop.
  */
-const RUN_DETAIL_POLL_MS = 1000;
+const SESSION_DETAIL_POLL_MS = 1000;
 
 /**
  * Consecutive live-poll failures tolerated before the transcript poll
  * stops. Transient failures (a torn read while the engine writes) are
- * silent; a run that fails this many times in a row is treated as
+ * silent; a session that fails this many times in a row is treated as
  * unreadable and polling stops until the user reopens or refreshes.
  */
-const RUN_DETAIL_POLL_MAX_FAILURES = 3;
+const SESSION_DETAIL_POLL_MAX_FAILURES = 3;
 
 /**
  * Fixed skills row budget from the terminal height alone — never read
@@ -431,49 +431,55 @@ export const App = (props: AppProps) => {
   const [promptsCard, setPromptsCard] = createSignal<BoxRenderable | undefined>(undefined);
   const [measuredPromptRows, setMeasuredPromptRows] = createSignal<number | undefined>(undefined);
   const [promptInstalling, setPromptInstalling] = createSignal(false);
-  const [runsPhase, setRunsPhase] = createSignal<Runs.RunsPhase>('extension');
-  const runsQuery = createQuery(() => ({
-    queryKey: Query.runsKey,
-    queryFn: () => Query.fetchRunsList(root, setRunsPhase),
-    // Live-refresh the list while any run is still progressing; idle lists
+  const [sessionsPhase, setSessionsPhase] = createSignal<Sessions.SessionsPhase>('extension');
+  const sessionsQuery = createQuery(() => ({
+    queryKey: Query.sessionsKey,
+    queryFn: () => Query.fetchSessionsList(root, setSessionsPhase),
+    // Live-refresh the list while any session is still progressing; idle lists
     // stay cache-first (no background churn).
     refetchInterval: (query) =>
-      (query.state.data?.rows ?? []).some((row) => isLiveRunStatus(row.status)) ? 1500 : false,
+      (query.state.data?.rows ?? []).some((row) => isLiveSessionStatus(row.status)) ? 1500 : false,
   }));
-  const runRows = createMemo(() => runsQuery.data?.rows ?? []);
-  const runsStoreInstalled = createMemo(() => runsQuery.data?.installed ?? false);
-  const runsLoaded = createMemo(() => !runsQuery.isPending);
-  const [runQuery, setRunQuery] = createSignal('');
-  const [runTyping, setRunTyping] = createSignal(false);
-  /** Whether the runs panel's All-runs section is expanded; hidden by default. */
-  const [runShowAll, setRunShowAll] = createSignal(false);
-  const [runHighlight, setRunHighlight] = createSignal(0);
-  const [runDetailId, setRunDetailId] = createSignal<string | undefined>(undefined);
-  const [runDetailData, setRunDetailData] = createSignal<Runs.RunDetail | undefined>(undefined);
-  const [runDetailLoading, setRunDetailLoading] = createSignal(false);
-  const [runDetailPollFailures, setRunDetailPollFailures] = createSignal(0);
-  const [runDetailMode, setRunDetailMode] = createSignal<RunDetailMode>('preview');
+  const sessionRows = createMemo(() => sessionsQuery.data?.rows ?? []);
+  const sessionsStoreInstalled = createMemo(() => sessionsQuery.data?.installed ?? false);
+  const sessionsLoaded = createMemo(() => !sessionsQuery.isPending);
+  const [sessionQuery, setSessionQuery] = createSignal('');
+  const [sessionTyping, setSessionTyping] = createSignal(false);
+  /** Whether the sessions panel's All-sessions section is expanded; hidden by default. */
+  const [sessionShowAll, setSessionShowAll] = createSignal(false);
+  const [sessionHighlight, setSessionHighlight] = createSignal(0);
+  const [sessionDetailId, setSessionDetailId] = createSignal<string | undefined>(undefined);
+  const [sessionDetailData, setSessionDetailData] = createSignal<
+    Sessions.SessionDetail | undefined
+  >(undefined);
+  const [sessionDetailLoading, setSessionDetailLoading] = createSignal(false);
+  const [sessionDetailPollFailures, setSessionDetailPollFailures] = createSignal(0);
+  const [sessionDetailMode, setSessionDetailMode] = createSignal<SessionDetailMode>('preview');
   /** Which pane the scroll keys drive — the transcript or the prompt above it. */
-  const [runDetailFocus, setRunDetailFocus] = createSignal<RunDetailFocus>('details');
+  const [sessionDetailFocus, setSessionDetailFocus] = createSignal<SessionDetailFocus>('details');
   /** Rows scrolled past in the prompt pane. */
-  const [runPromptScroll, setRunPromptScroll] = createSignal(0);
-  const [runDetailScroll, setRunDetailScroll] = createSignal(0);
+  const [sessionPromptScroll, setSessionPromptScroll] = createSignal(0);
+  const [sessionDetailScroll, setSessionDetailScroll] = createSignal(0);
   /** True while the reader sits on the newest transcript line — polls follow the tail. */
-  const [runDetailPinned, setRunDetailPinned] = createSignal(true);
-  const [runDetailAction, setRunDetailAction] = createSignal(0);
-  const [runsCard, setRunsCard] = createSignal<BoxRenderable | undefined>(undefined);
-  const [measuredRunRows, setMeasuredRunRows] = createSignal<number | undefined>(undefined);
-  const [runsInstalling, setRunsInstalling] = createSignal(false);
-  /** Run id from the most recent profile-create dispatch: the `g` keybind target. */
-  const [lastDispatchedRunId, setLastDispatchedRunId] = createSignal<string | undefined>(undefined);
+  const [sessionDetailPinned, setSessionDetailPinned] = createSignal(true);
+  const [sessionDetailAction, setSessionDetailAction] = createSignal(0);
+  const [sessionsCard, setSessionsCard] = createSignal<BoxRenderable | undefined>(undefined);
+  const [measuredSessionRows, setMeasuredSessionRows] = createSignal<number | undefined>(undefined);
+  const [sessionsInstalling, setSessionsInstalling] = createSignal(false);
+  /** Session id from the most recent profile-create dispatch: the `g` keybind target. */
+  const [lastDispatchedSessionId, setLastDispatchedSessionId] = createSignal<string | undefined>(
+    undefined,
+  );
   const [specsPhase, setSpecsPhase] = createSignal<Specs.SpecsPhase>('extension');
   const specsQuery = createQuery(() => ({
     queryKey: Query.specsKey,
     queryFn: () => Query.fetchSpecsList(root, setSpecsPhase),
-    // Live-refresh while a spec-bound run is progressing, so the
+    // Live-refresh while a spec-bound session is progressing, so the
     // derived `pending` ↔ `in-progress` state tracks the runner.
     refetchInterval: () =>
-      runRows().some((row) => row.spec !== '' && isLiveRunStatus(row.status)) ? 1500 : false,
+      sessionRows().some((row) => row.spec !== '' && isLiveSessionStatus(row.status))
+        ? 1500
+        : false,
   }));
   const specRows = createMemo(() => specsQuery.data?.rows ?? []);
   const specsInstalled = createMemo(() => specsQuery.data?.installed ?? false);
@@ -512,7 +518,7 @@ export const App = (props: AppProps) => {
    * actually exceeds the viewport — gates the `↑↓ scroll` hints so they
    * never show on fittable text. Re-measured after layout (microtask,
    * like the card measurements) on every input that changes the layout:
-   * run state, submitted text, scroll node, terminal size.
+   * session state, submitted text, scroll node, terminal size.
    */
   const [flowCanScroll, setFlowCanScroll] = createSignal(false);
   const [flowErrorCanScroll, setFlowErrorCanScroll] = createSignal(false);
@@ -531,7 +537,7 @@ export const App = (props: AppProps) => {
     syncScrollOverflow(flowErrorScroll(), setFlowErrorCanScroll);
   });
   const [working, setWorking] = createSignal<string | undefined>(undefined);
-  /** In-flight agent fiber while `working` is set: `esc` interrupts it to cancel the run. */
+  /** In-flight agent fiber while `working` is set: `esc` interrupts it to cancel the session. */
   const [flowFiber, setFlowFiber] = createSignal<Fiber.Fiber<unknown, unknown> | undefined>(
     undefined,
   );
@@ -645,7 +651,7 @@ export const App = (props: AppProps) => {
           setDialog(undefined);
           setInputEditor(undefined);
           // The flow modal shows the submitted text back during the
-          // agent run — stash it here so long dictated input stays
+          // agent session — stash it here so long dictated input stays
           // visible (and scrollable) after this dialog exits out.
           setLastInput(value === undefined || value === '' ? undefined : { title, value });
           resolve(value);
@@ -755,7 +761,7 @@ export const App = (props: AppProps) => {
     );
   };
 
-  /** Model choice for a dispatched spec run: a pinned label, the session default, or a cancelled picker. */
+  /** Model choice for a dispatched spec session: a pinned label, the session default, or a cancelled picker. */
   type ModelChoice = { kind: 'label'; label: string } | { kind: 'default' } | { kind: 'cancel' };
 
   /**
@@ -817,91 +823,95 @@ export const App = (props: AppProps) => {
   });
 
   /**
-   * Clear the `g` keybind target only when the settled run is the one it
+   * Clear the `g` keybind target only when the settled session is the one it
    * points at, so an earlier dispatch settling cannot drop the keybind for
    * a later in-flight one.
-   * @param runId - run that just settled
+   * @param sessionId - session that just settled
    */
-  const clearDispatchedRun = (runId: string): void => {
-    if (lastDispatchedRunId() === runId) setLastDispatchedRunId(undefined);
+  const clearDispatchedSession = (sessionId: string): void => {
+    if (lastDispatchedSessionId() === sessionId) setLastDispatchedSessionId(undefined);
   };
 
   /**
-   * Completion hooks for a dispatched profile-create run: refresh the
-   * profiles and runs lists, open the freshly created profile's detail, and
-   * toast the outcome. The run engine fires these after the author run
+   * Completion hooks for a dispatched profile-create session: refresh the
+   * profiles and sessions lists, open the freshly created profile's detail, and
+   * toast the outcome. The session engine fires these after the author session
    * settles.
    */
   const profileCreateHooks: Profiles.CreateFlowHooks = {
-    onProfileCreated: (profile, runId) => {
+    onProfileCreated: (profile, sessionId) => {
       refreshProfiles();
-      refreshRuns();
+      refreshSessions();
       setProfileDetailId(profile.id);
       setProfileDetailMode('preview');
       setProfileDetailScroll(0);
       setProfileDetailAction(0);
-      clearDispatchedRun(runId);
-      pushToast(`Created profile '${Runs.sanitizeRunText(profile.id)}'.`, { variant: 'success' });
+      clearDispatchedSession(sessionId);
+      pushToast(`Created profile '${Sessions.sanitizeSessionText(profile.id)}'.`, {
+        variant: 'success',
+      });
     },
-    onProfileFailed: (message, runId) => {
-      refreshRuns();
-      clearDispatchedRun(runId);
+    onProfileFailed: (message, sessionId) => {
+      refreshSessions();
+      clearDispatchedSession(sessionId);
       pushToast(message, { variant: 'error' });
     },
   };
 
   /**
-   * Completion hooks for a dispatched profile-modify run: refresh the
-   * profiles and runs lists and toast the outcome. The run engine fires
-   * these after the editor run settles.
+   * Completion hooks for a dispatched profile-modify session: refresh the
+   * profiles and sessions lists and toast the outcome. The session engine fires
+   * these after the editor session settles.
    */
   const profileModifyHooks: Profiles.ModifyFlowHooks = {
     onProfileModified: (profile) => {
       refreshProfiles();
-      refreshRuns();
-      pushToast(`Updated profile '${Runs.sanitizeRunText(profile.id)}'.`, { variant: 'success' });
+      refreshSessions();
+      pushToast(`Updated profile '${Sessions.sanitizeSessionText(profile.id)}'.`, {
+        variant: 'success',
+      });
     },
     onProfileFailed: (message) => {
-      refreshRuns();
+      refreshSessions();
       pushToast(message, { variant: 'error' });
     },
   };
 
   /**
-   * Completion hooks for a dispatched spec-author run: refresh the
-   * specs and runs lists, open the authored spec's detail, and toast
-   * the outcome. The run engine fires these after the author run settles.
+   * Completion hooks for a dispatched spec-author session: refresh the
+   * specs and sessions lists, open the authored spec's detail, and toast
+   * the outcome. The session engine fires these after the author session settles.
    */
   const specBeginHooks: Specs.BeginFlowHooks = {
-    onSpecCreated: (specId, runId) => {
+    onSpecCreated: (specId, sessionId) => {
       refreshSpecs();
-      refreshRuns();
+      refreshSessions();
       setSpecDetailId(specId);
       setSpecDetailMode('preview');
       setSpecDetailScroll(0);
-      clearDispatchedRun(runId);
-      pushToast(`Authored spec '${Runs.sanitizeRunText(specId)}'.`, { variant: 'success' });
+      clearDispatchedSession(sessionId);
+      pushToast(`Authored spec '${Sessions.sanitizeSessionText(specId)}'.`, { variant: 'success' });
     },
-    onSpecFailed: (message, runId) => {
+    onSpecFailed: (message, sessionId) => {
       refreshSpecs();
-      refreshRuns();
-      clearDispatchedRun(runId);
+      refreshSessions();
+      clearDispatchedSession(sessionId);
       pushToast(message, { variant: 'error' });
     },
   };
 
   /**
-   * Completion hook for a dispatched spec-execution run: refresh the specs
-   * and runs lists, reload the open detail when it is the executed spec, and
-   * toast the outcome. The run writes the spec files; the TUI only reads.
+   * Completion hook for a dispatched spec-execution session: refresh the specs
+   * and sessions lists, reload the open detail when it is the executed spec, and
+   * toast the outcome. The session writes the spec files; the TUI only reads.
    */
   const specExecuteHooks: Specs.ExecuteFlowHooks = {
-    onSpecSettled: (specId, runId, message) => {
+    onSpecSettled: (specId, sessionId, message) => {
       refreshSpecs();
-      refreshRuns();
+      refreshSessions();
       if (specDetailId() === specId) loadSpecDetail(specId);
-      clearDispatchedRun(runId);
-      pushToast(Runs.sanitizeRunText(message), { variant: 'success' });
+      clearDispatchedSession(sessionId);
+      pushToast(Sessions.sanitizeSessionText(message), { variant: 'success' });
     },
   };
 
@@ -918,19 +928,19 @@ export const App = (props: AppProps) => {
   });
 
   /**
-   * Completion hooks for a dispatched prompt-modify run: refresh the
-   * prompts and runs lists and toast the outcome. The run engine fires
-   * these after the editor run settles. Mirrors
+   * Completion hooks for a dispatched prompt-modify session: refresh the
+   * prompts and sessions lists and toast the outcome. The session engine fires
+   * these after the editor session settles. Mirrors
    * {@link profileModifyHooks}.
    */
   const promptModifyHooks: Prompts.ModifyFlowHooks = {
     onPromptModified: (prompt) => {
       refreshPrompts();
-      refreshRuns();
+      refreshSessions();
       pushToast(`Updated prompt '${prompt.id}'.`, { variant: 'success' });
     },
     onPromptFailed: (message) => {
-      refreshRuns();
+      refreshSessions();
       pushToast(message, { variant: 'error' });
     },
   };
@@ -995,10 +1005,10 @@ export const App = (props: AppProps) => {
     }));
 
   /**
-   * Open the flow-error modal for a failed agent flow: the run title,
+   * Open the flow-error modal for a failed agent flow: the session title,
    * the error, and retry over the same variables (the full flow
    * re-runs, prompts included). Focus starts on retry.
-   * @param title - run title (`Creating prompt failed`)
+   * @param title - session title (`Creating prompt failed`)
    * @param error - failure error
    * @param retry - thunk re-firing the mutation
    */
@@ -1009,42 +1019,44 @@ export const App = (props: AppProps) => {
   };
 
   /**
-   * Completion hooks for a dispatched skill-create run: refresh the
-   * skills and runs lists, open the authored skill's detail, and toast
-   * the outcome. The run engine fires these after the author run
+   * Completion hooks for a dispatched skill-create session: refresh the
+   * skills and sessions lists, open the authored skill's detail, and toast
+   * the outcome. The session engine fires these after the author session
    * settles. Mirrors {@link profileCreateHooks}.
    */
   const skillCreateHooks: Skills.CreateFlowHooks = {
-    onSkillCreated: (skill, runId) => {
+    onSkillCreated: (skill, sessionId) => {
       refreshSkills();
-      refreshRuns();
+      refreshSessions();
       setDetailId(skill.id);
       setDetailMode('preview');
       setDetailScroll(0);
       setDetailAction(0);
-      clearDispatchedRun(runId);
+      clearDispatchedSession(sessionId);
       pushToast(`Created skill '${skill.id}'.`, { variant: 'success' });
     },
-    onSkillFailed: (message, runId) => {
+    onSkillFailed: (message, sessionId) => {
       refreshSkills();
-      refreshRuns();
-      clearDispatchedRun(runId);
+      refreshSessions();
+      clearDispatchedSession(sessionId);
       pushToast(message, { variant: 'error' });
     },
   };
 
   /**
-   * Completion hooks for a dispatched skill-modify run: refresh the
-   * skills and runs lists and toast the outcome.
+   * Completion hooks for a dispatched skill-modify session: refresh the
+   * skills and sessions lists and toast the outcome.
    */
   const skillModifyHooks: Skills.ModifyFlowHooks = {
     onSkillModified: (skill) => {
       refreshSkills();
-      refreshRuns();
-      pushToast(`Updated skill '${Runs.sanitizeRunText(skill.id)}'.`, { variant: 'success' });
+      refreshSessions();
+      pushToast(`Updated skill '${Sessions.sanitizeSessionText(skill.id)}'.`, {
+        variant: 'success',
+      });
     },
     onSkillFailed: (message) => {
-      refreshRuns();
+      refreshSessions();
       pushToast(message, { variant: 'error' });
     },
   };
@@ -1053,7 +1065,7 @@ export const App = (props: AppProps) => {
    * Create flow: the service runner lazy-loads the extension, runs the
    * shared `createSkill` flow behind the overlays. Manual creation
    * persists and lands on the new skill's detail; agentic creation
-   * dispatches a run through the engine, toasts the run with the `g`
+   * dispatches a session through the engine, toasts the session with the `g`
    * keybind, and lets {@link skillCreateHooks} open the fresh skill when
    * it settles. Cancellations stay silent.
    */
@@ -1061,9 +1073,9 @@ export const App = (props: AppProps) => {
     run: () => Skills.runCreateFlow(root, flowPorts(), skillCreateHooks),
     done: (result) => {
       if (result.kind === 'dispatched') {
-        setLastDispatchedRunId(result.runId);
-        refreshRuns();
-        pushToast(`Run '${result.runId}' is creating your skill — press g to view`, {
+        setLastDispatchedSessionId(result.sessionId);
+        refreshSessions();
+        pushToast(`Session '${result.sessionId}' is creating your skill — press g to view`, {
           variant: 'info',
         });
         return;
@@ -1076,7 +1088,7 @@ export const App = (props: AppProps) => {
       refreshSkills();
     },
     fail: (error) => {
-      if (Runs.isRunsExtensionInstallError(error.message)) {
+      if (Sessions.isSessionsExtensionInstallError(error.message)) {
         pushToast(error.message, { variant: 'warning' });
         return;
       }
@@ -1095,15 +1107,15 @@ export const App = (props: AppProps) => {
       createSkillMutation.isPending
     )
       return;
-    // Gate on the runs engine before opening the dialog: without it the
+    // Gate on the sessions engine before opening the dialog: without it the
     // agentic path cannot run, and discovering that after the mode select,
     // requirements gate, description, and model picker is too late.
-    void Runs.runsExtensionInstalled(root)
+    void Sessions.sessionsExtensionInstalled(root)
       .pipe(Effect.runPromise)
       .then((installed) => {
         if (!installed) {
-          pushToast(Runs.RUNS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
-          setSelected('runs');
+          pushToast(Sessions.SESSIONS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
+          setSelected('sessions');
           return;
         }
         // The probe is async; a second `c` may have started the flow first.
@@ -1115,23 +1127,23 @@ export const App = (props: AppProps) => {
   /**
    * Modify flow for the open detail: the service runner lazy-loads the
    * extension, runs the shared `modifySkill` flow, and persists. Manual
-   * edits stay on the detail; agentic edits dispatch an editor run and
+   * edits stay on the detail; agentic edits dispatch an editor session and
    * open its detail page directly. Cancellations stay silent.
    */
   const modifySkillMutation = flowMutation({
     run: (id: string) => Skills.runModifyFlow(root, id, flowPorts(), skillModifyHooks),
     done: (result) => {
       if (result.kind === 'dispatched') {
-        refreshRuns();
-        pushToast(`Run '${result.runId}' is updating your skill.`, { variant: 'info' });
-        openRunDetail(result.runId);
+        refreshSessions();
+        pushToast(`Session '${result.sessionId}' is updating your skill.`, { variant: 'info' });
+        openSessionDetail(result.sessionId);
         return;
       }
       pushToast(`Saved skill '${result.skill.id}'.`, { variant: 'success' });
       refreshSkills();
     },
     fail: (error, id) => {
-      if (Runs.isRunsExtensionInstallError(error.message)) {
+      if (Sessions.isSessionsExtensionInstallError(error.message)) {
         pushToast(error.message, { variant: 'warning' });
         return;
       }
@@ -1152,15 +1164,15 @@ export const App = (props: AppProps) => {
     )
       return;
     const id = target.id;
-    // Gate on the runs engine before opening the dialog, mirroring the
+    // Gate on the sessions engine before opening the dialog, mirroring the
     // create flow: the agentic path cannot dispatch without it, and
     // discovering that after the mode select and prompts is too late.
-    void Runs.runsExtensionInstalled(root)
+    void Sessions.sessionsExtensionInstalled(root)
       .pipe(Effect.runPromise)
       .then((installed) => {
         if (!installed) {
-          pushToast(Runs.RUNS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
-          setSelected('runs');
+          pushToast(Sessions.SESSIONS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
+          setSelected('sessions');
           return;
         }
         if (modifySkillMutation.isPending || dialog() !== undefined) return;
@@ -1220,7 +1232,7 @@ export const App = (props: AppProps) => {
    * Create flow: the service runner lazy-loads the profiles extension,
    * runs the shared `createProfile` flow behind the overlays. Manual
    * creation persists and lands on the new profile's detail; agentic
-   * creation dispatches a run through the engine, toasts the run with
+   * creation dispatches a session through the engine, toasts the session with
    * the `g` keybind, and lets {@link profileCreateHooks} open the fresh
    * profile when it settles. Cancellations stay silent.
    */
@@ -1228,14 +1240,14 @@ export const App = (props: AppProps) => {
     run: () => Profiles.runCreateFlow(root, profileFlowPorts(), profileCreateHooks),
     done: (result) => {
       if (result.kind === 'dispatched') {
-        setLastDispatchedRunId(result.runId);
-        refreshRuns();
-        pushToast(`Run '${result.runId}' is creating your profile — press g to view`, {
+        setLastDispatchedSessionId(result.sessionId);
+        refreshSessions();
+        pushToast(`Session '${result.sessionId}' is creating your profile — press g to view`, {
           variant: 'info',
         });
         return;
       }
-      pushToast(`Saved profile '${Runs.sanitizeRunText(result.profile.id)}'.`, {
+      pushToast(`Saved profile '${Sessions.sanitizeSessionText(result.profile.id)}'.`, {
         variant: 'success',
       });
       setProfileDetailId(result.profile.id);
@@ -1245,7 +1257,7 @@ export const App = (props: AppProps) => {
       refreshProfiles();
     },
     fail: (error) => {
-      if (Runs.isRunsExtensionInstallError(error.message)) {
+      if (Sessions.isSessionsExtensionInstallError(error.message)) {
         pushToast(error.message, { variant: 'warning' });
         return;
       }
@@ -1264,15 +1276,15 @@ export const App = (props: AppProps) => {
       createProfileMutation.isPending
     )
       return;
-    // Gate on the runs engine before opening the dialog: without it the
+    // Gate on the sessions engine before opening the dialog: without it the
     // agentic path cannot run, and discovering that after the mode select,
     // requirements gate, description, and model picker is too late.
-    void Runs.runsExtensionInstalled(root)
+    void Sessions.sessionsExtensionInstalled(root)
       .pipe(Effect.runPromise)
       .then((installed) => {
         if (!installed) {
-          pushToast(Runs.RUNS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
-          setSelected('runs');
+          pushToast(Sessions.SESSIONS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
+          setSelected('sessions');
           return;
         }
         // The probe is async; a second `c` may have started the flow first.
@@ -1285,25 +1297,25 @@ export const App = (props: AppProps) => {
    * Modify flow for the open profile detail: the service runner
    * lazy-loads the extension, runs the shared `modifyProfile` flow, and
    * persists. Manual edits stay on the detail; agentic edits dispatch an
-   * editor run and open its detail page directly. Cancellations stay
+   * editor session and open its detail page directly. Cancellations stay
    * silent.
    */
   const modifyProfileMutation = flowMutation({
     run: (id: string) => Profiles.runModifyFlow(root, id, profileFlowPorts(), profileModifyHooks),
     done: (result) => {
       if (result.kind === 'dispatched') {
-        refreshRuns();
-        pushToast(`Run '${result.runId}' is updating your profile.`, { variant: 'info' });
-        openRunDetail(result.runId);
+        refreshSessions();
+        pushToast(`Session '${result.sessionId}' is updating your profile.`, { variant: 'info' });
+        openSessionDetail(result.sessionId);
         return;
       }
-      pushToast(`Saved profile '${Runs.sanitizeRunText(result.profile.id)}'.`, {
+      pushToast(`Saved profile '${Sessions.sanitizeSessionText(result.profile.id)}'.`, {
         variant: 'success',
       });
       refreshProfiles();
     },
     fail: (error, id) => {
-      if (Runs.isRunsExtensionInstallError(error.message)) {
+      if (Sessions.isSessionsExtensionInstallError(error.message)) {
         pushToast(error.message, { variant: 'warning' });
         return;
       }
@@ -1324,15 +1336,15 @@ export const App = (props: AppProps) => {
     )
       return;
     const id = target.id;
-    // Gate on the runs engine before opening the dialog, mirroring the
+    // Gate on the sessions engine before opening the dialog, mirroring the
     // create flow: the agentic path cannot dispatch without it, and
     // discovering that after the mode select and prompts is too late.
-    void Runs.runsExtensionInstalled(root)
+    void Sessions.sessionsExtensionInstalled(root)
       .pipe(Effect.runPromise)
       .then((installed) => {
         if (!installed) {
-          pushToast(Runs.RUNS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
-          setSelected('runs');
+          pushToast(Sessions.SESSIONS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
+          setSelected('sessions');
           return;
         }
         if (modifyProfileMutation.isPending || dialog() !== undefined) return;
@@ -1378,23 +1390,23 @@ export const App = (props: AppProps) => {
    * Modify flow for the open prompt detail: the service runner
    * lazy-loads the extension, runs the shared `modifyPrompt` flow, and
    * persists. Manual edits stay on the detail; agentic edits dispatch an
-   * editor run and open its detail page directly. Cancellations stay
+   * editor session and open its detail page directly. Cancellations stay
    * silent.
    */
   const modifyPromptMutation = flowMutation({
     run: (id: string) => Prompts.runModifyFlow(root, id, promptFlowPorts(), promptModifyHooks),
     done: (result) => {
       if (result.kind === 'dispatched') {
-        refreshRuns();
-        pushToast(`Run '${result.runId}' is updating your prompt.`, { variant: 'info' });
-        openRunDetail(result.runId);
+        refreshSessions();
+        pushToast(`Session '${result.sessionId}' is updating your prompt.`, { variant: 'info' });
+        openSessionDetail(result.sessionId);
         return;
       }
       pushToast(`Saved prompt '${result.prompt.id}'.`, { variant: 'success' });
       refreshPrompts();
     },
     fail: (error, id) => {
-      if (Runs.isRunsExtensionInstallError(error.message)) {
+      if (Sessions.isSessionsExtensionInstallError(error.message)) {
         pushToast(error.message, { variant: 'warning' });
         return;
       }
@@ -1415,15 +1427,15 @@ export const App = (props: AppProps) => {
     )
       return;
     const id = target.id;
-    // Gate on the runs engine before opening the dialog, mirroring the
+    // Gate on the sessions engine before opening the dialog, mirroring the
     // profile modify flow: the agentic path cannot dispatch without it,
     // and discovering that after the mode select and prompts is too late.
-    void Runs.runsExtensionInstalled(root)
+    void Sessions.sessionsExtensionInstalled(root)
       .pipe(Effect.runPromise)
       .then((installed) => {
         if (!installed) {
-          pushToast(Runs.RUNS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
-          setSelected('runs');
+          pushToast(Sessions.SESSIONS_EXTENSION_INSTALL_HINT, { variant: 'warning' });
+          setSelected('sessions');
           return;
         }
         if (modifyPromptMutation.isPending || dialog() !== undefined) return;
@@ -1522,39 +1534,39 @@ export const App = (props: AppProps) => {
   });
 
   /**
-   * Reload the open run detail from the store: transcript plus receipt.
+   * Reload the open session detail from the store: transcript plus receipt.
    * A manual load toasts on failure; the live poll passes `silent` so a
    * transient torn read does not flood the TUI with one toast per second.
-   * @param id - run id under view
+   * @param id - session id under view
    * @param options - `silent` suppresses the failure toast for poll reads
    */
-  const loadRunDetail = (id: string, options?: { readonly silent?: boolean }): void => {
+  const loadSessionDetail = (id: string, options?: { readonly silent?: boolean }): void => {
     const silent = options?.silent === true;
-    if (!silent) setRunDetailLoading(true);
-    void Runs.loadRun(root, id)
+    if (!silent) setSessionDetailLoading(true);
+    void Sessions.loadSession(root, id)
       .pipe(Effect.runPromise)
       .then(
         (data) => {
-          // Stale loads (closed while another run opened) never paint.
-          if (runDetailId() !== id) return;
-          setRunDetailData(data);
-          // Tail-following: a run transcript is a log that grows at the
+          // Stale loads (closed while another session opened) never paint.
+          if (sessionDetailId() !== id) return;
+          setSessionDetailData(data);
+          // Tail-following: a session transcript is a log that grows at the
           // end, so while the reader sits at the newest line (the
           // default) every poll keeps them there — new work stays in
           // view. Scrolling up unpins; scrolling back to the end re-pins.
-          if (runDetailPinned()) setRunDetailScroll(runDetailMaxScroll());
-          if (!silent) setRunDetailLoading(false);
-          setRunDetailPollFailures(0);
+          if (sessionDetailPinned()) setSessionDetailScroll(sessionDetailMaxScroll());
+          if (!silent) setSessionDetailLoading(false);
+          setSessionDetailPollFailures(0);
         },
         (error) => {
-          if (runDetailId() !== id) return;
-          if (!silent) setRunDetailLoading(false);
+          if (sessionDetailId() !== id) return;
+          if (!silent) setSessionDetailLoading(false);
           if (silent) {
-            setRunDetailPollFailures((count) => count + 1);
+            setSessionDetailPollFailures((count) => count + 1);
             return;
           }
           pushToast(
-            `Run detail failed: ${error instanceof Error ? error.message : String(error)}`,
+            `Session detail failed: ${error instanceof Error ? error.message : String(error)}`,
             {
               variant: 'error',
             },
@@ -1564,79 +1576,80 @@ export const App = (props: AppProps) => {
   };
 
   /**
-   * Open a run's detail page: park the list state, reset the view, and
+   * Open a session's detail page: park the list state, reset the view, and
    * load the transcript. The agent keeps running behind the detail —
    * the list refresh on settle updates the row underneath.
-   * @param id - run id to open
+   * @param id - session id to open
    */
-  const openRunDetail = (id: string): void => {
-    setRunDetailId(id);
-    setRunDetailData(undefined);
-    setRunDetailMode('preview');
+  const openSessionDetail = (id: string): void => {
+    setSessionDetailId(id);
+    setSessionDetailData(undefined);
+    setSessionDetailMode('preview');
     // Start at the top of the transcript like every other list, and
     // stay there: a poll only follows the tail once the reader has
     // scrolled into it themselves.
-    setRunDetailScroll(0);
-    setRunDetailPinned(false);
-    setRunDetailFocus('details');
-    setRunPromptScroll(0);
-    setRunDetailAction(0);
-    setRunTyping(false);
-    setRunDetailPollFailures(0);
-    loadRunDetail(id);
+    setSessionDetailScroll(0);
+    setSessionDetailPinned(false);
+    setSessionDetailFocus('details');
+    setSessionPromptScroll(0);
+    setSessionDetailAction(0);
+    setSessionTyping(false);
+    setSessionDetailPollFailures(0);
+    loadSessionDetail(id);
   };
 
-  const closeRunDetail = (): void => {
-    setRunDetailId(undefined);
-    setRunDetailData(undefined);
-    setRunDetailLoading(false);
-    setRunDetailMode('preview');
-    setRunDetailScroll(0);
-    setRunDetailPinned(true);
-    setRunDetailFocus('details');
-    setRunPromptScroll(0);
-    setRunDetailAction(0);
-    setRunDetailPollFailures(0);
+  const closeSessionDetail = (): void => {
+    setSessionDetailId(undefined);
+    setSessionDetailData(undefined);
+    setSessionDetailLoading(false);
+    setSessionDetailMode('preview');
+    setSessionDetailScroll(0);
+    setSessionDetailPinned(true);
+    setSessionDetailFocus('details');
+    setSessionPromptScroll(0);
+    setSessionDetailAction(0);
+    setSessionDetailPollFailures(0);
   };
 
-  /** Scroll window for the run transcript: one line per press, in
+  /** Scroll window for the session transcript: one line per press, in
    * both modes — the preview is a small window over the same lines.
    * Landing on the last line re-pins the tail; leaving it unpins, so a
    * live poll never yanks the reader away from where they scrolled.
    */
-  const scrollRunDetail = (delta: number): void => {
-    const next = Math.min(Math.max(runDetailScroll() + delta, 0), runDetailMaxScroll());
-    setRunDetailScroll(next);
-    setRunDetailPinned(next >= runDetailMaxScroll());
+  const scrollSessionDetail = (delta: number): void => {
+    const next = Math.min(Math.max(sessionDetailScroll() + delta, 0), sessionDetailMaxScroll());
+    setSessionDetailScroll(next);
+    setSessionDetailPinned(next >= sessionDetailMaxScroll());
   };
 
-  /** True while the open run is live — drives the transcript poll. */
-  const runDetailLive = createMemo(
-    () => runDetailId() !== undefined && isLiveRunStatus(runDetailData()?.summary.status),
+  /** True while the open session is live — drives the transcript poll. */
+  const sessionDetailLive = createMemo(
+    () =>
+      sessionDetailId() !== undefined && isLiveSessionStatus(sessionDetailData()?.summary.status),
   );
 
   /** True while the live transcript poll should run: live and not yet backed off. */
-  const runDetailPolling = createMemo(
-    () => runDetailLive() && runDetailPollFailures() < RUN_DETAIL_POLL_MAX_FAILURES,
+  const sessionDetailPolling = createMemo(
+    () => sessionDetailLive() && sessionDetailPollFailures() < SESSION_DETAIL_POLL_MAX_FAILURES,
   );
 
   /**
-   * Live transcript refresh: while the open run is live, poll the store
+   * Live transcript refresh: while the open session is live, poll the store
    * on a raw interval so streamed events appear without leaving the
    * detail. Poll failures are silent and backed off — the interval stops
-   * after {@link RUN_DETAIL_POLL_MAX_FAILURES} consecutive failures rather
+   * after {@link SESSION_DETAIL_POLL_MAX_FAILURES} consecutive failures rather
    * than toasting once per second. The interval clears on close or settle
    * (the live memo flips false) — polling only re-reads, it never
    * re-opens the detail.
    */
   createEffect(() => {
-    if (!runDetailPolling()) return;
-    const id = runDetailId();
+    if (!sessionDetailPolling()) return;
+    const id = sessionDetailId();
     if (id === undefined) return;
     // oxlint-disable-next-line montflow/no-timers -- documented above: Effect Clock hangs here.
     const timer = setInterval(() => {
-      if (runDetailId() === id) loadRunDetail(id, { silent: true });
-    }, RUN_DETAIL_POLL_MS);
+      if (sessionDetailId() === id) loadSessionDetail(id, { silent: true });
+    }, SESSION_DETAIL_POLL_MS);
     onCleanup(() => {
       // oxlint-disable-next-line montflow/no-timers -- interval teardown for the raw poll above.
       clearInterval(timer);
@@ -1721,21 +1734,21 @@ export const App = (props: AppProps) => {
   };
 
   /**
-   * Interrupt the open run through the engine: abort the live session and
+   * Interrupt the open session through the engine: abort the live session and
    * write the cancelled receipt, then reload the detail and the list. A
-   * stale live run with no session is cancelled through the store.
+   * stale live session with no session is cancelled through the store.
    */
-  const interruptRun = (): void => {
-    const id = runDetailId();
+  const interruptSession = (): void => {
+    const id = sessionDetailId();
     if (id === undefined || dialog() !== undefined) return;
-    void Runs.interruptRun(root, id)
+    void Sessions.interruptSession(root, id)
       .pipe(Effect.runPromise)
       .then(
         () => {
-          pushToast('Run interrupted.', { variant: 'info' });
-          clearDispatchedRun(id);
-          refreshRuns();
-          loadRunDetail(id);
+          pushToast('Session interrupted.', { variant: 'info' });
+          clearDispatchedSession(id);
+          refreshSessions();
+          loadSessionDetail(id);
         },
         (error) => {
           pushToast(`Interrupt failed: ${error instanceof Error ? error.message : String(error)}`, {
@@ -1746,86 +1759,86 @@ export const App = (props: AppProps) => {
   };
 
   /**
-   * Answer a parked run through the engine: the engine unparks the run and
+   * Answer a parked session through the engine: the engine unparks the session and
    * resolves the awaiting `ask_user` call — the answer travels in the tool
    * result, so nothing is relaunched.
    */
-  const answerRunMutation = flowMutation({
+  const answerSessionMutation = flowMutation({
     run: (id: string) =>
       Effect.promise(() => askInput('Answer the agent', 'Type your answer…')).pipe(
         Effect.flatMap((text) => {
           if (text === undefined || text.trim() === '') return Effect.succeed(undefined);
-          return Runs.answerRun(root, id, text.trim()).pipe(Effect.map(() => id));
+          return Sessions.answerSession(root, id, text.trim()).pipe(Effect.map(() => id));
         }),
       ),
     done: (id) => {
       if (id === undefined) return;
       pushToast('Answer sent.', { variant: 'success' });
-      refreshRuns();
-      loadRunDetail(id);
+      refreshSessions();
+      loadSessionDetail(id);
     },
   });
 
   const runAnswerFlow = (): void => {
-    const id = runDetailId();
-    const status = runDetailData()?.summary.status;
+    const id = sessionDetailId();
+    const status = sessionDetailData()?.summary.status;
     if (
       id === undefined ||
       status !== 'awaiting-input' ||
       dialog() !== undefined ||
       working() !== undefined ||
-      answerRunMutation.isPending
+      answerSessionMutation.isPending
     )
       return;
-    answerRunMutation.mutate(id);
+    answerSessionMutation.mutate(id);
   };
 
   /**
-   * Steer a running run through the engine: the message is delivered
+   * Steer a running session through the engine: the message is delivered
    * after the in-flight tool results, so the agent redirects without a
-   * relaunch. Only offered while the run is `running`.
+   * relaunch. Only offered while the session is `running`.
    */
-  const steerRunMutation = flowMutation({
+  const steerSessionMutation = flowMutation({
     run: (id: string) =>
       Effect.promise(() => askInput('Steer the agent', 'Nudge the agent…')).pipe(
         Effect.flatMap((text) => {
           if (text === undefined || text.trim() === '') return Effect.succeed(undefined);
-          return Runs.steerRun(root, id, text.trim()).pipe(Effect.map(() => id));
+          return Sessions.steerSession(root, id, text.trim()).pipe(Effect.map(() => id));
         }),
       ),
     done: (id) => {
       if (id === undefined) return;
       pushToast('Steering sent.', { variant: 'success' });
-      refreshRuns();
-      loadRunDetail(id);
+      refreshSessions();
+      loadSessionDetail(id);
     },
   });
 
   const runSteerFlow = (): void => {
-    const id = runDetailId();
-    const status = runDetailData()?.summary.status;
+    const id = sessionDetailId();
+    const status = sessionDetailData()?.summary.status;
     if (
       id === undefined ||
       status !== 'running' ||
       dialog() !== undefined ||
       working() !== undefined ||
-      steerRunMutation.isPending
+      steerSessionMutation.isPending
     )
       return;
-    steerRunMutation.mutate(id);
+    steerSessionMutation.mutate(id);
   };
 
   /**
    * Create flow: name plus initial prompt through the input dialogs,
    * model through the filter picker (session default pinned, like the
    * skills flows), then dispatch through the engine — `Store.create` +
-   * `start` plus a live Pi session. Lands on the new run's detail;
+   * `start` plus a live Pi session. Lands on the new session's detail;
    * cancellations stay silent.
    */
-  const createRunMutation = flowMutation({
+  const createSessionMutation = flowMutation({
     run: () =>
       Effect.gen(function* () {
-        const name = yield* Effect.promise(() => askInput('Run name', 'Fix login flow'));
+        const name = yield* Effect.promise(() => askInput('Session name', 'Fix login flow'));
         if (name === undefined || name.trim() === '') return undefined;
         const prompt = yield* Effect.promise(() =>
           askInput('Initial prompt', 'What should the agent do?'),
@@ -1853,8 +1866,8 @@ export const App = (props: AppProps) => {
           if (picked === undefined) return undefined;
           model = options.find((option) => displayModelLabel(option) === picked)?.label;
         }
-        const id = yield* Runs.newRunId(name.trim());
-        return yield* Runs.startRun(root, {
+        const id = yield* Sessions.newSessionId(name.trim());
+        return yield* Sessions.startSession(root, {
           id,
           name: name.trim(),
           prompt: prompt.trim(),
@@ -1862,33 +1875,33 @@ export const App = (props: AppProps) => {
         });
       }),
     done: (created) => {
-      pushToast(`Created run '${created.id}'.`, { variant: 'success' });
-      refreshRuns();
-      openRunDetail(created.id);
+      pushToast(`Created session '${created.id}'.`, { variant: 'success' });
+      refreshSessions();
+      openSessionDetail(created.id);
     },
     fail: (error) => {
-      openFlowError('Creating run failed', error, () => {
+      openFlowError('Creating session failed', error, () => {
         setFlowError(undefined);
-        createRunMutation.mutate(undefined);
+        createSessionMutation.mutate(undefined);
       });
     },
   });
 
-  const runCreateRun = (): void => {
+  const runCreateSession = (): void => {
     if (
-      !runsStoreInstalled() ||
+      !sessionsStoreInstalled() ||
       dialog() !== undefined ||
       working() !== undefined ||
-      createRunMutation.isPending
+      createSessionMutation.isPending
     )
       return;
-    createRunMutation.mutate(undefined);
+    createSessionMutation.mutate(undefined);
   };
 
   /**
    * Begin flow: describe the spec, pick a model, then dispatch an author
-   * run through the pi-runs engine. The run authors the spec and may park
-   * on `ask_user` for the user to answer; it lands on the run's detail so
+   * session through the pi-sessions engine. The session authors the spec and may park
+   * on `ask_user` for the user to answer; it lands on the session's detail so
    * the user can watch the state and answer. Cancellations stay silent.
    */
   const beginSpecMutation = flowMutation({
@@ -1907,15 +1920,15 @@ export const App = (props: AppProps) => {
         });
       }),
     done: (result) => {
-      pushToast(`Dispatched spec run '${Runs.sanitizeRunText(result.runId)}'.`, {
+      pushToast(`Dispatched spec session '${Sessions.sanitizeSessionText(result.sessionId)}'.`, {
         variant: 'success',
       });
-      setLastDispatchedRunId(result.runId);
-      refreshRuns();
-      openRunDetail(result.runId);
+      setLastDispatchedSessionId(result.sessionId);
+      refreshSessions();
+      openSessionDetail(result.sessionId);
     },
     fail: (error) => {
-      if (Runs.isRunsExtensionInstallError(error.message)) {
+      if (Sessions.isSessionsExtensionInstallError(error.message)) {
         pushToast(error.message, { variant: 'warning' });
         return;
       }
@@ -1935,8 +1948,8 @@ export const App = (props: AppProps) => {
 
   /**
    * Execute flow: from an open spec detail, pick a model, then dispatch a
-   * resume run that orchestrates the spec's phases (closing each with its
-   * review round). The run lands on the run's detail so the user can watch
+   * resume session that orchestrates the spec's phases (closing each with its
+   * review round). The session lands on the session's detail so the user can watch
    * it and answer any parked question. Cancellations stay silent.
    */
   const executeSpecMutation = flowMutation({
@@ -1953,15 +1966,15 @@ export const App = (props: AppProps) => {
         });
       }),
     done: (result) => {
-      pushToast(`Dispatched execute run '${Runs.sanitizeRunText(result.runId)}'.`, {
+      pushToast(`Dispatched execute session '${Sessions.sanitizeSessionText(result.sessionId)}'.`, {
         variant: 'success',
       });
-      setLastDispatchedRunId(result.runId);
-      refreshRuns();
-      openRunDetail(result.runId);
+      setLastDispatchedSessionId(result.sessionId);
+      refreshSessions();
+      openSessionDetail(result.sessionId);
     },
     fail: (error) => {
-      if (Runs.isRunsExtensionInstallError(error.message)) {
+      if (Sessions.isSessionsExtensionInstallError(error.message)) {
         pushToast(error.message, { variant: 'warning' });
         return;
       }
@@ -1987,17 +2000,17 @@ export const App = (props: AppProps) => {
   /**
    * Store install behind a mutation so the installing flag and the
    * list refresh settle together: success toasts and invalidates the
-   * runs key; failures toast.
+   * sessions key; failures toast.
    */
-  const installRunsMutation = flowMutation({
+  const installSessionsMutation = flowMutation({
     run: () =>
-      Runs.ensureRunsStore(root).pipe(
-        Effect.mapError((message) => new Error(`Runs install failed: ${message}`)),
+      Sessions.ensureSessionsStore(root).pipe(
+        Effect.mapError((message) => new Error(`Sessions install failed: ${message}`)),
         Effect.as(true),
       ),
     done: () => {
-      pushToast('Installed runs store.', { variant: 'success' });
-      refreshRuns();
+      pushToast('Installed sessions store.', { variant: 'success' });
+      refreshSessions();
     },
   });
 
@@ -2095,13 +2108,13 @@ export const App = (props: AppProps) => {
     }
   };
 
-  /** Panels with an independent filter, typing flag, and highlight: skills, profiles, prompts, and runs search separately. */
-  type SearchPanel = 'skills' | 'profiles' | 'prompts' | 'runs' | 'specs';
+  /** Panels with an independent filter, typing flag, and highlight: skills, profiles, prompts, and sessions search separately. */
+  type SearchPanel = 'skills' | 'profiles' | 'prompts' | 'sessions' | 'specs';
 
   /**
    * Read the typing flag for one panel: true while keystrokes filter
    * that panel's list. Filters persist per panel after typing stops.
-   * @param panel - skills, profiles, prompts, or runs
+   * @param panel - skills, profiles, prompts, or sessions
    * @returns typing flag
    */
   const typingOf = (panel: SearchPanel): boolean =>
@@ -2109,15 +2122,15 @@ export const App = (props: AppProps) => {
       ? profileTyping()
       : panel === 'prompts'
         ? promptTyping()
-        : panel === 'runs'
-          ? runTyping()
+        : panel === 'sessions'
+          ? sessionTyping()
           : panel === 'specs'
             ? specTyping()
             : skillTyping();
 
   /**
    * Read the filter query for one panel.
-   * @param panel - skills, profiles, prompts, or runs
+   * @param panel - skills, profiles, prompts, or sessions
    * @returns filter query
    */
   const queryOf = (panel: SearchPanel): string =>
@@ -2125,8 +2138,8 @@ export const App = (props: AppProps) => {
       ? profileQuery()
       : panel === 'prompts'
         ? promptQuery()
-        : panel === 'runs'
-          ? runQuery()
+        : panel === 'sessions'
+          ? sessionQuery()
           : panel === 'specs'
             ? specQuery()
             : skillQuery();
@@ -2139,7 +2152,9 @@ export const App = (props: AppProps) => {
   const profileDetail = createMemo(() => profileRows().find((row) => row.id === profileDetailId()));
   const filteredPrompts = createMemo(() => SkillFilter.filterByQuery(promptRows(), promptQuery()));
   const promptDetail = createMemo(() => promptRows().find((row) => row.id === promptDetailId()));
-  const filteredRuns = createMemo(() => SkillFilter.filterByQuery(runRows(), runQuery()));
+  const filteredSessions = createMemo(() =>
+    SkillFilter.filterByQuery(sessionRows(), sessionQuery()),
+  );
   const filteredSpecs = createMemo(() => SkillFilter.filterByQuery(specRows(), specQuery()));
 
   /** Panel chrome lines: border top/bottom only — `Panel` has no vertical padding, constant. */
@@ -2154,8 +2169,8 @@ export const App = (props: AppProps) => {
   /** Reserved lines inside the prompts content: search line plus footer line. Owned by `PromptsPanel`, constant. */
   const PROMPTS_RESERVED_LINES = 2;
 
-  /** Reserved lines inside the runs content: search line plus footer line. Owned by `RunsPanel`, constant. */
-  const RUNS_RESERVED_LINES = 2;
+  /** Reserved lines inside the sessions content: search line plus footer line. Owned by `SessionsPanel`, constant. */
+  const SESSIONS_RESERVED_LINES = 2;
 
   /** Reserved lines inside the specs content: search line plus footer line. Owned by `SpecsPanel`, constant. */
   const SPECS_RESERVED_LINES = 2;
@@ -2236,27 +2251,27 @@ export const App = (props: AppProps) => {
   });
 
   /**
-   * Read the live runs card height into a row budget: same chrome
-   * math as the skills card — the `RunsPanel` shares its shape so
+   * Read the live sessions card height into a row budget: same chrome
+   * math as the skills card — the `SessionsPanel` shares its shape so
    * the pinned region fills it exactly.
    */
-  const measureRunsCard = (): void => {
-    const node = runsCard();
+  const measureSessionsCard = (): void => {
+    const node = sessionsCard();
     if (node === undefined) return;
-    const rows = Math.floor(node.height) - CARD_CHROME_LINES - RUNS_RESERVED_LINES;
-    if (rows >= 1) setMeasuredRunRows(rows);
+    const rows = Math.floor(node.height) - CARD_CHROME_LINES - SESSIONS_RESERVED_LINES;
+    if (rows >= 1) setMeasuredSessionRows(rows);
   };
 
   /**
-   * Runs card measurement triggers: same contract as the skills
+   * Sessions card measurement triggers: same contract as the skills
    * card — flex-determined size, content-independent, so measuring
    * cannot loop.
    */
   createEffect(() => {
-    runsCard();
+    sessionsCard();
     dimensions();
-    runsLoaded();
-    queueMicrotask(measureRunsCard);
+    sessionsLoaded();
+    queueMicrotask(measureSessionsCard);
   });
 
   /**
@@ -2336,48 +2351,52 @@ export const App = (props: AppProps) => {
     filteredPrompts().slice(promptWindowStart(), promptWindowStart() + promptVisibleCount()),
   );
   const promptRelativeHighlight = createMemo(() => promptHighlight() - promptWindowStart());
-  /** Visible list window for the runs panel: same measured-card contract as skills. */
-  const runVisibleCount = createMemo(() => {
-    const measured = measuredRunRows();
+  /** Visible list window for the sessions panel: same measured-card contract as skills. */
+  const sessionVisibleCount = createMemo(() => {
+    const measured = measuredSessionRows();
     if (measured !== undefined) return measured;
     const height = dimensions().height;
     return Math.max(2, Math.floor((2 * (height - 6)) / 5) - 6);
   });
   /**
-   * Section header lines inside the runs panel: Active always, All runs
+   * Section header lines inside the sessions panel: Active always, All sessions
    * only while expanded. Reserved out of the measured row budget so the
    * extra lines never spill the list onto the border.
    */
-  const runSectionHeaderLines = createMemo(() => (runShowAll() ? 2 : 1));
-  /** Row lines left for the runs panel after its section headers. */
-  const runRowBudget = createMemo(() => Math.max(1, runVisibleCount() - runSectionHeaderLines()));
-  /** Active runs (pending/running/awaiting-input), `running` ahead of the queue. */
-  const runActiveRows = createMemo(() => activeRunRows(filteredRuns()));
+  const sessionSectionHeaderLines = createMemo(() => (sessionShowAll() ? 2 : 1));
+  /** Row lines left for the sessions panel after its section headers. */
+  const sessionRowBudget = createMemo(() =>
+    Math.max(1, sessionVisibleCount() - sessionSectionHeaderLines()),
+  );
+  /** Active sessions (pending/running/awaiting-input), `running` ahead of the queue. */
+  const sessionActiveRows = createMemo(() => activeSessionRows(filteredSessions()));
   /**
    * Active rows render unwindowed under their header, capped so a burst
-   * of live runs still cannot overflow the panel. While the All section
+   * of live sessions still cannot overflow the panel. While the All section
    * is expanded the cap leaves one line for its window, so the toggle is
    * never blank.
    */
-  const runVisibleActive = createMemo(() => {
-    const budget = runRowBudget();
-    return runActiveRows().slice(0, runShowAll() ? Math.max(0, budget - 1) : budget);
+  const sessionVisibleActive = createMemo(() => {
+    const budget = sessionRowBudget();
+    return sessionActiveRows().slice(0, sessionShowAll() ? Math.max(0, budget - 1) : budget);
   });
   /** Rows left for the All window after the unwindowed Active section. */
-  const runAllBudget = createMemo(() =>
-    runShowAll() ? Math.max(0, runRowBudget() - runVisibleActive().length) : 0,
+  const sessionAllBudget = createMemo(() =>
+    sessionShowAll() ? Math.max(0, sessionRowBudget() - sessionVisibleActive().length) : 0,
   );
   /** Window start for the All section: keeps the highlighted row in view. */
-  const runWindowStart = createMemo(() => {
-    const count = runAllBudget();
+  const sessionWindowStart = createMemo(() => {
+    const count = sessionAllBudget();
     if (count === 0) return 0;
-    const length = filteredRuns().length;
-    const index = runHighlight() - runVisibleActive().length;
+    const length = filteredSessions().length;
+    const index = sessionHighlight() - sessionVisibleActive().length;
     return Math.min(Math.max(index - count + 1, 0), Math.max(length - count, 0));
   });
-  /** Windowed slice of the full filtered list under the All runs header. */
-  const runVisibleAll = createMemo(() =>
-    runShowAll() ? filteredRuns().slice(runWindowStart(), runWindowStart() + runAllBudget()) : [],
+  /** Windowed slice of the full filtered list under the All sessions header. */
+  const sessionVisibleAll = createMemo(() =>
+    sessionShowAll()
+      ? filteredSessions().slice(sessionWindowStart(), sessionWindowStart() + sessionAllBudget())
+      : [],
   );
   /**
    * Flat selectable list across sections: capped Active rows first, then
@@ -2385,14 +2404,14 @@ export const App = (props: AppProps) => {
    * navigation walks this list, so headers are skipped and movement
    * crosses sections in one sequence.
    */
-  const runSelectable = createMemo(() =>
-    runSelectableRows(runVisibleActive(), filteredRuns(), runShowAll()),
+  const sessionSelectable = createMemo(() =>
+    sessionSelectableRows(sessionVisibleActive(), filteredSessions(), sessionShowAll()),
   );
   /** Panel-relative highlight: Active rows then the windowed All slice. */
-  const runRelativeHighlight = createMemo(() => {
-    const activeLength = runVisibleActive().length;
-    if (!runShowAll() || runHighlight() < activeLength) return runHighlight();
-    return activeLength + (runHighlight() - activeLength - runWindowStart());
+  const sessionRelativeHighlight = createMemo(() => {
+    const activeLength = sessionVisibleActive().length;
+    if (!sessionShowAll() || sessionHighlight() < activeLength) return sessionHighlight();
+    return activeLength + (sessionHighlight() - activeLength - sessionWindowStart());
   });
   /** Visible list window for the specs panel: same measured-card contract as skills. */
   const specVisibleCount = createMemo(() => {
@@ -2417,39 +2436,49 @@ export const App = (props: AppProps) => {
    * `createMemo` is eager, so a memo that reads a later one dies with a
    * temporal-dead-zone `ReferenceError` on boot.
    */
-  const runPromptPaneRows = createMemo(() =>
-    promptPaneRows(dimensions().height, dimensions().width, runDetailData()?.summary.prompt ?? ''),
+  const sessionPromptPaneRows = createMemo(() =>
+    promptPaneRows(
+      dimensions().height,
+      dimensions().width,
+      sessionDetailData()?.summary.prompt ?? '',
+    ),
   );
-  const showRunPromptPane = createMemo(() => showsPromptPane(dimensions().height));
-  const runPromptColumns = createMemo(() => promptPaneColumns(dimensions().width));
-  const runPromptBudgetRows = createMemo(() => Math.max(runPromptPaneRows() - 3, 1));
-  const runDetailMaxBodyLines = createMemo(() =>
-    detailBodyRows(dimensions().height, dimensions().width, runDetailData()?.summary.prompt ?? ''),
+  const showSessionPromptPane = createMemo(() => showsPromptPane(dimensions().height));
+  const sessionPromptColumns = createMemo(() => promptPaneColumns(dimensions().width));
+  const sessionPromptBudgetRows = createMemo(() => Math.max(sessionPromptPaneRows() - 3, 1));
+  const sessionDetailMaxBodyLines = createMemo(() =>
+    detailBodyRows(
+      dimensions().height,
+      dimensions().width,
+      sessionDetailData()?.summary.prompt ?? '',
+    ),
   );
 
   /** Rows of the prompt hidden below the prompt pane's window. */
-  const runPromptMaxScroll = createMemo(
+  const sessionPromptMaxScroll = createMemo(
     () =>
       promptWindow(
-        runDetailData()?.summary.prompt ?? '',
-        runPromptColumns(),
-        runPromptBudgetRows(),
+        sessionDetailData()?.summary.prompt ?? '',
+        sessionPromptColumns(),
+        sessionPromptBudgetRows(),
         0,
       ).below,
   );
 
   /**
    * Scroll whichever pane holds focus. Only the focused pane can move:
-   * the intent resolves against `runDetailFocus` before it reaches
+   * the intent resolves against `sessionDetailFocus` before it reaches
    * either scroll signal.
    * @param delta - rows to move (positive scrolls down)
    */
-  const scrollFocusedRunPane = (delta: number): void => {
-    if (runDetailFocus() === 'prompt' && showRunPromptPane()) {
-      setRunPromptScroll((offset) => Math.min(Math.max(offset + delta, 0), runPromptMaxScroll()));
+  const scrollFocusedSessionPane = (delta: number): void => {
+    if (sessionDetailFocus() === 'prompt' && showSessionPromptPane()) {
+      setSessionPromptScroll((offset) =>
+        Math.min(Math.max(offset + delta, 0), sessionPromptMaxScroll()),
+      );
       return;
     }
-    scrollRunDetail(delta);
+    scrollSessionDetail(delta);
   };
 
   /** Keybinds in canonical panel order for the status hint. */
@@ -2465,7 +2494,7 @@ export const App = (props: AppProps) => {
     if (current === 'skills') return skillsLoaded() && !skillsInstalled();
     if (current === 'profiles') return profilesLoaded() && !profilesInstalled();
     if (current === 'prompts') return promptsLoaded() && !promptsInstalled();
-    if (current === 'runs') return runsLoaded() && !runsStoreInstalled();
+    if (current === 'sessions') return sessionsLoaded() && !sessionsStoreInstalled();
     return false;
   });
 
@@ -2489,9 +2518,12 @@ export const App = (props: AppProps) => {
       filteredPrompts().length > 0,
   );
 
-  const runsInteractive = createMemo(
+  const sessionsInteractive = createMemo(
     () =>
-      selected() === 'runs' && runsLoaded() && runsStoreInstalled() && filteredRuns().length > 0,
+      selected() === 'sessions' &&
+      sessionsLoaded() &&
+      sessionsStoreInstalled() &&
+      filteredSessions().length > 0,
   );
 
   const specsInteractive = createMemo(
@@ -2574,19 +2606,19 @@ export const App = (props: AppProps) => {
     if (detail() !== undefined) return detailHint(detailMode());
     if (profileDetail() !== undefined) return detailHint(profileDetailMode());
     if (promptDetail() !== undefined) return detailHint(promptDetailMode());
-    if (runDetailId() !== undefined)
-      return runDetailHint(
-        runDetailData()?.summary.status,
-        runDetailMode(),
-        runDetailFocus(),
-        showRunPromptPane(),
+    if (sessionDetailId() !== undefined)
+      return sessionDetailHint(
+        sessionDetailData()?.summary.status,
+        sessionDetailMode(),
+        sessionDetailFocus(),
+        showSessionPromptPane(),
       );
     if (specDetailId() !== undefined) return specDetailHint();
     if (
       (selected() === 'skills' && skillTyping()) ||
       (selected() === 'profiles' && profileTyping()) ||
       (selected() === 'prompts' && promptTyping()) ||
-      (selected() === 'runs' && runTyping()) ||
+      (selected() === 'sessions' && sessionTyping()) ||
       (selected() === 'specs' && specTyping())
     )
       return formatKeybinds([
@@ -2595,11 +2627,11 @@ export const App = (props: AppProps) => {
         Keybinds.stopTyping(),
         Keybinds.clearFilter(),
       ]);
-    if (installing() || profileInstalling() || promptInstalling() || runsInstalling())
+    if (installing() || profileInstalling() || promptInstalling() || sessionsInstalling())
       return formatKeybinds([{ key: 'installing…' }, Keybinds.quit()]);
     const base = formatKeybinds([
       { key: orderedKeybinds().join('/'), action: 'select' },
-      ...(lastDispatchedRunId() !== undefined ? [Keybinds.goToRun()] : []),
+      ...(lastDispatchedSessionId() !== undefined ? [Keybinds.goToSession()] : []),
       Keybinds.quit(),
     ]);
     if (selectedMissing()) return `${base} · ${formatKeybinds([Keybinds.install()])}`;
@@ -2639,8 +2671,8 @@ export const App = (props: AppProps) => {
       }
       return `${base} · ${formatKeybinds([Keybinds.create(), Keybinds.refresh()])}`;
     }
-    if (selected() === 'runs' && runsLoaded() && runsStoreInstalled()) {
-      if (runsInteractive()) {
+    if (selected() === 'sessions' && sessionsLoaded() && sessionsStoreInstalled()) {
+      if (sessionsInteractive()) {
         const entries = [
           Keybinds.search(),
           Keybinds.open(),
@@ -2648,7 +2680,7 @@ export const App = (props: AppProps) => {
           Keybinds.showAll(),
           Keybinds.refresh(),
         ];
-        if (runQuery() !== '') entries.push(Keybinds.clearFilter());
+        if (sessionQuery() !== '') entries.push(Keybinds.clearFilter());
         return `${base} · ${formatKeybinds(entries)}`;
       }
       return `${base} · ${formatKeybinds([Keybinds.create(), Keybinds.refresh()])}`;
@@ -2680,8 +2712,8 @@ export const App = (props: AppProps) => {
       setProfileHighlight((index) => clampHighlight(index + delta, filteredProfiles().length));
     else if (selected() === 'prompts')
       setPromptHighlight((index) => clampHighlight(index + delta, filteredPrompts().length));
-    else if (selected() === 'runs')
-      setRunHighlight((index) => clampHighlight(index + delta, runSelectable().length));
+    else if (selected() === 'sessions')
+      setSessionHighlight((index) => clampHighlight(index + delta, sessionSelectable().length));
     else if (selected() === 'specs')
       setSpecHighlight((index) => clampHighlight(index + delta, filteredSpecs().length));
     else if (selected() === 'skills')
@@ -2711,9 +2743,9 @@ export const App = (props: AppProps) => {
       }
       return;
     }
-    if (selected() === 'runs') {
-      const row = runSelectable()[runHighlight()];
-      if (row !== undefined) openRunDetail(row.id);
+    if (selected() === 'sessions') {
+      const row = sessionSelectable()[sessionHighlight()];
+      if (row !== undefined) openSessionDetail(row.id);
       return;
     }
     if (selected() === 'specs') {
@@ -2732,16 +2764,16 @@ export const App = (props: AppProps) => {
   };
 
   /**
-   * Toggle the runs panel's All-runs section. The highlight clamps to the
+   * Toggle the sessions panel's All-sessions section. The highlight clamps to the
    * selectable list after the swap, so a hidden index never dangles when
    * the section closes and the full list stays reachable when it opens.
    */
-  const toggleRunSections = (): void => {
-    const next = !runShowAll();
-    setRunShowAll(next);
-    const activeLength = runVisibleActive().length;
-    const length = next ? activeLength + filteredRuns().length : activeLength;
-    setRunHighlight((index) => clampHighlight(index, length));
+  const toggleSessionSections = (): void => {
+    const next = !sessionShowAll();
+    setSessionShowAll(next);
+    const activeLength = sessionVisibleActive().length;
+    const length = next ? activeLength + filteredSessions().length : activeLength;
+    setSessionHighlight((index) => clampHighlight(index, length));
   };
 
   const closeDetail = (): void => {
@@ -2775,7 +2807,7 @@ export const App = (props: AppProps) => {
     setSkillTyping(false);
     setProfileTyping(false);
     setPromptTyping(false);
-    setRunTyping(false);
+    setSessionTyping(false);
     setSpecTyping(false);
   };
 
@@ -2816,20 +2848,20 @@ export const App = (props: AppProps) => {
     setDetailScroll((offset) => Math.min(Math.max(offset + delta, 0), detailMaxScroll()));
   };
 
-  /** Scroll window for the run transcript: rendered markdown source lines. */
-  const runDetailLineCount = createMemo(() => {
-    const data = runDetailData();
-    return data === undefined ? 0 : runTranscriptMarkdown(data).length;
+  /** Scroll window for the session transcript: rendered markdown source lines. */
+  const sessionDetailLineCount = createMemo(() => {
+    const data = sessionDetailData();
+    return data === undefined ? 0 : sessionTranscriptMarkdown(data).length;
   });
   /** Lines the transcript window shows right now: the small preview
    * window in `preview`, the whole body budget in `view`. The scroll
    * bound follows it, so the last page always fills the window.
    */
-  const runDetailWindow = createMemo(() =>
-    runDetailMode() === 'preview' ? RUN_PREVIEW_LINES : runDetailMaxBodyLines(),
+  const sessionDetailWindow = createMemo(() =>
+    sessionDetailMode() === 'preview' ? SESSION_PREVIEW_LINES : sessionDetailMaxBodyLines(),
   );
-  const runDetailMaxScroll = createMemo(() =>
-    Math.max(runDetailLineCount() - runDetailWindow(), 0),
+  const sessionDetailMaxScroll = createMemo(() =>
+    Math.max(sessionDetailLineCount() - sessionDetailWindow(), 0),
   );
   /** Scroll window for the spec full view. */
   const specDetailLineCount = createMemo(() => {
@@ -2909,7 +2941,9 @@ export const App = (props: AppProps) => {
       setProfileDetailMode('preview');
       setProfileDetailScroll(0);
       setProfileDetailAction(0);
-      pushToast(`Deleted profile '${Runs.sanitizeRunText(target.id)}'.`, { variant: 'success' });
+      pushToast(`Deleted profile '${Sessions.sanitizeSessionText(target.id)}'.`, {
+        variant: 'success',
+      });
       queryClient.setQueryData(Query.profilesKey, (previous: Query.ProfilesList | undefined) =>
         previous === undefined
           ? previous
@@ -3098,7 +3132,7 @@ export const App = (props: AppProps) => {
    * @param key - pressed key event
    */
   const handleKey = (key: KeyEvent): void => {
-    // Agent run in flight: arrows scroll overflowed input, `esc`
+    // Agent session in flight: arrows scroll overflowed input, `esc`
     // interrupts the agent fiber (the headless child is killed) and the
     // flow settles as a silent cancel. Every other key (including quit)
     // stays locked out.
@@ -3113,7 +3147,7 @@ export const App = (props: AppProps) => {
           void Fiber.interrupt(fiber)
             .pipe(Effect.runPromise)
             .then(() => {
-              pushToast('Agent run cancelled.', { variant: 'info' });
+              pushToast('Agent session cancelled.', { variant: 'info' });
             });
         }
         return;
@@ -3147,53 +3181,61 @@ export const App = (props: AppProps) => {
       } else if (key.name === 'escape') setFlowError(undefined);
       return;
     }
-    if (runDetailId() !== undefined) {
-      const actions = runDetailActions(runDetailData()?.summary.status, runDetailMode());
-      const intent = runDetailIntent(key, runDetailMode(), runDetailData()?.summary.status);
-      if (intent === 'close') closeRunDetail();
+    if (sessionDetailId() !== undefined) {
+      const actions = sessionDetailActions(
+        sessionDetailData()?.summary.status,
+        sessionDetailMode(),
+      );
+      const intent = sessionDetailIntent(
+        key,
+        sessionDetailMode(),
+        sessionDetailData()?.summary.status,
+      );
+      if (intent === 'close') closeSessionDetail();
       else if (intent === 'quit') renderer.destroy();
       else if (intent === 'toggle-view') {
-        setRunDetailMode((mode) => (mode === 'view' ? 'preview' : 'view'));
+        setSessionDetailMode((mode) => (mode === 'view' ? 'preview' : 'view'));
         // Both modes open at the top, like the list the detail came from.
-        setRunDetailScroll(0);
-        setRunDetailPinned(false);
+        setSessionDetailScroll(0);
+        setSessionDetailPinned(false);
       } else if (intent === 'refresh') {
-        const id = runDetailId();
-        refreshRuns();
-        if (id !== undefined) loadRunDetail(id);
-      } else if (intent === 'interrupt') interruptRun();
+        const id = sessionDetailId();
+        refreshSessions();
+        if (id !== undefined) loadSessionDetail(id);
+      } else if (intent === 'interrupt') interruptSession();
       else if (intent === 'steer') runSteerFlow();
       else if (intent === 'answer') runAnswerFlow();
       else if (intent === 'activate') {
-        const action = actions[runDetailAction()];
+        const action = actions[sessionDetailAction()];
         if (action?.id === 'toggle-view') {
-          setRunDetailMode((mode) => (mode === 'view' ? 'preview' : 'view'));
+          setSessionDetailMode((mode) => (mode === 'view' ? 'preview' : 'view'));
           // Both modes open at the top, like the list the detail came from.
-          setRunDetailScroll(0);
-          setRunDetailPinned(false);
+          setSessionDetailScroll(0);
+          setSessionDetailPinned(false);
         } else if (action?.id === 'steer') runSteerFlow();
-        else if (action?.id === 'interrupt') interruptRun();
+        else if (action?.id === 'interrupt') interruptSession();
         else if (action?.id === 'answer') runAnswerFlow();
-        else closeRunDetail();
+        else closeSessionDetail();
       } else if (intent === 'menu-up' || intent === 'menu-down') {
         // Arrows belong to the details column while it holds focus, and
         // to the focused scrollable pane otherwise.
-        if (runDetailFocus() !== 'details') {
-          scrollFocusedRunPane(intent === 'menu-down' ? 1 : -1);
+        if (sessionDetailFocus() !== 'details') {
+          scrollFocusedSessionPane(intent === 'menu-down' ? 1 : -1);
           return;
         }
         const delta = intent === 'menu-up' ? -1 : 1;
-        setRunDetailAction((index) => clampHighlight(index + delta, actions.length));
+        setSessionDetailAction((index) => clampHighlight(index + delta, actions.length));
       } else if (intent === 'scroll-up' || intent === 'scroll-down')
-        scrollFocusedRunPane(intent === 'scroll-down' ? 1 : -1);
-      else if (intent === 'focus-details') setRunDetailFocus('details');
-      else if (intent === 'focus-prompt' && showRunPromptPane()) setRunDetailFocus('prompt');
-      else if (intent === 'focus-transcript') setRunDetailFocus('transcript');
+        scrollFocusedSessionPane(intent === 'scroll-down' ? 1 : -1);
+      else if (intent === 'focus-details') setSessionDetailFocus('details');
+      else if (intent === 'focus-prompt' && showSessionPromptPane())
+        setSessionDetailFocus('prompt');
+      else if (intent === 'focus-transcript') setSessionDetailFocus('transcript');
       else if (intent === 'toggle-focus') {
         // Cycle only through panes that exist; focus never lands on a
         // pane the terminal is too small to show.
-        const cycle = runFocusCycle(showRunPromptPane());
-        setRunDetailFocus((focus) => {
+        const cycle = sessionFocusCycle(showSessionPromptPane());
+        setSessionDetailFocus((focus) => {
           const at = cycle.indexOf(focus);
           return cycle[(at + 1) % cycle.length] ?? 'details';
         });
@@ -3296,7 +3338,7 @@ export const App = (props: AppProps) => {
       selectedPanel === 'skills' ||
       selectedPanel === 'profiles' ||
       selectedPanel === 'prompts' ||
-      selectedPanel === 'runs' ||
+      selectedPanel === 'sessions' ||
       selectedPanel === 'specs'
         ? selectedPanel
         : undefined;
@@ -3308,9 +3350,9 @@ export const App = (props: AppProps) => {
         } else if (typingPanel === 'prompts') {
           setPromptQuery(update);
           setPromptHighlight(0);
-        } else if (typingPanel === 'runs') {
-          setRunQuery(update);
-          setRunHighlight(0);
+        } else if (typingPanel === 'sessions') {
+          setSessionQuery(update);
+          setSessionHighlight(0);
         } else if (typingPanel === 'specs') {
           setSpecQuery(update);
           setSpecHighlight(0);
@@ -3332,11 +3374,11 @@ export const App = (props: AppProps) => {
             setPromptQuery('');
             setPromptHighlight(0);
           }
-        } else if (typingPanel === 'runs') {
-          setRunTyping(false);
+        } else if (typingPanel === 'sessions') {
+          setSessionTyping(false);
           if (clear) {
-            setRunQuery('');
-            setRunHighlight(0);
+            setSessionQuery('');
+            setSessionHighlight(0);
           }
         } else if (typingPanel === 'specs') {
           setSpecTyping(false);
@@ -3366,13 +3408,13 @@ export const App = (props: AppProps) => {
       return;
     }
 
-    // Dispatched profile-create run: `g` jumps to its detail from
+    // Dispatched profile-create session: `g` jumps to its detail from
     // anywhere the detail stack is closed. Filter typing above owns
     // printable keys, so `g` stays a query character while searching.
     if (key.sequence === 'g' && !key.ctrl && !key.meta) {
-      const id = lastDispatchedRunId();
+      const id = lastDispatchedSessionId();
       if (id !== undefined) {
-        openRunDetail(id);
+        openSessionDetail(id);
         return;
       }
     }
@@ -3398,9 +3440,9 @@ export const App = (props: AppProps) => {
         setSkillHighlight(0);
         return;
       }
-      if (selected() === 'runs' && queryOf('runs') !== '') {
-        setRunQuery('');
-        setRunHighlight(0);
+      if (selected() === 'sessions' && queryOf('sessions') !== '') {
+        setSessionQuery('');
+        setSessionHighlight(0);
         return;
       }
       if (selected() === 'specs' && queryOf('specs') !== '') {
@@ -3417,9 +3459,9 @@ export const App = (props: AppProps) => {
       !installing() &&
       !profileInstalling() &&
       !promptInstalling() &&
-      !runsInstalling()
+      !sessionsInstalling()
     ) {
-      // SAFETY: selectedMissing is true only for skills/profiles/prompts/runs, all ExtensionPanels.
+      // SAFETY: selectedMissing is true only for skills/profiles/prompts/sessions, all ExtensionPanels.
       const current = selected() as Skills.ExtensionPanel;
       if (current === 'profiles') {
         setProfileInstalling(true);
@@ -3446,11 +3488,11 @@ export const App = (props: AppProps) => {
             setInstalling(false);
           },
         });
-      } else if (current === 'runs') {
-        setRunsInstalling(true);
-        installRunsMutation.mutate(undefined, {
+      } else if (current === 'sessions') {
+        setSessionsInstalling(true);
+        installSessionsMutation.mutate(undefined, {
           onSettled: () => {
-            setRunsInstalling(false);
+            setSessionsInstalling(false);
           },
         });
       } else {
@@ -3478,9 +3520,9 @@ export const App = (props: AppProps) => {
         return;
       }
     }
-    if (selected() === 'runs' && runsLoaded() && runsStoreInstalled()) {
+    if (selected() === 'sessions' && sessionsLoaded() && sessionsStoreInstalled()) {
       if (key.sequence === 'c') {
-        runCreateRun();
+        runCreateSession();
         return;
       }
     }
@@ -3493,7 +3535,7 @@ export const App = (props: AppProps) => {
     // Manual refetch for externally changed stores: stale-while-
     // revalidate keeps the old rows on screen, failures toast through
     // the query error effects. `R` (shift) never collides with the
-    // lowercase panel-select keybinds (`r` opens runs).
+    // lowercase panel-select keybinds (`r` opens sessions).
     if (key.sequence === 'R') {
       if (selected() === 'skills' && skillsLoaded() && skillsInstalled()) {
         refreshSkills();
@@ -3507,8 +3549,8 @@ export const App = (props: AppProps) => {
         refreshPrompts();
         return;
       }
-      if (selected() === 'runs' && runsLoaded() && runsStoreInstalled()) {
-        refreshRuns();
+      if (selected() === 'sessions' && sessionsLoaded() && sessionsStoreInstalled()) {
+        refreshSessions();
         return;
       }
       if (selected() === 'specs' && specsLoaded()) {
@@ -3556,13 +3598,13 @@ export const App = (props: AppProps) => {
         return;
       }
     }
-    if (selected() === 'runs' && runsInteractive()) {
+    if (selected() === 'sessions' && sessionsInteractive()) {
       if (key.sequence === 'A') {
-        toggleRunSections();
+        toggleSessionSections();
         return;
       }
       if (key.sequence === '/') {
-        setRunTyping(true);
+        setSessionTyping(true);
         return;
       }
       if (key.name === 'enter' || key.name === 'return') {
@@ -3687,39 +3729,39 @@ export const App = (props: AppProps) => {
   });
 
   /**
-   * Schedule a runs-list refetch behind the `runs` query key: same
+   * Schedule a sessions-list refetch behind the `sessions` query key: same
    * stale-while-revalidate contract as `refreshSkills` — the old rows
    * stay on screen, so create/settle/install never flash the panel
    * Loader.
    */
-  const refreshRuns = (): void => {
-    void queryClient.invalidateQueries({ queryKey: Query.runsKey });
+  const refreshSessions = (): void => {
+    void queryClient.invalidateQueries({ queryKey: Query.sessionsKey });
   };
 
   /**
-   * Toast one runs-list failure per query error: mirrors the skills
+   * Toast one sessions-list failure per query error: mirrors the skills
    * error effect — fires once when a fetch rejects, never on rerender.
    * Reads nothing else, writes only toasts — cannot loop.
    */
   createEffect(() => {
-    const failure = runsQuery.error;
+    const failure = sessionsQuery.error;
     if (failure instanceof Error)
-      pushToast(`Runs list failed: ${failure.message}`, { variant: 'error' });
+      pushToast(`Sessions list failed: ${failure.message}`, { variant: 'error' });
   });
 
   /** Previous live flag, so the settle edge (live → not live) refreshes once. */
-  let runDetailWasLive = false;
+  let sessionDetailWasLive = false;
 
   /**
-   * Refresh the runs list when the open run settles on its own: the
+   * Refresh the sessions list when the open session settles on its own: the
    * transcript poll flips the live memo false while the detail stays
    * open, so the row underneath updates without leaving the detail.
    * Closing the detail (id cleared) never refreshes.
    */
   createEffect(() => {
-    const live = runDetailLive();
-    if (runDetailWasLive && !live && runDetailId() !== undefined) refreshRuns();
-    runDetailWasLive = live;
+    const live = sessionDetailLive();
+    if (sessionDetailWasLive && !live && sessionDetailId() !== undefined) refreshSessions();
+    sessionDetailWasLive = live;
   });
 
   /**
@@ -3762,7 +3804,7 @@ export const App = (props: AppProps) => {
         // Extension unavailable: the profiles boot already surfaced it.
         return undefined;
       });
-    Runs.setRunNotifier({
+    Sessions.setSessionNotifier({
       toast: (message, variant) =>
         variant === undefined ? pushToast(message) : pushToast(message, { variant }),
       notify: (title, body) => pushToast(body, { title }),
@@ -3782,8 +3824,8 @@ export const App = (props: AppProps) => {
   onCleanup(() => {
     profileChangesStopped = true;
     cancelProfileChanges?.();
-    Runs.setRunNotifier(undefined);
-    void Runs.resetRunnerRuntimes();
+    Sessions.setSessionNotifier(undefined);
+    void Sessions.resetSessionRuntimes();
   });
 
   return (
@@ -3793,28 +3835,38 @@ export const App = (props: AppProps) => {
           detail() === undefined &&
           profileDetail() === undefined &&
           promptDetail() === undefined &&
-          runDetailId() === undefined &&
+          sessionDetailId() === undefined &&
           specDetailId() === undefined
         }
         fallback={
           <Show
-            when={runDetailId() === undefined}
+            when={sessionDetailId() === undefined}
             fallback={
               <box flexDirection="row" flexGrow={1} minHeight={0} gap={1} paddingX={1}>
-                <box flexDirection="column" width={RUN_SIDEBAR_WIDTH} flexShrink={0} minHeight={0}>
+                <box
+                  flexDirection="column"
+                  width={SESSION_SIDEBAR_WIDTH}
+                  flexShrink={0}
+                  minHeight={0}
+                >
                   <Panel
-                    title={`Run — ${runDetailData()?.summary.name ?? ''}`}
-                    selected={runDetailFocus() === 'details'}
+                    title={`Session — ${sessionDetailData()?.summary.name ?? ''}`}
+                    selected={sessionDetailFocus() === 'details'}
                   >
-                    <Show when={runDetailData()} fallback={<text> </text>}>
-                      {(run: () => Runs.RunDetail) => <RunMeta detail={run()} />}
+                    <Show when={sessionDetailData()} fallback={<text> </text>}>
+                      {(session: () => Sessions.SessionDetail) => (
+                        <SessionMeta detail={session()} />
+                      )}
                     </Show>
                     <box flexShrink={0}>
                       <text style={{ fg: palette.dim }}>actions</text>
                     </box>
                     <DetailActions
-                      actions={runDetailActions(runDetailData()?.summary.status, runDetailMode())}
-                      highlight={runDetailAction()}
+                      actions={sessionDetailActions(
+                        sessionDetailData()?.summary.status,
+                        sessionDetailMode(),
+                      )}
+                      highlight={sessionDetailAction()}
                     />
                     <box flexShrink={0}>
                       <text style={{ fg: palette.dim }}>↑↓ navigate · ⏎ select</text>
@@ -3822,41 +3874,43 @@ export const App = (props: AppProps) => {
                   </Panel>
                 </box>
                 <box flexDirection="column" flexGrow={1} flexBasis={0} minHeight={0}>
-                  <Show when={showRunPromptPane()}>
+                  <Show when={showSessionPromptPane()}>
                     <box
                       flexDirection="column"
                       flexShrink={0}
-                      height={runPromptPaneRows()}
+                      height={sessionPromptPaneRows()}
                       minHeight={0}
                     >
-                      <Panel title="Prompt" selected={runDetailFocus() === 'prompt'}>
-                        <RunPrompt
-                          text={runDetailData()?.summary.prompt ?? ''}
-                          columns={runPromptColumns()}
-                          rows={runPromptBudgetRows()}
-                          offset={runPromptScroll()}
-                          focused={runDetailFocus() === 'prompt'}
+                      <Panel title="Prompt" selected={sessionDetailFocus() === 'prompt'}>
+                        <SessionPrompt
+                          text={sessionDetailData()?.summary.prompt ?? ''}
+                          columns={sessionPromptColumns()}
+                          rows={sessionPromptBudgetRows()}
+                          offset={sessionPromptScroll()}
+                          focused={sessionDetailFocus() === 'prompt'}
                         />
                       </Panel>
                     </box>
                   </Show>
                   <box flexDirection="column" flexGrow={1} flexBasis={0} minHeight={0}>
                     <Panel
-                      title={`Transcript · ${runDetailMode() === 'view' ? 'view' : 'preview'}`}
-                      selected={runDetailFocus() === 'transcript'}
+                      title={`Transcript · ${sessionDetailMode() === 'view' ? 'view' : 'preview'}`}
+                      selected={sessionDetailFocus() === 'transcript'}
                     >
                       <Show
-                        when={runDetailData()}
+                        when={sessionDetailData()}
                         fallback={
-                          <PanelMessage message={runDetailLoading() ? 'Loading run…' : 'No run.'} />
+                          <PanelMessage
+                            message={sessionDetailLoading() ? 'Loading session…' : 'No session.'}
+                          />
                         }
                       >
-                        {(run: () => Runs.RunDetail) => (
-                          <RunDetail
-                            detail={run()}
-                            mode={runDetailMode()}
-                            scrollOffset={runDetailScroll()}
-                            maxBodyLines={runDetailMaxBodyLines()}
+                        {(session: () => Sessions.SessionDetail) => (
+                          <SessionDetail
+                            detail={session()}
+                            mode={sessionDetailMode()}
+                            scrollOffset={sessionDetailScroll()}
+                            maxBodyLines={sessionDetailMaxBodyLines()}
                           />
                         )}
                       </Show>
@@ -4032,8 +4086,8 @@ export const App = (props: AppProps) => {
                             ? setProfilesCard
                             : cell.panel === 'prompts'
                               ? setPromptsCard
-                              : cell.panel === 'runs'
-                                ? setRunsCard
+                              : cell.panel === 'sessions'
+                                ? setSessionsCard
                                 : cell.panel === 'specs'
                                   ? setSpecsCard
                                   : undefined
@@ -4084,21 +4138,21 @@ export const App = (props: AppProps) => {
                           capacity={promptVisibleCount()}
                           selected={selected() === 'prompts'}
                         />
-                      ) : cell.panel === 'runs' ? (
-                        <RunsPanel
-                          loading={!runsLoaded()}
-                          installing={runsInstalling()}
-                          loadingVariant={runsPhase()}
-                          installed={runsStoreInstalled()}
-                          activeRows={runVisibleActive()}
-                          allRows={runVisibleAll()}
-                          showAll={runShowAll()}
-                          highlight={runRelativeHighlight()}
-                          total={filteredRuns().length}
-                          query={runQuery()}
-                          searching={runTyping()}
-                          capacity={runVisibleCount()}
-                          selected={selected() === 'runs'}
+                      ) : cell.panel === 'sessions' ? (
+                        <SessionsPanel
+                          loading={!sessionsLoaded()}
+                          installing={sessionsInstalling()}
+                          loadingVariant={sessionsPhase()}
+                          installed={sessionsStoreInstalled()}
+                          activeRows={sessionVisibleActive()}
+                          allRows={sessionVisibleAll()}
+                          showAll={sessionShowAll()}
+                          highlight={sessionRelativeHighlight()}
+                          total={filteredSessions().length}
+                          query={sessionQuery()}
+                          searching={sessionTyping()}
+                          capacity={sessionVisibleCount()}
+                          selected={selected() === 'sessions'}
                         />
                       ) : cell.panel === 'specs' ? (
                         <SpecsPanel

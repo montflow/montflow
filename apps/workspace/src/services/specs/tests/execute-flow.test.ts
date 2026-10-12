@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import * as Vitest from '@effect/vitest';
 import { Effect } from 'effect';
 import * as Specs from '../index.js';
-import * as Runs from '../../runs/index.js';
-import { makeHarness, poll, settleEvent } from '../../runs/tests/harness.js';
+import * as Sessions from '../../sessions/index.js';
+import { makeHarness, poll, settleEvent } from '../../sessions/tests/harness.js';
 
 /** Unique scratch root per test — no shared state across files. */
 const freshRoot = (): Promise<string> => mkdtemp(join(tmpdir(), 'workspace-spec-execute-'));
@@ -83,38 +83,38 @@ const writeSpecTree = async (root: string, id: string): Promise<void> => {
 };
 
 Vitest.afterEach(async () => {
-  await Runs.resetRunnerRuntimes();
-  Runs.setSessionFactoryLayer(undefined);
-  Runs.setExtensionProbe(undefined);
+  await Sessions.resetSessionRuntimes();
+  Sessions.setSessionFactoryLayer(undefined);
+  Sessions.setExtensionProbe(undefined);
   Specs.resetExtensionCache();
 });
 
 Vitest.describe('Specs.executeSpec dispatch', () => {
-  Vitest.it.live('gates on the runs extension without dispatching', () =>
+  Vitest.it.live('gates on the sessions extension without dispatching', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(false));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(false));
       const root = yield* Effect.promise(freshRoot);
       const error = yield* Specs.executeSpec(root, { id: 'ship-login' }).pipe(Effect.flip);
-      Vitest.expect(error).toBe(Runs.RUNS_EXTENSION_INSTALL_HINT);
+      Vitest.expect(error).toBe(Sessions.SESSIONS_EXTENSION_INSTALL_HINT);
       Vitest.expect(harness.sessions.length).toBe(0);
     }),
   );
 
-  Vitest.it.live('dispatches a resume run bound to the spec', () =>
+  Vitest.it.live('dispatches a resume session bound to the spec', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writeSpecTree(root, 'ship-login'));
-      const { runId } = yield* Specs.executeSpec(root, { id: 'ship-login' });
-      Vitest.expect(runId).toMatch(/^execute-ship-login-/);
+      const { sessionId } = yield* Specs.executeSpec(root, { id: 'ship-login' });
+      Vitest.expect(sessionId).toMatch(/^execute-ship-login-/);
       const session = harness.sessions[0];
       if (session === undefined) return yield* Effect.fail('session not created');
       Vitest.expect([...(session.request.tools ?? [])].toSorted()).toStrictEqual(
-        [...Specs.SPEC_EXECUTE_TOOLS, ...Runs.RUN_TOOL_NAMES].toSorted(),
+        [...Specs.SPEC_EXECUTE_TOOLS, ...Sessions.SESSION_TOOL_NAMES].toSorted(),
       );
       const prompt = yield* poll(
         Effect.sync(() => session.prompts[0]),
@@ -146,8 +146,8 @@ Vitest.describe('Specs.executeSpec dispatch', () => {
   Vitest.it.live('fires the settle hook with the outcome', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writeSpecTree(root, 'ship-login'));
       const settled: Array<readonly [string, string, string]> = [];

@@ -1,5 +1,5 @@
-import type { Runs } from '../services/index.js';
-import { isLiveRunStatus } from './run-detail-keys.js';
+import type { Sessions } from '../services/index.js';
+import { isLiveSessionStatus } from './session-detail-keys.js';
 
 /**
  * Transcript line glyph by role: user `›`, assistant `◈`, system and
@@ -7,7 +7,7 @@ import { isLiveRunStatus } from './run-detail-keys.js';
  * @param role - event role
  * @returns one-glyph marker
  */
-export const runRoleMarker = (role: string): string =>
+export const sessionRoleMarker = (role: string): string =>
   role === 'user' ? '›' : role === 'assistant' ? '◈' : '·';
 
 /**
@@ -20,29 +20,29 @@ const MARKDOWN_BLOCK_START =
   /^(?: {4,}|#{1,6}(?:\s|$)|[-*+](?:\s|$)|\d+[.)](?:\s|$)|>|\||```|~~~|-{3,}|\*{3,}|_{3,})/;
 
 /** Lines a tool result keeps at the head — where the match or error is. */
-export const RUN_TOOL_HEAD_LINES = 4;
+export const SESSION_TOOL_HEAD_LINES = 4;
 
 /** Lines a tool result keeps at the tail — where the summary lines are. */
-export const RUN_TOOL_TAIL_LINES = 2;
+export const SESSION_TOOL_TAIL_LINES = 2;
 
 /**
  * Rows a prompt column spends on the text before it ellipsizes. Default
- * for callers that only know the width; the run detail passes its pane
+ * for callers that only know the width; the session detail passes its pane
  * height so a column-sized prompt uses every row it has.
  */
-export const RUN_PROMPT_ROWS = 4;
+export const SESSION_PROMPT_ROWS = 4;
 
 /**
  * Rows a prompt needs in a pane `columns` wide: each source line costs
  * `ceil(length / columns)` rows, at least one, counted until the cap.
  * Pure, and shared by the pane sizing and the clip so a prompt's box is
  * exactly as tall as the text inside it.
- * @param prompt - full run prompt
+ * @param prompt - full session prompt
  * @param columns - columns the pane gives the prompt
  * @param maxRows - rows to stop counting at
  * @returns rows the prompt occupies, never more than `maxRows`
  */
-export const runPromptRows = (prompt: string, columns: number, maxRows: number): number => {
+export const sessionPromptRows = (prompt: string, columns: number, maxRows: number): number => {
   const width = Math.max(columns, 8);
   const budget = Math.max(maxRows, 1);
   let used = 0;
@@ -82,7 +82,7 @@ export interface PromptWindow {
  * the first line that begins at or after `offset`, so the pane can
  * never render more rows than it has — the overflow guard for a prompt
  * of any length. `offset` is clamped to the last window.
- * @param prompt - full run prompt
+ * @param prompt - full session prompt
  * @param columns - columns the pane gives the prompt
  * @param rows - rows the pane has for text
  * @param offset - rows to skip above the window
@@ -131,7 +131,7 @@ export const promptWindow = (
  * @returns columns available to the prompt text
  */
 export const promptPaneColumns = (terminalWidth: number): number =>
-  Math.max(terminalWidth - RUN_SIDEBAR_WIDTH - 9, 24);
+  Math.max(terminalWidth - SESSION_SIDEBAR_WIDTH - 9, 24);
 
 /**
  * Rows the prompt text may take above the transcript, before the prompt
@@ -150,11 +150,11 @@ export const promptPaneTextRows = (height: number): number =>
  * by {@link promptPaneTextRows}.
  * @param height - terminal height
  * @param terminalWidth - terminal width
- * @param prompt - full run prompt
+ * @param prompt - full session prompt
  * @returns rows the prompt pane occupies
  */
 export const promptPaneRows = (height: number, terminalWidth: number, prompt: string): number =>
-  runPromptRows(prompt, promptPaneColumns(terminalWidth), promptPaneTextRows(height)) + 3;
+  sessionPromptRows(prompt, promptPaneColumns(terminalWidth), promptPaneTextRows(height)) + 3;
 
 /**
  * Transcript rows the pane below the prompt can spend in full view: its
@@ -162,7 +162,7 @@ export const promptPaneRows = (height: number, terminalWidth: number, prompt: st
  * rows the prompt pane took above it.
  * @param height - terminal height
  * @param terminalWidth - terminal width
- * @param prompt - full run prompt
+ * @param prompt - full session prompt
  * @returns body line budget for the transcript
  */
 export const detailBodyRows = (height: number, terminalWidth: number, prompt: string): number =>
@@ -172,18 +172,22 @@ export const detailBodyRows = (height: number, terminalWidth: number, prompt: st
   );
 
 /**
- * Clip a run prompt to the rows its pane can actually show. A character
+ * Clip a session prompt to the rows its pane can actually show. A character
  * budget alone is not enough: short lines wrap rarely and long lines
  * wrap often, so a budget that fits one prompt's style overflows the
- * next. This walks the lines {@link runPromptRows} accounts for, keeps
+ * next. This walks the lines {@link sessionPromptRows} accounts for, keeps
  * every line that fits, and marks the cut with an ellipsis row — so
  * nothing spills past the pane's last row and no line is cut in half.
- * @param prompt - full run prompt
+ * @param prompt - full session prompt
  * @param columns - columns the pane gives the prompt
  * @param rows - rows the pane gives the prompt
  * @returns prompt text clipped to the pane's rows
  */
-export const clipRunPrompt = (prompt: string, columns: number, rows = RUN_PROMPT_ROWS): string => {
+export const clipSessionPrompt = (
+  prompt: string,
+  columns: number,
+  rows = SESSION_PROMPT_ROWS,
+): string => {
   const width = Math.max(columns, 8);
   const budget = Math.max(rows, 1);
   const source = prompt.split('\n');
@@ -202,7 +206,7 @@ export const clipRunPrompt = (prompt: string, columns: number, rows = RUN_PROMPT
 /**
  * Transcribe one event for the markdown body, bounding a tool result.
  * Agent tool output is mostly whole files and command transcripts —
- * one `cat` can run to hundreds of lines — and a run's transcript is
+ * one `cat` can run to hundreds of lines — and a session's transcript is
  * mostly tool output. Left unbounded it buries the agent's prose under
  * a wall of code and the transcript reads as raw text, so a long tool
  * result keeps its head and tail around an italic note saying how much
@@ -213,15 +217,15 @@ export const clipRunPrompt = (prompt: string, columns: number, rows = RUN_PROMPT
 const eventText = (event: { readonly role: string; readonly text: string }): string => {
   if (event.role !== 'toolResult') return event.text;
   const lines = event.text.split('\n');
-  const kept = RUN_TOOL_HEAD_LINES + RUN_TOOL_TAIL_LINES;
+  const kept = SESSION_TOOL_HEAD_LINES + SESSION_TOOL_TAIL_LINES;
   if (lines.length <= kept + 1) return event.text;
   const hidden = lines.length - kept;
   return [
-    ...lines.slice(0, RUN_TOOL_HEAD_LINES),
+    ...lines.slice(0, SESSION_TOOL_HEAD_LINES),
     '',
     `_… ${hidden} lines of tool output hidden · open the session file for the rest …_`,
     '',
-    ...lines.slice(lines.length - RUN_TOOL_TAIL_LINES),
+    ...lines.slice(lines.length - SESSION_TOOL_TAIL_LINES),
   ].join('\n');
 };
 
@@ -233,14 +237,16 @@ const eventText = (event: { readonly role: string; readonly text: string }): str
  * transcript reads as prose the markdown renderer can style — headings,
  * lists, emphasis, code — instead of raw text. Pure so the renderer,
  * the app's scroll bound, and the tests share one projection.
- * @param detail - run detail
+ * @param detail - session detail
  * @returns markdown source lines
  */
-export const runTranscriptMarkdown = (detail: Runs.RunDetail): ReadonlyArray<string> => {
+export const sessionTranscriptMarkdown = (
+  detail: Sessions.SessionDetail,
+): ReadonlyArray<string> => {
   const out: Array<string> = [];
   for (const [index, event] of detail.events.entries()) {
     if (index > 0) out.push('');
-    const marker = runRoleMarker(event.role);
+    const marker = sessionRoleMarker(event.role);
     const [first = '', ...rest] = eventText(event).split('\n');
     if (event.text === '') {
       out.push(marker);
@@ -254,60 +260,60 @@ export const runTranscriptMarkdown = (detail: Runs.RunDetail): ReadonlyArray<str
 };
 
 /**
- * The parked question for an `awaiting-input` run: the last `system`
+ * The parked question for an `awaiting-input` session: the last `system`
  * transcript line (the engine appends the `ask_user` question there).
- * @param detail - run detail
- * @returns question text, or undefined when the run is not parked
+ * @param detail - session detail
+ * @returns question text, or undefined when the session is not parked
  */
-export const parkedQuestion = (detail: Runs.RunDetail): string | undefined => {
+export const parkedQuestion = (detail: Sessions.SessionDetail): string | undefined => {
   if (detail.summary.status !== 'awaiting-input') return undefined;
   return detail.events.findLast((event) => event.role === 'system')?.text;
 };
 
 /**
  * Live-state suffix for the status line: `live` while running, a call to
- * action while parked, undefined once the run settles.
- * @param status - run status, if loaded
+ * action while parked, undefined once the session settles.
+ * @param status - session status, if loaded
  * @returns suffix copy, or undefined when not live
  */
 export const liveNote = (status: string | undefined): string | undefined =>
   status === 'awaiting-input'
     ? 'waiting for your answer'
-    : isLiveRunStatus(status)
+    : isLiveSessionStatus(status)
       ? 'live'
       : undefined;
 
 /** One detail-sidebar metadata row: a dim label plus the value beside it. */
-export interface RunMetaRow {
+export interface SessionMetaRow {
   readonly label: string;
   readonly value: string;
 }
 
-/** Placeholder for a value the run never set, so an unset field keeps its row. */
-export const RUN_META_NONE = '—';
+/** Placeholder for a value the session never set, so an unset field keeps its row. */
+export const SESSION_META_NONE = '—';
 
 /**
  * Sidebar panel width the detail page renders, borders and padding
  * included. The app sizes the column from this so the two cannot drift.
  */
-export const RUN_SIDEBAR_WIDTH = 36;
+export const SESSION_SIDEBAR_WIDTH = 36;
 
 /**
  * Content columns inside the sidebar (its width minus both borders and
  * both padding cells). Every value is clipped against this so a long
  * model pin or timestamp never wraps and pushes the action menu down.
  */
-export const RUN_META_COLUMNS = RUN_SIDEBAR_WIDTH - 4;
+export const SESSION_META_COLUMNS = SESSION_SIDEBAR_WIDTH - 4;
 
 /**
  * Columns the label column occupies. Labels are padded to it so every
  * value starts on the same column and the sidebar reads as a table
- * instead of a run of `label value` pairs of drifting widths.
+ * instead of a session of `label value` pairs of drifting widths.
  */
-export const RUN_META_LABEL_COLUMNS = 8;
+export const SESSION_META_LABEL_COLUMNS = 8;
 
 /** Columns a row's value may spend: the rest of the sidebar content. */
-export const RUN_META_VALUE_COLUMNS = RUN_META_COLUMNS - RUN_META_LABEL_COLUMNS - 1;
+export const SESSION_META_VALUE_COLUMNS = SESSION_META_COLUMNS - SESSION_META_LABEL_COLUMNS - 1;
 
 /**
  * Clip one free-text metadata value to `max` characters, marking the
@@ -318,46 +324,48 @@ export const RUN_META_VALUE_COLUMNS = RUN_META_COLUMNS - RUN_META_LABEL_COLUMNS 
  * @param max - characters the value may spend
  * @returns clipped value
  */
-export const clipRunMetaValue = (value: string, max: number): string =>
+export const clipSessionMetaValue = (value: string, max: number): string =>
   value.length <= max ? value : `${value.slice(0, Math.max(max - 1, 1))}…`;
 
 /**
  * Compact an ISO timestamp for the sidebar: `2026-01-01T10:00:00.000Z`
  * becomes `2026-01-01 10:00`. Textual on purpose — no `Date`, no
  * timezone shift — and anything unparseable is returned as-is.
- * @param value - ISO timestamp from the run
+ * @param value - ISO timestamp from the session
  * @returns compact timestamp
  */
-export const shortRunTimestamp = (value: string): string =>
+export const shortSessionTimestamp = (value: string): string =>
   /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(value)?.[0]?.replace('T', ' ') ?? value;
 
 /**
  * Sidebar metadata for the detail page: the model's pin, the bound
  * spec, the thinking level, the tool allowlist, both timestamps,
- * and the run id. The status badge, the live progress line, and the
+ * and the session id. The status badge, the live progress line, and the
  * initial prompt are rendered by their own components, so they are
  * deliberately absent here. Unset optional values render as
- * {@link RUN_META_NONE} so the labels never reflow, labels are padded
- * to {@link RUN_META_LABEL_COLUMNS} so every value starts on the same
+ * {@link SESSION_META_NONE} so the labels never reflow, labels are padded
+ * to {@link SESSION_META_LABEL_COLUMNS} so every value starts on the same
  * column, and values are clipped to the sidebar so each row stays one
  * line. Pure — the sidebar component and its tests share one
  * projection.
- * @param summary - run summary
+ * @param summary - session summary
  * @returns metadata rows in display order
  */
-export const runMetaRows = (summary: Runs.RunSummary): ReadonlyArray<RunMetaRow> => {
+export const sessionMetaRows = (
+  summary: Sessions.SessionSummary,
+): ReadonlyArray<SessionMetaRow> => {
   /** One row: placeholder an unset value, then clip it to the value column. */
-  const row = (label: string, raw: string): RunMetaRow => ({
+  const row = (label: string, raw: string): SessionMetaRow => ({
     label,
-    value: clipRunMetaValue(raw === '' ? RUN_META_NONE : raw, RUN_META_VALUE_COLUMNS),
+    value: clipSessionMetaValue(raw === '' ? SESSION_META_NONE : raw, SESSION_META_VALUE_COLUMNS),
   });
   return [
     row('model', summary.model),
     row('spec', summary.spec),
     row('thinking', summary.thinking),
     row('tools', summary.tools.join(', ')),
-    row('created', shortRunTimestamp(summary.created)),
-    row('updated', shortRunTimestamp(summary.updated)),
+    row('created', shortSessionTimestamp(summary.created)),
+    row('updated', shortSessionTimestamp(summary.updated)),
     row('id', summary.id),
   ];
 };

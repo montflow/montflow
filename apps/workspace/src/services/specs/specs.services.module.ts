@@ -2,9 +2,9 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for spec files; both go away with the FileSystem migration.
 import { join } from 'node:path';
-import type { RunDetail as EngineRunDetail } from '@montflow/pi-runs';
+import type { SessionDetail as EngineSessionDetail } from '@montflow/pi-sessions';
 import { Data, Effect } from 'effect';
-import * as Runs from '../runs/index.js';
+import * as Sessions from '../sessions/index.js';
 
 /**
  * Lazy handle to the pi-specs runtime. Static imports are type-only
@@ -130,7 +130,7 @@ export interface SpecSummary {
   readonly description: string;
   readonly state: string;
   readonly status: string;
-  /** True when a live run is bound to this spec. */
+  /** True when a live session is bound to this spec. */
   readonly active: boolean;
   readonly total: number;
   readonly complete: number;
@@ -258,18 +258,22 @@ const summarize = (
 };
 
 /**
- * Spec slugs with a live run bound: persisted runs whose `spec` is
- * set and whose id is in the runner's live registry. A missing runs store
+ * Spec slugs with a live session bound: persisted sessions whose `spec` is
+ * set and whose id is in the runner's live registry. A missing sessions store
  * or an unbuilt runtime reads as empty, never an error.
- * @param root - workspace root (runs store and runner owner)
+ * @param root - workspace root (sessions store and runner owner)
  * @returns Effect resolving to the active spec slugs
  */
 export const activeSpecIds = (root: string): Effect.Effect<ReadonlySet<string>> =>
   Effect.gen(function* () {
-    const runs = yield* Runs.fetchRuns(root).pipe(Effect.orElseSucceed(() => []));
-    const live = yield* Runs.liveRunIds(root).pipe(Effect.orElseSucceed(() => new Set<string>()));
+    const sessions = yield* Sessions.fetchSessions(root).pipe(Effect.orElseSucceed(() => []));
+    const live = yield* Sessions.liveSessionIds(root).pipe(
+      Effect.orElseSucceed(() => new Set<string>()),
+    );
     return new Set(
-      runs.filter((run) => run.spec !== '' && live.has(run.id)).map((run) => run.spec),
+      sessions
+        .filter((session) => session.spec !== '' && live.has(session.id))
+        .map((session) => session.spec),
     );
   });
 
@@ -386,7 +390,7 @@ export const loadSpec = (root: string, id: string): Effect.Effect<SpecDetail, st
 /**
  * Raw spec directory names under the specs root, regardless of
  * decode validity. Used to snapshot the store at dispatch and to find the
- * spec an author run created after it settles. Dotfiles are skipped.
+ * spec an author session created after it settles. Dotfiles are skipped.
  * @param root - workspace root (specs store owner)
  * @returns Effect resolving to directory names (empty when the store is missing)
  */
@@ -399,12 +403,12 @@ export const rawSpecIds = (root: string): Effect.Effect<ReadonlyArray<string>> =
   );
 
 /**
- * Tool allowlist for a spec-author run: the standard workspace set plus
+ * Tool allowlist for a spec-author session: the standard workspace set plus
  * `bash`, so the agent can run the mechanical checker before finishing.
- * `@montflow/pi-runs` unions the interaction tools (`ask_user` /
+ * `@montflow/pi-sessions` unions the interaction tools (`ask_user` /
  * `notify_user`) into whatever allowlist is passed.
  */
-export const SPEC_RUN_TOOLS = ['read', 'write', 'edit', 'bash'] as const;
+export const SPEC_SESSION_TOOLS = ['read', 'write', 'edit', 'bash'] as const;
 
 /** One transcript line, shared by the engine detail and the dashboard row. */
 interface TranscriptLine {
@@ -413,27 +417,27 @@ interface TranscriptLine {
 }
 
 /**
- * Final assistant text from a settled run's transcript, or undefined when
- * the run produced no assistant turn.
+ * Final assistant text from a settled session's transcript, or undefined when
+ * the session produced no assistant turn.
  * @param events - stored transcript events
  * @returns last assistant text, if any
  */
 export const finalAssistantText = (events: ReadonlyArray<TranscriptLine>): string | undefined =>
   events.findLast((event) => event.role === 'assistant')?.text;
 
-/** How a settled author run's spec was resolved. */
+/** How a settled author session's spec was resolved. */
 export type AuthoredSpecPick =
   | { readonly kind: 'one'; readonly id: string }
   | { readonly kind: 'ambiguous'; readonly ids: ReadonlyArray<string> }
   | { readonly kind: 'none' };
 
 /**
- * Resolve the spec a settled author run created. Prefers the fresh
- * spec named in the run's final reply — correlating concurrent authors
- * to their own run — and falls back to the name diff only when exactly one
+ * Resolve the spec a settled author session created. Prefers the fresh
+ * spec named in the session's final reply — correlating concurrent authors
+ * to their own session — and falls back to the name diff only when exactly one
  * fresh spec exists (unambiguous).
- * @param reply - final assistant text from the run, if any
- * @param fresh - spec directory ids added since the run was dispatched
+ * @param reply - final assistant text from the session, if any
+ * @param fresh - spec directory ids added since the session was dispatched
  * @returns the chosen spec, an ambiguity, or none
  */
 export const pickAuthoredSpec = (
@@ -454,25 +458,25 @@ export const pickAuthoredSpec = (
 };
 
 /**
- * TUI callbacks for a dispatched author run's completion: the fresh
- * spec was found (refresh + open its detail), or the run settled
- * without one (surface the reason). The run id lets the TUI clear only the
- * matching dispatched-run keybind target.
+ * TUI callbacks for a dispatched author session's completion: the fresh
+ * spec was found (refresh + open its detail), or the session settled
+ * without one (surface the reason). The session id lets the TUI clear only the
+ * matching dispatched-session keybind target.
  */
 export interface BeginFlowHooks {
-  /** Fresh spec found after the author run settled. */
-  readonly onSpecCreated?: ((specId: string, runId: string) => void) | undefined;
-  /** Author run settled without creating a spec. */
-  readonly onSpecFailed?: ((message: string, runId: string) => void) | undefined;
+  /** Fresh spec found after the author session settled. */
+  readonly onSpecCreated?: ((specId: string, sessionId: string) => void) | undefined;
+  /** Author session settled without creating a spec. */
+  readonly onSpecFailed?: ((message: string, sessionId: string) => void) | undefined;
 }
 
 /**
- * Completion hook for a dispatched author run: resolve the spec the run
+ * Completion hook for a dispatched author session: resolve the spec the session
  * authored (reply-correlated, name-diff fallback) and notify the hooks.
- * Exported so a resumed author run can re-attach the same hook through
- * `Runs.resumeRun` after an app restart.
+ * Exported so a resumed author session can re-attach the same hook through
+ * `Sessions.resumeSession` after an app restart.
  * @param root - workspace root (specs store owner)
- * @param runId - the author run id
+ * @param sessionId - the author session id
  * @param beforeIds - spec directory ids snapshotted at dispatch, or undefined after a restart
  * @param hooks - TUI completion callbacks
  * @returns the `onSettled` hook
@@ -480,90 +484,90 @@ export interface BeginFlowHooks {
 export const specAuthorCompletion =
   (
     root: string,
-    runId: string,
+    sessionId: string,
     beforeIds: ReadonlyArray<string> | undefined,
     hooks?: BeginFlowHooks,
-  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  ): ((detail: EngineSessionDetail) => Effect.Effect<void>) =>
   (detail) =>
     Effect.gen(function* () {
       const afterIds = yield* rawSpecIds(root);
       const freshIds = afterIds.filter((id) => !(beforeIds ?? []).includes(id));
       const pick = pickAuthoredSpec(finalAssistantText(detail.events), freshIds);
       if (pick.kind === 'one') {
-        hooks?.onSpecCreated?.(pick.id, runId);
+        hooks?.onSpecCreated?.(pick.id, sessionId);
         return;
       }
       if (pick.kind === 'ambiguous') {
         hooks?.onSpecFailed?.(
-          `Run '${runId}' created several specs (${pick.ids.join(', ')}) — open the one you want from the list.`,
-          runId,
+          `Session '${sessionId}' created several specs (${pick.ids.join(', ')}) — open the one you want from the list.`,
+          sessionId,
         );
         return;
       }
       hooks?.onSpecFailed?.(
-        `Run '${runId}' finished without creating a spec — try describing it differently.`,
-        runId,
+        `Session '${sessionId}' finished without creating a spec — try describing it differently.`,
+        sessionId,
       );
     });
 
-/** Inputs for dispatching a spec-author run. */
+/** Inputs for dispatching a spec-author session. */
 export interface BeginSpecInput {
   /** The user's spec request. */
   readonly description: string;
-  /** `provider/model-id` pin for the author run, if any. */
+  /** `provider/model-id` pin for the author session, if any. */
   readonly modelLabel?: string | undefined;
   /** TUI completion callbacks, if any. */
   readonly hooks?: BeginFlowHooks | undefined;
 }
 
 /**
- * Begin a spec from the workspace: gate on the runs extension, snapshot
- * the specs store, dispatch an author run through the pi-runs engine
- * with the authoring preprompt, and return its id. The run may park on
+ * Begin a spec from the workspace: gate on the sessions extension, snapshot
+ * the specs store, dispatch an author session through the pi-sessions engine
+ * with the authoring preprompt, and return its id. The session may park on
  * `ask_user` for the user to answer; on settle,
  * {@link specAuthorCompletion} correlates the fresh spec to this
- * run's final reply. The run, not this flow, writes the spec.
+ * session's final reply. The session, not this flow, writes the spec.
  * @param root - workspace root (specs store owner)
  * @param input - spec request, optional model pin, and completion hooks
- * @returns Effect resolving to the dispatched run id, failing with displayable message
+ * @returns Effect resolving to the dispatched session id, failing with displayable message
  */
 export const beginSpec = (
   root: string,
   input: BeginSpecInput,
-): Effect.Effect<{ readonly runId: string }, string> =>
+): Effect.Effect<{ readonly sessionId: string }, string> =>
   loadPiSpecs().pipe(
     Effect.mapError((error) => error.message),
     Effect.flatMap((libs) => {
       const prompt = libs.Prompt.buildAuthorPrompt(input.description);
       return Effect.gen(function* () {
-        const installed = yield* Runs.runsExtensionInstalled(root);
-        if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+        const installed = yield* Sessions.sessionsExtensionInstalled(root);
+        if (!installed) return yield* Effect.fail(Sessions.SESSIONS_EXTENSION_INSTALL_HINT);
         const beforeIds = yield* rawSpecIds(root);
-        const runId = yield* Runs.newRunId('author-spec');
-        yield* Runs.startRun(root, {
-          id: runId,
+        const sessionId = yield* Sessions.newSessionId('author-spec');
+        yield* Sessions.startSession(root, {
+          id: sessionId,
           name: `Author spec: ${input.description.trim().slice(0, 72)}`,
           prompt,
           model: input.modelLabel,
-          tools: [...SPEC_RUN_TOOLS],
-          onSettled: specAuthorCompletion(root, runId, beforeIds, input.hooks),
+          tools: [...SPEC_SESSION_TOOLS],
+          onSettled: specAuthorCompletion(root, sessionId, beforeIds, input.hooks),
         });
-        return { runId };
+        return { sessionId };
       });
     }),
   );
 
 /**
- * Tool allowlist for a spec-execution run. Same shape as the author run —
+ * Tool allowlist for a spec-execution session. Same shape as the author session —
  * `bash` so the orchestrator can run the mechanical checker — plus the
- * `run_*` tools it needs to spawn and supervise worker runs. An explicit
- * allowlist filters extension tools too, so {@link Runs.RUN_TOOL_NAMES}
+ * `session_*` tools it needs to spawn and supervise worker sessions. An explicit
+ * allowlist filters extension tools too, so {@link Sessions.SESSION_TOOL_NAMES}
  * must be named or the orchestrator cannot dispatch.
  */
 export const SPEC_EXECUTE_TOOLS = ['read', 'write', 'edit', 'bash'] as const;
 
 /**
- * Render the state context a resume run needs: derived state, the active
+ * Render the state context a resume session needs: derived state, the active
  * phase, every task with its type and status, and the convention link of
  * each phase's review task to its round (marking a missing round). Built
  * from the on-disk snapshot so the orchestrator starts from the files,
@@ -626,68 +630,74 @@ export const buildResumeContext = (
 };
 
 /**
- * TUI callback for a dispatched execute run's completion: the run settled,
+ * TUI callback for a dispatched execute session's completion: the session settled,
  * so the TUI refreshes the spec and toasts the outcome. Absent in headless
  * tests.
  */
 export interface ExecuteFlowHooks {
-  /** Resume run settled; `message` is a one-line outcome for the toast. */
-  readonly onSpecSettled?: ((specId: string, runId: string, message: string) => void) | undefined;
+  /** Resume session settled; `message` is a one-line outcome for the toast. */
+  readonly onSpecSettled?:
+    | ((specId: string, sessionId: string, message: string) => void)
+    | undefined;
 }
 
 /**
- * Completion hook for a dispatched resume run: report the outcome to the
- * TUI so the spec detail and runs list refresh. The run writes the spec
+ * Completion hook for a dispatched resume session: report the outcome to the
+ * TUI so the spec detail and sessions list refresh. The session writes the spec
  * files; this hook never touches them.
- * @param specId - the spec the run executes
- * @param runId - the resume run id
+ * @param specId - the spec the session executes
+ * @param sessionId - the resume session id
  * @param hooks - TUI completion callbacks
  * @returns the `onSettled` hook
  */
 export const specExecuteCompletion =
   (
     specId: string,
-    runId: string,
+    sessionId: string,
     hooks?: ExecuteFlowHooks,
-  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  ): ((detail: EngineSessionDetail) => Effect.Effect<void>) =>
   (detail) =>
     Effect.sync(() => {
       const outcome = detail.receipt?.outcome ?? 'done';
       const summary = detail.receipt?.summary ?? '';
-      hooks?.onSpecSettled?.(specId, runId, `Run '${runId}' ${outcome}: ${summary}`.trim());
+      hooks?.onSpecSettled?.(
+        specId,
+        sessionId,
+        `Session '${sessionId}' ${outcome}: ${summary}`.trim(),
+      );
     });
 
-/** Inputs for dispatching a spec-execution run. */
+/** Inputs for dispatching a spec-execution session. */
 export interface ExecuteSpecInput {
   /** Spec directory slug to execute. */
   readonly id: string;
-  /** `provider/model-id` pin for the resume run, if any. */
+  /** `provider/model-id` pin for the resume session, if any. */
   readonly modelLabel?: string | undefined;
   /** TUI completion callbacks, if any. */
   readonly hooks?: ExecuteFlowHooks | undefined;
 }
 
 /**
- * Execute a spec from the workspace: gate on the runs extension, read the
+ * Execute a spec from the workspace: gate on the sessions extension, read the
  * spec snapshot, build the resume prompt from its state, and dispatch a
- * resume run through the pi-runs engine tagged with `spec` so the lifecycle
- * reads `in-progress`. The run orchestrates the phases (closing each with its
+ * resume session through the pi-sessions engine tagged with `spec` so the lifecycle
+ * reads `in-progress`. The session orchestrates the phases (closing each with its
  * review round) and may park on `ask_user`; on settle,
  * {@link specExecuteCompletion} refreshes the TUI.
- * @param root - workspace root (specs and runs store owner)
+ * @param root - workspace root (specs and sessions store owner)
  * @param input - spec id, optional model pin, and completion hooks
- * @returns Effect resolving to the dispatched run id, failing with displayable message
+ * @returns Effect resolving to the dispatched session id, failing with displayable message
  */
 export const executeSpec = (
   root: string,
   input: ExecuteSpecInput,
-): Effect.Effect<{ readonly runId: string }, string> =>
+): Effect.Effect<{ readonly sessionId: string }, string> =>
   loadPiSpecs().pipe(
     Effect.mapError((error) => error.message),
     Effect.flatMap((libs) =>
       Effect.gen(function* () {
-        const installed = yield* Runs.runsExtensionInstalled(root);
-        if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+        const installed = yield* Sessions.sessionsExtensionInstalled(root);
+        if (!installed) return yield* Effect.fail(Sessions.SESSIONS_EXTENSION_INSTALL_HINT);
         const files = yield* Effect.tryPromise({
           try: () => readSnapshot(root, input.id),
           catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
@@ -697,17 +707,17 @@ export const executeSpec = (
           input.id,
           buildResumeContext(libs, input.id, files, review),
         );
-        const runId = yield* Runs.newRunId(`execute-${input.id}`);
-        yield* Runs.startRun(root, {
-          id: runId,
+        const sessionId = yield* Sessions.newSessionId(`execute-${input.id}`);
+        yield* Sessions.startSession(root, {
+          id: sessionId,
           name: `Execute spec: ${input.id}`,
           prompt,
           model: input.modelLabel,
-          tools: [...SPEC_EXECUTE_TOOLS, ...Runs.RUN_TOOL_NAMES],
+          tools: [...SPEC_EXECUTE_TOOLS, ...Sessions.SESSION_TOOL_NAMES],
           spec: input.id,
-          onSettled: specExecuteCompletion(input.id, runId, input.hooks),
+          onSettled: specExecuteCompletion(input.id, sessionId, input.hooks),
         });
-        return { runId };
+        return { sessionId };
       }),
     ),
   );

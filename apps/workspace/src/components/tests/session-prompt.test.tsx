@@ -9,9 +9,9 @@ import {
   promptPaneColumns,
   promptPaneRows,
   promptPaneTextRows,
-  runTranscriptMarkdown,
-} from '../run-detail-lines.js';
-import { RunPrompt } from '../run-prompt.js';
+  sessionTranscriptMarkdown,
+} from '../session-detail-lines.js';
+import { SessionPrompt } from '../session-prompt.js';
 
 type Setup = Awaited<ReturnType<typeof testRender>>;
 
@@ -21,9 +21,9 @@ afterEach(() => {
   for (const setup of setups.splice(0)) setup.renderer.destroy();
 });
 
-const DIR = '/home/daniel/dev/montflow/main/.agents/@montflow/runs/prompts-verify-tests-v2';
+const DIR = '/home/daniel/dev/montflow/main/.agents/@montflow/sessions/prompts-verify-tests-v2';
 
-/** The run's own transcript: one JSON event per line, written by the store. */
+/** The session's own transcript: one JSON event per line, written by the store. */
 const realEvents: ReadonlyArray<{ seq: number; role: string; text: string }> = readFileSync(
   `${DIR}/session.jsonl`,
   'utf8',
@@ -32,10 +32,10 @@ const realEvents: ReadonlyArray<{ seq: number; role: string; text: string }> = r
   .filter((line) => line.trim() !== '')
   .map((line) => JSON.parse(line));
 
-/** A run whose prompt is a real specification-sized block of text. */
+/** A session whose prompt is a real specification-sized block of text. */
 const realDetail = {
   summary: {
-    id: 'run-1',
+    id: 'session-1',
     name: 'prompts-verify-tests-v2',
     description: 'x',
     status: 'done',
@@ -86,7 +86,7 @@ const renderPromptPane = (
           minHeight={0}
         >
           <Panel title="Prompt" selected={options?.focused ?? false}>
-            <RunPrompt
+            <SessionPrompt
               text={detail.summary.prompt}
               columns={promptPaneColumns(width)}
               rows={Math.max(promptPaneRows(height, width, detail.summary.prompt) - 3, 1)}
@@ -173,7 +173,7 @@ describe('transcript sizing with the prompt pane', () => {
   });
 
   test('a real transcript is far larger than any pane, so the budget is a window', () => {
-    expect(runTranscriptMarkdown(realDetail).length).toBeGreaterThan(
+    expect(sessionTranscriptMarkdown(realDetail).length).toBeGreaterThan(
       detailBodyRows(30, 110, realDetail.summary.prompt),
     );
   });

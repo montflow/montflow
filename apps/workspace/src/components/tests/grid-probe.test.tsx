@@ -60,7 +60,7 @@ describe('full grid probe', () => {
                 </Panel>
               </box>
               <box flexDirection="column" flexGrow={5} flexBasis={0} minHeight={0} gap={1}>
-                <Panel title="[r] Runs" selected={false} grow={3}>
+                <Panel title="[r] Sessions" selected={false} grow={3}>
                   <PanelMessage message="[unimplemented]" />
                 </Panel>
                 <Panel title="[f] Profiles" selected grow={2}>

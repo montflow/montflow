@@ -3,17 +3,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as Vitest from '@effect/vitest';
 import { Effect } from 'effect';
-import * as Runs from '../../runs/index.js';
+import * as Sessions from '../../sessions/index.js';
 import * as Skills from '../index.js';
-import { makeHarness, poll, settleEvent } from '../../runs/tests/harness.js';
+import { makeHarness, poll, settleEvent } from '../../sessions/tests/harness.js';
 
 /** Unique scratch root per test — no shared state across files. */
-const freshRoot = (): Promise<string> => mkdtemp(join(tmpdir(), 'workspace-skill-run-'));
+const freshRoot = (): Promise<string> => mkdtemp(join(tmpdir(), 'workspace-skill-session-'));
 
 /** Skill directory for a scratch root. */
 const skillDir = (root: string, id: string): string => join(root, '.agents', 'skills', id);
 
-/** Seed one `SKILL.md` the way the editor run would. */
+/** Seed one `SKILL.md` the way the editor session would. */
 const writeSkill = (root: string, id: string, description: string): Promise<void> =>
   mkdir(skillDir(root, id), { recursive: true }).then(() =>
     writeFile(
@@ -62,39 +62,39 @@ const ports = (
 });
 
 Vitest.afterEach(async () => {
-  await Runs.resetRunnerRuntimes();
-  Runs.setSessionFactoryLayer(undefined);
-  Runs.setExtensionProbe(undefined);
-  Skills.resetDispatchedRun();
-  Skills.resetDispatchedModifyRun();
+  await Sessions.resetSessionRuntimes();
+  Sessions.setSessionFactoryLayer(undefined);
+  Sessions.setExtensionProbe(undefined);
+  Skills.resetDispatchedSession();
+  Skills.resetDispatchedModifySession();
 });
 
 Vitest.describe('Skills.runCreateFlow agentic dispatch', () => {
-  Vitest.it.live('gates on the runs extension without dispatching', () =>
+  Vitest.it.live('gates on the sessions extension without dispatching', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(false));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(false));
       const root = yield* Effect.promise(freshRoot);
       const error = yield* Skills.runCreateFlow(root, ports('agent')).pipe(Effect.flip);
-      Vitest.expect(error).toBe(Runs.RUNS_EXTENSION_INSTALL_HINT);
+      Vitest.expect(error).toBe(Sessions.SESSIONS_EXTENSION_INSTALL_HINT);
       Vitest.expect(harness.sessions.length).toBe(0);
     }),
   );
 
-  Vitest.it.live('dispatches an author run and resolves the dispatched result', () =>
+  Vitest.it.live('dispatches an author session and resolves the dispatched result', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       const result = yield* Skills.runCreateFlow(root, ports('agent'));
       Vitest.expect(result?.kind).toBe('dispatched');
-      const runId = result?.kind === 'dispatched' ? result.runId : '';
-      Vitest.expect(runId).toMatch(/^create-skill-/);
+      const sessionId = result?.kind === 'dispatched' ? result.sessionId : '';
+      Vitest.expect(sessionId).toMatch(/^create-skill-/);
       const session = harness.sessions[0];
       if (session === undefined) return yield* Effect.fail('session not created');
-      Vitest.expect(session.request.tools).toStrictEqual([...Runs.DEFAULT_RUN_TOOLS]);
+      Vitest.expect(session.request.tools).toStrictEqual([...Sessions.DEFAULT_SESSION_TOOLS]);
       const prompt = yield* poll(
         Effect.sync(() => session.prompts[0]),
         (value) => value !== undefined,
@@ -107,17 +107,17 @@ Vitest.describe('Skills.runCreateFlow agentic dispatch', () => {
   Vitest.it.live('fires the completion hook with the fresh skill on settle', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       const created: Array<readonly [string, string]> = [];
       const failed: Array<string> = [];
       const result = yield* Skills.runCreateFlow(root, ports('agent'), {
-        onSkillCreated: (skill, runId) => created.push([skill.id, runId]),
+        onSkillCreated: (skill, sessionId) => created.push([skill.id, sessionId]),
         onSkillFailed: (message) => failed.push(message),
       });
       Vitest.expect(result?.kind).toBe('dispatched');
-      const runId = result?.kind === 'dispatched' ? result.runId : '';
+      const sessionId = result?.kind === 'dispatched' ? result.sessionId : '';
       yield* Effect.promise(() => writeSkill(root, 'typescript-reviewer', 'reviews TypeScript'));
       const session = harness.sessions[0];
       if (session === undefined) return yield* Effect.fail('session not created');
@@ -126,7 +126,7 @@ Vitest.describe('Skills.runCreateFlow agentic dispatch', () => {
         Effect.sync(() => created.length + failed.length),
         (count) => count > 0,
       );
-      Vitest.expect(created).toStrictEqual([['typescript-reviewer', runId]]);
+      Vitest.expect(created).toStrictEqual([['typescript-reviewer', sessionId]]);
       Vitest.expect(failed).toStrictEqual([]);
     }),
   );
@@ -134,8 +134,8 @@ Vitest.describe('Skills.runCreateFlow agentic dispatch', () => {
   Vitest.it.live('reports a settle with no fresh skill', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       const failed: Array<string> = [];
       yield* Skills.runCreateFlow(root, ports('agent'), {
@@ -155,7 +155,7 @@ Vitest.describe('Skills.runCreateFlow agentic dispatch', () => {
 
   Vitest.it.live('resolves undefined on a real cancel without dispatching', () =>
     Effect.gen(function* () {
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       const result = yield* Skills.runCreateFlow(root, ports('cancel'));
       Vitest.expect(result).toBeUndefined();
@@ -166,7 +166,7 @@ Vitest.describe('Skills.runCreateFlow agentic dispatch', () => {
 Vitest.describe('Skills.runCreateFlow manual create', () => {
   Vitest.it.live('persists the manual skill and resolves the saved result', () =>
     Effect.gen(function* () {
-      Runs.setExtensionProbe(() => Effect.succeed(false));
+      Sessions.setExtensionProbe(() => Effect.succeed(false));
       const root = yield* Effect.promise(freshRoot);
       const result = yield* Skills.runCreateFlow(root, ports('manual'));
       Vitest.expect(result?.kind).toBe('saved');
@@ -178,33 +178,33 @@ Vitest.describe('Skills.runCreateFlow manual create', () => {
 });
 
 Vitest.describe('Skills.runModifyFlow agentic dispatch', () => {
-  Vitest.it.live('gates on the runs extension without dispatching', () =>
+  Vitest.it.live('gates on the sessions extension without dispatching', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(false));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(false));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writeSkill(root, 'reviewer', 'reviews TypeScript'));
       const error = yield* Skills.runModifyFlow(root, 'reviewer', ports('agent')).pipe(Effect.flip);
-      Vitest.expect(error).toBe(Runs.RUNS_EXTENSION_INSTALL_HINT);
+      Vitest.expect(error).toBe(Sessions.SESSIONS_EXTENSION_INSTALL_HINT);
       Vitest.expect(harness.sessions.length).toBe(0);
     }),
   );
 
-  Vitest.it.live('dispatches an editor run and resolves the dispatched result', () =>
+  Vitest.it.live('dispatches an editor session and resolves the dispatched result', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writeSkill(root, 'reviewer', 'reviews TypeScript'));
       const result = yield* Skills.runModifyFlow(root, 'reviewer', ports('agent'));
       Vitest.expect(result?.kind).toBe('dispatched');
-      const runId = result?.kind === 'dispatched' ? result.runId : '';
-      Vitest.expect(runId).toMatch(/^modify-skill-/);
+      const sessionId = result?.kind === 'dispatched' ? result.sessionId : '';
+      Vitest.expect(sessionId).toMatch(/^modify-skill-/);
       const session = harness.sessions[0];
       if (session === undefined) return yield* Effect.fail('session not created');
-      Vitest.expect(session.request.tools).toStrictEqual([...Runs.DEFAULT_RUN_TOOLS]);
+      Vitest.expect(session.request.tools).toStrictEqual([...Sessions.DEFAULT_SESSION_TOOLS]);
       const prompt = yield* poll(
         Effect.sync(() => session.prompts[0]),
         (value) => value !== undefined,
@@ -217,18 +217,18 @@ Vitest.describe('Skills.runModifyFlow agentic dispatch', () => {
   Vitest.it.live('fires the completion hook with the updated skill on settle', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writeSkill(root, 'reviewer', 'reviews TypeScript'));
       const modified: Array<readonly [string, string]> = [];
       const failed: Array<string> = [];
       const result = yield* Skills.runModifyFlow(root, 'reviewer', ports('agent'), {
-        onSkillModified: (skill, runId) => modified.push([skill.id, runId]),
+        onSkillModified: (skill, sessionId) => modified.push([skill.id, sessionId]),
         onSkillFailed: (message) => failed.push(message),
       });
       Vitest.expect(result?.kind).toBe('dispatched');
-      const runId = result?.kind === 'dispatched' ? result.runId : '';
+      const sessionId = result?.kind === 'dispatched' ? result.sessionId : '';
       yield* Effect.promise(() => writeSkill(root, 'reviewer', 'reviews TypeScript and tests'));
       const session = harness.sessions[0];
       if (session === undefined) return yield* Effect.fail('session not created');
@@ -237,7 +237,7 @@ Vitest.describe('Skills.runModifyFlow agentic dispatch', () => {
         Effect.sync(() => modified.length + failed.length),
         (count) => count > 0,
       );
-      Vitest.expect(modified).toStrictEqual([['reviewer', runId]]);
+      Vitest.expect(modified).toStrictEqual([['reviewer', sessionId]]);
       Vitest.expect(failed).toStrictEqual([]);
     }),
   );
@@ -245,8 +245,8 @@ Vitest.describe('Skills.runModifyFlow agentic dispatch', () => {
   Vitest.it.live('reports a settle that left the skill unchanged', () =>
     Effect.gen(function* () {
       const harness = makeHarness();
-      Runs.setSessionFactoryLayer(harness.layer);
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writeSkill(root, 'reviewer', 'reviews TypeScript'));
       const failed: Array<string> = [];
@@ -267,7 +267,7 @@ Vitest.describe('Skills.runModifyFlow agentic dispatch', () => {
 
   Vitest.it.live('resolves undefined on a real cancel without dispatching', () =>
     Effect.gen(function* () {
-      Runs.setExtensionProbe(() => Effect.succeed(true));
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writeSkill(root, 'reviewer', 'reviews TypeScript'));
       const result = yield* Skills.runModifyFlow(root, 'reviewer', ports('cancel'));
@@ -279,7 +279,7 @@ Vitest.describe('Skills.runModifyFlow agentic dispatch', () => {
 Vitest.describe('Skills.runModifyFlow manual modify', () => {
   Vitest.it.live('persists the manual edit and resolves the saved result', () =>
     Effect.gen(function* () {
-      Runs.setExtensionProbe(() => Effect.succeed(false));
+      Sessions.setExtensionProbe(() => Effect.succeed(false));
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() => writeSkill(root, 'reviewer', 'reviews TypeScript'));
       const result = yield* Skills.runModifyFlow(root, 'reviewer', ports('manual'));

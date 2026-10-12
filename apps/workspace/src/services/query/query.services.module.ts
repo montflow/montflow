@@ -21,11 +21,11 @@ import {
   type PromptsPhase,
 } from '../prompts/prompts.services.module.js';
 import {
-  fetchRuns,
-  runsInstalled,
-  type RunSummary,
-  type RunsPhase,
-} from '../runs/runs.services.module.js';
+  fetchSessions,
+  sessionsInstalled,
+  type SessionSummary,
+  type SessionsPhase,
+} from '../sessions/sessions.services.module.js';
 import {
   fetchSkills,
   isExtensionInstalled,
@@ -82,18 +82,18 @@ export interface PromptsList {
  */
 export const promptsKey = ['prompts'] as const;
 
-/** Cached runs-list snapshot behind the `runs` query key. */
-export interface RunsList {
+/** Cached sessions-list snapshot behind the `sessions` query key. */
+export interface SessionsList {
   readonly installed: boolean;
-  readonly rows: ReadonlyArray<RunSummary>;
+  readonly rows: ReadonlyArray<SessionSummary>;
 }
 
 /**
- * Query key for the workspace runs list. Mirrors `skillsKey` —
- * every runs read/write in `app.tsx` goes through this key so flow
+ * Query key for the workspace sessions list. Mirrors `skillsKey` —
+ * every sessions read/write in `app.tsx` goes through this key so flow
  * completions update the UI through the cache, never signals.
  */
-export const runsKey = ['runs'] as const;
+export const sessionsKey = ['sessions'] as const;
 
 /** Cached specs-list snapshot behind the `specs` query key. */
 export interface SpecsList {
@@ -230,25 +230,25 @@ export const fetchPromptsList = (
   );
 
 /**
- * Runs-list query bridge: same staged boot as `fetchSkillsList`
+ * Sessions-list query bridge: same staged boot as `fetchSkillsList`
  * (store-directory check, then the list read) as one TanStack query.
- * @param root - workspace root (runs store owner)
- * @param onPhase - Loader stage reporter (`extension`, then `runs`)
+ * @param root - workspace root (sessions store owner)
+ * @param onPhase - Loader stage reporter (`extension`, then `sessions`)
  * @returns Promise resolving to the list snapshot
  */
-export const fetchRunsList = (
+export const fetchSessionsList = (
   root: string,
-  onPhase: (phase: RunsPhase) => void,
-): Promise<RunsList> =>
-  runsInstalled(root).pipe(
+  onPhase: (phase: SessionsPhase) => void,
+): Promise<SessionsList> =>
+  sessionsInstalled(root).pipe(
     Effect.flatMap((installed) => {
       onPhase('extension');
       if (!installed) {
-        const empty: RunsList = { installed, rows: [] };
+        const empty: SessionsList = { installed, rows: [] };
         return Effect.succeed(empty);
       }
-      onPhase('runs');
-      return fetchRuns(root).pipe(
+      onPhase('sessions');
+      return fetchSessions(root).pipe(
         Effect.map((rows) => ({ installed, rows })),
         Effect.mapError((message) => new Error(message)),
       );

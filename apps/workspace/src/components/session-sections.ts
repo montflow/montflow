@@ -1,28 +1,28 @@
-import type { Runs } from '../services/index.js';
+import type { Sessions } from '../services/index.js';
 
 /**
- * True while a run belongs in the runs panel's always-visible Active
+ * True while a session belongs in the sessions panel's always-visible Active
  * section: queued (`pending`), live (`running`), or parked
- * (`awaiting-input`). Terminal runs are history and stay behind the
+ * (`awaiting-input`). Terminal sessions are history and stay behind the
  * `A` toggle.
- * @param status - run status
+ * @param status - session status
  * @returns active-section flag
  */
-export const isActiveRunStatus = (status: string): boolean =>
+export const isActiveSessionStatus = (status: string): boolean =>
   status === 'pending' || status === 'running' || status === 'awaiting-input';
 
 /**
- * Active run rows for the pinned section: the active statuses only, with
+ * Active session rows for the pinned section: the active statuses only, with
  * `running` ahead of the queue. Stable — store order is preserved within
  * each group so the list never reshuffles between live polls.
- * @param rows - filtered run rows
+ * @param rows - filtered session rows
  * @returns active rows, running first
  */
-export const activeRunRows = (
-  rows: ReadonlyArray<Runs.RunSummary>,
-): ReadonlyArray<Runs.RunSummary> => [
+export const activeSessionRows = (
+  rows: ReadonlyArray<Sessions.SessionSummary>,
+): ReadonlyArray<Sessions.SessionSummary> => [
   ...rows.filter((row) => row.status === 'running'),
-  ...rows.filter((row) => isActiveRunStatus(row.status) && row.status !== 'running'),
+  ...rows.filter((row) => isActiveSessionStatus(row.status) && row.status !== 'running'),
 ];
 
 /**
@@ -35,8 +35,8 @@ export const activeRunRows = (
  * @param showAll - whether the All section is expanded
  * @returns selectable rows in display order
  */
-export const runSelectableRows = (
-  active: ReadonlyArray<Runs.RunSummary>,
-  all: ReadonlyArray<Runs.RunSummary>,
+export const sessionSelectableRows = (
+  active: ReadonlyArray<Sessions.SessionSummary>,
+  all: ReadonlyArray<Sessions.SessionSummary>,
   showAll: boolean,
-): ReadonlyArray<Runs.RunSummary> => (showAll ? [...active, ...all] : active);
+): ReadonlyArray<Sessions.SessionSummary> => (showAll ? [...active, ...all] : active);

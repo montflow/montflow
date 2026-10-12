@@ -38,7 +38,7 @@ const matchesSubsequence = (haystack: string, needle: string): boolean => {
 /**
  * Fuse index over skill rows: name carries the most weight, then id,
  * then description. Typo-tolerant and location-independent — `psta`
- * finds `Cooking Pasta`, `tset` still finds `Effect Testing`. Runs
+ * finds `Cooking Pasta`, `tset` still finds `Effect Testing`. Sessions
  * loose on purpose: precision comes from the tier order in
  * {@link filterByQuery}, not the threshold.
  * @param rows - skill rows to index

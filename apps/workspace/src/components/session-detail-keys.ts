@@ -2,15 +2,15 @@ import type { DetailAction } from './detail-actions.js';
 import { Keybinds, formatKeybinds } from './keybinds.js';
 
 /** Detail body mode: truncated preview or scrollable full view. */
-export type RunDetailMode = 'preview' | 'view';
+export type SessionDetailMode = 'preview' | 'view';
 
 /**
- * Which run pane the keys act on: the metadata-and-actions column, the
+ * Which session pane the keys act on: the metadata-and-actions column, the
  * prompt above the transcript, or the transcript itself. Exactly one is
  * focused, so scroll and menu keys can only ever move what you are
  * looking at.
  */
-export type RunDetailFocus = 'details' | 'prompt' | 'transcript';
+export type SessionDetailFocus = 'details' | 'prompt' | 'transcript';
 
 /**
  * The panes the focus keys can reach, in cycle order. The prompt pane is
@@ -18,23 +18,23 @@ export type RunDetailFocus = 'details' | 'prompt' | 'transcript';
  * @param promptPane - true when the detail shows a prompt pane
  * @returns focusable panes in `tab` order
  */
-export const runFocusCycle = (promptPane: boolean): ReadonlyArray<RunDetailFocus> =>
+export const sessionFocusCycle = (promptPane: boolean): ReadonlyArray<SessionDetailFocus> =>
   promptPane ? ['details', 'prompt', 'transcript'] : ['details', 'transcript'];
 
 /**
- * True while a run is live: running or parked awaiting input. Terminal
+ * True while a session is live: running or parked awaiting input. Terminal
  * statuses (`done`/`failed`/`cancelled`) are not live.
- * @param status - run status, if loaded
+ * @param status - session status, if loaded
  * @returns live flag
  */
-export const isLiveRunStatus = (status: string | undefined): boolean =>
+export const isLiveSessionStatus = (status: string | undefined): boolean =>
   status === 'running' || status === 'awaiting-input';
 
 /**
- * One run-detail intent: the action a keypress performs. Keeps dispatch
+ * One session-detail intent: the action a keypress performs. Keeps dispatch
  * in `app.tsx` free of keystroke strings and testable without a renderer.
  */
-export type RunDetailIntent =
+export type SessionDetailIntent =
   | 'close'
   | 'quit'
   | 'toggle-view'
@@ -53,25 +53,25 @@ export type RunDetailIntent =
   | 'scroll-down';
 
 /**
- * Map a keypress to a run-detail intent. `j`/`k` scroll the transcript
+ * Map a keypress to a session-detail intent. `j`/`k` scroll the transcript
  * in both modes (the preview is a small window over the same
  * transcript), while `↑`/`↓` always walk the action menu — so paging
  * never hijacks the menu highlight. `s` steers and `a` answers — the
  * caller guards both by status. `x` is gated here on
- * {@link isLiveRunStatus} so the raw key never disagrees with the
- * menu/hint on a settled run. `esc` always closes the detail; `x` is
+ * {@link isLiveSessionStatus} so the raw key never disagrees with the
+ * menu/hint on a settled session. `esc` always closes the detail; `x` is
  * the sole interrupt route — D003's detail UI supersedes D001's
  * esc-interrupt touch-point.
  * @param key - pressed key (name plus raw sequence)
  * @param mode - preview or full-view mode
- * @param status - run status, if loaded
+ * @param status - session status, if loaded
  * @returns intent, or undefined when the key is unbound
  */
-export const runDetailIntent = (
+export const sessionDetailIntent = (
   key: { readonly name: string; readonly sequence: string },
-  mode: RunDetailMode,
+  mode: SessionDetailMode,
   status: string | undefined,
-): RunDetailIntent | undefined => {
+): SessionDetailIntent | undefined => {
   if (key.name === 'escape') return 'close';
   if (key.name === 'q') return 'quit';
   if (key.name === 'tab') return 'toggle-focus';
@@ -80,7 +80,7 @@ export const runDetailIntent = (
   if (key.sequence === 't') return 'focus-transcript';
   if (key.sequence === 'v') return 'toggle-view';
   if (key.sequence === 'R') return 'refresh';
-  if (key.sequence === 'x') return isLiveRunStatus(status) ? 'interrupt' : undefined;
+  if (key.sequence === 'x') return isLiveSessionStatus(status) ? 'interrupt' : undefined;
   if (key.sequence === 's') return 'steer';
   if (key.sequence === 'a') return 'answer';
   if (key.name === 'enter' || key.name === 'return') return 'activate';
@@ -92,17 +92,17 @@ export const runDetailIntent = (
 };
 
 /**
- * Action-menu rows for the open run detail: view toggle plus the live
+ * Action-menu rows for the open session detail: view toggle plus the live
  * controls (`s` steer while running, `x` interrupt while live, `a` answer
  * while parked) and back. Mirrors the keybinds so menu and keys never
  * drift.
- * @param status - run status, if loaded
+ * @param status - session status, if loaded
  * @param mode - preview or full-view mode
  * @returns menu actions in display order
  */
-export const runDetailActions = (
+export const sessionDetailActions = (
   status: string | undefined,
-  mode: RunDetailMode,
+  mode: SessionDetailMode,
 ): ReadonlyArray<DetailAction> => {
   const actions: Array<DetailAction> = [
     {
@@ -111,8 +111,9 @@ export const runDetailActions = (
       hint: 'v',
     },
   ];
-  if (status === 'running') actions.push({ id: 'steer', label: 'Steer run', hint: 's' });
-  if (isLiveRunStatus(status)) actions.push({ id: 'interrupt', label: 'Interrupt run', hint: 'x' });
+  if (status === 'running') actions.push({ id: 'steer', label: 'Steer session', hint: 's' });
+  if (isLiveSessionStatus(status))
+    actions.push({ id: 'interrupt', label: 'Interrupt session', hint: 'x' });
   if (status === 'awaiting-input')
     actions.push({ id: 'answer', label: 'Answer question', hint: 'a' });
   actions.push({ id: 'back', label: 'Back', hint: 'esc' });
@@ -120,21 +121,21 @@ export const runDetailActions = (
 };
 
 /**
- * Status-bar hint for the open run detail: the focus keys that jump to
+ * Status-bar hint for the open session detail: the focus keys that jump to
  * a pane (the main menu's model), the scroll keys for whichever pane
- * holds focus, the view toggle, and the live controls for the run's
+ * holds focus, the view toggle, and the live controls for the session's
  * current status. The scroll keys only appear when the focused pane can
  * actually scroll.
- * @param status - run status, if loaded
+ * @param status - session status, if loaded
  * @param mode - preview or full-view mode
  * @param focus - pane the keys act on
  * @param promptPane - true when the detail shows a prompt pane
  * @returns one-line hint copy
  */
-export const runDetailHint = (
+export const sessionDetailHint = (
   status: string | undefined,
-  mode: RunDetailMode,
-  focus: RunDetailFocus = 'details',
+  mode: SessionDetailMode,
+  focus: SessionDetailFocus = 'details',
   promptPane = false,
 ): string =>
   formatKeybinds([
@@ -146,7 +147,7 @@ export const runDetailHint = (
     ...(focus === 'details' ? [Keybinds.menuNavigate(), Keybinds.selectRow()] : []),
     mode === 'view' ? Keybinds.showPreview() : Keybinds.showFull(),
     ...(status === 'running' ? [Keybinds.steer()] : []),
-    ...(isLiveRunStatus(status) ? [Keybinds.interrupt()] : []),
+    ...(isLiveSessionStatus(status) ? [Keybinds.interrupt()] : []),
     ...(status === 'awaiting-input' ? [Keybinds.answer()] : []),
     Keybinds.refresh(),
     Keybinds.back(),

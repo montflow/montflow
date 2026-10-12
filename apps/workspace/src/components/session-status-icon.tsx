@@ -2,9 +2,9 @@
 import { Show, createSignal, onCleanup } from 'solid-js';
 import { FRAME_MS, LOADER_FRAMES } from './loader.js';
 import { palette } from './palette.js';
-import { runMarker } from './runs-panel.js';
+import { sessionMarker } from './sessions-panel.js';
 
-export interface RunStatusIconProps {
+export interface SessionStatusIconProps {
   readonly status: string;
   /**
    * Dim line under the badge: `live`, `waiting for your answer`. It
@@ -17,14 +17,14 @@ export interface RunStatusIconProps {
 }
 
 /**
- * Colour for one run status: accent while running, warn while parked
+ * Colour for one session status: accent while running, warn while parked
  * awaiting an answer, `good`/`bad` once settled, dim for pending,
  * cancelled, and anything unrecognised. The badge inverts the glyph
  * against this colour, so it carries the state at a glance.
- * @param status - run status
+ * @param status - session status
  * @returns palette colour
  */
-export const runStatusColor = (status: string): string => {
+export const sessionStatusColor = (status: string): string => {
   switch (status) {
     case 'running':
       return palette.accent;
@@ -40,16 +40,16 @@ export const runStatusColor = (status: string): string => {
 };
 
 /**
- * Run status badge: the status marker inverted inside a coloured chip,
+ * Session status badge: the status marker inverted inside a coloured chip,
  * the status word beside it in the same colour, and the note on its own
- * dim line underneath. Reuses the list `runMarker`, so the panel row
+ * dim line underneath. Reuses the list `sessionMarker`, so the panel row
  * and the detail badge never disagree on glyphs, and animates the
- * braille spinner for a `running` run on the raw interval every other
+ * braille spinner for a `running` session on the raw interval every other
  * spinner in the app uses.
- * @param props - run status, optional dim note, optional fixed frame
+ * @param props - session status, optional dim note, optional fixed frame
  * @returns status badge element
  */
-export const RunStatusIcon = (props: RunStatusIconProps) => {
+export const SessionStatusIcon = (props: SessionStatusIconProps) => {
   const [frame, setFrame] = createSignal(props.frame ?? 0);
   if (props.frame === undefined) {
     // oxlint-disable-next-line montflow/no-timers -- Loader pattern: Effect Clock hangs here.
@@ -61,13 +61,13 @@ export const RunStatusIcon = (props: RunStatusIconProps) => {
       clearInterval(timer);
     });
   }
-  const color = (): string => runStatusColor(props.status);
+  const color = (): string => sessionStatusColor(props.status);
 
   return (
     <box flexDirection="column" flexShrink={0}>
       <box flexDirection="row" alignItems="center" gap={1} flexShrink={0}>
         <box backgroundColor={color()} paddingLeft={1} paddingRight={1} flexShrink={0}>
-          <text style={{ fg: palette.bg }}>{runMarker(props.status, frame())}</text>
+          <text style={{ fg: palette.bg }}>{sessionMarker(props.status, frame())}</text>
         </box>
         <text style={{ fg: color() }}>{props.status}</text>
       </box>

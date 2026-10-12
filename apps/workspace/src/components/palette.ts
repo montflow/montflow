@@ -5,7 +5,7 @@
  * `highlight` is the lighter grey for selected rows, focused buttons, and the
  * footer bar. Semantic status colours (`good`/`bad`/`warn`) stay coloured so
  * state and glyphs remain readable — `warn` is the amber for attention states
- * (toast warnings, parked runs), never for success or failure.
+ * (toast warnings, parked sessions), never for success or failure.
  */
 export const palette = {
   bg: '#141414',

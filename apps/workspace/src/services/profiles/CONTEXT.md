@@ -54,14 +54,14 @@ Consequences:
   `MODIFY_PREPROMPT`) — the extension module owns the canonical, which
   is not exported through the package index
 - `generateFor` / `modifyFor` dispatch agentic create/modify through the
-  runs engine (`Runs.runsExtensionInstalled` gate, `Runs.startRun` with
+  sessions engine (`Sessions.sessionsExtensionInstalled` gate, `Sessions.startSession` with
   the author/editor prompt and the `read/write/edit` allowlist), record
-  the run id, and unwind the shared flow with `CANCELLED`;
-  `authorCompletion` correlates the fresh profile to the run's final
+  the session id, and unwind the shared flow with `CANCELLED`;
+  `authorCompletion` correlates the fresh profile to the session's final
   reply and `modifyCompletion` re-reads the named profile (raw-snapshot
   no-op check), re-encodes it via `saveProfile`, and fires the flow
   hooks. Both are re-usable as the `onSettled` hook passed to
-  `Runs.resumeRun` after a restart.
+  `Sessions.resumeSession` after a restart.
 - `runCreateFlow` / `runModifyFlow` workspace hosts (manual or agentic
   behind the TUI overlays); create and modify each resolve `saved` or
   `dispatched`

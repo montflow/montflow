@@ -46,12 +46,12 @@ export interface MarkdownBodyProps {
   readonly maxBodyLines: number;
   /**
    * Absolute preview size, overriding the shared preview ratio. The
-   * run detail pins a small card-sized preview while its metadata
+   * session detail pins a small card-sized preview while its metadata
    * lives in the sidebar; the other details leave it unset.
    */
   readonly previewLines?: number | undefined;
   /**
-   * True when the caller pages the preview with `j`/`k` (the run
+   * True when the caller pages the preview with `j`/`k` (the session
    * transcript). The footer then reports the window position instead of
    * a `… N more lines` teaser, so the counts always match the screen.
    */
@@ -59,7 +59,7 @@ export interface MarkdownBodyProps {
 }
 
 /**
- * Markdown body shared by the skill, profile, prompt, and run details:
+ * Markdown body shared by the skill, profile, prompt, and session details:
  * the source renders through OpenTUI's `markdown` component (headings,
  * lists, emphasis, code) instead of raw text. Windowing comes from
  * {@link markdownWindow}, which takes an optional absolute preview size

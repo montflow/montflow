@@ -280,7 +280,7 @@ export const RemoveDialog = (props: RemoveDialogProps) => (
   />
 );
 
-/** Submitted flow input shown back during the agent run. */
+/** Submitted flow input shown back during the agent session. */
 export interface SubmittedInput {
   readonly title: string;
   readonly value: string;
@@ -298,15 +298,15 @@ export interface FlowModalProps {
 export const FLOW_INPUT_ROWS = 5;
 
 /**
- * Agentic-run modal: same `Modal` chrome as every dialog, with an
- * animated braille spinner beside the one-line run status plus the
+ * Agentic-session modal: same `Modal` chrome as every dialog, with an
+ * animated braille spinner beside the one-line session status plus the
  * just-submitted input (scrollable past `FLOW_INPUT_ROWS`) so long
  * dictated text stays visible while the agent works. Mounted while
  * `working` is set — `esc` cancels the agent fiber (the child is
  * killed), arrows scroll overflowed input, every other key stays
  * locked out. The scroll hint only renders while `canScroll` says the
  * text actually overflows. Framed by the shared `Modal` shell.
- * @param props - run status, submitted input, and overflow flag
+ * @param props - session status, submitted input, and overflow flag
  * @returns flow overlay element
  */
 export const FlowModal = (props: FlowModalProps) => {
@@ -362,12 +362,12 @@ export interface FlowErrorModalProps {
 export const FLOW_ERROR_ROWS = 6;
 
 /**
- * Flow-failure modal: the run title, the scrollable error, and
+ * Flow-failure modal: the session title, the scrollable error, and
  * Retry/Back buttons — retry re-fires the failed flow, back returns
  * to the view beneath. Mounted while a flow failure is open; the key
  * handler owns navigation so every other key stays locked out.
  * Framed by the shared `Modal` shell.
- * @param props - run title, error text, and focused button
+ * @param props - session title, error text, and focused button
  * @returns flow-error overlay element
  */
 export const FlowErrorModal = (props: FlowErrorModalProps) => (

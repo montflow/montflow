@@ -1,10 +1,10 @@
 /** @jsxImportSource @opentui/solid */
 import { testRender } from '@opentui/solid';
 import { afterEach, describe, test } from 'bun:test';
-import type { Runs } from '../../services/index.js';
+import type { Sessions } from '../../services/index.js';
 import { FRAME_MS, LOADER_FRAMES } from '../loader.js';
 import { Panel } from '../panel.js';
-import { RunsPanel, runMarker, type RunsPanelProps } from '../runs-panel.js';
+import { SessionsPanel, sessionMarker, type SessionsPanelProps } from '../sessions-panel.js';
 
 type Setup = Awaited<ReturnType<typeof testRender>>;
 
@@ -15,11 +15,11 @@ afterEach(() => {
 });
 
 const CAPACITY = 5;
-/** Rig width: must fit the runs banner plus the windowed count (`A all runs`). */
+/** Rig width: must fit the sessions banner plus the windowed count (`A all sessions`). */
 const WIDTH = 64;
 const HEIGHT = 16;
 
-const row = (id: string, status: string): Runs.RunSummary => ({
+const row = (id: string, status: string): Sessions.SessionSummary => ({
   id,
   name: id,
   description: '',
@@ -35,20 +35,20 @@ const row = (id: string, status: string): Runs.RunSummary => ({
 });
 
 /**
- * Render one RunsPanel state inside Panel chrome with a sentinel line below.
+ * Render one SessionsPanel state inside Panel chrome with a sentinel line below.
  * The frame is fixed by default for deterministic snapshots; `animated` drops
  * it so the panel runs its live spinner interval.
  */
 const renderState = async (
-  panel: Partial<RunsPanelProps>,
+  panel: Partial<SessionsPanelProps>,
   options: { readonly frame?: number | undefined; readonly animated?: boolean | undefined } = {},
 ): Promise<Setup> => {
   const spinnerFrame = options.animated === true ? undefined : (options.frame ?? 0);
   const setup = await testRender(
     () => (
       <box width={WIDTH} height={HEIGHT} flexDirection="column">
-        <Panel title="[r] Runs" selected={false}>
-          <RunsPanel
+        <Panel title="[r] Sessions" selected={false}>
+          <SessionsPanel
             loading={false}
             installing={false}
             installed
@@ -92,14 +92,14 @@ const has = (rows: ReadonlyArray<string>, text: string): boolean =>
 
 /** Boolean assertion with a label (bun:test `expect` takes no message argument). */
 const check = (actual: boolean, label: string): void => {
-  if (!actual) throw new Error(`RunsPanel layout: ${label}`);
+  if (!actual) throw new Error(`SessionsPanel layout: ${label}`);
 };
 
 /** Sectioned rows shared by the section/toggle tests. */
 const sectionProps = (
   showAll: boolean,
 ): Pick<
-  RunsPanelProps,
+  SessionsPanelProps,
   'installed' | 'activeRows' | 'allRows' | 'showAll' | 'total' | 'selected'
 > => ({
   installed: true,
@@ -110,18 +110,18 @@ const sectionProps = (
   selected: true,
 });
 
-describe('RunsPanel sections', () => {
+describe('SessionsPanel sections', () => {
   test('renders Active always; the full list stays behind the toggle', async () => {
     const collapsed = frameRows(await renderState(sectionProps(false)));
     check(has(collapsed, 'Active'), 'active header');
     check(has(collapsed, 'live'), 'running active row');
     check(has(collapsed, 'queued'), 'queued active row');
-    check(!has(collapsed, 'All runs'), 'all header hidden');
+    check(!has(collapsed, 'All sessions'), 'all header hidden');
     check(!has(collapsed, 'old'), 'history hidden');
 
     const expanded = frameRows(await renderState(sectionProps(true)));
     check(has(expanded, 'Active'), 'active header retained');
-    check(has(expanded, 'All runs'), 'all header shown');
+    check(has(expanded, 'All sessions'), 'all header shown');
     check(has(expanded, 'old'), 'history shown');
   });
 
@@ -142,7 +142,7 @@ describe('RunsPanel sections', () => {
         selected: true,
       }),
     );
-    check(has(collapsed, 'A all runs'), 'toggle keybind');
+    check(has(collapsed, 'A all sessions'), 'toggle keybind');
     check(has(collapsed, '1/4'), 'active count');
 
     const expanded = frameRows(
@@ -159,8 +159,8 @@ describe('RunsPanel sections', () => {
   });
 });
 
-describe('RunsPanel highlight across sections', () => {
-  const base = (): Partial<RunsPanelProps> => ({
+describe('SessionsPanel highlight across sections', () => {
+  const base = (): Partial<SessionsPanelProps> => ({
     installed: true,
     activeRows: [row('live', 'running')],
     allRows: [row('live', 'running'), row('mid', 'done'), row('old', 'done')],
@@ -182,7 +182,7 @@ describe('RunsPanel highlight across sections', () => {
   });
 });
 
-describe('RunsPanel running spinner', () => {
+describe('SessionsPanel running spinner', () => {
   test('running rows take the injected braille frame; static markers survive', async () => {
     const rows = frameRows(
       await renderState(
@@ -253,27 +253,27 @@ describe('RunsPanel running spinner', () => {
       rows.some((line) => line.includes('live') && line.includes('⠋')),
       'frame 0 visible',
     );
-    check(runMarker('running') === '●', 'runMarker static default');
-    check(runMarker('running', 0) === '⠋', 'runMarker frame 0');
-    check(runMarker('awaiting-input', 3) === '◐', 'non-running marker ignores frame');
+    check(sessionMarker('running') === '●', 'sessionMarker static default');
+    check(sessionMarker('running', 0) === '⠋', 'sessionMarker frame 0');
+    check(sessionMarker('awaiting-input', 3) === '◐', 'non-running marker ignores frame');
   });
 });
 
-describe('RunsPanel notes and chrome', () => {
+describe('SessionsPanel notes and chrome', () => {
   test('install and empty notes keep their copy with a pinned grid', async () => {
     const baseline = sentinelRowOf(frameRows(await renderState({})));
     const missing = frameRows(await renderState({ installed: false, selected: true }));
-    check(has(missing, 'Runs extension not installed.'), 'install note');
+    check(has(missing, 'Sessions extension not installed.'), 'install note');
     check(has(missing, '⏎ install'), 'install hint');
 
     const empty = frameRows(await renderState({ installed: true, total: 0, selected: true }));
-    check(has(empty, 'No runs found.'), 'empty note');
+    check(has(empty, 'No sessions found.'), 'empty note');
     check(has(empty, 'c create'), 'create hint');
 
     const noMatch = frameRows(
       await renderState({ installed: true, total: 0, query: 'zz', selected: true }),
     );
-    check(has(noMatch, 'No runs match.'), 'no-match note');
+    check(has(noMatch, 'No sessions match.'), 'no-match note');
 
     check(sentinelRowOf(missing) === baseline, 'missing sentinel stable');
     check(sentinelRowOf(empty) === baseline, 'empty sentinel stable');

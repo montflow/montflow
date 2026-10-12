@@ -34,21 +34,21 @@ export const Keybinds = {
   search: (): Keybind => ({ key: '/', action: 'search' }),
   /** `⏎ open` — list detail entry. */
   open: (): Keybind => ({ key: '⏎', action: 'open' }),
-  /** `g run` — jump to the dispatched profile-create run's detail. */
-  goToRun: (): Keybind => ({ key: 'g', action: 'run' }),
+  /** `g session` — jump to the dispatched profile-create session's detail. */
+  goToSession: (): Keybind => ({ key: 'g', action: 'session' }),
   /** `j/k move` — list highlight entry. */
   move: (): Keybind => ({ key: 'j/k', action: 'move' }),
-  /** `A all runs` — runs-list section toggle (Active vs full history). */
-  showAll: (): Keybind => ({ key: 'A', action: 'all runs' }),
+  /** `A all sessions` — sessions-list section toggle (Active vs full history). */
+  showAll: (): Keybind => ({ key: 'A', action: 'all sessions' }),
   /** `j/k scroll` — detail full-view scroll entry. */
   scroll: (): Keybind => ({ key: 'j/k', action: 'scroll' }),
-  /** `tab focus` — cycle which run pane the keys act on. */
+  /** `tab focus` — cycle which session pane the keys act on. */
   toggleFocus: (): Keybind => ({ key: 'tab', action: 'focus' }),
-  /** `d details` — focus the run's metadata-and-actions column. */
+  /** `d details` — focus the session's metadata-and-actions column. */
   focusDetails: (): Keybind => ({ key: 'd', action: 'details' }),
-  /** `p prompt` — focus the run's prompt pane. */
+  /** `p prompt` — focus the session's prompt pane. */
   focusPrompt: (): Keybind => ({ key: 'p', action: 'prompt' }),
-  /** `t transcript` — focus the run's transcript pane. */
+  /** `t transcript` — focus the session's transcript pane. */
   focusTranscript: (): Keybind => ({ key: 't', action: 'transcript' }),
   /** `↑↓ scroll` — read-only scroll-view entry (flow modals, working status). */
   arrowScroll: (): Keybind => ({ key: '↑↓', action: 'scroll' }),
@@ -88,17 +88,17 @@ export const Keybinds = {
   clearFilter: (): Keybind => ({ key: 'esc', action: 'clear' }),
   /** `d delete` — detail delete entry. */
   remove: (): Keybind => ({ key: 'd', action: 'delete' }),
-  /** `s steer` — run-detail steering entry (live runs). */
+  /** `s steer` — session-detail steering entry (live sessions). */
   steer: (): Keybind => ({ key: 's', action: 'steer' }),
-  /** `a answer` — run-detail parked-question answer entry. */
+  /** `a answer` — session-detail parked-question answer entry. */
   answer: (): Keybind => ({ key: 'a', action: 'answer' }),
-  /** `x interrupt` — run-detail live-run stop entry. */
+  /** `x interrupt` — session-detail live-session stop entry. */
   interrupt: (): Keybind => ({ key: 'x', action: 'interrupt' }),
   /** `R refresh` — list refetch entry (panels and details). */
   refresh: (): Keybind => ({ key: 'R', action: 'refresh' }),
   /** `m modify` — detail modify entry. */
   modify: (): Keybind => ({ key: 'm', action: 'modify' }),
-  /** `e execute` — spec-detail execute entry (dispatch the resume run). */
+  /** `e execute` — spec-detail execute entry (dispatch the resume session). */
   execute: (): Keybind => ({ key: 'e', action: 'execute' }),
   /** `v view` — detail preview-mode entry. */
   showFull: (): Keybind => ({ key: 'v', action: 'view' }),
@@ -122,7 +122,7 @@ export const Keybinds = {
    * identical except for the panels' own capabilities.
    * @param installed - store presence flag
    * @param total - filtered row count
-   * @param options - capability flags (`quickRemove` for list-level `x`, `allRuns` for the runs section toggle)
+   * @param options - capability flags (`quickRemove` for list-level `x`, `allSessions` for the sessions section toggle)
    * @returns footer entries in display order
    */
   listBanner: (
@@ -130,7 +130,7 @@ export const Keybinds = {
     total: number,
     options?: {
       readonly quickRemove?: boolean | undefined;
-      readonly allRuns?: boolean | undefined;
+      readonly allSessions?: boolean | undefined;
     },
   ): ReadonlyArray<Keybind> => {
     if (!installed) return [Keybinds.install()];
@@ -138,7 +138,7 @@ export const Keybinds = {
     const entries: Array<Keybind> = [Keybinds.search(), Keybinds.open(), Keybinds.create()];
     if (options?.quickRemove === true) entries.push(Keybinds.removeFromList());
     entries.push(Keybinds.move());
-    if (options?.allRuns === true) entries.push(Keybinds.showAll());
+    if (options?.allSessions === true) entries.push(Keybinds.showAll());
     return entries;
   },
 };

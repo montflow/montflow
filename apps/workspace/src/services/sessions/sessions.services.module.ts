@@ -1,6 +1,6 @@
-// eslint-disable-next-line montflow/no-node-platform-imports -- platform adapter at the TUI composition-root boundary: runs store lives under .agents/@montflow/runs; migrate to FileSystem when the app moves onto the platform layer graph.
+// eslint-disable-next-line montflow/no-node-platform-imports -- platform adapter at the TUI composition-root boundary: sessions store lives under .agents/@montflow/sessions; migrate to FileSystem when the app moves onto the platform layer graph.
 import { mkdir, stat } from 'node:fs/promises';
-// eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for run files; both go away with the FileSystem migration.
+// eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for session files; both go away with the FileSystem migration.
 import { join } from 'node:path';
 // eslint-disable-next-line montflow/no-node-platform-imports -- platform adapter at the TUI composition-root boundary: shells out to the pi CLI for the extension probe; migrate to Command when the app moves onto the platform layer graph.
 import { execFile } from 'node:child_process';
@@ -10,53 +10,53 @@ import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Clock, Data, Effect, Layer } from 'effect';
 import * as ManagedRuntime from 'effect/ManagedRuntime';
 import type {
-  Run,
-  RunDetail as EngineRunDetail,
-  Runner,
-  RunnerImpl,
+  Session,
+  SessionDetail as EngineSessionDetail,
+  SessionRunner,
+  SessionRunnerImpl,
   SessionFactory,
   Store,
   WorkspaceBridge,
-} from '@montflow/pi-runs';
+} from '@montflow/pi-sessions';
 
 /**
- * Default tool allowlist for workspace-dispatched runs. Restores the
+ * Default tool allowlist for workspace-dispatched sessions. Restores the
  * `pi -p --tools read,write,edit` capability set the in-process engine
  * replaced — without it Pi's session default also enables `bash`. The Pi
  * factory unions the interaction tools (`ask_user`/`notify_user`) into
- * whatever allowlist is passed, so a restricted run can still park and
+ * whatever allowlist is passed, so a restricted session can still park and
  * notify.
  */
-export const DEFAULT_RUN_TOOLS = ['read', 'write', 'edit'] as const;
+export const DEFAULT_SESSION_TOOLS = ['read', 'write', 'edit'] as const;
 
 /**
- * The `run_*` tools the pi-runs extension registers (`extension.ts`). An
+ * The `session_*` tools the pi-sessions extension registers (`extension.ts`). An
  * explicit `tools` allowlist filters *extension* tools too — Pi keeps only
- * the listed names — so an orchestrator run that must spawn workers has to
- * name these, or `run_start` is filtered out of its session.
+ * the listed names — so an orchestrator session that must spawn workers has to
+ * name these, or `session_start` is filtered out of its session.
  */
-export const RUN_TOOL_NAMES = [
-  'run_start',
-  'run_status',
-  'run_verify',
-  'run_list',
-  'run_resume',
-  'run_interrupt',
-  'run_steer',
-  'run_answer',
+export const SESSION_TOOL_NAMES = [
+  'session_start',
+  'session_status',
+  'session_verify',
+  'session_list',
+  'session_resume',
+  'session_interrupt',
+  'session_steer',
+  'session_answer',
 ] as const;
 
 /**
- * Lazy handle to the runs extension runtime. Static imports from
- * `@montflow/pi-runs` are type-only (erased at build) — the runtime
+ * Lazy handle to the sessions extension runtime. Static imports from
+ * `@montflow/pi-sessions` are type-only (erased at build) — the runtime
  * resolves here, on first use, never at dashboard boot. A broken or
  * missing extension therefore cannot crash the TUI; the failing flow
  * surfaces the load error as a toast instead.
  */
-type PiRunsLib = typeof import('@montflow/pi-runs');
+type PiSessionsLib = typeof import('@montflow/pi-sessions');
 
-/** Failure loading the runs extension runtime. `cause` classifies the import rejection. */
-export class ExtensionLoadError extends Data.TaggedError('@montflow/RunsExtensionLoadError')<{
+/** Failure loading the sessions extension runtime. `cause` classifies the import rejection. */
+export class ExtensionLoadError extends Data.TaggedError('@montflow/SessionsExtensionLoadError')<{
   readonly message: string;
   readonly cause: 'network' | 'missing' | 'unknown';
 }> {}
@@ -84,11 +84,11 @@ const MISSING_SIGNALS = [
 export const loadErrorMessage = (cause: ExtensionLoadError['cause']): string => {
   switch (cause) {
     case 'network':
-      return 'Runs extension download failed (network) — check the connection, then retry.';
+      return 'Sessions extension download failed (network) — check the connection, then retry.';
     case 'missing':
-      return 'Runs extension not found — reinstall the workspace dependencies, then retry.';
+      return 'Sessions extension not found — reinstall the workspace dependencies, then retry.';
     default:
-      return 'Runs extension failed to load — reinstall the workspace dependencies, then retry.';
+      return 'Sessions extension failed to load — reinstall the workspace dependencies, then retry.';
   }
 };
 
@@ -113,14 +113,14 @@ export const classifyLoadError = (cause: unknown): ExtensionLoadError => {
 };
 
 /** Cached extension module promise. Cleared on failure so retrying reloads it. */
-let cachedLib: Promise<PiRunsLib> | undefined;
+let cachedLib: Promise<PiSessionsLib> | undefined;
 
 /** The resolved extension runtime, once a flow has loaded it. */
-let liveLib: PiRunsLib | undefined;
+let liveLib: PiSessionsLib | undefined;
 
 /** Single import attempt: resolves the runtime, or rejects with a classified load error. */
-const importOnce = (): Promise<PiRunsLib> => {
-  cachedLib ??= import('@montflow/pi-runs').then(
+const importOnce = (): Promise<PiSessionsLib> => {
+  cachedLib ??= import('@montflow/pi-sessions').then(
     (libs) => {
       liveLib = libs;
       return libs;
@@ -143,14 +143,14 @@ export const resetExtensionCache = (): void => {
  * The loaded extension runtime, if any flow has loaded it yet.
  * @returns the extension module namespace, or undefined before first load
  */
-export const loadedPiRuns = (): PiRunsLib | undefined => liveLib;
+export const loadedPiSessions = (): PiSessionsLib | undefined => liveLib;
 
 /**
- * Load the runs extension runtime as an Effect, caching the module
+ * Load the sessions extension runtime as an Effect, caching the module
  * across flows.
  * @returns Effect resolving to the extension module namespace
  */
-export const loadPiRuns = (): Effect.Effect<PiRunsLib, ExtensionLoadError> =>
+export const loadPiSessions = (): Effect.Effect<PiSessionsLib, ExtensionLoadError> =>
   Effect.tryPromise({
     try: () => importOnce(),
     catch: (cause) => (cause instanceof ExtensionLoadError ? cause : classifyLoadError(cause)),
@@ -160,32 +160,32 @@ export const loadPiRuns = (): Effect.Effect<PiRunsLib, ExtensionLoadError> =>
 const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 /**
- * Absolute runs directory for a working directory:
- * `<cwd>/.agents/@montflow/runs`. Mirrors the extension's
- * `Store.RUNS_SEGMENTS`; the pre-load fs checks (`runsInstalled`,
- * `ensureRunsStore`) cannot import the runtime, so engine paths derive
- * from the loaded segments via {@link runsDirFor} instead.
+ * Absolute sessions directory for a working directory:
+ * `<cwd>/.agents/@montflow/sessions`. Mirrors the extension's
+ * `Store.SESSIONS_SEGMENTS`; the pre-load fs checks (`sessionsInstalled`,
+ * `ensureSessionsStore`) cannot import the runtime, so engine paths derive
+ * from the loaded segments via {@link sessionsDirFor} instead.
  * @param root - workspace root
- * @returns absolute runs directory
+ * @returns absolute sessions directory
  */
-export const runsDir = (root: string): string => join(root, '.agents', '@montflow', 'runs');
+export const sessionsDir = (root: string): string => join(root, '.agents', '@montflow', 'sessions');
 
 /**
- * Absolute runs directory derived from the loaded extension's segments,
- * so the engine's store location can never drift from pi-runs.
- * @param libs - loaded pi-runs namespace
+ * Absolute sessions directory derived from the loaded extension's segments,
+ * so the engine's store location can never drift from pi-sessions.
+ * @param libs - loaded pi-sessions namespace
  * @param root - workspace root
- * @returns absolute runs directory
+ * @returns absolute sessions directory
  */
-const runsDirFor = (libs: PiRunsLib, root: string): string =>
-  join(root, ...libs.Store.RUNS_SEGMENTS);
+const sessionsDirFor = (libs: PiSessionsLib, root: string): string =>
+  join(root, ...libs.Store.SESSIONS_SEGMENTS);
 
 /**
  * Run one store operation against the file backend rooted at the
- * workspace runs directory. Loads the extension runtime, builds the
+ * workspace sessions directory. Loads the extension runtime, builds the
  * root-scoped store over the Node platform layers, and maps
  * `StoreError` to its displayable reason.
- * @param root - workspace root (runs store owner)
+ * @param root - workspace root (sessions store owner)
  * @param use - store operation
  * @returns Effect resolving to the operation result, failing with displayable message
  */
@@ -193,29 +193,29 @@ const withStore = <A>(
   root: string,
   use: (store: Store.Impl) => Effect.Effect<A, string>,
 ): Effect.Effect<A, string> =>
-  loadPiRuns().pipe(
+  loadPiSessions().pipe(
     Effect.mapError((error) => error.message),
     Effect.flatMap((libs) =>
-      libs.Store.makeWithRoot(runsDirFor(libs, root)).pipe(
+      libs.Store.makeWithRoot(sessionsDirFor(libs, root)).pipe(
         Effect.provide(NodeLive),
         Effect.flatMap((store) => use(store)),
       ),
     ),
   );
 
-/** One run row for the dashboard list. Mirrors `Run.Run` with display fallbacks. Satisfies the shared `Filterable` (description carries the initial prompt so search reaches it). */
-export interface RunSummary {
+/** One session row for the dashboard list. Mirrors `Session.Session` with display fallbacks. Satisfies the shared `Filterable` (description carries the initial prompt so search reaches it). */
+export interface SessionSummary {
   readonly id: string;
   readonly name: string;
   readonly description: string;
   readonly status: string;
   readonly model: string;
-  /** Thinking-level pin for the run, empty when the session default applies. */
+  /** Thinking-level pin for the session, empty when the session default applies. */
   readonly thinking: string;
-  /** Tool allowlist for the run's session; empty means Pi's default set. */
+  /** Tool allowlist for the session's Pi session; empty means Pi's default set. */
   readonly tools: ReadonlyArray<string>;
   readonly prompt: string;
-  /** Spec slug this run works on, empty when unbound. */
+  /** Spec slug this session works on, empty when unbound. */
   readonly spec: string;
   /** Latest agent-posted progress line; empty when none. */
   readonly progress: string;
@@ -223,9 +223,9 @@ export interface RunSummary {
   readonly updated: string;
 }
 
-/** Full run detail: the run row plus transcript events plus settlement receipt. */
-export interface RunDetail {
-  readonly summary: RunSummary;
+/** Full session detail: the session row plus transcript events plus settlement receipt. */
+export interface SessionDetail {
+  readonly summary: SessionSummary;
   readonly events: ReadonlyArray<{
     readonly seq: number;
     readonly role: string;
@@ -235,39 +235,39 @@ export interface RunDetail {
 }
 
 /**
- * Bridge a `Run.Run` into a dashboard row. Total — the run already
+ * Bridge a `Session.Session` into a dashboard row. Total — the session already
  * carries every field; missing display fields fall back to the id.
- * @param run - pi-runs Run
+ * @param session - pi-sessions Session
  * @returns dashboard row
  */
-export const fromRun = (run: Run.Run): RunSummary => ({
-  id: run.id,
-  name: run.name ?? run.id,
-  description: run.prompt ?? run.name ?? run.id,
-  status: run.status,
-  model: run.model ?? '',
-  thinking: run.thinking ?? '',
-  tools: run.tools ?? [],
-  prompt: run.prompt ?? '',
-  spec: run.spec ?? '',
-  progress: run.progress ?? '',
-  created: run.created,
-  updated: run.updated,
+export const fromSession = (session: Session.Session): SessionSummary => ({
+  id: session.id,
+  name: session.name ?? session.id,
+  description: session.prompt ?? session.name ?? session.id,
+  status: session.status,
+  model: session.model ?? '',
+  thinking: session.thinking ?? '',
+  tools: session.tools ?? [],
+  prompt: session.prompt ?? '',
+  spec: session.spec ?? '',
+  progress: session.progress ?? '',
+  created: session.created,
+  updated: session.updated,
 });
 
-/** Directory-safe run id: lowercase alphanumeric groups joined by single hyphens. */
-export const RUN_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
+/** Directory-safe session id: lowercase alphanumeric groups joined by single hyphens. */
+export const SESSION_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
 /**
- * True when `id` is a safe run directory name (no traversal, no blanks).
- * @param id - candidate run id
+ * True when `id` is a safe session directory name (no traversal, no blanks).
+ * @param id - candidate session id
  * @returns true for safe ids
  */
-export const isValidRunId = (id: string): boolean =>
-  id.length >= 1 && id.length <= 64 && RUN_ID_PATTERN.test(id);
+export const isValidSessionId = (id: string): boolean =>
+  id.length >= 1 && id.length <= 64 && SESSION_ID_PATTERN.test(id);
 
 /**
- * Slugify a run name into a directory-safe id: lowercase,
+ * Slugify a session name into a directory-safe id: lowercase,
  * non-alphanumerics to hyphens, collapsed and trimmed, capped at 48
  * chars with a time suffix for uniqueness.
  * @param name - display name from the create modal
@@ -282,70 +282,70 @@ export const slugifyName = (name: string, now: number): string => {
     .replace(/-{2,}/g, '-')
     .slice(0, 48)
     .replace(/-+$/g, '');
-  const base = slug === '' ? 'run' : slug;
+  const base = slug === '' ? 'session' : slug;
   // Full millisecond timestamp in base36 — a modulo suffix wrapped every
-  // ~28 minutes, colliding same-named runs created a cycle apart.
+  // ~28 minutes, colliding same-named sessions created a cycle apart.
   return `${base}-${now.toString(36)}`;
 };
 
 /**
- * Slug a fresh run id from a display name using the Effect `Clock` (no
+ * Slug a fresh session id from a display name using the Effect `Clock` (no
  * wall-clock reads, so tests can drive time).
  * @param name - display name from the create modal
- * @returns Effect resolving to a directory-safe run id
+ * @returns Effect resolving to a directory-safe session id
  */
-export const newRunId = (name: string): Effect.Effect<string> =>
+export const newSessionId = (name: string): Effect.Effect<string> =>
   Clock.currentTimeMillis.pipe(Effect.map((now) => slugifyName(name, now)));
 
 /**
- * True when the runs store directory exists.
+ * True when the sessions store directory exists.
  * @param root - workspace root
  * @returns installed flag, never fails
  */
-export const runsInstalled = (root: string): Effect.Effect<boolean, never> =>
+export const sessionsInstalled = (root: string): Effect.Effect<boolean, never> =>
   Effect.promise(() =>
-    stat(runsDir(root)).then(
+    stat(sessionsDir(root)).then(
       () => true,
       () => false,
     ),
   );
 
 /**
- * Parse `pi list` stdout. True when the pi-runs package is registered in
+ * Parse `pi list` stdout. True when the pi-sessions package is registered in
  * the pi session — its name appears as a path segment (project-local
- * `../packages/pi-runs`, absolute path) or as the `@montflow/pi-runs`
+ * `../packages/pi-sessions`, absolute path) or as the `@montflow/pi-sessions`
  * package on its own line. The segment match keeps lookalikes
- * (`not-pi-runs-x`) from reading as installed.
+ * (`not-pi-sessions-x`) from reading as installed.
  * @param stdout - raw command stdout
- * @returns true when pi-runs is listed
+ * @returns true when pi-sessions is listed
  */
 export const parseListOutput = (stdout: string): boolean =>
-  stdout.split(/\r?\n/).some((line) => /(?:^|[/@\s])pi-runs(?:$|[/@\s])/.test(line));
+  stdout.split(/\r?\n/).some((line) => /(?:^|[/@\s])pi-sessions(?:$|[/@\s])/.test(line));
 
 /**
- * Toast copy when an agentic flow needs the runs extension but `pi list`
+ * Toast copy when an agentic flow needs the sessions extension but `pi list`
  * does not register it. The caller compares against this exact value to
  * route the failure to a toast instead of the flow-error modal. The
- * workspace engine imports `@montflow/pi-runs` directly; `pi list`
+ * workspace engine imports `@montflow/pi-sessions` directly; `pi list`
  * registration is what the Pi session needs to load the extension.
  */
-export const RUNS_EXTENSION_INSTALL_HINT =
-  'Runs extension not installed — register `@montflow/pi-runs` in `.pi/settings.json` (or reinstall the workspace dependencies), then retry.';
+export const SESSIONS_EXTENSION_INSTALL_HINT =
+  'Sessions extension not installed — register `@montflow/pi-sessions` in `.pi/settings.json` (or reinstall the workspace dependencies), then retry.';
 
 /**
- * True when a flow failure is the runs-extension install hint, so the TUI
+ * True when a flow failure is the sessions-extension install hint, so the TUI
  * routes it to a warning toast instead of the flow-error modal.
  * @param message - flow failure message
  * @returns true for the install hint
  */
-export const isRunsExtensionInstallError = (message: string): boolean =>
-  message === RUNS_EXTENSION_INSTALL_HINT;
+export const isSessionsExtensionInstallError = (message: string): boolean =>
+  message === SESSIONS_EXTENSION_INSTALL_HINT;
 
 /** Overridable extension probe: tests inject a fake so the gate is deterministic without a Pi install. */
 let extensionProbe: ((root: string) => Effect.Effect<boolean, never>) | undefined;
 
 /**
- * Test seam: replace the runs-extension probe, or clear it to restore the
+ * Test seam: replace the sessions-extension probe, or clear it to restore the
  * `pi list` shell-out.
  * @param probe - probe to use, or undefined to restore the real one
  */
@@ -365,7 +365,7 @@ const defaultExtensionProbe = (root: string): Effect.Effect<boolean, never> =>
   );
 
 /**
- * True when pi-runs is installed in the pi session (`pi list` registers
+ * True when pi-sessions is installed in the pi session (`pi list` registers
  * it). The probe runs in the workspace root so project-local packages
  * resolve — from anywhere else `pi list` reports nothing. Slow or
  * failing probes read as missing, so an agentic flow gates instead of
@@ -373,65 +373,67 @@ const defaultExtensionProbe = (root: string): Effect.Effect<boolean, never> =>
  * @param root - workspace root (pi project directory)
  * @returns installed flag, never fails
  */
-export const runsExtensionInstalled = (root: string): Effect.Effect<boolean, never> =>
+export const sessionsExtensionInstalled = (root: string): Effect.Effect<boolean, never> =>
   (extensionProbe ?? defaultExtensionProbe)(root);
 
 /**
- * Create the runs store directory (the install path behind `⏎`).
- * @param root - workspace root (runs store owner)
+ * Create the sessions store directory (the install path behind `⏎`).
+ * @param root - workspace root (sessions store owner)
  * @returns Effect completing once installed, failing with the reason
  */
-export const ensureRunsStore = (root: string): Effect.Effect<void, string> =>
+export const ensureSessionsStore = (root: string): Effect.Effect<void, string> =>
   Effect.tryPromise({
-    try: () => mkdir(runsDir(root), { recursive: true }).then(() => undefined),
+    try: () => mkdir(sessionsDir(root), { recursive: true }).then(() => undefined),
     catch: (cause) => (cause instanceof Error ? cause.message.slice(-2000) : String(cause)),
   });
 
-/** Staged boot phase behind the runs-panel Loader: extension import, then the run-list read. */
-export type RunsPhase = 'extension' | 'runs';
+/** Staged boot phase behind the sessions-panel Loader: extension import, then the session-list read. */
+export type SessionsPhase = 'extension' | 'sessions';
 
 /**
- * Run rows for the TUI boot through the loaded runs module: load the
+ * Session rows for the TUI boot through the loaded sessions module: load the
  * extension runtime, then list the store newest-first. A missing store
  * directory reads as an empty list so the panel shows its install note
  * instead of an error.
- * @param root - workspace root (runs store owner)
+ * @param root - workspace root (sessions store owner)
  * @returns Effect resolving to sorted summary rows, failing with displayable message
  */
-export const fetchRuns = (root: string): Effect.Effect<RunSummary[], string> =>
+export const fetchSessions = (root: string): Effect.Effect<SessionSummary[], string> =>
   withStore(root, (store) => store.list().pipe(Effect.mapError((error) => error.reason))).pipe(
-    Effect.map((runs) => runs.map(fromRun).toSorted((a, b) => b.updated.localeCompare(a.updated))),
+    Effect.map((rows) =>
+      rows.map(fromSession).toSorted((a, b) => b.updated.localeCompare(a.updated)),
+    ),
     Effect.catch((error) =>
       error.includes('missing') || error.includes('ENOENT') || error.includes('not exist')
-        ? Effect.succeed<RunSummary[]>([])
+        ? Effect.succeed<SessionSummary[]>([])
         : Effect.fail(error),
     ),
   );
 
 /**
- * Ids of runs with a live in-process session. Persisted `running` statuses
+ * Ids of sessions with a live in-process session. Persisted `running` statuses
  * left behind by a dead process are excluded, so this is the trustworthy
  * "is something actually working" signal for specs.
  * @param root - workspace root (runner runtime owner)
- * @returns Effect resolving to live run ids, failing with displayable message
+ * @returns Effect resolving to live session ids, failing with displayable message
  */
-export const liveRunIds = (root: string): Effect.Effect<ReadonlySet<string>, string> =>
-  withRunner(root, (runner) => runner.liveRunIds(root));
+export const liveSessionIds = (root: string): Effect.Effect<ReadonlySet<string>, string> =>
+  withSessionRunner(root, (runner) => runner.liveSessionIds(root));
 
 /**
- * Load one run for the detail page: run plus transcript events plus
+ * Load one session for the detail page: session plus transcript events plus
  * settlement receipt (if any).
- * @param root - workspace root (runs store owner)
- * @param id - run id
+ * @param root - workspace root (sessions store owner)
+ * @param id - session id
  * @returns Effect resolving to the detail, failing with displayable message
  */
-export const loadRun = (root: string, id: string): Effect.Effect<RunDetail, string> =>
+export const loadSession = (root: string, id: string): Effect.Effect<SessionDetail, string> =>
   withStore(root, (store) =>
     Effect.gen(function* () {
-      if (!isValidRunId(id)) return yield* Effect.fail(`Unknown run '${id}'.`);
+      if (!isValidSessionId(id)) return yield* Effect.fail(`Unknown session '${id}'.`);
       const loaded = yield* store.load(id).pipe(Effect.mapError((error) => error.reason));
       return {
-        summary: fromRun(loaded.run),
+        summary: fromSession(loaded.session),
         events: loaded.events.map((event) => ({
           seq: event.seq,
           role: event.role,
@@ -441,12 +443,12 @@ export const loadRun = (root: string, id: string): Effect.Effect<RunDetail, stri
           loaded.receipt === null
             ? undefined
             : { outcome: loaded.receipt.outcome, summary: loaded.receipt.summary },
-      } satisfies RunDetail;
+      } satisfies SessionDetail;
     }),
   );
 
-/** Workspace callbacks the run engine forwards to: a toast and a notification. */
-export interface RunNotifier {
+/** Workspace callbacks the session engine forwards to: a toast and a notification. */
+export interface SessionNotifier {
   readonly toast: (message: string, variant?: 'info' | 'success' | 'error') => void;
   readonly notify: (title: string, body: string) => void;
 }
@@ -456,13 +458,13 @@ export interface RunNotifier {
  * `WorkspaceBridge` forwards toasts and notifications here; when unset
  * (tests, headless import) both calls are silent.
  */
-let notifier: RunNotifier | undefined;
+let notifier: SessionNotifier | undefined;
 
 /**
- * Install the TUI notifier the run engine's bridge forwards to.
+ * Install the TUI notifier the session engine's bridge forwards to.
  * @param next - notifier, or undefined to clear
  */
-export const setRunNotifier = (next: RunNotifier | undefined): void => {
+export const setSessionNotifier = (next: SessionNotifier | undefined): void => {
   notifier = next;
 };
 
@@ -474,11 +476,11 @@ export const setRunNotifier = (next: RunNotifier | undefined): void => {
 let sessionFactoryLayer: Layer.Layer<SessionFactory> | undefined;
 
 /**
- * Per-repo-root engine runtimes. The engine's live-run registry must
+ * Per-repo-root engine runtimes. The engine's live-session registry must
  * survive across dispatches, so one runtime is built per root and
- * reused — mirroring `createRunnerHost` in `@montflow/pi-runs`.
+ * reused — mirroring `createSessionRunnerHost` in `@montflow/pi-sessions`.
  */
-const runtimes = new Map<string, ManagedRuntime.ManagedRuntime<Runner, never>>();
+const runtimes = new Map<string, ManagedRuntime.ManagedRuntime<SessionRunner, never>>();
 
 /**
  * Dispose and forget every cached engine runtime, awaiting each disposal
@@ -487,7 +489,7 @@ const runtimes = new Map<string, ManagedRuntime.ManagedRuntime<Runner, never>>()
  * the TUI on unmount.
  * @returns promise resolving once every runtime is disposed
  */
-export const resetRunnerRuntimes = async (): Promise<void> => {
+export const resetSessionRuntimes = async (): Promise<void> => {
   const disposals = [...runtimes.values()].map((runtime) => runtime.dispose());
   runtimes.clear();
   await Promise.all(disposals);
@@ -501,12 +503,12 @@ export const resetRunnerRuntimes = async (): Promise<void> => {
  */
 export const setSessionFactoryLayer = (layer: Layer.Layer<SessionFactory> | undefined): void => {
   sessionFactoryLayer = layer;
-  void resetRunnerRuntimes();
+  void resetSessionRuntimes();
 };
 
-/** File-backed store layer rooted at the workspace runs directory. */
-const storeLayer = (libs: PiRunsLib, root: string): Layer.Layer<Store.Store> =>
-  Layer.effect(libs.Store.Store, libs.Store.makeWithRoot(runsDirFor(libs, root))).pipe(
+/** File-backed store layer rooted at the workspace sessions directory. */
+const storeLayer = (libs: PiSessionsLib, root: string): Layer.Layer<Store.Store> =>
+  Layer.effect(libs.Store.Store, libs.Store.makeWithRoot(sessionsDirFor(libs, root))).pipe(
     Layer.provide(NodeLive),
   );
 
@@ -514,14 +516,14 @@ const storeLayer = (libs: PiRunsLib, root: string): Layer.Layer<Store.Store> =>
 const ESCAPE = String.fromCharCode(27);
 
 /**
- * Strip ANSI escapes and control characters from run-controlled text
- * before it reaches the TUI. Mirrors the pi-runs `ConsoleBridge`
+ * Strip ANSI escapes and control characters from session-controlled text
+ * before it reaches the TUI. Mirrors the pi-sessions `ConsoleBridge`
  * sanitizer: a prompt-injected agent must not be able to move the
  * cursor or corrupt the toast layer.
- * @param text - run-controlled text (toast body, notification title/body)
+ * @param text - session-controlled text (toast body, notification title/body)
  * @returns printable, trimmed text
  */
-export const sanitizeRunText = (text: string): string => {
+export const sanitizeSessionText = (text: string): string => {
   const chars = [...text];
   let stripped = '';
   for (let index = 0; index < chars.length; index++) {
@@ -542,20 +544,20 @@ export const sanitizeRunText = (text: string): string => {
 };
 
 /** Engine bridge: both calls land on the TUI notifier, sanitized and silent when unset. */
-const bridgeLayer = (libs: PiRunsLib): Layer.Layer<WorkspaceBridge> =>
+const bridgeLayer = (libs: PiSessionsLib): Layer.Layer<WorkspaceBridge> =>
   Layer.succeed(libs.WorkspaceBridge, {
     toast: (message, variant) =>
       Effect.sync(() => {
-        notifier?.toast(sanitizeRunText(message), variant);
+        notifier?.toast(sanitizeSessionText(message), variant);
       }),
     notify: (title, body) =>
       Effect.sync(() => {
-        notifier?.notify(sanitizeRunText(title), sanitizeRunText(body));
+        notifier?.notify(sanitizeSessionText(title), sanitizeSessionText(body));
       }),
   });
 
 /** Full engine layer for one repo root: store plus Pi factory plus bridge plus the platform services `Default` still requires. */
-const runnerLayer = (libs: PiRunsLib, root: string): Layer.Layer<Runner> =>
+const sessionRunnerLayer = (libs: PiSessionsLib, root: string): Layer.Layer<SessionRunner> =>
   libs.Default.pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -569,31 +571,31 @@ const runnerLayer = (libs: PiRunsLib, root: string): Layer.Layer<Runner> =>
 
 /** Build (once) and cache the engine runtime for a repo root. */
 const runtimeFor = (
-  libs: PiRunsLib,
+  libs: PiSessionsLib,
   root: string,
-): ManagedRuntime.ManagedRuntime<Runner, never> => {
+): ManagedRuntime.ManagedRuntime<SessionRunner, never> => {
   const existing = runtimes.get(root);
   if (existing !== undefined) return existing;
-  const created = ManagedRuntime.make(runnerLayer(libs, root));
+  const created = ManagedRuntime.make(sessionRunnerLayer(libs, root));
   runtimes.set(root, created);
   return created;
 };
 
 /**
  * Run one engine operation against the root's long-lived runtime: load
- * the extension, resolve the `Runner` service, and hand it to `use`.
+ * the extension, resolve the `SessionRunner` service, and hand it to `use`.
  * @param root - workspace root (runtime cache key)
  * @param use - engine operation
  * @returns Effect resolving to the operation result, failing with displayable message
  */
-const withRunner = <A>(
+const withSessionRunner = <A>(
   root: string,
-  use: (runner: RunnerImpl) => Effect.Effect<A, string>,
+  use: (runner: SessionRunnerImpl) => Effect.Effect<A, string>,
 ): Effect.Effect<A, string> =>
-  loadPiRuns().pipe(
+  loadPiSessions().pipe(
     Effect.mapError((error) => error.message),
     Effect.flatMap((libs) =>
-      Effect.promise(() => runtimeFor(libs, root).runPromise(libs.Runner)).pipe(
+      Effect.promise(() => runtimeFor(libs, root).runPromise(libs.SessionRunner)).pipe(
         Effect.flatMap((runner) => use(runner)),
       ),
     ),
@@ -623,40 +625,43 @@ const isMissingPiRuntime = (reason: string): boolean => {
  * @param reason - engine failure message
  * @returns displayable message
  */
-const surfaceRunFailure = (reason: string): string => {
+const surfaceSessionFailure = (reason: string): string => {
   if (!isMissingPiRuntime(reason)) return reason;
   return "Pi runtime not found — reinstall workspace dependencies so '@earendil-works/pi-coding-agent' resolves, then retry.";
 };
 
-/** Inputs for dispatching a fresh run through the engine. */
-export interface StartRunInput {
+/** Inputs for dispatching a fresh session through the engine. */
+export interface StartSessionInput {
   readonly id: string;
   readonly name?: string | undefined;
   readonly prompt: string;
   readonly model?: string | undefined;
   readonly tools?: ReadonlyArray<string> | undefined;
-  /** Parent run id: this run is a subrun of that run. */
+  /** Parent session id: this session is a subsession of that session. */
   readonly parent?: string | undefined;
-  /** Non-parent related run ids (siblings, review target). */
+  /** Non-parent related session ids (siblings, review target). */
   readonly related?: ReadonlyArray<string> | undefined;
-  /** Spec slug this run works on, when bound to one. */
+  /** Spec slug this session works on, when bound to one. */
   readonly spec?: string | undefined;
-  /** Called once when the run settles; the profile-create completion hook lives here. */
-  readonly onSettled?: ((detail: EngineRunDetail) => Effect.Effect<void>) | undefined;
+  /** Called once when the session settles; the profile-create completion hook lives here. */
+  readonly onSettled?: ((detail: EngineSessionDetail) => Effect.Effect<void>) | undefined;
 }
 
 /**
- * Dispatch a fresh run through the engine: `Store.create` + `start`,
+ * Dispatch a fresh session through the engine: `Store.create` + `start`,
  * then a live Pi session whose events stream into the store. The engine
- * detaches the prompt, so this resolves as soon as the run is registered.
- * Tool allowlists default to {@link DEFAULT_RUN_TOOLS} so a workspace run
+ * detaches the prompt, so this resolves as soon as the session is registered.
+ * Tool allowlists default to {@link DEFAULT_SESSION_TOOLS} so a workspace session
  * never silently regains Pi's `bash` default.
  * @param root - workspace root (store and session owner)
- * @param input - run id, display name, prompt, optional model/tools pins, and parentage/hook
+ * @param input - session id, display name, prompt, optional model/tools pins, and parentage/hook
  * @returns Effect resolving to the running row, failing with displayable message
  */
-export const startRun = (root: string, input: StartRunInput): Effect.Effect<RunSummary, string> =>
-  withRunner(root, (runner) =>
+export const startSession = (
+  root: string,
+  input: StartSessionInput,
+): Effect.Effect<SessionSummary, string> =>
+  withSessionRunner(root, (runner) =>
     runner
       .start({
         root,
@@ -664,66 +669,70 @@ export const startRun = (root: string, input: StartRunInput): Effect.Effect<RunS
         name: input.name,
         prompt: input.prompt,
         model: input.model,
-        tools: input.tools ?? DEFAULT_RUN_TOOLS,
+        tools: input.tools ?? DEFAULT_SESSION_TOOLS,
         parent: input.parent,
         related: input.related,
         spec: input.spec,
         onSettled: input.onSettled,
       })
-      .pipe(Effect.map(fromRun)),
-  ).pipe(Effect.catch((reason) => Effect.fail(surfaceRunFailure(reason))));
+      .pipe(Effect.map(fromSession)),
+  ).pipe(Effect.catch((reason) => Effect.fail(surfaceSessionFailure(reason))));
 
 /**
- * Steer a live run. Pi delivers the steering turn after the in-flight
+ * Steer a live session. Pi delivers the steering turn after the in-flight
  * tool results; the engine mirrors it as a user event.
  * @param root - workspace root (store and session owner)
- * @param id - run id
+ * @param id - session id
  * @param text - steering message
  * @returns Effect completing once forwarded, failing with displayable message
  */
-export const steerRun = (root: string, id: string, text: string): Effect.Effect<void, string> =>
-  withRunner(root, (runner) => runner.steer(root, id, text));
+export const steerSession = (root: string, id: string, text: string): Effect.Effect<void, string> =>
+  withSessionRunner(root, (runner) => runner.steer(root, id, text));
 
 /**
- * Answer a parked run: the engine unparks it and resolves the awaiting
+ * Answer a parked session: the engine unparks it and resolves the awaiting
  * `ask_user` call — the answer travels in the tool result, so nothing is
  * relaunched.
  * @param root - workspace root (store and session owner)
- * @param id - run id
+ * @param id - session id
  * @param text - user answer
  * @returns Effect completing once the ask is released, failing with displayable message
  */
-export const answerRun = (root: string, id: string, text: string): Effect.Effect<void, string> =>
-  withRunner(root, (runner) => runner.answer(root, id, text));
+export const answerSession = (
+  root: string,
+  id: string,
+  text: string,
+): Effect.Effect<void, string> =>
+  withSessionRunner(root, (runner) => runner.answer(root, id, text));
 
 /**
- * Interrupt a live run: the engine aborts the session, releases any
- * parked ask, and writes the cancelled receipt. A stale live run with no
- * session is cancelled through the store.
+ * Interrupt a live session: the engine aborts the session, releases any
+ * parked ask, and writes the cancelled receipt. A stale live session with
+ * no active runner is cancelled through the store.
  * @param root - workspace root (store and session owner)
- * @param id - run id
+ * @param id - session id
  * @returns Effect completing once cancelled, failing with displayable message
  */
-export const interruptRun = (root: string, id: string): Effect.Effect<void, string> =>
-  withRunner(root, (runner) => runner.interrupt(root, id));
+export const interruptSession = (root: string, id: string): Effect.Effect<void, string> =>
+  withSessionRunner(root, (runner) => runner.interrupt(root, id));
 
 /**
- * Resume a settled or interrupted run from its stored transcript,
+ * Resume a settled or interrupted session from its stored transcript,
  * optionally with a continuation prompt. Pass `onSettled` to re-attach a
  * completion hook after an app restart — the engine holds hooks in memory
- * only, so a resumed author run otherwise settles unobserved.
+ * only, so a resumed author session otherwise settles unobserved.
  * @param root - workspace root (store and session owner)
- * @param id - run id
+ * @param id - session id
  * @param prompt - continuation prompt, if any
- * @param onSettled - completion hook re-attached for the resumed run
+ * @param onSettled - completion hook re-attached for the resumed session
  * @returns Effect resolving to the resumed row, failing with displayable message
  */
-export const resumeRun = (
+export const resumeSession = (
   root: string,
   id: string,
   prompt?: string,
-  onSettled?: (detail: EngineRunDetail) => Effect.Effect<void>,
-): Effect.Effect<RunSummary, string> =>
-  withRunner(root, (runner) =>
-    runner.resume(root, id, prompt, onSettled).pipe(Effect.map(fromRun)),
-  ).pipe(Effect.catch((reason) => Effect.fail(surfaceRunFailure(reason))));
+  onSettled?: (detail: EngineSessionDetail) => Effect.Effect<void>,
+): Effect.Effect<SessionSummary, string> =>
+  withSessionRunner(root, (runner) =>
+    runner.resume(root, id, prompt, onSettled).pipe(Effect.map(fromSession)),
+  ).pipe(Effect.catch((reason) => Effect.fail(surfaceSessionFailure(reason))));

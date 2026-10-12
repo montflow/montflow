@@ -7,9 +7,9 @@ import { execFile } from 'node:child_process';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: promisify adapts the session probe shell-out; both go away with the Command migration.
 import { promisify } from 'node:util';
 import type { Interactive as PromptsInteractive, Prompts } from '@montflow/pi-prompts';
-import type { RunDetail as EngineRunDetail } from '@montflow/pi-runs';
+import type { SessionDetail as EngineSessionDetail } from '@montflow/pi-sessions';
 import { Data, Effect } from 'effect';
-import * as Runs from '../runs/index.js';
+import * as Sessions from '../sessions/index.js';
 import * as Skills from '../skills/index.js';
 
 /**
@@ -570,7 +570,7 @@ export const generateAgentic = (
 /**
  * Read one raw prompt file. Fails on unknown or unsafe names — the
  * dispatch snapshot compares these bytes against the settled state to
- * refuse a no-op run.
+ * refuse a no-op session.
  * @param root - workspace root (prompt store owner)
  * @param id - prompt file slug (without `.json`)
  * @returns Effect resolving to the raw file contents
@@ -596,7 +596,7 @@ interface FreshPrompt {
 }
 
 /**
- * Read the settled state of one prompt file the editor run was scoped
+ * Read the settled state of one prompt file the editor session was scoped
  * to. Never fails: a missing file reads as no bytes and no row, a
  * malformed one as bytes with no row (so the caller can tell "wrote
  * nothing" from "wrote something unusable").
@@ -620,27 +620,27 @@ const readFreshPrompt = (
   );
 
 /**
- * TUI callbacks for a dispatched editor run's completion: the named
- * prompt was found and persisted (refresh + toast), or the run settled
+ * TUI callbacks for a dispatched editor session's completion: the named
+ * prompt was found and persisted (refresh + toast), or the session settled
  * without a usable change (surface the reason). Absent in headless tests.
  */
 export interface ModifyFlowHooks {
-  /** Named prompt found after the editor run settled. */
-  readonly onPromptModified?: ((prompt: PromptSummary, runId: string) => void) | undefined;
-  /** Editor run settled without updating the prompt. */
-  readonly onPromptFailed?: ((message: string, runId: string) => void) | undefined;
+  /** Named prompt found after the editor session settled. */
+  readonly onPromptModified?: ((prompt: PromptSummary, sessionId: string) => void) | undefined;
+  /** Editor session settled without updating the prompt. */
+  readonly onPromptFailed?: ((message: string, sessionId: string) => void) | undefined;
 }
 
 /**
- * Completion hook for a dispatched editor run: re-read the named
+ * Completion hook for a dispatched editor session: re-read the named
  * prompt, refuse a no-op settle by comparing the raw file to the
  * dispatch snapshot, persist it canonically through the loaded
  * runtime's decode+encode path, and notify the hooks. Exported so a
- * resumed editor run can re-attach the same hook through
- * `Runs.resumeRun` after an app restart.
+ * resumed editor session can re-attach the same hook through
+ * `Sessions.resumeSession` after an app restart.
  * @param root - workspace root (prompt store owner)
  * @param libs - loaded extension runtime
- * @param runId - the editor run id
+ * @param sessionId - the editor session id
  * @param promptId - prompt file slug under edit
  * @param beforeRaw - raw prompt file snapshotted at dispatch, or undefined when unreadable
  * @param hooks - TUI completion callbacks
@@ -650,27 +650,27 @@ export const modifyCompletion =
   (
     root: string,
     libs: PiPromptsLib,
-    runId: string,
+    sessionId: string,
     promptId: string,
     beforeRaw: string | undefined,
     hooks?: ModifyFlowHooks,
-  ): ((detail: EngineRunDetail) => Effect.Effect<void>) =>
+  ): ((detail: EngineSessionDetail) => Effect.Effect<void>) =>
   (_detail) =>
     Effect.gen(function* () {
       const { raw: afterRaw, row: updated } = yield* readFreshPrompt(libs, root, promptId);
       if (updated === undefined) {
         hooks?.onPromptFailed?.(
           afterRaw === undefined
-            ? `Run '${runId}' finished without updating prompt '${promptId}' — try describing the change differently.`
-            : `Run '${runId}' wrote an invalid prompt '${promptId}' — check its JSON and retry.`,
-          runId,
+            ? `Session '${sessionId}' finished without updating prompt '${promptId}' — try describing the change differently.`
+            : `Session '${sessionId}' wrote an invalid prompt '${promptId}' — check its JSON and retry.`,
+          sessionId,
         );
         return;
       }
       if (beforeRaw !== undefined && afterRaw === beforeRaw) {
         hooks?.onPromptFailed?.(
-          `Run '${runId}' finished without updating prompt '${promptId}' — try describing the change differently.`,
-          runId,
+          `Session '${sessionId}' finished without updating prompt '${promptId}' — try describing the change differently.`,
+          sessionId,
         );
         return;
       }
@@ -679,24 +679,24 @@ export const modifyCompletion =
       );
       if (failure !== undefined) {
         hooks?.onPromptFailed?.(
-          `Run '${runId}' updated '${promptId}' but it could not be saved: ${failure}`,
-          runId,
+          `Session '${sessionId}' updated '${promptId}' but it could not be saved: ${failure}`,
+          sessionId,
         );
         return;
       }
-      hooks?.onPromptModified?.(updated, runId);
+      hooks?.onPromptModified?.(updated, sessionId);
     });
 
 /**
  * Agentic generation port for the shared interactive flows: headless
  * `pi -p` over the shared author prompt, wrapped in the TUI working
  * overlay (the prompts flows take no loading port of their own, so the
- * host applies it here — input locks while the child agent runs). The
+ * host applies it here — input locks while the child agent sessions). The
  * `PromptStore` requirement stays unfulfilled by construction — the
  * workspace host reads files directly, so the port runs anywhere the
  * flows run.
  * @param root - workspace root (prompt store owner)
- * @param loading - working-overlay wrapper for the headless run
+ * @param loading - working-overlay wrapper for the headless session
  * @returns generator port for the interactive flows
  */
 export const generateFor =
@@ -711,27 +711,27 @@ export const generateFor =
       ),
     );
 
-/** Result of a modify flow: persisted manually, or dispatched as a run. */
+/** Result of a modify flow: persisted manually, or dispatched as a session. */
 export type ModifyFlowResult =
   | { readonly kind: 'saved'; readonly prompt: PromptSummary }
-  | { readonly kind: 'dispatched'; readonly runId: string };
+  | { readonly kind: 'dispatched'; readonly sessionId: string };
 
-/** Run id dispatched by the most recent agentic modify, consumed by {@link runModifyFlow}. */
-let dispatchedModifyRunId: string | undefined;
+/** Session id dispatched by the most recent agentic modify, consumed by {@link runModifyFlow}. */
+let dispatchedModifySessionId: string | undefined;
 
-/** Test seam: forget the dispatched-modify-run ref so a fresh modify flow starts clean. */
-export const resetDispatchedModifyRun = (): void => {
-  dispatchedModifyRunId = undefined;
+/** Test seam: forget the dispatched-modify-session ref so a fresh modify flow starts clean. */
+export const resetDispatchedModifySession = (): void => {
+  dispatchedModifySessionId = undefined;
 };
 
 /**
  * Agentic modification port for the shared interactive flows: gate on
- * the runs extension, snapshot the named prompt's raw file, dispatch an
- * editor run through the pi-runs engine, then unwind the shared
- * `modifyPrompt` flow with `CANCELLED` (the run, not this flow, writes
- * the prompt). The run id lands in a module-level ref that
+ * the sessions extension, snapshot the named prompt's raw file, dispatch an
+ * editor session through the pi-sessions engine, then unwind the shared
+ * `modifyPrompt` flow with `CANCELLED` (the session, not this flow, writes
+ * the prompt). The session id lands in a module-level ref that
  * {@link runModifyFlow} reads to distinguish a dispatch from a real
- * cancel. When the run settles, {@link modifyCompletion} re-reads and
+ * cancel. When the session settles, {@link modifyCompletion} re-reads and
  * persists the named prompt. Mirrors the profiles modify port.
  * @param root - workspace root (prompt store owner)
  * @param hooks - TUI completion callbacks, if any
@@ -743,13 +743,13 @@ export const modifyFor =
     loadLibs().pipe(
       Effect.flatMap((libs) =>
         Effect.gen(function* () {
-          const installed = yield* Runs.runsExtensionInstalled(root);
-          if (!installed) return yield* Effect.fail(Runs.RUNS_EXTENSION_INSTALL_HINT);
+          const installed = yield* Sessions.sessionsExtensionInstalled(root);
+          if (!installed) return yield* Effect.fail(Sessions.SESSIONS_EXTENSION_INSTALL_HINT);
           const beforeRaw = yield* readRawPrompt(root, input.name).pipe(
             Effect.match({ onFailure: () => undefined, onSuccess: (raw) => raw }),
           );
-          const id = yield* Runs.newRunId('modify-prompt');
-          yield* Runs.startRun(root, {
+          const id = yield* Sessions.newSessionId('modify-prompt');
+          yield* Sessions.startSession(root, {
             id,
             name: `Modify prompt: ${input.name}`,
             prompt: Skills.buildHeadlessPrompt(
@@ -758,10 +758,10 @@ export const modifyFor =
               MODIFY_POSTPROMPT,
             ),
             model: input.modelLabel,
-            tools: [...Runs.DEFAULT_RUN_TOOLS],
+            tools: [...Sessions.DEFAULT_SESSION_TOOLS],
             onSettled: modifyCompletion(root, libs, id, input.name, beforeRaw, hooks),
           });
-          dispatchedModifyRunId = id;
+          dispatchedModifySessionId = id;
           return yield* Effect.fail(libs.Interactive.CANCELLED);
         }),
       ),
@@ -772,7 +772,7 @@ export const modifyFor =
  * model picker and working overlay. All `Interactive` references are
  * type positions — the runtime stays behind the lazy loader. The
  * prompts flows take no loading port of their own, so `loading` wraps
- * the headless agent runs inside the generator / modifier ports
+ * the headless agent sessions inside the generator / modifier ports
  * instead — same `LoadingFn` shape as the skills and profiles flows.
  */
 export interface FlowPorts {
@@ -828,13 +828,13 @@ export const runCreateFlow = (
  * Workspace host for the shared modify flow for one prompt: load the
  * extension, run `modifyPrompt` (manual template edit or agentic
  * rewrite). Manual edits persist and resolve `saved`; agentic edits
- * dispatch an editor run and resolve `dispatched`; real cancels resolve
+ * dispatch an editor session and resolve `dispatched`; real cancels resolve
  * undefined. The TUI needs no `CANCELLED` knowledge — only real
  * failures reject. Mirrors the profiles modify host.
  * @param root - workspace root (prompt store owner)
  * @param id - prompt name under edit
  * @param ports - TUI overlay ports
- * @param hooks - completion callbacks for a dispatched editor run
+ * @param hooks - completion callbacks for a dispatched editor session
  * @returns Effect resolving to the modify outcome, or undefined on cancel
  */
 export const runModifyFlow = (
@@ -849,7 +849,7 @@ export const runModifyFlow = (
         const prompts = yield* listRows(libs, root);
         const refs = yield* Skills.listModelLabels();
         const fallback = yield* Skills.listDefaultModel();
-        dispatchedModifyRunId = undefined;
+        dispatchedModifySessionId = undefined;
         // SAFETY: same phantom-`PromptStore` requirement as creation (see
         // above) — the workspace modifier reads files directly.
         const prompt = yield* libs.Interactive.modifyPrompt(
@@ -866,12 +866,12 @@ export const runModifyFlow = (
       }).pipe(
         Effect.catch((error) => {
           if (error !== libs.Interactive.CANCELLED) return Effect.fail(error);
-          const runId = dispatchedModifyRunId;
-          dispatchedModifyRunId = undefined;
+          const sessionId = dispatchedModifySessionId;
+          dispatchedModifySessionId = undefined;
           return Effect.succeed(
-            runId === undefined
+            sessionId === undefined
               ? undefined
-              : ({ kind: 'dispatched', runId } satisfies ModifyFlowResult),
+              : ({ kind: 'dispatched', sessionId } satisfies ModifyFlowResult),
           );
         }),
       ),

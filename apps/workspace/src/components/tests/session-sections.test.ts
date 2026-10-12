@@ -1,8 +1,12 @@
 import * as Vitest from '@effect/vitest';
-import type { Runs } from '../../services/index.js';
-import { activeRunRows, isActiveRunStatus, runSelectableRows } from '../run-sections.js';
+import type { Sessions } from '../../services/index.js';
+import {
+  activeSessionRows,
+  isActiveSessionStatus,
+  sessionSelectableRows,
+} from '../session-sections.js';
 
-const row = (id: string, status: string): Runs.RunSummary => ({
+const row = (id: string, status: string): Sessions.SessionSummary => ({
   id,
   name: id,
   description: '',
@@ -17,23 +21,23 @@ const row = (id: string, status: string): Runs.RunSummary => ({
   updated: '',
 });
 
-Vitest.describe('isActiveRunStatus', () => {
-  Vitest.it('keeps queued and live runs in the Active section', () => {
-    Vitest.expect(isActiveRunStatus('pending')).toBe(true);
-    Vitest.expect(isActiveRunStatus('running')).toBe(true);
-    Vitest.expect(isActiveRunStatus('awaiting-input')).toBe(true);
+Vitest.describe('isActiveSessionStatus', () => {
+  Vitest.it('keeps queued and live sessions in the Active section', () => {
+    Vitest.expect(isActiveSessionStatus('pending')).toBe(true);
+    Vitest.expect(isActiveSessionStatus('running')).toBe(true);
+    Vitest.expect(isActiveSessionStatus('awaiting-input')).toBe(true);
   });
 
   Vitest.it('treats terminal statuses as history', () => {
-    Vitest.expect(isActiveRunStatus('done')).toBe(false);
-    Vitest.expect(isActiveRunStatus('failed')).toBe(false);
-    Vitest.expect(isActiveRunStatus('cancelled')).toBe(false);
-    Vitest.expect(isActiveRunStatus('unknown')).toBe(false);
+    Vitest.expect(isActiveSessionStatus('done')).toBe(false);
+    Vitest.expect(isActiveSessionStatus('failed')).toBe(false);
+    Vitest.expect(isActiveSessionStatus('cancelled')).toBe(false);
+    Vitest.expect(isActiveSessionStatus('unknown')).toBe(false);
   });
 });
 
-Vitest.describe('activeRunRows', () => {
-  Vitest.it('keeps only active runs, with running ahead of the queue', () => {
+Vitest.describe('activeSessionRows', () => {
+  Vitest.it('keeps only active sessions, with running ahead of the queue', () => {
     const rows = [
       row('done-1', 'done'),
       row('queued-1', 'pending'),
@@ -42,7 +46,7 @@ Vitest.describe('activeRunRows', () => {
       row('failed-1', 'failed'),
       row('live-2', 'running'),
     ];
-    Vitest.expect(activeRunRows(rows).map((entry) => entry.id)).toStrictEqual([
+    Vitest.expect(activeSessionRows(rows).map((entry) => entry.id)).toStrictEqual([
       'live-1',
       'live-2',
       'queued-1',
@@ -51,15 +55,15 @@ Vitest.describe('activeRunRows', () => {
   });
 
   Vitest.it('returns an empty list when nothing is active', () => {
-    Vitest.expect(activeRunRows([row('done-1', 'done')])).toStrictEqual([]);
+    Vitest.expect(activeSessionRows([row('done-1', 'done')])).toStrictEqual([]);
   });
 });
 
-Vitest.describe('runSelectableRows', () => {
+Vitest.describe('sessionSelectableRows', () => {
   Vitest.it('walks Active rows then the full list while All is expanded', () => {
     const active = [row('live-1', 'running')];
     const all = [row('live-1', 'running'), row('done-1', 'done')];
-    const selectable = runSelectableRows(active, all, true);
+    const selectable = sessionSelectableRows(active, all, true);
     Vitest.expect(selectable.map((entry) => entry.id)).toStrictEqual([
       'live-1',
       'live-1',
@@ -73,8 +77,8 @@ Vitest.describe('runSelectableRows', () => {
   Vitest.it('hides the full list from navigation while All is collapsed', () => {
     const active = [row('live-1', 'running')];
     const all = [row('live-1', 'running'), row('done-1', 'done')];
-    Vitest.expect(runSelectableRows(active, all, false).map((entry) => entry.id)).toStrictEqual([
-      'live-1',
-    ]);
+    Vitest.expect(sessionSelectableRows(active, all, false).map((entry) => entry.id)).toStrictEqual(
+      ['live-1'],
+    );
   });
 });

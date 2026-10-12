@@ -1,16 +1,16 @@
 import { Effect, Layer, Option } from 'effect';
 import {
   SessionFactory,
-  type SessionEvent,
+  type PiSessionEvent,
   type SessionFactoryImpl,
   type SessionPort,
   type SessionRequest,
-} from '@montflow/pi-runs';
+} from '@montflow/pi-sessions';
 
 /** One fake session created by the harness, with its recorded traffic. */
 export interface FakeSession {
   readonly request: SessionRequest;
-  readonly listeners: Array<(event: SessionEvent) => void>;
+  readonly listeners: Array<(event: PiSessionEvent) => void>;
   readonly prompts: string[];
   readonly steers: string[];
   readonly followUps: string[];
@@ -32,7 +32,7 @@ export interface HarnessOptions {
 /**
  * Build a fake `SessionFactory` layer the engine can run against, so
  * lifecycle tests exercise the real runner without a Pi install. Mirrors
- * the harness in `packages/pi-runs/src/services/runner/tests`.
+ * the harness in `packages/pi-sessions/src/services/runner/tests`.
  * @param options - failure knobs
  * @returns recorded sessions plus the injectable factory layer
  */
@@ -91,7 +91,7 @@ export const settleEvent = (session: FakeSession): void => {
 };
 
 /** Raw Pi message payload, derived from the engine's session event type. */
-type SessionMessage = Extract<SessionEvent, { type: 'message' }>['message'];
+type SessionMessage = Extract<PiSessionEvent, { type: 'message' }>['message'];
 
 /**
  * Push a mirrored `message` event through every subscribed session

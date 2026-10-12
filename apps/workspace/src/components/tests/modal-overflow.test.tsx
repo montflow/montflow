@@ -198,7 +198,7 @@ describe('modal overflow', () => {
 
   test('flow error modal shows the error and scrolls', async () => {
     let node: ScrollBoxRenderable | undefined;
-    const error = `Agent failed: ${'something went wrong in the headless run. '.repeat(12)}tail`;
+    const error = `Agent failed: ${'something went wrong in the headless session. '.repeat(12)}tail`;
     const setup = await renderModal(() => (
       <FlowErrorModal
         title="Creating prompt failed"
