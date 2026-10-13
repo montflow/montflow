@@ -5,7 +5,7 @@ type: review
 originator: user
 depends-on:
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task A099: Review phase A

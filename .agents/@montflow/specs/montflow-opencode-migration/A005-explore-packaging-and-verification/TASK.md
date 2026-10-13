@@ -5,7 +5,7 @@ type: exploratory
 originator: user
 depends-on: A002
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task A005: Determine how plugins are packaged, verified, and distributed

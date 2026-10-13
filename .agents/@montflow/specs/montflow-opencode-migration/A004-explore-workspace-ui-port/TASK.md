@@ -5,7 +5,7 @@ type: exploratory
 originator: user
 depends-on: A002
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task A004: Map the workspace and TUI widgets onto OpenCode surfaces

@@ -5,6 +5,7 @@ workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-13
 locked-phases:
+  - A
 ---
 
 # Montflow OpenCode migration
@@ -57,13 +58,13 @@ place and working until a later execution phase ports them.
 
 | ID   | Name                               | Type        | Status  | Gates |
 | ---- | ---------------------------------- | ----------- | ------- | ----- |
-| A001 | explore-pi-extension-surface       | exploratory | pending | No    |
-| A002 | explore-opencode-plugin-api        | exploratory | pending | No    |
-| A003 | explore-session-engine-gap         | exploratory | pending | No    |
-| A004 | explore-workspace-ui-port          | exploratory | pending | No    |
-| A005 | explore-packaging-and-verification | exploratory | pending | No    |
-| A006 | synthesize-migration-contract      | exploratory | pending | No    |
-| A099 | review-phase                       | review      | pending | No    |
+| A001 | explore-pi-extension-surface       | exploratory | complete | No    |
+| A002 | explore-opencode-plugin-api        | exploratory | complete | No    |
+| A003 | explore-session-engine-gap         | exploratory | complete | No    |
+| A004 | explore-workspace-ui-port          | exploratory | complete | No    |
+| A005 | explore-packaging-and-verification | exploratory | complete | No    |
+| A006 | synthesize-migration-contract      | exploratory | complete | No    |
+| A099 | review-phase                       | review      | complete | No    |
 | B001 | decide-package-architecture        | planning    | pending | No    |
 | B002 | decide-adapter-seams               | planning    | pending | No    |
 | B003 | decide-session-engine-mapping      | planning    | pending | No    |

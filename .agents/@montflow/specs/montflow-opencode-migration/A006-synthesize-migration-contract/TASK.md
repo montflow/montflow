@@ -5,7 +5,7 @@ type: exploratory
 originator: user
 depends-on: A001, A002, A003, A004, A005
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task A006: Synthesize the migration contract
