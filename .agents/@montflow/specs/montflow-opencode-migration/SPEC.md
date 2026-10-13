@@ -1,11 +1,12 @@
 ---
 name: montflow-opencode-migration
-status: in-progress
+status: complete
 workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-13
 locked-phases:
   - A
+  - B
 ---
 
 # Montflow OpenCode migration
@@ -65,10 +66,10 @@ place and working until a later execution phase ports them.
 | A005 | explore-packaging-and-verification | exploratory | complete | No    |
 | A006 | synthesize-migration-contract      | exploratory | complete | No    |
 | A099 | review-phase                       | review      | complete | No    |
-| B001 | decide-package-architecture        | planning    | pending | No    |
-| B002 | decide-adapter-seams               | planning    | pending | No    |
-| B003 | decide-session-engine-mapping      | planning    | pending | No    |
-| B004 | decide-workspace-integration       | planning    | pending | No    |
-| B005 | plan-migration-sequence            | planning    | pending | No    |
-| B006 | plan-verification-and-distribution | planning    | pending | No    |
-| B099 | review-phase                       | review      | pending | No    |
+| B001 | decide-package-architecture        | planning    | complete | No    |
+| B002 | decide-adapter-seams               | planning    | complete | No    |
+| B003 | decide-session-engine-mapping      | planning    | complete | No    |
+| B004 | decide-workspace-integration       | planning    | complete | No    |
+| B005 | plan-migration-sequence            | planning    | complete | No    |
+| B006 | plan-verification-and-distribution | planning    | complete | No    |
+| B099 | review-phase                       | review      | complete | No    |

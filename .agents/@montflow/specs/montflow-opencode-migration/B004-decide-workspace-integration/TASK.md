@@ -5,7 +5,7 @@ type: planning
 originator: user
 depends-on: A004, A006
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task B004: Decide the workspace integration surface

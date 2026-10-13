@@ -5,7 +5,7 @@ type: planning
 originator: user
 depends-on: A005, B001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task B006: Plan verification and distribution

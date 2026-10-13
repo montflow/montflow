@@ -5,7 +5,7 @@ type: planning
 originator: user
 depends-on: A006
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task B002: Decide the adapter seams
