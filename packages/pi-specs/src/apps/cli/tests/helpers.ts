@@ -11,10 +11,13 @@ export const memory = memoryMarkdown();
 
 /**
  * In-memory `SpecStore` for CLI tests: specs keyed by directory name.
- * `snapshot` fails for unknown names, matching the file-backed store.
+ * `snapshot` fails for unknown names, matching the file-backed store, and
+ * `write` replaces the entry so a scaffold can be read back.
+ * @param specs - mutable spec map the stub reads from and writes into
+ * @returns the stub layer
  */
 export const stubLayer = (
-  specs: ReadonlyMap<string, ReadonlyArray<SpecFileEntry>>,
+  specs: Map<string, ReadonlyArray<SpecFileEntry>>,
 ): Layer.Layer<SpecStore.SpecStore> =>
   Layer.succeed(
     SpecStore.SpecStore,
@@ -30,5 +33,9 @@ export const stubLayer = (
             )
           : Effect.succeed({ name, files });
       },
+      write: (_root, name, files) =>
+        Effect.sync(() => {
+          specs.set(name, files);
+        }),
     }),
   );

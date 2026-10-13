@@ -1,7 +1,7 @@
 # CLI app
 
 Standalone `mf-specs` command built with `effect/cli`, plus
-the slash-command form the Pi extension reuses. Four subcommands for
+the slash-command form the Pi extension reuses. Subcommands for
 agents and humans:
 
 - `check` — mechanically verify the whole spec store (`--dir` selects the
@@ -12,28 +12,36 @@ agents and humans:
 - `status --name <spec>` — readable status panel for one spec:
   lifecycle, counts, per-phase task list, verification verdict. Exits
   non-zero when that spec fails verification.
+- `state --name <spec>` — compact derived state, active phase, and
+  locked phases for an orchestrator.
+- `next --name <spec>` — the ready task set for the active phase.
 - `list` — list every spec with its derived lifecycle state and
   task counts, filtered by `--pending` (unfinished) or by `--status`
   with an exact state list (`completed` is an alias for `complete`).
+- `create --name <spec>` — deterministic, model-free scaffold: renders a
+  fresh spec tree via `modules/scaffold` and writes it through
+  `SpecStore.write`. Refuses to overwrite an existing spec.
 - `doctor` — install the packaged spec skills into
   `<repo>/.agents/skills/`. Idempotent; the repo root is resolved from
   the working directory (`apps/doctor`).
 
 ## Belongs here
 
-- Pure engines (`check`, `status`, `list`) over the `SpecStore`
-  service
-- Pure renderers (`renderCheck`, `renderStatus`, `renderList`) — the
-  token-efficiency contract lives here
-- `Command`/`Flag` wiring (`checkCommand`, `statusCommand`, `listCommand`, `doctorCommand`, `rootCommand`)
+- Pure engines (`check`, `status`, `list`, `scaffold`) over the
+  `SpecStore` service
+- Pure renderers (`renderCheck`, `renderStatus`, `renderList`,
+  `renderScaffold`) — the token-efficiency contract lives here
+- `Command`/`Flag` wiring (`checkCommand`, `statusCommand`, `listCommand`,
+  `createCommand`, `doctorCommand`, `rootCommand`)
 - The slash-command form (`runSlash`, `SlashReport`) reused by `extension.ts`
 - The `main.ts` binary entry
 
 ## Does not belong here
 
 - Verification rules — `modules/spec` + `modules/structure`
-- Filesystem reading — the `SpecStore` service
-- Writing or fixing specs — future authoring flows
+- Filesystem reading and writing — the `SpecStore` service
+- Spec file templates — `modules/scaffold`
+- Dispatching author or orchestrator sessions — `@montflow/pi-sessions`
 
 ## Running
 
@@ -57,8 +65,10 @@ target build would be required for `npx` without Bun.
 
 Inside Pi, the same engines are exposed as `/mf-specs` by
 `src/extension.ts` (`check [--name <spec>] [--verbose]` /
-`status --name <spec>` / `list [--pending | --status <states>]
-[--verbose]`).
+`status --name <spec>` / `state --name <spec>` / `next --name <spec>` /
+`list [--pending | --status <states>] [--verbose]` /
+`create --name <spec> [--description <text>] [--author <name>]
+[--workspace-type <in-place|worktree>] [--tasks <name[:type[:gates]],…>]`).
 
 ## Building & distributing
 
@@ -76,9 +86,9 @@ Two supported paths — neither needs Node or a model at runtime:
   `#!/usr/bin/env bun`) works with `bun link` for local/agent use where
   Bun is installed.
 
-Everything `check`/`status`/`list` do is pure filesystem work, so the
-binary and slash command work fully offline. Only future agentic
-specs would require Pi and a model.
+Everything `check`/`status`/`list`/`create` do is pure filesystem
+work, so the binary and slash command work fully offline. Only agentic
+spec authoring or execution would require Pi and a model.
 
 ## Parallelism
 

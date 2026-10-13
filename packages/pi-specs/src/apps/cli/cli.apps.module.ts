@@ -1,14 +1,20 @@
-import { Console, Effect, Option } from 'effect';
+import { Clock, Console, Effect, Option } from 'effect';
 import * as CliError from 'effect/cli/CliError';
 import * as Command from 'effect/cli/Command';
 import * as Flag from 'effect/cli/Flag';
-import { type Spec, parseSpecFile } from '../../modules/spec/index.js';
+import { type Spec, isValidName, parseSpecFile } from '../../modules/spec/index.js';
 import {
   type Analysis,
   type State,
   STATES,
   analyze as analyzeLifecycle,
 } from '../../modules/lifecycle/index.js';
+import {
+  SCAFFOLD_TASK_TYPES,
+  isScaffoldTaskType,
+  renderSpecScaffold,
+} from '../../modules/scaffold/index.js';
+import type { ScaffoldTask } from '../../modules/scaffold/index.js';
 import { type SpecSnapshot, verifySpecTree } from '../../modules/structure/index.js';
 import { type Task, parseTaskDirName, parseTaskFile, phaseOf } from '../../modules/task/index.js';
 import type { Issue, Result } from '../../modules/verify/index.js';
@@ -586,6 +592,139 @@ export const resolveListOptions = (
   return { options: { statuses: states } };
 };
 
+// ─── Create ───────────────────────────────────────────────────────────
+
+/** Default task name when no `--tasks` value is supplied. */
+export const DEFAULT_SCAFFOLD_TASK = 'implement';
+
+/** Options for {@link scaffold}. */
+export interface ScaffoldOptions {
+  /** Spec slug; also the directory name. */
+  readonly name: string;
+  /** Author stamped into `SPEC.md`; defaults to `spec-scaffold`. */
+  readonly author?: string | undefined;
+  readonly description?: string | undefined;
+  /** `in-place` (default) or `worktree`. */
+  readonly workspaceType?: string | undefined;
+  /** Raw tasks, each `name[:type[:gates]]`; defaults to one `implement` task. */
+  readonly taskSpecs?: ReadonlyArray<string> | undefined;
+}
+
+/** What {@link scaffold} wrote. */
+export interface ScaffoldReport {
+  readonly name: string;
+  /** Spec directory, POSIX-joined from the store root. */
+  readonly dir: string;
+  readonly phase: string;
+  readonly taskCount: number;
+  /** Spec-relative file paths written, in write order. */
+  readonly files: ReadonlyArray<string>;
+}
+
+/** Parsed task spec: the task, or a user-facing error. */
+export type ScaffoldTaskParse =
+  | { readonly ok: true; readonly task: ScaffoldTask }
+  | { readonly ok: false; readonly error: string };
+
+/**
+ * Parse one `name[:type[:gates]]` task spec. The type defaults to
+ * `execution`; the gates token is `gates` or `true` to request a `GATES.md`.
+ * @param raw - one raw task spec
+ * @returns the task, or a user-facing error
+ */
+export const parseScaffoldTask = (raw: string): ScaffoldTaskParse => {
+  const [name = '', type = 'execution', gates = ''] = raw.split(':');
+  if (!isValidName(name)) {
+    return {
+      ok: false,
+      error: `'${name}' is not a valid task name — use a kebab-case slug such as 'build-login'.`,
+    };
+  }
+  if (!isScaffoldTaskType(type)) {
+    return {
+      ok: false,
+      error: `Unknown task type '${type}' — use one of: ${SCAFFOLD_TASK_TYPES.join(', ')}.`,
+    };
+  }
+  return {
+    ok: true,
+    task: { name, type, gates: gates === 'gates' || gates === 'true' },
+  };
+};
+
+/**
+ * Scaffold a mechanically valid spec tree under `root/<name>`: `SPEC.md`,
+ * one task directory per task, and the phase's review task. Deterministic
+ * and model-free — the mechanical half of `mf-specs create`. Refuses to
+ * touch an existing spec directory.
+ * @param root - spec root directory
+ * @param options - spec name, metadata, and task specs
+ * @returns what was written, failing with a displayable reason
+ */
+export const scaffold = (
+  root: string,
+  options: ScaffoldOptions,
+): Effect.Effect<ScaffoldReport, SpecStore.StoreError, SpecStore.SpecStore> =>
+  Effect.gen(function* () {
+    const operation = 'SpecCreate';
+    const refuse = (reason: string) => Effect.fail(new SpecStore.StoreError({ operation, reason }));
+    if (!isValidName(options.name)) {
+      return yield* refuse(
+        `'${options.name}' is not a valid spec name — use a kebab-case slug such as 'ship-login'.`,
+      );
+    }
+    const workspaceType = options.workspaceType ?? 'in-place';
+    if (workspaceType !== 'in-place' && workspaceType !== 'worktree') {
+      return yield* refuse(
+        `Unknown workspace type '${workspaceType}' — use 'in-place' or 'worktree'.`,
+      );
+    }
+    const store = yield* SpecStore.SpecStore;
+    if (yield* store.exists(root, options.name)) {
+      return yield* refuse(`Spec '${options.name}' already exists under ${root}.`);
+    }
+    const rawTasks =
+      options.taskSpecs === undefined || options.taskSpecs.length === 0
+        ? [DEFAULT_SCAFFOLD_TASK]
+        : options.taskSpecs;
+    const tasks: Array<ScaffoldTask> = [];
+    for (const raw of rawTasks) {
+      const parsed = parseScaffoldTask(raw);
+      if (!parsed.ok) return yield* refuse(parsed.error);
+      tasks.push(parsed.task);
+    }
+    const now = yield* Clock.currentTimeMillis;
+    const created = new Date(now).toISOString().slice(0, 10);
+    const rendered = renderSpecScaffold({
+      name: options.name,
+      author: options.author?.trim() || 'spec-scaffold',
+      created,
+      description: options.description,
+      workspaceType,
+      tasks,
+    });
+    yield* store.write(root, options.name, rendered.files);
+    return {
+      name: options.name,
+      dir: `${root.replace(/\/+$/, '')}/${options.name}`,
+      phase: rendered.phase,
+      taskCount: rendered.taskCount,
+      files: rendered.files.map((file) => file.path),
+    };
+  });
+
+/**
+ * Render a scaffold report: one header line, the directory, and the files.
+ * @param report - report from {@link scaffold}
+ * @returns the display text
+ */
+export const renderScaffold = (report: ScaffoldReport): string =>
+  [
+    `\u2713 created '${report.name}' \u00b7 phase ${report.phase} \u00b7 ${report.taskCount} task${report.taskCount === 1 ? '' : 's'}`,
+    report.dir,
+    ...report.files.map((file) => `  ${file}`),
+  ].join('\n');
+
 // ─── Commands ─────────────────────────────────────────────────────────
 
 const dirFlag = Flag.String('dir').pipe(
@@ -594,6 +733,18 @@ const dirFlag = Flag.String('dir').pipe(
 );
 
 const nameFlag = Flag.String('name').pipe(Flag.withDescription('Spec directory name.'));
+
+/** Collapse an optional flag to `string | undefined`. */
+const opt = (value: Option.Option<string>): string | undefined => Option.getOrUndefined(value);
+
+/** Comma-separated values; blank or absent reads as an empty list. */
+const csv = (value: string | undefined): ReadonlyArray<string> =>
+  value === undefined || value.trim() === ''
+    ? []
+    : value
+        .split(',')
+        .map((part) => part.trim())
+        .filter((part) => part !== '');
 
 const toUserError = (error: SpecStore.StoreError): CliError.UserError =>
   new CliError.UserError({ cause: error, userMessage: error.reason });
@@ -646,6 +797,48 @@ const statusCommand = Command.make('status', { dir: dirFlag, name: nameFlag }, (
   }).pipe(Effect.catchTag('@montflow/SpecStoreError', (error) => Effect.fail(toUserError(error)))),
 ).pipe(
   Command.withDescription('Show the status of one spec (--name required).'),
+  Command.provide(SpecStore.Default),
+);
+
+const createCommand = Command.make(
+  'create',
+  {
+    dir: dirFlag,
+    name: nameFlag,
+    author: Flag.String('author').pipe(
+      Flag.withDescription('Author stamped into SPEC.md.'),
+      Flag.optional,
+    ),
+    description: Flag.String('description').pipe(
+      Flag.withDescription('One-line spec description.'),
+      Flag.optional,
+    ),
+    workspaceType: Flag.String('workspace-type').pipe(
+      Flag.withDescription("How work is isolated: 'in-place' (default) or 'worktree'."),
+      Flag.optional,
+    ),
+    tasks: Flag.String('tasks').pipe(
+      Flag.withDescription('Comma-separated tasks, each name[:type[:gates]]. Default: implement.'),
+      Flag.optional,
+    ),
+  },
+  (config) =>
+    Effect.gen(function* () {
+      const report = yield* scaffold(storeDirOf(config.dir), {
+        name: config.name,
+        author: opt(config.author),
+        description: opt(config.description),
+        workspaceType: opt(config.workspaceType),
+        taskSpecs: csv(opt(config.tasks)),
+      });
+      yield* Console.log(renderScaffold(report));
+    }).pipe(
+      Effect.catchTag('@montflow/SpecStoreError', (error) => Effect.fail(toUserError(error))),
+    ),
+).pipe(
+  Command.withDescription(
+    'Scaffold a spec tree: SPEC.md, task directories, and the phase review task. Model-free.',
+  ),
   Command.provide(SpecStore.Default),
 );
 
@@ -728,15 +921,16 @@ const doctorCommand = Command.make('doctor', {}, () =>
   ),
 ).pipe(Command.withDescription('Install the packaged spec skills into .agents/skills/.'));
 
-/** Root command: `mf-specs <check|status|state|next|list|doctor>`. */
+/** Root command: `mf-specs <check|status|state|next|list|create|doctor>`. */
 export const rootCommand = Command.make('mf-specs').pipe(
-  Command.withDescription('List, verify, and set up montflow specs.'),
+  Command.withDescription('List, verify, scaffold, and set up montflow specs.'),
   Command.withSubcommands([
     checkCommand,
     statusCommand,
     stateCommand,
     nextCommand,
     listCommand,
+    createCommand,
     doctorCommand,
   ]),
 );
@@ -749,15 +943,30 @@ export interface SlashReport {
   readonly ok: boolean;
 }
 
-/** Parsed slash args: `check`/`status`/`state`/`next`/`list` plus their flags. */
+/** Parsed slash args: `check`/`status`/`state`/`next`/`list`/`create` plus their flags. */
 interface SlashArgs {
-  readonly command: 'check' | 'status' | 'state' | 'next' | 'list';
+  readonly command: 'check' | 'status' | 'state' | 'next' | 'list' | 'create';
   readonly name: string | undefined;
   readonly dir: string | undefined;
   readonly verbose: boolean;
   readonly statusFilter: string | undefined;
   readonly pending: boolean;
+  readonly description: string | undefined;
+  readonly author: string | undefined;
+  readonly workspaceType: string | undefined;
+  readonly tasks: ReadonlyArray<string>;
 }
+
+/** Flags the slash parser accepts as `--key value` or `--key=value`. */
+const SLASH_VALUE_FLAGS = new Set([
+  'name',
+  'dir',
+  'status',
+  'description',
+  'author',
+  'workspace-type',
+  'tasks',
+]);
 
 const parseSlashArgs = (args: string): SlashArgs => {
   const tokens = args.split(/\s+/).filter((token) => token !== '');
@@ -771,16 +980,35 @@ const parseSlashArgs = (args: string): SlashArgs => {
           ? 'next'
           : head === 'list'
             ? 'list'
-            : 'check';
-  const rest =
-    head === 'check' || head === 'status' || head === 'state' || head === 'next' || head === 'list'
-      ? tokens.slice(1)
-      : tokens;
+            : head === 'create'
+              ? 'create'
+              : 'check';
+  const known =
+    head === 'check' ||
+    head === 'status' ||
+    head === 'state' ||
+    head === 'next' ||
+    head === 'list' ||
+    head === 'create';
+  const rest = known ? tokens.slice(1) : tokens;
   let name: string | undefined;
   let dir: string | undefined;
   let statusFilter: string | undefined;
+  let description: string | undefined;
+  let author: string | undefined;
+  let workspaceType: string | undefined;
+  let tasks: ReadonlyArray<string> = [];
   let verbose = false;
   let pending = false;
+  const assign = (key: string, value: string): void => {
+    if (key === 'name') name = value;
+    else if (key === 'dir') dir = value;
+    else if (key === 'status') statusFilter = value;
+    else if (key === 'description') description = value;
+    else if (key === 'author') author = value;
+    else if (key === 'workspace-type') workspaceType = value;
+    else if (key === 'tasks') tasks = csv(value);
+  };
   for (let index = 0; index < rest.length; index++) {
     const token = rest[index] ?? '';
     if (token === '--verbose' || token === '-v') {
@@ -791,24 +1019,31 @@ const parseSlashArgs = (args: string): SlashArgs => {
       pending = true;
       continue;
     }
-    const inline = /^--(name|dir|status)=(.*)$/.exec(token);
+    const inline = /^--([\w-]+)=(.*)$/.exec(token);
     if (inline !== null) {
-      if (inline[1] === 'name') name = inline[2];
-      else if (inline[1] === 'dir') dir = inline[2];
-      else statusFilter = inline[2];
+      if (SLASH_VALUE_FLAGS.has(inline[1] ?? '')) assign(inline[1] ?? '', inline[2] ?? '');
       continue;
     }
-    if (token === '--name' || token === '--dir' || token === '--status') {
+    if (token.startsWith('--') && SLASH_VALUE_FLAGS.has(token.slice(2))) {
       const value = rest[index + 1];
       if (value !== undefined && !value.startsWith('--')) {
-        if (token === '--name') name = value;
-        else if (token === '--dir') dir = value;
-        else statusFilter = value;
+        assign(token.slice(2), value);
         index++;
       }
     }
   }
-  return { command, name, dir, verbose, statusFilter, pending };
+  return {
+    command,
+    name,
+    dir,
+    verbose,
+    statusFilter,
+    pending,
+    description,
+    author,
+    workspaceType,
+    tasks,
+  };
 };
 
 /**
@@ -825,6 +1060,24 @@ export const runSlash = (
   Effect.gen(function* () {
     const parsed = parseSlashArgs(args);
     const dir = parsed.dir === undefined ? root : storeDirOf(parsed.dir);
+    if (parsed.command === 'create') {
+      if (parsed.name === undefined || parsed.name === '') {
+        return yield* Effect.fail(
+          new SpecStore.StoreError({
+            operation: 'SpecCreate',
+            reason: 'create requires --name <spec>.',
+          }),
+        );
+      }
+      const report = yield* scaffold(dir, {
+        name: parsed.name,
+        author: parsed.author,
+        description: parsed.description,
+        workspaceType: parsed.workspaceType,
+        taskSpecs: parsed.tasks,
+      });
+      return { output: renderScaffold(report), ok: true };
+    }
     if (parsed.command === 'status') {
       if (parsed.name === undefined || parsed.name === '') {
         return yield* Effect.fail(

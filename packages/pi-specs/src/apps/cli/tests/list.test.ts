@@ -102,6 +102,7 @@ Vitest.describe('Cli.list runtime', () => {
               exists: () => Effect.succeed(false),
               snapshot: () =>
                 Effect.fail(new SpecStore.StoreError({ operation: 'unused', reason: 'unused' })),
+              write: () => Effect.void,
             }),
           ),
         ),
