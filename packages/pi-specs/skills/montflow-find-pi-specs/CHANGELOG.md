@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.0] - 2026-10-13
+
+### Added
+
+- Pointer to `mf-specs create` for scaffolding a new spec skeleton
+
 ## [1.1.0] - 2026-10-07
 
 ### Changed

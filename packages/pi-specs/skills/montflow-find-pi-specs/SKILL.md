@@ -3,7 +3,7 @@ name: montflow-find-pi-specs
 description: Finds and filters montflow specs under .agents/@montflow/specs/ with the `mf-specs list` CLI (or `/mf-specs list` in Pi), reporting each spec's derived lifecycle state. Use when an agent must answer "what is pending?", pick a spec to resume, or list specs by state.
 id: f21093485cea4b44
 author: Daniel Montilla
-version: 1.1.0
+version: 1.2.0
 license: MIT
 dependencies:
   - executing-skills
@@ -74,7 +74,8 @@ Each line is `<mark> <name>  <declared> · <derived> · <task counts>`, plus a
 
 The listing reflects the spec files on disk. If `list` reports no specs,
 none exist under the root — do not invent one. To author a new spec use
-`montflow-create-pi-specs`; to run work against an existing spec use the
+`montflow-create-pi-specs` (or scaffold the skeleton with
+`mf-specs create --name <spec>`); to run work against an existing spec use the
 `montflow-dispatch-pi-sessions` skill.
 
 # Reference
@@ -82,6 +83,6 @@ none exist under the root — do not invent one. To author a new spec use
 - **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus
   one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`).
 - **CLI engine**: `packages/pi-specs/src/apps/cli/cli.apps.module.ts` —
-  `list`, `renderList`, `resolveListOptions`.
+  `list`, `renderList`, `resolveListOptions`, `scaffold` (the `create` engine).
 - **Lifecycle contract**: `packages/pi-specs/src/modules/lifecycle/lifecycle.module.ts`
   — the derived states and their meanings.

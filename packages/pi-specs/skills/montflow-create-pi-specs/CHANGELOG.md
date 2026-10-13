@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.1.0] - 2026-10-13
+
+### Added
+
+- `mf-specs create` scaffold step: the skill now scaffolds a valid tree with the deterministic, model-free CLI before filling it in
+
+### Changed
+
+- Self-check now runs `mf-specs check --name <spec>`
+
 ## [2.0.0] - 2026-10-06
 
 ### Changed

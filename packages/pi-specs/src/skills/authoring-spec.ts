@@ -17,6 +17,17 @@ Author the spec; do not execute it.
 - One directory per task: \`<PHASE_LETTERS><NNN>-<kebab-name>/\` containing \`TASK.md\` and
   \`MEMORY.md\`, plus \`GATES.md\` when \`Gates\` is \`Yes\`.
 
+## Scaffold
+
+Start from the mechanical scaffold — one model-free command that writes a tree which
+already passes \`check\`:
+
+\`bun run --cwd packages/pi-specs cli create --name <name> [--description "<line>"] [--author "<name>"] [--tasks "<name>[:<type>[:gates]],…"]\`
+
+Each task is \`name[:type[:gates]]\` (type defaults to \`execution\`); the command appends
+\`<PHASE>099-review-phase\` and refuses to overwrite an existing spec. Then edit the rendered
+files to carry the real requirements.
+
 ## TASK.md
 
 Frontmatter: \`id\` (\`<LETTERS><NNN>\`, matches the directory), \`name\` (matches the directory

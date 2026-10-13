@@ -22,6 +22,17 @@ bun run --cwd packages/pi-specs cli check
 - `status --name <spec>` — lifecycle, task counts, per-phase task
   list, and verification verdict. Exits non-zero when the spec fails
   verification.
+- `state --name <spec>` — compact derived state, active phase, and
+  locked phases, for an orchestrator to read before acting.
+- `next --name <spec>` — the ready task set for the active phase
+  (pending tasks whose `depends-on` targets are complete, review last;
+  `gated` marks a task with a `GATES.md`).
+- `create --name <spec>` — deterministic, model-free scaffold: writes
+  `SPEC.md`, one task directory per `--tasks` entry (each
+  `name[:type[:gates]]`), and the phase's `<PHASE>099-review-phase`
+  review task. Refuses to overwrite an existing spec. Optional
+  `--description`, `--author`, `--workspace-type in-place|worktree`.
+  The generated tree passes `check`; edit it to carry the real work.
 - `list [--pending | --status <states>] [--verbose]` — lists every
   spec with its derived lifecycle state and task counts. `--pending`
   keeps every unfinished spec; `--status` takes a comma-separated list
@@ -70,6 +81,9 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
 - **`Prompt`** — `AUTHOR_PREPROMPT` / `AUTHOR_POSTPROMPT` + `buildAuthorPrompt`
   (author one spec) and `RESUME_PREPROMPT` / `RESUME_POSTPROMPT` +
   `buildResumePrompt` (orchestrate a spec). Each injects its skill.
+- **`Scaffold`** — `renderSpecScaffold` / `ScaffoldSpecInput` /
+  `ScaffoldTask`: pure renderer for a fresh spec tree (the mechanical
+  half of `mf-specs create`).
 - **`SpecSkill`** — `AUTHORING_SPEC` / `EXECUTING_SPEC`,
   the simplified skill text sent into dispatched sessions (not Pi-discovered).
 - **`Verify` / `Frontmatter`** — shared `Issue` / `Result` vocabulary and

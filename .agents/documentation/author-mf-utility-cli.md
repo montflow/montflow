@@ -19,7 +19,7 @@ Not for `core`, `format`, `linting`, `stlx` — no CLI, different rules.
 | `pi-reviews` | `mf-reviews` | `doctor`, `list`, `show`, `verify`, `new` |
 | `pi-sessions` | `mf-sessions` | `doctor`, `list`, `status`, `verify`, `start`, `resume`, `interrupt`, `steer`, `answer` |
 | `pi-skills` | `mf-skills` | `doctor`, `list`, `show`, `verify`, `create`, `modify`, `delete` |
-| `pi-specs` | `mf-specs` | `doctor`, `check`, `status`, `list` |
+| `pi-specs` | `mf-specs` | `doctor`, `check`, `status`, `state`, `next`, `list`, `create` |
 
 `pi-effect`, `pi-interactive`, `pi-notifications`, `pi-workflows`: libraries. No CLI.
 
