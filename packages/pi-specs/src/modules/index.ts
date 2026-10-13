@@ -7,4 +7,5 @@ export * as Verify from './verify/index.js';
 export * as Frontmatter from './frontmatter/index.js';
 export * as Structure from './structure/index.js';
 export * as Prompt from './prompt/index.js';
+export * as Scaffold from './scaffold/index.js';
 export * as ReviewLink from './review-link/index.js';

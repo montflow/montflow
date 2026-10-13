@@ -42,4 +42,25 @@ Vitest.describe('SpecStore runtime', () => {
       Vitest.expect(yield* store.hasRoot('/tmp/pi-specs-definitely-missing')).toBe(false);
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
   );
+
+  Vitest.it.effect('writes a fresh spec tree, creating the root', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = path.join(yield* fs.makeTempDirectoryScoped(), 'specs');
+      const store = yield* SpecStore.SpecStore;
+
+      yield* store.write(root, 'ship-login', [
+        { path: 'SPEC.md', content: '# Spec\n' },
+        { path: 'A001-implement/TASK.md', content: '# Task\n' },
+      ]);
+
+      Vitest.expect(yield* store.hasRoot(root)).toBe(true);
+      const snapshot = yield* store.snapshot(root, 'ship-login');
+      Vitest.expect(snapshot.files.map((file) => file.path).toSorted()).toStrictEqual([
+        'A001-implement/TASK.md',
+        'SPEC.md',
+      ]);
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
+  );
 });

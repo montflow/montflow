@@ -7,7 +7,7 @@ export class StoreError extends Data.TaggedError('@montflow/SpecStoreError')<{
   readonly reason: string;
 }> {}
 
-/** Filesystem surface the CLI needs: list specs, snapshot one spec. */
+/** Filesystem surface the CLI needs: list specs, snapshot one spec, write a new tree. */
 export interface Impl {
   /** Spec directory names under `root`, sorted. Dotfiles skipped. */
   readonly names: (root: string) => Effect.Effect<ReadonlyArray<string>, StoreError>;
@@ -17,6 +17,16 @@ export interface Impl {
   readonly exists: (root: string, name: string) => Effect.Effect<boolean, never>;
   /** Every file under `root/<name>`, as POSIX-relative paths + contents. */
   readonly snapshot: (root: string, name: string) => Effect.Effect<SpecSnapshot, StoreError>;
+  /**
+   * Write a fresh spec tree under `root/<name>`, creating `root` and every
+   * parent directory. `files` carry POSIX-relative paths; an existing file is
+   * overwritten.
+   */
+  readonly write: (
+    root: string,
+    name: string,
+    files: ReadonlyArray<SpecFileEntry>,
+  ) => Effect.Effect<void, StoreError>;
 }
 
 const toStoreError =
@@ -83,7 +93,26 @@ const make = Effect.gen(function* () {
       return { name, files };
     });
 
-  return { names, hasRoot, exists, snapshot } as const;
+  const write = (
+    root: string,
+    name: string,
+    files: ReadonlyArray<SpecFileEntry>,
+  ): Effect.Effect<void, StoreError> =>
+    Effect.gen(function* () {
+      const operation = 'SpecStore.write';
+      const dir = path.join(root, name);
+      for (const file of files) {
+        const target = path.join(dir, file.path);
+        yield* fs
+          .makeDirectory(path.dirname(target), { recursive: true })
+          .pipe(Effect.mapError(toStoreError(operation)));
+        yield* fs
+          .writeFileString(target, file.content)
+          .pipe(Effect.mapError(toStoreError(operation)));
+      }
+    });
+
+  return { names, hasRoot, exists, snapshot, write } as const;
 });
 
 export const Id = '@montflow/SpecStore';
