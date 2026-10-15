@@ -12,7 +12,7 @@ import {
   phaseRank,
   verifyTaskFile,
 } from '../task/index.js';
-import { type Issue, type Result, issue } from '../verify/index.js';
+import { type Issue, type Result, issue, noErrors } from '../verify/index.js';
 
 /**
  * One file inside a spec directory, as seen by the verifier.
@@ -81,9 +81,12 @@ const findCycle = (tasks: ReadonlyMap<string, Task>): ReadonlyArray<string> | un
   return cycle;
 };
 
-/** Prefix a nested file's issues with its path so output is actionable. */
+/**
+ * Prefix a nested file's issues with its path so output is actionable, keeping
+ * each finding's severity, fix, and line intact.
+ */
 const nest = (path: string, result: Result): ReadonlyArray<Issue> =>
-  result.issues.map((found) => issue(`${path}: ${found.field}`, found.message));
+  result.issues.map((found) => ({ ...found, field: `${path}: ${found.field}` }));
 
 /**
  * Mechanically verify the whole on-disk structure of a spec:
@@ -291,5 +294,5 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review?: SeriesSnapshot):
     );
   }
 
-  return { valid: issues.length === 0, issues };
+  return { valid: noErrors(issues), issues };
 };

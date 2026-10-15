@@ -3,7 +3,8 @@ import { Effect } from 'effect';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import type { SpecFileEntry } from '../../../modules/structure/index.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
-import { renderStatus, status } from '../index.js';
+import { warning } from '../../../modules/verify/index.js';
+import { type StatusReport, renderStatus, status } from '../index.js';
 import { entry, memory, stubLayer } from './helpers.js';
 
 /** Build the two-task spec used across the state cases. */
@@ -142,4 +143,24 @@ Vitest.describe('Cli.status lifecycle states runtime', () => {
       Vitest.expect(text).toContain('Phase A \u00b7 locked');
     }),
   );
+});
+
+Vitest.describe('Cli.renderStatus warnings runtime', () => {
+  const report: StatusReport = {
+    name: 'ship-spec',
+    spec: undefined,
+    tasks: [],
+    state: undefined,
+    verify: {
+      valid: true,
+      issues: [warning('metrics', 'No metrics recorded.', 'Add a `## Metrics` section.')],
+    },
+  };
+
+  Vitest.it('marks a warning and keeps the verified verdict', () => {
+    const text = renderStatus(report);
+    Vitest.expect(text).toContain('verify \u2713 verified \u00b7 1 warning');
+    Vitest.expect(text).toContain('  ! metrics: No metrics recorded.');
+    Vitest.expect(text).toContain('    Fix: Add a `## Metrics` section.');
+  });
 });

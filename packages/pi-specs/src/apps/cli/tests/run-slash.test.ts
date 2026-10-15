@@ -83,6 +83,24 @@ Vitest.describe('Cli.runSlash runtime', () => {
     }),
   );
 
+  Vitest.it.effect('accepts --strict for a clean spec', () =>
+    Effect.gen(function* () {
+      const report = yield* runSlash('check --name ok --strict', root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.ok).toBe(true);
+    }),
+  );
+
+  Vitest.it.effect('fails a broken spec under --strict', () =>
+    Effect.gen(function* () {
+      const report = yield* runSlash('check --name bad --strict', root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.ok).toBe(false);
+    }),
+  );
+
   Vitest.it.effect('reports an unknown list status as an error', () =>
     Effect.gen(function* () {
       const error = yield* runSlash('list --status=bogus', root).pipe(

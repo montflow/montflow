@@ -1,5 +1,5 @@
 import { phaseOf, phaseRank } from '../task/index.js';
-import { type Issue, type Result, issue } from '../verify/index.js';
+import { type Issue, type Result, issue, noErrors } from '../verify/index.js';
 
 /**
  * The convention linking a spec's per-phase review tasks to its review
@@ -98,5 +98,5 @@ export const verify = (
     }
   }
 
-  return { valid: issues.length === 0, issues };
+  return { valid: noErrors(issues), issues };
 };

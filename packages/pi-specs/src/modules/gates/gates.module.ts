@@ -1,4 +1,4 @@
-import { type Issue, type Result, issue } from '../verify/index.js';
+import { type Issue, type Result, issue, noErrors } from '../verify/index.js';
 
 /** One parsed GATES.md stage: its heading and checkbox items. */
 export interface GateStage {
@@ -72,5 +72,5 @@ export const verifyGatesFile = (markdown: string): Result => {
   if (stages.length > 0 && itemCount === 0) {
     issues.push(issue('body', 'No checklist items (`- [ ]`) found.'));
   }
-  return { valid: issues.length === 0, issues };
+  return { valid: noErrors(issues), issues };
 };

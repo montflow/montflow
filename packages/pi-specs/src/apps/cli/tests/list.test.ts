@@ -3,7 +3,8 @@ import { Effect, Layer } from 'effect';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import { SpecStore } from '../../../services/index.js';
-import { LIST_STATUSES, list, renderList, resolveListOptions } from '../index.js';
+import { warning } from '../../../modules/verify/index.js';
+import { LIST_STATUSES, type ListReport, list, renderList, resolveListOptions } from '../index.js';
 import { entry, memory, stubLayer } from './helpers.js';
 
 const root = '.agents/@montflow/specs';
@@ -131,6 +132,27 @@ Vitest.describe('Cli.renderList runtime', () => {
       Vitest.expect(renderList(report, true).startsWith(`root ${root}`)).toBe(true);
     }),
   );
+
+  Vitest.it('marks warnings apart from issues', () => {
+    const report: ListReport = {
+      root,
+      specs: [
+        {
+          name: 'ok',
+          spec: undefined,
+          tasks: [],
+          state: undefined,
+          verify: {
+            valid: true,
+            issues: [warning('metrics', 'No metrics recorded.')],
+          },
+        },
+      ],
+      total: 1,
+      matched: 1,
+    };
+    Vitest.expect(renderList(report, false)).toContain('! 1 warning');
+  });
 });
 
 Vitest.describe('Cli.resolveListOptions runtime', () => {

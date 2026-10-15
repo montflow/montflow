@@ -1,7 +1,7 @@
 import { Schema } from 'effect';
 import { fieldList, fieldString, parseMarkdown } from '../frontmatter/index.js';
 import type { FieldValue } from '../frontmatter/index.js';
-import { type Issue, type Result, issue } from '../verify/index.js';
+import { type Issue, type Result, issue, noErrors } from '../verify/index.js';
 
 // ─── Patterns ─────────────────────────────────────────────────────────
 
@@ -271,5 +271,5 @@ export const verifyTaskFile = (dirName: string, markdown: string): Result => {
     }
   }
 
-  return { valid: issues.length === 0, issues };
+  return { valid: noErrors(issues), issues };
 };

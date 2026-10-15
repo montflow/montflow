@@ -1,6 +1,6 @@
 import type { SpecStatus } from '../spec/index.js';
 import { type TaskStatus, phaseOf, phaseRank } from '../task/index.js';
-import { type Issue, type Result, issue } from '../verify/index.js';
+import { type Issue, type Result, issue, noErrors } from '../verify/index.js';
 
 /**
  * Derived lifecycle state of a spec. `pending` is idle work (not
@@ -151,7 +151,7 @@ export const verify = (input: Input): Result => {
     }
   }
 
-  return { valid: issues.length === 0, issues };
+  return { valid: noErrors(issues), issues };
 };
 
 /**

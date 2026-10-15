@@ -1,7 +1,7 @@
 import { Schema } from 'effect';
 import { fieldList, fieldString, parseMarkdown } from '../frontmatter/index.js';
 import type { FieldValue } from '../frontmatter/index.js';
-import { type Issue, type Result, hasSection, issue } from '../verify/index.js';
+import { type Issue, type Result, hasSection, issue, noErrors } from '../verify/index.js';
 
 // ─── Patterns ─────────────────────────────────────────────────────────
 
@@ -230,7 +230,7 @@ export const verifySpecFile = (dirName: string, markdown: string): Result => {
     }
   }
 
-  return { valid: issues.length === 0, issues };
+  return { valid: noErrors(issues), issues };
 };
 
 // ─── Slug helpers ─────────────────────────────────────────────────────

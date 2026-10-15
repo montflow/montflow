@@ -17,7 +17,15 @@ import {
 import type { ScaffoldTask } from '../../modules/scaffold/index.js';
 import { type SpecSnapshot, verifySpecTree } from '../../modules/structure/index.js';
 import { type Task, parseTaskDirName, parseTaskFile, phaseOf } from '../../modules/task/index.js';
-import type { Issue, Result } from '../../modules/verify/index.js';
+import {
+  type Issue,
+  type Result,
+  errorCount,
+  isWarning,
+  noErrors,
+  promoteWarnings,
+  warningCount,
+} from '../../modules/verify/index.js';
 import { SpecStore } from '../../services/index.js';
 import { runDoctorAt } from '../doctor/index.js';
 
@@ -49,8 +57,12 @@ export interface CheckSpec {
 export interface CheckReport {
   readonly root: string;
   readonly specs: ReadonlyArray<CheckSpec>;
+  /** Specs with at least one error-severity issue (warnings never count here). */
   readonly failed: number;
+  /** Total error-severity findings across every spec. */
   readonly issueCount: number;
+  /** Total warning-severity findings across every spec, counted apart from issues. */
+  readonly warningCount: number;
 }
 
 /** Options for {@link check}. */
@@ -59,15 +71,54 @@ export interface CheckOptions {
   readonly name?: string;
   /** Specs verified concurrently. */
   readonly concurrency?: number;
+  /** Promote warnings to errors, so an advisory finding fails the check. */
+  readonly strict?: boolean;
 }
+
+/** One spec's findings, before reduction into a report. */
+export interface CheckEntry {
+  readonly name: string;
+  readonly issues: ReadonlyArray<Issue>;
+}
+
+/**
+ * Reduce per-spec findings into a {@link CheckReport}. `strict` promotes every
+ * warning to an error first, so a warning fails the run only under `--strict`.
+ * Pure — the caller supplies the findings.
+ * @param root - spec root directory
+ * @param entries - one entry per spec, in output order
+ * @param strict - promote warnings to errors
+ * @returns the aggregated report
+ */
+export const reduceCheck = (
+  root: string,
+  entries: ReadonlyArray<CheckEntry>,
+  strict: boolean,
+): CheckReport => {
+  const specs = entries.map(({ name, issues }): CheckSpec => {
+    const effective = strict ? promoteWarnings(issues) : issues;
+    return { name, valid: noErrors(effective), issues: effective };
+  });
+  return {
+    root,
+    specs,
+    failed: specs.filter((spec) => !spec.valid).length,
+    issueCount: specs.reduce((sum, spec) => sum + errorCount(spec.issues), 0),
+    warningCount: specs.reduce((sum, spec) => sum + warningCount(spec.issues), 0),
+  };
+};
+
+/** Process exit code a check report implies: `0` when nothing failed, else `1`. */
+export const checkExitCode = (report: CheckReport): number => (report.failed > 0 ? 1 : 0);
 
 /**
  * Mechanically verify every spec under `root` (or one `name`). Each
  * spec is a pure `verifySpecTree` over its snapshot, so the
  * specs run concurrently. Never fails on a bad spec — bad specs
- * become failing entries; only IO failures fail.
+ * become failing entries; only IO failures fail. Warnings are advisory
+ * unless `strict` promotes them.
  * @param root - spec root directory
- * @param options - optional single-spec + concurrency controls
+ * @param options - optional single-spec, concurrency, and strictness controls
  * @returns the aggregated report
  */
 export const check = (
@@ -76,6 +127,7 @@ export const check = (
 ): Effect.Effect<CheckReport, SpecStore.StoreError, SpecStore.SpecStore> =>
   Effect.gen(function* () {
     const store = yield* SpecStore.SpecStore;
+    const strict = options.strict ?? false;
     if (!(yield* store.hasRoot(root))) {
       return yield* Effect.fail(
         new SpecStore.StoreError({
@@ -88,36 +140,38 @@ export const check = (
       const issues: ReadonlyArray<Issue> = [
         { field: options.name, message: `Spec directory not found under ${root}.` },
       ];
-      return {
-        root,
-        specs: [{ name: options.name, valid: false, issues }],
-        failed: 1,
-        issueCount: 1,
-      };
+      return reduceCheck(root, [{ name: options.name, issues }], strict);
     }
     const names = options.name !== undefined ? [options.name] : yield* store.names(root);
-    const specs = yield* Effect.forEach(
+    const entries = yield* Effect.forEach(
       names,
       (name) =>
         store.snapshot(root, name).pipe(
-          Effect.map((snapshot) => {
+          Effect.map((snapshot): CheckEntry => {
             const result = verifySpecTree(snapshot);
-            return { name, valid: result.valid, issues: result.issues };
+            return { name, issues: result.issues };
           }),
         ),
       { concurrency: options.concurrency ?? DEFAULT_CONCURRENCY },
     );
-    return {
-      root,
-      specs,
-      failed: specs.filter((spec) => !spec.valid).length,
-      issueCount: specs.reduce((sum, spec) => sum + spec.issues.length, 0),
-    };
+    return reduceCheck(root, entries, strict);
   });
 
 /**
- * Render a check report. Token-lean by default — only failures and a
- * one-line summary. `verbose` also lists passing specs and the root.
+ * The `(…)` count suffix on a check spec line, naming errors and warnings apart.
+ */
+const checkCounts = (errors: number, warnings: number): string => {
+  if (warnings === 0) return errors === 0 ? '' : ` (${errors})`;
+  const parts: Array<string> = [];
+  if (errors > 0) parts.push(`${errors} issue${errors === 1 ? '' : 's'}`);
+  parts.push(`${warnings} warning${warnings === 1 ? '' : 's'}`);
+  return ` (${parts.join(' \u00b7 ')})`;
+};
+
+/**
+ * Render a check report. Token-lean by default — failures and warnings, plus a
+ * one-line summary. `verbose` also lists passing specs and the root. Warnings
+ * render with a `!` mark, counted apart from issues, and never fail a spec.
  * @param report - report from {@link check}
  * @param verbose - include passing specs and the root path
  * @returns the display text
@@ -126,18 +180,23 @@ export const renderCheck = (report: CheckReport, verbose: boolean): string => {
   const lines: Array<string> = [];
   if (verbose) lines.push(`root ${report.root}`);
   for (const spec of report.specs) {
-    if (spec.valid && !verbose) continue;
-    lines.push(
-      `${spec.valid ? '\u2713' : '\u2717'} ${spec.name}${spec.valid ? '' : ` (${spec.issues.length})`}`,
-    );
-    if (!spec.valid) {
-      for (const found of spec.issues) lines.push(`  ${found.field}: ${found.message}`);
+    const errors = errorCount(spec.issues);
+    const warnings = warningCount(spec.issues);
+    if (spec.valid && warnings === 0 && !verbose) continue;
+    lines.push(`${spec.valid ? '\u2713' : '\u2717'} ${spec.name}${checkCounts(errors, warnings)}`);
+    for (const found of spec.issues) {
+      lines.push(`${isWarning(found) ? '  ! ' : '  '}${found.field}: ${found.message}`);
+      if (found.fix !== undefined) lines.push(`    Fix: ${found.fix}`);
     }
   }
   if (lines.length > 0) lines.push('');
   const specCount = report.specs.length;
+  const warningSuffix =
+    report.warningCount === 0
+      ? ''
+      : ` \u00b7 ${report.warningCount} warning${report.warningCount === 1 ? '' : 's'}`;
   lines.push(
-    `${specCount} spec${specCount === 1 ? '' : 's'} \u00b7 ${report.failed} failed \u00b7 ${report.issueCount} issue${report.issueCount === 1 ? '' : 's'}`,
+    `${specCount} spec${specCount === 1 ? '' : 's'} \u00b7 ${report.failed} failed \u00b7 ${report.issueCount} issue${report.issueCount === 1 ? '' : 's'}${warningSuffix}`,
   );
   return lines.join('\n');
 };
@@ -258,9 +317,18 @@ export const renderStatus = (report: StatusReport): string => {
   lines.push(
     `tasks ${report.tasks.length}${report.tasks.length > 0 ? ` \u00b7 ${statusCounts(report.tasks)}` : ''}`,
   );
+  const errors = errorCount(report.verify.issues);
+  const warnings = warningCount(report.verify.issues);
+  const warningSuffix =
+    warnings === 0 ? '' : ` \u00b7 ${warnings} warning${warnings === 1 ? '' : 's'}`;
   lines.push(
-    `verify ${report.verify.valid ? '\u2713 verified' : `\u2717 ${report.verify.issues.length} issue${report.verify.issues.length === 1 ? '' : 's'}`}`,
+    `verify ${errors === 0 ? '\u2713 verified' : `\u2717 ${errors} issue${errors === 1 ? '' : 's'}`}${warningSuffix}`,
   );
+  for (const found of report.verify.issues) {
+    if (!isWarning(found)) continue;
+    lines.push(`  ! ${found.field}: ${found.message}`);
+    if (found.fix !== undefined) lines.push(`    Fix: ${found.fix}`);
+  }
   if (report.state !== undefined && report.state.state === 'inconsistent') {
     for (const found of report.state.issues) lines.push(`  ${found.field}: ${found.message}`);
   }
@@ -543,7 +611,12 @@ export const renderList = (report: ListReport, verbose: boolean): string => {
     const mark = derived === undefined ? '\u2717' : LIST_MARK[derived];
     const declared = spec.spec?.status ?? 'unreadable';
     const counts = statusCounts(spec.tasks) || `${spec.tasks.length} tasks`;
-    const verdict = spec.verify.valid ? '' : ` \u00b7 \u2717 ${spec.verify.issues.length}`;
+    const errors = errorCount(spec.verify.issues);
+    const warnings = warningCount(spec.verify.issues);
+    const parts: Array<string> = [];
+    if (errors > 0) parts.push(`\u2717 ${errors}`);
+    if (warnings > 0) parts.push(`! ${warnings} warning${warnings === 1 ? '' : 's'}`);
+    const verdict = parts.length === 0 ? '' : ` \u00b7 ${parts.join(' \u00b7 ')}`;
     lines.push(
       `${mark} ${spec.name}  ${declared} \u00b7 ${derived ?? 'unreadable'} \u00b7 ${counts}${verdict}`,
     );
@@ -762,19 +835,24 @@ const checkCommand = Command.make(
       Flag.withDescription('Specs verified in parallel.'),
       Flag.withDefault(DEFAULT_CONCURRENCY),
     ),
+    strict: Flag.Boolean('strict').pipe(
+      Flag.withDescription('Treat warnings as errors.'),
+      Flag.withDefault(false),
+    ),
   },
   (config) =>
     Effect.gen(function* () {
       const name = Option.isSome(config.name) ? config.name.value : undefined;
       const options: CheckOptions =
         name === undefined
-          ? { concurrency: config.concurrency }
-          : { name, concurrency: config.concurrency };
+          ? { concurrency: config.concurrency, strict: config.strict }
+          : { name, concurrency: config.concurrency, strict: config.strict };
       const report = yield* check(storeDirOf(config.dir), options);
       yield* Console.log(renderCheck(report, config.verbose));
-      if (report.failed > 0) {
+      const exit = checkExitCode(report);
+      if (exit !== 0) {
         yield* Effect.sync(() => {
-          process.exitCode = 1;
+          process.exitCode = exit;
         });
       }
     }).pipe(
@@ -949,6 +1027,7 @@ interface SlashArgs {
   readonly name: string | undefined;
   readonly dir: string | undefined;
   readonly verbose: boolean;
+  readonly strict: boolean;
   readonly statusFilter: string | undefined;
   readonly pending: boolean;
   readonly description: string | undefined;
@@ -1000,6 +1079,7 @@ const parseSlashArgs = (args: string): SlashArgs => {
   let tasks: ReadonlyArray<string> = [];
   let verbose = false;
   let pending = false;
+  let strict = false;
   const assign = (key: string, value: string): void => {
     if (key === 'name') name = value;
     else if (key === 'dir') dir = value;
@@ -1017,6 +1097,10 @@ const parseSlashArgs = (args: string): SlashArgs => {
     }
     if (token === '--pending') {
       pending = true;
+      continue;
+    }
+    if (token === '--strict') {
+      strict = true;
       continue;
     }
     const inline = /^--([\w-]+)=(.*)$/.exec(token);
@@ -1037,6 +1121,7 @@ const parseSlashArgs = (args: string): SlashArgs => {
     name,
     dir,
     verbose,
+    strict,
     statusFilter,
     pending,
     description,
@@ -1126,8 +1211,8 @@ export const runSlash = (
     }
     const options: CheckOptions =
       parsed.name === undefined
-        ? { concurrency: DEFAULT_CONCURRENCY }
-        : { name: parsed.name, concurrency: DEFAULT_CONCURRENCY };
+        ? { concurrency: DEFAULT_CONCURRENCY, strict: parsed.strict }
+        : { name: parsed.name, concurrency: DEFAULT_CONCURRENCY, strict: parsed.strict };
     const report = yield* check(dir, options);
     return { output: renderCheck(report, parsed.verbose), ok: report.failed === 0 };
   });

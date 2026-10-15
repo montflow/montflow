@@ -1,4 +1,4 @@
-import { type Issue, type Result, hasSection, issue } from '../verify/index.js';
+import { type Issue, type Result, hasSection, issue, noErrors } from '../verify/index.js';
 
 /** Sections the MEMORY.md template defines, in order. */
 export const MEMORY_SECTIONS = [
@@ -30,5 +30,5 @@ export const verifyMemoryFile = (markdown: string): Result => {
       issues.push(issue('body', `Missing \`## ${section}\` section.`));
     }
   }
-  return { valid: issues.length === 0, issues };
+  return { valid: noErrors(issues), issues };
 };
