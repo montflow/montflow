@@ -66,7 +66,7 @@ export default function piReviewsExtension(
       ),
     }),
     execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => {
-      const thinking: Session.ThinkingLevel | undefined =
+      const thinking =
         params.thinking === undefined
           ? undefined
           : Schema.is(Session.ThinkingLevel)(params.thinking)

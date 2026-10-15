@@ -67,8 +67,10 @@ review is started from **inside the Pi session**. The extension registers a
 `review_create` tool:
 
 ```
-review_create  name=<series>  [target=<what>]  [spec=<spec-slug>]  [profile=<name>]  [parent=<session-id>]  [model=<p/m>]
+review_create  name=<series>  [target=<what>]  [spec=<spec-slug>]  [profile=<name>]  [round=<NNN>]  [phase=<id>]  [thinking=<level>]  [parent=<session-id>]  [model=<p/m>]
 ```
+
+A **phase review** names `round=<NNN>` and `phase=<id>` so the review lands on the same round in every expected series and the round records which phase it reviews (`- Phase:`); without them the reviewer starts on the series' next free round with no phase attribution.
 
 It ensures the series ledger exists and starts the `montflow-adversarial-review`
 reviewer session through the session's session runner host (the same host

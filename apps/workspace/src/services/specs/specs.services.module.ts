@@ -125,7 +125,7 @@ export const readReviewSeries = async (
   const profiles = files
     .filter((file) => file.path.endsWith('/TASK.md'))
     .map((file) => libs.Task.parseTaskFile(file.content))
-    .flatMap((task) => (task === undefined ? [] : task.reviewerProfiles));
+    .flatMap((task) => (task === undefined || task.type !== 'review' ? [] : task.reviewerProfiles));
   const names = [...new Set(libs.ReviewLink.seriesNames(name, profiles))];
   const read = await Promise.all(
     names.map(async (series): Promise<ReviewSeries | undefined> => {
@@ -678,19 +678,22 @@ export const buildResumeContext = (
     type: task.type,
     reviewerProfiles: task.reviewerProfiles,
   }));
-  lines.push('', 'Phase reviews (series shares the spec name, one per reviewer profile):');
+  lines.push(
+    '',
+    'Phase reviews (one series per reviewer profile: `<spec>` or `<spec>-<profile>`):',
+  );
   for (const phase of libs.ReviewLink.reviewPhases(reviewTasks)) {
-    const round = libs.ReviewLink.roundForPhase(phase);
+    const preferred = libs.ReviewLink.roundForPhase(phase);
     const profiles =
       reviewTasks.find((task) => task.type === 'review' && phaseOf(task.id) === phase)
         ?.reviewerProfiles ?? [];
     for (const series of libs.ReviewLink.seriesNames(id, profiles)) {
-      const present =
-        review
-          .find((snapshot) => snapshot.name === series)
-          ?.rounds.some((roundSnapshot) => roundSnapshot.round === round) ?? false;
+      const attributed = review
+        .find((snapshot) => snapshot.name === series)
+        ?.rounds.find((roundSnapshot) => roundSnapshot.phase === phase);
+      const round = attributed?.round ?? preferred;
       lines.push(
-        `- phase ${phase} → .agents/@montflow/reviews/${series}/${round}${present ? '' : ' (missing)'}`,
+        `- phase ${phase} → .agents/@montflow/reviews/${series}/${round}${attributed === undefined ? ' (missing)' : ''}`,
       );
     }
   }

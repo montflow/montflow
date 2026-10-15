@@ -113,6 +113,50 @@ const writeReviewSeries = async (root: string, name: string): Promise<void> => {
   await mkdir(join(root, '.agents', '@montflow', 'reviews', name), { recursive: true });
 };
 
+/** A round's REVIEW.md carrying the required metadata and an optional phase. */
+const roundMarkdown = (name: string, round: string, phase?: string): string =>
+  [
+    `# Review: ${name} / ${round}`,
+    '',
+    '## Metadata',
+    `- Target: ${name}`,
+    `- Round: ${round}`,
+    ...(phase === undefined ? [] : [`- Phase: ${phase}`]),
+    '- Type: standalone',
+    '- Isolation: isolated',
+    '- Max Attempts: 3',
+    '- Status: open',
+    '- Created: 2026-10-12',
+    '',
+    '## Findings',
+    '',
+    'No defects found.',
+    '',
+    '## Summary',
+    '- Critical: 0',
+    '- Major: 0',
+    '- Minor: 0',
+    '- Nit: 0',
+    '- Open: 0',
+    '- In Review: 0',
+    '- Resolved: 0',
+    "- Won't Fix: 0",
+    '- Escalated: 0',
+    '',
+  ].join('\n');
+
+/** Write one round file into a series directory, attributed to a phase when given. */
+const writeRound = async (
+  root: string,
+  series: string,
+  round: string,
+  phase?: string,
+): Promise<void> => {
+  const dir = join(root, '.agents', '@montflow', 'reviews', series, round);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, 'REVIEW.md'), roundMarkdown(series, round, phase));
+};
+
 Vitest.afterEach(async () => {
   await Sessions.resetSessionRuntimes();
   Sessions.setSessionFactoryLayer(undefined);
@@ -217,6 +261,43 @@ Vitest.describe('Specs.executeSpec dispatch', () => {
       Vitest.expect(prompt).toContain(
         '.agents/@montflow/reviews/ship-login-effect-reviewer/001 (missing)',
       );
+    }),
+  );
+
+  Vitest.it.live('reports a phase whose preferred round an earlier phase occupies as missing', () =>
+    Effect.gen(function* () {
+      const harness = makeHarness();
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
+      const root = yield* Effect.promise(freshRoot);
+      const dir = join(root, '.agents', '@montflow', 'specs', 'ship-login');
+      const write = (rel: string, content: string): Promise<void> =>
+        mkdir(join(dir, rel, '..'), { recursive: true }).then(() =>
+          writeFile(join(dir, rel), content),
+        );
+      yield* Effect.promise(async () => {
+        await write('SPEC.md', specMarkdown('ship-login'));
+        await write('A001-build-login/TASK.md', taskMarkdown('A001', 'build-login', 'execution'));
+        await write('A001-build-login/MEMORY.md', memoryMarkdown);
+        await write('A099-review-phase/TASK.md', taskMarkdown('A099', 'review-phase', 'review'));
+        await write('A099-review-phase/MEMORY.md', memoryMarkdown);
+        await write('C099-review-phase/TASK.md', taskMarkdown('C099', 'review-phase', 'review'));
+        await write('C099-review-phase/MEMORY.md', memoryMarkdown);
+      });
+      // Phase A holds rounds 001-003, so phase C's preferred round (003) is taken
+      // and no round is attributed to C: C must be reported missing, not "present".
+      yield* Effect.promise(() => writeRound(root, 'ship-login', '001', 'A'));
+      yield* Effect.promise(() => writeRound(root, 'ship-login', '002', 'A'));
+      yield* Effect.promise(() => writeRound(root, 'ship-login', '003', 'A'));
+      yield* Specs.executeSpec(root, { id: 'ship-login' });
+      const session = harness.sessions[0];
+      if (session === undefined) return yield* Effect.fail('session not created');
+      const prompt = yield* poll(
+        Effect.sync(() => session.prompts[0]),
+        (value) => value !== undefined,
+      );
+      Vitest.expect(prompt).toContain('.agents/@montflow/reviews/ship-login/001\n');
+      Vitest.expect(prompt).toContain('.agents/@montflow/reviews/ship-login/003 (missing)');
     }),
   );
 

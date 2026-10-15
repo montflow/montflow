@@ -514,8 +514,19 @@ export const scaffold = (
       .readSeries(fields.cwd, fields.name, fields.dir)
       .pipe(Effect.orElseSucceed(() => ''));
     const existingProfile = Review.parseSeries(ledgerRaw).metadata['Profile'];
-    const profile =
-      fields.profile === undefined || fields.profile === '' ? existingProfile : fields.profile;
+    const requestedProfile =
+      fields.profile === undefined || fields.profile === '' ? undefined : fields.profile;
+    if (
+      requestedProfile !== undefined &&
+      existingProfile !== undefined &&
+      existingProfile !== '' &&
+      existingProfile !== requestedProfile
+    ) {
+      return yield* Effect.fail(
+        `Series '${fields.name}' is already bound to profile '${existingProfile}'; refusing to bind profile '${requestedProfile}'.`,
+      );
+    }
+    const profile = requestedProfile ?? existingProfile;
 
     const rows: Array<Review.RoundRow> = [];
     const findings: Array<Review.FindingsRow> = [];

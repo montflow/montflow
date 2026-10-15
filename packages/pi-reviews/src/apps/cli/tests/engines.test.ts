@@ -125,6 +125,26 @@ Vitest.describe('review CLI engines', () => {
     }).pipe(Effect.provide(Live)),
   );
 
+  Vitest.it.effect('refuses to rebind a scaffolded series to a different profile', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      yield* Engines.scaffold({
+        cwd: root,
+        name: 'demo-effect-reviewer',
+        profile: 'effect-reviewer',
+      });
+      const failure = yield* Engines.scaffold({
+        cwd: root,
+        name: 'demo-effect-reviewer',
+        profile: 'generic-reviewer',
+      }).pipe(Effect.flip);
+      Vitest.expect(failure).toContain("already bound to profile 'effect-reviewer'");
+      const ledger = yield* Engines.show({ cwd: root }, 'demo-effect-reviewer');
+      Vitest.expect(ledger).toContain('- Profile: effect-reviewer');
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+    }).pipe(Effect.provide(Live)),
+  );
+
   Vitest.it.effect('verify reports a malformed round', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
