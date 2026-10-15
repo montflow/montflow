@@ -3,6 +3,8 @@ import { Effect, Layer } from 'effect';
 import { FileSystem } from 'effect/FileSystem';
 import * as Vitest from '@effect/vitest';
 import * as Engines from '../engines.apps.module.js';
+import * as Renderers from '../renderers.apps.module.js';
+import * as SkillCheck from '../../../modules/skill-check/index.js';
 import { ProfileStore } from '../../../services/index.js';
 
 /** Platform layers plus the store, for headless engine tests. */
@@ -90,10 +92,80 @@ Vitest.describe('Engines.verifyAll', () => {
       Vitest.expect(report.entries[0]?.result.valid).toBe(false);
       const messages =
         report.entries[0]?.result.issues.map((issue) => issue.message).join('\n') ?? '';
-      Vitest.expect(messages).toContain("'missing-skill' is not installed under .agents/skills/.");
+      Vitest.expect(messages).toContain(
+        `Skill 'missing-skill' is not installed under ${dir}/.agents/skills/.`,
+      );
       Vitest.expect(messages).toContain("'montflow-bad' failed verification");
       Vitest.expect(messages).not.toContain("'effect'");
       Vitest.expect(report.warnings).toStrictEqual([]);
+    }).pipe(Effect.provide(NodeLive), Effect.scoped),
+  );
+
+  Vitest.it.effect('counts warnings apart from issues in the whole-store summary', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-verify-' });
+      const root = `${dir}/.agents/@montflow/profiles`;
+      const skills = `${dir}/.agents/skills`;
+      yield* fs.makeDirectory(`${root}/effect-reviewer`, { recursive: true });
+      yield* fs.makeDirectory(`${skills}/effect`, { recursive: true });
+      yield* fs.writeFileString(`${skills}/effect/SKILL.md`, '# upstream shape, no frontmatter\n');
+      yield* fs.writeFileString(
+        `${root}/effect-reviewer/PROFILE.md`,
+        `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
+      );
+
+      const report = yield* Engines.verifyAll(dir).pipe(Effect.provide(TestLive));
+      Vitest.expect(report.issueCount).toBe(0);
+      Vitest.expect(report.warningCount).toBe(1);
+      Vitest.expect(Engines.renderVerifyAll(report)).toContain(
+        '1 profile \u00b7 0 issues \u00b7 1 warning',
+      );
+    }).pipe(Effect.provide(NodeLive), Effect.scoped),
+  );
+
+  Vitest.it.effect('verifies clean when no skills store exists, despite declared skills', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-verify-' });
+      const root = `${dir}/.agents/@montflow/profiles`;
+      yield* fs.makeDirectory(`${root}/effect-reviewer`, { recursive: true });
+      yield* fs.writeFileString(
+        `${root}/effect-reviewer/PROFILE.md`,
+        `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
+      );
+
+      const report = yield* Engines.verifyAll(dir).pipe(Effect.provide(TestLive));
+      Vitest.expect(report.entries[0]?.result.valid).toBe(true);
+      Vitest.expect(report.issueCount).toBe(0);
+      Vitest.expect(report.warnings).toStrictEqual([]);
+    }).pipe(Effect.provide(NodeLive), Effect.scoped),
+  );
+
+  Vitest.it.effect('promotes unresolved skills to errors under strict', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-verify-' });
+      const root = `${dir}/.agents/@montflow/profiles`;
+      const skills = `${dir}/.agents/skills`;
+      yield* fs.makeDirectory(`${root}/effect-reviewer`, { recursive: true });
+      yield* fs.makeDirectory(`${skills}/effect`, { recursive: true });
+      yield* fs.writeFileString(`${skills}/effect/SKILL.md`, '# upstream shape, no frontmatter\n');
+      yield* fs.writeFileString(
+        `${root}/effect-reviewer/PROFILE.md`,
+        `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
+      );
+
+      const lenient = yield* Engines.verifyAll(dir).pipe(Effect.provide(TestLive));
+      Vitest.expect(lenient.entries[0]?.result.valid).toBe(true);
+
+      const strict = yield* Engines.verifyAll(dir, undefined, { strict: true }).pipe(
+        Effect.provide(TestLive),
+      );
+      Vitest.expect(strict.entries[0]?.result.valid).toBe(false);
+      Vitest.expect(
+        strict.entries[0]?.result.issues.some((issue) => issue.severity === 'error'),
+      ).toBe(true);
     }).pipe(Effect.provide(NodeLive), Effect.scoped),
   );
 
@@ -131,4 +203,77 @@ Vitest.describe('Engines.verifyAll', () => {
       Vitest.expect(error).toContain('not found');
     }).pipe(Effect.provide(NodeLive), Effect.scoped),
   );
+});
+
+Vitest.describe('Engines.filterByStatus', () => {
+  Vitest.it.effect('carries the warning count so a valid entry is not mistaken for clean', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-list-' });
+      const root = `${dir}/.agents/@montflow/profiles`;
+      const skills = `${dir}/.agents/skills`;
+      yield* fs.makeDirectory(`${root}/effect-reviewer`, { recursive: true });
+      yield* fs.makeDirectory(`${skills}/effect`, { recursive: true });
+      yield* fs.writeFileString(`${skills}/effect/SKILL.md`, '# upstream shape, no frontmatter\n');
+      yield* fs.writeFileString(
+        `${root}/effect-reviewer/PROFILE.md`,
+        `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
+      );
+
+      const profiles = yield* Engines.list(dir).pipe(Effect.provide(TestLive));
+      const valid = yield* Engines.filterByStatus(dir, profiles, 'valid').pipe(
+        Effect.provide(TestLive),
+      );
+      Vitest.expect(valid.map((entry) => entry.profile.name)).toStrictEqual(['effect-reviewer']);
+      Vitest.expect(valid[0]?.warningCount).toBe(1);
+      // The list surface must show the warning, not present the entry as clean.
+      Vitest.expect(Renderers.list(valid)).toContain('effect-reviewer');
+      Vitest.expect(Renderers.list(valid)).toContain('(1 warning)');
+    }).pipe(Effect.provide(NodeLive), Effect.scoped),
+  );
+});
+
+Vitest.describe('Engines.renderVerifyAll mixed verdict', () => {
+  Vitest.it.effect('counts one error apart from one warning in the per-entry line', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-mixed-' });
+      const root = `${dir}/.agents/@montflow/profiles`;
+      const skills = `${dir}/.agents/skills`;
+      yield* fs.makeDirectory(`${root}/broken`, { recursive: true });
+      yield* fs.makeDirectory(`${skills}/effect`, { recursive: true });
+      yield* fs.writeFileString(`${skills}/effect/SKILL.md`, '# upstream shape, no frontmatter\n');
+      // Missing `## Review Checklist` (one error) plus an unresolved skill (one warning).
+      yield* fs.writeFileString(
+        `${root}/broken/PROFILE.md`,
+        `---\nname: broken\ndescription: Missing the checklist.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Broken\n\n## Instructions\n\nDo things.\n`,
+      );
+
+      const report = yield* Engines.verifyAll(dir).pipe(Effect.provide(TestLive));
+      Vitest.expect(report.issueCount).toBe(1);
+      Vitest.expect(report.warningCount).toBe(1);
+      const text = Engines.renderVerifyAll(report);
+      Vitest.expect(text).toContain('broken: ✗ not verified — 1 issue · 1 warning');
+      Vitest.expect(text).not.toContain('broken: ✗ not verified — 2 issues');
+    }).pipe(Effect.provide(NodeLive), Effect.scoped),
+  );
+});
+
+Vitest.describe('Engines.skillsEngineWarning', () => {
+  const resolution = { root: '/ws', names: new Set(['effect']) };
+
+  Vitest.it('warns when the engine is unavailable and a skill was declared', () => {
+    Vitest.expect(Engines.skillsEngineWarning(undefined, 1, false)).toBe(
+      SkillCheck.SKILLS_ENGINE_WARNING,
+    );
+  });
+
+  Vitest.it('stays silent when no store resolved but the engine is available', () => {
+    Vitest.expect(Engines.skillsEngineWarning(undefined, 1, true)).toBeUndefined();
+  });
+
+  Vitest.it('stays silent when a resolution exists or nothing was declared', () => {
+    Vitest.expect(Engines.skillsEngineWarning(resolution, 1, false)).toBeUndefined();
+    Vitest.expect(Engines.skillsEngineWarning(undefined, 0, false)).toBeUndefined();
+  });
 });

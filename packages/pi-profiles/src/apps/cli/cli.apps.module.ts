@@ -201,7 +201,9 @@ export const run = (
         const status = yield* resolveListStatus(action.status);
         const profiles = yield* list(cwd);
         const shown =
-          status === undefined ? profiles : yield* filterByStatus(cwd, profiles, status);
+          status === undefined
+            ? profiles.map((profile) => ({ profile, warningCount: 0 }))
+            : yield* filterByStatus(cwd, profiles, status);
         if (shown.length === 0 && status !== undefined) {
           return yield* say(`No profiles with status '${status}'.`);
         }

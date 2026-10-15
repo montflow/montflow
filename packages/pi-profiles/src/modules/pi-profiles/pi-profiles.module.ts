@@ -103,16 +103,56 @@ export const TRANSFORM_REQUIREMENTS: ReadonlyArray<string> = [
   'montflow-modify-pi-profiles',
 ];
 
-/** One mechanical check failure: which field broke, and why. */
+/**
+ * Severity of a mechanical issue. An `error` fails verification; a `warning`
+ * is surfaced but never fails it, so a finding that may not apply to every
+ * checkout (e.g. a skill that only exists locally) does not red-out CI.
+ */
+export type IssueSeverity = 'error' | 'warning';
+
+/** One mechanical check failure: which field broke, why, and how hard. */
 export interface VerifyIssue {
   readonly field: string;
   readonly message: string;
+  /** Defaults to `error` when absent, preserving pre-severity callers. */
+  readonly severity?: IssueSeverity;
 }
 
 /** Mechanical verification outcome for one `PROFILE.md` file. */
 export interface VerifyResult {
   readonly valid: boolean;
   readonly issues: ReadonlyArray<VerifyIssue>;
+}
+
+/** True when an issue fails verification; absent severity reads as `error`. */
+const isError = (issue: VerifyIssue): boolean => (issue.severity ?? 'error') === 'error';
+
+/** Number of findings that fail verification; absent severity reads as `error`. */
+export const errorCount = (issues: ReadonlyArray<VerifyIssue>): number =>
+  issues.filter(isError).length;
+
+/** Number of advisory findings that never fail verification. */
+export const warningCount = (issues: ReadonlyArray<VerifyIssue>): number =>
+  issues.length - errorCount(issues);
+
+/**
+ * The installed-skill store a `skills:` list is resolved against: the
+ * workspace root searched plus the skill names it holds. Built by the caller
+ * (which owns the IO), never by the pure verifier.
+ */
+export interface SkillResolution {
+  /** Workspace root whose `.agents/skills` store was searched (the resolved `--dir`). */
+  readonly root: string;
+  /** Names of the skills installed in that store. */
+  readonly names: ReadonlySet<string>;
+}
+
+/** Options for {@link verifyProfileFile}. */
+export interface VerifyOptions {
+  /** Installed skills to resolve `skills:` names against. Absent skips resolution. */
+  readonly skills?: SkillResolution | undefined;
+  /** Promote warnings (e.g. an unresolved skill) to fatal errors. */
+  readonly strict?: boolean | undefined;
 }
 
 const verifyIssue = (field: string, message: string): VerifyIssue => ({ field, message });
@@ -122,7 +162,7 @@ const verifyIssue = (field: string, message: string): VerifyIssue => ({ field, m
  * mechanical result. Zero extra issues returns the result unchanged.
  * @param result - base result from {@link verifyProfileFile}
  * @param extra - additional issues to fold in
- * @returns the combined result; `valid` is false when any issue remains
+ * @returns the combined result; `valid` is false when any error issue remains
  */
 export const withIssues = (
   result: VerifyResult,
@@ -130,7 +170,7 @@ export const withIssues = (
 ): VerifyResult => {
   if (extra.length === 0) return result;
   const issues = [...result.issues, ...extra];
-  return { valid: false, issues };
+  return { valid: !issues.some(isError), issues };
 };
 
 /**
@@ -149,12 +189,20 @@ export const declaredSkills = (markdown: string): ReadonlyArray<string> => {
  * Mechanically verify a `PROFILE.md` file against the montflow-create-pi-profiles
  * standard: frontmatter `name` (valid slug, matching the directory) +
  * non-empty `description`, plus body `# Title`, `## Instructions`, and
- * `## Review Checklist` with at least one item. Pure — no IO.
+ * `## Review Checklist` with at least one item. When `options.skills` is
+ * supplied, every `skills:` name is resolved against that store; an
+ * unresolved name is reported by its exact name — a warning unless
+ * `options.strict`. Pure — the caller supplies any store resolution.
  * @param dirName - profile directory slug
  * @param markdown - raw PROFILE.md contents
- * @returns the result; `valid` is true only with zero issues
+ * @param options - optional skill resolution and strict promotion
+ * @returns the result; `valid` is true only with zero error issues
  */
-export const verifyProfileFile = (dirName: string, markdown: string): VerifyResult => {
+export const verifyProfileFile = (
+  dirName: string,
+  markdown: string,
+  options: VerifyOptions = {},
+): VerifyResult => {
   const issues: Array<VerifyIssue> = [];
   const parsed = parseProfileFile(markdown);
   if (parsed === null) {
@@ -177,7 +225,19 @@ export const verifyProfileFile = (dirName: string, markdown: string): VerifyResu
     issues.push(verifyIssue('body', 'Missing `## Instructions` section.'));
   if (sections.checklist.length === 0)
     issues.push(verifyIssue('body', 'Missing `## Review Checklist` items.'));
-  return { valid: issues.length === 0, issues };
+  const skills = options.skills;
+  if (skills !== undefined) {
+    const severity: IssueSeverity = options.strict === true ? 'error' : 'warning';
+    for (const skill of fieldStrings(fields, 'skills')) {
+      if (skills.names.has(skill)) continue;
+      issues.push({
+        field: 'skills',
+        message: `Skill '${skill}' is not installed under ${skills.root}/.agents/skills/.`,
+        severity,
+      });
+    }
+  }
+  return { valid: !issues.some(isError), issues };
 };
 
 /**
@@ -186,9 +246,14 @@ export const verifyProfileFile = (dirName: string, markdown: string): VerifyResu
  * @returns one status line for the panel
  */
 export const verifyInfoLine = (result: VerifyResult): string => {
-  if (result.valid) return '✓ verified';
-  const count = result.issues.length;
-  return `✗ not verified — ${count} issue${count === 1 ? '' : 's'}`;
+  const errors = errorCount(result.issues);
+  const warnings = warningCount(result.issues);
+  if (errors === 0)
+    return warnings === 0
+      ? '✓ verified'
+      : `✓ verified — ${warnings} warning${warnings === 1 ? '' : 's'}`;
+  const warningClause = warnings === 0 ? '' : ` · ${warnings} warning${warnings === 1 ? '' : 's'}`;
+  return `✗ not verified — ${errors} issue${errors === 1 ? '' : 's'}${warningClause}`;
 };
 
 /**

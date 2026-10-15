@@ -243,4 +243,33 @@ Vitest.describe('Cli list --status', () => {
       }),
     ),
   );
+
+  Vitest.it.effect(
+    'surfaces a warning marker for a valid profile with a broken skill reference',
+    () =>
+      withTempDir((dir) =>
+        Effect.gen(function* () {
+          yield* Effect.gen(function* () {
+            const fs = yield* FileSystem;
+            const root = join(dir, '.agents', '@montflow', 'profiles');
+            const skills = join(dir, '.agents', 'skills');
+            yield* fs.makeDirectory(join(root, 'effect-reviewer'), { recursive: true });
+            yield* fs.makeDirectory(join(skills, 'effect'), { recursive: true });
+            yield* fs.writeFileString(join(skills, 'effect', 'SKILL.md'), '# effect\n');
+            yield* fs.writeFileString(
+              join(root, 'effect-reviewer', 'PROFILE.md'),
+              `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
+            );
+          }).pipe(
+            Effect.mapError((error) => String(error)),
+            Effect.provide(NodeLive),
+          );
+
+          const shown: Array<string> = [];
+          yield* Cli.run('list --status valid', scriptedUi(shown), dir);
+          Vitest.expect(shown.join('\n')).toContain('effect-reviewer');
+          Vitest.expect(shown.join('\n')).toContain('(1 warning)');
+        }),
+      ),
+  );
 });

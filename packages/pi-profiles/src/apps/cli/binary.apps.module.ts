@@ -111,7 +111,9 @@ const listCommand = Command.make(
       const status = yield* Engines.resolveListStatus(opt(config.status));
       const profiles = yield* Engines.list(cwd);
       const shown =
-        status === undefined ? profiles : yield* Engines.filterByStatus(cwd, profiles, status);
+        status === undefined
+          ? profiles.map((profile) => ({ profile, warningCount: 0 }))
+          : yield* Engines.filterByStatus(cwd, profiles, status);
       const text =
         shown.length === 0 && status !== undefined
           ? `No profiles with status '${status}'.`
@@ -134,13 +136,20 @@ const verifyCommand = Command.make(
     name: namesArg,
     all: optionalBoolean('all', 'Verify every profile in the store.'),
     verbose: optionalBoolean('verbose', 'Show passing profiles. Default is token-lean.'),
+    strict: optionalBoolean(
+      'strict',
+      'Treat unresolved skill references as errors instead of warnings.',
+    ),
   },
   (config) =>
     Effect.gen(function* () {
       const names = config.all || config.name.length === 0 ? undefined : config.name;
-      const verdict = yield* Engines.verifyAll(scope(config.dir), names);
+      const verdict = yield* Engines.verifyAll(scope(config.dir), names, {
+        strict: config.strict,
+      });
       yield* Console.log(Renderers.renderVerifyAll(verdict, config.verbose));
-      if (verdict.issueCount > 0) yield* exitFailed;
+      // Warnings do not fail: only an issue that produced `valid: false` does.
+      if (verdict.entries.some((entry) => !entry.result.valid)) yield* exitFailed;
       return yield* Effect.void;
     }).pipe(Effect.catch((message) => Console.log(message).pipe(Effect.andThen(exitFailed)))),
 ).pipe(

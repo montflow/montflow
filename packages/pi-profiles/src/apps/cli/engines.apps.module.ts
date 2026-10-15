@@ -27,10 +27,39 @@ export interface ProfileVerifyEntry {
 /** A verification report: the whole store, or the named profiles. */
 export interface ProfileVerifyReport {
   readonly entries: ReadonlyArray<ProfileVerifyEntry>;
+  /** Error-severity findings across every profile. */
   readonly issueCount: number;
+  /** Warning-severity findings across every profile, counted apart from issues. */
+  readonly warningCount: number;
   /** Non-fatal problems (e.g. the skills engine was unavailable). */
   readonly warnings: ReadonlyArray<string>;
 }
+
+/** Options for {@link verifyAll}. */
+export interface VerifyOptions {
+  /** Treat unresolved skill references as errors instead of warnings. */
+  readonly strict?: boolean | undefined;
+}
+
+/**
+ * The warning to attach when declared skills went unchecked because the
+ * skills engine could not load. {@link SkillCheck.resolveSkills} returns
+ * undefined both when no store exists (a silent skip) and when the engine is
+ * unavailable (a skipped check the reader must hear about); this names the
+ * rule so only the latter warns, and only when a skill was declared.
+ * @param resolution - the skill resolution, or undefined when it did not resolve
+ * @param declaredCount - distinct skills the profiles declared
+ * @param engineAvailable - whether the pi-skills runtime loaded
+ * @returns the warning, or undefined when no check was actually skipped
+ */
+export const skillsEngineWarning = (
+  resolution: PiProfiles.SkillResolution | undefined,
+  declaredCount: number,
+  engineAvailable: boolean,
+): string | undefined =>
+  resolution === undefined && declaredCount > 0 && !engineAvailable
+    ? SkillCheck.SKILLS_ENGINE_WARNING
+    : undefined;
 
 /** A requested-but-absent profile, reported rather than dropped. */
 const profileNotFound: PiProfiles.VerifyResult = {
@@ -43,13 +72,20 @@ const profileNotFound: PiProfiles.VerifyResult = {
  * including files the store cannot decode, plus each declared skill. Pass
  * `names` to verify only those profiles; a requested name with no file is
  * reported as not found. Omit `names` to verify the whole store.
+ *
+ * Declared skills are resolved against `<cwd>/.agents/skills`: an unresolved
+ * name is a warning (an error under `options.strict`), and an installed
+ * montflow skill that fails its standard is an error. A missing skill store
+ * skips resolution entirely rather than reporting every name as missing.
  * @param cwd - workspace root owning the profiles and skills stores
  * @param names - profile names to verify, or undefined for every profile
+ * @param options - strict promotion for unresolved skill references
  * @returns Effect resolving to the report, failing when the store is unreadable
  */
 export const verifyAll = (
   cwd: string,
   names?: ReadonlyArray<string>,
+  options: VerifyOptions = {},
 ): Effect.Effect<ProfileVerifyReport, string, ProfileStore.ProfileStore> =>
   Effect.gen(function* () {
     const store = yield* ProfileStore.ProfileStore;
@@ -65,9 +101,23 @@ export const verifyAll = (
       (profile): profile is { readonly name: string; readonly raw: string } =>
         profile.raw !== undefined,
     );
+    const resolution = yield* SkillCheck.resolveSkills(cwd);
+    const installed = resolution?.names ?? new Set<string>();
+    const declared = present.flatMap((profile) => PiProfiles.declaredSkills(profile.raw));
+    // Only skills that exist reach the standard check: an unresolved name is
+    // the pure verifier's warning, and would be a duplicate error here.
     const check = yield* SkillCheck.checkSkills(
       cwd,
-      present.flatMap((profile) => PiProfiles.declaredSkills(profile.raw)),
+      declared.filter((name) => installed.has(name)),
+    );
+    // `resolveSkills` collapses "no store to resolve" (a silent skip) and
+    // "engine unavailable" into undefined; only the latter skipped a check the
+    // reader asked for, so surface its warning — but only when a declared
+    // skill was actually left unchecked.
+    const engineWarning = skillsEngineWarning(
+      resolution,
+      declared.length,
+      yield* SkillCheck.engineAvailable(),
     );
     const issueByName = new Map<string, PiProfiles.VerifyIssue>();
     for (const verdict of check.verdicts) {
@@ -75,17 +125,22 @@ export const verifyAll = (
     }
     const entries = selected.map(({ name, raw }): ProfileVerifyEntry => {
       if (raw === undefined) return { name, result: profileNotFound };
-      const base = PiProfiles.verifyProfileFile(name, raw);
+      const base = PiProfiles.verifyProfileFile(name, raw, {
+        skills: resolution,
+        strict: options.strict,
+      });
       const skillIssues = PiProfiles.declaredSkills(raw)
         .map((skill) => issueByName.get(skill))
         .filter((issue): issue is PiProfiles.VerifyIssue => issue !== undefined);
       return { name, result: PiProfiles.withIssues(base, skillIssues) };
     });
-    const issueCount = entries.reduce((count, entry) => count + entry.result.issues.length, 0);
+    const allIssues = entries.flatMap((entry) => entry.result.issues);
+    const issueCount = allIssues.filter((issue) => (issue.severity ?? 'error') === 'error').length;
     return {
       entries,
       issueCount,
-      warnings: check.warning === undefined ? [] : [check.warning],
+      warningCount: allIssues.length - issueCount,
+      warnings: engineWarning === undefined ? [] : [engineWarning],
     };
   });
 
@@ -94,6 +149,18 @@ export const LIST_STATUSES = ['valid', 'invalid'] as const;
 
 /** A verification state `list --status` accepts. */
 export type ListStatus = (typeof LIST_STATUSES)[number];
+
+/**
+ * One listed profile plus the number of warning-severity findings it carries.
+ * The list surface owns the warning count so `list --status valid` can mark an
+ * entry that passes (`valid`) only because its finding is advisory — otherwise
+ * a warning-bearing profile would be indistinguishable from a clean one.
+ */
+export interface ProfileListEntry {
+  readonly profile: PiProfiles.Profile;
+  /** Warning-severity findings for this profile; zero when it has none. */
+  readonly warningCount: number;
+}
 
 const isListStatus = (value: string): value is ListStatus =>
   LIST_STATUSES.some((status) => status === value);
@@ -237,30 +304,40 @@ export const remove = (
 
 /**
  * Keep only profiles whose file passes (`valid`) or fails (`invalid`)
- * mechanical verification. An unreadable file counts as invalid.
+ * mechanical verification, each paired with its warning count. An unreadable
+ * file counts as invalid. The warning count is carried through so the list
+ * surface can mark an entry whose only finding is advisory rather than
+ * silently dropping it as clean.
  * @param cwd - workspace root owning the profiles store
  * @param profiles - profiles to filter
  * @param status - verification state to keep
- * @returns Effect resolving to the matching profiles
+ * @returns Effect resolving to the matching entries with their warning counts
  */
 export const filterByStatus = (
   cwd: string,
   profiles: ReadonlyArray<PiProfiles.Profile>,
   status: ListStatus,
-): Effect.Effect<ReadonlyArray<PiProfiles.Profile>, never, ProfileStore.ProfileStore> =>
+): Effect.Effect<ReadonlyArray<ProfileListEntry>, never, ProfileStore.ProfileStore> =>
   Effect.gen(function* () {
     const store = yield* ProfileStore.ProfileStore;
     const wanted = status === 'valid';
+    const resolution = yield* SkillCheck.resolveSkills(cwd);
     const verdicts = yield* Effect.forEach(profiles, (profile) =>
       store.readRaw(cwd, profile.name).pipe(
-        Effect.map((raw) => ({
-          profile,
-          valid: PiProfiles.verifyProfileFile(profile.name, raw).valid,
-        })),
-        Effect.orElseSucceed(() => ({ profile, valid: false })),
+        Effect.map((raw) => {
+          const result = PiProfiles.verifyProfileFile(profile.name, raw, { skills: resolution });
+          return {
+            profile,
+            valid: result.valid,
+            warningCount: PiProfiles.warningCount(result.issues),
+          };
+        }),
+        Effect.orElseSucceed(() => ({ profile, valid: false, warningCount: 0 })),
       ),
     );
-    return verdicts.filter((entry) => entry.valid === wanted).map((entry) => entry.profile);
+    return verdicts
+      .filter((entry) => entry.valid === wanted)
+      .map((entry) => ({ profile: entry.profile, warningCount: entry.warningCount }));
   });
 
 /** Re-exported so existing callers keep reading the render from the engines module. */

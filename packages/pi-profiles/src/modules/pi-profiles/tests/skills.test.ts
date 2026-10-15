@@ -59,3 +59,52 @@ Vitest.describe('PiProfiles.withIssues', () => {
     ]);
   });
 });
+
+Vitest.describe('PiProfiles.verifyProfileFile skills resolution', () => {
+  const raw = `---
+name: effect-reviewer
+description: Does X.
+skills:
+  - effect
+  - missing
+---
+
+# Effect Reviewer
+
+## Instructions
+
+Do X.
+
+## Review Checklist
+
+- [ ] Done
+`;
+  /** Only `effect` is installed; `missing` is the unresolved name. */
+  const skills: PiProfiles.SkillResolution = { root: '/ws', names: new Set(['effect']) };
+
+  Vitest.it('reports an unresolved name as a warning and stays valid', () => {
+    const result = PiProfiles.verifyProfileFile('effect-reviewer', raw, { skills });
+    Vitest.expect(result.valid).toBe(true);
+    Vitest.expect(result.issues).toStrictEqual([
+      {
+        field: 'skills',
+        message: "Skill 'missing' is not installed under /ws/.agents/skills/.",
+        severity: 'warning',
+      },
+    ]);
+  });
+
+  Vitest.it('promotes an unresolved name to an error under strict', () => {
+    const result = PiProfiles.verifyProfileFile('effect-reviewer', raw, { skills, strict: true });
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.message).toContain("'missing'");
+    Vitest.expect(result.issues[0]?.severity).toBe('error');
+  });
+
+  Vitest.it('stays silent when no store was resolved', () => {
+    Vitest.expect(PiProfiles.verifyProfileFile('effect-reviewer', raw)).toStrictEqual({
+      valid: true,
+      issues: [],
+    });
+  });
+});

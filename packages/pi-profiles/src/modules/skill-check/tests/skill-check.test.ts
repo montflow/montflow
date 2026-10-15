@@ -22,7 +22,6 @@ Vitest.describe('SkillCheck.checkSkills', () => {
       yield* seedSkill(fs, dir, 'effect', '# upstream shape, no montflow frontmatter\n');
 
       const check = yield* SkillCheck.checkSkills(dir, ['effect']);
-      Vitest.expect(check.warning).toBeUndefined();
       Vitest.expect(check.verdicts).toStrictEqual([{ name: 'effect', issue: undefined }]);
     }).pipe(Effect.provide(NodeLive), Effect.scoped),
   );
@@ -34,7 +33,6 @@ Vitest.describe('SkillCheck.checkSkills', () => {
       yield* seedSkill(fs, dir, 'montflow-bad', '# no frontmatter\n');
 
       const check = yield* SkillCheck.checkSkills(dir, ['montflow-bad', 'effect', 'montflow-bad']);
-      Vitest.expect(check.warning).toBeUndefined();
       Vitest.expect(check.verdicts.map((verdict) => verdict.name)).toStrictEqual([
         'montflow-bad',
         'effect',
@@ -53,7 +51,34 @@ Vitest.describe('SkillCheck.checkSkills', () => {
       const fs = yield* FileSystem;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-skill-check-' });
       const check = yield* SkillCheck.checkSkills(dir, []);
-      Vitest.expect(check).toStrictEqual({ verdicts: [], warning: undefined });
+      Vitest.expect(check).toStrictEqual({ verdicts: [] });
+    }).pipe(Effect.provide(NodeLive), Effect.scoped),
+  );
+});
+
+Vitest.describe('SkillCheck.resolveSkills', () => {
+  Vitest.it.effect('resolves the installed skill names under the store', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-skill-check-' });
+      yield* seedSkill(fs, dir, 'effect', '# upstream shape\n');
+      yield* seedSkill(fs, dir, 'montflow-bad', '# no frontmatter\n');
+
+      const resolution = yield* SkillCheck.resolveSkills(dir);
+      Vitest.expect(resolution?.root).toBe(dir);
+      Vitest.expect([...(resolution?.names ?? [])].toSorted()).toStrictEqual([
+        'effect',
+        'montflow-bad',
+      ]);
+    }).pipe(Effect.provide(NodeLive), Effect.scoped),
+  );
+
+  Vitest.it.effect('returns undefined when no skills store exists', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-skill-check-' });
+      const resolution = yield* SkillCheck.resolveSkills(dir);
+      Vitest.expect(resolution).toBeUndefined();
     }).pipe(Effect.provide(NodeLive), Effect.scoped),
   );
 });

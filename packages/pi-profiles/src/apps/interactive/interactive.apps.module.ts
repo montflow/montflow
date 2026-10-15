@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import type { ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 import * as PiProfiles from '../../modules/pi-profiles/index.js';
+import * as SkillCheck from '../../modules/skill-check/index.js';
 
 /** Slash-command name registered by {@link register} (invoke as `/mf-profiles`). */
 export const COMMAND_NAME = 'mf-profiles';
@@ -900,6 +901,7 @@ export const completeCreate = (
   loading: LoadingFn | undefined,
   menu?: MenuFn | undefined,
   fix?: ProfileModifier | undefined,
+  skillResolution?: PiProfiles.SkillResolution | undefined,
 ): Effect.Effect<void, string> =>
   Effect.gen(function* () {
     yield* Effect.sync(() =>
@@ -920,6 +922,7 @@ export const completeCreate = (
       modelPicker,
       loading,
       menu,
+      skillResolution,
     );
   });
 
@@ -989,6 +992,7 @@ export const browse = (
   loading?: LoadingFn | undefined,
   menu?: MenuFn | undefined,
   fix?: ProfileModifier | undefined,
+  skillResolution?: PiProfiles.SkillResolution | undefined,
 ): Effect.Effect<void, string> =>
   browseFrom(
     ui,
@@ -1002,6 +1006,7 @@ export const browse = (
     modelPicker,
     loading,
     menu,
+    skillResolution,
   );
 
 /**
@@ -1037,30 +1042,38 @@ export const detailOptions = (result: PiProfiles.VerifyResult): ReadonlyArray<st
 
 /**
  * Verify one profile against the standard shape by reading its raw file.
+ * The caller supplies the skill resolution so a declared `skills:` name that
+ * is not installed is a finding here too, not silence.
  * @param store - injected persistence port
  * @param name - picked profile name
+ * @param skills - skill resolution from the command's working directory
  * @returns Effect resolving to the mechanical result, failing on unknown names
  */
 export const verifyProfile = (
   store: ProfileStore,
   name: string,
+  skills: PiProfiles.SkillResolution | undefined,
 ): Effect.Effect<PiProfiles.VerifyResult, string> => {
   if (store.readRaw !== undefined) {
-    return store.readRaw(name).pipe(Effect.map((raw) => PiProfiles.verifyProfileFile(name, raw)));
+    return store
+      .readRaw(name)
+      .pipe(Effect.map((raw) => PiProfiles.verifyProfileFile(name, raw, { skills })));
   }
   return store.list().pipe(
     Effect.flatMap((profiles) => {
       const found = profiles.find((profile) => profile.name === name);
       if (found === undefined) return Effect.fail(`Unknown profile '${name}'.`);
       return Effect.succeed(
-        PiProfiles.verifyProfileFile(name, PiProfiles.encodeProfileFile(found)),
+        PiProfiles.verifyProfileFile(name, PiProfiles.encodeProfileFile(found), { skills }),
       );
     }),
   );
 };
 
 /**
- * Notify a verify outcome: one line when valid, the issue list otherwise.
+ * Notify a verify outcome: one clean line, then the findings when failing.
+ * Errors are counted apart from warnings so an advisory finding is never
+ * reported as an issue, mirroring {@link PiProfiles.verifyInfoLine}.
  * @param ui - Pi ui dialogs
  * @param name - verified profile name
  * @param result - result from {@link verifyProfile}
@@ -1072,12 +1085,18 @@ export const notifyVerifyResult = (
   result: PiProfiles.VerifyResult,
 ): Effect.Effect<void> =>
   Effect.sync(() => {
-    if (result.valid) {
-      ui.notify(`✓ '${name}' matches the standard format.`, 'info');
+    const errors = PiProfiles.errorCount(result.issues);
+    const warnings = PiProfiles.warningCount(result.issues);
+    if (errors === 0) {
+      const warningClause =
+        warnings === 0 ? '' : ` — ${warnings} warning${warnings === 1 ? '' : 's'}`;
+      ui.notify(`✓ '${name}' matches the standard format${warningClause}.`, 'info');
       return;
     }
+    const warningClause =
+      warnings === 0 ? '' : ` · ${warnings} warning${warnings === 1 ? '' : 's'}`;
     ui.notify(
-      `✗ '${name}' has ${result.issues.length} issue${result.issues.length === 1 ? '' : 's'}:\n${result.issues.map((found) => `• [${found.field}] ${found.message}`).join('\n')}`,
+      `✗ '${name}' has ${errors} issue${errors === 1 ? '' : 's'}${warningClause}:\n${result.issues.map((found) => `• [${found.field}] ${found.message}`).join('\n')}`,
       'info',
     );
   });
@@ -1148,9 +1167,12 @@ const detailFrom = (
   modelPicker: ModelPickerFn | undefined,
   loading: LoadingFn | undefined,
   menu: MenuFn | undefined,
+  skillResolution: PiProfiles.SkillResolution | undefined,
 ): Effect.Effect<void, string> =>
   Effect.gen(function* () {
-    const result = yield* verifyProfile(store, name).pipe(Effect.orElseSucceed(() => undefined));
+    const result = yield* verifyProfile(store, name, skillResolution).pipe(
+      Effect.orElseSucceed(() => undefined),
+    );
     if (result === undefined) return;
     const title = `Profile '${name}'`;
     const info = [PiProfiles.verifyInfoLine(result)];
@@ -1176,6 +1198,7 @@ const detailFrom = (
         modelPicker,
         loading,
         menu,
+        skillResolution,
       );
     if (detail === 'Show') {
       const fresh = yield* store.list();
@@ -1201,7 +1224,7 @@ const detailFrom = (
       return yield* again(profile.name);
     }
     if (detail === DETAIL_REVERIFY) {
-      const reverified = yield* verifyProfile(store, name);
+      const reverified = yield* verifyProfile(store, name, skillResolution);
       yield* notifyVerifyResult(ui, name, reverified);
       return yield* again(name);
     }
@@ -1244,6 +1267,7 @@ const browseFrom = (
   modelPicker: ModelPickerFn | undefined,
   loading: LoadingFn | undefined,
   menu: MenuFn | undefined,
+  skillResolution: PiProfiles.SkillResolution | undefined,
 ): Effect.Effect<void, string> =>
   Effect.gen(function* () {
     const profiles = yield* store.list();
@@ -1276,6 +1300,7 @@ const browseFrom = (
           modelPicker,
           loading,
           menu,
+          skillResolution,
         );
       }
       return;
@@ -1302,6 +1327,7 @@ const browseFrom = (
       modelPicker,
       loading,
       menu,
+      skillResolution,
     );
     return yield* browseFrom(
       ui,
@@ -1315,6 +1341,7 @@ const browseFrom = (
       modelPicker,
       loading,
       menu,
+      skillResolution,
     );
   });
 
@@ -1344,6 +1371,12 @@ export const run = (
     const installer = env.installer;
     const fixer = transform ?? env.transform ?? modify;
     const action = parseAction(args);
+    // Only the flows that open a detail panel verify, so only they need the
+    // skill store resolved — `list`/`show`/`help` must not pull the engine in.
+    const skillResolution =
+      action.kind === 'Browse' || action.kind === 'Create' || action.kind === 'Menu'
+        ? yield* SkillCheck.resolveSkills(env.cwd)
+        : undefined;
     switch (action.kind) {
       case 'Help': {
         yield* Effect.sync(() => ui.notify(USAGE, 'info'));
@@ -1362,6 +1395,7 @@ export const run = (
           loading,
           env.menu,
           fixer,
+          skillResolution,
         );
         return;
       }
@@ -1393,6 +1427,7 @@ export const run = (
           loading,
           env.menu,
           fixer,
+          skillResolution,
         );
         return;
       }
@@ -1454,6 +1489,7 @@ export const run = (
               loading,
               menu,
               fixer,
+              skillResolution,
             );
             return;
           }
@@ -1485,6 +1521,7 @@ export const run = (
               loading,
               menu,
               fixer,
+              skillResolution,
             );
             return;
           }

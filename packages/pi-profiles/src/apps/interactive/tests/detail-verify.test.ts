@@ -1,4 +1,6 @@
-import { Effect } from 'effect';
+import { NodeFileSystem, NodePath } from '@effect/platform-node';
+import { Effect, Layer } from 'effect';
+import { FileSystem } from 'effect/FileSystem';
 import * as Vitest from '@effect/vitest';
 import * as Interactive from '../index.js';
 import * as PiProfiles from '../../../modules/pi-profiles/index.js';
@@ -43,6 +45,9 @@ const scriptedUi = (answers: {
     },
   };
 };
+
+/** Platform layers for the detail-panel skill-resolution test. */
+const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 const testProfile = PiProfiles.decodeUnknown({
   name: 'code-reviewer',
@@ -211,4 +216,66 @@ Vitest.describe('Interactive.detail verify panel', () => {
     Vitest.expect(result.valid).toBe(true);
     Vitest.expect(PiProfiles.verifyInfoLine(result)).toBe('✓ verified');
   });
+
+  Vitest.it('counts failures apart from warnings in the detail line', () => {
+    const result: PiProfiles.VerifyResult = {
+      valid: false,
+      issues: [
+        { field: 'body', message: 'Missing the checklist.' },
+        { field: 'skills', message: 'Missing skill.', severity: 'warning' },
+      ],
+    };
+    Vitest.expect(PiProfiles.verifyInfoLine(result)).toBe('✗ not verified — 1 issue · 1 warning');
+  });
+
+  Vitest.it('counts failures apart from warnings in the re-verify notification', () => {
+    const notifies: Array<string> = [];
+    const ui = scriptedUi({ notifies });
+    Interactive.notifyVerifyResult(ui, 'broken', {
+      valid: false,
+      issues: [
+        { field: 'body', message: 'Missing the checklist.' },
+        { field: 'skills', message: 'Missing skill.', severity: 'warning' },
+      ],
+    }).pipe(Effect.runSync);
+    Vitest.expect(notifies[0]).toContain("✗ 'broken' has 1 issue · 1 warning:");
+    Vitest.expect(notifies[0]).toContain('• [skills] Missing skill.');
+  });
+
+  Vitest.it('renders a warning-only re-verify result as a warning, not clean', () => {
+    const notifies: Array<string> = [];
+    const ui = scriptedUi({ notifies });
+    Interactive.notifyVerifyResult(ui, 'effect-reviewer', {
+      valid: true,
+      issues: [{ field: 'skills', message: 'Missing skill.', severity: 'warning' }],
+    }).pipe(Effect.runSync);
+    Vitest.expect(notifies[0]).toBe("✓ 'effect-reviewer' matches the standard format — 1 warning.");
+  });
+
+  Vitest.it.effect('names a broken skill reference in the detail panel instead of silence', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-detail-skill-' });
+      yield* fs.makeDirectory(`${dir}/.agents/skills/effect`, { recursive: true });
+      yield* fs.writeFileString(`${dir}/.agents/skills/effect/SKILL.md`, '# effect\n');
+      const rawWithMissing = `---\nname: code-reviewer\ndescription: Reviews code.\nskills:\n  - missing-skill\n---\n\n# Code Reviewer\n\n## Instructions\n\nBe strict.\n\n## Review Checklist\n\n- [ ] Flag issues\n`;
+
+      const seen: Array<{
+        readonly title: string;
+        readonly info: ReadonlyArray<string>;
+        readonly options: ReadonlyArray<string>;
+      }> = [];
+      const ui = scriptedUi({ selects: ['code-reviewer', 'Back'] });
+      const env: Interactive.CommandEnv = { ...envFor(ui, menuQueue(seen, ['Back'])), cwd: dir };
+      yield* Interactive.run(
+        'browse',
+        env,
+        memoryStore(rawWithMissing, []),
+        { list: () => Effect.succeed([]) },
+        () => Effect.fail('unused'),
+        () => Effect.fail('unused'),
+      );
+      Vitest.expect(seen[0]?.info).toStrictEqual(['✓ verified — 1 warning']);
+    }).pipe(Effect.provide(NodeLive), Effect.scoped),
+  );
 });

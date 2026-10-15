@@ -1,4 +1,6 @@
 import { Effect } from 'effect';
+// eslint-disable-next-line montflow/no-node-platform-imports -- the skills store is a platform boundary; pi-skills owns its files, this only asks whether it exists.
+import { stat } from 'node:fs/promises';
 import * as PiProfiles from '../pi-profiles/index.js';
 
 /**
@@ -36,6 +38,41 @@ const importOnce = (): Promise<PiSkillsLib> => {
 const load = (): Effect.Effect<PiSkillsLib | undefined> =>
   Effect.tryPromise(() => importOnce()).pipe(Effect.orElseSucceed(() => undefined));
 
+/**
+ * Whether the pi-skills runtime can be loaded. {@link resolveSkills} returns
+ * undefined both when no skills store exists and when the engine is
+ * unavailable; this lets a caller tell the two apart, so only the skipped
+ * check the reader asked for is surfaced as a warning.
+ * @returns Effect resolving to true when the engine loaded
+ */
+export const engineAvailable = (): Effect.Effect<boolean> =>
+  load().pipe(Effect.map((libs) => libs !== undefined));
+
+/** True when `target` exists, never failing. */
+const pathExists = (target: string): Promise<boolean> =>
+  stat(target).then(
+    () => true,
+    () => false,
+  );
+
+/**
+ * Resolve the skills installed under `<cwd>/.agents/skills`, so a pure
+ * verifier can resolve `skills:` names without owning any IO. Returns
+ * undefined when the store does not exist (a package fixture or fresh clone)
+ * or the skills runtime is unavailable, so the caller emits no finding
+ * rather than a false "not installed".
+ * @param cwd - workspace root owning `.agents/skills`
+ * @returns the resolution, or undefined when it cannot be resolved
+ */
+export const resolveSkills = (cwd: string): Effect.Effect<PiProfiles.SkillResolution | undefined> =>
+  Effect.gen(function* () {
+    const libs = yield* load();
+    if (libs === undefined) return undefined;
+    const dir = libs.SkillStore.skillsDir(cwd);
+    if (!(yield* Effect.promise(() => pathExists(dir)))) return undefined;
+    return { root: cwd, names: new Set(yield* libs.SkillStore.names(cwd)) };
+  });
+
 /** One declared skill's verify outcome. `issue` is undefined when it passes. */
 export interface SkillVerdict {
   readonly name: string;
@@ -45,8 +82,6 @@ export interface SkillVerdict {
 /** Outcome of checking a profile's declared skills. */
 export interface SkillCheck {
   readonly verdicts: ReadonlyArray<SkillVerdict>;
-  /** Set when the check could not run at all. */
-  readonly warning: string | undefined;
 }
 
 /** One-line rendering of a skill's verify issues. */
@@ -88,17 +123,19 @@ const checkOne = (libs: PiSkillsLib, cwd: string, name: string): Effect.Effect<S
 /**
  * Verify the declared skills of one or more profiles. Deduplicates names
  * and verifies each once. Empty input short-circuits without loading the
- * skills engine.
+ * skills engine. When a caller supplies names but the engine cannot load,
+ * no verdicts are produced: the caller resolved the store first and owns the
+ * "check skipped" warning, so this module never has to invent one.
  * @param cwd - workspace root owning `.agents/skills`
  * @param names - declared skill names, across every profile being checked
- * @returns Effect resolving to the verdicts plus an optional warning
+ * @returns Effect resolving to the verdicts
  */
 export const checkSkills = (cwd: string, names: ReadonlyArray<string>): Effect.Effect<SkillCheck> =>
   Effect.gen(function* () {
     const unique = [...new Set(names)];
-    if (unique.length === 0) return { verdicts: [], warning: undefined };
+    if (unique.length === 0) return { verdicts: [] };
     const libs = yield* load();
-    if (libs === undefined) return { verdicts: [], warning: SKILLS_ENGINE_WARNING };
+    if (libs === undefined) return { verdicts: [] };
     const verdicts = yield* Effect.forEach(unique, (name) => checkOne(libs, cwd, name));
-    return { verdicts, warning: undefined };
+    return { verdicts };
   });
