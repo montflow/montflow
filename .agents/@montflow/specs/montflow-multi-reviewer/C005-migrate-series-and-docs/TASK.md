@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: B003, C001, C002, C003, C004
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task C005: Migrate specs and document the change
@@ -27,7 +27,7 @@ and land the documentation and changelog entries that close the spec.
 
 ## Completion
 
-- [ ] Chosen specs migrated and all series seeded
-- [ ] Docs and changelogs landed
-- [ ] `verify:montflow:specs` and `verify:montflow:reviews` pass
-- [ ] GATES.md passed
+- [x] Chosen specs migrated and all series seeded
+- [x] Docs and changelogs landed
+- [x] `verify:montflow:specs` and `verify:montflow:reviews` pass
+- [x] GATES.md passed

@@ -5,6 +5,7 @@ type: review
 originator: user
 depends-on:
 related-tasks:
+reviewer-profiles: effect-reviewer
 status: pending
 ---
 
