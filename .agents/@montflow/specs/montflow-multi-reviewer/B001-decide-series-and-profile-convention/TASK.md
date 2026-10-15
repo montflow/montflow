@@ -5,7 +5,7 @@ type: planning
 originator: user
 depends-on: A003
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task B001: Decide the series and profile convention

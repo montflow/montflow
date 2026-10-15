@@ -5,7 +5,7 @@ type: planning
 originator: user
 depends-on: A003, B001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task B002: Decide dispatch and verification changes

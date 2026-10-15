@@ -5,7 +5,7 @@ type: planning
 originator: user
 depends-on: B001, B002
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task B003: Plan rollout, migration, and the effect-reviewer binding

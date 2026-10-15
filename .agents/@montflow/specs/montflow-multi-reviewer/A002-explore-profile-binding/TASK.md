@@ -5,7 +5,7 @@ type: exploratory
 originator: user
 depends-on:
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task A002: Map how profiles bind to reviewers

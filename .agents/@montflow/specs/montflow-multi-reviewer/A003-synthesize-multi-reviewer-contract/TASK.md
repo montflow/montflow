@@ -5,7 +5,7 @@ type: exploratory
 originator: user
 depends-on: A001, A002
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task A003: Synthesize the multi-reviewer contract
