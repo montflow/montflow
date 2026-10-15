@@ -60,6 +60,30 @@ Vitest.describe('renderSpecScaffold', () => {
     Vitest.expect(verifySpecTree({ name: base.name, files: result.files }).valid).toBe(true);
   });
 
+  Vitest.it('emits an empty reviewer-profiles line on the review task by default', () => {
+    const result = renderSpecScaffold({
+      ...base,
+      tasks: [{ name: 'implement', type: 'execution' }],
+    });
+    const review =
+      result.files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
+    Vitest.expect(review).toContain('reviewer-profiles:');
+    Vitest.expect(review).not.toContain('reviewer-profiles: effect-reviewer');
+    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }).valid).toBe(true);
+  });
+
+  Vitest.it('emits supplied reviewer-profiles on the review task', () => {
+    const result = renderSpecScaffold({
+      ...base,
+      reviewerProfiles: ['effect-reviewer', 'generic-reviewer'],
+      tasks: [{ name: 'implement', type: 'execution' }],
+    });
+    const review =
+      result.files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
+    Vitest.expect(review).toContain('reviewer-profiles: effect-reviewer, generic-reviewer');
+    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }).valid).toBe(true);
+  });
+
   Vitest.it('honors a custom phase letter', () => {
     const result = renderSpecScaffold({
       ...base,

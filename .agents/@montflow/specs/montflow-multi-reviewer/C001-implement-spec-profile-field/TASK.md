@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: B003
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task C001: Add the review-task profile field
@@ -27,7 +27,7 @@ the generated review task, so a phase can declare its reviewer profiles.
 
 ## Completion
 
-- [ ] `profiles` parsed and verified on the task contract
-- [ ] Scaffold emits the field on the review task
-- [ ] Tests green for all four cases
-- [ ] GATES.md passed
+- [x] `profiles` parsed and verified on the task contract
+- [x] Scaffold emits the field on the review task
+- [x] Tests green for all four cases
+- [x] GATES.md passed
