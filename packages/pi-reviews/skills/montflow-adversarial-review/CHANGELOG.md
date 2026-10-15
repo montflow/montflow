@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.1.0] - 2026-10-15
+
+### Added
+
+- Spec-phase reviews: a phase may be backed by more than one series, one per declared reviewer profile; each session writes its own series
+- An orchestrator-supplied explicit round (`- Round: <NNN>`) is authoritative — write that round, populating an existing empty scaffold in place, rather than always computing the highest + 1
+- `- Phase: <phase id>` recorded in a phase-review round's `## Metadata`
+
 ## [5.0.0] - 2026-10-12
 
 ### Changed (breaking)

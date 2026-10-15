@@ -42,7 +42,10 @@ Body sections: \`## Type: <type>\`, \`## Description\`, \`## Requirements\`, \`#
 - \`depends-on\` may reference only tasks in the same phase or an earlier phase.
 - \`reviewer-profiles\` (\`review\` tasks only): comma-separated ordered reviewer profile
   slugs (\`reviewer-profiles: effect-reviewer, generic-reviewer\`). Empty or absent keeps the
-  single general reviewer; each entry adds a \`<spec>-<profile>\` review series.
+  single general reviewer; each entry adds a \`<spec>-<profile>\` review series, and the phase's
+  review round is written to every expected series (the spec's own plus one per profile) at the
+  same round. Declare \`effect-reviewer\` on **code phases** — any phase holding an \`execution\`
+  or \`defect\` task; exploration and planning phases stay empty.
 - \`finding-ref\` (\`defect\` tasks only): a fully-qualified finding locator,
   \`<series>/<round>/F<n>\` (e.g. \`ship-login/002/F2\`).
 

@@ -3,7 +3,7 @@ name: montflow-adversarial-review
 description: Performs a hostile, bug-hunting code review that assumes the author made mistakes. Surfaces possible bugs, edge cases, security holes, missed refactors, missing tests, and documentation gaps, and writes each round to a review series under `.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md`. Use when reviewing code, PRs, or diffs before merge. Pair with montflow-addressing-adversarial-review to resolve findings across fix→re-review loops.
 id: 714e99f0430c9637
 author: Daniel Montilla
-version: 5.0.0
+version: 5.1.0
 license: MIT
 dependencies:
   - executing-skills
@@ -64,12 +64,18 @@ There is no in-place review mode — the round file is the shared artifact that 
 
 Start the series through the CLI: `mf-reviews create <name>` for a fresh review, or `mf-reviews resume <name>` to continue an existing one.
 
+When an orchestrator dispatches this review (e.g. closing a spec phase), its context names the series and, when the review is bound to a spec phase, also the round, the phase, and the reviewer profile (`- Series:`, `- Round:`, `- Phase:`, `- Profile:`). A spec phase may be backed by **more than one series**, one per declared reviewer profile — the spec's own series (the general reviewer) plus one `<spec>-<profile>` series per profile. Each is a separate reviewer session writing its own series; this skill's job is identical in every one.
+
+- **An explicit round is authoritative.** When the dispatch names `- Round: <NNN>`, write that exact round in that series — do not compute "highest existing + 1". If the series already holds an _empty_ scaffold at that round, populate it in place; never create a higher round instead, and never overwrite a round that already holds findings.
+- **With no explicit round**, compute it as described below.
+- **When the dispatch names `- Phase: <phase>`** (a spec-phase review), record it as `- Phase:` in the round's `## Metadata`.
+
 Before reviewing, determine the two path parameters (directory entries only — reading _another_ round's contents is forbidden by the isolation requirement):
 
 1. **`<name>`**: A short identifier for the feature, project, or thing being reviewed (infer from the user's request or the target context). Reuse the same `<name>` across passes so the series stays together.
-2. **`<NNN>`**: The next round number. If `.agents/@montflow/reviews/<name>/` does not exist, this is a **fresh review** and the round is `001`. If it exists, this is a **re-review**: list the existing round directory names (`001`, `002`, …), and the new round is the highest existing number + 1.
+2. **`<NNN>`**: The round number. When the dispatch names an explicit round it is authoritative (above). Otherwise: if `.agents/@montflow/reviews/<name>/` does not exist, this is a **fresh review** and the round is `001`; if it exists, this is a **re-review**: list the existing round directory names (`001`, `002`, …), and the new round is the highest existing number + 1.
 
-The reviewer always writes a **new round** and never edits an existing one; the fixer edits the latest round in place. Create `.agents/@montflow/reviews/<name>/` if missing. Proceed through the pipeline; the round file and the ledger are written in Step 8.
+The reviewer always writes a **new round** and never edits an existing one, _except_ to populate an explicitly named empty scaffold in place; the fixer edits the latest round in place. Create `.agents/@montflow/reviews/<name>/` if missing. Proceed through the pipeline; the round file and the ledger are written in Step 8.
 
 ## 1. Map the Change
 
@@ -184,6 +190,7 @@ Round file (`<name>/<NNN>/REVIEW.md`):
 
 - Target: <what was reviewed — file, module, PR, feature>
 - Round: <NNN>
+- Phase: <phase id> # optional; the spec phase this round reviews
 - Type: standalone | re-review
 - Isolation: isolated | non-isolated (<reason>)
 - Max Attempts: 3
@@ -250,7 +257,7 @@ Series ledger (`<name>/REVIEW.md`) — regenerate its tables from every round on
 
 ### Write the Files
 
-1. Write the round to `.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md` using the structure above — a **new** round directory on every pass; never overwrite a prior round.
+1. Write the round to `.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md` using the structure above — a **new** round directory on every pass; never overwrite a prior round. When the dispatch named an explicit round, write that round, populating an existing empty scaffold in place. Record `- Phase: <phase id>` in `## Metadata` when the round reviews a spec phase.
 2. Write or update the series ledger `.agents/@montflow/reviews/<name>/REVIEW.md`: its `Rounds` table and `Findings` index must reflect every round, and `Metadata.Rounds` must equal the number of round directories.
 3. The per-finding `#### Discussion` block starts empty on a standalone review. It is appended to — never rewritten — across passes.
 4. Isolation: do NOT read the _contents_ of any round other than the one being iterated (Step 9). Never read a sibling round's findings.

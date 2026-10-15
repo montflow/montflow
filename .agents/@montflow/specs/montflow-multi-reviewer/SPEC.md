@@ -68,6 +68,6 @@ and is independent of the `montflow-opencode-migration` spec.
 | C001 | implement-spec-profile-field       | execution   | complete | Yes   |
 | C002 | implement-multi-series-review-link | execution   | complete | Yes   |
 | C003 | implement-profile-aware-dispatch   | execution   | complete | Yes   |
-| C004 | update-orchestration-and-skills    | execution   | pending | Yes   |
+| C004 | update-orchestration-and-skills    | execution   | complete | Yes   |
 | C005 | migrate-series-and-docs            | execution   | pending | Yes   |
 | C099 | review-phase                       | review      | pending | No    |

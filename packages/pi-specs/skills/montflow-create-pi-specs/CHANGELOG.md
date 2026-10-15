@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0] - 2026-10-15
+
+### Added
+
+- `reviewer-profiles` on the `review` task: the field, its `<spec>-<profile>` series, and the `effect-reviewer` binding for code phases (any phase holding an `execution` or `defect` task)
+- `--reviewer-profiles` in the scaffold command and reference
+
 ## [2.1.0] - 2026-10-13
 
 ### Added

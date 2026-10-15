@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: B003, C003
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task C004: Update orchestration and skills
@@ -27,6 +27,6 @@ reviewer session per declared profile, each against its own series.
 
 ## Completion
 
-- [ ] `executing-spec` spawns one session per declared profile
-- [ ] Adversarial-review and authoring skill text updated and consistent
-- [ ] GATES.md passed
+- [x] `executing-spec` spawns one session per declared profile
+- [x] Adversarial-review and authoring skill text updated and consistent
+- [x] GATES.md passed
