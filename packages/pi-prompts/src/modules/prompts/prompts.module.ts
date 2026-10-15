@@ -323,7 +323,14 @@ export const renderPrompt = (
   );
 };
 
-/** One mechanical check failure: which field broke, why, and how to fix it. */
+/**
+ * Severity of a mechanical issue. An `error` fails verification; a `warning`
+ * is surfaced but never fails it, so a finding that may not apply to every
+ * checkout (e.g. a skill that only exists locally) does not red-out CI.
+ */
+export type IssueSeverity = 'error' | 'warning';
+
+/** One mechanical check failure: which field broke, why, and how hard. */
 export interface VerifyIssue {
   readonly field: string;
   readonly message: string;
@@ -331,6 +338,8 @@ export interface VerifyIssue {
   readonly fix?: string;
   /** 1-based template line, for issues located in the template. */
   readonly line?: number;
+  /** Defaults to `error` when absent, preserving pre-severity callers. */
+  readonly severity?: IssueSeverity;
 }
 
 /** Mechanical verification outcome for one prompt file. */
@@ -345,6 +354,37 @@ export interface VerifyResult {
   readonly expectedVariables?: string;
 }
 
+/**
+ * The installed-skill store a `skills:` list is resolved against: the
+ * workspace root searched plus the skill names it holds. Built by the caller
+ * (which owns the IO), never by the pure verifier.
+ */
+export interface SkillResolution {
+  /** Workspace root whose `.agents/skills` store was searched (the resolved `--dir`). */
+  readonly root: string;
+  /** Names of the skills installed in that store. */
+  readonly names: ReadonlySet<string>;
+}
+
+/** Options for {@link verifyPrompt} and {@link verifyPromptFile}. */
+export interface VerifyOptions {
+  /** Installed skills to resolve `skills:` names against. Absent skips resolution. */
+  readonly skills?: SkillResolution | undefined;
+  /** Promote warnings (e.g. an unresolved skill) to fatal errors. */
+  readonly strict?: boolean | undefined;
+}
+
+/** True when an issue fails verification; absent severity reads as `error`. */
+const isError = (issue: VerifyIssue): boolean => (issue.severity ?? 'error') === 'error';
+
+/** Number of findings that fail verification; absent severity reads as `error`. */
+export const errorCount = (issues: ReadonlyArray<VerifyIssue>): number =>
+  issues.filter(isError).length;
+
+/** Number of advisory findings that never fail verification. */
+export const warningCount = (issues: ReadonlyArray<VerifyIssue>): number =>
+  issues.length - errorCount(issues);
+
 /** A `VerifyResult` being filled in, so `expectedVariables` can stay absent. */
 interface MutableVerifyResult {
   valid: boolean;
@@ -358,6 +398,7 @@ interface MutableVerifyIssue {
   message: string;
   fix?: string;
   line?: number;
+  severity?: IssueSeverity;
 }
 
 const verifyIssue = (field: string, message: string, fix?: string, line?: number): VerifyIssue => {
@@ -402,9 +443,14 @@ const indentBlock = (block: string, pad: number): string => {
  *
  * @param name - prompt file name slug (without `.json`)
  * @param raw - raw prompt file contents
- * @returns the result; `valid` is true only with zero issues
+ * @param options - optional skill resolution and strict promotion
+ * @returns the result; `valid` is true only with zero error issues
  */
-export const verifyPromptFile = (name: string, raw: string): VerifyResult => {
+export const verifyPromptFile = (
+  name: string,
+  raw: string,
+  options: VerifyOptions = {},
+): VerifyResult => {
   let prompt: Prompt;
   try {
     prompt = Schema.decodeUnknownSync(FromJson)(raw);
@@ -425,7 +471,7 @@ export const verifyPromptFile = (name: string, raw: string): VerifyResult => {
   // Note the order: the names-match test comes first, so a mismatch is
   // appended even when everything else passed — which is the only case where
   // `result.valid` is still true here.
-  const result = verifyPrompt(prompt);
+  const result = verifyPrompt(prompt, options);
   if (prompt.name === name) return result;
   const outcome: MutableVerifyResult = {
     // Recomputed, not spread: a mismatch is always a failure, so carrying
@@ -452,9 +498,10 @@ export const verifyPromptFile = (name: string, raw: string): VerifyResult => {
  * still render, substituting nothing, and the agent would dispatch a prompt
  * silently missing a value.
  * @param prompt - a decoded prompt
+ * @param options - optional skill resolution and strict promotion
  * @returns the verification result
  */
-export const verifyPrompt = (prompt: Prompt): VerifyResult => {
+export const verifyPrompt = (prompt: Prompt, options: VerifyOptions = {}): VerifyResult => {
   // `name` is unused: the slug check reads `prompt.name` directly, and the
   // file-name match belongs to `verifyPromptFile`.
   const issues: Array<VerifyIssue> = [];
@@ -566,10 +613,27 @@ export const verifyPrompt = (prompt: Prompt): VerifyResult => {
     listAgrees = false;
   }
 
+  // Resolve declared skills against the caller-supplied store, if any. An
+  // unresolved name is a warning by default so a skill that only exists in
+  // the author's checkout does not red-out CI; `strict` promotes it.
+  const skills = options.skills;
+  if (skills !== undefined) {
+    const severity: IssueSeverity = options.strict === true ? 'error' : 'warning';
+    for (const skill of prompt.skills) {
+      if (skills.names.has(skill)) continue;
+      issues.push({
+        field: 'skills',
+        message: `Skill '${skill}' is not installed under ${skills.root}/.agents/skills/.`,
+        fix: `Install the skill under ${skills.root}/.agents/skills/, or remove '${skill}' from "skills".`,
+        severity,
+      });
+    }
+  }
+
   // `expectedVariables` is only useful when the template's implied list is
   // what the author should adopt, so it rides on the same flag as the
   // coverage checks.
-  const outcome: MutableVerifyResult = { valid: issues.length === 0, issues };
+  const outcome: MutableVerifyResult = { valid: !issues.some(isError), issues };
   if (!listAgrees) outcome.expectedVariables = expectedJson(implied);
   return outcome;
 };
@@ -580,9 +644,14 @@ export const verifyPrompt = (prompt: Prompt): VerifyResult => {
  * @returns one status line for the panel
  */
 export const verifyInfoLine = (result: VerifyResult): string => {
-  if (result.valid) return '✓ verified';
-  const count = result.issues.length;
-  return `✗ not verified — ${count} issue${count === 1 ? '' : 's'}`;
+  const errors = errorCount(result.issues);
+  const warnings = warningCount(result.issues);
+  if (errors === 0)
+    return warnings === 0
+      ? '✓ verified'
+      : `✓ verified — ${warnings} warning${warnings === 1 ? '' : 's'}`;
+  const warningClause = warnings === 0 ? '' : ` · ${warnings} warning${warnings === 1 ? '' : 's'}`;
+  return `✗ not verified — ${errors} issue${errors === 1 ? '' : 's'}${warningClause}`;
 };
 
 /**
@@ -595,12 +664,20 @@ export const verifyInfoLine = (result: VerifyResult): string => {
  * @returns a multi-line report
  */
 export const verifyReport = (name: string, result: VerifyResult): string => {
-  if (result.valid) return `✓ '${name}' matches the standard format.`;
-  const count = result.issues.length;
-  const lines = [
-    `✗ '${name}' has ${count} issue${count === 1 ? '' : 's'}. Fix each one and run verify again.`,
-    '',
-  ];
+  if (result.issues.length === 0) return `✓ '${name}' matches the standard format.`;
+  const errors = errorCount(result.issues);
+  const warnings = warningCount(result.issues);
+  const warningClause = warnings === 0 ? '' : ` · ${warnings} warning${warnings === 1 ? '' : 's'}`;
+  const lines =
+    errors === 0
+      ? [
+          `✓ '${name}' matches the standard format — ${warnings} warning${warnings === 1 ? '' : 's'}.`,
+          '',
+        ]
+      : [
+          `✗ '${name}' has ${errors} issue${errors === 1 ? '' : 's'}${warningClause}. Fix each one and run verify again.`,
+          '',
+        ];
   result.issues.forEach((found, index) => {
     const where = found.line === undefined ? '' : ` (line ${found.line})`;
     lines.push(`${index + 1}. [${found.field}] ${found.message}${where}`);

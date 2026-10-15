@@ -323,7 +323,7 @@ export const run = (
         if (action.all || action.name === undefined) {
           const report = yield* Engines.verifyAll({ cwd: action.dir ?? cwd });
           yield* say(Renderers.verifyAll(report));
-          if (report.issueCount > 0) {
+          if (report.entries.some((entry) => !entry.result.valid)) {
             return yield* Effect.fail(`verification failed:\n${Renderers.verifyAll(report)}`);
           }
           return;

@@ -139,11 +139,15 @@ Vitest.describe('Renderers.list', () => {
   const prompt = auditPrompt();
 
   Vitest.it('prints names only by default', () => {
-    Vitest.expect(Renderers.list([prompt])).toBe('audit');
+    Vitest.expect(Renderers.list([{ prompt, warningCount: 0 }])).toBe('audit');
+  });
+
+  Vitest.it('marks an entry whose only findings are advisory', () => {
+    Vitest.expect(Renderers.list([{ prompt, warningCount: 1 }])).toBe('audit (1 warning)');
   });
 
   Vitest.it('adds description, model, and a variable count when verbose', () => {
-    const text = Renderers.list([prompt], { verbose: true });
+    const text = Renderers.list([{ prompt, warningCount: 0 }], { verbose: true });
     Vitest.expect(text).toContain('Audits.');
     Vitest.expect(text).toContain('model: (none)');
     Vitest.expect(text).toContain('variables: 2 (1 required)');
@@ -154,9 +158,12 @@ Vitest.describe('Renderers.list', () => {
   });
 
   Vitest.it('keeps every lean line present in a verbose run', () => {
-    const prompts = [prompt, Prompts.make('other', 'Other.', 'Another.')];
-    const lean = Renderers.list(prompts).split('\n');
-    const verbose = Renderers.list(prompts, { verbose: true });
+    const entries = [
+      { prompt, warningCount: 0 },
+      { prompt: Prompts.make('other', 'Other.', 'Another.'), warningCount: 1 },
+    ];
+    const lean = Renderers.list(entries).split('\n');
+    const verbose = Renderers.list(entries, { verbose: true });
     for (const line of lean) Vitest.expect(verbose).toContain(line);
   });
 });
@@ -183,7 +190,7 @@ Vitest.describe('Renderers.verify', () => {
 
 Vitest.describe('Renderers', () => {
   Vitest.it('emits no ANSI escapes, since agents read this verbatim', () => {
-    const text = Renderers.list([auditPrompt()], { verbose: true });
+    const text = Renderers.list([{ prompt: auditPrompt(), warningCount: 1 }], { verbose: true });
     // oxlint-disable-next-line no-control-regex -- asserting the absence of escapes is the point.
     Vitest.expect(/\[/u.test(text)).toBe(false);
   });
@@ -216,7 +223,7 @@ Vitest.describe('Engines over the store', () => {
       const root = yield* readyRoot;
       yield* seed(root);
       const scope = { cwd: root };
-      Vitest.expect((yield* Engines.list(scope)).map((entry) => entry.name)).toStrictEqual([
+      Vitest.expect((yield* Engines.list(scope)).map((entry) => entry.prompt.name)).toStrictEqual([
         'audit',
       ]);
       Vitest.expect((yield* Engines.load(scope, 'audit')).description).toBe('Audits.');
@@ -224,6 +231,89 @@ Vitest.describe('Engines over the store', () => {
       Vitest.expect(yield* Engines.render(scope, 'audit', { files: 'src/' })).toContain(
         'everywhere',
       );
+      yield* cleanup(root);
+    }).pipe(Effect.provide(Live)),
+  );
+
+  Vitest.it.effect('resolves declared skills, warning on a miss and erroring under strict', () =>
+    Effect.gen(function* () {
+      const root = yield* bareRoot;
+      yield* writePrompt(root, 'audit.json', {
+        name: 'audit',
+        description: 'Audits.',
+        template: 'Audit {{files}}',
+        variables: [{ name: 'files' }],
+        skills: ['effect', 'missing-skill'],
+        model: '',
+      });
+
+      // No skills store at all: silent, and never a false "not installed".
+      const bare = yield* Engines.verify({ cwd: root }, 'audit');
+      Vitest.expect(bare.valid).toBe(true);
+      Vitest.expect(bare.issues).toStrictEqual([]);
+
+      // Store exists with `effect` only: `missing-skill` is a named warning.
+      yield* Effect.promise(() =>
+        mkdir(join(root, '.agents', 'skills', 'effect'), { recursive: true }),
+      );
+      const warned = yield* Engines.verify({ cwd: root }, 'audit');
+      Vitest.expect(warned.valid).toBe(true);
+      const miss = warned.issues.find((issue) => issue.field === 'skills');
+      Vitest.expect(miss?.message).toContain("'missing-skill'");
+      Vitest.expect(miss?.severity).toBe('warning');
+
+      // Strict promotes it to an error, so the gate fails.
+      const strict = yield* Engines.verify({ cwd: root }, 'audit', { strict: true });
+      Vitest.expect(strict.valid).toBe(false);
+      Vitest.expect(strict.issues[0]?.severity).toBe('error');
+      yield* cleanup(root);
+    }).pipe(Effect.provide(Live)),
+  );
+
+  Vitest.it.effect('counts warnings apart from issues in the whole-store summary', () =>
+    Effect.gen(function* () {
+      const root = yield* bareRoot;
+      yield* writePrompt(root, 'audit.json', {
+        name: 'audit',
+        description: 'Audits.',
+        template: 'Audit {{files}}',
+        variables: [{ name: 'files' }],
+        skills: ['effect', 'missing-skill'],
+        model: '',
+      });
+      yield* Effect.promise(() =>
+        mkdir(join(root, '.agents', 'skills', 'effect'), { recursive: true }),
+      );
+
+      const report = yield* Engines.verifyAll({ cwd: root });
+      Vitest.expect(report.issueCount).toBe(0);
+      Vitest.expect(report.warningCount).toBe(1);
+      Vitest.expect(Renderers.verifyAll(report)).toContain(
+        '1 prompt \u00b7 0 issues \u00b7 1 warning',
+      );
+      yield* cleanup(root);
+    }).pipe(Effect.provide(Live)),
+  );
+
+  Vitest.it.effect('marks a valid prompt that only warns, so list --status valid shows it', () =>
+    Effect.gen(function* () {
+      const root = yield* bareRoot;
+      yield* writePrompt(root, 'audit.json', {
+        name: 'audit',
+        description: 'Audits.',
+        template: 'Audit {{files}}',
+        variables: [{ name: 'files' }],
+        skills: ['effect', 'missing-skill'],
+        model: '',
+      });
+      yield* Effect.promise(() =>
+        mkdir(join(root, '.agents', 'skills', 'effect'), { recursive: true }),
+      );
+
+      const entries = yield* Engines.list({ cwd: root }, { status: 'valid' });
+      Vitest.expect(entries.map((entry) => entry.prompt.name)).toStrictEqual(['audit']);
+      Vitest.expect(entries[0]?.warningCount).toBe(1);
+      Vitest.expect(Renderers.list(entries)).toBe('audit (1 warning)');
       yield* cleanup(root);
     }).pipe(Effect.provide(Live)),
   );

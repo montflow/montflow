@@ -224,17 +224,22 @@ const verifyCommand = Command.make(
     ),
     all: optionalBoolean('all', 'Verify every prompt in the store.'),
     verbose: verboseFlag,
+    strict: optionalBoolean(
+      'strict',
+      'Treat unresolved skill references as errors instead of warnings.',
+    ),
   },
   (config) =>
     Effect.gen(function* () {
       const name = opt(config.name);
       if (config.all || name === undefined) {
-        const all = yield* Engines.verifyAll(scope(config.dir));
+        const all = yield* Engines.verifyAll(scope(config.dir), { strict: config.strict });
         yield* Console.log(Renderers.verifyAll(all, { verbose: config.verbose }));
-        if (all.issueCount > 0) yield* exitFailed;
+        // Warnings do not fail: only an issue that produced `valid: false` does.
+        if (all.entries.some((entry) => !entry.result.valid)) yield* exitFailed;
         return yield* Effect.void;
       }
-      const result = yield* Engines.verify(scope(config.dir), name);
+      const result = yield* Engines.verify(scope(config.dir), name, { strict: config.strict });
       yield* Console.log(Renderers.verify(name, result, { verbose: config.verbose }));
       if (!result.valid) yield* exitFailed;
       return yield* Effect.void;

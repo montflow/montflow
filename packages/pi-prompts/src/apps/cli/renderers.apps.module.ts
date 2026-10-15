@@ -9,9 +9,10 @@ import type * as Engines from './engines.apps.module.js';
  * These carry the **token contract**, because the output is read by agents far
  * more often than by humans:
  *
- * - **Token-lean by default.** A `list` prints names and nothing else; a
- *   passing `verify` prints one line. A reader that only needs to know "is
- *   this fine?" should not have to scroll past a wall of green.
+ * - **Token-lean by default.** A `list` prints names and nothing else — but a
+ *   marker on an entry whose only findings are advisory, so it cannot read as
+ *   clean; a passing `verify` prints one line. A reader that only needs to know
+ *   "is this fine?" should not have to scroll past a wall of green.
  * - **`--verbose` adds, never removes.** Detail is opt-in, so a lean run is
  *   always a strict subset of a verbose one.
  * - **Failures are never suppressed.** Every problem an engine found appears in
@@ -30,7 +31,7 @@ Usage:
   mf-prompts inspect <name> [key=value ...] [--dir <path>]
   mf-prompts execute <name> --model <provider/model-id> [key=value ...] [--dir <path>]
   mf-prompts show <name> [--dir <path>]
-  mf-prompts verify <name>|--all [--dir <path>]
+  mf-prompts verify <name>|--all [--strict] [--dir <path>]
   mf-prompts render <name> [key=value ...] [--dir <path>]
   mf-prompts create <name> --template <text> [--description <d>] [--model <p/m>]
                     [--skills a,b] [--variable name[:flags]] [--dir <path>]
@@ -53,29 +54,39 @@ export interface ListOptions extends Verbosity {
   readonly status?: string | undefined;
 }
 
+/** A ` (N warning[s])` marker, or nothing when the entry carries none. */
+const warningMarker = (count: number): string =>
+  count === 0 ? '' : ` (${count} warning${count === 1 ? '' : 's'})`;
+
 /**
- * Stored prompt names. Lean by default: names only, one per line, because that
- * is what a caller almost always wants to feed back into the next command.
- * @param prompts - prompts from `engines.list`
+ * Stored prompt names, each with a warning marker when its only findings are
+ * advisory. Lean by default: names only, one per line, because that is what a
+ * caller almost always wants to feed back into the next command — a marker
+ * appears only on an entry that would otherwise read as clean.
+ * @param entries - entries from `engines.list`
  * @param options - verbosity plus the active status filter
  * @returns the rendered list
  */
 export const list = (
-  prompts: ReadonlyArray<Prompts.Prompt>,
+  entries: ReadonlyArray<Engines.PromptListEntry>,
   options: ListOptions = { verbose: false },
 ): string => {
-  if (prompts.length === 0) {
+  if (entries.length === 0) {
     return options.status === undefined
       ? 'No prompts yet. Create one with: mf-prompts create <name> --template "…"'
       : `No prompts with status '${options.status}'.`;
   }
-  if (!options.verbose) return prompts.map((prompt) => prompt.name).join('\n');
-  return prompts
-    .map((prompt) => {
+  if (!options.verbose) {
+    return entries
+      .map(({ prompt, warningCount }) => `${prompt.name}${warningMarker(warningCount)}`)
+      .join('\n');
+  }
+  return entries
+    .map(({ prompt, warningCount }) => {
       const required = prompt.variables.filter((variable) => variable.required).length;
       const model = prompt.model === '' ? 'model: (none)' : `model: ${prompt.model}`;
       return [
-        prompt.name,
+        `${prompt.name}${warningMarker(warningCount)}`,
         `  ${prompt.description === '' ? '(no description)' : prompt.description}`,
         `  ${model} · variables: ${prompt.variables.length} (${required} required)`,
       ].join('\n');
@@ -110,8 +121,9 @@ export const verify = (
 };
 
 /**
- * A whole-store verification report. Failures are never suppressed; a passing
- * prompt appears only under `verbose`, matching the single-prompt renderer.
+ * A whole-store verification report. Failures are never suppressed; a prompt
+ * with no findings appears only under `verbose`, while one carrying warnings
+ * is always shown. The summary counts errors and warnings apart.
  * @param report - report from `engines.verifyAll`
  * @param options - include passing prompts
  * @returns the display text
@@ -122,13 +134,14 @@ export const verifyAll = (
 ): string => {
   const lines: Array<string> = [];
   for (const entry of report.entries) {
-    if (entry.result.valid && !options.verbose) continue;
+    if (entry.result.valid && entry.result.issues.length === 0 && !options.verbose) continue;
     lines.push(`${entry.name}: ${Prompts.verifyInfoLine(entry.result)}`);
     for (const found of entry.result.issues) lines.push(`  ${found.field}: ${found.message}`);
   }
   if (report.entries.length === 0) lines.push('No prompts yet.');
+  const prompts = report.entries.length;
   lines.push(
-    `${report.entries.length} prompt${report.entries.length === 1 ? '' : 's'} \u00b7 ${report.issueCount} issue${report.issueCount === 1 ? '' : 's'}`,
+    `${prompts} prompt${prompts === 1 ? '' : 's'} \u00b7 ${report.issueCount} issue${report.issueCount === 1 ? '' : 's'} \u00b7 ${report.warningCount} warning${report.warningCount === 1 ? '' : 's'}`,
   );
   return lines.join('\n');
 };

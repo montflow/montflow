@@ -60,22 +60,22 @@ const run = (options: Engines.ListOptions) =>
 Vitest.describe('Engines.list status filter', () => {
   Vitest.it.effect('returns every prompt when no status is given', () =>
     Effect.gen(function* () {
-      const prompts = yield* run({});
-      Vitest.expect(prompts.map((prompt) => prompt.name)).toStrictEqual(['bad', 'good']);
+      const entries = yield* run({});
+      Vitest.expect(entries.map((entry) => entry.prompt.name)).toStrictEqual(['bad', 'good']);
     }),
   );
 
   Vitest.it.effect('--status valid keeps only files that verify', () =>
     Effect.gen(function* () {
-      const prompts = yield* run({ status: 'valid' });
-      Vitest.expect(prompts.map((prompt) => prompt.name)).toStrictEqual(['good']);
+      const entries = yield* run({ status: 'valid' });
+      Vitest.expect(entries.map((entry) => entry.prompt.name)).toStrictEqual(['good']);
     }),
   );
 
   Vitest.it.effect('--status invalid keeps only files that fail verification', () =>
     Effect.gen(function* () {
-      const prompts = yield* run({ status: 'invalid' });
-      Vitest.expect(prompts.map((prompt) => prompt.name)).toStrictEqual(['bad']);
+      const entries = yield* run({ status: 'invalid' });
+      Vitest.expect(entries.map((entry) => entry.prompt.name)).toStrictEqual(['bad']);
     }),
   );
 });

@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import * as PromptExecute from '../../modules/prompt-execute/index.js';
 import * as Prompts from '../../modules/prompts/index.js';
+import * as SkillCheck from '../../modules/skill-check/index.js';
 import * as TemplateEngine from '../../modules/template-engine/index.js';
 import { PromptStore } from '../../services/index.js';
 import * as Doctor from '../doctor/index.js';
@@ -26,6 +27,12 @@ export interface StoreScope {
   readonly cwd: string;
   /** Explicit store directory, resolved against `cwd` when set. */
   readonly dir?: string | undefined;
+}
+
+/** Options for {@link verify} and {@link verifyAll}. */
+export interface VerifyOptions {
+  /** Treat unresolved skill references as errors instead of warnings. */
+  readonly strict?: boolean | undefined;
 }
 
 /**
@@ -124,6 +131,18 @@ export interface ListOptions {
 }
 
 /**
+ * One listed prompt plus the number of warning-severity findings it carries.
+ * The list surface owns the warning count so `list --status valid` can mark an
+ * entry that passes (`valid`) only because its finding is advisory — otherwise
+ * a warning-bearing prompt would be indistinguishable from a clean one.
+ */
+export interface PromptListEntry {
+  readonly prompt: Prompts.Prompt;
+  /** Warning-severity findings for this prompt; zero when it has none. */
+  readonly warningCount: number;
+}
+
+/**
  * Resolve a raw `--status` value to a {@link ListStatus}. Absent or empty
  * means "no filter"; anything else must name a state.
  * @param value - raw flag value, if any
@@ -139,16 +158,18 @@ export const resolveListStatus = (
 };
 
 /**
- * Every prompt in the store, sorted by name, optionally filtered to those
- * whose file passes (`valid`) or fails (`invalid`) mechanical verification.
- * The filter verifies each file's raw bytes, so it reports the file's real
- * state rather than a decoded round-trip of it. Files the store cannot decode
- * are never listed, with or without a filter.
+ * Every prompt in the store, sorted by name, each paired with its warning
+ * count, optionally filtered to those whose file passes (`valid`) or fails
+ * (`invalid`) mechanical verification. The filter verifies each file's raw
+ * bytes, so it reports the file's real state rather than a decoded round-trip
+ * of it; the warning count marks an entry whose only findings are advisory so
+ * the list can surface it rather than present it as clean. Files the store
+ * cannot decode are never listed, with or without a filter.
  */
 export const list = (
   scope: StoreScope,
   options: ListOptions = {},
-): Effect.Effect<ReadonlyArray<Prompts.Prompt>, string, PromptStore.PromptStore> =>
+): Effect.Effect<ReadonlyArray<PromptListEntry>, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const store = yield* PromptStore.PromptStore;
     const prompts = yield* store
@@ -156,18 +177,21 @@ export const list = (
       .pipe(Effect.mapError((error: PromptStore.StoreError) => error.message));
     const sorted = [...prompts].toSorted((a, b) => a.name.localeCompare(b.name));
     const status = options.status;
-    if (status === undefined) return sorted;
+    if (status === undefined) return sorted.map((prompt) => ({ prompt, warningCount: 0 }));
     const wanted = status === 'valid';
+    const skills = yield* SkillCheck.resolveSkills(scope.cwd);
     const verdicts = yield* Effect.forEach(sorted, (prompt) =>
       store.readRaw(scope.cwd, prompt.name, scope.dir).pipe(
         Effect.mapError((error: PromptStore.StoreError) => error.message),
-        Effect.map((raw) => ({
-          prompt,
-          valid: Prompts.verifyPromptFile(prompt.name, raw).valid,
-        })),
+        Effect.map((raw) => {
+          const result = Prompts.verifyPromptFile(prompt.name, raw, { skills });
+          return { prompt, valid: result.valid, warningCount: Prompts.warningCount(result.issues) };
+        }),
       ),
     );
-    return verdicts.filter((entry) => entry.valid === wanted).map((entry) => entry.prompt);
+    return verdicts
+      .filter((entry) => entry.valid === wanted)
+      .map((entry) => ({ prompt: entry.prompt, warningCount: entry.warningCount }));
   });
 
 /** One prompt by name, failing with a message that names the fix. */
@@ -181,11 +205,11 @@ export const load = (
         `'${name}' is not a valid prompt name — use a kebab-case slug such as 'my-prompt'.`,
       );
     }
-    const prompts = yield* list(scope);
-    const found = prompts.find((prompt) => prompt.name === name);
+    const entries = yield* list(scope);
+    const found = entries.find((entry) => entry.prompt.name === name);
     return found === undefined
       ? yield* Effect.fail(`Unknown prompt '${name}'. Run \`list\` to see the available names.`)
-      : found;
+      : found.prompt;
   });
 
 /** Raw bytes of one prompt file, as stored on disk. */
@@ -203,13 +227,19 @@ export const readRaw = (
 /**
  * Mechanically verify one prompt file against the prompt standard. Pure over
  * the file's bytes, so it reports the file's real state rather than a decoded
- * round-trip of it.
+ * round-trip of it. Declared `skills:` are resolved against `<scope.cwd>/.agents/skills`;
+ * an unresolved name is a warning, or an error under `options.strict`.
  */
 export const verify = (
   scope: StoreScope,
   name: string,
+  options: VerifyOptions = {},
 ): Effect.Effect<Prompts.VerifyResult, string, PromptStore.PromptStore> =>
-  readRaw(scope, name).pipe(Effect.map((raw) => Prompts.verifyPromptFile(name, raw)));
+  Effect.gen(function* () {
+    const raw = yield* readRaw(scope, name);
+    const skills = yield* SkillCheck.resolveSkills(scope.cwd);
+    return Prompts.verifyPromptFile(name, raw, { skills, strict: options.strict });
+  });
 
 /** One prompt's verification result, paired with its name. */
 export interface VerifyAllEntry {
@@ -220,29 +250,36 @@ export interface VerifyAllEntry {
 /** A whole-store verification report. */
 export interface VerifyAllReport {
   readonly entries: ReadonlyArray<VerifyAllEntry>;
+  /** Error-severity findings across every prompt. */
   readonly issueCount: number;
+  /** Warning-severity findings across every prompt, counted apart from issues. */
+  readonly warningCount: number;
 }
 
 /**
  * Mechanically verify every prompt file in the store, including files the
  * store cannot decode. Unlike {@link list}, this enumerates the directory's
  * raw `*.json` files, so a corrupt file is reported rather than dropped —
- * which is the whole point of a `verify --all` gate.
+ * which is the whole point of a `verify --all` gate. Declared `skills:` are
+ * resolved once against `<scope.cwd>/.agents/skills`.
  */
 export const verifyAll = (
   scope: StoreScope,
+  options: VerifyOptions = {},
 ): Effect.Effect<VerifyAllReport, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const store = yield* PromptStore.PromptStore;
     const raws = yield* store
       .readAllRaw(scope.cwd, scope.dir)
       .pipe(Effect.mapError((error: PromptStore.StoreError) => error.message));
+    const skills = yield* SkillCheck.resolveSkills(scope.cwd);
     const entries = raws.map(({ name, raw }) => ({
       name,
-      result: Prompts.verifyPromptFile(name, raw),
+      result: Prompts.verifyPromptFile(name, raw, { skills, strict: options.strict }),
     }));
-    const issueCount = entries.reduce((count, entry) => count + entry.result.issues.length, 0);
-    return { entries, issueCount };
+    const allIssues = entries.flatMap((entry) => entry.result.issues);
+    const issueCount = allIssues.filter((issue) => (issue.severity ?? 'error') === 'error').length;
+    return { entries, issueCount, warningCount: allIssues.length - issueCount };
   });
 
 /** Everything an `inspect` needs: the summary plus the raw template text. */

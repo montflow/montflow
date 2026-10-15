@@ -16,8 +16,9 @@ and annotation are each a single export.
 - Value resolution (`resolveValues`, `missingRequired`) and rendering
   (`renderToString`, `renderPrompt`)
 - Mechanical verification (`verifyPromptFile`, `verifyReport`, `verifyInfoLine`,
-  `VerifyIssue`, `VerifyResult`) and the author-facing rules
-  (`authoringRules`, `templateVariables`, `analyze`)
+  `VerifyIssue`, `VerifyResult`, `VerifyOptions`) — issues carry a severity, and
+  a caller-supplied `SkillResolution` resolves `skills:` names — and the
+  author-facing rules (`authoringRules`, `templateVariables`, `analyze`)
 
 ## Does not belong here
 

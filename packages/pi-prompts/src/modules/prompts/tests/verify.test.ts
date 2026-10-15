@@ -286,6 +286,46 @@ Vitest.describe('Prompts.verifyPromptFile template grammar', () => {
   });
 });
 
+Vitest.describe('Prompts.verifyPromptFile skills resolution', () => {
+  const raw = JSON.stringify({
+    name: 'audit',
+    description: 'Does X.',
+    template: 'Do X.',
+    variables: [],
+    skills: ['effect', 'missing'],
+    model: '',
+  });
+  /** Only `effect` is installed; `missing` is the unresolved name. */
+  const skills: Prompts.SkillResolution = { root: '/ws', names: new Set(['effect']) };
+
+  Vitest.it('reports an unresolved name as a warning and stays valid', () => {
+    const result = Prompts.verifyPromptFile('audit', raw, { skills });
+    Vitest.expect(result.valid).toBe(true);
+    Vitest.expect(result.issues).toStrictEqual([
+      {
+        field: 'skills',
+        message: "Skill 'missing' is not installed under /ws/.agents/skills/.",
+        fix: 'Install the skill under /ws/.agents/skills/, or remove \'missing\' from "skills".',
+        severity: 'warning',
+      },
+    ]);
+  });
+
+  Vitest.it('promotes an unresolved name to an error under strict', () => {
+    const result = Prompts.verifyPromptFile('audit', raw, { skills, strict: true });
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.message).toContain("'missing'");
+    Vitest.expect(result.issues[0]?.severity).toBe('error');
+  });
+
+  Vitest.it('stays silent when no store was resolved', () => {
+    Vitest.expect(Prompts.verifyPromptFile('audit', raw)).toStrictEqual({
+      valid: true,
+      issues: [],
+    });
+  });
+});
+
 Vitest.describe('Prompts.verifyReport', () => {
   Vitest.it('confirms a clean file in one line', () => {
     Vitest.expect(Prompts.verifyReport('commit', { valid: true, issues: [] })).toBe(
@@ -305,6 +345,18 @@ Vitest.describe('Prompts.verifyReport', () => {
     Vitest.expect(report).toContain('1. [template] Bad. (line 3)');
     Vitest.expect(report).toContain('   Fix: Close the block.');
     Vitest.expect(report).toContain('2. [variables] Missing one.');
+  });
+
+  Vitest.it('counts errors apart from warnings when a failing result also warns', () => {
+    const report = Prompts.verifyReport('mix', {
+      valid: false,
+      issues: [
+        { field: 'name', message: 'Mismatch.' },
+        { field: 'skills', message: 'Missing skill.', severity: 'warning' },
+      ],
+    });
+    Vitest.expect(report).toContain("'mix' has 1 issue · 1 warning");
+    Vitest.expect(report).not.toContain("'mix' has 2 issues");
   });
 
   Vitest.it('appends the expected variables JSON, once, when coverage is wrong', () => {
@@ -340,5 +392,17 @@ Vitest.describe('Prompts.verifyInfoLine', () => {
     Vitest.expect(
       Prompts.verifyInfoLine({ valid: false, issues: [{ field: 'json', message: 'Bad.' }] }),
     ).toBe('✗ not verified — 1 issue');
+  });
+
+  Vitest.it('renders a separate warning clause when a failing result also warns', () => {
+    Vitest.expect(
+      Prompts.verifyInfoLine({
+        valid: false,
+        issues: [
+          { field: 'name', message: 'Mismatch.' },
+          { field: 'skills', message: 'Missing skill.', severity: 'warning' },
+        ],
+      }),
+    ).toBe('✗ not verified — 1 issue · 1 warning');
   });
 });
