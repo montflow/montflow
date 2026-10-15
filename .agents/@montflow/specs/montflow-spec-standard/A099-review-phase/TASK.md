@@ -5,7 +5,7 @@ type: review
 originator: user
 depends-on: A003, A004
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Review Phase A: review phase
@@ -27,6 +27,6 @@ severity channel stay strictly additive.
 
 ## Completion
 
-- [ ] Review written to `.agents/@montflow/reviews/montflow-spec-standard/A.md` and read by the human
-- [ ] Accepted findings turned into defect tasks; deferred and dismissed ones recorded as such
-- [ ] No open finding without a disposition
+- [x] Review written to `.agents/@montflow/reviews/montflow-spec-standard/001/REVIEW.md` and read by the human
+- [x] Accepted findings turned into defect tasks; deferred and dismissed ones recorded as such
+- [x] No open finding without a disposition

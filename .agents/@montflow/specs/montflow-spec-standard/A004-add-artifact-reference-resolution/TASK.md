@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: A001
 related-tasks: A003
-status: pending
+status: complete
 ---
 
 # Task A004: add artifact reference resolution

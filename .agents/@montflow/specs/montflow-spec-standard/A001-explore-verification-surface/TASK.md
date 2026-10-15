@@ -5,7 +5,7 @@ type: exploratory
 originator: user
 depends-on:
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task A001: explore verification surface
