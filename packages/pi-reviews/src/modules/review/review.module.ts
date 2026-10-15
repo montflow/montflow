@@ -1070,6 +1070,8 @@ export interface SeriesScaffold {
   readonly status?: string | undefined;
   readonly rounds?: ReadonlyArray<RoundRow> | undefined;
   readonly findings?: ReadonlyArray<FindingsRow> | undefined;
+  /** Reviewer profile bound to this series; omitted for the general reviewer. */
+  readonly profile?: string | undefined;
 }
 
 /**
@@ -1088,6 +1090,7 @@ export const renderSeries = (input: SeriesScaffold): string => {
     `- Target: ${input.target}`,
     `- Status: ${input.status ?? 'open'}`,
     `- Rounds: ${rows.length}`,
+    ...(input.profile === undefined || input.profile === '' ? [] : [`- Profile: ${input.profile}`]),
     `- Created: ${input.created}`,
     '',
     '## Rounds',

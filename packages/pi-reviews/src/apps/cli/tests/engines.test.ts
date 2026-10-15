@@ -4,16 +4,23 @@ import { join } from 'node:path';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Effect, Layer } from 'effect';
 import * as Vitest from '@effect/vitest';
+import { ProfileStore } from '@montflow/pi-profiles';
+import { SpecStore } from '@montflow/pi-specs';
 import { ProfileProbe, ReviewStore } from '../../../services/index.js';
 import * as Engines from '../engines.apps.module.js';
 
 const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 const StoreLive = Layer.provide(ReviewStore.Default, NodeLive);
-const Live = Layer.merge(StoreLive, ProfileProbe.Default);
+const SpecProfileLive = Layer.mergeAll(
+  Layer.provide(SpecStore.Default, NodeLive),
+  Layer.provide(ProfileStore.Default, NodeLive),
+);
+const Live = Layer.mergeAll(StoreLive, ProfileProbe.Default, SpecProfileLive);
 
 /** Stub probes for the declared-profile path. */
-const probeFailed = Layer.merge(
+const probeFailed = Layer.mergeAll(
   StoreLive,
+  SpecProfileLive,
   Layer.succeed(
     ProfileProbe.ProfileProbe,
     ProfileProbe.ProfileProbe.of({
@@ -22,8 +29,9 @@ const probeFailed = Layer.merge(
     }),
   ),
 );
-const probeUnavailable = Layer.merge(
+const probeUnavailable = Layer.mergeAll(
   StoreLive,
+  SpecProfileLive,
   Layer.succeed(
     ProfileProbe.ProfileProbe,
     ProfileProbe.ProfileProbe.of({
@@ -39,7 +47,7 @@ const probeUnavailable = Layer.merge(
 /** A throwaway repo root. */
 const freshRoot = (): Promise<string> => mkdtemp(join(tmpdir(), 'mf-reviews-cli-'));
 
-/** Declare a `- Profile:` in a series ledger (the field has no CLI flag). */
+/** Declare a `- Profile:` in a series ledger, bypassing the create flag. */
 const declareProfile = async (root: string, name: string, profile: string): Promise<void> => {
   const ledger = join(root, '.agents', '@montflow', 'reviews', name, 'REVIEW.md');
   const raw = await readFile(ledger, 'utf8');
@@ -95,6 +103,24 @@ Vitest.describe('review CLI engines', () => {
         Effect.flip,
       );
       Vitest.expect(failure).toContain('already exists');
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+    }).pipe(Effect.provide(Live)),
+  );
+
+  Vitest.it.effect('stamps a scaffolded series with its profile and preserves it', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      yield* Engines.scaffold({
+        cwd: root,
+        name: 'demo-effect-reviewer',
+        profile: 'effect-reviewer',
+      });
+      const ledger = yield* Engines.show({ cwd: root }, 'demo-effect-reviewer');
+      Vitest.expect(ledger).toContain('- Profile: effect-reviewer');
+      // A later scaffold without the flag must not clear the stamp.
+      yield* Engines.scaffold({ cwd: root, name: 'demo-effect-reviewer' });
+      const after = yield* Engines.show({ cwd: root }, 'demo-effect-reviewer');
+      Vitest.expect(after).toContain('- Profile: effect-reviewer');
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }).pipe(Effect.provide(Live)),
   );

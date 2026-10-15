@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: B003, C002
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task C003: Make review dispatch profile-aware
@@ -28,7 +28,7 @@ the profile.
 
 ## Completion
 
-- [ ] Dispatch starts one session per profile with the profile's model and thinking
-- [ ] Ledger profile stamped and profile verified before dispatch
-- [ ] Tests green for all listed cases
-- [ ] GATES.md passed
+- [x] Dispatch starts one session per profile with the profile's model and thinking
+- [x] Ledger profile stamped and profile verified before dispatch
+- [x] Tests green for all listed cases
+- [x] GATES.md passed

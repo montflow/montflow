@@ -1,6 +1,8 @@
 import { PiEffect } from '@montflow/pi-effect';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Effect, Layer } from 'effect';
+import { ProfileStore } from '@montflow/pi-profiles';
+import { SpecStore } from '@montflow/pi-specs';
 import { ProfileProbe, ReviewStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
@@ -19,11 +21,11 @@ export const COMMAND_NAME = 'mf-reviews';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Run the reviews CLI headlessly: doctor [--check], list, show <name> [--round NNN], verify [<name>|--all], create <name> [--target t] [--round NNN], resume <name>, or new <name> (alias of create). Store operations accept --dir to target a workspace root other than the working directory.';
+  'Run the reviews CLI headlessly: doctor [--check], list, show <name> [--round NNN], verify [<name>|--all], create <name> [--target t] [--profile p] [--round NNN], resume <name>, or new <name> (alias of create). Store operations accept --dir to target a workspace root other than the working directory.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-reviews doctor [--check] | list | show <name> [--round NNN] | verify [<name>|--all] [--dir path] | create <name> [--target t] [--round NNN] [--dir path] | resume <name> [--dir path] | new <name> (alias of create) | help';
+  '/mf-reviews doctor [--check] | list | show <name> [--round NNN] | verify [<name>|--all] [--dir path] | create <name> [--target t] [--profile p] [--round NNN] [--dir path] | resume <name> [--dir path] | new <name> (alias of create) | help';
 
 /** Parsed `/mf-reviews` invocation. Malformed input is `Help`. */
 export type CliAction =
@@ -41,6 +43,7 @@ export type CliAction =
       readonly kind: 'Create';
       readonly name: string;
       readonly target: string | undefined;
+      readonly profile: string | undefined;
       readonly round: string | undefined;
       readonly dir: string | undefined;
     }
@@ -141,12 +144,13 @@ export const parseCliArgs = (args: string): CliAction => {
     case 'create':
     case 'new': {
       if (tokens[1] === undefined) return { kind: 'Help' };
-      const split = splitTokens(tokens.slice(2), new Set(['target', 'round', 'dir']));
+      const split = splitTokens(tokens.slice(2), new Set(['target', 'profile', 'round', 'dir']));
       if (split.unknown.length > 0) return { kind: 'Help' };
       return {
         kind: 'Create',
         name: tokens[1],
         target: one(split.flags['target']),
+        profile: one(split.flags['profile']),
         round: one(split.flags['round']),
         dir: one(split.flags['dir']),
       };
@@ -178,7 +182,14 @@ export const run = (
   args: string,
   ui: CliUi,
   cwd: string,
-): Effect.Effect<void, string, ReviewStore.ReviewStore | ProfileProbe.ProfileProbe> => {
+): Effect.Effect<
+  void,
+  string,
+  | ReviewStore.ReviewStore
+  | ProfileProbe.ProfileProbe
+  | SpecStore.SpecStore
+  | ProfileStore.ProfileStore
+> => {
   const action = parseCliArgs(args);
   const say = (text: string): Effect.Effect<void> => Effect.sync(() => ui.notify(text, 'info'));
   return Effect.gen(function* () {
@@ -221,6 +232,7 @@ export const run = (
           name: action.name,
           target: action.target,
           round: action.round,
+          profile: action.profile,
         });
         return yield* say(Renderers.created(result));
       }
@@ -240,7 +252,12 @@ export const run = (
  */
 export const register = (
   api: Pick<ExtensionAPI, 'registerCommand'>,
-  live: Layer.Layer<ReviewStore.ReviewStore | ProfileProbe.ProfileProbe>,
+  live: Layer.Layer<
+    | ReviewStore.ReviewStore
+    | ProfileProbe.ProfileProbe
+    | SpecStore.SpecStore
+    | ProfileStore.ProfileStore
+  >,
 ): Effect.Effect<void> =>
   PiEffect.registerCommandEffect(api, COMMAND_NAME, COMMAND_DESCRIPTION, (args, ctx) =>
     run(args, ctx.ui, ctx.cwd).pipe(Effect.provide(live)),
