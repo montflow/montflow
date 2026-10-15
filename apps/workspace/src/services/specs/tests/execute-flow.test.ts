@@ -11,7 +11,7 @@ import { makeHarness, poll, settleEvent } from '../../sessions/tests/harness.js'
 const freshRoot = (): Promise<string> => mkdtemp(join(tmpdir(), 'workspace-spec-execute-'));
 
 /** SPEC.md with one execution task and its phase review. */
-const specMarkdown = (name: string): string =>
+const specMarkdown = (name: string, reviewStatus = 'pending'): string =>
   [
     '---',
     `name: ${name}`,
@@ -33,12 +33,18 @@ const specMarkdown = (name: string): string =>
     '| ID   | Name         | Type      | Status  | Gates |',
     '| ---- | ------------ | --------- | ------- | ----- |',
     '| A001 | build-login  | execution | pending | No    |',
-    '| A099 | review-phase | review    | pending | No    |',
+    `| A099 | review-phase | review    | ${reviewStatus} | No    |`,
     '',
   ].join('\n');
 
 /** One TASK.md, valid against the pi-specs contract. */
-const taskMarkdown = (id: string, name: string, type: string): string =>
+const taskMarkdown = (
+  id: string,
+  name: string,
+  type: string,
+  status = 'pending',
+  reviewerProfiles?: string,
+): string =>
   [
     '---',
     `id: ${id}`,
@@ -47,7 +53,8 @@ const taskMarkdown = (id: string, name: string, type: string): string =>
     'originator: user',
     'depends-on:',
     'related-tasks:',
-    'status: pending',
+    ...(reviewerProfiles === undefined ? [] : [`reviewer-profiles: ${reviewerProfiles}`]),
+    `status: ${status}`,
     '---',
     '',
     `# Task ${id}: ${name}`,
@@ -70,16 +77,40 @@ const taskMarkdown = (id: string, name: string, type: string): string =>
 
 const memoryMarkdown = ['# Memory', '', '## Context', '', 'None.', ''].join('\n');
 
+/** Options for seeding a spec tree's review task and review series. */
+interface TreeOptions {
+  readonly reviewerProfiles?: string | undefined;
+  readonly reviewStatus?: string | undefined;
+}
+
 /** Seed a spec tree with an execution task and its phase review. */
-const writeSpecTree = async (root: string, id: string): Promise<void> => {
+const writeSpecTree = async (
+  root: string,
+  id: string,
+  options: TreeOptions = {},
+): Promise<void> => {
   const dir = join(root, '.agents', '@montflow', 'specs', id);
   const write = (rel: string, content: string): Promise<void> =>
     mkdir(join(dir, rel, '..'), { recursive: true }).then(() => writeFile(join(dir, rel), content));
-  await write('SPEC.md', specMarkdown(id));
+  await write('SPEC.md', specMarkdown(id, options.reviewStatus ?? 'pending'));
   await write('A001-build-login/TASK.md', taskMarkdown('A001', 'build-login', 'execution'));
   await write('A001-build-login/MEMORY.md', memoryMarkdown);
-  await write('A099-review-phase/TASK.md', taskMarkdown('A099', 'review-phase', 'review'));
+  await write(
+    'A099-review-phase/TASK.md',
+    taskMarkdown(
+      'A099',
+      'review-phase',
+      'review',
+      options.reviewStatus ?? 'pending',
+      options.reviewerProfiles,
+    ),
+  );
   await write('A099-review-phase/MEMORY.md', memoryMarkdown);
+};
+
+/** Create a review series directory (round-less unless files are supplied). */
+const writeReviewSeries = async (root: string, name: string): Promise<void> => {
+  await mkdir(join(root, '.agents', '@montflow', 'reviews', name), { recursive: true });
 };
 
 Vitest.afterEach(async () => {
@@ -133,13 +164,59 @@ Vitest.describe('Specs.executeSpec dispatch', () => {
   Vitest.it.live('flags a review phase missing its round in the spec detail', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
-      yield* Effect.promise(() => writeSpecTree(root, 'ship-login'));
+      yield* Effect.promise(() => writeSpecTree(root, 'ship-login', { reviewStatus: 'complete' }));
       const detail = yield* Specs.loadSpec(root, 'ship-login');
       Vitest.expect(detail.summary.valid).toBe(false);
       Vitest.expect(detail.issues).toContainEqual({
-        field: 'phase A',
-        message: "Phase 'A' has a review task but series 'ship-login' has no round 001.",
+        field: 'review-series',
+        message: "Phase 'A' has a review task but review series 'ship-login' does not exist.",
       });
+    }),
+  );
+
+  Vitest.it.live('requires the attributed round in every declared profile series', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      yield* Effect.promise(() =>
+        writeSpecTree(root, 'ship-login', {
+          reviewStatus: 'complete',
+          reviewerProfiles: 'effect-reviewer',
+        }),
+      );
+      // The default series exists but carries no attributed round; the profile series is absent.
+      yield* Effect.promise(() => writeReviewSeries(root, 'ship-login'));
+      const detail = yield* Specs.loadSpec(root, 'ship-login');
+      Vitest.expect(detail.summary.valid).toBe(false);
+      const messages = detail.issues.map((issue) => issue.message);
+      Vitest.expect(messages).toContain(
+        "Phase 'A' has a review task but series 'ship-login' has no round attributed to phase 'A'.",
+      );
+      Vitest.expect(messages).toContain(
+        "Phase 'A' has a review task but review series 'ship-login-effect-reviewer' does not exist.",
+      );
+    }),
+  );
+
+  Vitest.it.live('renders one review line per expected series in the resume context', () =>
+    Effect.gen(function* () {
+      const harness = makeHarness();
+      Sessions.setSessionFactoryLayer(harness.layer);
+      Sessions.setExtensionProbe(() => Effect.succeed(true));
+      const root = yield* Effect.promise(freshRoot);
+      yield* Effect.promise(() =>
+        writeSpecTree(root, 'ship-login', { reviewerProfiles: 'effect-reviewer' }),
+      );
+      yield* Specs.executeSpec(root, { id: 'ship-login' });
+      const session = harness.sessions[0];
+      if (session === undefined) return yield* Effect.fail('session not created');
+      const prompt = yield* poll(
+        Effect.sync(() => session.prompts[0]),
+        (value) => value !== undefined,
+      );
+      Vitest.expect(prompt).toContain('.agents/@montflow/reviews/ship-login/001 (missing)');
+      Vitest.expect(prompt).toContain(
+        '.agents/@montflow/reviews/ship-login-effect-reviewer/001 (missing)',
+      );
     }),
   );
 

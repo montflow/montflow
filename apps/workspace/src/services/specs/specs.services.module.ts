@@ -7,23 +7,26 @@ import { Data, Effect } from 'effect';
 import * as Sessions from '../sessions/index.js';
 
 /**
- * Lazy handle to the pi-specs runtime. Static imports are type-only
- * (erased at build) — the runtime resolves here, on first use, never at
- * dashboard boot. A missing extension surfaces as a toast, not a crash.
+ * Lazy handles to the pi-specs and pi-reviews runtimes. Static imports are
+ * type-only (erased at build) — the runtimes resolve here, on first use, never
+ * at dashboard boot. A missing extension surfaces as a toast, not a crash.
  */
 type PiSpecsLib = typeof import('@montflow/pi-specs');
+type PiReviewsLib = typeof import('@montflow/pi-reviews');
 
 /** Failure loading the pi-specs runtime. */
 export class ExtensionLoadError extends Data.TaggedError('@montflow/SpecsExtensionLoadError')<{
   readonly message: string;
 }> {}
 
-/** Cached extension module promise. Cleared on failure so retrying reloads it. */
+/** Cached extension module promises. Cleared on failure so retrying reloads them. */
 let cachedLib: Promise<PiSpecsLib> | undefined;
+let cachedReviews: Promise<PiReviewsLib> | undefined;
 
-/** Test hook: drop the cached runtime so the next load re-imports. */
+/** Test hook: drop the cached runtimes so the next load re-imports. */
 export const resetExtensionCache = (): void => {
   cachedLib = undefined;
+  cachedReviews = undefined;
 };
 
 /**
@@ -49,6 +52,22 @@ export const loadPiSpecs = (): Effect.Effect<PiSpecsLib, ExtensionLoadError> =>
       }),
   });
 
+/**
+ * Load the pi-reviews runtime, caching the module across flows. Used only to
+ * read a round's `Phase:` attribution through its single-owner parser.
+ * @returns a promise resolving to the pi-reviews module namespace
+ */
+const loadPiReviews = async (): Promise<PiReviewsLib> => {
+  cachedReviews ??= import('@montflow/pi-reviews').then(
+    (libs) => libs,
+    (cause: unknown) => {
+      cachedReviews = undefined;
+      throw cause;
+    },
+  );
+  return cachedReviews;
+};
+
 /** One file inside a spec directory, POSIX-relative to the spec root. */
 export interface SnapshotFile {
   readonly path: string;
@@ -66,30 +85,72 @@ export const specsDir = (root: string): string => join(root, '.agents', '@montfl
 /** Absolute reviews directory for a working directory: `<cwd>/.agents/@montflow/reviews`. */
 export const reviewsDir = (root: string): string => join(root, '.agents', '@montflow', 'reviews');
 
+/** One round of a linked review series, with its phase attribution when set. */
+export interface ReviewSeriesRound {
+  /** Round directory name, e.g. `001`. */
+  readonly round: string;
+  /** The phase the round reviews (its `- Phase:` metadata), when set. */
+  readonly phase?: string | undefined;
+}
+
 /** A spec's linked review series, as the review store lays it out. */
 export interface ReviewSeries {
-  /** Series directory name (the convention is the spec name). */
+  /** Series directory name (`<spec>` or `<spec>-<profile>`). */
   readonly name: string;
-  /** Round directory names under the series, e.g. `['001', '002']`. */
-  readonly rounds: ReadonlyArray<string>;
+  /** The series' rounds, each carrying its phase attribution when set. */
+  readonly rounds: ReadonlyArray<ReviewSeriesRound>;
 }
 
 /**
- * Read the review series linked to a spec. By convention the series shares
- * the spec's name; an absent series reads as undefined, never an error.
- * Only three-digit round directories count, so a stray `README.md` or a
- * legacy `<code>.md` file never masquerades as a round.
+ * Read the review series linked to a spec: the default series plus one per
+ * declared reviewer profile, in declared order. Only three-digit round
+ * directories count, so a stray `README.md` or a legacy `<code>.md` file never
+ * masquerades as a round; each round's `Phase:` attribution is read through
+ * `@montflow/pi-reviews`' single-owner parser. A series directory that does not
+ * exist is omitted, so the link verifier can tell "absent" from "present, no
+ * round". Never fails on a missing series.
  * @param root - workspace root (review store owner)
  * @param name - spec directory slug
- * @returns the series snapshot, or undefined when the series does not exist
+ * @param libs - loaded pi-specs runtime (series naming)
+ * @param files - the spec's files as read from disk (review-task profiles)
+ * @returns the existing linked series, default first
  */
 export const readReviewSeries = async (
   root: string,
   name: string,
-): Promise<ReviewSeries | undefined> => {
-  const entries = await readdir(join(reviewsDir(root), name)).catch(() => undefined);
-  if (entries === undefined) return undefined;
-  return { name, rounds: entries.filter((entry) => /^\d{3}$/.test(entry)).toSorted() };
+  libs: PiSpecsLib,
+  files: ReadonlyArray<SnapshotFile>,
+): Promise<ReadonlyArray<ReviewSeries>> => {
+  const reviews = await loadPiReviews();
+  const profiles = files
+    .filter((file) => file.path.endsWith('/TASK.md'))
+    .map((file) => libs.Task.parseTaskFile(file.content))
+    .flatMap((task) => (task === undefined ? [] : task.reviewerProfiles));
+  const names = [...new Set(libs.ReviewLink.seriesNames(name, profiles))];
+  const read = await Promise.all(
+    names.map(async (series): Promise<ReviewSeries | undefined> => {
+      const dir = join(reviewsDir(root), series);
+      const entries = await readdir(dir).catch(() => undefined);
+      if (entries === undefined) return undefined;
+      const rounds = await Promise.all(
+        entries
+          .filter((entry) => reviews.Review.isValidRound(entry))
+          .toSorted()
+          .map(async (round): Promise<ReviewSeriesRound> => {
+            const raw = await readFile(join(dir, round, reviews.Review.FILE_NAME), 'utf8').catch(
+              () => undefined,
+            );
+            const phase =
+              raw === undefined
+                ? undefined
+                : reviews.Review.parseRound(round, raw).metadata['Phase'];
+            return phase === undefined || phase === '' ? { round } : { round, phase };
+          }),
+      );
+      return { name: series, rounds };
+    }),
+  );
+  return read.filter((series): series is ReviewSeries => series !== undefined);
 };
 
 /**
@@ -210,7 +271,7 @@ const inspect = (
   id: string,
   files: ReadonlyArray<SnapshotFile>,
   active: boolean,
-  review?: ReviewSeries,
+  review: ReadonlyArray<ReviewSeries>,
 ) => {
   const specFile = files.find((file) => file.path === 'SPEC.md');
   const spec = specFile === undefined ? undefined : libs.Spec.parseSpecFile(specFile.content);
@@ -218,10 +279,7 @@ const inspect = (
     .filter((file) => file.path.endsWith('/TASK.md'))
     .map((file) => libs.Task.parseTaskFile(file.content))
     .filter((task) => task !== undefined);
-  const verify = libs.Structure.verifySpecTree(
-    { name: id, files },
-    review ?? { name: libs.ReviewLink.seriesName(id), rounds: [] },
-  );
+  const verify = libs.Structure.verifySpecTree({ name: id, files }, review);
   const analysis =
     spec === undefined
       ? undefined
@@ -240,7 +298,7 @@ const summarize = (
   id: string,
   files: ReadonlyArray<SnapshotFile>,
   active: boolean,
-  review?: ReviewSeries,
+  review: ReadonlyArray<ReviewSeries>,
 ): SpecSummary => {
   const { spec, specFile, tasks, verify, analysis } = inspect(libs, id, files, active, review);
   return {
@@ -291,7 +349,7 @@ const readSpecs = async (
       const info = await stat(join(dir, name));
       if (!info.isDirectory()) return undefined;
       const files = await readSnapshot(root, name);
-      const review = await readReviewSeries(root, name);
+      const review = await readReviewSeries(root, name, libs, files);
       return summarize(libs, name, files, active.has(name), review);
     }),
   );
@@ -341,7 +399,7 @@ export const loadSpec = (root: string, id: string): Effect.Effect<SpecDetail, st
         return yield* Effect.tryPromise({
           try: async (): Promise<SpecDetail> => {
             const files = await readSnapshot(root, id);
-            const review = await readReviewSeries(root, id);
+            const review = await readReviewSeries(root, id, libs, files);
             const { spec, specFile, tasks, verify, analysis } = inspect(
               libs,
               id,
@@ -569,20 +627,20 @@ export const SPEC_EXECUTE_TOOLS = ['read', 'write', 'edit', 'bash'] as const;
 /**
  * Render the state context a resume session needs: derived state, the active
  * phase, every task with its type and status, and the convention link of
- * each phase's review task to its round (marking a missing round). Built
- * from the on-disk snapshot so the orchestrator starts from the files,
- * never from conversation memory.
+ * each phase's review task to its round in every expected series (marking a
+ * missing round). Built from the on-disk snapshot so the orchestrator starts
+ * from the files, never from conversation memory.
  * @param libs - loaded extension runtime
  * @param id - spec directory slug
  * @param files - the spec's files as read from disk
- * @param review - the linked review series, when it exists
+ * @param review - the linked review series (default first)
  * @returns the context block injected under `Spec: <name>`
  */
 export const buildResumeContext = (
   libs: PiSpecsLib,
   id: string,
   files: ReadonlyArray<SnapshotFile>,
-  review?: ReviewSeries,
+  review: ReadonlyArray<ReviewSeries>,
 ): string => {
   const specFile = files.find((file) => file.path === 'SPEC.md');
   const spec = specFile === undefined ? undefined : libs.Spec.parseSpecFile(specFile.content);
@@ -615,15 +673,26 @@ export const buildResumeContext = (
     lines.push(`- ${task.id} [${task.type}] ${task.status} — ${task.name}`);
   }
 
-  const reviewTasks = tasks.map((task) => ({ id: task.id, type: task.type }));
-  lines.push('', 'Phase reviews (convention: series shares the spec name):');
+  const reviewTasks = tasks.map((task) => ({
+    id: task.id,
+    type: task.type,
+    reviewerProfiles: task.reviewerProfiles,
+  }));
+  lines.push('', 'Phase reviews (series shares the spec name, one per reviewer profile):');
   for (const phase of libs.ReviewLink.reviewPhases(reviewTasks)) {
     const round = libs.ReviewLink.roundForPhase(phase);
-    const path = `${libs.ReviewLink.seriesName(id)}/${round}`;
-    const present = review?.rounds.includes(round) ?? false;
-    lines.push(
-      `- phase ${phase} → .agents/@montflow/reviews/${path}${present ? '' : ' (missing)'}`,
-    );
+    const profiles =
+      reviewTasks.find((task) => task.type === 'review' && phaseOf(task.id) === phase)
+        ?.reviewerProfiles ?? [];
+    for (const series of libs.ReviewLink.seriesNames(id, profiles)) {
+      const present =
+        review
+          .find((snapshot) => snapshot.name === series)
+          ?.rounds.some((roundSnapshot) => roundSnapshot.round === round) ?? false;
+      lines.push(
+        `- phase ${phase} → .agents/@montflow/reviews/${series}/${round}${present ? '' : ' (missing)'}`,
+      );
+    }
   }
 
   return lines.join('\n');
@@ -702,7 +771,7 @@ export const executeSpec = (
           try: () => readSnapshot(root, input.id),
           catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
         });
-        const review = yield* Effect.promise(() => readReviewSeries(root, input.id));
+        const review = yield* Effect.promise(() => readReviewSeries(root, input.id, libs, files));
         const prompt = libs.Prompt.buildResumePrompt(
           input.id,
           buildResumeContext(libs, input.id, files, review),

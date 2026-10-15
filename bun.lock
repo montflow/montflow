@@ -23,6 +23,7 @@
         "@montflow/pi-effect": "workspace:*",
         "@montflow/pi-profiles": "workspace:*",
         "@montflow/pi-prompts": "workspace:*",
+        "@montflow/pi-reviews": "workspace:*",
         "@montflow/pi-sessions": "workspace:*",
         "@montflow/pi-skills": "workspace:*",
         "@montflow/pi-specs": "workspace:*",

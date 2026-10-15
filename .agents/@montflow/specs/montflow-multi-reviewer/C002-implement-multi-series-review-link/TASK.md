@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: B003, C001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task C002: Generalize the review link to multiple series
@@ -28,7 +28,7 @@ series.
 
 ## Completion
 
-- [ ] Review link accepts a series set and reports per-series misses
-- [ ] Series naming is slug-safe and collision-free
-- [ ] Tests green for all listed cases
-- [ ] GATES.md passed
+- [x] Review link accepts a series set and reports per-series misses
+- [x] Series naming is slug-safe and collision-free
+- [x] Tests green for all listed cases
+- [x] GATES.md passed
