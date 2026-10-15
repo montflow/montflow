@@ -6,7 +6,7 @@ originator: user
 depends-on:
 related-tasks:
 reviewer-profiles: effect-reviewer
-status: pending
+status: complete
 ---
 
 # Task C099: Review phase C

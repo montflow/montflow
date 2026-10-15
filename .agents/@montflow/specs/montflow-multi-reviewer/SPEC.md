@@ -1,12 +1,13 @@
 ---
 name: montflow-multi-reviewer
-status: in-progress
+status: complete
 workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-13
 locked-phases:
   - A
   - B
+  - C
 ---
 
 # Montflow multi-reviewer reviews
@@ -70,4 +71,4 @@ and is independent of the `montflow-opencode-migration` spec.
 | C003 | implement-profile-aware-dispatch   | execution   | complete | Yes   |
 | C004 | update-orchestration-and-skills    | execution   | complete | Yes   |
 | C005 | migrate-series-and-docs            | execution   | complete | Yes   |
-| C099 | review-phase                       | review      | pending | No    |
+| C099 | review-phase                       | review      | complete | No    |
