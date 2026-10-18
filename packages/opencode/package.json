@@ -1,0 +1,50 @@
+{
+  "name": "@montflow/opencode",
+  "version": "0.0.1",
+  "private": true,
+  "description": "OpenCode v2 adapter: the host seams (PluginEntry, CommandPort, InteractionPort) and the makePorts factory",
+  "keywords": [
+    "adapter",
+    "effect",
+    "opencode",
+    "plugin"
+  ],
+  "bugs": {
+    "url": "https://github.com/montflow/montflow/issues"
+  },
+  "license": "MIT",
+  "author": "Daniel Montilla",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/montflow/montflow.git",
+    "directory": "packages/opencode"
+  },
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./tui": "./src/tui.ts"
+  },
+  "scripts": {
+    "format:check": "oxfmt --check .",
+    "format:fix": "oxfmt .",
+    "lint:check": "oxlint --deny-warnings .",
+    "lint:fix": "oxlint . --fix",
+    "smoke": "bun test test/plugin-loader.test.ts",
+    "test": "vitest run --typecheck",
+    "ts:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.0.18",
+    "effect": "4.0.0-rc.112"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.0-rc.112",
+    "@types/bun": "^1.4.2",
+    "@types/node": "^26.1.2",
+    "oxfmt": "0.63.0",
+    "oxlint": "1.78.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  }
+}
