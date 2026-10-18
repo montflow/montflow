@@ -1,5 +1,5 @@
 import { Context, Effect, Layer } from 'effect';
-// eslint-disable-next-line montflow/no-node-platform-imports -- composition-root shell-out to the optional pi-profiles CLI; a review must still verify when that extension is absent, so this stays a loose call rather than a package dependency.
+// eslint-disable-next-line montflow/no-node-platform-imports -- composition-root shell-out to the optional profiles CLI; a review must still verify when that extension is absent, so this stays a loose call rather than a package dependency.
 import { execFile } from 'node:child_process';
 
 /**
@@ -14,7 +14,7 @@ export type ProbeOutcome =
   | { readonly kind: 'failed'; readonly message: string }
   | { readonly kind: 'unavailable'; readonly message: string };
 
-/** Default binary: the `mf-profiles` bin the `@montflow/pi-profiles` package installs. */
+/** Default binary: the `mf-profiles` bin the `@montflow/profiles` package installs. */
 export const DEFAULT_BIN = 'mf-profiles';
 
 /** How long one probe may run before it is treated as failed. */
@@ -64,7 +64,7 @@ const make = (bin: string): Effect.Effect<Impl> =>
 export const Id = '@montflow/ProfileProbe';
 export type Id = typeof Id;
 
-/** Optional profile-verification probe over the pi-profiles extension. */
+/** Optional profile-verification probe over the profiles extension. */
 export class ProfileProbe extends Context.Service<ProfileProbe, Impl>()(Id) {}
 
 /** Probe layer over an explicit binary, for overrides and tests. */

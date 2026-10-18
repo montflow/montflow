@@ -1,12 +1,11 @@
 {
-  "name": "@montflow/pi-reviews",
+  "name": "@montflow/reviews",
   "version": "0.0.1",
   "private": true,
-  "description": "Effect-first adversarial review primitives for Pi extensions (review series, finding verification, /mf-reviews)",
+  "description": "Effect-first adversarial review primitives (review series, finding verification) and the mf-reviews CLI",
   "keywords": [
     "effect",
-    "pi",
-    "pi-package"
+    "reviews"
   ],
   "bugs": {
     "url": "https://github.com/montflow/montflow/issues"
@@ -16,7 +15,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/montflow/montflow.git",
-    "directory": "packages/pi-reviews"
+    "directory": "packages/reviews"
   },
   "bin": {
     "mf-reviews": "./src/apps/cli/main.ts"
@@ -39,12 +38,10 @@
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0-rc.112",
-    "@montflow/pi-effect": "workspace:*",
-    "@montflow/pi-profiles": "workspace:*",
-    "@montflow/pi-sessions": "workspace:*"
+    "@montflow/pi-sessions": "workspace:*",
+    "@montflow/profiles": "workspace:*"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.84.0",
     "@effect/vitest": "4.0.0-rc.112",
     "@types/node": "^26.1.2",
     "effect": "4.0.0-rc.112",
@@ -54,13 +51,6 @@
     "vitest": "^5.0.4"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "effect": "4.0.0-rc.112",
-    "typebox": "*"
-  },
-  "pi": {
-    "extensions": [
-      "./src/extension.ts"
-    ]
+    "effect": "4.0.0-rc.112"
   }
 }

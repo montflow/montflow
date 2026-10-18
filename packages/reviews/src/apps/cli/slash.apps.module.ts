@@ -1,6 +1,4 @@
-import { PiEffect } from '@montflow/pi-effect';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 import { ProfileProbe, ReviewStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
@@ -14,7 +12,7 @@ import * as Renderers from './renderers.apps.module.js';
  * `Command` tree cannot be reused here. Everything below the parser is shared.
  */
 
-/** Slash-command name registered by {@link register}. */
+/** Slash-command name. */
 export const COMMAND_NAME = 'mf-reviews';
 
 /** Help text shown for the command and the `help` action. */
@@ -231,17 +229,3 @@ export const run = (
     }
   });
 };
-
-/**
- * Register the `/mf-reviews` slash command as an Effect. Failures notify.
- * @param api - Pi extension API
- * @param live - store layer provided to the handler at invocation
- * @returns Effect completing once the command is registered
- */
-export const register = (
-  api: Pick<ExtensionAPI, 'registerCommand'>,
-  live: Layer.Layer<ReviewStore.ReviewStore | ProfileProbe.ProfileProbe>,
-): Effect.Effect<void> =>
-  PiEffect.registerCommandEffect(api, COMMAND_NAME, COMMAND_DESCRIPTION, (args, ctx) =>
-    run(args, ctx.ui, ctx.cwd).pipe(Effect.provide(live)),
-  );
