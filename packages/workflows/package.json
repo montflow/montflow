@@ -1,12 +1,11 @@
 {
-  "name": "@montflow/pi-workflows",
+  "name": "@montflow/workflows",
   "version": "0.0.1",
   "private": true,
-  "description": "Effect-first workflow primitives for Pi extensions (workflow descriptors, step pipelines)",
+  "description": "Effect-first workflow primitives (workflow descriptors, step pipelines)",
   "keywords": [
     "effect",
-    "pi",
-    "pi-package"
+    "workflow"
   ],
   "bugs": {
     "url": "https://github.com/montflow/montflow/issues"
@@ -16,7 +15,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/montflow/montflow.git",
-    "directory": "packages/pi-workflows"
+    "directory": "packages/workflows"
   },
   "type": "module",
   "exports": {
@@ -32,7 +31,6 @@
     "ts:check": "tsc --noEmit"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.84.0",
     "@effect/vitest": "4.0.0-rc.112",
     "@types/node": "^26.1.2",
     "effect": "4.0.0-rc.112",
@@ -42,7 +40,6 @@
     "vitest": "^5.0.4"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
     "effect": "4.0.0-rc.112"
   }
 }

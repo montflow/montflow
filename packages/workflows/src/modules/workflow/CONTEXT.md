@@ -1,6 +1,6 @@
 # Workflow module
 
-Effect-first workflow primitives for Pi extensions: a `Workflow`
+Effect-first workflow primitives: a `Workflow`
 descriptor holding an ordered pipeline of free-form `Step`s, plus slug
 helpers for workflow names.
 
