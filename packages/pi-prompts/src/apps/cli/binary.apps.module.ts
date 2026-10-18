@@ -1,7 +1,5 @@
 import { Console, Effect, Option } from 'effect';
-import * as Argument from 'effect/cli/Argument';
-import * as Command from 'effect/cli/Command';
-import * as Flag from 'effect/cli/Flag';
+import { Argument, Command, Flag } from 'effect/unstable/cli';
 import { PromptStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
@@ -31,11 +29,11 @@ const opt = (value: Option.Option<string>): string | undefined => Option.getOrUn
 
 /** Optional string flag. */
 const optionalString = (name: string, description: string) =>
-  Flag.String(name).pipe(Flag.withDescription(description), Flag.optional);
+  Flag.string(name).pipe(Flag.withDescription(description), Flag.optional);
 
 /** Boolean flag, defaulting to false. */
 const optionalBoolean = (name: string, description: string) =>
-  Flag.Boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
+  Flag.boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
 
 /** Workspace-root override, on every store-touching command. */
 const dirFlag = optionalString('dir', 'Workspace root. Defaults to the working directory.');
@@ -44,12 +42,12 @@ const dirFlag = optionalString('dir', 'Workspace root. Defaults to the working d
 const verboseFlag = optionalBoolean('verbose', 'Show per-item detail. Default is token-lean.');
 
 /** The `name` positional every prompt command takes. */
-const nameArg = Argument.String('name').pipe(
+const nameArg = Argument.string('name').pipe(
   Argument.withDescription('Prompt name (the file slug).'),
 );
 
 /** Trailing `key=value` positionals, shared with the slash command. */
-const valuesArg = Argument.String('values').pipe(
+const valuesArg = Argument.string('values').pipe(
   Argument.variadic,
   Argument.map(Engines.keyValues),
   Argument.withDescription('Variable values, as key=value pairs.'),
@@ -218,7 +216,7 @@ const verifyCommand = Command.make(
   'verify',
   {
     dir: dirFlag,
-    name: Argument.String('name').pipe(
+    name: Argument.string('name').pipe(
       Argument.withDescription('Prompt name. Omit to verify every prompt.'),
       Argument.optional,
     ),
@@ -259,7 +257,7 @@ const createCommand = Command.make(
   {
     ...editFlags,
     name: nameArg,
-    template: Flag.String('template').pipe(Flag.withDescription('Prompt text. Required.')),
+    template: Flag.string('template').pipe(Flag.withDescription('Prompt text. Required.')),
   },
   (config) =>
     report(

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { NodeServices } from '@effect/platform-node';
 import { Effect } from 'effect';
-import * as Command from 'effect/cli/Command';
+import { Command } from 'effect/unstable/cli';
 import { VERSION, rootCommand } from './binary.apps.module.js';
 
 /**

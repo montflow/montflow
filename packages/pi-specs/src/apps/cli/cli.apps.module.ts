@@ -1,7 +1,5 @@
 import { Clock, Console, Effect, Option } from 'effect';
-import * as CliError from 'effect/cli/CliError';
-import * as Command from 'effect/cli/Command';
-import * as Flag from 'effect/cli/Flag';
+import { CliError, Command, Flag } from 'effect/unstable/cli';
 import { type Spec, isValidName, parseSpecFile } from '../../modules/spec/index.js';
 import {
   type Analysis,
@@ -800,12 +798,12 @@ export const renderScaffold = (report: ScaffoldReport): string =>
 
 // ─── Commands ─────────────────────────────────────────────────────────
 
-const dirFlag = Flag.String('dir').pipe(
+const dirFlag = Flag.string('dir').pipe(
   Flag.withDescription('Workspace root. Defaults to the working directory.'),
   Flag.withDefault('.'),
 );
 
-const nameFlag = Flag.String('name').pipe(Flag.withDescription('Spec directory name.'));
+const nameFlag = Flag.string('name').pipe(Flag.withDescription('Spec directory name.'));
 
 /** Collapse an optional flag to `string | undefined`. */
 const opt = (value: Option.Option<string>): string | undefined => Option.getOrUndefined(value);
@@ -827,15 +825,15 @@ const checkCommand = Command.make(
   {
     dir: dirFlag,
     name: Flag.optional(nameFlag),
-    verbose: Flag.Boolean('verbose').pipe(
+    verbose: Flag.boolean('verbose').pipe(
       Flag.withDescription('Show passing specs and the root path.'),
       Flag.withDefault(false),
     ),
-    concurrency: Flag.Int('concurrency').pipe(
+    concurrency: Flag.integer('concurrency').pipe(
       Flag.withDescription('Specs verified in parallel.'),
       Flag.withDefault(DEFAULT_CONCURRENCY),
     ),
-    strict: Flag.Boolean('strict').pipe(
+    strict: Flag.boolean('strict').pipe(
       Flag.withDescription('Treat warnings as errors.'),
       Flag.withDefault(false),
     ),
@@ -883,19 +881,19 @@ const createCommand = Command.make(
   {
     dir: dirFlag,
     name: nameFlag,
-    author: Flag.String('author').pipe(
+    author: Flag.string('author').pipe(
       Flag.withDescription('Author stamped into SPEC.md.'),
       Flag.optional,
     ),
-    description: Flag.String('description').pipe(
+    description: Flag.string('description').pipe(
       Flag.withDescription('One-line spec description.'),
       Flag.optional,
     ),
-    workspaceType: Flag.String('workspace-type').pipe(
+    workspaceType: Flag.string('workspace-type').pipe(
       Flag.withDescription("How work is isolated: 'in-place' (default) or 'worktree'."),
       Flag.optional,
     ),
-    tasks: Flag.String('tasks').pipe(
+    tasks: Flag.string('tasks').pipe(
       Flag.withDescription('Comma-separated tasks, each name[:type[:gates]]. Default: implement.'),
       Flag.optional,
     ),
@@ -945,15 +943,15 @@ const listCommand = Command.make(
   {
     dir: dirFlag,
     status: Flag.optional(
-      Flag.String('status').pipe(
+      Flag.string('status').pipe(
         Flag.withDescription(`Comma-separated states to keep: ${LIST_STATUSES.join(', ')}.`),
       ),
     ),
-    pending: Flag.Boolean('pending').pipe(
+    pending: Flag.boolean('pending').pipe(
       Flag.withDescription('Keep only unfinished specs (state is not `complete`).'),
       Flag.withDefault(false),
     ),
-    verbose: Flag.Boolean('verbose').pipe(
+    verbose: Flag.boolean('verbose').pipe(
       Flag.withDescription('Show the root path.'),
       Flag.withDefault(false),
     ),
