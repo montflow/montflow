@@ -32,7 +32,7 @@
     "ts:check": "tsc --noEmit"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.3",
+    "@effect/platform-node": "4.0.0-rc.112",
     "@montflow/pi-effect": "workspace:*",
     "@montflow/pi-profiles": "workspace:*",
     "@montflow/pi-prompts": "workspace:*",
@@ -42,12 +42,12 @@
     "@opentui/core": "^0.5.11",
     "@opentui/solid": "^0.5.11",
     "@tanstack/solid-query": "^5.102.8",
-    "effect": "^4.0.3",
+    "effect": "4.0.0-rc.112",
     "fuse.js": "^7.5.0",
     "solid-js": "1.9.12"
   },
   "devDependencies": {
-    "@effect/vitest": "4.0.3",
+    "@effect/vitest": "4.0.0-rc.112",
     "@types/bun": "^1.4.2",
     "@types/node": "^26.1.2",
     "oxfmt": "0.63.0",

@@ -10,7 +10,8 @@
     "apps/*"
   ],
   "overrides": {
-    "effect": "4.0.3"
+    "effect": "4.0.0-rc.112",
+    "@effect/platform-node-shared": "4.0.0-rc.112"
   },
   "scripts": {
     "changeset": "changeset",

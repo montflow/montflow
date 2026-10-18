@@ -40,10 +40,10 @@
   "devDependencies": {
     "@earendil-works/pi-ai": "^0.84.0",
     "@earendil-works/pi-coding-agent": "^0.84.0",
-    "@effect/platform-node": "4.0.3",
-    "@effect/vitest": "4.0.3",
+    "@effect/platform-node": "4.0.0-rc.112",
+    "@effect/vitest": "4.0.0-rc.112",
     "@types/node": "^26.1.2",
-    "effect": "^4.0.3",
+    "effect": "4.0.0-rc.112",
     "oxfmt": "0.63.0",
     "oxlint": "1.78.0",
     "typescript": "^7.0.2",
@@ -52,7 +52,7 @@
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*",
-    "effect": "^4.0.3",
+    "effect": "4.0.0-rc.112",
     "typebox": "*"
   },
   "pi": {
