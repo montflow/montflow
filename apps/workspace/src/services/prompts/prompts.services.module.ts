@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: promisify adapts the session probe shell-out; both go away with the Command migration.
 import { promisify } from 'node:util';
-import type { Interactive as PromptsInteractive, Prompts } from '@montflow/pi-prompts';
+import type { Interactive as PromptsInteractive, Prompts } from '@montflow/prompts';
 import type { SessionDetail as EngineSessionDetail } from '@montflow/pi-sessions';
 import { Data, Effect } from 'effect';
 import * as Sessions from '../sessions/index.js';
@@ -14,12 +14,12 @@ import * as Skills from '../skills/index.js';
 
 /**
  * Lazy handle to the prompts extension runtime. Static imports from
- * `@montflow/pi-prompts` are type-only (erased at build) — the runtime
+ * `@montflow/prompts` are type-only (erased at build) — the runtime
  * resolves here, on first flow use, never at dashboard boot. A broken
  * or missing extension therefore cannot crash the TUI; the failing
  * flow surfaces the load error as a toast instead.
  */
-type PiPromptsLib = typeof import('@montflow/pi-prompts');
+type PiPromptsLib = typeof import('@montflow/prompts');
 
 /** Failure loading the prompts extension runtime. `cause` classifies the import rejection. */
 export class ExtensionLoadError extends Data.TaggedError('@montflow/PromptsExtensionLoadError')<{
@@ -86,7 +86,7 @@ let liveLib: PiPromptsLib | undefined;
 
 /** Single import attempt: resolves the runtime, or rejects with a classified load error. */
 const importOnce = (): Promise<PiPromptsLib> => {
-  cachedLib ??= import('@montflow/pi-prompts').then(
+  cachedLib ??= import('@montflow/prompts').then(
     (libs) => {
       liveLib = libs;
       return libs;
@@ -473,7 +473,7 @@ export const AUTHOR_POSTPROMPT =
 /**
  * Instructions before the change request: the child agent edits the single
  * named prompt file, then verifies it. Mirrors `MODIFY_PREPROMPT` in
- * `@montflow/pi-prompts`'s extension.
+ * `@montflow/prompts`'s extension.
  */
 export const MODIFY_PREPROMPT = `You are a prompt author for a pi coding agent.
 

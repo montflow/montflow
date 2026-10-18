@@ -7,7 +7,7 @@ import { execFile } from 'node:child_process';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: promisify adapts the session probe shell-out; both go away with the Command migration.
 import { promisify } from 'node:util';
 import type { Changes } from '@montflow/pi-effect';
-import type { Interactive as ProfilesInteractive, PiProfiles } from '@montflow/pi-profiles';
+import type { Interactive as ProfilesInteractive, PiProfiles } from '@montflow/profiles';
 import type { SessionDetail as EngineSessionDetail } from '@montflow/pi-sessions';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Data, Effect, Fiber, Layer, Stream } from 'effect';
@@ -16,12 +16,12 @@ import * as Skills from '../skills/index.js';
 
 /**
  * Lazy handle to the profiles extension runtime. Static imports from
- * `@montflow/pi-profiles` are type-only (erased at build) — the runtime
+ * `@montflow/profiles` are type-only (erased at build) — the runtime
  * resolves here, on first flow use, never at dashboard boot. A broken
  * or missing extension therefore cannot crash the TUI; the failing
  * flow surfaces the load error as a toast instead.
  */
-type PiProfilesLib = typeof import('@montflow/pi-profiles');
+type PiProfilesLib = typeof import('@montflow/profiles');
 
 /** Failure loading the profiles extension runtime. `cause` classifies the import rejection. */
 export class ExtensionLoadError extends Data.TaggedError('@montflow/ProfilesExtensionLoadError')<{
@@ -88,7 +88,7 @@ let liveLib: PiProfilesLib | undefined;
 
 /** Single import attempt: resolves the runtime, or rejects with a classified load error. */
 const importOnce = (): Promise<PiProfilesLib> => {
-  cachedLib ??= import('@montflow/pi-profiles').then(
+  cachedLib ??= import('@montflow/profiles').then(
     (libs) => {
       liveLib = libs;
       return libs;
@@ -365,7 +365,7 @@ export type ProfileVerify = PiProfiles.VerifyResult;
  * Verify one workspace profile: read its raw `PROFILE.md` and delegate
  * the mechanical check to the loaded extension runtime's
  * `PiProfiles.verifyProfileFile`. The check itself stays in
- * `@montflow/pi-profiles` — this host only supplies the bytes. Fails on
+ * `@montflow/profiles` — this host only supplies the bytes. Fails on
  * unknown, unsafe, or unreadable ids.
  * @param root - workspace root (profile store owner)
  * @param id - profile directory name
@@ -619,7 +619,7 @@ export const installerFor =
 /**
  * Instructions before the user description: the child agent authors
  * exactly one profile, then stops. Mirrors `AUTHOR_PREPROMPT` in
- * `@montflow/pi-profiles`'s extension (not exported through the package
+ * `@montflow/profiles`'s extension (not exported through the package
  * index, so the workspace host carries this copy for its dispatched
  * author sessions).
  */
@@ -670,7 +670,7 @@ export const AUTHOR_POSTPROMPT =
 /**
  * Instructions before the change request: the child agent edits the single
  * named profile, then stops. Mirrors `MODIFY_PREPROMPT` in
- * `@montflow/pi-profiles`'s extension.
+ * `@montflow/profiles`'s extension.
  */
 export const MODIFY_PREPROMPT = `You are a profile editor for a pi coding agent.
 

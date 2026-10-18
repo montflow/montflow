@@ -69,7 +69,7 @@ import {
 } from './components/index.js';
 import type { Toast, ToastVariant } from './components/index.js';
 import { Specs, GitInfo, Profiles, Prompts, Query, Sessions, Skills } from './services/index.js';
-import type { Interactive } from '@montflow/pi-skills';
+import type { Interactive } from '@montflow/skills';
 
 export interface AppProps {
   readonly layout: Dashboard.Layout;
@@ -359,8 +359,8 @@ const defectMessage = (cause: unknown): string =>
  * the template (`v` full view with `j`/`k` scroll, `d` delete behind
  * the same timed confirm modal, `m` modify, `R` refetch). Create and
  * modify run the shared
- * `@montflow/pi-skills` / `@montflow/pi-profiles` /
- * `@montflow/pi-prompts` interactive flows — manual or agentic, with a
+ * `@montflow/skills` / `@montflow/profiles` /
+ * `@montflow/prompts` interactive flows — manual or agentic, with a
  * filterable model picker and a locked flow modal (animated spinner,
  * one-line status, the submitted input) while the headless `pi -p`
  * child runs; agent failures open a retry/back error modal instead of

@@ -8,19 +8,19 @@ import { homedir } from 'node:os';
 import { execFile, spawn } from 'node:child_process';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: promisify adapts the installer shell-out; both go away with the Command migration.
 import { promisify } from 'node:util';
-import type { Interactive, Skill } from '@montflow/pi-skills';
+import type { Interactive, Skill } from '@montflow/skills';
 import type { SessionDetail as EngineSessionDetail } from '@montflow/pi-sessions';
 import { Data, Effect, Schema } from 'effect';
 import * as Sessions from '../sessions/index.js';
 
 /**
  * Lazy handle to the skills extension runtime. Static imports from
- * `@montflow/pi-skills` are type-only (erased at build) — the runtime
+ * `@montflow/skills` are type-only (erased at build) — the runtime
  * resolves here, on first flow use, never at dashboard boot. A broken
  * or missing extension therefore cannot crash the TUI; the failing
  * flow surfaces the load error as a toast instead.
  */
-type PiSkillsLib = typeof import('@montflow/pi-skills');
+type PiSkillsLib = typeof import('@montflow/skills');
 
 /** Failure loading the skills extension runtime. `cause` classifies the import rejection. */
 export class ExtensionLoadError extends Data.TaggedError('@montflow/ExtensionLoadError')<{
@@ -87,7 +87,7 @@ let liveLib: PiSkillsLib | undefined;
 
 /** Single import attempt: resolves the runtime, or rejects with a classified load error. */
 const importOnce = (): Promise<PiSkillsLib> => {
-  cachedLib ??= import('@montflow/pi-skills').then(
+  cachedLib ??= import('@montflow/skills').then(
     (libs) => {
       liveLib = libs;
       return libs;
@@ -435,7 +435,7 @@ export const getSkills = (
 /**
  * Serialize a skill row to `SKILL.md` contents: frontmatter plus body.
  * Empty `groups` / `dependencies` drop their keys. Mirrors the writer in
- * `@montflow/pi-skills` so both hosts produce identical files.
+ * `@montflow/skills` so both hosts produce identical files.
  * @param skill - skill row to persist
  * @returns file contents
  */
@@ -719,7 +719,7 @@ const AGENT_TIMEOUT_MS = 300_000;
  * carry tailed output. Spawned (not `execFile`) so the Effect stays
  * interruptible — cancelling the fiber kills the child, and the five
  * minute timeout interrupts the wait the same way. This is the
- * workspace host for the `@montflow/pi-skills` agent prompts — same
+ * workspace host for the `@montflow/skills` agent prompts — same
  * preprompts the pi extension feeds `AgentRun`, transported over the
  * CLI instead.
  * @param root - workspace root (child working directory)
