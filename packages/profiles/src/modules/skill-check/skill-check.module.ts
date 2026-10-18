@@ -10,24 +10,23 @@ import * as PiProfiles from '../pi-profiles/index.js';
  * (`montflow-*`) are held to the full standard; generic and vendored
  * skills only have to exist.
  *
- * `@montflow/pi-skills` is imported lazily: verifying profiles must not
+ * `@montflow/skills` is imported lazily: verifying profiles must not
  * pull the whole skills extension into every session. When it cannot be
  * loaded, the check is skipped and the caller surfaces a warning rather
  * than failing the profile.
  */
 
 /** The skills extension runtime, resolved lazily. */
-type PiSkillsLib = typeof import('@montflow/pi-skills');
+type PiSkillsLib = typeof import('@montflow/skills');
 
 /** Warning surfaced when the skills engine cannot be loaded. */
-export const SKILLS_ENGINE_WARNING =
-  'Skill verification skipped: could not load @montflow/pi-skills.';
+export const SKILLS_ENGINE_WARNING = 'Skill verification skipped: could not load @montflow/skills.';
 
 let cached: Promise<PiSkillsLib> | undefined;
 
 /** Single lazy import: a failure clears the cache so the next check retries. */
 const importOnce = (): Promise<PiSkillsLib> => {
-  cached ??= import('@montflow/pi-skills').catch((cause: unknown) => {
+  cached ??= import('@montflow/skills').catch((cause: unknown) => {
     cached = undefined;
     throw cause;
   });
