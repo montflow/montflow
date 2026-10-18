@@ -21,11 +21,11 @@
       "dependencies": {
         "@effect/platform-node": "4.0.0-rc.112",
         "@montflow/pi-effect": "workspace:*",
-        "@montflow/pi-profiles": "workspace:*",
-        "@montflow/pi-prompts": "workspace:*",
         "@montflow/pi-sessions": "workspace:*",
-        "@montflow/pi-skills": "workspace:*",
         "@montflow/pi-specs": "workspace:*",
+        "@montflow/profiles": "workspace:*",
+        "@montflow/prompts": "workspace:*",
+        "@montflow/skills": "workspace:*",
         "@opentui/core": "^0.5.11",
         "@opentui/solid": "^0.5.11",
         "@tanstack/solid-query": "^5.102.8",
@@ -154,108 +154,6 @@
         "effect": "4.0.0-rc.112",
       },
     },
-    "packages/pi-notifications": {
-      "name": "@montflow/pi-notifications",
-      "version": "0.0.1",
-      "devDependencies": {
-        "@earendil-works/pi-coding-agent": "^0.84.0",
-        "@effect/vitest": "4.0.0-rc.112",
-        "@types/node": "^26.1.2",
-        "effect": "4.0.0-rc.112",
-        "oxfmt": "0.63.0",
-        "oxlint": "1.78.0",
-        "typescript": "^7.0.2",
-        "vitest": "^5.0.4",
-      },
-      "peerDependencies": {
-        "@earendil-works/pi-coding-agent": "*",
-        "effect": "4.0.0-rc.112",
-      },
-    },
-    "packages/pi-profiles": {
-      "name": "@montflow/pi-profiles",
-      "version": "0.0.1",
-      "bin": {
-        "mf-profiles": "./src/apps/cli/main.ts",
-      },
-      "dependencies": {
-        "@effect/platform-node": "4.0.0-rc.112",
-        "@montflow/pi-effect": "workspace:*",
-        "@montflow/pi-interactive": "workspace:*",
-        "@montflow/pi-skills": "workspace:*",
-      },
-      "devDependencies": {
-        "@earendil-works/pi-coding-agent": "^0.84.0",
-        "@earendil-works/pi-tui": "^0.84.2",
-        "@effect/vitest": "4.0.0-rc.112",
-        "@types/node": "^26.1.2",
-        "effect": "4.0.0-rc.112",
-        "oxfmt": "0.63.0",
-        "oxlint": "1.78.0",
-        "typescript": "^7.0.2",
-        "vitest": "^5.0.4",
-      },
-      "peerDependencies": {
-        "@earendil-works/pi-coding-agent": "*",
-        "effect": "4.0.0-rc.112",
-      },
-    },
-    "packages/pi-prompts": {
-      "name": "@montflow/pi-prompts",
-      "version": "0.0.1",
-      "bin": {
-        "mf-prompts": "./src/apps/cli/main.ts",
-      },
-      "dependencies": {
-        "@effect/platform-node": "4.0.0-rc.112",
-        "@montflow/pi-effect": "workspace:*",
-        "@montflow/pi-interactive": "workspace:*",
-        "handlebars": "4.7.9",
-      },
-      "devDependencies": {
-        "@earendil-works/pi-coding-agent": "^0.84.0",
-        "@effect/vitest": "4.0.0-rc.112",
-        "@types/node": "^26.1.2",
-        "effect": "4.0.0-rc.112",
-        "oxfmt": "0.63.0",
-        "oxlint": "1.78.0",
-        "typebox": "*",
-        "typescript": "^7.0.2",
-        "vitest": "^5.0.4",
-      },
-      "peerDependencies": {
-        "@earendil-works/pi-coding-agent": "*",
-        "effect": "4.0.0-rc.112",
-      },
-    },
-    "packages/pi-reviews": {
-      "name": "@montflow/pi-reviews",
-      "version": "0.0.1",
-      "bin": {
-        "mf-reviews": "./src/apps/cli/main.ts",
-      },
-      "dependencies": {
-        "@effect/platform-node": "4.0.0-rc.112",
-        "@montflow/pi-effect": "workspace:*",
-        "@montflow/pi-profiles": "workspace:*",
-        "@montflow/pi-sessions": "workspace:*",
-      },
-      "devDependencies": {
-        "@earendil-works/pi-coding-agent": "^0.84.0",
-        "@effect/vitest": "4.0.0-rc.112",
-        "@types/node": "^26.1.2",
-        "effect": "4.0.0-rc.112",
-        "oxfmt": "0.63.0",
-        "oxlint": "1.78.0",
-        "typescript": "^7.0.2",
-        "vitest": "^5.0.4",
-      },
-      "peerDependencies": {
-        "@earendil-works/pi-coding-agent": "*",
-        "effect": "4.0.0-rc.112",
-        "typebox": "*",
-      },
-    },
     "packages/pi-sessions": {
       "name": "@montflow/pi-sessions",
       "version": "0.0.1",
@@ -279,34 +177,6 @@
         "@earendil-works/pi-coding-agent": "*",
         "effect": "4.0.0-rc.112",
         "typebox": "*",
-      },
-    },
-    "packages/pi-skills": {
-      "name": "@montflow/pi-skills",
-      "version": "0.0.1",
-      "bin": {
-        "mf-skills": "./src/apps/cli/main.ts",
-      },
-      "dependencies": {
-        "@effect/platform-node": "4.0.0-rc.112",
-        "@montflow/pi-effect": "workspace:*",
-        "@montflow/pi-interactive": "workspace:*",
-        "@montflow/pi-sessions": "workspace:*",
-      },
-      "devDependencies": {
-        "@earendil-works/pi-coding-agent": "^0.84.0",
-        "@effect/vitest": "4.0.0-rc.112",
-        "@types/node": "^26.1.2",
-        "effect": "4.0.0-rc.112",
-        "oxfmt": "0.63.0",
-        "oxlint": "1.78.0",
-        "typescript": "^7.0.2",
-        "vitest": "^5.0.4",
-      },
-      "peerDependencies": {
-        "@earendil-works/pi-coding-agent": "*",
-        "@earendil-works/pi-tui": "*",
-        "effect": "4.0.0-rc.112",
       },
     },
     "packages/pi-specs": {
@@ -333,9 +203,17 @@
         "effect": "4.0.0-rc.112",
       },
     },
-    "packages/pi-workflows": {
-      "name": "@montflow/pi-workflows",
+    "packages/profiles": {
+      "name": "@montflow/profiles",
       "version": "0.0.1",
+      "bin": {
+        "mf-profiles": "./src/apps/cli/main.ts",
+      },
+      "dependencies": {
+        "@effect/platform-node": "4.0.0-rc.112",
+        "@montflow/pi-effect": "workspace:*",
+        "@montflow/skills": "workspace:*",
+      },
       "devDependencies": {
         "@earendil-works/pi-coding-agent": "^0.84.0",
         "@effect/vitest": "4.0.0-rc.112",
@@ -347,7 +225,80 @@
         "vitest": "^5.0.4",
       },
       "peerDependencies": {
-        "@earendil-works/pi-coding-agent": "*",
+        "effect": "4.0.0-rc.112",
+      },
+    },
+    "packages/prompts": {
+      "name": "@montflow/prompts",
+      "version": "0.0.1",
+      "bin": {
+        "mf-prompts": "./src/apps/cli/main.ts",
+      },
+      "dependencies": {
+        "@effect/platform-node": "4.0.0-rc.112",
+        "@montflow/pi-effect": "workspace:*",
+        "@montflow/pi-interactive": "workspace:*",
+        "handlebars": "4.7.9",
+      },
+      "devDependencies": {
+        "@earendil-works/pi-coding-agent": "^0.84.0",
+        "@effect/vitest": "4.0.0-rc.112",
+        "@types/node": "^26.1.2",
+        "effect": "4.0.0-rc.112",
+        "oxfmt": "0.63.0",
+        "oxlint": "1.78.0",
+        "typescript": "^7.0.2",
+        "vitest": "^5.0.4",
+      },
+      "peerDependencies": {
+        "effect": "4.0.0-rc.112",
+      },
+    },
+    "packages/reviews": {
+      "name": "@montflow/reviews",
+      "version": "0.0.1",
+      "bin": {
+        "mf-reviews": "./src/apps/cli/main.ts",
+      },
+      "dependencies": {
+        "@effect/platform-node": "4.0.0-rc.112",
+        "@montflow/pi-sessions": "workspace:*",
+        "@montflow/profiles": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/vitest": "4.0.0-rc.112",
+        "@types/node": "^26.1.2",
+        "effect": "4.0.0-rc.112",
+        "oxfmt": "0.63.0",
+        "oxlint": "1.78.0",
+        "typescript": "^7.0.2",
+        "vitest": "^5.0.4",
+      },
+      "peerDependencies": {
+        "effect": "4.0.0-rc.112",
+      },
+    },
+    "packages/skills": {
+      "name": "@montflow/skills",
+      "version": "0.0.1",
+      "bin": {
+        "mf-skills": "./src/apps/cli/main.ts",
+      },
+      "dependencies": {
+        "@effect/platform-node": "4.0.0-rc.112",
+        "@montflow/pi-sessions": "workspace:*",
+      },
+      "devDependencies": {
+        "@earendil-works/pi-coding-agent": "^0.84.0",
+        "@effect/vitest": "4.0.0-rc.112",
+        "@types/node": "^26.1.2",
+        "effect": "4.0.0-rc.112",
+        "oxfmt": "0.63.0",
+        "oxlint": "1.78.0",
+        "typescript": "^7.0.2",
+        "vitest": "^5.0.4",
+      },
+      "peerDependencies": {
         "effect": "4.0.0-rc.112",
       },
     },
@@ -389,6 +340,22 @@
         "babel-plugin-annotate-pure-calls": "^0.5.0",
         "typescript": "^7.0.2",
         "vitest": "^5.0.4",
+      },
+    },
+    "packages/workflows": {
+      "name": "@montflow/workflows",
+      "version": "0.0.1",
+      "devDependencies": {
+        "@effect/vitest": "4.0.0-rc.112",
+        "@types/node": "^26.1.2",
+        "effect": "4.0.0-rc.112",
+        "oxfmt": "0.63.0",
+        "oxlint": "1.78.0",
+        "typescript": "^7.0.2",
+        "vitest": "^5.0.4",
+      },
+      "peerDependencies": {
+        "effect": "4.0.0-rc.112",
       },
     },
     "tooling/oxfmt": {
@@ -666,21 +633,17 @@
 
     "@montflow/pi-interactive": ["@montflow/pi-interactive@workspace:packages/pi-interactive"],
 
-    "@montflow/pi-notifications": ["@montflow/pi-notifications@workspace:packages/pi-notifications"],
-
-    "@montflow/pi-profiles": ["@montflow/pi-profiles@workspace:packages/pi-profiles"],
-
-    "@montflow/pi-prompts": ["@montflow/pi-prompts@workspace:packages/pi-prompts"],
-
-    "@montflow/pi-reviews": ["@montflow/pi-reviews@workspace:packages/pi-reviews"],
-
     "@montflow/pi-sessions": ["@montflow/pi-sessions@workspace:packages/pi-sessions"],
-
-    "@montflow/pi-skills": ["@montflow/pi-skills@workspace:packages/pi-skills"],
 
     "@montflow/pi-specs": ["@montflow/pi-specs@workspace:packages/pi-specs"],
 
-    "@montflow/pi-workflows": ["@montflow/pi-workflows@workspace:packages/pi-workflows"],
+    "@montflow/profiles": ["@montflow/profiles@workspace:packages/profiles"],
+
+    "@montflow/prompts": ["@montflow/prompts@workspace:packages/prompts"],
+
+    "@montflow/reviews": ["@montflow/reviews@workspace:packages/reviews"],
+
+    "@montflow/skills": ["@montflow/skills@workspace:packages/skills"],
 
     "@montflow/specs": ["@montflow/specs@workspace:packages/specs"],
 
@@ -691,6 +654,8 @@
     "@montflow/tooling-oxlint": ["@montflow/tooling-oxlint@workspace:tooling/oxlint"],
 
     "@montflow/tooling-typescript": ["@montflow/tooling-typescript@workspace:tooling/typescript"],
+
+    "@montflow/workflows": ["@montflow/workflows@workspace:packages/workflows"],
 
     "@montflow/workspace": ["@montflow/workspace@workspace:apps/workspace"],
 
@@ -1842,25 +1807,23 @@
 
     "@montflow/pi-interactive/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 
-    "@montflow/pi-notifications/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
-
-    "@montflow/pi-profiles/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
-
-    "@montflow/pi-prompts/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
-
-    "@montflow/pi-reviews/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
-
     "@montflow/pi-sessions/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
-
-    "@montflow/pi-skills/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 
     "@montflow/pi-specs/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 
-    "@montflow/pi-workflows/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
+    "@montflow/profiles/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
+
+    "@montflow/prompts/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
+
+    "@montflow/reviews/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
+
+    "@montflow/skills/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 
     "@montflow/specs/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 
     "@montflow/stlx/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
+
+    "@montflow/workflows/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 
     "@montflow/workspace/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 
