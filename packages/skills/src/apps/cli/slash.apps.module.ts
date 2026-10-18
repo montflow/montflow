@@ -1,5 +1,3 @@
-import { PiEffect } from '@montflow/pi-effect';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Effect } from 'effect';
 import * as Doctor from '../doctor/index.js';
 import * as Engines from './engines.apps.module.js';
@@ -15,7 +13,7 @@ import * as Renderers from './renderers.apps.module.js';
  */
 
 /**
- * Slash-command name registered by {@link register}.
+ * Slash-command name.
  *
  * `mf-skills` — the same name as the binary, because it is the same command.
  * A Pi session runs the headless CLI; the interactive menu is
@@ -330,13 +328,3 @@ export const run = (args: string, ui: CliUi, cwd: string): Effect.Effect<void, s
     }
   });
 };
-
-/**
- * Register the `/mf-skills` slash command as an Effect. Failures notify.
- * @param api - Pi extension API
- * @returns Effect completing once the command is registered
- */
-export const register = (api: Pick<ExtensionAPI, 'registerCommand'>): Effect.Effect<void> =>
-  PiEffect.registerCommandEffect(api, COMMAND_NAME, COMMAND_DESCRIPTION, (args, ctx) =>
-    run(args, ctx.ui, ctx.cwd),
-  );

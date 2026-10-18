@@ -232,7 +232,7 @@ export const runDoctor = (
         const payload = yield* readPayload(fs, path, name, shipped);
         if (payload === undefined) {
           return yield* Effect.fail(
-            `doctor: packaged skill '${name}' is not available on disk at '${path.join(shipped, name)}' and is not embedded in this build — reinstall @montflow/pi-skills`,
+            `doctor: packaged skill '${name}' is not available on disk at '${path.join(shipped, name)}' and is not embedded in this build — reinstall @montflow/skills`,
           );
         }
         const { files, source } = payload;
