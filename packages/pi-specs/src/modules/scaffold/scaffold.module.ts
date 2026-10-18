@@ -49,6 +49,8 @@ export interface ScaffoldSpecInput {
   readonly workspaceType?: 'in-place' | 'worktree' | undefined;
   /** Phase letter; defaults to `A`. */
   readonly phase?: string | undefined;
+  /** Ordered reviewer profile slugs emitted on the phase's review task. */
+  readonly reviewerProfiles?: ReadonlyArray<string> | undefined;
   readonly tasks: ReadonlyArray<ScaffoldTask>;
 }
 
@@ -163,9 +165,10 @@ const renderTask = (id: string, task: ScaffoldTask): string =>
  * Render the auto-appended phase review task.
  * @param phase - the phase letter
  * @param id - the review task id
+ * @param reviewerProfiles - ordered reviewer profile slugs; empty by default
  * @returns the file contents
  */
-const renderReview = (phase: string, id: string): string =>
+const renderReview = (phase: string, id: string, reviewerProfiles: ReadonlyArray<string>): string =>
   [
     '---',
     `id: ${id}`,
@@ -174,6 +177,9 @@ const renderReview = (phase: string, id: string): string =>
     'originator: user',
     'depends-on:',
     'related-tasks:',
+    reviewerProfiles.length > 0
+      ? `reviewer-profiles: ${reviewerProfiles.join(', ')}`
+      : 'reviewer-profiles:',
     'status: pending',
     '---',
     '',
@@ -263,7 +269,10 @@ export const renderSpecScaffold = (input: ScaffoldSpecInput): ScaffoldResult => 
     if (task.gates === true) files.push({ path: `${dir}/GATES.md`, content: renderGates() });
   }
   const reviewDir = dirName(reviewId, 'review-phase');
-  files.push({ path: `${reviewDir}/TASK.md`, content: renderReview(phase, reviewId) });
+  files.push({
+    path: `${reviewDir}/TASK.md`,
+    content: renderReview(phase, reviewId, input.reviewerProfiles ?? []),
+  });
   files.push({ path: `${reviewDir}/MEMORY.md`, content: renderMemory() });
 
   return { files, phase, reviewId, taskCount: numbered.length + 1 };

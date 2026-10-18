@@ -41,7 +41,8 @@
     "@effect/platform-node": "4.0.3",
     "@montflow/pi-effect": "workspace:*",
     "@montflow/pi-profiles": "workspace:*",
-    "@montflow/pi-sessions": "workspace:*"
+    "@montflow/pi-sessions": "workspace:*",
+    "@montflow/pi-specs": "workspace:*"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.84.0",

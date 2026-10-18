@@ -17,8 +17,11 @@ export const TASK_DIR_PATTERN = /^[A-Z]{1,2}\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** Who created a task: `user`, `defect:<task-id>`, or `planner:<task-id>`. */
 export const ORIGINATOR_PATTERN = /^(?:user|(?:defect|planner):[A-Z]{1,2}\d{3})$/;
 
-/** Adversarial-review finding id referenced by a `defect` task (`F1`, `F12`). */
-export const FINDING_REF_PATTERN = /^F\d+$/;
+/** Adversarial-review finding locator referenced by a `defect` task (`series/002/F2`). */
+export const FINDING_REF_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*\/\d{3}\/F\d+$/;
+
+/** Task frontmatter key listing a `review` task's ordered reviewer profile slugs. */
+export const REVIEWER_PROFILES_FIELD = 'reviewer-profiles';
 
 // ─── Enums ────────────────────────────────────────────────────────────
 
@@ -91,7 +94,9 @@ export class Task extends Schema.Class<Task>('SpecTask')({
   dependsOn: Schema.Array(TaskId),
   /** Task ids this task fixes or cross-references. */
   relatedTasks: Schema.Array(TaskId),
-  /** Adversarial-review finding this task addresses (`F<n>`), if any. */
+  /** Ordered reviewer profile slugs; `review` tasks only, empty = general reviewer. */
+  reviewerProfiles: Schema.Array(Schema.String.check(Schema.isPattern(SLUG_PATTERN))),
+  /** Adversarial-review finding this task addresses (`<series>/<round>/F<n>`), if any. */
   findingRef: Schema.optionalKey(Schema.String.check(Schema.isPattern(FINDING_REF_PATTERN))),
   /** Current task state. */
   status: TaskStatus,
@@ -110,6 +115,7 @@ interface TaskInput {
   readonly originator: string;
   readonly dependsOn: ReadonlyArray<string>;
   readonly relatedTasks: ReadonlyArray<string>;
+  readonly reviewerProfiles: ReadonlyArray<string>;
   readonly status: string;
   readonly findingRef?: string;
 }
@@ -123,6 +129,7 @@ const taskInput = (fields: Record<string, FieldValue>): TaskInput => {
     originator: fieldString(fields, 'originator') ?? '',
     dependsOn: fieldList(fields, 'depends-on'),
     relatedTasks: fieldList(fields, 'related-tasks'),
+    reviewerProfiles: fieldList(fields, REVIEWER_PROFILES_FIELD),
     status: fieldString(fields, 'status') ?? '',
   };
   if (findingRef === undefined || findingRef === '') return base;
@@ -253,9 +260,23 @@ export const verifyTaskFile = (dirName: string, markdown: string): Result => {
     }
   }
 
+  if (fields[REVIEWER_PROFILES_FIELD] !== undefined && type !== 'review') {
+    issues.push(issue(REVIEWER_PROFILES_FIELD, "only valid on a 'review' task."));
+  }
+  const seenProfiles = new Set<string>();
+  for (const profile of fieldList(fields, REVIEWER_PROFILES_FIELD)) {
+    if (!SLUG_PATTERN.test(profile)) {
+      issues.push(issue(REVIEWER_PROFILES_FIELD, `'${profile}' is not a profile slug.`));
+    } else if (seenProfiles.has(profile)) {
+      issues.push(issue(REVIEWER_PROFILES_FIELD, `'${profile}' is listed more than once.`));
+    } else {
+      seenProfiles.add(profile);
+    }
+  }
+
   const findingRef = fieldString(fields, 'finding-ref');
   if (findingRef !== undefined && findingRef !== '' && !FINDING_REF_PATTERN.test(findingRef)) {
-    issues.push(issue('finding-ref', 'Must be a finding id like `F1`.'));
+    issues.push(issue('finding-ref', "Must be a finding reference like '<series>/<round>/F1'."));
   }
 
   const status = fieldString(fields, 'status');

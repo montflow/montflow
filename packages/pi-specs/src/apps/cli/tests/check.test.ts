@@ -50,6 +50,60 @@ Vitest.describe('Cli.check runtime', () => {
       Vitest.expect(report.specs[0]?.issues[0]?.field).toBe('nope');
     }),
   );
+
+  Vitest.it.effect('passes a no-profile spec with a completed review and no series (F17)', () =>
+    Effect.gen(function* () {
+      const tree = new Map([
+        [
+          'reviewed',
+          [
+            entry(
+              'SPEC.md',
+              specMarkdown({
+                name: 'reviewed',
+                rows: [
+                  {
+                    id: 'A001',
+                    name: 'implement-login',
+                    type: 'execution',
+                    status: 'complete',
+                    gates: 'No',
+                  },
+                  {
+                    id: 'A099',
+                    name: 'review-phase',
+                    type: 'review',
+                    status: 'complete',
+                    gates: 'No',
+                  },
+                ],
+              }),
+            ),
+            entry(
+              'A001-implement-login/TASK.md',
+              taskMarkdown({ id: 'A001', name: 'implement-login', status: 'complete' }),
+            ),
+            entry('A001-implement-login/MEMORY.md', memory),
+            entry(
+              'A099-review-phase/TASK.md',
+              taskMarkdown({
+                id: 'A099',
+                name: 'review-phase',
+                type: 'review',
+                status: 'complete',
+              }),
+            ),
+            entry('A099-review-phase/MEMORY.md', memory),
+          ],
+        ],
+      ]);
+      const report = yield* check('.agents/@montflow/specs', { name: 'reviewed' }).pipe(
+        Effect.provide(stubLayer(tree)),
+      );
+      Vitest.expect(report.specs[0]?.valid).toBe(true);
+      Vitest.expect(report.failed).toBe(0);
+    }),
+  );
 });
 
 const report: CheckReport = {

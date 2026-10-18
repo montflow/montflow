@@ -366,4 +366,84 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
       message: "Spec status is 'complete' but 1 task is not complete: A001 (pending).",
     });
   });
+
+  Vitest.it('accepts a complete review backed by every expected series', () => {
+    const tree = snapshot([
+      entry(
+        'SPEC.md',
+        specMarkdown({
+          rows: [
+            {
+              id: 'A001',
+              name: 'implement-login',
+              type: 'execution',
+              status: 'pending',
+              gates: 'No',
+            },
+            { id: 'A099', name: 'review-phase', type: 'review', status: 'complete', gates: 'No' },
+          ],
+        }),
+      ),
+      entry('A001-implement-login/TASK.md', taskMarkdown({ id: 'A001', name: 'implement-login' })),
+      entry('A001-implement-login/MEMORY.md', memory),
+      entry(
+        'A099-review-phase/TASK.md',
+        taskMarkdown({
+          id: 'A099',
+          name: 'review-phase',
+          type: 'review',
+          reviewerProfiles: 'effect-reviewer',
+          status: 'complete',
+        }),
+      ),
+      entry('A099-review-phase/MEMORY.md', memory),
+    ]);
+    const result = Structure.verifySpecTree(tree, [
+      { name: 'ship-spec', rounds: [{ round: '001', phase: 'A' }] },
+      { name: 'ship-spec-effect-reviewer', rounds: [{ round: '001', phase: 'A' }] },
+    ]);
+    Vitest.expect(result.issues).toStrictEqual([]);
+    Vitest.expect(result.valid).toBe(true);
+  });
+
+  Vitest.it('flags a complete review when a profile series is missing', () => {
+    const tree = snapshot([
+      entry(
+        'SPEC.md',
+        specMarkdown({
+          rows: [
+            {
+              id: 'A001',
+              name: 'implement-login',
+              type: 'execution',
+              status: 'pending',
+              gates: 'No',
+            },
+            { id: 'A099', name: 'review-phase', type: 'review', status: 'complete', gates: 'No' },
+          ],
+        }),
+      ),
+      entry('A001-implement-login/TASK.md', taskMarkdown({ id: 'A001', name: 'implement-login' })),
+      entry('A001-implement-login/MEMORY.md', memory),
+      entry(
+        'A099-review-phase/TASK.md',
+        taskMarkdown({
+          id: 'A099',
+          name: 'review-phase',
+          type: 'review',
+          reviewerProfiles: 'effect-reviewer',
+          status: 'complete',
+        }),
+      ),
+      entry('A099-review-phase/MEMORY.md', memory),
+    ]);
+    const result = Structure.verifySpecTree(tree, [
+      { name: 'ship-spec', rounds: [{ round: '001', phase: 'A' }] },
+    ]);
+    Vitest.expect(result.issues).toContainEqual({
+      field: 'review-series',
+      message:
+        "Phase 'A' has a review task but review series 'ship-spec-effect-reviewer' does not exist.",
+    });
+  });
 });

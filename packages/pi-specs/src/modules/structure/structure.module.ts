@@ -3,7 +3,11 @@ import { parseMarkdown } from '../frontmatter/index.js';
 import { verifyGatesFile } from '../gates/index.js';
 import { verify as verifyLifecycle } from '../lifecycle/index.js';
 import { verifyMemoryFile } from '../memory/index.js';
-import { type SeriesSnapshot, verify as verifyReviewLink } from '../review-link/index.js';
+import {
+  type ReviewTaskEntry,
+  type SeriesSnapshot,
+  verify as verifyReviewLink,
+} from '../review-link/index.js';
 import {
   type Task,
   parseTaskDirName,
@@ -94,15 +98,18 @@ const nest = (path: string, result: Result): ReadonlyArray<Issue> =>
  * real phases. Pure — no IO.
  *
  * When `review` is supplied, the tree's review tasks are additionally
- * checked against the convention link (`ReviewLink`): every phase holding a
- * `review` task must have its round in the supplied series. Omitting it
- * skips the cross-store check, so a caller without review-store access is
- * unaffected.
+ * checked against the convention link (`ReviewLink`): each complete `review`
+ * task must have a round attributed to its phase in every expected series.
+ * Omitting it skips the cross-store check, so a caller without review-store
+ * access is unaffected.
  * @param snapshot - the spec directory listing
- * @param review - the linked review series rounds, when the caller has them
+ * @param review - the linked review series, when the caller has them
  * @returns the result; `valid` is true only with zero issues
  */
-export const verifySpecTree = (snapshot: SpecSnapshot, review?: SeriesSnapshot): Result => {
+export const verifySpecTree = (
+  snapshot: SpecSnapshot,
+  review?: ReadonlyArray<SeriesSnapshot>,
+): Result => {
   const issues: Array<Issue> = [];
 
   for (const file of snapshot.files) {
@@ -282,13 +289,14 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review?: SeriesSnapshot):
   }
 
   if (review !== undefined) {
-    issues.push(
-      ...verifyReviewLink(
-        snapshot.name,
-        Array.from(tasks.values()).map((task) => ({ id: task.id, type: task.type })),
-        review,
-      ).issues,
-    );
+    const reviewTasks: ReadonlyArray<ReviewTaskEntry> = Array.from(tasks.values())
+      .filter((task) => task.type === 'review')
+      .map((task) => ({
+        phase: phaseOf(task.id),
+        profiles: task.reviewerProfiles,
+        complete: task.status === 'complete',
+      }));
+    issues.push(...verifyReviewLink(snapshot.name, reviewTasks, review).issues);
   }
 
   return { valid: issues.length === 0, issues };

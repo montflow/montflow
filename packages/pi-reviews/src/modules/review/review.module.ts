@@ -47,6 +47,9 @@ export const slugify = (name: string): string =>
 /** Round directory names are zero-padded three-digit numbers (`001`). */
 export const ROUND_PATTERN = /^\d{3}$/;
 
+/** A spec phase id: one or two uppercase letters (`A`, `AA`). */
+export const PHASE_ID_PATTERN = /^[A-Z]{1,2}$/;
+
 /**
  * Zero-pad a round number to its directory name.
  * @param round - positive round number
@@ -594,6 +597,17 @@ export const parseRound = (round: string, raw: string): ParsedRound => {
         ),
       );
     }
+    const phase = metadata['Phase'];
+    if (phase !== undefined && phase !== '' && !PHASE_ID_PATTERN.test(phase)) {
+      issues.push(
+        issue(
+          'metadata',
+          `'Phase' must be a phase id such as 'A' or 'AA' (got '${phase}').`,
+          "Set '- Phase: <phase>', or drop the line.",
+          fieldLine(metaSection.body, 'Phase'),
+        ),
+      );
+    }
     const type = metadata['Type'];
     if (type !== undefined && !REVIEW_TYPES.some((known) => known === type)) {
       issues.push(
@@ -1003,6 +1017,8 @@ export interface RoundScaffold {
   readonly isolation?: string | undefined;
   readonly maxAttempts?: number | undefined;
   readonly status?: string | undefined;
+  /** The spec phase this round reviews, e.g. `C`; omitted for a standalone review. */
+  readonly phase?: string | undefined;
 }
 
 /**
@@ -1020,6 +1036,7 @@ export const renderRound = (input: RoundScaffold): string =>
     '## Metadata',
     `- Target: ${input.target}`,
     `- Round: ${input.round}`,
+    ...(input.phase === undefined || input.phase === '' ? [] : [`- Phase: ${input.phase}`]),
     `- Type: ${input.type ?? 'standalone'}`,
     `- Isolation: ${input.isolation ?? 'isolated'}`,
     `- Max Attempts: ${input.maxAttempts ?? 3}`,
@@ -1053,6 +1070,8 @@ export interface SeriesScaffold {
   readonly status?: string | undefined;
   readonly rounds?: ReadonlyArray<RoundRow> | undefined;
   readonly findings?: ReadonlyArray<FindingsRow> | undefined;
+  /** Reviewer profile bound to this series; omitted for the general reviewer. */
+  readonly profile?: string | undefined;
 }
 
 /**
@@ -1071,6 +1090,7 @@ export const renderSeries = (input: SeriesScaffold): string => {
     `- Target: ${input.target}`,
     `- Status: ${input.status ?? 'open'}`,
     `- Rounds: ${rows.length}`,
+    ...(input.profile === undefined || input.profile === '' ? [] : [`- Profile: ${input.profile}`]),
     `- Created: ${input.created}`,
     '',
     '## Rounds',
@@ -1158,6 +1178,7 @@ Round file (<NNN>/REVIEW.md):
   ## Metadata
   - Target: <what was reviewed>
   - Round: <NNN>
+  - Phase: <phase id>             # optional; the spec phase this round reviews
   - Type: standalone | re-review
   - Isolation: isolated | non-isolated (<reason>)
   - Max Attempts: 3

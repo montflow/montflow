@@ -22,22 +22,32 @@ Author the spec; do not execute it.
 Start from the mechanical scaffold — one model-free command that writes a tree which
 already passes \`check\`:
 
-\`bun run --cwd packages/pi-specs cli create --name <name> [--description "<line>"] [--author "<name>"] [--tasks "<name>[:<type>[:gates]],…"]\`
+\`bun run --cwd packages/pi-specs cli create --name <name> [--description "<line>"] [--author "<name>"] [--tasks "<name>[:<type>[:gates]],…"] [--reviewer-profiles "<a>,<b>"]\`
 
 Each task is \`name[:type[:gates]]\` (type defaults to \`execution\`); the command appends
-\`<PHASE>099-review-phase\` and refuses to overwrite an existing spec. Then edit the rendered
-files to carry the real requirements.
+\`<PHASE>099-review-phase\` and refuses to overwrite an existing spec. \`--reviewer-profiles\`
+seeds the review task's profile list. Then edit the rendered files to carry the real
+requirements.
 
 ## TASK.md
 
 Frontmatter: \`id\` (\`<LETTERS><NNN>\`, matches the directory), \`name\` (matches the directory
-name after the id), \`type\`, \`originator\`, \`depends-on\`, \`related-tasks\`, \`status\`.
+name after the id), \`type\`, \`originator\`, \`depends-on\`, \`related-tasks\`, \`reviewer-profiles\`,
+\`finding-ref\`, \`status\`.
 Body sections: \`## Type: <type>\`, \`## Description\`, \`## Requirements\`, \`## Completion\`.
 
 - \`type\`: exploratory | execution | planning | interruptor | defect | review.
 - \`status\`: pending | in-progress | complete | blocked (\`defect\` is a type, never a status).
 - \`originator\`: \`user\`, \`defect:<task-id>\`, or \`planner:<task-id>\`.
 - \`depends-on\` may reference only tasks in the same phase or an earlier phase.
+- \`reviewer-profiles\` (\`review\` tasks only): comma-separated ordered reviewer profile
+  slugs (\`reviewer-profiles: effect-reviewer, generic-reviewer\`). Empty or absent keeps the
+  single general reviewer; each entry adds a \`<spec>-<profile>\` review series, and the phase's
+  review round is written to every expected series (the spec's own plus one per profile) at the
+  same round. Declare \`effect-reviewer\` on **code phases** — any phase holding an \`execution\`
+  or \`defect\` task; exploration and planning phases stay empty.
+- \`finding-ref\` (\`defect\` tasks only): a fully-qualified finding locator,
+  \`<series>/<round>/F<n>\` (e.g. \`ship-login/002/F2\`).
 
 ## Rules
 

@@ -52,7 +52,7 @@ mf-reviews doctor [--check]                       # install / verify the skills
 mf-reviews list [--verbose]
 mf-reviews show <name> [--round <NNN>]            # the ledger, or one round
 mf-reviews verify <name>|--all [--verbose]
-mf-reviews create <name> [--target <text>] [--round <NNN>]
+mf-reviews create <name> [--target <text>] [--profile <name>] [--round <NNN>]
 mf-reviews resume <name>                          # where an in-flight review left off
 mf-reviews new <name>                             # alias of create
 ```
@@ -67,8 +67,10 @@ review is started from **inside the Pi session**. The extension registers a
 `review_create` tool:
 
 ```
-review_create  name=<series>  [target=<what>]  [spec=<spec-slug>]  [parent=<session-id>]  [model=<p/m>]
+review_create  name=<series>  [target=<what>]  [spec=<spec-slug>]  [profile=<name>]  [round=<NNN>]  [phase=<id>]  [thinking=<level>]  [parent=<session-id>]  [model=<p/m>]
 ```
+
+A **phase review** names `round=<NNN>` and `phase=<id>` so the review lands on the same round in every expected series and the round records which phase it reviews (`- Phase:`); without them the reviewer starts on the series' next free round with no phase attribution.
 
 It ensures the series ledger exists and starts the `montflow-adversarial-review`
 reviewer session through the session's session runner host (the same host
@@ -85,6 +87,14 @@ may declare an optional `- Profile: <name>` in its ledger: `verify` asks the
 `@montflow/pi-profiles` extension (`mf-profiles verify <name>`) whether that
 profile exists and is valid. A profile that fails is an issue; a missing
 profiles extension is a warning, not a failure.
+
+A series is bound to **at most one** profile: pass `profile=<name>` to
+`review_create` (or `--profile <name>` to `create`) to stamp it. A spec phase
+that declares several `reviewer-profiles` gets one series per profile — named
+`<spec>-<profile>` — with the general reviewer always keeping the `<spec>`
+series. See
+[`Migration: multi-reviewer reviews`](../pi-specs/README.md#migration-multi-reviewer-reviews)
+in the `@montflow/pi-specs` README for the full change.
 
 `verify` is pure over the file bytes: it reports every structural problem in one
 pass, each with a `Fix:` line, and for an inconsistent ledger it prints the exact

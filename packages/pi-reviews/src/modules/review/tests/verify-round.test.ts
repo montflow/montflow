@@ -114,3 +114,36 @@ Vitest.describe('Review.parseRound', () => {
     Vitest.expect(parsed.metadata['Target']).toBe('the demo');
   });
 });
+
+/** A valid round scaffold, optionally attributed to a phase. */
+const roundWithPhase = (phase?: string): string =>
+  Review.renderRound(
+    phase === undefined
+      ? { name: 'demo', round: '001', target: 't', created: '2026-10-12' }
+      : { name: 'demo', round: '001', target: 't', created: '2026-10-12', phase },
+  );
+
+Vitest.describe('Review round Phase metadata', () => {
+  Vitest.it('emits an optional - Phase: line after Round', () => {
+    const rendered = roundWithPhase('C');
+    Vitest.expect(rendered).toContain('- Round: 001\n- Phase: C\n');
+    Vitest.expect(Review.verifyRoundFile('001', rendered).valid).toBe(true);
+  });
+
+  Vitest.it('round-trips the phase through parseRound', () => {
+    Vitest.expect(Review.parseRound('001', roundWithPhase('C')).metadata['Phase']).toBe('C');
+  });
+
+  Vitest.it('omits the line when no phase is set', () => {
+    Vitest.expect(roundWithPhase()).not.toContain('- Phase:');
+    Vitest.expect(roundWithPhase('')).not.toContain('- Phase:');
+    Vitest.expect(Review.parseRound('001', roundWithPhase()).metadata['Phase']).toBeUndefined();
+  });
+
+  Vitest.it('reports a malformed Phase value', () => {
+    const tampered = roundWithPhase().replace('- Round: 001\n', '- Round: 001\n- Phase: 1\n');
+    const result = Review.verifyRoundFile('001', tampered);
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues.some((found) => found.message.includes('Phase'))).toBe(true);
+  });
+});

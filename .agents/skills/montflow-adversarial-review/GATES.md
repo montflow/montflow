@@ -22,6 +22,9 @@
 ## Phase 3: File Format (mandatory file output)
 
 - [ ] The round was written to `.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md` (a **new** round directory; there is no in-place mode)
+- [ ] When the dispatch named an explicit round (`- Round: <NNN>`), that exact round was written — an existing empty scaffold was populated in place, no higher round was created, and no round holding findings was overwritten
+- [ ] When the dispatch named a series, the round was written to that series; a spec phase backed by several reviewer profiles was reviewed once per expected series, each writing its own series
+- [ ] When the round reviews a spec phase, `## Metadata` records `- Phase: <phase id>`
 - [ ] Round `## Metadata` contains **Target**, **Round**, **Type**, **Isolation**, **Max Attempts**, **Status**, and **Created**
 - [ ] Every finding is headed `### F<n> — <title>` and has **Severity**, **Location**, **Status**, **Attempts**, **First Seen**, **Problem**, **Impact**, **Suggestion**, and a `#### Discussion` subsection (empty on a standalone review)
 - [ ] Every `Severity` and `Status` value is from its enum; `Attempts` and `First Seen` are integers
