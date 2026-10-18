@@ -1,12 +1,11 @@
 {
-  "name": "@montflow/pi-prompts",
+  "name": "@montflow/prompts",
   "version": "0.0.1",
   "private": true,
-  "description": "Effect-first prompt template primitives for Pi extensions (prompt descriptors, variable rendering)",
+  "description": "Effect-first prompt template primitives (prompt descriptors, variable rendering) and the mf-prompts CLI",
   "keywords": [
     "effect",
-    "pi",
-    "pi-package"
+    "prompts"
   ],
   "bugs": {
     "url": "https://github.com/montflow/montflow/issues"
@@ -16,7 +15,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/montflow/montflow.git",
-    "directory": "packages/pi-prompts"
+    "directory": "packages/prompts"
   },
   "bin": {
     "mf-prompts": "./src/apps/cli/main.ts"
@@ -50,17 +49,10 @@
     "effect": "4.0.0-rc.112",
     "oxfmt": "0.63.0",
     "oxlint": "1.78.0",
-    "typebox": "*",
     "typescript": "^7.0.2",
     "vitest": "^5.0.4"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
     "effect": "4.0.0-rc.112"
-  },
-  "pi": {
-    "extensions": [
-      "./src/extension.ts"
-    ]
   }
 }

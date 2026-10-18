@@ -8,7 +8,7 @@ import * as Prompts from '../prompts/index.js';
 /**
  * Resolve the skills installed under `<root>/.agents/skills`, so a pure prompt
  * verifier can resolve `skills:` names without owning any IO. Mirrors
- * `@montflow/pi-profiles`' skill check for the shape of the resolution, but
+ * `@montflow/profiles`' skill check for the shape of the resolution, but
  * only checks existence: a prompt's `skills:` list names what a run loads, and
  * this package has no skills engine to hold those skills to a standard.
  *

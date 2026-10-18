@@ -1,6 +1,4 @@
-import { PiEffect } from '@montflow/pi-effect';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 import * as PromptExecute from '../../modules/prompt-execute/index.js';
 import { PromptStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
@@ -18,7 +16,7 @@ import * as Renderers from './renderers.apps.module.js';
  */
 
 /**
- * Slash-command name registered by {@link register}.
+ * Slash-command name.
  *
  * `mf-prompts` — the same name as the binary, because it is the same command.
  * A Pi session runs the headless CLI; the interactive menu is
@@ -370,19 +368,3 @@ export const run = (
     }
   });
 };
-
-/**
- * Register the `/mf-prompts` slash command as an Effect. Failures notify.
- * @param api - Pi extension API
- * @param live - store layer provided to the handler at invocation
- * @param executeFor - port that runs an agent on a resolved execution
- * @returns Effect completing once the command is registered
- */
-export const register = (
-  api: Pick<ExtensionAPI, 'registerCommand'>,
-  live: Layer.Layer<PromptStore.PromptStore>,
-  executeFor: (cwd: string) => PromptExecute.PromptExecutor,
-): Effect.Effect<void> =>
-  PiEffect.registerCommandEffect(api, COMMAND_NAME, COMMAND_DESCRIPTION, (args, ctx) =>
-    run(args, ctx.ui, ctx.cwd, executeFor(ctx.cwd)).pipe(Effect.provide(live)),
-  );
