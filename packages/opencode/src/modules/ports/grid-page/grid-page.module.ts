@@ -1,8 +1,8 @@
 /**
  * An element handed to the host for rendering. The adapter never inspects
- * its shape, and `null` is the portable "renders nothing" value.
+ * its shape; `null`/`undefined` are the portable "renders nothing" values.
  */
-export type RenderOutput = object | null;
+export type RenderOutput = object | null | undefined;
 
 /** Route payload a plugin page receives; flat scalars only, never host objects. */
 export type PageData = Readonly<Record<string, string>>;

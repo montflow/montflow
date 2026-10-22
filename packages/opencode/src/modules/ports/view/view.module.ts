@@ -1,7 +1,7 @@
 import type { DialogSize } from '../interaction/index.js';
 
 /** An element handed to the host dialog; the adapter never inspects its shape. */
-export type ViewOutput = object | null;
+export type ViewOutput = object | null | undefined;
 
 /** Presentation the host gives a plugin panel. */
 export type PanelPresentation = 'panel' | 'fullscreen';
