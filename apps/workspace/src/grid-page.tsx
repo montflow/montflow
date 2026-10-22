@@ -230,7 +230,11 @@ const WorkspacePage = (props: WorkspacePageProps) => {
   };
   loadInfo();
 
-  /** Selected panel's list state, so keys never need a panel switch. */
+  /**
+   * Selected list's state, so keys never need a panel switch. Panels without
+   * a store-backed list (`info`, `sessions`) hold no highlight: they read 0
+   * and ignore writes rather than borrowing the skills list.
+   */
   const highlightOf = (panel: string): number =>
     panel === 'profiles'
       ? profileHighlight()
@@ -238,13 +242,15 @@ const WorkspacePage = (props: WorkspacePageProps) => {
         ? promptHighlight()
         : panel === 'specs'
           ? specHighlight()
-          : skillHighlight();
+          : panel === 'skills'
+            ? skillHighlight()
+            : 0;
 
   const setHighlight = (panel: string, index: number): void => {
     if (panel === 'profiles') setProfileHighlight(index);
     else if (panel === 'prompts') setPromptHighlight(index);
     else if (panel === 'specs') setSpecHighlight(index);
-    else setSkillHighlight(index);
+    else if (panel === 'skills') setSkillHighlight(index);
   };
 
   const rowsOf = (panel: DetailKind): ReadonlyArray<RowIdentity> =>
@@ -256,6 +262,7 @@ const WorkspacePage = (props: WorkspacePageProps) => {
           ? filteredSpecs()
           : filteredSkills();
 
+  /** Filter text of a store-backed list; other panels have no query. */
   const queryOf = (panel: string): string =>
     panel === 'profiles'
       ? profileQuery()
@@ -263,13 +270,16 @@ const WorkspacePage = (props: WorkspacePageProps) => {
         ? promptQuery()
         : panel === 'specs'
           ? specQuery()
-          : skillQuery();
+          : panel === 'skills'
+            ? skillQuery()
+            : '';
 
   const setQuery = (panel: string, value: string): void => {
     if (panel === 'profiles') setProfileQuery(value);
     else if (panel === 'prompts') setPromptQuery(value);
     else if (panel === 'specs') setSpecQuery(value);
-    else setSkillQuery(value);
+    else if (panel === 'skills') setSkillQuery(value);
+    else return;
     setHighlight(panel, 0);
   };
 
@@ -449,9 +459,10 @@ const WorkspacePage = (props: WorkspacePageProps) => {
         bind: 'escape',
         run: () => {
           const panel = selected();
-          // A filtered list reads as an empty store, so esc always restores
-          // the full list before it closes a detail or leaves the page.
-          if (queryOf(panel) !== '') {
+          // A filtered list reads as an empty store, so esc restores the full
+          // list first — but only when the focused panel owns that filter.
+          // From `info`/`sessions` the key falls through and leaves the page.
+          if (isDetailPanel(panel) && queryOf(panel) !== '') {
             setQuery(panel, '');
             return;
           }
@@ -530,9 +541,12 @@ const WorkspacePage = (props: WorkspacePageProps) => {
         Keybinds.back(),
       ]);
     }
-    if (selected() === 'info') return formatKeybinds([Keybinds.back(), Keybinds.quit()]);
+    const panel = selected();
+    // `info` and `sessions` hold no list: esc leaves the page, so advertise
+    // that instead of a filter clear the panel cannot own.
+    if (!isDetailPanel(panel)) return formatKeybinds([Keybinds.home(), Keybinds.quit()]);
     const entries = [Keybinds.search(), Keybinds.open(), Keybinds.move(), Keybinds.refresh()];
-    if (queryOf(selected()) !== '') entries.push(Keybinds.clearFilter());
+    entries.push(queryOf(panel) !== '' ? Keybinds.clearFilter() : Keybinds.home());
     return formatKeybinds(entries);
   });
 
@@ -764,7 +778,7 @@ const HelpOverlay = () => (
         ['v', 'toggle preview and full view'],
         ['d', 'delete the open row (skills, profiles, prompts)'],
         ['R', 'refresh every store'],
-        ['esc', 'close the detail, then leave the page'],
+        ['esc', 'clear the filter, close the detail, then leave the page'],
         ['q', 'back to the native session list'],
         ['?', 'this keymap'],
       ]}

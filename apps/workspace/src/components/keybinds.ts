@@ -58,6 +58,8 @@ export const Keybinds = {
   insertNewline: (): Keybind => ({ key: 'shift+⏎', action: 'newline' }),
   /** `esc back` — detail close entry. */
   back: (): Keybind => ({ key: 'esc', action: 'back' }),
+  /** `esc home` — page-level return to the native session list. */
+  home: (): Keybind => ({ key: 'esc', action: 'home' }),
   /** `q quit` — status hint quit entry. */
   quit: (): Keybind => ({ key: 'q', action: 'quit' }),
   /** `esc cancel` — dialog and delete-confirm cancel entry. */

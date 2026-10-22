@@ -215,8 +215,75 @@ describe('workspace grid page', () => {
     const restored = await settledFrame(setup, (frame) => !frame.includes('/alpha'));
     expect(restored).toContain('beta');
     expect(restored).not.toContain('esc clear');
+    // With the filter gone, the same key now advertises where it goes.
+    expect(restored).toContain('esc home');
     // Clearing a filter is not a navigation: esc still never left the page.
     expect(navigations).toStrictEqual([]);
+  });
+
+  test('escape on the info panel leaves instead of clearing a hidden list filter', async () => {
+    const { setup, layers, navigations } = await renderPage(Dashboard.DEFAULT_LAYOUT, {
+      panel: 'skills',
+      skills: true,
+      picked: 'alpha',
+    });
+    await settledFrame(setup, (frame) => frame.includes('alpha') && frame.includes('beta'));
+
+    await commandOf(layers, 'workspace.search').run();
+    await settledFrame(setup, (frame) => frame.includes('/alpha'));
+
+    await commandOf(layers, 'workspace.panel.info').run();
+    const info = await settledFrame(setup, (frame) => frame.includes('esc home'));
+    // The info panel owns no query: the hidden skills filter survives, and
+    // the hint describes the key that actually runs.
+    expect(info).toContain('/alpha');
+    expect(info).not.toContain('esc clear');
+
+    await commandOf(layers, 'workspace.back').run();
+    expect(navigations).toStrictEqual(['home']);
+  });
+
+  test('escape on a filtered skills panel clears first, then leaves', async () => {
+    const { setup, layers, navigations } = await renderPage(Dashboard.DEFAULT_LAYOUT, {
+      panel: 'skills',
+      skills: true,
+      picked: 'alpha',
+    });
+    await settledFrame(setup, (frame) => frame.includes('alpha') && frame.includes('beta'));
+
+    await commandOf(layers, 'workspace.search').run();
+    const filtered = await settledFrame(setup, (frame) => frame.includes('/alpha'));
+    expect(filtered).toContain('esc clear');
+
+    const back = commandOf(layers, 'workspace.back');
+    await back.run();
+    const cleared = await settledFrame(setup, (frame) => frame.includes('esc home'));
+    expect(cleared).not.toContain('/alpha');
+    expect(navigations).toStrictEqual([]);
+
+    await back.run();
+    expect(navigations).toStrictEqual(['home']);
+  });
+
+  test('moving on the info panel leaves the hidden list highlights alone', async () => {
+    const { setup, layers } = await renderPage(Dashboard.DEFAULT_LAYOUT, {
+      panel: 'skills',
+      skills: true,
+    });
+    await settledFrame(setup, (frame) => frame.includes('alpha') && frame.includes('beta'));
+
+    const down = commandOf(layers, 'workspace.move-down');
+    await down.run();
+    const moved = await settledFrame(setup, (frame) => frame.includes('▸ beta'));
+    expect(moved).not.toContain('▸ alpha');
+
+    await commandOf(layers, 'workspace.panel.info').run();
+    await down.run();
+    await down.run();
+
+    await commandOf(layers, 'workspace.panel.skills').run();
+    const back = await settledFrame(setup, (frame) => frame.includes('▸ beta'));
+    expect(back).not.toContain('▸ alpha');
   });
 
   test('a layout without the sessions cell renders only its own panels', async () => {
