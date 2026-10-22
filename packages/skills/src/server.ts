@@ -64,7 +64,8 @@ const reportDispatch = (
  */
 const registerDispatchTools = (ports: Ports): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
-    const dispatch = makeSkillSessionPorts(ports, { storeFor });
+    const scope = yield* Effect.scope;
+    const dispatch = makeSkillSessionPorts(ports, { storeFor, scope });
 
     yield* ports.tool.add(
       defineTool({

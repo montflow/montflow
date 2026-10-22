@@ -1,5 +1,5 @@
 import type { ModelPort, SessionDispatchPort } from '@montflow/opencode';
-import { Deferred, Effect, Result, Schema } from 'effect';
+import { Deferred, Effect, Fiber, Result, Schema, type Scope } from 'effect';
 import * as Vitest from '@effect/vitest';
 import { Interactive } from '../../index.js';
 import * as Sessions from '../index.js';
@@ -129,13 +129,13 @@ const makeDispatch = () => {
 type Fake = ReturnType<typeof makeDispatch>;
 
 /** Ports over a memory store and the fake dispatch, plus the recorders. */
-const harness = (initial: ReadonlyArray<Entry>) => {
+const harness = (initial: ReadonlyArray<Entry>, scope: Scope.Scope) => {
   const dispatch = makeDispatch();
   const messages: Array<string> = [];
   const store = memoryStore(initial);
   const ports = Sessions.makeSkillSessionPorts(
     { session: dispatch.session, model: dispatch.model },
-    { storeFor: () => store.store },
+    { storeFor: () => store.store, scope },
   );
   const notify = (message: string): void => {
     messages.push(message);
@@ -202,7 +202,8 @@ Vitest.describe('Sessions.pickAuthoredSkill', () => {
 Vitest.describe('Sessions generator dispatch', () => {
   Vitest.it.effect('dispatches an author session, names it, and unwinds the flow', () =>
     Effect.gen(function* () {
-      const { dispatch, messages, ports, notify } = harness([]);
+      const scope = yield* Effect.scope;
+      const { dispatch, messages, ports, notify } = harness([], scope);
       const failure = yield* failureOf(
         ports.generateFor(
           '/repo',
@@ -226,7 +227,8 @@ Vitest.describe('Sessions generator dispatch', () => {
 
   Vitest.it.effect('re-encodes and reports the skill the session created', () =>
     Effect.gen(function* () {
-      const { dispatch, messages, store, ports, notify } = harness([]);
+      const scope = yield* Effect.scope;
+      const { dispatch, messages, store, ports, notify } = harness([], scope);
       yield* failureOf(
         ports.generateFor('/repo', notify)({ description: 'x', modelLabel: undefined, inject: [] }),
       );
@@ -238,9 +240,36 @@ Vitest.describe('Sessions generator dispatch', () => {
     }),
   );
 
+  Vitest.it.effect('settles after the dispatching fiber ends', () =>
+    Effect.gen(function* () {
+      const scope = yield* Effect.scope;
+      const { dispatch, messages, store, ports, notify } = harness([], scope);
+      // The tool-execute fiber: it ends as soon as the dispatch returns.
+      const dispatching = yield* Effect.forkChild(
+        failureOf(
+          ports.generateFor(
+            '/repo',
+            notify,
+          )({
+            description: 'x',
+            modelLabel: undefined,
+            inject: [],
+          }),
+        ),
+      );
+      Vitest.expect(yield* Fiber.join(dispatching)).toBe(Interactive.DISPATCHED);
+      const session = yield* only(dispatch);
+      store.write('reviewer', 'reviews TypeScript');
+      yield* settle(dispatch, session.id, 'Created reviewer.');
+      Vitest.expect(store.saves).toStrictEqual(['reviewer']);
+      Vitest.expect(messages[1]).toBe("Created skill 'reviewer'.");
+    }),
+  );
+
   Vitest.it.effect('reports a settle that created nothing', () =>
     Effect.gen(function* () {
-      const { dispatch, messages, ports, notify } = harness([]);
+      const scope = yield* Effect.scope;
+      const { dispatch, messages, ports, notify } = harness([], scope);
       yield* failureOf(
         ports.generateFor('/repo', notify)({ description: 'x', modelLabel: undefined, inject: [] }),
       );
@@ -254,7 +283,8 @@ Vitest.describe('Sessions generator dispatch', () => {
 Vitest.describe('Sessions modifier dispatch', () => {
   Vitest.it.effect('dispatches an editor session scoped to the skill and unwinds', () =>
     Effect.gen(function* () {
-      const { dispatch, messages, ports, notify } = harness([entry('reviewer')]);
+      const scope = yield* Effect.scope;
+      const { dispatch, messages, ports, notify } = harness([entry('reviewer')], scope);
       const failure = yield* failureOf(
         ports.modifyFor(
           '/repo',
@@ -278,7 +308,8 @@ Vitest.describe('Sessions modifier dispatch', () => {
 
   Vitest.it.effect('re-encodes and reports the updated skill on settle', () =>
     Effect.gen(function* () {
-      const { dispatch, messages, store, ports, notify } = harness([entry('reviewer')]);
+      const scope = yield* Effect.scope;
+      const { dispatch, messages, store, ports, notify } = harness([entry('reviewer')], scope);
       yield* failureOf(
         ports.modifyFor(
           '/repo',
@@ -301,7 +332,8 @@ Vitest.describe('Sessions modifier dispatch', () => {
 
   Vitest.it.effect('reports a settle that left the skill untouched', () =>
     Effect.gen(function* () {
-      const { dispatch, messages, ports, notify } = harness([entry('reviewer')]);
+      const scope = yield* Effect.scope;
+      const { dispatch, messages, ports, notify } = harness([entry('reviewer')], scope);
       yield* failureOf(
         ports.modifyFor(
           '/repo',
@@ -321,7 +353,8 @@ Vitest.describe('Sessions modifier dispatch', () => {
 
   Vitest.it.effect('reports a session that never settles and skips its completion', () =>
     Effect.gen(function* () {
-      const { dispatch, messages, store, ports, notify } = harness([entry('reviewer')]);
+      const scope = yield* Effect.scope;
+      const { dispatch, messages, store, ports, notify } = harness([entry('reviewer')], scope);
       yield* failureOf(
         ports.modifyFor(
           '/repo',
@@ -345,7 +378,8 @@ Vitest.describe('Sessions modifier dispatch', () => {
 
   Vitest.it.effect('reports a settle that removed the skill file', () =>
     Effect.gen(function* () {
-      const { dispatch, messages, store, ports, notify } = harness([entry('reviewer')]);
+      const scope = yield* Effect.scope;
+      const { dispatch, messages, store, ports, notify } = harness([entry('reviewer')], scope);
       yield* failureOf(
         ports.modifyFor(
           '/repo',
@@ -368,7 +402,8 @@ Vitest.describe('Sessions modifier dispatch', () => {
 Vitest.describe('Sessions transform dispatch', () => {
   Vitest.it.effect('dispatches a transform session with its own prompt and title', () =>
     Effect.gen(function* () {
-      const { dispatch, ports, notify } = harness([entry('reviewer')]);
+      const scope = yield* Effect.scope;
+      const { dispatch, ports, notify } = harness([entry('reviewer')], scope);
       yield* failureOf(
         ports.transformFor(
           '/repo',

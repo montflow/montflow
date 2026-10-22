@@ -1,5 +1,5 @@
 import type { ModelPort, SessionDispatchPort } from '@montflow/opencode';
-import { Effect } from 'effect';
+import { Effect, type Scope } from 'effect';
 import * as SkillStore from '../../modules/skill-store/index.js';
 import { Skill } from '../../modules/index.js';
 import { Interactive } from '../index.js';
@@ -110,6 +110,8 @@ export interface SkillDispatchPorts {
 export interface SkillSessionPortsOptions {
   /** Persistence port for a working directory, shared with the flows. */
   readonly storeFor: (cwd: string) => Interactive.SkillStore;
+  /** Plugin-owned scope the settle watchers run in. */
+  readonly scope: Scope.Scope;
 }
 
 /** One native dispatch: what to call the session and what it must do. */
@@ -127,10 +129,10 @@ type SessionId = Effect.Success<ReturnType<SessionDispatchPort['create']>>;
  * Build the session-dispatching skill ports over native session dispatch. Each
  * agentic flow creates a peer session, prompts it, and leaves a watcher that
  * waits for settlement, reads the last assistant reply, runs the completion
- * hook, and notifies. The watcher is forked into the caller's scope, so the
- * plugin lifetime owns it.
+ * hook, and notifies. The watcher is forked into the plugin-owned scope, so it
+ * outlives the tool-execute fiber that dispatched it.
  * @param ports - adapter seams (session dispatch + model resolution)
- * @param options - store port factory
+ * @param options - store port factory and the plugin scope
  * @returns the ports the server plugin registers
  */
 export const makeSkillSessionPorts = (
@@ -292,7 +294,7 @@ export const makeSkillSessionPorts = (
           : yield* ports.session.create({ title, model });
       yield* ports.session.prompt(sessionId, request.prompt);
       pending.add(sessionId);
-      yield* Effect.forkChild(watch(request.root, sessionId, completionFor(sessionId)));
+      yield* Effect.forkIn(watch(request.root, sessionId, completionFor(sessionId)), options.scope);
       return sessionId;
     });
 
