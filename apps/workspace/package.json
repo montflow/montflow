@@ -39,20 +39,25 @@
     "@montflow/profiles": "workspace:*",
     "@montflow/prompts": "workspace:*",
     "@montflow/skills": "workspace:*",
-    "@opentui/core": "^0.5.11",
-    "@opentui/solid": "^0.5.11",
     "@tanstack/solid-query": "^5.102.8",
     "effect": "4.0.0-rc.112",
-    "fuse.js": "^7.5.0",
-    "solid-js": "1.9.12"
+    "fuse.js": "^7.5.0"
   },
   "devDependencies": {
     "@effect/vitest": "4.0.0-rc.112",
+    "@opentui/core": "0.5.12",
+    "@opentui/solid": "0.5.12",
     "@types/bun": "^1.4.2",
     "@types/node": "^26.1.2",
     "oxfmt": "0.63.0",
     "oxlint": "1.78.0",
+    "solid-js": "1.9.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.4"
+  },
+  "peerDependencies": {
+    "@opentui/core": ">=0.5.12",
+    "@opentui/solid": ">=0.5.12",
+    "solid-js": ">=1.9.0"
   }
 }
