@@ -31,6 +31,6 @@ completion. Work one phase at a time.
 
 - Once the phase is approved, append its letter to \`locked-phases\` (comma-separated, prefix
   order) and commit the phase.
-- Verify when done: \`bun run --cwd packages/pi-specs cli check --name <name>\` must report
+- Verify when done: \`bun run --cwd packages/specs cli check --name <name>\` must report
   zero issues.
 - Ask the user with \`ask_user\` at phase boundaries and whenever a decision is theirs.`;

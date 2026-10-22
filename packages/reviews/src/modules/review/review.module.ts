@@ -1138,7 +1138,7 @@ Series ledger (REVIEW.md at the series root):
   - Target: <what is under review>
   - Status: open | closed
   - Rounds: <number of round directories>
-  - Profile: <profile name>          # optional; verified against the pi-profiles extension
+  - Profile: <profile name>          # optional; verified against the profiles plugin
   - Created: <YYYY-MM-DD>
 
   ## Rounds

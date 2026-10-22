@@ -422,7 +422,7 @@ export const saveSkill = (root: string, skill: SkillSummary): Effect.Effect<void
 };
 
 /**
- * Bridge a dashboard row into a pi-skills `Skill` for the shared
+ * Bridge a dashboard row into a `@montflow/skills` `Skill` for the shared
  * interactive flows (`createSkill`, `modifySkill`, requirements gate).
  * Takes the lazily loaded runtime — no static extension dependency.
  * @param libs - loaded extension runtime
@@ -440,10 +440,10 @@ export const toSkill = (libs: PiSkillsLib, row: SkillSummary): Effect.Effect<Ski
   }).pipe(Effect.mapError(() => `Invalid skill '${row.id}'.`));
 
 /**
- * Bridge a pi-skills `Skill` back into a dashboard row for persistence.
+ * Bridge a `@montflow/skills` `Skill` back into a dashboard row for persistence.
  * Total — `Skill.encode` only produces valid shapes.
  * @param libs - loaded extension runtime
- * @param skill - pi-skills Skill
+ * @param skill - skills-plugin Skill
  * @returns dashboard row
  */
 export const fromSkill = (libs: PiSkillsLib, skill: Skill.Skill): SkillSummary => {

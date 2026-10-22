@@ -1,14 +1,13 @@
-# @montflow/pi-prompts
+# @montflow/prompts
 
-Effect-first prompt template primitives for Pi extensions — the `Prompt` and
+Effect-first prompt template primitives for OpenCode — the `Prompt` and
 `Variable` Schema Classes, a Handlebars engine restricted to a closed grammar,
 mechanical file verification, a `mf-prompts` CLI (a binary, and the same
-command inside a Pi session as `/mf-prompts`), an interactive
-`/mf-prompts-tui` menu, and the agent-callable `prompt_inspect` /
-`prompt_execute` Pi tools.
+command in the OpenCode host as `/mf-prompts`), and the agent-callable
+`prompt_inspect` / `prompt_execute` tools.
 
 ```typescript
-import { Prompts, PromptExecute } from '@montflow/pi-prompts';
+import { Prompts, PromptExecute } from '@montflow/prompts';
 import { Effect } from 'effect';
 
 const program = Effect.gen(function* () {
@@ -36,20 +35,18 @@ const program = Effect.gen(function* () {
 ## Commands
 
 ```bash
-# The CLI — the binary, or the same command inside a Pi session
+# The CLI, or the same command via the OpenCode slash command
 mf-prompts doctor [--check]                    # install / verify the skills
 mf-prompts list [--status valid|invalid]
 mf-prompts inspect <name> [key=value ...]     # variables table
 mf-prompts execute <name> --model p/m [key=value ...]
 mf-prompts render <name> [key=value ...]      # text only, no agent
 mf-prompts show | verify | create | modify | delete | help
-
-# The interactive menu, for humans
-/mf-prompts-tui browse | create | inspect <name> | execute <name> | …
 ```
 
-Inside Pi, the slash form is spelled `/mf-prompts …`; everywhere else it is
-`mf-prompts …`. They are one CLI in two runtimes.
+Inside OpenCode the same command is spelled `/mf-prompts …`. An agent can also
+call `prompt_inspect` and `prompt_execute` directly; `prompt_execute` runs
+the rendered prompt on a native session.
 
 `execute` runs `doctor` first and refuses when the packaged skills are missing
 or stale — an agent must not act on guidance the verifier no longer enforces.
@@ -122,7 +119,7 @@ Two skills ship with the package and `doctor` installs them into
 
 ## Status
 
-Boilerplate (`0.0.1`, private). Source-only — no build step: Pi loads the
-`.ts` files directly. Run `bun install` from the repo
-root for dependencies, then `turbo` `test` / `ts:check` cover this package
-like the rest.
+Boilerplate (`0.0.1`, private). Source-only — no build step: a local-path
+OpenCode install loads the `.ts` files directly. Run `bun install` from the
+repo root for dependencies, then `turbo` `test` / `ts:check` cover this
+package like the rest.

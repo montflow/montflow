@@ -34,7 +34,7 @@ export interface SkillsList {
 /**
  * Query key for the workspace skills list. Single source for the
  * fetch, the delete cache patches, and invalidation — every skills
- * read/write in `app.tsx` goes through this key.
+ * read/write in `grid-page.tsx` goes through this key.
  */
 export const skillsKey = ['skills'] as const;
 
@@ -46,7 +46,7 @@ export interface ProfilesList {
 
 /**
  * Query key for the workspace profiles list. Mirrors `skillsKey` —
- * every profiles read/write in `app.tsx` goes through this key so
+ * every profiles read/write in `grid-page.tsx` goes through this key so
  * flow completions update the UI through the cache, never signals.
  */
 export const profilesKey = ['profiles'] as const;
@@ -69,7 +69,7 @@ export interface PromptsList {
 
 /**
  * Query key for the workspace prompts list. Mirrors `skillsKey` —
- * every prompts read/write in `app.tsx` goes through this key so flow
+ * every prompts read/write in `grid-page.tsx` goes through this key so flow
  * completions update the UI through the cache, never signals.
  */
 export const promptsKey = ['prompts'] as const;

@@ -1,9 +1,9 @@
 ---
 name: montflow-create-pi-prompts
-description: Creates and modifies reusable prompt templates for the @montflow/pi-prompts extension, stored as JSON under .agents/@montflow/pi-prompts/. Use when an agent must author a new prompt, or change an existing one, directly from the rules below instead of shelling out.
+description: Creates and modifies reusable prompt templates for the @montflow/prompts plugin, stored as JSON under .agents/@montflow/pi-prompts/. Use when an agent must author a new prompt, or change an existing one, directly from the rules below instead of shelling out.
 id: 1f2ac0720ecc0742
 author: Daniel Montilla
-version: 3.0.0
+version: 3.0.1
 license: MIT
 dependencies:
   - executing-skills
@@ -14,7 +14,7 @@ groups:
 # When To Use
 
 Use when an agent must create or change a reusable prompt template for
-`@montflow/pi-prompts`: a parameterized instruction stored as JSON under
+`@montflow/prompts`: a parameterized instruction stored as JSON under
 `.agents/@montflow/pi-prompts/`. The agent authors the file itself from the
 rules below — it does not call a CLI, and it does not dispatch a session.
 
@@ -133,6 +133,6 @@ satisfied. Change only what the request asks for, and keep the file name and the
 
 # Reference
 
-- **Grammar and analysis**: `TemplateEngine` in `packages/pi-prompts/src/modules/template-engine/template-engine.module.ts`
-- **Verifier**: `Prompts.verifyPromptFile` and `Prompts.verifyReport` in `packages/pi-prompts/src/modules/prompts/prompts.module.ts`
+- **Grammar and analysis**: `TemplateEngine` in `packages/prompts/src/modules/template-engine/`
+- **Verifier**: `Prompts.verifyPromptFile` and `Prompts.verifyReport` in `packages/prompts/src/modules/prompts/prompts.module.ts`
 - **Inspecting and executing a prompt**: skill `montflow-execute-pi-prompts`

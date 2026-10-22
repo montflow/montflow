@@ -1,26 +1,26 @@
-# pi-profiles CLI — agent reference
+# mf-profiles CLI — agent reference
 
-Effect-first Pi extension owns agent profiles. Two commands, two audiences:
+The profiles plugin owns agent profiles. Two ways in, over the same engines:
 
-- `/mf-profiles` — interactive TUI (humans): browse, create, modify via dialogs, agentic sessions.
-- `/mf-profiles-cli` — headless, manual-only (agents/scripts): same operations as flags. **Use this one.**
+- `/mf-profiles <subcommand> …` — the slash command in the OpenCode host (humans and agents).
+- `mf-profiles <subcommand> …` — the binary, for scripts.
+- `profile_execute` — the agent tool that runs a stored profile on a native session.
 
-## Invoking from bash
+## Invoking
 
-Slash commands **not** dispatched via `pi -p`. Drive CLI through RPC over stdio:
+From the OpenCode host, send the slash command as a prompt:
+
+```text
+/mf-profiles list
+```
+
+From a shell, run the binary from the package:
 
 ```bash
-pi --mode rpc
+bun run --cwd packages/profiles cli list
 ```
 
-Send one JSON line per command, read notify text from event stream:
-
-```json
-{ "id": "req-1", "type": "prompt", "message": "/mf-profiles-cli list" }
-```
-
-Extension commands execute immediately, even mid-stream. Confirm via `{"type": "get_commands"}`
-(`mf-profiles`, `mf-profiles-cli` listed when package loads).
+Both forms read the same store and return the same report text.
 
 ## Storage
 
@@ -36,13 +36,13 @@ One directory per profile, one file per profile:
 ## CLI reference
 
 ```text
-/mf-profiles-cli list [--status valid|invalid]
-/mf-profiles-cli show <name>
-/mf-profiles-cli verify [<name>...]
-/mf-profiles-cli create <name> --description "text" [--model p/m] [--skills a,b] [--instructions "text"] [--checklist "item 1; item 2"]
-/mf-profiles-cli modify <name> [--description ...] [--model ...] [--skills ...] [--instructions ...] [--checklist ...]
-/mf-profiles-cli delete <name>
-/mf-profiles-cli help
+/mf-profiles list [--status valid|invalid]
+/mf-profiles show <name>
+/mf-profiles verify [<name>...]
+/mf-profiles create <name> --description "text" [--model p/m] [--skills a,b] [--instructions "text"] [--checklist "item 1; item 2"]
+/mf-profiles modify <name> [--description ...] [--model ...] [--skills ...] [--instructions ...] [--checklist ...]
+/mf-profiles delete <name>
+/mf-profiles help
 ```
 
 - Flags accept `--flag value`, `--flag=value`. Unknown flags print usage.
@@ -53,12 +53,10 @@ One directory per profile, one file per profile:
   full skill standard; generic and vendored skills only have to exist. Name one
   or more profiles to narrow the check; omit names for the whole store. A named
   profile with no file is reported as `Profile not found.` Fails with the issue
-  list when anything is off. The headless half is
+  list when anything is off. The binary form is
   `mf-profiles verify [--all] [<name>...] [--dir <path>]`.
-- The `mf-profiles` binary exposes the same verbs as `/mf-profiles-cli`
-  (`list`, `show`, `verify`, `create`, `modify`, `delete`) and adds the
-  `effect/cli` `--help`/`--version`/`--completions`. On both,
-  `--dir` is the **workspace root**; the store is `<root>/.agents/@montflow/profiles`.
+- On both, `--dir` is the **workspace root**; the store is
+  `<root>/.agents/@montflow/profiles`.
 - `create` requires `--description`. Absent flags mean defaults (create), keep (modify).
   No clear-flags: blank field → `delete` + `create`.
 - `--skills` comma-separated (`--skills reviewer,security`). `--checklist`
@@ -68,9 +66,9 @@ One directory per profile, one file per profile:
 Examples:
 
 ```text
-/mf-profiles-cli create code-reviewer --description "Senior reviewer focused on security" --instructions "Be strict. Cite files." --checklist "Security issues flagged; Tests cover changes"
-/mf-profiles-cli modify code-reviewer --model anthropic/claude-sonnet-4-5 --skills montflow-create-pi-profiles
-/mf-profiles-cli show code-reviewer
+/mf-profiles create code-reviewer --description "Senior reviewer focused on security" --instructions "Be strict. Cite files." --checklist "Security issues flagged; Tests cover changes"
+/mf-profiles modify code-reviewer --model anthropic/claude-sonnet-4-5 --skills montflow-create-pi-profiles
+/mf-profiles show code-reviewer
 ```
 
 ## PROFILE.md schema (hand-written files)
@@ -109,5 +107,5 @@ skills:
 ## Standards
 
 `.agents/skills/montflow-create-pi-profiles/SKILL.md` (repo `montflow/montflow`,
-installable via `npx skills add montflow/montflow -s montflow-create-pi-profiles -a pi -y`)
+installable via `npx skills add montflow/montflow -s montflow-create-pi-profiles -y`)
 holds authoring standards. Installed → follow it; rules above = mechanical core.

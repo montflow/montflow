@@ -1,20 +1,18 @@
-# @montflow/pi-skills
+# @montflow/skills
 
-Effect-first skill primitives for Pi extensions — the `Skill` Schema Class
-(schema and type in one) plus slug helpers (`isValidName`, `slugify`) and the
-`/mf-skills-tui` interactive menu.
+Effect-first skill primitives for OpenCode — the `Skill` Schema Class (schema
+and type in one), the skill store, slug helpers (`isValidName`, `slugify`), the
+`mf-skills` CLI, native skill registration, and the `skill_create` /
+`skill_modify` dispatch tools.
 
 Skills live in the regular `.agents/skills/<slug>/SKILL.md` location —
 this package only inspects and modifies them.
 
 ## Surfaces
 
-Three ways in, over the same engines:
-
 ```bash
 mf-skills <subcommand> …      # the binary — scriptable, real exit codes
-/mf-skills <subcommand> …     # the same command inside a Pi session
-/mf-skills-tui                # the interactive menu, for humans
+/mf-skills <subcommand> …     # the same command in the OpenCode host
 ```
 
 Subcommands: `doctor`, `list`, `show`, `verify [name]`, `create`, `modify`,
@@ -25,13 +23,11 @@ against its ownership class (`Skill.verifySkillFile`): montflow skills
 skills only have to exist. It exits non-zero when a skill fails. Store commands
 accept `--dir` to target a workspace root other than the working directory.
 
-The interactive menu browses, shows, manually or agentically creates/modifies,
-deletes, and re-verifies skills.
-
 Agentic create, modify, and transform dispatch a native OpenCode session
 instead of running a child agent inline: the command names the session id and
 unwinds, the session writes the `SKILL.md`, and a settle watcher re-encodes the
-result and reports the outcome.
+result and reports the outcome. Agents call them through `skill_create` /
+`skill_modify`.
 
 ## Packaged skills
 
@@ -44,10 +40,10 @@ author skills without shelling out:
 Agentic sessions inject these (`Skill.GENERATION_REQUIREMENTS` /
 `MODIFICATION_REQUIREMENTS`). The package ships them under `skills/` and embeds
 them for the compiled binary; regenerate the embed after editing them with
-`bun run --cwd packages/pi-skills generate:payload`.
+`bun run --cwd packages/skills generate:payload`.
 
 ```typescript
-import { Skill } from '@montflow/pi-skills';
+import { Skill } from '@montflow/skills';
 import { Effect } from 'effect';
 
 const program = Effect.gen(function* () {
@@ -69,7 +65,7 @@ const program = Effect.gen(function* () {
 
 ## Status
 
-Boilerplate (`0.0.1`, private). Source-only — no build step: Pi loads the
-`.ts` files directly. Run `bun install` from the repo
-root for dependencies, then `turbo` `test` / `ts:check` cover this package
-like the rest.
+Boilerplate (`0.0.1`, private). Source-only — no build step: a local-path
+OpenCode install loads the `.ts` files directly. Run `bun install` from the repo
+root for dependencies, then `turbo` `test` / `ts:check` cover this package like
+the rest.

@@ -3,7 +3,7 @@ name: montflow-adversarial-review
 description: Performs a hostile, bug-hunting code review that assumes the author made mistakes. Surfaces possible bugs, edge cases, security holes, missed refactors, missing tests, and documentation gaps, and writes each round to a review series under `.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md`. Use when reviewing code, PRs, or diffs before merge. Pair with montflow-addressing-adversarial-review to resolve findings across fix→re-review loops.
 id: 714e99f0430c9637
 author: Daniel Montilla
-version: 5.0.0
+version: 5.0.1
 license: MIT
 dependencies:
   - executing-skills
@@ -232,7 +232,7 @@ Series ledger (`<name>/REVIEW.md`) — regenerate its tables from every round on
 - Target: <what is under review>
 - Status: open | closed
 - Rounds: <count>
-- Profile: <profile name> # optional; verified against the pi-profiles extension when set
+- Profile: <profile name> # optional; verified against the profiles plugin when set
 - Created: <YYYY-MM-DD>
 
 ## Rounds

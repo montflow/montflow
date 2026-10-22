@@ -3,7 +3,7 @@ name: montflow-create-pi-skills
 description: Authors a workspace skill under .agents/skills/<name>/ — a SKILL.md with the required frontmatter and `# When To Use` / `# Pipeline` / `# Reference` body — from the rules below. Use when an agent must create a skill directly, without dispatching a session or shelling out.
 id: 94b1651acdb76a86
 author: montflow
-version: 1.1.0
+version: 1.1.1
 license: MIT
 groups:
   - skills
@@ -31,9 +31,9 @@ exactly one skill, then stop. If a skill with that name already exists, pick a
 fresh name.
 
 **Extension-owned skills are namespaced.** A skill that ships as the payload of a
-`montflow/pi-*` extension MUST be named `montflow-<name>` — prefixed
-`montflow-` — so the repo can tell a skill it owns (and holds to the full
-standard) from a generic or vendored one. Workspace-only skills may use any
+`@montflow/*` plugin MUST be named `montflow-<name>` — prefixed `montflow-` — so
+the repo can tell a skill it owns (and holds to the full standard) from a
+generic or vendored one. Workspace-only skills may use any
 kebab name.
 
 ## 2. Write the Frontmatter
@@ -82,7 +82,7 @@ Add only what the skill needs: `CHANGELOG.md` (dated entries), `references/`,
 
 ```bash
 mf-skills verify <name>          # the binary, scriptable
-/mf-skills verify <name>         # the same command inside a Pi session
+/mf-skills verify <name>         # the same command in the OpenCode host
 ```
 
 - Nothing outside `.agents/skills/` was touched.
@@ -90,5 +90,5 @@ mf-skills verify <name>          # the binary, scriptable
 # Reference
 
 - **Skill format**: `.agents/skills/<name>/SKILL.md` — one directory per skill.
-- **Contract source**: `packages/pi-skills/src/modules/skill/skill.module.ts` (`verifySkillFile`).
+- **Contract source**: `packages/skills/src/modules/skill/skill.module.ts` (`verifySkillFile`).
 - **Executor skill**: [executing-skills](../executing-skills/SKILL.md).

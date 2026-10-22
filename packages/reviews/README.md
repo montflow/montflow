@@ -1,14 +1,14 @@
-# @montflow/pi-reviews
+# @montflow/reviews
 
-Effect-first adversarial review primitives for Pi extensions — the review
-_series_ and _round_ format, pure mechanical verification of a review file, a
-`mf-reviews` CLI (a binary, and the same command inside a Pi session as
-`/mf-reviews`), and the `montflow-adversarial-review` /
-`montflow-addressing-adversarial-review` skills, shipped as package payload and installed
-by `doctor`.
+Effect-first adversarial review primitives for OpenCode — the review _series_
+and _round_ format, pure mechanical verification of a review file, a
+`mf-reviews` CLI (a binary, and the same command in the host as
+`/mf-reviews`), the `review_create` tool, and the
+`montflow-adversarial-review` / `montflow-addressing-adversarial-review`
+skills, shipped as package payload and installed by `doctor`.
 
 ```typescript
-import { Review } from '@montflow/pi-reviews';
+import { Review } from '@montflow/reviews';
 import { Effect } from 'effect';
 
 const program = Effect.gen(function* () {
@@ -57,7 +57,7 @@ mf-reviews resume <name>                          # where an in-flight review le
 mf-reviews new <name>                             # alias of create
 ```
 
-Inside Pi, the slash form is `/mf-reviews …`; everywhere else it is
+Inside OpenCode, the slash form is `/mf-reviews …`; from a shell it is
 `mf-reviews …`. They are one CLI in two runtimes.
 
 ## Dispatch (in-session)
@@ -81,7 +81,7 @@ The `mf-reviews` **CLI**'s `create`/`new` only scaffold a series; the tool (or t
 `create` scaffolds a series and its first round; `resume` reports the latest
 round and the open-finding count so an agent can pick a review back up. A series
 may declare an optional `- Profile: <name>` in its ledger: `verify` asks the
-`@montflow/pi-profiles` extension (`mf-profiles verify <name>`) whether that
+`@montflow/profiles` plugin (`mf-profiles verify <name>`) whether that
 profile exists and is valid. A profile that fails is an issue; a missing
 profiles extension is a warning, not a failure.
 
@@ -103,6 +103,7 @@ mf-reviews doctor
 
 ## Status
 
-Boilerplate (`0.0.1`, private). Source-only — no build step: Pi loads the `.ts`
-files directly. Run `bun install` from the repo root for dependencies, then
-`turbo` `test` / `ts:check` cover this package like the rest.
+Boilerplate (`0.0.1`, private). Source-only — no build step: a local-path
+OpenCode install loads the `.ts` files directly. Run `bun install` from the
+repo root for dependencies, then `turbo` `test` / `ts:check` cover this
+package like the rest.

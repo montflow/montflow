@@ -1,4 +1,4 @@
-# @montflow/pi-specs
+# @montflow/specs
 
 Spec primitives and a CLI for montflow — schema-backed parsing,
 mechanical verification, a status panel, and the authoring/executing skill
@@ -12,7 +12,7 @@ bunx mf-specs check --name ship-spec
 npx mf-specs check --name ship-spec
 
 # or by package script
-bun run --cwd packages/pi-specs cli check
+bun run --cwd packages/specs cli check
 ```
 
 - `check` — verifies the whole spec root (default
@@ -45,7 +45,7 @@ bun run --cwd packages/pi-specs cli check
 
 `npx`/`bunx` resolve the workspace `bin` link inside this repo (the root
 `devDependencies` entry is what creates it). From a registry
-(`npx @montflow/pi-specs` / `bunx @montflow/pi-specs`) the package
+(`npx @montflow/specs` / `bunx @montflow/specs`) the package
 must be published first — it is `private` today. The `bin` is a `.ts`
 entry with `#!/usr/bin/env bun`, so registry use needs Bun on the
 machine; a Node build would be required for `npx` without Bun.
@@ -85,7 +85,8 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
   `ScaffoldTask`: pure renderer for a fresh spec tree (the mechanical
   half of `mf-specs create`).
 - **`SpecSkill`** — `AUTHORING_SPEC` / `EXECUTING_SPEC`,
-  the simplified skill text sent into dispatched sessions (not Pi-discovered).
+  the simplified skill text sent into dispatched sessions (not published as
+  workspace skills).
 - **`Verify` / `Frontmatter`** — shared `Issue` / `Result` vocabulary and
   the tolerant frontmatter grammar.
 - **`SpecStore`** — filesystem reader (`names`, `hasRoot`, `exists`,
@@ -102,5 +103,5 @@ issue list, so callers can render or repair.
 
 ## Status
 
-Early (`0.0.1`, private). Targets the pi-specs spec contract.
-Source-only — no build step: Pi loads the `.ts` files directly.
+Early (`0.0.1`, private). Targets the spec contract migrated from `pi-specs`.
+Source-only — no build step: the OpenCode host loads the `.ts` files directly.

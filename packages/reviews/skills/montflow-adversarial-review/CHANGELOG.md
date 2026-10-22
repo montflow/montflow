@@ -1,5 +1,11 @@
 # Changelog
 
+## [5.0.1] - 2026-10-22
+
+### Changed
+
+- Ledger `Profile` line names the profiles plugin instead of the retired pi-profiles extension
+
 ## [5.0.0] - 2026-10-12
 
 ### Changed (breaking)

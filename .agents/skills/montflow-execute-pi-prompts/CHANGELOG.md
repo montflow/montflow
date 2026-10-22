@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.4.2] - 2026-10-22
+
+### Changed
+
+- Front ends are the `mf-prompts` binary, the `/mf-prompts` command, and the `prompt_inspect` / `prompt_execute` tools; the removed Pi TUI menu is no longer documented
+- Package references point at `@montflow/prompts` and `packages/prompts`
+
 ## [3.4.1] - 2026-10-21
 
 ### Changed

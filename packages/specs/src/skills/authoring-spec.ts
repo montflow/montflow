@@ -22,7 +22,7 @@ Author the spec; do not execute it.
 Start from the mechanical scaffold — one model-free command that writes a tree which
 already passes \`check\`:
 
-\`bun run --cwd packages/pi-specs cli create --name <name> [--description "<line>"] [--author "<name>"] [--tasks "<name>[:<type>[:gates]],…"]\`
+\`bun run --cwd packages/specs cli create --name <name> [--description "<line>"] [--author "<name>"] [--tasks "<name>[:<type>[:gates]],…"]\`
 
 Each task is \`name[:type[:gates]]\` (type defaults to \`execution\`); the command appends
 \`<PHASE>099-review-phase\` and refuses to overwrite an existing spec. Then edit the rendered
@@ -46,6 +46,6 @@ Body sections: \`## Type: <type>\`, \`## Description\`, \`## Requirements\`, \`#
 - Leave \`locked-phases:\` empty and the spec \`status: in-progress\`.
 - Ask the user with \`ask_user\` only when the decision is theirs (scope, naming, ambiguity);
   otherwise decide and proceed. Use \`notify_user\` for progress the user should see.
-- Verify before finishing: \`bun run --cwd packages/pi-specs cli check --name <name>\` must
+- Verify before finishing: \`bun run --cwd packages/specs cli check --name <name>\` must
   report zero issues.
 - Touch nothing outside \`.agents/@montflow/specs/\`.`;

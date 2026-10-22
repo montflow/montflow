@@ -54,9 +54,9 @@ opencode plugin add /path/to/montflow/packages/specs
 opencode plugin add /path/to/montflow/apps/workspace
 
 # Git subpath: reads a generated published-shape artifact, never the source manifest
-bun run pack:plugins            # emits dist/pack/<name>/
+bun run pack:plugins            # emits dist/pack/@montflow__<name>/
 git add -f dist/pack && git commit -m "build: pack plugins" && git push
-opencode plugin add "git+https://github.com/montflow/montflow.git#<sha>::path:dist/pack/specs"
+opencode plugin add "git+https://github.com/montflow/montflow.git#<sha>::path:dist/pack/@montflow__specs"
 ```
 
 Why two forms: a committed source manifest declares `@montflow/*: workspace:*`,

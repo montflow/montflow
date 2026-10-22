@@ -1,9 +1,9 @@
 ---
 name: montflow-execute-pi-prompts
-description: Inspects and executes reusable prompt templates stored by @montflow/pi-prompts on a chosen model, then returns the agent's reply. Use when an agent must run a stored prompt — inspect its variables, supply the required ones, pick a model, and execute it.
+description: Inspects and executes reusable prompt templates stored by @montflow/prompts on a chosen model, then returns the agent's reply. Use when an agent must run a stored prompt — inspect its variables, supply the required ones, pick a model, and execute it.
 id: a7fa5091d2615813
 author: Daniel Montilla
-version: 3.4.1
+version: 3.4.2
 license: MIT
 dependencies:
   - executing-skills
@@ -23,31 +23,25 @@ takes, supply what is required, run it on a model, and use the reply.
 
 ## 0. Pick a Front End
 
-Three ways in, over the same engines:
+Two ways in, over the same engines:
 
 ```bash
 mf-prompts <subcommand> …      # the binary — scriptable, real exit codes
-/mf-prompts <subcommand> …      # the same command inside a Pi session
-/mf-prompts-tui                 # the interactive menu, for humans
+/mf-prompts <subcommand> …     # the same command in the OpenCode host
 ```
 
-The binary and the `/mf-prompts` slash command are the _same_ CLI in two
-runtimes, so everything below works identically in either. **Prefer them** when
-you are an agent or a script: no dialogs, a meaningful exit code, and `execute`
-prints exactly the text that would be sent.
+Agents can also call the `prompt_inspect` and `prompt_execute` tools directly.
+They are the native path: `prompt_execute` renders the prompt and runs it on a
+session, returning the reply. The `/mf-prompts` slash command does the same in
+the host. The **binary** has no model runtime, so its `execute` validates,
+renders, and stops there.
 
-Use `/mf-prompts-tui` only when a human is driving. It asks for values and a
-model through dialogs, and its `Execute` action is the one form that _runs_ a
-prompt, because running one needs a model runtime that lives in the Pi
-extension — the binary has none, so its `execute` validates, renders, and stops
-there.
-
-Build it once with `bun run --cwd packages/pi-prompts build:cli`, which emits
+Build it once with `bun run --cwd packages/prompts build:cli`, which emits
 `dist/mf-prompts` as a self-contained executable. Or run it from source with
-`bun packages/pi-prompts/src/apps/cli/main.ts` from the repository root, so the
-working directory is the one holding `.agents/@montflow/pi-prompts`. The
-binary carries the prompt skills inside itself, so every subcommand below works
-from a compiled binary with no package checkout present.
+`bun packages/prompts/src/apps/cli/main.ts` from the repository root, so the
+working directory is the one holding `.agents/@montflow/pi-prompts`. The binary
+carries the prompt skills inside itself, so every subcommand below works from a
+compiled binary with no package checkout present.
 
 ## 1. Ensure the Skills Are Installed
 
@@ -86,9 +80,7 @@ mf-prompts list --status valid    # only files that pass verification
 mf-prompts list --status invalid  # only files that fail verification
 ```
 
-`show <name>` prints a prompt's raw template. In the TUI, `/mf-prompts-tui browse`
-opens a picker with per-prompt actions (Show, Inspect, Fill & render, Execute,
-Modify, Delete).
+`show <name>` prints a prompt's raw template.
 
 ## 3. Inspect It
 
@@ -97,6 +89,8 @@ Always inspect before executing. It tells you exactly what to supply.
 ```bash
 mf-prompts inspect <name> [key=value ...]
 ```
+
+Or call the `prompt_inspect` tool with `name` and optional `values`.
 
 For a prompt described _"Draft a commit message."_, pinned to model
 `opencode-go/deepseek-v4.1-flash`, loading skill `planning-git-commits`, with a
@@ -132,21 +126,17 @@ mf-prompts execute <name> --model provider/model-id [key=value ...]
 mf-prompts execute commit-message --model opencode-go/deepseek-v4.1-flash files=src/
 ```
 
+Or call `prompt_execute` with the same name, model, and values; it runs the
+rendered prompt in a native session and returns the reply.
+
 - **`--model` is required** unless the prompt pins its own `"model"`. The
   command falls back to the prompt's model, so you only pass it when the
   prompt leaves it open.
 - **Every required variable must be supplied.** Optional and defaulted
   variables are not demanded.
-- The binary and the slash command validate, render, and print what _would_ be
-  sent, exiting non-zero on any refusal. To actually run it, use the TUI or the
-  Pi tool — both report their own actionable refusals:
-
-  ```bash
-  /mf-prompts-tui execute commit-message --model opencode-go/deepseek-v4.1-flash files=src/
-  ```
-
-In the TUI: `/mf-prompts-tui execute <name> [key=value ...]` checks the skills,
-asks for the values and the model, then runs.
+- The binary validates, renders, and prints what _would_ be sent, exiting
+  non-zero on any refusal. The slash command and `prompt_execute` actually run
+  it and report their own actionable refusals.
 
 ### When it refuses
 
@@ -179,20 +169,20 @@ undeclared variables included, which would otherwise render as nothing.
 
 - **Engines** — `list`, `load`, `verify`, `inspect`, `render`, `plan`, `doctor`,
   `create`, `modify`, `remove` — plus the input grammars both front ends share:
-  `packages/pi-prompts/src/apps/cli/engines.apps.module.ts`
+  `packages/prompts/src/apps/cli/engines.apps.module.ts`
 - **Renderers** and the token contract (lean by default, `--verbose` only adds,
   failures never suppressed):
-  `packages/pi-prompts/src/apps/cli/renderers.apps.module.ts`
+  `packages/prompts/src/apps/cli/renderers.apps.module.ts`
 - **Binary command tree** (`effect/cli`) and `main.ts`:
-  `packages/pi-prompts/src/apps/cli/binary.apps.module.ts`
+  `packages/prompts/src/apps/cli/binary.apps.module.ts`
 - **Slash parser** (registered as `/mf-prompts`):
-  `packages/pi-prompts/src/apps/cli/slash.apps.module.ts`
-- **Interactive menu** (registered as `/mf-prompts-tui`):
-  `packages/pi-prompts/src/apps/interactive/interactive.apps.module.ts`
+  `packages/prompts/src/apps/cli/slash.apps.module.ts`
+- **Interactive engines** (dialogs and menus; the plugin does not register them
+  yet): `packages/prompts/src/apps/interactive/interactive.apps.module.ts`
 - **Programmatic**: `PromptExecute.inspect`, `PromptExecute.table`,
   `PromptExecute.execute` in
-  `packages/pi-prompts/src/modules/prompt-execute/prompt-execute.module.ts`
-- **Pi tools**: `prompt_inspect` (`name`, optional `values` as `[name, value]`
-  pairs) and `prompt_execute` (`name`, optional `model`, optional `values`) — an
-  agent can call these instead of either command
+  `packages/prompts/src/modules/prompt-execute/prompt-execute.module.ts`
+- **Tools**: `prompt_inspect` (`name`, optional `values` as a record) and
+  `prompt_execute` (`name`, optional `model`, optional `values`) — an agent can
+  call these instead of either command
 - **Authoring a prompt**: skill `montflow-create-pi-prompts`
