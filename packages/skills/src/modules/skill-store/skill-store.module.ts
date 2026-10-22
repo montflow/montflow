@@ -14,7 +14,9 @@ import * as Skill from '../skill/index.js';
 export const skillsDir = (root: string): string => join(root, '.agents', 'skills');
 
 /** Absolute `SKILL.md` path for one skill directory. */
-const skillFile = (root: string, id: string): string => join(skillsDir(root), id, 'SKILL.md');
+/** Absolute `SKILL.md` path for one skill directory. */
+export const skillFilePath = (root: string, id: string): string =>
+  join(skillsDir(root), id, 'SKILL.md');
 
 /** True when a path exists, never failing. */
 const pathExists = (target: string): Promise<boolean> =>
@@ -54,7 +56,7 @@ export const list = (root: string): Effect.Effect<ReadonlyArray<Skill.Skill>, ne
     const entries = yield* names(root);
     const skills = yield* Effect.forEach(entries, (entry) =>
       Effect.promise(() =>
-        readFile(skillFile(root, entry), 'utf8').then(
+        readFile(skillFilePath(root, entry), 'utf8').then(
           (raw) => raw,
           () => undefined,
         ),
@@ -81,7 +83,7 @@ export const list = (root: string): Effect.Effect<ReadonlyArray<Skill.Skill>, ne
 export const readRaw = (root: string, id: string): Effect.Effect<string, string> => {
   if (!Skill.isValidName(id)) return Effect.fail(`Unknown skill '${id}'.`);
   return Effect.tryPromise({
-    try: () => readFile(skillFile(root, id), 'utf8'),
+    try: () => readFile(skillFilePath(root, id), 'utf8'),
     catch: () => `Unknown skill '${id}'.`,
   });
 };

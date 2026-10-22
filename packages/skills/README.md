@@ -28,10 +28,10 @@ accept `--dir` to target a workspace root other than the working directory.
 The interactive menu browses, shows, manually or agentically creates/modifies,
 deletes, and re-verifies skills.
 
-Agentic create, modify, and transform dispatch a `@montflow/pi-sessions` session
+Agentic create, modify, and transform dispatch a native OpenCode session
 instead of running a child agent inline: the command names the session id and
-unwinds, the session writes the `SKILL.md`, and its completion hook re-encodes the
-result and reports the outcome. Follow or steer a live session with `/mf-sessions`.
+unwinds, the session writes the `SKILL.md`, and a settle watcher re-encodes the
+result and reports the outcome.
 
 ## Packaged skills
 

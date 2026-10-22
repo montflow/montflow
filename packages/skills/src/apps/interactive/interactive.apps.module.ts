@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-import type { ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 import * as Skill from '../../modules/skill/index.js';
 
 /** Slash-command name registered by {@link register} (invoke as `/mf-skills-tui`). */
@@ -113,11 +112,6 @@ export interface InteractiveUi {
   readonly searchSelect?: (title: string, options: string[]) => Promise<string | undefined>;
 }
 
-/** UI surface available where custom TUI components can render (TUI mode). */
-export interface FilterUi extends InteractiveUi {
-  readonly custom: ExtensionUIContext['custom'];
-}
-
 /** Persistence port the consuming extension injects (file store, memory, router). */
 export interface SkillStore {
   readonly list: () => Effect.Effect<readonly Skill.Skill[], string>;
@@ -204,20 +198,6 @@ export interface CommandEnv {
   readonly menu: MenuFn | undefined;
   /** Agentic format-transform port (fix a skill to the standard shape). */
   readonly transform: SkillModifier;
-}
-
-/** Narrow command surface the registration needs — full Pi APIs remain assignable. */
-export interface CommandApi {
-  readonly registerCommand: (
-    name: string,
-    options: {
-      readonly description: string;
-      readonly handler: (
-        args: string,
-        ctx: { readonly ui: FilterUi; readonly cwd: string; readonly mode: string } & ModelSource,
-      ) => Promise<void>;
-    },
-  ) => void;
 }
 
 /** Parsed `/mf-skills` invocation. */
@@ -1446,91 +1426,3 @@ export const run = (
       }
     }
   });
-
-/**
- * Register the `/mf-skills` slash command on a Pi API. Failures notify;
- * user cancellation notifies as info instead of an error.
- * @param api - Pi extension API
- * @param storeFor - persistence port for the command's working directory
- * @param generateFor - agentic generation port for the command's working directory
- * @param modifyFor - agentic modification port for the command's working directory's working directory
- * @param installerFor - skill installer port for the command's working directory
- * @param searchFor - TUI filter picker factory, if available
- * @param modelPickerFor - TUI model picker factory, if available
- * @param loadingFor - TUI loading-modal factory, if available
- * @param menuFor - TUI main-menu factory, if available
- * @param transformFor - agentic format-transform port factory, if available (defaults to `modifyFor`)
- * @returns Nothing
- */
-export const register = (
-  api: CommandApi,
-  storeFor: (cwd: string) => SkillStore,
-  generateFor: (cwd: string, notify: InteractiveUi['notify']) => SkillGenerator,
-  modifyFor: (cwd: string, notify: InteractiveUi['notify']) => SkillModifier,
-  installerFor: (cwd: string) => SkillInstaller,
-  searchFor?: (ctx: {
-    readonly ui: FilterUi;
-    readonly mode: string;
-  }) => InteractiveUi['searchSelect'],
-  modelPickerFor?: (ctx: {
-    readonly ui: FilterUi;
-    readonly mode: string;
-  }) => ModelPickerFn | undefined,
-  loadingFor?: (ctx: { readonly ui: FilterUi; readonly mode: string }) => LoadingFn | undefined,
-  menuFor?: (ctx: { readonly ui: FilterUi; readonly mode: string }) => MenuFn | undefined,
-  transformFor?: (cwd: string, notify: InteractiveUi['notify']) => SkillModifier,
-): void => {
-  api.registerCommand(COMMAND_NAME, {
-    description: COMMAND_DESCRIPTION,
-    handler: (args, ctx) =>
-      Effect.sync(() => {
-        const base = ctx.ui;
-        let ui: InteractiveUi = {
-          select: (title, options) => base.select(title, options),
-          confirm: (title, message) => base.confirm(title, message),
-          input: (title, placeholder) => base.input(title, placeholder),
-          notify: (message, type) => base.notify(message, type),
-        };
-        const search = searchFor?.({ ui: ctx.ui, mode: ctx.mode });
-        if (search !== undefined) ui = { ...ui, searchSelect: search };
-        const modelPicker = modelPickerFor?.({ ui: ctx.ui, mode: ctx.mode });
-        const loading = loadingFor?.({ ui: ctx.ui, mode: ctx.mode });
-        const menu = menuFor?.({ ui: ctx.ui, mode: ctx.mode });
-        // Agentic ports report through this session's notify channel: a
-        // dispatched session names its id there, and the completion hook
-        // reports the outcome from the runner's own runtime.
-        const notify = (message: string, type?: 'info' | 'warning' | 'error'): void =>
-          ctx.ui.notify(message, type);
-        const modify = modifyFor(ctx.cwd, notify);
-        return run(
-          args,
-          {
-            ui,
-            cwd: ctx.cwd,
-            models: resolveModelOptions(ctx),
-            modelPicker,
-            loading,
-            installer: installerFor(ctx.cwd),
-            menu,
-            transform: transformFor?.(ctx.cwd, notify) ?? modify,
-          },
-          storeFor(ctx.cwd),
-          generateFor(ctx.cwd, notify),
-          modify,
-        );
-      }).pipe(
-        Effect.flatMap((effect) => effect),
-        Effect.matchEffect({
-          onFailure: (error) =>
-            // A dispatched session already announced itself and its id; the
-            // flow unwinding is bookkeeping, not a failure to report.
-            Effect.sync(() => {
-              if (error === DISPATCHED) return;
-              ctx.ui.notify(error, error === CANCELLED ? 'info' : 'error');
-            }),
-          onSuccess: () => Effect.void,
-        }),
-        Effect.runPromise,
-      ),
-  });
-};

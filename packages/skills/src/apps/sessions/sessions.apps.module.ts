@@ -1,46 +1,20 @@
-import { Effect, Layer } from 'effect';
-import * as ManagedRuntime from 'effect/ManagedRuntime';
-import {
-  SessionRunner,
-  Session,
-  Runtime,
-  WorkspaceBridge,
-  type SessionDetail,
-} from '@montflow/pi-sessions';
-import { Interactive } from '../index.js';
+import type { ModelPort, SessionDispatchPort } from '@montflow/opencode';
+import { Effect } from 'effect';
+import * as SkillStore from '../../modules/skill-store/index.js';
 import { Skill } from '../../modules/index.js';
+import { Interactive } from '../index.js';
 
 /**
  * Agentic flows for `/mf-skills` dispatch sessions instead of running a child
  * agent inline: the shared `Interactive` flows keep their shape, but an
- * agentic port never resolves a skill — it starts a session, notifies the
- * session, and unwinds the flow with
- * {@link Interactive.DISPATCHED}. The session writes the file; its
- * completion hook re-reads, canonically re-encodes, and notifies the
- * outcome. Same contract the workspace dashboard uses, so `/mf-skills`
- * and the skills panel behave identically.
+ * agentic port never resolves a skill — it starts a native OpenCode session,
+ * notifies the session, and unwinds the flow with {@link Interactive.DISPATCHED}.
+ * The session writes the file; a settle watcher re-reads, canonically
+ * re-encodes, and notifies the outcome.
  */
 
-/** Notification channel the dispatching Pi session exposes. */
+/** Notification channel the dispatching session exposes. */
 export type NotifyFn = (message: string, type?: 'info' | 'warning' | 'error') => void;
-
-/** Tool allowlist for skill sessions: the session reads and writes the skill, nothing else. */
-export const SESSION_TOOLS: ReadonlyArray<string> = ['read', 'write', 'edit'];
-
-/**
- * Engine start arguments for one dispatched session. Optional engine keys
- * are carried as `| undefined` so a missing model is stated rather than
- * spread in conditionally.
- */
-interface EngineStartArgs {
-  readonly root: string;
-  readonly id: string;
-  readonly name: string | undefined;
-  readonly prompt: string;
-  readonly model: string | undefined;
-  readonly tools: ReadonlyArray<string>;
-  readonly onSettled: ((detail: SessionDetail) => Effect.Effect<void>) | undefined;
-}
 
 /**
  * Build a child prompt the same way `AgentRun.buildPrompt` does:
@@ -56,15 +30,6 @@ export const buildSessionPrompt = (preprompt: string, prompt: string, postprompt
     .map((part) => part.trim())
     .filter((part) => part !== '')
     .join('\n\n');
-
-/**
- * Final assistant text from a settled session's transcript, or undefined when
- * the session produced no assistant turn.
- * @param events - stored transcript events
- * @returns last assistant text, if any
- */
-export const finalAssistantText = (events: SessionDetail['events']): string | undefined =>
-  events.findLast((event) => event.role === 'assistant')?.text;
 
 /**
  * How a settled author session's skill was resolved: the reply names the new
@@ -103,6 +68,20 @@ export const pickAuthoredSkill = (
   return { kind: 'ambiguous', ids: fresh.map((skill) => skill.id) };
 };
 
+/**
+ * File-backed `SkillStore` port for the shared interactive flows:
+ * `<root>/.agents/skills`. Malformed files skip on list; saves and deletes
+ * carry string errors.
+ * @param root - workspace root (skill store owner)
+ * @returns store port for the interactive flows
+ */
+export const storeFor = (root: string): Interactive.SkillStore => ({
+  list: () => SkillStore.list(root),
+  save: (skill) => SkillStore.save(root, skill),
+  delete: (id) => SkillStore.remove(root, id),
+  readRaw: (id) => SkillStore.readRaw(root, id),
+});
+
 /** Ports the extension injects into the shared interactive flows. */
 export interface SkillSessionPorts {
   /**
@@ -117,31 +96,49 @@ export interface SkillSessionPorts {
   readonly transformFor: (cwd: string, notify: NotifyFn) => Interactive.SkillModifier;
   /** Bind a session's notify channel for a working directory. */
   readonly bind: (root: string, notify: NotifyFn) => void;
-  /** Interrupt every live session, then release the per-root runtimes. */
+  /** Interrupt every dispatched session that has not settled yet. */
   readonly shutdown: () => Promise<void>;
 }
 
-/** Construction inputs; the layer factory is a test seam. */
+/** The adapter seams dispatch reads; `Ports` satisfies this slice. */
+export interface SkillDispatchPorts {
+  readonly session: SessionDispatchPort;
+  readonly model: ModelPort;
+}
+
+/** Construction inputs; the store factory is a test seam. */
 export interface SkillSessionPortsOptions {
   /** Persistence port for a working directory, shared with the flows. */
   readonly storeFor: (cwd: string) => Interactive.SkillStore;
-  /** Session runner layer factory; defaults to the file-backed engine. */
-  readonly layerFor?: (
-    root: string,
-    bridge: Layer.Layer<WorkspaceBridge>,
-  ) => Layer.Layer<SessionRunner>;
 }
 
+/** One native dispatch: what to call the session and what it must do. */
+interface DispatchRequest {
+  readonly root: string;
+  readonly title: string;
+  readonly prompt: string;
+  readonly modelLabel: string | undefined;
+}
+
+/** The branded session id the dispatch port mints. */
+type SessionId = Effect.Success<ReturnType<SessionDispatchPort['create']>>;
+
 /**
- * Build the session-dispatching skill ports. One session runner runtime per repo
- * root is created lazily and reused, so a session stays steerable and
- * answerable from the same Pi session for as long as the extension
- * lives; {@link SkillSessionPorts.shutdown} interrupts and disposes them.
- * @param options - store port factory plus the optional layer seam
- * @returns the ports the extension registers
+ * Build the session-dispatching skill ports over native session dispatch. Each
+ * agentic flow creates a peer session, prompts it, and leaves a watcher that
+ * waits for settlement, reads the last assistant reply, runs the completion
+ * hook, and notifies. The watcher is forked into the caller's scope, so the
+ * plugin lifetime owns it.
+ * @param ports - adapter seams (session dispatch + model resolution)
+ * @param options - store port factory
+ * @returns the ports the server plugin registers
  */
-export const makeSkillSessionPorts = (options: SkillSessionPortsOptions): SkillSessionPorts => {
+export const makeSkillSessionPorts = (
+  ports: SkillDispatchPorts,
+  options: SkillSessionPortsOptions,
+): SkillSessionPorts => {
   const surfaces = new Map<string, NotifyFn>();
+  const pending = new Set<SessionId>();
 
   /** Notify the session that dispatched from `root`, when one is bound. */
   const tell = (root: string, message: string, type?: 'info' | 'error'): void => {
@@ -151,63 +148,6 @@ export const makeSkillSessionPorts = (options: SkillSessionPortsOptions): SkillS
   /** Bind a session's notify channel for a working directory. */
   const bind = (root: string, notify: NotifyFn): void => {
     surfaces.set(root, notify);
-  };
-
-  /** Bridge the session runner uses for `notify_user` / `toast_user` / errors. */
-  const bridgeFor = (root: string): Layer.Layer<WorkspaceBridge> =>
-    Layer.succeed(WorkspaceBridge, {
-      toast: (message, variant) =>
-        Effect.sync(() => tell(root, message, variant === 'error' ? 'error' : 'info')),
-      notify: (title, body) => Effect.sync(() => tell(root, `${title}: ${body}`, 'info')),
-    });
-
-  // Lazily built, per-repo-root session runner runtimes. Mirrors the pi-sessions
-  // extension: the live-session registry must outlive one command invocation.
-  const runtimes = new Map<string, ManagedRuntime.ManagedRuntime<SessionRunner, never>>();
-
-  /** Build (once) the session runner runtime for a repo root. */
-  const buildRuntime = (root: string): ManagedRuntime.ManagedRuntime<SessionRunner, never> =>
-    ManagedRuntime.make(
-      options.layerFor?.(root, bridgeFor(root)) ??
-        Runtime.sessionRunnerLayer({ root, bridge: bridgeFor(root) }),
-    );
-
-  /** Start one session through the engine; resolves as soon as it is registered. */
-  const start = (
-    root: string,
-    input: {
-      readonly id: string;
-      readonly name: string;
-      readonly prompt: string;
-      readonly modelLabel: string | undefined;
-      readonly onSettled: (detail: SessionDetail) => Effect.Effect<void>;
-    },
-  ): Effect.Effect<string, string> => {
-    let runtime = runtimes.get(root);
-    if (runtime === undefined) {
-      runtime = buildRuntime(root);
-      runtimes.set(root, runtime);
-    }
-    return Effect.tryPromise({
-      try: () =>
-        runtime.runPromise(
-          Effect.gen(function* () {
-            const sessionRunner = yield* SessionRunner;
-            const args: EngineStartArgs = {
-              root,
-              id: input.id,
-              name: input.name,
-              prompt: input.prompt,
-              model: input.modelLabel,
-              tools: [...SESSION_TOOLS],
-              onSettled: input.onSettled,
-            };
-            yield* sessionRunner.start(args);
-            return input.id;
-          }),
-        ),
-      catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
-    });
   };
 
   /**
@@ -264,14 +204,14 @@ export const makeSkillSessionPorts = (options: SkillSessionPortsOptions): SkillS
    */
   const authorCompletion =
     (root: string, sessionId: string, beforeIds: ReadonlyArray<string>) =>
-    (detail: SessionDetail): Effect.Effect<void> =>
+    (reply: string | undefined): Effect.Effect<void> =>
       Effect.gen(function* () {
         const store = options.storeFor(root);
         const skills = yield* store
           .list()
           .pipe(Effect.orElseSucceed((): ReadonlyArray<Skill.Skill> => []));
         const fresh = skills.filter((skill) => !beforeIds.includes(skill.id));
-        const pick = pickAuthoredSkill(finalAssistantText(detail.events), fresh);
+        const pick = pickAuthoredSkill(reply, fresh);
         if (pick.kind === 'none') {
           tell(
             root,
@@ -311,6 +251,50 @@ export const makeSkillSessionPorts = (options: SkillSessionPortsOptions): SkillS
         tell(root, `Created skill '${pick.id}'.`);
       });
 
+  /** Wait for a dispatched session to settle, then run its completion hook. */
+  const watch = (
+    root: string,
+    sessionId: SessionId,
+    completion: (reply: string | undefined) => Effect.Effect<void>,
+  ): Effect.Effect<void> =>
+    ports.session.wait(sessionId).pipe(
+      Effect.andThen(ports.session.reply(sessionId)),
+      Effect.orElseSucceed(() => undefined),
+      Effect.flatMap(completion),
+      Effect.catchCause(() =>
+        Effect.sync(() => {
+          tell(root, `Session '${sessionId}' ended before it could be verified.`, 'error');
+        }),
+      ),
+      Effect.ensuring(
+        Effect.sync(() => {
+          pending.delete(sessionId);
+        }),
+      ),
+    );
+
+  /** Start one native session and hand its id back as soon as it is prompted. */
+  const start = (
+    request: DispatchRequest,
+    completionFor: (sessionId: SessionId) => (reply: string | undefined) => Effect.Effect<void>,
+  ): Effect.Effect<SessionId, string> =>
+    Effect.gen(function* () {
+      const label = request.modelLabel?.trim() ?? '';
+      const model =
+        label === ''
+          ? undefined
+          : yield* ports.model.resolve(label).pipe(Effect.mapError((error) => error.message));
+      const title = request.title;
+      const sessionId =
+        model === undefined
+          ? yield* ports.session.create({ title })
+          : yield* ports.session.create({ title, model });
+      yield* ports.session.prompt(sessionId, request.prompt);
+      pending.add(sessionId);
+      yield* Effect.forkChild(watch(request.root, sessionId, completionFor(sessionId)));
+      return sessionId;
+    });
+
   /** Dispatch an author session for one description. */
   const generateFor =
     (cwd: string, notify: NotifyFn): Interactive.SkillGenerator =>
@@ -321,26 +305,21 @@ export const makeSkillSessionPorts = (options: SkillSessionPortsOptions): SkillS
         const before = yield* store
           .list()
           .pipe(Effect.orElseSucceed((): ReadonlyArray<Skill.Skill> => []));
-        const id = yield* Session.newId('create-skill');
-        yield* start(cwd, {
-          id,
-          name: `Create skill: ${input.description.trim().slice(0, 72)}`,
-          prompt: buildSessionPrompt(
-            Interactive.AUTHOR_PREPROMPT + Skill.formatInjectedSkills(input.inject),
-            `Skill description: ${input.description}`,
-            Interactive.AUTHOR_POSTPROMPT,
-          ),
-          modelLabel: input.modelLabel,
-          onSettled: authorCompletion(
-            cwd,
-            id,
-            before.map((skill) => skill.id),
-          ),
-        });
-        tell(
-          cwd,
-          `Session '${id}' is creating your skill — follow it with /mf-sessions status ${id}.`,
+        const beforeIds = before.map((skill) => skill.id);
+        const id = yield* start(
+          {
+            root: cwd,
+            title: `Create skill: ${input.description.trim().slice(0, 72)}`,
+            prompt: buildSessionPrompt(
+              Interactive.AUTHOR_PREPROMPT + Skill.formatInjectedSkills(input.inject),
+              `Skill description: ${input.description}`,
+              Interactive.AUTHOR_POSTPROMPT,
+            ),
+            modelLabel: input.modelLabel,
+          },
+          (sessionId) => authorCompletion(cwd, sessionId, beforeIds),
         );
+        tell(cwd, `Session '${id}' is creating your skill.`);
         return yield* Effect.fail(Interactive.DISPATCHED);
       });
 
@@ -353,7 +332,7 @@ export const makeSkillSessionPorts = (options: SkillSessionPortsOptions): SkillS
     (
       cwd: string,
       notify: NotifyFn,
-      naming: { readonly idPrefix: string; readonly title: string },
+      naming: { readonly title: string },
       preprompt: (input: Interactive.ModifyInput) => string,
       postprompt: string,
     ) =>
@@ -364,22 +343,20 @@ export const makeSkillSessionPorts = (options: SkillSessionPortsOptions): SkillS
         const beforeRaw = yield* store
           .readRaw(input.skill.id)
           .pipe(Effect.match({ onFailure: () => undefined, onSuccess: (raw) => raw }));
-        const id = yield* Session.newId(naming.idPrefix);
-        yield* start(cwd, {
-          id,
-          name: `${naming.title} skill: ${input.skill.id}`,
-          prompt: buildSessionPrompt(
-            preprompt(input),
-            `Change request: ${input.instruction}`,
-            postprompt,
-          ),
-          modelLabel: input.modelLabel,
-          onSettled: modifyCompletion(cwd, id, input.skill.id, beforeRaw),
-        });
-        tell(
-          cwd,
-          `Session '${id}' is updating skill '${input.skill.id}' — follow it with /mf-sessions status ${id}.`,
+        const id = yield* start(
+          {
+            root: cwd,
+            title: `${naming.title} skill: ${input.skill.id}`,
+            prompt: buildSessionPrompt(
+              preprompt(input),
+              `Change request: ${input.instruction}`,
+              postprompt,
+            ),
+            modelLabel: input.modelLabel,
+          },
+          (sessionId) => () => modifyCompletion(cwd, sessionId, input.skill.id, beforeRaw)(),
         );
+        tell(cwd, `Session '${id}' is updating skill '${input.skill.id}'.`);
         return yield* Effect.fail(Interactive.DISPATCHED);
       });
 
@@ -387,7 +364,7 @@ export const makeSkillSessionPorts = (options: SkillSessionPortsOptions): SkillS
     editorFor(
       cwd,
       notify,
-      { idPrefix: 'modify-skill', title: 'Modify' },
+      { title: 'Modify' },
       (input) =>
         `${Interactive.MODIFY_PREPROMPT}\n\nSkill to edit: ${input.skill.id}${Skill.formatInjectedSkills(input.inject)}`,
       Interactive.MODIFY_POSTPROMPT,
@@ -397,37 +374,24 @@ export const makeSkillSessionPorts = (options: SkillSessionPortsOptions): SkillS
     editorFor(
       cwd,
       notify,
-      { idPrefix: 'transform-skill', title: 'Transform' },
+      { title: 'Transform' },
       (input) =>
         `${Interactive.TRANSFORM_PREPROMPT}\n\nSkill to fix: ${input.skill.id}${Skill.formatInjectedSkills(input.inject)}`,
       Interactive.TRANSFORM_POSTPROMPT,
     );
 
-  /** Interrupt every live session this host started, then release the runtimes. */
+  /** Interrupt every dispatched session that has not settled yet. */
   const shutdown = async (): Promise<void> => {
-    const all = [...runtimes.entries()];
-    runtimes.clear();
+    const ids = [...pending];
+    pending.clear();
     await Promise.all(
-      all.map(([root, runtime]) =>
-        runtime
-          .runPromise(
-            Effect.gen(function* () {
-              const sessionRunner = yield* SessionRunner;
-              const sessions = yield* sessionRunner.list(root).pipe(Effect.orElseSucceed(() => []));
-              yield* Effect.forEach(
-                sessions.filter(
-                  (session) => session.status === 'running' || session.status === 'awaiting-input',
-                ),
-                (session) =>
-                  sessionRunner.interrupt(root, session.id).pipe(Effect.catch(() => Effect.void)),
-                { discard: true },
-              );
-            }),
-          )
-          .catch(() => undefined),
+      ids.map((id) =>
+        ports.session.interrupt(id).pipe(
+          Effect.catchCause(() => Effect.void),
+          Effect.runPromise,
+        ),
       ),
     );
-    await Promise.all(all.map(([, runtime]) => runtime.dispose()));
     surfaces.clear();
   };
 
