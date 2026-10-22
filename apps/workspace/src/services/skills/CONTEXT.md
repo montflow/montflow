@@ -32,10 +32,11 @@ whether to retry, reinstall, or just retry.
   failure. No production code calls them: only their file-reading wrappers
   `listModelLabels` / `listDefaultModel` and the unit tests in
   `tests/skill-write.test.ts` do. Those two wrappers read
-  `~/.pi/agent/models-store.json` and `~/.pi/agent/settings.json` on each call,
-  have no caller anywhere, and are marked `@deprecated` (kept for the tests).
-  The live model label comes from `ModelPort.default()` in `grid-page.tsx`,
-  not from this module.
+  `~/.pi/agent/models-store.json` and `~/.pi/agent/settings.json` on each call
+  and have no caller at all — no production code calls them and no test
+  references them (the tests exercise the parsers directly) — so they remain
+  `@deprecated` candidates for removal. The live model label comes from
+  `ModelPort.default()` in `grid-page.tsx`, not from this module.
 
 ## Does not belong here
 

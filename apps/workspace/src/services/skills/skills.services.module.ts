@@ -541,7 +541,8 @@ export const parseModelsStore = (json: string): ReadonlyArray<ModelRef> => {
 /**
  * Read the retired pi catalogue from `~/.pi/agent/models-store.json`.
  * Reads the file once per call — failures read as empty, never fail.
- * Unused: no production caller; kept for tests.
+ * Unused: no caller at all (no production code, no tests); candidate for
+ * removal.
  * @deprecated The live model label comes from `ModelPort.default()`.
  * @param home - home directory override (defaults to the live one)
  * @returns catalogue refs, or empty when unreadable
@@ -585,8 +586,8 @@ export const parseDefaultModel = (json: string): ModelRef | undefined => {
 
 /**
  * Read the retired pi session default from `~/.pi/agent/settings.json`.
- * Failures read as undefined, never fail. Unused: no production caller;
- * kept for tests.
+ * Failures read as undefined, never fail. Unused: no caller at all (no
+ * production code, no tests); candidate for removal.
  * @deprecated The live model label comes from `ModelPort.default()`.
  * @param home - home directory override (defaults to the live one)
  * @returns default ref, or undefined when unreadable
