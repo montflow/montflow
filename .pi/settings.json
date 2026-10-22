@@ -1,9 +1,3 @@
 {
-  "packages": [
-    "../packages/pi-specs",
-    "../packages/pi-notifications",
-    "../packages/pi-profiles",
-    "../packages/pi-prompts",
-    "../packages/pi-skills"
-  ]
+  "packages": ["../packages/pi-specs"]
 }
