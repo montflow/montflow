@@ -2,10 +2,10 @@ import type { TuiPlugin } from '@montflow/opencode';
 import { ID } from './server.js';
 
 /**
- * OpenCode TUI plugin entry. The reviews surface is served by the server
- * plugin (slash command + `review_create`); the TUI half is present so the
- * host loads both entrypoints, and interactive review panels attach once the
- * TUI ports land.
+ * OpenCode TUI plugin entry. The reviews surface is the server command
+ * (`/mf-reviews`) plus the `review_create` tool; the Pi-era interactive menus
+ * are not ported. This face registers the plugin id and mounts nothing — the
+ * host still loads both entrypoints from the package.
  */
 export default {
   id: ID,

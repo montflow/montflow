@@ -2,10 +2,11 @@ import type { TuiPlugin } from '@montflow/opencode';
 import { ID } from './server.js';
 
 /**
- * OpenCode TUI plugin entry. The skills surface is served by the server
- * plugin (slash command, skill registry, dispatch tools); the TUI half is
- * present so the host loads both entrypoints, and the interactive menu
- * attaches once the TUI ports land.
+ * OpenCode TUI plugin entry. The skills surface is the server command
+ * (`/mf-skills`), native skill registration, and the `skill_create` /
+ * `skill_modify` dispatch tools; the Pi-era interactive menu is not ported.
+ * This face registers the plugin id and mounts nothing — the host still loads
+ * both entrypoints from the package.
  */
 export default {
   id: ID,

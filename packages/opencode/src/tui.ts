@@ -42,4 +42,3 @@ export type {
   StorageHandle,
   StoragePort,
 } from './modules/ports/storage/index.js';
-export * as Widgets from './widgets/index.js';
