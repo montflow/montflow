@@ -1,9 +1,8 @@
 import { Effect } from 'effect';
-import type { ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 import * as PiProfiles from '../../modules/pi-profiles/index.js';
 import * as SkillCheck from '../../modules/skill-check/index.js';
 
-/** Slash-command name registered by {@link register} (invoke as `/mf-profiles`). */
+/** Slash-command name for the interactive menu (invoke as `/mf-profiles`). */
 export const COMMAND_NAME = 'mf-profiles';
 
 /** Help text shown for the command and the `help` action. */
@@ -28,11 +27,6 @@ export interface InteractiveUi {
   readonly notify: (message: string, type?: 'info' | 'warning' | 'error') => void;
   /** Live filter-as-you-type picker. Absent outside the TUI (falls back to input+select). */
   readonly searchSelect?: (title: string, options: string[]) => Promise<string | undefined>;
-}
-
-/** UI surface available where custom TUI components can render (TUI mode). */
-export interface FilterUi extends InteractiveUi {
-  readonly custom: ExtensionUIContext['custom'];
 }
 
 /** Persistence port the consuming extension injects (file store, memory, router). */
@@ -148,20 +142,6 @@ export interface CommandEnv {
   readonly menu: MenuFn | undefined;
   /** Agentic format-fix port (fix a profile to the standard shape). */
   readonly transform?: ProfileModifier | undefined;
-}
-
-/** Narrow command surface the registration needs — full Pi APIs remain assignable. */
-export interface CommandApi {
-  readonly registerCommand: (
-    name: string,
-    options: {
-      readonly description: string;
-      readonly handler: (
-        args: string,
-        ctx: { readonly ui: FilterUi; readonly cwd: string; readonly mode: string } & ModelSource,
-      ) => Promise<void>;
-    },
-  ) => void;
 }
 
 /** Parsed `/mf-profiles` invocation. */
@@ -1535,82 +1515,3 @@ export const run = (
       }
     }
   });
-
-/**
- * Register the `/mf-profiles` slash command on a Pi API. Failures notify;
- * user cancellation notifies as info instead of an error.
- * @param api - Pi extension API
- * @param storeFor - persistence port for the command's working directory
- * @param skillsFor - skill inventory port for the command's working directory
- * @param generateFor - agentic generation port for the command's working directory
- * @param modifyFor - agentic modification port for the command's working directory
- * @param installerFor - skill installer port for the command's working directory
- * @param searchFor - TUI filter picker factory, if available
- * @param modelPickerFor - TUI model picker factory, if available
- * @param loadingFor - TUI loading-modal factory, if available
- * @param menuFor - TUI main-menu factory, if available
- * @returns Nothing
- */
-export const register = (
-  api: CommandApi,
-  storeFor: (cwd: string) => ProfileStore,
-  skillsFor: (cwd: string) => SkillStore,
-  generateFor: (cwd: string) => ProfileGenerator,
-  modifyFor: (cwd: string) => ProfileModifier,
-  installerFor: (cwd: string) => SkillInstaller,
-  searchFor?: (ctx: {
-    readonly ui: FilterUi;
-    readonly mode: string;
-  }) => InteractiveUi['searchSelect'],
-  modelPickerFor?: (ctx: {
-    readonly ui: FilterUi;
-    readonly mode: string;
-  }) => ModelPickerFn | undefined,
-  loadingFor?: (ctx: { readonly ui: FilterUi; readonly mode: string }) => LoadingFn | undefined,
-  menuFor?: (ctx: { readonly ui: FilterUi; readonly mode: string }) => MenuFn | undefined,
-  transformFor?: (cwd: string) => ProfileModifier,
-): void => {
-  api.registerCommand(COMMAND_NAME, {
-    description: COMMAND_DESCRIPTION,
-    handler: (args, ctx) =>
-      Effect.sync(() => {
-        const base = ctx.ui;
-        let ui: InteractiveUi = {
-          select: (title, options) => base.select(title, options),
-          confirm: (title, message) => base.confirm(title, message),
-          input: (title, placeholder) => base.input(title, placeholder),
-          notify: (message, type) => base.notify(message, type),
-        };
-        const search = searchFor?.({ ui: ctx.ui, mode: ctx.mode });
-        if (search !== undefined) ui = { ...ui, searchSelect: search };
-        const modelPicker = modelPickerFor?.({ ui: ctx.ui, mode: ctx.mode });
-        const loading = loadingFor?.({ ui: ctx.ui, mode: ctx.mode });
-        const menu = menuFor?.({ ui: ctx.ui, mode: ctx.mode });
-        return run(
-          args,
-          {
-            ui,
-            cwd: ctx.cwd,
-            models: resolveModelOptions(ctx),
-            modelPicker,
-            loading,
-            installer: installerFor(ctx.cwd),
-            menu,
-            transform: (transformFor ?? modifyFor)(ctx.cwd),
-          },
-          storeFor(ctx.cwd),
-          skillsFor(ctx.cwd),
-          generateFor(ctx.cwd),
-          modifyFor(ctx.cwd),
-        );
-      }).pipe(
-        Effect.flatMap((effect) => effect),
-        Effect.matchEffect({
-          onFailure: (error) =>
-            Effect.sync(() => ctx.ui.notify(error, error === CANCELLED ? 'info' : 'error')),
-          onSuccess: () => Effect.void,
-        }),
-        Effect.runPromise,
-      ),
-  });
-};
