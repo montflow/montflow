@@ -1,4 +1,4 @@
-import type { Ports } from '@montflow/opencode';
+import type { ServerPorts } from '@montflow/opencode';
 import { Effect } from 'effect';
 import type * as PromptExecute from '../../modules/prompt-execute/index.js';
 
@@ -14,7 +14,7 @@ import type * as PromptExecute from '../../modules/prompt-execute/index.js';
  * @returns executor port for the CLI, tools, and commands
  */
 export const makePromptExecutor =
-  (ports: Ports): PromptExecute.PromptExecutor =>
+  (ports: ServerPorts): PromptExecute.PromptExecutor =>
   (request) =>
     Effect.gen(function* () {
       const model = yield* ports.model

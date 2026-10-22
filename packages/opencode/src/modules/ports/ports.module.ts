@@ -63,49 +63,49 @@ export interface TuiPortsContext extends PortsContext {
   readonly storage?: NonNullable<StorageContext['storage']> | undefined;
 }
 
-/** Every seam a plugin program receives; each entry supplies the half it can. */
-export interface Ports {
+/**
+ * Every seam a server plugin program receives. The client-local halves are
+ * deliberately absent: a server host context cannot supply them, so naming them
+ * here would make a server program call a seam that dies at runtime.
+ */
+export interface ServerPorts {
   readonly agent: AgentPort;
   readonly command: CommandPort;
-  readonly data: DataPort;
-  readonly grid: GridPagePort;
-  readonly interaction: InteractionPort;
   readonly model: ModelPort;
   readonly session: SessionDispatchPort;
   readonly skill: SkillPort;
-  readonly storage: StoragePort;
   readonly tool: ToolPort;
-  readonly view: CustomViewPort;
   /** Project directory owning the stores the plugin reads. */
   readonly cwd: string;
 }
 
-/** Server-side ports, built from the server context; client-only seams die on use. */
-const makeServerPorts = (context: PortsContext): Ports => ({
+/** The server seams plus the client-local seams only a TUI host context provides. */
+export interface TuiPorts extends ServerPorts {
+  readonly data: DataPort;
+  readonly grid: GridPagePort;
+  readonly interaction: InteractionPort;
+  readonly storage: StoragePort;
+  readonly view: CustomViewPort;
+}
+
+/** Construct the server seam ports over a server host context. */
+export const makePorts = (context: PortsContext): ServerPorts => ({
   agent: makeAgentPort(context),
   command: makeCommandPort(context),
-  data: makeDataPort({}),
-  grid: makeGridPagePort({}),
-  interaction: makeInteractionPort({}),
   model: makeModelPort(context),
   session: makeSessionDispatchPort(context),
   skill: makeSkillPort(context),
-  storage: makeStoragePort({}),
   tool: makeToolPort(context),
-  view: makeCustomViewPort({}),
   cwd: context.location?.directory ?? process.cwd(),
 });
-
-/** Construct the seam ports over a server host context. */
-export const makePorts = (context: PortsContext): Ports => makeServerPorts(context);
 
 /**
  * Construct the seam ports over a TUI host context: the server seams stay
  * available (they die only if a TUI program calls one that needs the server
  * domain) and the client-local seams are wired to the live host objects.
  */
-export const makeTuiPorts = (context: TuiPortsContext): Ports => ({
-  ...makeServerPorts(context),
+export const makeTuiPorts = (context: TuiPortsContext): TuiPorts => ({
+  ...makePorts(context),
   data: makeDataPort(context),
   grid: makeGridPagePort(context),
   interaction: makeInteractionPort(context),

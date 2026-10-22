@@ -103,10 +103,7 @@ const makeDispatch = () => {
         const record = find(sessionID);
         if (record !== undefined) record.prompt = text;
       }),
-    interrupt: () => Effect.void,
     wait: (sessionID) => Deferred.await(gate(sessionID)),
-    synthetic: () => Effect.void,
-    messages: () => Effect.succeed([]),
     reply: (sessionID) => Effect.succeed(replies.get(sessionID)),
   };
 

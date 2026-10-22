@@ -1,4 +1,4 @@
-import { defineSkill, type Ports } from '@montflow/opencode';
+import { defineSkill, type ServerPorts } from '@montflow/opencode';
 import { Effect, type Scope } from 'effect';
 import * as SkillStore from '../../modules/skill-store/index.js';
 
@@ -8,7 +8,10 @@ import * as SkillStore from '../../modules/skill-store/index.js';
  * receives the id, name, description, path, and content it loads skills from,
  * so agents can select them like any native skill.
  */
-export const syncSkills = (ports: Ports, cwd: string): Effect.Effect<void, never, Scope.Scope> =>
+export const syncSkills = (
+  ports: ServerPorts,
+  cwd: string,
+): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
     const skills = yield* SkillStore.list(cwd);
     yield* Effect.forEach(

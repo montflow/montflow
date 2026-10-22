@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import type { Ports } from '@montflow/opencode';
+import type { TuiPorts } from '@montflow/opencode';
 import { createMemo } from 'solid-js';
 import { palette } from './components/index.js';
 
@@ -7,7 +7,7 @@ import { palette } from './components/index.js';
 export const PAGE_NAME = 'workspace';
 
 export interface ContributionProps {
-  readonly ports: Ports;
+  readonly ports: TuiPorts;
 }
 
 /**

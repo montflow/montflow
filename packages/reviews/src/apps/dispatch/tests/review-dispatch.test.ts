@@ -39,10 +39,7 @@ const makePorts = (dispatched: Array<Dispatched>, labels: Array<string> = []) =>
         const last = dispatched[dispatched.length - 1];
         if (last !== undefined) dispatched[dispatched.length - 1] = { ...last, prompt: text };
       }),
-    interrupt: () => Effect.void,
     wait: () => Effect.void,
-    synthetic: () => Effect.void,
-    messages: () => Effect.succeed([]),
     reply: () => Effect.succeed(undefined),
   };
   const model: ModelPort = {

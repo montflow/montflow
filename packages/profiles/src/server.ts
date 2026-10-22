@@ -1,5 +1,5 @@
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
-import { defineTool, entry, type Ports } from '@montflow/opencode';
+import { defineTool, entry, type ServerPorts } from '@montflow/opencode';
 import { Effect, Layer, Schema, type Scope } from 'effect';
 import * as Cli from './apps/cli/index.js';
 import * as Interactive from './apps/interactive/index.js';
@@ -56,7 +56,7 @@ const loadProfile = (cwd: string, name: string): Effect.Effect<PiProfiles.Profil
   );
 
 /** The `profile_execute` tool: run a profile in a native session. */
-const executeTool = (cwd: string, ports: Ports, scope: Scope.Scope) =>
+const executeTool = (cwd: string, ports: ServerPorts, scope: Scope.Scope) =>
   defineTool({
     name: 'profile_execute',
     description:

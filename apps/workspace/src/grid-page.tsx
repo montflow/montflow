@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import type { KeymapCommand, Ports, StorageHandle } from '@montflow/opencode';
+import type { KeymapCommand, StorageHandle, TuiPorts } from '@montflow/opencode';
 import { useTerminalDimensions } from '@opentui/solid';
 import type { QueryClient } from '@tanstack/solid-query';
 import { QueryClientProvider, createQuery, useQueryClient } from '@tanstack/solid-query';
@@ -51,7 +51,7 @@ export interface PageFocus {
 export interface WorkspacePageProps {
   readonly layout: Dashboard.Layout;
   readonly root: string;
-  readonly ports: Ports;
+  readonly ports: TuiPorts;
   readonly focus: StorageHandle<PageFocus>;
   readonly client: QueryClient;
 }

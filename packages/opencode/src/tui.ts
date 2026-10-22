@@ -5,7 +5,12 @@ export type {
 } from './modules/ports/plugin-entry/index.js';
 export { tuiEntry } from './modules/ports/plugin-entry/index.js';
 export { makeTuiPorts } from './modules/ports/ports.module.js';
-export type { Ports, PortsContext, TuiPortsContext } from './modules/ports/ports.module.js';
+export type {
+  PortsContext,
+  ServerPorts,
+  TuiPorts,
+  TuiPortsContext,
+} from './modules/ports/ports.module.js';
 export type { InteractionContext, InteractionPort } from './modules/ports/interaction/index.js';
 export type {
   Destination,

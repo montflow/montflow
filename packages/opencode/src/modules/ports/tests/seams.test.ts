@@ -102,62 +102,57 @@ Vitest.describe('port seam contract', () => {
     >().toEqualTypeOf<false>();
   });
 
-  Vitest.it('the assembled ports expose every seam exactly once', () => {
-    Vitest.expectTypeOf<keyof Ports.Ports>().toEqualTypeOf<
-      | 'agent'
-      | 'command'
-      | 'data'
-      | 'grid'
-      | 'interaction'
-      | 'model'
-      | 'session'
-      | 'skill'
-      | 'storage'
-      | 'tool'
-      | 'view'
-      | 'cwd'
+  Vitest.it('the server ports expose only server seams', () => {
+    Vitest.expectTypeOf<keyof Ports.ServerPorts>().toEqualTypeOf<
+      'agent' | 'command' | 'model' | 'session' | 'skill' | 'tool' | 'cwd'
+    >();
+  });
+
+  Vitest.it('the TUI ports add exactly the client-local seams', () => {
+    Vitest.expectTypeOf<Exclude<keyof Ports.TuiPorts, keyof Ports.ServerPorts>>().toEqualTypeOf<
+      'data' | 'grid' | 'interaction' | 'storage' | 'view'
     >();
   });
 
   Vitest.it('the registry seams require exactly Scope.Scope', () => {
-    Vitest.expectTypeOf<ReturnType<Ports.Ports['command']['register']>>().toEqualTypeOf<
+    Vitest.expectTypeOf<ReturnType<Ports.ServerPorts['command']['register']>>().toEqualTypeOf<
       Effect.Effect<void, never, Scope.Scope>
     >();
-    Vitest.expectTypeOf<ReturnType<Ports.Ports['tool']['remove']>>().toEqualTypeOf<
+    Vitest.expectTypeOf<ReturnType<Ports.ServerPorts['tool']['remove']>>().toEqualTypeOf<
       Effect.Effect<void, never, Scope.Scope>
     >();
-    Vitest.expectTypeOf<ReturnType<Ports.Ports['tool']['add']>>().toEqualTypeOf<
+    Vitest.expectTypeOf<ReturnType<Ports.ServerPorts['tool']['add']>>().toEqualTypeOf<
       Effect.Effect<void, never, Scope.Scope>
     >();
-    Vitest.expectTypeOf<ReturnType<Ports.Ports['skill']['add']>>().toEqualTypeOf<
+    Vitest.expectTypeOf<ReturnType<Ports.ServerPorts['skill']['add']>>().toEqualTypeOf<
       Effect.Effect<void, never, Scope.Scope>
     >();
-    Vitest.expectTypeOf<ReturnType<Ports.Ports['agent']['upsert']>>().toEqualTypeOf<
+    Vitest.expectTypeOf<ReturnType<Ports.ServerPorts['agent']['upsert']>>().toEqualTypeOf<
       Effect.Effect<void, never, Scope.Scope>
     >();
   });
 
   Vitest.it('the read seams stay infallible and requirement-free', () => {
-    Vitest.expectTypeOf<ReturnType<Ports.Ports['command']['list']>>().toEqualTypeOf<
+    Vitest.expectTypeOf<ReturnType<Ports.ServerPorts['command']['list']>>().toEqualTypeOf<
       Effect.Effect<readonly Command.Info[]>
     >();
-    Vitest.expectTypeOf<ReturnType<Ports.Ports['agent']['list']>>().toEqualTypeOf<
+    Vitest.expectTypeOf<ReturnType<Ports.ServerPorts['agent']['list']>>().toEqualTypeOf<
       Effect.Effect<readonly Agent.Info[]>
     >();
-    Vitest.expectTypeOf<ReturnType<Ports.Ports['skill']['list']>>().toEqualTypeOf<
+    Vitest.expectTypeOf<ReturnType<Ports.ServerPorts['skill']['list']>>().toEqualTypeOf<
       Effect.Effect<readonly Skill.Info[]>
-    >();
-    Vitest.expectTypeOf<Ports.Ports['data']['sessions']>().toEqualTypeOf<
-      () => readonly SessionSnapshot[]
     >();
   });
 
   Vitest.it('the client-local seams stay synchronous over the host context', () => {
-    Vitest.expectTypeOf<Ports.Ports['grid']['registerPage']>().toEqualTypeOf<
+    Vitest.expectTypeOf<Ports.TuiPorts['data']['sessions']>().toEqualTypeOf<
+      () => readonly SessionSnapshot[]
+    >();
+    Vitest.expectTypeOf<Ports.TuiPorts['grid']['registerPage']>().toEqualTypeOf<
       (page: PageDefinition) => () => void
     >();
-    Vitest.expectTypeOf<Ports.Ports['view']['clear']>().toEqualTypeOf<() => void>();
-    Vitest.expectTypeOf<Ports.Ports['interaction']['confirm']>().toEqualTypeOf<
+    Vitest.expectTypeOf<Ports.TuiPorts['view']['clear']>().toEqualTypeOf<() => void>();
+    Vitest.expectTypeOf<Ports.TuiPorts['interaction']['confirm']>().toEqualTypeOf<
       (options: {
         readonly title: string;
         readonly message: string;

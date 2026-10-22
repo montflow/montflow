@@ -1,5 +1,5 @@
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
-import { defineTool, entry, type Ports } from '@montflow/opencode';
+import { defineTool, entry, type ServerPorts } from '@montflow/opencode';
 import { Effect, Layer, Schema } from 'effect';
 import * as Cli from './apps/cli/index.js';
 import { startReview } from './apps/dispatch/index.js';
@@ -35,7 +35,7 @@ const notify = (message: string): void => {
  * The `review_create` tool: scaffold a series if needed, then dispatch one
  * reviewer pass on a native session and return its session id.
  */
-const createTool = (ports: Ports) =>
+const createTool = (ports: ServerPorts) =>
   defineTool({
     name: 'review_create',
     description:

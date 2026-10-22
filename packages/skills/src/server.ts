@@ -1,4 +1,4 @@
-import { defineTool, entry, type Ports } from '@montflow/opencode';
+import { defineTool, entry, type ServerPorts } from '@montflow/opencode';
 import { Effect, Schema, type Scope } from 'effect';
 import { Interactive } from './apps/index.js';
 import * as Cli from './apps/cli/index.js';
@@ -62,7 +62,7 @@ const reportDispatch = (
  * the dispatched session writes the file and the settle watcher reports the
  * outcome through the host log.
  */
-const registerDispatchTools = (ports: Ports): Effect.Effect<void, never, Scope.Scope> =>
+const registerDispatchTools = (ports: ServerPorts): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
     const scope = yield* Effect.scope;
     const dispatch = makeSkillSessionPorts(ports, { storeFor, scope });

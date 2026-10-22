@@ -24,16 +24,14 @@ type SessionDomain = NonNullable<SessionDispatch.SessionDispatchContext['session
 interface Calls {
   readonly create: Array<Parameters<SessionDomain['create']>[0]>;
   readonly prompt: Array<Parameters<SessionDomain['prompt']>[0]>;
-  readonly interrupt: Array<Parameters<SessionDomain['interrupt']>[0]>;
   readonly wait: Array<Parameters<SessionDomain['wait']>[0]>;
-  readonly synthetic: Array<Parameters<SessionDomain['synthetic']>[0]>;
 }
 
 const makeContext = (
   messages: ReadonlyArray<SessionDispatch.SessionEntry> = [],
   overrides: Partial<SessionDomain> = {},
 ) => {
-  const calls: Calls = { create: [], prompt: [], interrupt: [], wait: [], synthetic: [] };
+  const calls: Calls = { create: [], prompt: [], wait: [] };
   const context: SessionDispatch.SessionDispatchContext = {
     location: { directory: '/project' },
     session: {
@@ -46,17 +44,9 @@ const makeContext = (
         Effect.sync(() => {
           calls.prompt.push(input);
         }),
-      interrupt: (input) =>
-        Effect.sync(() => {
-          calls.interrupt.push(input);
-        }),
       wait: (input) =>
         Effect.sync(() => {
           calls.wait.push(input);
-        }),
-      synthetic: (input) =>
-        Effect.sync(() => {
-          calls.synthetic.push(input);
         }),
       context: () => Effect.succeed(messages),
       ...overrides,
@@ -90,33 +80,18 @@ Vitest.describe('SessionDispatchPort runtime', () => {
     }),
   );
 
-  Vitest.it.effect('prompt, interrupt, wait, and synthetic forward to the host', () =>
+  Vitest.it.effect('prompt and wait forward to the host', () =>
     Effect.gen(function* () {
       const { context, calls } = makeContext();
       const port = SessionDispatch.makeSessionDispatchPort(context);
       yield* port.prompt(sessionID, 'hello');
       yield* port.prompt(sessionID, 'follow-up', 'queue');
-      yield* port.interrupt(sessionID);
       yield* port.wait(sessionID);
-      yield* port.synthetic(sessionID, 'note', 'note description');
       Vitest.expect(calls.prompt).toStrictEqual([
         { sessionID, text: 'hello' },
         { sessionID, text: 'follow-up', delivery: 'queue' },
       ]);
-      Vitest.expect(calls.interrupt).toStrictEqual([{ sessionID }]);
       Vitest.expect(calls.wait).toStrictEqual([{ sessionID }]);
-      Vitest.expect(calls.synthetic).toStrictEqual([
-        { sessionID, text: 'note', description: 'note description' },
-      ]);
-    }),
-  );
-
-  Vitest.it.effect('messages returns the host context', () =>
-    Effect.gen(function* () {
-      const transcript = [user('hi'), assistant('hello')];
-      const { context } = makeContext(transcript);
-      const port = SessionDispatch.makeSessionDispatchPort(context);
-      Vitest.expect(yield* port.messages(sessionID)).toStrictEqual(transcript);
     }),
   );
 

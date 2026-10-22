@@ -6,7 +6,7 @@ import {
   // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- same seam: a plain factory, not a Layer-owned service.
   makeTuiPorts,
 } from '../ports.module.js';
-import type { Ports, PortsContext, TuiPortsContext } from '../ports.module.js';
+import type { ServerPorts, PortsContext, TuiPorts, TuiPortsContext } from '../ports.module.js';
 
 /** The server plugin context the host passes to `Plugin.effect`. */
 export type PluginContext = Plugin.Context;
@@ -36,20 +36,20 @@ export interface TuiPlugin {
  */
 export const entry = <R = Scope.Scope>(
   id: string,
-  program: (ports: Ports) => Effect.Effect<void, never, R>,
+  program: (ports: ServerPorts) => Effect.Effect<void, never, R>,
 ): Plugin.Plugin<R> => ({
   id,
   effect: (context: PortsContext) => program(makePorts(context)),
 });
 
 /**
- * Build a host TUI plugin from a montflow setup. The setup receives the same
- * `Ports` the server face gets, with the client-local seams wired, and returns
- * the host cleanup directly, so a plugin never imports `@opencode/*`.
+ * Build a host TUI plugin from a montflow setup. The setup receives the TUI
+ * ports (server seams plus the client-local ones), and returns the host
+ * cleanup directly, so a plugin never imports `@opencode/*`.
  */
 export const tuiEntry = (
   id: string,
-  setup: (ports: Ports, context: TuiPluginContext) => TuiCleanup | void,
+  setup: (ports: TuiPorts, context: TuiPluginContext) => TuiCleanup | void,
 ): TuiPlugin => ({
   id,
   setup: (context) => setup(makeTuiPorts(context), context),

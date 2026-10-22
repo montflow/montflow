@@ -45,10 +45,7 @@ const makePorts = () => {
         return 'ses_1' as never;
       }),
     prompt: () => Effect.void,
-    interrupt: () => Effect.void,
     wait: () => Effect.void,
-    synthetic: () => Effect.void,
-    messages: () => Effect.succeed([]),
     reply: () => Effect.succeed('done'),
   };
   return { ports: { agent, model, session }, calls };

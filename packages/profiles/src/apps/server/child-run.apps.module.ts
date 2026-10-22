@@ -2,7 +2,7 @@ import {
   defineAgent,
   type AgentPort,
   type ModelPort,
-  type Ports,
+  type ServerPorts,
   type SessionDispatchPort,
 } from '@montflow/opencode';
 import { Effect, Scope } from 'effect';
@@ -41,7 +41,7 @@ export const agentOf = (profile: PiProfiles.Profile) => {
 
 /** Register every stored profile as a native agent. */
 export const syncAgents = (
-  ports: Ports,
+  ports: ServerPorts,
   profiles: readonly PiProfiles.Profile[],
 ): Effect.Effect<void, never, Scope.Scope> =>
   Effect.forEach(
@@ -54,7 +54,7 @@ export const syncAgents = (
     { discard: true },
   );
 
-/** The adapter seams a profile run reads; `Ports` satisfies this slice. */
+/** The adapter seams a profile run reads; `ServerPorts` satisfies this slice. */
 export interface ProfileRunPorts {
   readonly agent: AgentPort;
   readonly model: ModelPort;

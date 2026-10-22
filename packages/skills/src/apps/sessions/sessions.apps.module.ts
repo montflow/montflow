@@ -94,13 +94,9 @@ export interface SkillSessionPorts {
   readonly modifyFor: (cwd: string, notify: NotifyFn) => Interactive.SkillModifier;
   /** Format-transform: same shape as modify, with the transform prompt. */
   readonly transformFor: (cwd: string, notify: NotifyFn) => Interactive.SkillModifier;
-  /** Bind a session's notify channel for a working directory. */
-  readonly bind: (root: string, notify: NotifyFn) => void;
-  /** Interrupt every dispatched session that has not settled yet. */
-  readonly shutdown: () => Promise<void>;
 }
 
-/** The adapter seams dispatch reads; `Ports` satisfies this slice. */
+/** The adapter seams dispatch reads; `ServerPorts` satisfies this slice. */
 export interface SkillDispatchPorts {
   readonly session: SessionDispatchPort;
   readonly model: ModelPort;
@@ -140,7 +136,6 @@ export const makeSkillSessionPorts = (
   options: SkillSessionPortsOptions,
 ): SkillSessionPorts => {
   const surfaces = new Map<string, NotifyFn>();
-  const pending = new Set<SessionId>();
 
   /** Notify the session that dispatched from `root`, when one is bound. */
   const tell = (root: string, message: string, type?: 'info' | 'error'): void => {
@@ -269,11 +264,6 @@ export const makeSkillSessionPorts = (
           tell(root, `Session '${sessionId}' ended before it could be verified.`, 'error');
         }),
       ),
-      Effect.ensuring(
-        Effect.sync(() => {
-          pending.delete(sessionId);
-        }),
-      ),
     );
 
   /** Start one native session and hand its id back as soon as it is prompted. */
@@ -297,7 +287,6 @@ export const makeSkillSessionPorts = (
       yield* ports.session
         .prompt(sessionId, request.prompt)
         .pipe(Effect.mapError((error) => error.message));
-      pending.add(sessionId);
       yield* Effect.forkIn(watch(request.root, sessionId, completionFor(sessionId)), options.scope);
       return sessionId;
     });
@@ -387,26 +376,9 @@ export const makeSkillSessionPorts = (
       Interactive.TRANSFORM_POSTPROMPT,
     );
 
-  /** Interrupt every dispatched session that has not settled yet. */
-  const shutdown = async (): Promise<void> => {
-    const ids = [...pending];
-    pending.clear();
-    await Promise.all(
-      ids.map((id) =>
-        ports.session.interrupt(id).pipe(
-          Effect.catchCause(() => Effect.void),
-          Effect.runPromise,
-        ),
-      ),
-    );
-    surfaces.clear();
-  };
-
   return {
     generateFor,
     modifyFor,
     transformFor,
-    bind,
-    shutdown,
   };
 };

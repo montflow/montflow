@@ -36,13 +36,7 @@ export interface SessionDispatchContext {
           readonly text: string;
           readonly delivery?: SessionInbox.Delivery;
         }): Effect.Effect<unknown, unknown>;
-        interrupt(input: { readonly sessionID: Session.ID }): Effect.Effect<unknown, unknown>;
         wait(input: { readonly sessionID: Session.ID }): Effect.Effect<void, unknown>;
-        synthetic(input: {
-          readonly sessionID: Session.ID;
-          readonly text: string;
-          readonly description?: string;
-        }): Effect.Effect<unknown, unknown>;
         context(input: {
           readonly sessionID: Session.ID;
         }): Effect.Effect<ReadonlyArray<SessionEntry>, unknown>;
@@ -72,34 +66,12 @@ interface PromptRequest {
   delivery?: SessionInbox.Delivery;
 }
 
-/** Host synthetic note request, assembled field by field before dispatch. */
-interface SyntheticRequest {
-  sessionID: Session.ID;
-  text: string;
-  description?: string;
-}
-
 /** Host call a failed dispatch came from. */
-export type DispatchOperation =
-  | 'create'
-  | 'prompt'
-  | 'interrupt'
-  | 'wait'
-  | 'synthetic'
-  | 'messages'
-  | 'reply';
+export type DispatchOperation = 'create' | 'prompt' | 'wait' | 'reply';
 
 /** Failure raised when the host session domain rejects a dispatch call. */
 export class DispatchError extends Schema.TaggedError<DispatchError>()('DispatchError', {
-  operation: Schema.Literals([
-    'create',
-    'prompt',
-    'interrupt',
-    'wait',
-    'synthetic',
-    'messages',
-    'reply',
-  ]),
+  operation: Schema.Literals(['create', 'prompt', 'wait', 'reply']),
   message: Schema.String,
 }) {}
 
@@ -116,16 +88,7 @@ export interface SessionDispatchPort {
     text: string,
     delivery?: SessionInbox.Delivery,
   ) => Effect.Effect<void, DispatchError>;
-  readonly interrupt: (sessionID: Session.ID) => Effect.Effect<void, DispatchError>;
   readonly wait: (sessionID: Session.ID) => Effect.Effect<void, DispatchError>;
-  readonly synthetic: (
-    sessionID: Session.ID,
-    text: string,
-    description?: string,
-  ) => Effect.Effect<void, DispatchError>;
-  readonly messages: (
-    sessionID: Session.ID,
-  ) => Effect.Effect<readonly SessionEntry[], DispatchError>;
   /** Last assistant text the session produced, or undefined when empty. */
   readonly reply: (sessionID: Session.ID) => Effect.Effect<string | undefined, DispatchError>;
 }
@@ -193,10 +156,6 @@ export const makeSessionDispatchPort = (context: SessionDispatchContext): Sessio
       if (delivery !== undefined) request.delivery = delivery;
       return call('prompt', session.prompt(request)).pipe(Effect.asVoid);
     },
-    interrupt: (sessionID) => {
-      if (session === undefined) return Effect.die(unavailable());
-      return call('interrupt', session.interrupt({ sessionID })).pipe(Effect.asVoid);
-    },
     wait: (sessionID) => {
       if (session === undefined) return Effect.die(unavailable());
       return call('wait', session.wait({ sessionID })).pipe(
@@ -206,21 +165,11 @@ export const makeSessionDispatchPort = (context: SessionDispatchContext): Sessio
             Effect.fail(
               new DispatchError({
                 operation: 'wait',
-                message: `Session '${sessionID}' did not settle within five minutes. Interrupt it, or rerun the task with a narrower prompt.`,
+                message: `Session '${sessionID}' did not settle within five minutes. Rerun the task with a narrower prompt, or stop the session and retry.`,
               }),
             ),
         }),
       );
-    },
-    synthetic: (sessionID, text, description) => {
-      if (session === undefined) return Effect.die(unavailable());
-      const request: SyntheticRequest = { sessionID, text };
-      if (description !== undefined) request.description = description;
-      return call('synthetic', session.synthetic(request)).pipe(Effect.asVoid);
-    },
-    messages: (sessionID) => {
-      if (session === undefined) return Effect.die(unavailable());
-      return call('messages', session.context({ sessionID }));
     },
     reply: (sessionID) => {
       if (session === undefined) return Effect.die(unavailable());

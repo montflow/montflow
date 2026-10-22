@@ -32,7 +32,7 @@ export interface ReviewDispatchResult {
   readonly series: string;
 }
 
-/** The adapter seams review dispatch reads; `Ports` satisfies this slice. */
+/** The adapter seams review dispatch reads; `ServerPorts` satisfies this slice. */
 export interface ReviewDispatchPorts {
   readonly session: SessionDispatchPort;
   readonly model: ModelPort;

@@ -1,5 +1,5 @@
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
-import { defineTool, entry, type Ports } from '@montflow/opencode';
+import { defineTool, entry, type ServerPorts } from '@montflow/opencode';
 import { Effect, Layer, Schema } from 'effect';
 import * as Cli from './apps/cli/index.js';
 // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- native child-run factory, not an Effect service; B002 §6 keeps dispatch out of a Layer.
@@ -60,7 +60,7 @@ const inspectTool = (cwd: string) =>
   });
 
 /** The `prompt_execute` tool: dispatch a rendered prompt on a native session. */
-const executeTool = (cwd: string, ports: Ports) =>
+const executeTool = (cwd: string, ports: ServerPorts) =>
   defineTool({
     name: 'prompt_execute',
     description:
