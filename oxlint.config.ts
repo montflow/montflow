@@ -91,5 +91,16 @@ export default defineConfig({
         'montflow/no-timers': 'off',
       },
     },
+    {
+      // @montflow/tooling-compat-check is a composition root: its whole job is
+      // reading the repository from disk (manifests, `bun.lock`, the release
+      // workflow) and generating distribution artifacts. There is no Effect
+      // runtime to provide a platform layer to, and the rule explicitly
+      // sanctions suppressing it where the platform is touched at the root.
+      files: ['tooling/compat-check/**'],
+      rules: {
+        'montflow/no-node-platform-imports': 'off',
+      },
+    },
   ],
 });
