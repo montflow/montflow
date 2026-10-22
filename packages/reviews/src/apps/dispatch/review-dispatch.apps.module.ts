@@ -1,5 +1,5 @@
+import type { ModelPort, SessionDispatchPort } from '@montflow/opencode';
 import { Clock, Effect } from 'effect';
-import { Session, SessionRunner, Runtime } from '@montflow/pi-sessions';
 import * as Review from '../../modules/review/index.js';
 import { ReviewStore } from '../../services/index.js';
 
@@ -7,10 +7,9 @@ import { ReviewStore } from '../../services/index.js';
  * In-session dispatch of an adversarial review session.
  *
  * `mf-reviews create` scaffolds a series; a *spawned* review session is what
- * actually performs the pass. A short-lived CLI process cannot keep an
- * in-process Pi session alive, so the spawn happens here — inside the Pi session,
- * through the session runner host the sessions extension built
- * ({@link Runtime.activeSessionRunnerHost}) — and the reviewer writes the round.
+ * actually performs the pass. The spawn happens here, on a native OpenCode
+ * session: create a peer session, prompt it with {@link reviewerPrompt}, and
+ * return its id. No montflow runtime owns the session loop.
  */
 
 /** Inputs for starting one review session. */
@@ -23,18 +22,20 @@ export interface ReviewDispatchInput {
   readonly target?: string | undefined;
   /** Spec this review belongs to (`<spec-slug>`), when bound to one. */
   readonly spec?: string | undefined;
-  /** Parent session id (the dispatching orchestrator), when there is one. */
-  readonly parent?: string | undefined;
   /** `provider/model-id` pin for the reviewer session. */
   readonly model?: string | undefined;
-  /** Thinking level for the reviewer session. */
-  readonly thinking?: Session.ThinkingLevel | undefined;
 }
 
 /** What {@link startReview} started. */
 export interface ReviewDispatchResult {
   readonly sessionId: string;
   readonly series: string;
+}
+
+/** The adapter seams review dispatch reads; `Ports` satisfies this slice. */
+export interface ReviewDispatchPorts {
+  readonly session: SessionDispatchPort;
+  readonly model: ModelPort;
 }
 
 /** The prompt the reviewer session receives. */
@@ -54,9 +55,6 @@ export const reviewerPrompt = (input: ReviewDispatchInput): string =>
     '',
     'Do not edit spec state, task status, or locks; the orchestrator owns those.',
   ].join('\n');
-
-/** Reviewer session tools: read the code under review, write the round file. */
-const REVIEW_TOOLS = ['read', 'write', 'edit', 'bash'] as const;
 
 /** Ensure the series ledger exists (0 rounds); the reviewer writes the rounds. */
 const ensureSeries = (
@@ -88,43 +86,28 @@ const ensureSeries = (
   });
 
 /**
- * Ensure the series exists and start the reviewer session through the session's
- * session runner host. Fails with a displayable message when the sessions extension is not
- * loaded (no host) — a missing tooling problem to surface, not to improvise.
- * @param input - series, context, and optional session pins
+ * Ensure the series exists and start the reviewer session on a native session.
+ * The session is prompted, not awaited: a review pass outlives the dispatching
+ * turn, and its outcome is the session's own durable execution event.
+ * @param ports - adapter seams (session dispatch + model resolution)
+ * @param input - series, context, and optional model pin
  * @returns the started session id and its series
  */
 export const startReview = (
+  ports: ReviewDispatchPorts,
   input: ReviewDispatchInput,
 ): Effect.Effect<ReviewDispatchResult, string, ReviewStore.ReviewStore> =>
   Effect.gen(function* () {
     yield* ensureSeries(input);
-    const host = Runtime.activeSessionRunnerHost();
-    if (host === undefined) {
-      return yield* Effect.fail(
-        'The sessions extension (mf-sessions) is not loaded in this session; cannot spawn the reviewer session.',
-      );
-    }
-    const runtime = host.runtimeFor(input.root);
-    const id = yield* Session.newId(`${input.name}-review`);
-    const prompt = reviewerPrompt(input);
-    const session = yield* Effect.promise(() =>
-      runtime.runPromise(
-        Effect.gen(function* () {
-          const sessionRunner = yield* SessionRunner;
-          return yield* sessionRunner.start({
-            root: input.root,
-            id,
-            name: `Review: ${input.name}`,
-            prompt,
-            model: input.model,
-            thinking: input.thinking,
-            parent: input.parent,
-            spec: input.spec,
-            tools: [...REVIEW_TOOLS],
-          });
-        }),
-      ),
-    );
-    return { sessionId: session.id, series: input.name };
+    const model =
+      input.model === undefined
+        ? undefined
+        : yield* ports.model.resolve(input.model).pipe(Effect.mapError((error) => error.message));
+    const title = `Review: ${input.name}`;
+    const sessionId =
+      model === undefined
+        ? yield* ports.session.create({ title })
+        : yield* ports.session.create({ title, model });
+    yield* ports.session.prompt(sessionId, reviewerPrompt(input));
+    return { sessionId, series: input.name };
   });
