@@ -93,3 +93,55 @@ Vitest.describe('ModelPort runtime', () => {
     }),
   );
 });
+
+Vitest.describe('ModelPort TUI half', () => {
+  const tuiContext: ModelPort.ModelContext = {
+    data: {
+      location: {
+        model: {
+          list: () => catalogue,
+        },
+      },
+    },
+    ui: {
+      model: {
+        current: () => ({ providerID: 'openai', modelID: 'gpt-5' }),
+      },
+    },
+  };
+
+  Vitest.it.effect('list reads the location catalogue synced by the host', () =>
+    Effect.gen(function* () {
+      const port = ModelPort.makeModelPort(tuiContext);
+      Vitest.expect(yield* port.list()).toStrictEqual([
+        { label: 'anthropic/claude-sonnet-4', providerID: 'anthropic', modelID: 'claude-sonnet-4' },
+        { label: 'openai/gpt-5', providerID: 'openai', modelID: 'gpt-5' },
+      ]);
+      Vitest.expect(yield* port.list('anthropic')).toStrictEqual([
+        { label: 'anthropic/claude-sonnet-4', providerID: 'anthropic', modelID: 'claude-sonnet-4' },
+      ]);
+    }),
+  );
+
+  Vitest.it.effect('get reads the catalogue and default reads the prompt model', () =>
+    Effect.gen(function* () {
+      const port = ModelPort.makeModelPort(tuiContext);
+      Vitest.expect(yield* port.get('openai', 'gpt-5')).toStrictEqual(info('openai', 'gpt-5'));
+      Vitest.expect(yield* port.get('openai', 'missing')).toBeUndefined();
+      Vitest.expect(yield* port.default()).toStrictEqual({
+        providerID: 'openai',
+        modelID: 'gpt-5',
+      });
+    }),
+  );
+
+  Vitest.it.effect('default is undefined before the prompt selects a model', () =>
+    Effect.gen(function* () {
+      const port = ModelPort.makeModelPort({
+        data: tuiContext.data,
+        ui: { model: { current: () => undefined } },
+      });
+      Vitest.expect(yield* port.default()).toBeUndefined();
+    }),
+  );
+});

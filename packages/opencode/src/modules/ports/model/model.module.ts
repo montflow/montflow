@@ -51,6 +51,29 @@ export interface ModelContext {
         readonly default: () => Effect.Effect<{ readonly data: ModelEntry | undefined }, unknown>;
       }
     | undefined;
+  /**
+   * TUI half: the host already synced the location's model catalogue, so a
+   * plugin reads it without a session or an Effect round-trip.
+   */
+  readonly data?:
+    | {
+        readonly location: {
+          readonly model: {
+            list(): ReadonlyArray<ModelEntry>;
+          };
+        };
+      }
+    | undefined;
+  /** TUI half: the prompt's selected model, when one is selected. */
+  readonly ui?:
+    | {
+        readonly model: {
+          current():
+            | { readonly providerID: string; readonly modelID: string; readonly variant?: string }
+            | undefined;
+        };
+      }
+    | undefined;
 }
 
 /**
@@ -93,18 +116,61 @@ const read = <A>(context: ModelContext, select: (editor: ModelEditor) => A): Eff
   }).pipe(Effect.scoped);
 };
 
+/** The catalog entry `providerID/modelID` label matches, across both halves. */
+const findEntry = (
+  context: ModelContext,
+  providerID: string,
+  modelID: string,
+): ModelEntry | undefined => {
+  const catalog = context.data?.location.model.list();
+  return catalog?.find((entry) => entry.providerID === providerID && entry.id === modelID);
+};
+
 /** Build the model seam over the host model domain. */
 export const makeModelPort = (context: ModelContext): ModelPort => ({
-  list: (providerID) =>
-    read(context, (editor) =>
+  list: (providerID) => {
+    if (context.model === undefined) {
+      const catalog = context.data?.location.model.list();
+      if (catalog === undefined) return Effect.die(unavailable());
+      return Effect.succeed(
+        (providerID === undefined
+          ? catalog
+          : catalog.filter((entry) => entry.providerID === providerID)
+        ).map((entry) => ({
+          label: labelOf(entry),
+          providerID: entry.providerID,
+          modelID: entry.id,
+        })),
+      );
+    }
+    return read(context, (editor) =>
       (providerID === undefined ? editor.list() : editor.list(providerID)).map((model) => ({
         label: labelOf(model),
         providerID: model.providerID,
         modelID: model.id,
       })),
-    ),
-  get: (providerID, modelID) => read(context, (editor) => editor.get(providerID, modelID)),
-  default: () => read(context, (editor) => editor.default.get()),
+    );
+  },
+  get: (providerID, modelID) => {
+    if (context.model === undefined) {
+      if (context.data === undefined) return Effect.die(unavailable());
+      return Effect.succeed(findEntry(context, providerID, modelID));
+    }
+    return read(context, (editor) => editor.get(providerID, modelID));
+  },
+  default: () => {
+    if (context.model === undefined) {
+      const ui = context.ui;
+      if (ui === undefined) return Effect.die(unavailable());
+      const current = ui.model.current();
+      return Effect.succeed(
+        current === undefined
+          ? undefined
+          : { providerID: current.providerID, modelID: current.modelID },
+      );
+    }
+    return read(context, (editor) => editor.default.get());
+  },
   resolve: (label) =>
     Effect.try({
       try: () => ModelSchema.Ref.parse(label),

@@ -1,8 +1,12 @@
 import type { Plugin } from '@opencode/plugin/effect';
 import type { Effect, Scope } from 'effect';
-// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- `makePorts` is a plain factory over the host context, not an Effect service; B002 §6 rejects a Layer here.
-import { makePorts } from '../ports.module.js';
-import type { Ports } from '../ports.module.js';
+import {
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- `makePorts` / `makeTuiPorts` are plain factories over the host context, not Effect services; B002 §6 rejects a Layer here.
+  makePorts,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- same seam: a plain factory, not a Layer-owned service.
+  makeTuiPorts,
+} from '../ports.module.js';
+import type { Ports, PortsContext, TuiPortsContext } from '../ports.module.js';
 
 /** The server plugin context the host passes to `Plugin.effect`. */
 export type PluginContext = Plugin.Context;
@@ -14,10 +18,11 @@ export type MontflowPlugin<R = Scope.Scope> = Plugin.Plugin<R>;
 export type TuiCleanup = () => Promise<void> | void;
 
 /**
- * The host TUI context handed to `setup`. Opaque in the adapter for now — no
- * TUI port reads it yet, so C005 widens it when the workspace seams land.
+ * The host TUI context handed to `setup`, narrowed to the slices the ports
+ * read. The real `Context` carries more (renderer, theme, markdown, client);
+ * the seam only names what it consumes, so fakes stay tiny.
  */
-export type TuiPluginContext = Record<string, never>;
+export type TuiPluginContext = TuiPortsContext;
 
 /** The structural shape of a host TUI plugin definition. */
 export interface TuiPlugin {
@@ -34,5 +39,18 @@ export const entry = <R = Scope.Scope>(
   program: (ports: Ports) => Effect.Effect<void, never, R>,
 ): Plugin.Plugin<R> => ({
   id,
-  effect: (context) => program(makePorts(context)),
+  effect: (context: PortsContext) => program(makePorts(context)),
+});
+
+/**
+ * Build a host TUI plugin from a montflow setup. The setup receives the same
+ * `Ports` the server face gets, with the client-local seams wired, and returns
+ * the host cleanup directly, so a plugin never imports `@opencode/*`.
+ */
+export const tuiEntry = (
+  id: string,
+  setup: (ports: Ports, context: TuiPluginContext) => TuiCleanup | void,
+): TuiPlugin => ({
+  id,
+  setup: (context) => setup(makeTuiPorts(context), context),
 });
