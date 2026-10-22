@@ -45,6 +45,8 @@ const targetOf = (name: string) => ({
 const specsTarget = targetOf('specs');
 const promptsTarget = targetOf('prompts');
 const profilesTarget = targetOf('profiles');
+const reviewsTarget = targetOf('reviews');
+const skillsTarget = targetOf('skills');
 
 /** The command editor the port drives through `ctx.command.transform`. */
 interface HostCommandEditor {
@@ -80,11 +82,19 @@ interface HostAgentDomain {
   ): Effect.Effect<{ readonly dispose: Effect.Effect<void> }, never>;
 }
 
+/** The slice of the host `Plugin.Context.skill` the plugins touch. */
+interface HostSkillDomain {
+  transform(
+    callback: (editor: { add(skill: { readonly id: string }): void }) => void,
+  ): Effect.Effect<{ readonly dispose: Effect.Effect<void> }, never>;
+}
+
 /** The host server context fields the plugin programs read. */
 interface HostContext {
   readonly command: HostCommandDomain;
   readonly tool: HostToolDomain;
   readonly agent: HostAgentDomain;
+  readonly skill: HostSkillDomain;
   readonly location: { readonly directory: string };
 }
 
@@ -121,6 +131,7 @@ const makeHost = (directory: string) => {
   const commands: string[] = [];
   const tools: string[] = [];
   const agents: string[] = [];
+  const skills: string[] = [];
   const registered: Agent.Info[] = [];
   const context: HostContext = {
     location: { directory },
@@ -167,8 +178,19 @@ const makeHost = (directory: string) => {
           return { dispose: Effect.void };
         }),
     },
+    skill: {
+      transform: (callback) =>
+        Effect.sync(() => {
+          callback({
+            add: (skill) => {
+              skills.push(skill.id);
+            },
+          });
+          return { dispose: Effect.void };
+        }),
+    },
   };
-  return { context, commands, tools, agents };
+  return { context, commands, tools, agents, skills };
 };
 
 const run = (server: ServerModule, context: HostContext) =>
@@ -213,10 +235,12 @@ test('the /specs slash command registers in the host command transform', async (
   expect(host.commands).toEqual(['specs']);
 });
 
-test('prompts and profiles expose native server and TUI faces', async () => {
+test('prompts, profiles, reviews, and skills expose native server and TUI faces', async () => {
   const targets = [
     ['prompts', promptsTarget],
     ['profiles', profilesTarget],
+    ['reviews', reviewsTarget],
+    ['skills', skillsTarget],
   ] as const;
   await Promise.all(
     targets.map(async ([id, target]) => {
@@ -281,4 +305,46 @@ test('profiles registers stored profiles as agents plus /mf-profiles and its too
   expect(host.agents).toEqual(['mf-reviewer']);
   expect(host.commands).toEqual(['mf-profiles']);
   expect(host.tools).toEqual(['profile_execute']);
+});
+
+test('reviews registers /mf-reviews and review_create without a Pi runtime', async () => {
+  const entries = Host.resolve(reviewsTarget);
+  const server = await load<ServerModule>(entries.server, 'server');
+  const host = makeHost(process.cwd());
+  await run(server, host.context);
+  expect(host.commands).toEqual(['mf-reviews']);
+  expect(host.tools).toEqual(['review_create']);
+  expect(host.agents).toEqual([]);
+});
+
+test('skills publishes the stored skills, /mf-skills, and the dispatch tools', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'montflow-skills-'));
+  const directory = path.join(root, '.agents', 'skills', 'authoring-skills');
+  await mkdir(directory, { recursive: true });
+  await writeFile(
+    path.join(directory, 'SKILL.md'),
+    [
+      '---',
+      'name: authoring-skills',
+      'description: Write a skill',
+      '---',
+      '',
+      '# When To Use',
+      '',
+      'When authoring a skill.',
+      '',
+    ].join('\n'),
+  );
+  const entries = Host.resolve(skillsTarget);
+  const server = await load<ServerModule>(entries.server, 'server');
+  const host = makeHost(root);
+  try {
+    await run(server, host.context);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+  expect(host.skills).toEqual(['authoring-skills']);
+  expect(host.commands).toEqual(['mf-skills']);
+  expect(host.tools).toEqual(['skill_create', 'skill_modify', 'skill_transform']);
+  expect(host.agents).toEqual([]);
 });
