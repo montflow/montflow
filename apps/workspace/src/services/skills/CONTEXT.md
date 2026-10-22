@@ -26,13 +26,17 @@ whether to retry, reinstall, or just retry.
 - `toSkill` / `fromSkill` bridges between dashboard rows and `@montflow/skills`
   `Skill` (validated one way, total the other)
 - `panelInstalled` checks and `installHint` copy per panel
-- `storeFor` / `buildHeadlessPrompt` / `runHeadlessAgent` — structural store and
-  headless-agent helpers with no consumer in the plugin faces yet
+- `parseModelsStore` / `listModelLabels` / `parseDefaultModel` /
+  `listDefaultModel` — the provider/model labels the info panel reads from the
+  host's model store and session defaults; a missing or malformed file reads as
+  empty, never as a failure
 
 ## Does not belong here
 
 - Dialogs, keyboard handling, signals — those live in `grid-page.tsx` and
   `components/`
 - Filtering — the `skill-filter` module owns query matching
-- Verification and authoring — `/mf-skills` and the `skill_*` tools own them in
-  `@montflow/skills`'s plugin faces
+- Verification, authoring, and dispatch — `/mf-skills` and the `skill_*` tools
+  own them in `@montflow/skills`'s plugin faces; their sessions run through the
+  native `SessionDispatchPort`, and the workspace only lists and renders what
+  the store ends up with
