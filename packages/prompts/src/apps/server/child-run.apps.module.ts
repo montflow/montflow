@@ -1,0 +1,34 @@
+import type { Ports } from '@montflow/opencode';
+import { Effect } from 'effect';
+import type * as PromptExecute from '../../modules/prompt-execute/index.js';
+
+/**
+ * Prompt execution over a native session: resolve the persisted
+ * `provider/model-id` label, create a session, prompt it with the rendered
+ * text (skills first), wait for it to settle, and return its last reply.
+ *
+ * The old Pi path ran a child agent through `ModelRuntime`; the native path
+ * dispatches a peer session and reads its durable context, so no montflow
+ * runtime owns the model loop.
+ * @param ports - adapter seam ports from the server plugin
+ * @returns executor port for the CLI, tools, and commands
+ */
+export const makePromptExecutor =
+  (ports: Ports): PromptExecute.PromptExecutor =>
+  (request) =>
+    Effect.gen(function* () {
+      const model = yield* ports.model
+        .resolve(request.model)
+        .pipe(Effect.mapError((error) => error.message));
+      const instructions = request.skills
+        .map((name) => `Load the '${name}' skill before starting.`)
+        .join('\n');
+      const text = instructions === '' ? request.text : `${instructions}\n\n${request.text}`;
+      const sessionID = yield* ports.session.create({
+        title: `prompt: ${request.name}`,
+        model,
+      });
+      yield* ports.session.prompt(sessionID, text);
+      yield* ports.session.wait(sessionID);
+      return (yield* ports.session.reply(sessionID)) ?? `Completed session ${sessionID}.`;
+    });

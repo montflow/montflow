@@ -1,13 +1,11 @@
-import { PiEffect } from '@montflow/pi-effect';
 import { Dialogs, ModelOptions } from '@montflow/pi-interactive';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { Effect, Layer } from 'effect';
+import { Effect } from 'effect';
 import * as PromptExecute from '../../modules/prompt-execute/index.js';
 import * as Prompts from '../../modules/prompts/index.js';
 import * as Doctor from '../doctor/index.js';
 import { PromptStore } from '../../services/index.js';
 
-/** Slash-command name registered by {@link register} (invoke as `/mf-prompts-tui`). */
+/** Slash-command name for the interactive menu (invoke as `/mf-prompts-tui`). */
 export const COMMAND_NAME = 'mf-prompts-tui';
 
 /**
@@ -829,61 +827,3 @@ export const run = (
       }
     }
   });
-
-/**
- * Register the `/mf-prompts` slash command as an Effect. Failures notify;
- * user cancellation notifies as info instead of an error.
- * @param api - Pi extension API
- * @param live - store layer provided to the handler at invocation
- * @param generateFor - agentic generation port for the command's working directory
- * @param modifyFor - agentic modification port for the command's working directory
- * @param executeFor - port that runs a resolved prompt for the working directory
- * @param searchFor - TUI filter picker factory, if available
- * @param modelPickerFor - TUI model picker factory, if available
- * @returns Effect completing once the command is registered
- */
-export const register = (
-  api: Pick<ExtensionAPI, 'registerCommand'>,
-  live: Layer.Layer<PromptStore.PromptStore>,
-  generateFor: (cwd: string) => PromptGenerator,
-  modifyFor: (cwd: string) => PromptModifier,
-  executeFor: (cwd: string) => PromptExecute.PromptExecutor,
-  searchFor?: (ctx: {
-    readonly ui: FilterUi;
-    readonly mode: string;
-  }) => InteractiveUi['searchSelect'],
-  modelPickerFor?: (ctx: {
-    readonly ui: FilterUi;
-    readonly mode: string;
-  }) => ModelPickerFn | undefined,
-): Effect.Effect<void> =>
-  PiEffect.registerCommandEffect(
-    api,
-    COMMAND_NAME,
-    COMMAND_DESCRIPTION,
-    (args, ctx) => {
-      const base = ctx.ui;
-      let ui: InteractiveUi = {
-        select: (title, options) => base.select(title, options),
-        confirm: (title, message) => base.confirm(title, message),
-        input: (title, placeholder) => base.input(title, placeholder),
-        notify: (message, type) => base.notify(message, type),
-      };
-      const search = searchFor?.({ ui: ctx.ui, mode: ctx.mode });
-      if (search !== undefined) ui = { ...ui, searchSelect: search };
-      const modelPicker = modelPickerFor?.({ ui: ctx.ui, mode: ctx.mode });
-      return run(
-        args,
-        {
-          ui,
-          cwd: ctx.cwd,
-          models: resolveModelOptions(ctx),
-          modelPicker,
-        },
-        generateFor(ctx.cwd),
-        modifyFor(ctx.cwd),
-        executeFor(ctx.cwd),
-      ).pipe(Effect.provide(live));
-    },
-    (error) => (error === CANCELLED ? 'info' : 'error'),
-  );
