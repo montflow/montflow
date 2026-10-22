@@ -40,7 +40,6 @@
     "@effect/platform-node": "4.0.0-rc.112",
     "@montflow/opencode": "workspace:*",
     "@montflow/pi-effect": "workspace:*",
-    "@montflow/pi-sessions": "workspace:*",
     "@montflow/pi-specs": "workspace:*",
     "@montflow/profiles": "workspace:*",
     "@montflow/prompts": "workspace:*",

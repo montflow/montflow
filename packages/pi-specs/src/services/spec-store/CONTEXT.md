@@ -14,7 +14,7 @@ spec directories under a root, and writes a fresh spec tree.
 
 - Verification — `structure` / `spec` modules own the rules
 - Rendering — the `scaffold` module renders files, the `cli` app renders output
-- Dispatching author sessions — `@montflow/pi-sessions` owns the engine
+- Dispatching author sessions — the native `subagent` tool owns them
 
 ## Layers
 

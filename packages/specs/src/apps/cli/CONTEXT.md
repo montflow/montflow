@@ -41,7 +41,7 @@ agents and humans:
 - Verification rules — `modules/spec` + `modules/structure`
 - Filesystem reading and writing — the `SpecStore` service
 - Spec file templates — `modules/scaffold`
-- Dispatching author or orchestrator sessions — `@montflow/pi-sessions`
+- Dispatching author or orchestrator sessions — the native `subagent` tool
 
 ## Running
 

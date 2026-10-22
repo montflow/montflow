@@ -3,7 +3,7 @@ name: montflow-execute-pi-prompts
 description: Inspects and executes reusable prompt templates stored by @montflow/pi-prompts on a chosen model, then returns the agent's reply. Use when an agent must run a stored prompt — inspect its variables, supply the required ones, pick a model, and execute it.
 id: a7fa5091d2615813
 author: Daniel Montilla
-version: 3.4.0
+version: 3.4.1
 license: MIT
 dependencies:
   - executing-skills
@@ -163,8 +163,8 @@ Do not guess — read the message.
 
 ## 5. Use the Reply
 
-`execute` returns the agent's final text. Send it onward, or dispatch it as a
-separate session with `@montflow/pi-sessions` (see skill `montflow-dispatch-pi-sessions`).
+`execute` returns the agent's final text. Send it onward, or hand it to the
+`subagent` tool when it should run as its own session.
 
 To see the rendered text _without_ running an agent, use
 `mf-prompts render <name> key=value ...`.

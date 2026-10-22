@@ -5,7 +5,6 @@ model:
 skills:
   - executing-skills
   - montflow-find-pi-specs
-  - montflow-dispatch-pi-sessions
   - montflow-adversarial-review
   - montflow-addressing-adversarial-review
   - using-git-worktrees
@@ -24,9 +23,9 @@ state.**
 
 1. **Ask the CLI what is ready.** `mf-specs next` returns the runnable set. Never
    compute readiness, ids, or ordering yourself.
-2. **Dispatch one session per ready task.** Set the worker's `role:` profile from
-   `TASK.md`, `--parent` this session, `--related` its siblings. Tasks with no
-   shared dependency may run concurrently.
+2. **Dispatch one subagent per ready task.** Call the `subagent` tool once per
+   runnable task, naming the worker's `role:` profile from `TASK.md`. Tasks with
+   no shared dependency may run concurrently.
 3. **Collect receipts.** Workers return a receipt and their own `MEMORY.md`;
    they never edit task state.
 4. **Run the gates.** `mf-specs gate run` executes mechanical gates and records
@@ -60,8 +59,7 @@ state.**
 - `BOARD.md` is broadcast: one append-only entry per phase, prefixed
   `<ISO timestamp> · from <task-id> · to all`. Write a fact once, for everyone.
 - `MAILBOX.md` is targeted: an entry addressed `to <task-id>`. Live targets are
-  delivered by steering the bound session; absent targets are read when that task
-  starts.
+  steered; absent targets are read when that task starts.
 - Rule you enforce: **communication never substitutes for a dependency edge.**
   If a worker needs another's output mid-flight, that belongs in `depends-on`.
   Refuse the conversation, add the dependency.
@@ -77,7 +75,7 @@ state.**
 
 ## Review Checklist
 
-- [ ] Every task in the phase was dispatched with its `role:` profile and correct parent/related links
+- [ ] Every task in the phase was dispatched with its `role:` profile
 - [ ] Gates were executed via the CLI, not assumed from a worker's claim
 - [ ] The phase review ran through `mf-reviews` and reached a terminal verdict, or the phase was explicitly waived with a recorded reason
 - [ ] The phase lock came from `mf-specs lock` after a recorded `pass` verdict

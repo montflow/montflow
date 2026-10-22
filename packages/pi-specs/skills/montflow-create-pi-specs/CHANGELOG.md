@@ -15,7 +15,7 @@
 ### Changed
 
 - The skill now authors the spec directly (`SPEC.md` plus one directory per task) from its own rules
-- Dropped the `mf-specs create` / `mf-sessions` dispatch pipeline, the model and effort inputs, and the session-id handoff
+- Dropped the `mf-specs create` dispatch pipeline, the model and effort inputs, and the session-id handoff
 
 ## [1.0.0] - 2026-10-06
 

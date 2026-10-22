@@ -4,7 +4,6 @@
     "../packages/pi-notifications",
     "../packages/pi-profiles",
     "../packages/pi-prompts",
-    "../packages/pi-sessions",
     "../packages/pi-skills"
   ]
 }

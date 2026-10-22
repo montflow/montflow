@@ -2,7 +2,7 @@
 #
 # This is the general gate the repository lacked: lint, format, typecheck,
 # tests, and the extension verifications (skills, prompts, specs, profiles,
-# sessions). Each matrix cell runs one check through a shared root script
+# reviews). Each matrix cell runs one check through a shared root script
 # (`package.json`) so a failure names a single target and CI, the local
 # `verify:montflow` script, and the Lefthook pre-push hook all execute the
 # same commands.
@@ -58,8 +58,6 @@ jobs:
             script: verify:montflow:specs
           - target: profiles
             script: verify:montflow:profiles
-          - target: sessions
-            script: verify:montflow:sessions
           - target: reviews
             script: verify:montflow:reviews
     steps:

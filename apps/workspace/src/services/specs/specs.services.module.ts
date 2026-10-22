@@ -2,9 +2,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for spec files; both go away with the FileSystem migration.
 import { join } from 'node:path';
-import type { SessionDetail as EngineSessionDetail } from '@montflow/pi-sessions';
 import { Data, Effect } from 'effect';
-import * as Sessions from '../sessions/index.js';
 
 /**
  * Lazy handle to the pi-specs runtime. Static imports are type-only
@@ -130,8 +128,6 @@ export interface SpecSummary {
   readonly description: string;
   readonly state: string;
   readonly status: string;
-  /** True when a live session is bound to this spec. */
-  readonly active: boolean;
   readonly total: number;
   readonly complete: number;
   readonly issues: number;
@@ -209,7 +205,6 @@ const inspect = (
   libs: PiSpecsLib,
   id: string,
   files: ReadonlyArray<SnapshotFile>,
-  active: boolean,
   review?: ReviewSeries,
 ) => {
   const specFile = files.find((file) => file.path === 'SPEC.md');
@@ -229,7 +224,7 @@ const inspect = (
           status: spec.status,
           lockedPhases: spec.lockedPhases,
           tasks: tasks.map((task) => ({ id: task.id, status: task.status })),
-          active,
+          active: false,
         });
   return { spec, specFile, tasks, verify, analysis };
 };
@@ -239,17 +234,15 @@ const summarize = (
   libs: PiSpecsLib,
   id: string,
   files: ReadonlyArray<SnapshotFile>,
-  active: boolean,
   review?: ReviewSeries,
 ): SpecSummary => {
-  const { spec, specFile, tasks, verify, analysis } = inspect(libs, id, files, active, review);
+  const { spec, specFile, tasks, verify, analysis } = inspect(libs, id, files, review);
   return {
     id,
     name: spec?.name ?? id,
     description: descriptionOf(specFile?.content ?? '') || (spec?.name ?? id),
     state: analysis?.state ?? 'inconsistent',
     status: spec?.status ?? 'unknown',
-    active,
     total: tasks.length,
     complete: tasks.filter((task) => task.status === 'complete').length,
     issues: verify.issues.length,
@@ -257,32 +250,8 @@ const summarize = (
   };
 };
 
-/**
- * Spec slugs with a live session bound: persisted sessions whose `spec` is
- * set and whose id is in the runner's live registry. A missing sessions store
- * or an unbuilt runtime reads as empty, never an error.
- * @param root - workspace root (sessions store and runner owner)
- * @returns Effect resolving to the active spec slugs
- */
-export const activeSpecIds = (root: string): Effect.Effect<ReadonlySet<string>> =>
-  Effect.gen(function* () {
-    const sessions = yield* Sessions.fetchSessions(root).pipe(Effect.orElseSucceed(() => []));
-    const live = yield* Sessions.liveSessionIds(root).pipe(
-      Effect.orElseSucceed(() => new Set<string>()),
-    );
-    return new Set(
-      sessions
-        .filter((session) => session.spec !== '' && live.has(session.id))
-        .map((session) => session.spec),
-    );
-  });
-
 /** List every spec directory as a summary row, alphabetical. */
-const readSpecs = async (
-  root: string,
-  libs: PiSpecsLib,
-  active: ReadonlySet<string>,
-): Promise<ReadonlyArray<SpecSummary>> => {
+const readSpecs = async (root: string, libs: PiSpecsLib): Promise<ReadonlyArray<SpecSummary>> => {
   const dir = specsDir(root);
   const entries = await readdir(dir);
   const names = entries.filter((entry) => !entry.startsWith('.')).toSorted();
@@ -292,7 +261,7 @@ const readSpecs = async (
       if (!info.isDirectory()) return undefined;
       const files = await readSnapshot(root, name);
       const review = await readReviewSeries(root, name);
-      return summarize(libs, name, files, active.has(name), review);
+      return summarize(libs, name, files, review);
     }),
   );
   return rows.filter((row): row is SpecSummary => row !== undefined);
@@ -309,12 +278,9 @@ export const fetchSpecs = (root: string): Effect.Effect<ReadonlyArray<SpecSummar
   loadPiSpecs().pipe(
     Effect.mapError((error) => error.message),
     Effect.flatMap((libs) =>
-      Effect.gen(function* () {
-        const active = yield* activeSpecIds(root);
-        return yield* Effect.tryPromise({
-          try: () => readSpecs(root, libs, active),
-          catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
-        });
+      Effect.tryPromise({
+        try: () => readSpecs(root, libs),
+        catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
       }),
     ),
     Effect.catch((error) =>
@@ -335,389 +301,44 @@ export const loadSpec = (root: string, id: string): Effect.Effect<SpecDetail, st
   loadPiSpecs().pipe(
     Effect.mapError((error) => error.message),
     Effect.flatMap((libs) =>
-      Effect.gen(function* () {
-        const active = yield* activeSpecIds(root);
-        const isActive = active.has(id);
-        return yield* Effect.tryPromise({
-          try: async (): Promise<SpecDetail> => {
-            const files = await readSnapshot(root, id);
-            const review = await readReviewSeries(root, id);
-            const { spec, specFile, tasks, verify, analysis } = inspect(
-              libs,
-              id,
-              files,
-              isActive,
-              review,
-            );
-            const phases = (analysis?.phases ?? []).map((phase) => ({
-              phase: phase.phase,
-              locked: phase.locked,
-              tasks: tasks
-                .filter((task) => phaseOf(task.id) === phase.phase)
-                .map((task) => ({
-                  id: task.id,
-                  name: task.name,
-                  type: task.type,
-                  status: task.status,
-                })),
-            }));
-            return {
-              summary: summarize(libs, id, files, isActive, review),
-              meta:
-                spec === undefined
-                  ? undefined
-                  : {
-                      name: spec.name,
-                      status: spec.status,
-                      workspaceType: spec.workspaceType,
-                      author: spec.author,
-                      created: spec.created,
-                      lockedPhases: spec.lockedPhases,
-                      description: descriptionOf(specFile?.content ?? ''),
-                    },
-              state: analysis?.state ?? 'inconsistent',
-              counts: analysis?.counts ?? EMPTY_COUNTS,
-              phases,
-              issues: verify.issues,
-            };
-          },
-          catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
-        });
-      }),
-    ),
-  );
-
-/**
- * Raw spec directory names under the specs root, regardless of
- * decode validity. Used to snapshot the store at dispatch and to find the
- * spec an author session created after it settles. Dotfiles are skipped.
- * @param root - workspace root (specs store owner)
- * @returns Effect resolving to directory names (empty when the store is missing)
- */
-export const rawSpecIds = (root: string): Effect.Effect<ReadonlyArray<string>> =>
-  Effect.promise((): Promise<ReadonlyArray<string>> =>
-    readdir(specsDir(root)).then(
-      (names) => names.filter((name) => !name.startsWith('.')),
-      () => [],
-    ),
-  );
-
-/**
- * Tool allowlist for a spec-author session: the standard workspace set plus
- * `bash`, so the agent can run the mechanical checker before finishing.
- * `@montflow/pi-sessions` unions the interaction tools (`ask_user` /
- * `notify_user`) into whatever allowlist is passed.
- */
-export const SPEC_SESSION_TOOLS = ['read', 'write', 'edit', 'bash'] as const;
-
-/** One transcript line, shared by the engine detail and the dashboard row. */
-interface TranscriptLine {
-  readonly role: string;
-  readonly text: string;
-}
-
-/**
- * Final assistant text from a settled session's transcript, or undefined when
- * the session produced no assistant turn.
- * @param events - stored transcript events
- * @returns last assistant text, if any
- */
-export const finalAssistantText = (events: ReadonlyArray<TranscriptLine>): string | undefined =>
-  events.findLast((event) => event.role === 'assistant')?.text;
-
-/** How a settled author session's spec was resolved. */
-export type AuthoredSpecPick =
-  | { readonly kind: 'one'; readonly id: string }
-  | { readonly kind: 'ambiguous'; readonly ids: ReadonlyArray<string> }
-  | { readonly kind: 'none' };
-
-/**
- * Resolve the spec a settled author session created. Prefers the fresh
- * spec named in the session's final reply — correlating concurrent authors
- * to their own session — and falls back to the name diff only when exactly one
- * fresh spec exists (unambiguous).
- * @param reply - final assistant text from the session, if any
- * @param fresh - spec directory ids added since the session was dispatched
- * @returns the chosen spec, an ambiguity, or none
- */
-export const pickAuthoredSpec = (
-  reply: string | undefined,
-  fresh: ReadonlyArray<string>,
-): AuthoredSpecPick => {
-  if (fresh.length === 0) return { kind: 'none' };
-  const named = reply === undefined ? [] : fresh.filter((id) => reply.includes(id));
-  if (named.length === 1) {
-    const id = named[0];
-    if (id !== undefined) return { kind: 'one', id };
-  }
-  if (fresh.length === 1) {
-    const id = fresh[0];
-    if (id !== undefined) return { kind: 'one', id };
-  }
-  return { kind: 'ambiguous', ids: fresh.toSorted() };
-};
-
-/**
- * TUI callbacks for a dispatched author session's completion: the fresh
- * spec was found (refresh + open its detail), or the session settled
- * without one (surface the reason). The session id lets the TUI clear only the
- * matching dispatched-session keybind target.
- */
-export interface BeginFlowHooks {
-  /** Fresh spec found after the author session settled. */
-  readonly onSpecCreated?: ((specId: string, sessionId: string) => void) | undefined;
-  /** Author session settled without creating a spec. */
-  readonly onSpecFailed?: ((message: string, sessionId: string) => void) | undefined;
-}
-
-/**
- * Completion hook for a dispatched author session: resolve the spec the session
- * authored (reply-correlated, name-diff fallback) and notify the hooks.
- * Exported so a resumed author session can re-attach the same hook through
- * `Sessions.resumeSession` after an app restart.
- * @param root - workspace root (specs store owner)
- * @param sessionId - the author session id
- * @param beforeIds - spec directory ids snapshotted at dispatch, or undefined after a restart
- * @param hooks - TUI completion callbacks
- * @returns the `onSettled` hook
- */
-export const specAuthorCompletion =
-  (
-    root: string,
-    sessionId: string,
-    beforeIds: ReadonlyArray<string> | undefined,
-    hooks?: BeginFlowHooks,
-  ): ((detail: EngineSessionDetail) => Effect.Effect<void>) =>
-  (detail) =>
-    Effect.gen(function* () {
-      const afterIds = yield* rawSpecIds(root);
-      const freshIds = afterIds.filter((id) => !(beforeIds ?? []).includes(id));
-      const pick = pickAuthoredSpec(finalAssistantText(detail.events), freshIds);
-      if (pick.kind === 'one') {
-        hooks?.onSpecCreated?.(pick.id, sessionId);
-        return;
-      }
-      if (pick.kind === 'ambiguous') {
-        hooks?.onSpecFailed?.(
-          `Session '${sessionId}' created several specs (${pick.ids.join(', ')}) — open the one you want from the list.`,
-          sessionId,
-        );
-        return;
-      }
-      hooks?.onSpecFailed?.(
-        `Session '${sessionId}' finished without creating a spec — try describing it differently.`,
-        sessionId,
-      );
-    });
-
-/** Inputs for dispatching a spec-author session. */
-export interface BeginSpecInput {
-  /** The user's spec request. */
-  readonly description: string;
-  /** `provider/model-id` pin for the author session, if any. */
-  readonly modelLabel?: string | undefined;
-  /** TUI completion callbacks, if any. */
-  readonly hooks?: BeginFlowHooks | undefined;
-}
-
-/**
- * Begin a spec from the workspace: gate on the sessions extension, snapshot
- * the specs store, dispatch an author session through the pi-sessions engine
- * with the authoring preprompt, and return its id. The session may park on
- * `ask_user` for the user to answer; on settle,
- * {@link specAuthorCompletion} correlates the fresh spec to this
- * session's final reply. The session, not this flow, writes the spec.
- * @param root - workspace root (specs store owner)
- * @param input - spec request, optional model pin, and completion hooks
- * @returns Effect resolving to the dispatched session id, failing with displayable message
- */
-export const beginSpec = (
-  root: string,
-  input: BeginSpecInput,
-): Effect.Effect<{ readonly sessionId: string }, string> =>
-  loadPiSpecs().pipe(
-    Effect.mapError((error) => error.message),
-    Effect.flatMap((libs) => {
-      const prompt = libs.Prompt.buildAuthorPrompt(input.description);
-      return Effect.gen(function* () {
-        const installed = yield* Sessions.sessionsExtensionInstalled(root);
-        if (!installed) return yield* Effect.fail(Sessions.SESSIONS_EXTENSION_INSTALL_HINT);
-        const beforeIds = yield* rawSpecIds(root);
-        const sessionId = yield* Sessions.newSessionId('author-spec');
-        yield* Sessions.startSession(root, {
-          id: sessionId,
-          name: `Author spec: ${input.description.trim().slice(0, 72)}`,
-          prompt,
-          model: input.modelLabel,
-          tools: [...SPEC_SESSION_TOOLS],
-          onSettled: specAuthorCompletion(root, sessionId, beforeIds, input.hooks),
-        });
-        return { sessionId };
-      });
-    }),
-  );
-
-/**
- * Tool allowlist for a spec-execution session. Same shape as the author session —
- * `bash` so the orchestrator can run the mechanical checker — plus the
- * `session_*` tools it needs to spawn and supervise worker sessions. An explicit
- * allowlist filters extension tools too, so {@link Sessions.SESSION_TOOL_NAMES}
- * must be named or the orchestrator cannot dispatch.
- */
-export const SPEC_EXECUTE_TOOLS = ['read', 'write', 'edit', 'bash'] as const;
-
-/**
- * Render the state context a resume session needs: derived state, the active
- * phase, every task with its type and status, and the convention link of
- * each phase's review task to its round (marking a missing round). Built
- * from the on-disk snapshot so the orchestrator starts from the files,
- * never from conversation memory.
- * @param libs - loaded extension runtime
- * @param id - spec directory slug
- * @param files - the spec's files as read from disk
- * @param review - the linked review series, when it exists
- * @returns the context block injected under `Spec: <name>`
- */
-export const buildResumeContext = (
-  libs: PiSpecsLib,
-  id: string,
-  files: ReadonlyArray<SnapshotFile>,
-  review?: ReviewSeries,
-): string => {
-  const specFile = files.find((file) => file.path === 'SPEC.md');
-  const spec = specFile === undefined ? undefined : libs.Spec.parseSpecFile(specFile.content);
-  const tasks = files
-    .filter((file) => file.path.endsWith('/TASK.md'))
-    .map((file) => libs.Task.parseTaskFile(file.content))
-    .filter((task) => task !== undefined)
-    .toSorted((a, b) => a.id.localeCompare(b.id));
-  const analysis =
-    spec === undefined
-      ? undefined
-      : libs.Lifecycle.analyze({
-          status: spec.status,
-          lockedPhases: spec.lockedPhases,
-          tasks: tasks.map((task) => ({ id: task.id, status: task.status })),
-        });
-
-  const lines: Array<string> = [];
-  lines.push(`State: ${analysis?.state ?? 'unreadable'}.`);
-  if (spec !== undefined) {
-    lines.push(`Status: ${spec.status}.`);
-    lines.push(
-      `Locked phases: ${spec.lockedPhases.length === 0 ? 'none' : spec.lockedPhases.join(', ')}.`,
-    );
-  }
-  const active = analysis?.phases.find((phase) => !phase.locked && phase.complete < phase.total);
-  lines.push(`Active phase: ${active?.phase ?? 'none'}.`);
-  lines.push('', 'Tasks:');
-  for (const task of tasks) {
-    lines.push(`- ${task.id} [${task.type}] ${task.status} — ${task.name}`);
-  }
-
-  const reviewTasks = tasks.map((task) => ({ id: task.id, type: task.type }));
-  lines.push('', 'Phase reviews (convention: series shares the spec name):');
-  for (const phase of libs.ReviewLink.reviewPhases(reviewTasks)) {
-    const round = libs.ReviewLink.roundForPhase(phase);
-    const path = `${libs.ReviewLink.seriesName(id)}/${round}`;
-    const present = review?.rounds.includes(round) ?? false;
-    lines.push(
-      `- phase ${phase} → .agents/@montflow/reviews/${path}${present ? '' : ' (missing)'}`,
-    );
-  }
-
-  return lines.join('\n');
-};
-
-/**
- * TUI callback for a dispatched execute session's completion: the session settled,
- * so the TUI refreshes the spec and toasts the outcome. Absent in headless
- * tests.
- */
-export interface ExecuteFlowHooks {
-  /** Resume session settled; `message` is a one-line outcome for the toast. */
-  readonly onSpecSettled?:
-    | ((specId: string, sessionId: string, message: string) => void)
-    | undefined;
-}
-
-/**
- * Completion hook for a dispatched resume session: report the outcome to the
- * TUI so the spec detail and sessions list refresh. The session writes the spec
- * files; this hook never touches them.
- * @param specId - the spec the session executes
- * @param sessionId - the resume session id
- * @param hooks - TUI completion callbacks
- * @returns the `onSettled` hook
- */
-export const specExecuteCompletion =
-  (
-    specId: string,
-    sessionId: string,
-    hooks?: ExecuteFlowHooks,
-  ): ((detail: EngineSessionDetail) => Effect.Effect<void>) =>
-  (detail) =>
-    Effect.sync(() => {
-      const outcome = detail.receipt?.outcome ?? 'done';
-      const summary = detail.receipt?.summary ?? '';
-      hooks?.onSpecSettled?.(
-        specId,
-        sessionId,
-        `Session '${sessionId}' ${outcome}: ${summary}`.trim(),
-      );
-    });
-
-/** Inputs for dispatching a spec-execution session. */
-export interface ExecuteSpecInput {
-  /** Spec directory slug to execute. */
-  readonly id: string;
-  /** `provider/model-id` pin for the resume session, if any. */
-  readonly modelLabel?: string | undefined;
-  /** TUI completion callbacks, if any. */
-  readonly hooks?: ExecuteFlowHooks | undefined;
-}
-
-/**
- * Execute a spec from the workspace: gate on the sessions extension, read the
- * spec snapshot, build the resume prompt from its state, and dispatch a
- * resume session through the pi-sessions engine tagged with `spec` so the lifecycle
- * reads `in-progress`. The session orchestrates the phases (closing each with its
- * review round) and may park on `ask_user`; on settle,
- * {@link specExecuteCompletion} refreshes the TUI.
- * @param root - workspace root (specs and sessions store owner)
- * @param input - spec id, optional model pin, and completion hooks
- * @returns Effect resolving to the dispatched session id, failing with displayable message
- */
-export const executeSpec = (
-  root: string,
-  input: ExecuteSpecInput,
-): Effect.Effect<{ readonly sessionId: string }, string> =>
-  loadPiSpecs().pipe(
-    Effect.mapError((error) => error.message),
-    Effect.flatMap((libs) =>
-      Effect.gen(function* () {
-        const installed = yield* Sessions.sessionsExtensionInstalled(root);
-        if (!installed) return yield* Effect.fail(Sessions.SESSIONS_EXTENSION_INSTALL_HINT);
-        const files = yield* Effect.tryPromise({
-          try: () => readSnapshot(root, input.id),
-          catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
-        });
-        const review = yield* Effect.promise(() => readReviewSeries(root, input.id));
-        const prompt = libs.Prompt.buildResumePrompt(
-          input.id,
-          buildResumeContext(libs, input.id, files, review),
-        );
-        const sessionId = yield* Sessions.newSessionId(`execute-${input.id}`);
-        yield* Sessions.startSession(root, {
-          id: sessionId,
-          name: `Execute spec: ${input.id}`,
-          prompt,
-          model: input.modelLabel,
-          tools: [...SPEC_EXECUTE_TOOLS, ...Sessions.SESSION_TOOL_NAMES],
-          spec: input.id,
-          onSettled: specExecuteCompletion(input.id, sessionId, input.hooks),
-        });
-        return { sessionId };
+      Effect.tryPromise({
+        try: async (): Promise<SpecDetail> => {
+          const files = await readSnapshot(root, id);
+          const review = await readReviewSeries(root, id);
+          const { spec, specFile, tasks, verify, analysis } = inspect(libs, id, files, review);
+          const phases = (analysis?.phases ?? []).map((phase) => ({
+            phase: phase.phase,
+            locked: phase.locked,
+            tasks: tasks
+              .filter((task) => phaseOf(task.id) === phase.phase)
+              .map((task) => ({
+                id: task.id,
+                name: task.name,
+                type: task.type,
+                status: task.status,
+              })),
+          }));
+          return {
+            summary: summarize(libs, id, files, review),
+            meta:
+              spec === undefined
+                ? undefined
+                : {
+                    name: spec.name,
+                    status: spec.status,
+                    workspaceType: spec.workspaceType,
+                    author: spec.author,
+                    created: spec.created,
+                    lockedPhases: spec.lockedPhases,
+                    description: descriptionOf(specFile?.content ?? ''),
+                  },
+            state: analysis?.state ?? 'inconsistent',
+            counts: analysis?.counts ?? EMPTY_COUNTS,
+            phases,
+            issues: verify.issues,
+          };
+        },
+        catch: (cause) => (cause instanceof Error ? cause.message : String(cause)),
       }),
     ),
   );

@@ -17,7 +17,6 @@ Not for `core`, `format`, `linting`, `stlx` — no CLI, different rules.
 | `pi-profiles` | `mf-profiles` | `list`, `show`, `verify`, `create`, `modify`, `delete` (binary + slash `/mf-profiles-cli`) |
 | `pi-prompts` | `mf-prompts` | `doctor`, `list`, `inspect`, `execute`, `show`, `verify`, `render`, `create`, `modify`, `delete` |
 | `pi-reviews` | `mf-reviews` | `doctor`, `list`, `show`, `verify`, `new` |
-| `pi-sessions` | `mf-sessions` | `doctor`, `list`, `status`, `verify`, `start`, `resume`, `interrupt`, `steer`, `answer` |
 | `pi-skills` | `mf-skills` | `doctor`, `list`, `show`, `verify`, `create`, `modify`, `delete` |
 | `pi-specs` | `mf-specs` | `doctor`, `check`, `status`, `state`, `next`, `list`, `create` |
 
@@ -48,14 +47,14 @@ Conform every `mf-*` binary to this contract.
 | `create` / `modify` / `delete` (`mf-reviews` uses `new`) | CRUD over store files | 1 on refusal |
 | `help` / `--help` | usage | 0 |
 
-Domain verbs extend this; never break it (`mf-sessions`: `start`/`resume`/`interrupt`/`steer`/`answer`).
+Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`).
 
 ### Flags
 
 - `--dir <path>` = **workspace root**. Every store derives from it: `<root>/.agents/@montflow/<domain>`, skills at `<root>/.agents/skills`. Default `process.cwd()`.
 - `doctor` reads the same root and installs/verifies `<root>/.agents/skills/`.
 - `--verbose` adds per-item detail; never hides failures. Default token-lean.
-- `--status valid|invalid` on `list` for file stores; lifecycle states on `list` for `mf-sessions`/`mf-specs`.
+- `--status valid|invalid` on `list` for file stores; lifecycle states on `list` for `mf-specs`.
 - `--check` on `doctor`: report-only, non-zero when unhealthy.
 - `--all` on `verify`: whole store.
 - Accept `--flag value` and `--flag=value`. Unknown flag → usage, exit 1.
@@ -78,7 +77,6 @@ Domain verbs extend this; never break it (`mf-sessions`: `start`/`resume`/`inter
 
 ### Sanctioned exceptions
 
-- `pi-sessions` hand-rolls argv parsing: its verbs (`start`/`steer`/`answer`) and their parser are shared with the Pi extension, so the `Command` tree is not reusable. Engines stay shared.
 - Binary and slash expose the **same verb set**; the slash parser is hand-rolled because Pi passes one argument string, not an argv array.
 
 ## Steps

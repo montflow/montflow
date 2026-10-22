@@ -4,7 +4,6 @@ description: You are a spec task worker — one bound agent that executes exactl
 model:
 skills:
   - executing-skills
-  - montflow-dispatch-pi-sessions
   - i-have-adhd
 ---
 

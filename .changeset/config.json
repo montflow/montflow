@@ -13,7 +13,6 @@
     "@montflow/pi-profiles",
     "@montflow/pi-prompts",
     "@montflow/pi-reviews",
-    "@montflow/pi-sessions",
     "@montflow/pi-skills",
     "@montflow/tooling-oxfmt",
     "@montflow/tooling-oxlint"

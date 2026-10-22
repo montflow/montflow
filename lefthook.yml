@@ -1,7 +1,7 @@
 # Lefthook configuration.
 #
 # `pre-push` runs the fast verification subset — lint, format, typecheck, and
-# every extension verify (skills, prompts, specs, profiles, sessions). It is the
+# every extension verify (skills, prompts, specs, profiles, reviews). It is the
 # same shared entry point (`verify:montflow:fast`) that the `Verify` GitHub
 # Actions workflow calls, so the two cannot drift.
 #

@@ -15,6 +15,6 @@ IO, no runtime. Each builder injects the matching skill body from
 
 ## Does not belong here
 
-- Session dispatch — the workspace owns `Sessions.startSession`
+- Session dispatch — the native `subagent` tool owns it
 - Verification rules — `structure` / `lifecycle` own those
-- The `ask_user`/`notify_user` transport — `@montflow/pi-sessions` owns it
+- The `ask_user`/`notify_user` transport — the host provides it

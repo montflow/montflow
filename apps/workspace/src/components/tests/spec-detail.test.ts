@@ -9,7 +9,6 @@ const detail: SpecDetail = {
     description: 'Ship it.',
     state: 'inconsistent',
     status: 'complete',
-    active: false,
     total: 3,
     complete: 2,
     issues: 1,

@@ -66,7 +66,7 @@ One line per matched spec, then a matched-of-total summary:
 
 Each line is `<mark> <name>  <declared> · <derived> · <task counts>`, plus a
 `· ✗ <n>` suffix when the spec fails mechanical verification. Derived states:
-`pending` (idle), `in-progress` (a live session is bound), `blocked`, `complete`, or
+`pending` (idle), `in-progress` (work has started), `blocked`, `complete`, or
 `inconsistent` (the spec contradicts itself). Drill into one spec with
 `status --name <spec>`; verify the whole root with `check`.
 
@@ -75,8 +75,8 @@ Each line is `<mark> <name>  <declared> · <derived> · <task counts>`, plus a
 The listing reflects the spec files on disk. If `list` reports no specs,
 none exist under the root — do not invent one. To author a new spec use
 `montflow-create-pi-specs` (or scaffold the skeleton with
-`mf-specs create --name <spec>`); to run work against an existing spec use the
-`montflow-dispatch-pi-sessions` skill.
+`mf-specs create --name <spec>`); to run work against an existing spec,
+dispatch `subagent` sessions from the orchestrator.
 
 # Reference
 

@@ -1,6 +1,6 @@
 /**
  * Simplified `executing-spec` skill, aligned with the pi-specs
- * contract (status enum, lifecycle states, CLI) and the pi-sessions tools.
+ * contract (status enum, lifecycle states, CLI) and the native subagent tool.
  * Injected verbatim into a spec-resume session's prompt — never discovered as
  * a Pi skill.
  */
@@ -13,16 +13,16 @@ completion. Work one phase at a time.
 
 - Read \`SPEC.md\` and every \`TASK.md\`. The active phase is the first phase holding any
   \`pending\` or \`in-progress\` task.
-- Derived states: pending (idle), in-progress (a live session is bound), blocked, complete,
+- Derived states: pending (idle), in-progress (work has started), blocked, complete,
   inconsistent.
 
 ## Execute a phase
 
-- Spawn sessions for the phase's pending tasks (\`session_start\`), respecting \`depends-on\`. Tasks whose
+- Dispatch one subagent per pending task (the \`subagent\` tool), respecting \`depends-on\`. Tasks whose
   dependencies are all complete may run in parallel.
 - A task with \`Gates: Yes\` must run and pass its \`GATES.md\` before it is marked complete.
 - Never mark a task \`complete\` while any \`depends-on\` target is pending or in-progress.
-- Close the phase with its \`review\` task: spawn an independent session to run \`montflow-adversarial-review\`
+- Close the phase with its \`review\` task: dispatch an independent subagent to run \`montflow-adversarial-review\`
   over the phase and write round \`<NNN>/REVIEW.md\` of the review series that shares the spec's name
   (\`.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md\`, phase \`A\` → \`001\`, \`B\` → \`002\`, …), keeping the
   series ledger in step, then resolve accepted findings as \`defect\` or \`execution\` tasks.

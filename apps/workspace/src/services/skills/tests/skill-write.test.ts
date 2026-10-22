@@ -99,18 +99,3 @@ Vitest.describe('Skills.buildHeadlessPrompt runtime', () => {
     Vitest.expect(Skills.buildHeadlessPrompt('pre', 'prompt', '')).toBe('pre\n\nprompt');
   });
 });
-
-Vitest.describe('Skills.installArgsFor runtime', () => {
-  Vitest.it('installs named skills project-local and non-interactive', () => {
-    Vitest.expect(Skills.installArgsFor(['authoring-skills'])).toStrictEqual([
-      'skills',
-      'add',
-      'montflow/montflow',
-      '-s',
-      'authoring-skills',
-      '-a',
-      'pi',
-      '-y',
-    ]);
-  });
-});
