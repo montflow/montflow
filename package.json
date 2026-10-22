@@ -18,6 +18,7 @@
     "changeset:version": "changeset version",
     "changeset:publish": "bun run --filter @montflow/core --filter @montflow/format build && changeset publish",
     "test": "turbo test",
+    "test:tui": "turbo test:tui",
     "smoke": "turbo smoke",
     "ts:check": "turbo ts:check",
     "format:check": "turbo format:check",
@@ -34,7 +35,7 @@
     "verify:montflow:distribution": "bun run --cwd tooling/compat-check cli distribution",
     "verify:montflow:extensions": "bun run verify:montflow:skills && bun run verify:montflow:prompts && bun run verify:montflow:specs && bun run verify:montflow:profiles && bun run verify:montflow:reviews",
     "verify:montflow:fast": "turbo lint:check && turbo format:check && turbo ts:check && bun run verify:montflow:compat && bun run verify:montflow:distribution && bun run verify:montflow:extensions",
-    "verify:montflow": "turbo lint:check && turbo format:check && turbo ts:check && turbo test && turbo smoke && bun run verify:montflow:compat && bun run verify:montflow:distribution && bun run verify:montflow:extensions",
+    "verify:montflow": "turbo lint:check && turbo format:check && turbo ts:check && turbo test && turbo test:tui && turbo smoke && bun run verify:montflow:compat && bun run verify:montflow:distribution && bun run verify:montflow:extensions",
     "hooks:install": "lefthook install"
   },
   "devDependencies": {

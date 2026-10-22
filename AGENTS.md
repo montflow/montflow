@@ -13,6 +13,7 @@ bun@1.3.13 — lockfile is source of truth
 - install: `bun install`
 - test: `turbo test`
 - smoke (plugin loader): `bun run --cwd packages/opencode smoke`
+- tui suite: `bun run test:tui` (turbo `test:tui`, `apps/workspace` `.test.tsx`)
 - typecheck: `turbo ts:check`
 - lint: `turbo lint:check` / `turbo lint:fix`
 - format: `turbo format:check` / `turbo format:fix`
@@ -43,7 +44,8 @@ bun@1.3.13 — lockfile is source of truth
 ## Verification gate
 
 - `bun run verify:montflow` is the repo-wide gate: `lint:check`, `format:check`,
-  `ts:check`, `turbo test`, `turbo smoke` (the `@opencode/plugin` loader smoke),
+  `ts:check`, `turbo test`, `turbo test:tui` (the workspace TUI `.test.tsx`
+  suite), `turbo smoke` (the `@opencode/plugin` loader smoke),
   the dependency-drift and distribution checks, then the extension verifies. CI
   runs each check as its own matrix cell in `.github/workflows/verify.yml` (push
   to `main`).
