@@ -16,12 +16,29 @@ export const EXTERNAL_ALLOWLIST = ['@opencode/', '@opentui/', 'effect', 'solid-j
 /** Node builtins are provided by the host runtime, prefixed or bare. */
 const BUILTINS = new Set(builtinModules);
 
+/** True for an import the bundler left external (not relative and not a builtin). */
+const isExternalImport = (specifier: string): boolean =>
+  !specifier.startsWith('.') &&
+  !specifier.startsWith('/') &&
+  !specifier.startsWith('node:') &&
+  !BUILTINS.has(specifier);
+
+/** The package a bare specifier resolves to (`@opencode/schema/agent` → `@opencode/schema`). */
+const packageOf = (specifier: string): string => {
+  const parts = specifier.split('/');
+  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : (parts[0] ?? specifier);
+};
+
+/** Top-level static imports/exports of one emitted bundle. */
+const importsOf = (source: string): readonly string[] =>
+  [
+    ...source.matchAll(/^(?:import|export)\b[^\n]*?\bfrom\s*"([^"]+)"/gmu),
+    ...source.matchAll(/^import\s*"([^"]+)"/gmu),
+  ].map((match) => match[1] ?? '');
+
 /** Builtins plus the allowlist: every other import in an artifact is a defect. */
 const isAllowedImport = (specifier: string): boolean => {
-  if (specifier.startsWith('.') || specifier.startsWith('/') || specifier.startsWith('node:')) {
-    return true;
-  }
-  if (BUILTINS.has(specifier)) return true;
+  if (!isExternalImport(specifier)) return true;
   return EXTERNAL_ALLOWLIST.some((allowed) =>
     allowed.endsWith('/')
       ? specifier.startsWith(allowed)
@@ -128,12 +145,23 @@ export interface PublishedManifest {
   readonly exports: Readonly<Record<string, string>>;
   readonly files: readonly string[];
   readonly dependencies: Readonly<Record<string, string>>;
+  /** Host singletons the artifact imports but does not bundle. */
+  readonly peerDependencies: Readonly<Record<string, string>>;
 }
 
-/** Build the artifact manifest: source exports mapped to their bundles. */
+/**
+ * Build the artifact manifest: source exports mapped to their bundles, the
+ * declared runtime dependencies, and the host externals the emitted bundles
+ * actually import. A host external the artifact imports must be declared or a
+ * Git install outside the host tree cannot resolve it.
+ * @param manifest - source package manifest
+ * @param bundles - subpath → emitted file
+ * @param externals - external import specifiers found in the emitted bundles
+ */
 export const publishedManifest = (
   manifest: Manifest,
   bundles: ReadonlyMap<string, string>,
+  externals: readonly string[] = [],
 ): PublishedManifest => {
   const exports = Object.fromEntries([
     ['./package.json', './package.json'],
@@ -144,6 +172,11 @@ export const publishedManifest = (
       .flatMap((field) => Object.entries(manifest[field] ?? {}))
       .filter(([dependency]) => !dependency.startsWith('@montflow/')),
   );
+  const peerDependencies = Object.fromEntries(
+    [...new Set(externals.map((specifier) => packageOf(specifier)))]
+      .filter((dependency) => !(dependency in dependencies))
+      .map((dependency) => [dependency, '*']),
+  );
   return {
     name: manifest.name,
     version: manifest.version ?? '0.0.0',
@@ -152,6 +185,7 @@ export const publishedManifest = (
     exports,
     files: ['*.js', 'package.json'],
     dependencies,
+    peerDependencies,
   };
 };
 
@@ -163,6 +197,10 @@ export const auditArtifact = (
   bundles: readonly { readonly specifier: string; readonly file: string }[],
 ): readonly Problem[] => {
   const problems: Problem[] = [];
+  const declared = new Set([
+    ...Object.keys(artifact.dependencies),
+    ...Object.keys(artifact.peerDependencies),
+  ]);
   for (const [dependency, version] of Object.entries(artifact.dependencies)) {
     if (version.includes('workspace:')) {
       problems.push({ where, problem: `${dependency} keeps a workspace: specifier` });
@@ -180,16 +218,19 @@ export const auditArtifact = (
     const source = readFileSync(path.join(artifactRoot, file), 'utf8');
     // Only top-level static imports/exports count: bundled string literals can
     // contain `from "..."` and would otherwise be read as imports.
-    const imports = [
-      ...source.matchAll(/^(?:import|export)\b[^\n]*?\bfrom\s*"([^"]+)"/gmu),
-      ...source.matchAll(/^import\s*"([^"]+)"/gmu),
-    ];
-    for (const match of imports) {
-      const imported = match[1] ?? '';
+    for (const imported of importsOf(source)) {
       if (!isAllowedImport(imported)) {
         problems.push({
           where: `${where}/${file}`,
           problem: `${specifier} imports ${imported}, which a Git install cannot resolve`,
+        });
+        continue;
+      }
+      const dependency = packageOf(imported);
+      if (isExternalImport(imported) && !declared.has(dependency)) {
+        problems.push({
+          where: `${where}/${file}`,
+          problem: `${specifier} imports ${imported}, which the artifact does not declare`,
         });
       }
     }
@@ -259,9 +300,13 @@ export const packPlugin = async (
     const error = await new Response(build.stderr).text();
     throw new Error(`packing ${entry.manifest.name} failed:\n${error}`);
   }
+  const externals = bundles.flatMap((bundle) =>
+    importsOf(readFileSync(path.join(dir, bundle.file), 'utf8')).filter(isExternalImport),
+  );
   const manifest = publishedManifest(
     entry.manifest,
     new Map(bundles.map((bundle) => [bundle.subpath, bundle.file])),
+    externals,
   );
   writeFileSync(path.join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   return {

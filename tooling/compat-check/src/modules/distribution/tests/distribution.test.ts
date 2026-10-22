@@ -186,9 +186,17 @@ describe('distribution boundary', () => {
 });
 
 describe('published artifact', () => {
-  it('drops internal and workspace dependencies from the install manifest', () => {
-    const manifest = publishedManifest(plugin().manifest, new Map([['.', 'index.js']]));
+  it('drops internal dependencies and declares the host externals it imports', () => {
+    const manifest = publishedManifest(plugin().manifest, new Map([['.', 'index.js']]), [
+      '@opencode/schema/agent',
+      '@opencode/plugin/effect',
+      'effect',
+    ]);
     expect(manifest.dependencies).toStrictEqual({ effect: '4.0.0-rc.112' });
+    expect(manifest.peerDependencies).toStrictEqual({
+      '@opencode/schema': '*',
+      '@opencode/plugin': '*',
+    });
     expect(manifest.exports).toStrictEqual({
       './package.json': './package.json',
       '.': './index.js',
@@ -210,10 +218,64 @@ describe('published artifact', () => {
       exports: { './package.json': './package.json', '.': './index.js' },
       files: ['*.js'],
       dependencies: { effect: '4.0.0-rc.112' },
+      peerDependencies: {},
     };
     expect(
       auditArtifact(root, 'packages/specs', artifact, [{ specifier: '.', file: 'index.js' }]),
     ).toStrictEqual([]);
+  });
+
+  it('accepts a declared host external', () => {
+    const root = tempRoot();
+    writeFileSync(
+      path.join(root, 'server.js'),
+      'import { Agent } from "@opencode/schema/agent";\n',
+    );
+    writeFileSync(path.join(root, 'package.json'), '{}');
+    const artifact: PublishedManifest = {
+      name: '@montflow/specs',
+      version: '0.0.1',
+      private: true,
+      type: 'module',
+      exports: { './package.json': './package.json', './server': './server.js' },
+      files: ['*.js'],
+      dependencies: { effect: '4.0.0-rc.112' },
+      peerDependencies: { '@opencode/schema': '*' },
+    };
+    expect(
+      auditArtifact(root, 'packages/specs', artifact, [
+        { specifier: './server', file: 'server.js' },
+      ]),
+    ).toStrictEqual([]);
+  });
+
+  it('fails an artifact that imports an undeclared host external', () => {
+    const root = tempRoot();
+    writeFileSync(
+      path.join(root, 'server.js'),
+      'import { Agent } from "@opencode/schema/agent";\n',
+    );
+    writeFileSync(path.join(root, 'package.json'), '{}');
+    const artifact: PublishedManifest = {
+      name: '@montflow/specs',
+      version: '0.0.1',
+      private: true,
+      type: 'module',
+      exports: { './package.json': './package.json', './server': './server.js' },
+      files: ['*.js'],
+      dependencies: { effect: '4.0.0-rc.112' },
+      peerDependencies: {},
+    };
+    expect(
+      auditArtifact(root, 'packages/specs', artifact, [
+        { specifier: './server', file: 'server.js' },
+      ]),
+    ).toStrictEqual([
+      {
+        where: 'packages/specs/server.js',
+        problem: './server imports @opencode/schema/agent, which the artifact does not declare',
+      },
+    ]);
   });
 
   it('fails an artifact that imports an internal package a Git install cannot resolve', () => {
@@ -231,6 +293,7 @@ describe('published artifact', () => {
       exports: { './package.json': './package.json', './server': './server.js' },
       files: ['*.js'],
       dependencies: { effect: '4.0.0-rc.112' },
+      peerDependencies: {},
     };
     expect(
       auditArtifact(root, 'packages/specs', artifact, [
@@ -240,6 +303,10 @@ describe('published artifact', () => {
       {
         where: 'packages/specs/server.js',
         problem: './server imports @montflow/opencode, which a Git install cannot resolve',
+      },
+      {
+        where: 'packages/specs/server.js',
+        problem: './server imports @opencode/plugin/host, which the artifact does not declare',
       },
     ]);
   });
