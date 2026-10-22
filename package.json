@@ -32,8 +32,7 @@
     "verify:montflow:extensions": "bun run verify:montflow:skills && bun run verify:montflow:prompts && bun run verify:montflow:specs && bun run verify:montflow:profiles && bun run verify:montflow:sessions && bun run verify:montflow:reviews",
     "verify:montflow:fast": "turbo lint:check && turbo format:check && turbo ts:check && bun run verify:montflow:extensions",
     "verify:montflow": "turbo lint:check && turbo format:check && turbo ts:check && turbo test && bun run verify:montflow:extensions",
-    "hooks:install": "lefthook install",
-    "workspace": "bun run --cwd apps/workspace start"
+    "hooks:install": "lefthook install"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",

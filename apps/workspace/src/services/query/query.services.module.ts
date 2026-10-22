@@ -8,7 +8,6 @@ import {
 } from '../specs/specs.services.module.js';
 import {
   fetchProfiles,
-  isExtensionInstalled as isProfilesExtensionInstalled,
   type ProfileSummary,
   type ProfileVerify,
   type ProfilesPhase,
@@ -16,19 +15,12 @@ import {
 } from '../profiles/profiles.services.module.js';
 import {
   fetchPrompts,
-  isExtensionInstalled as isPromptsExtensionInstalled,
   type PromptSummary,
   type PromptsPhase,
 } from '../prompts/prompts.services.module.js';
 import {
-  fetchSessions,
-  sessionsInstalled,
-  type SessionSummary,
-  type SessionsPhase,
-} from '../sessions/sessions.services.module.js';
-import {
   fetchSkills,
-  isExtensionInstalled,
+  panelInstalled,
   type SkillSummary,
   type SkillsPhase,
 } from '../skills/skills.services.module.js';
@@ -82,19 +74,6 @@ export interface PromptsList {
  */
 export const promptsKey = ['prompts'] as const;
 
-/** Cached sessions-list snapshot behind the `sessions` query key. */
-export interface SessionsList {
-  readonly installed: boolean;
-  readonly rows: ReadonlyArray<SessionSummary>;
-}
-
-/**
- * Query key for the workspace sessions list. Mirrors `skillsKey` —
- * every sessions read/write in `app.tsx` goes through this key so flow
- * completions update the UI through the cache, never signals.
- */
-export const sessionsKey = ['sessions'] as const;
-
 /** Cached specs-list snapshot behind the `specs` query key. */
 export interface SpecsList {
   readonly installed: boolean;
@@ -143,7 +122,7 @@ export const fetchSkillsList = (
   root: string,
   onPhase: (phase: SkillsPhase) => void,
 ): Promise<SkillsList> =>
-  isExtensionInstalled(root).pipe(
+  panelInstalled(root, 'skills').pipe(
     Effect.flatMap((installed) => {
       onPhase('extension');
       if (!installed) {
@@ -170,7 +149,7 @@ export const fetchProfilesList = (
   root: string,
   onPhase: (phase: ProfilesPhase) => void,
 ): Promise<ProfilesList> =>
-  isProfilesExtensionInstalled(root).pipe(
+  panelInstalled(root, 'profiles').pipe(
     Effect.flatMap((installed) => {
       onPhase('extension');
       if (!installed) {
@@ -213,7 +192,7 @@ export const fetchPromptsList = (
   root: string,
   onPhase: (phase: PromptsPhase) => void,
 ): Promise<PromptsList> =>
-  isPromptsExtensionInstalled(root).pipe(
+  panelInstalled(root, 'prompts').pipe(
     Effect.flatMap((installed) => {
       onPhase('extension');
       if (!installed) {
@@ -222,33 +201,6 @@ export const fetchPromptsList = (
       }
       onPhase('prompts');
       return fetchPrompts(root).pipe(
-        Effect.map((rows) => ({ installed, rows })),
-        Effect.mapError((message) => new Error(message)),
-      );
-    }),
-    Effect.runPromise,
-  );
-
-/**
- * Sessions-list query bridge: same staged boot as `fetchSkillsList`
- * (store-directory check, then the list read) as one TanStack query.
- * @param root - workspace root (sessions store owner)
- * @param onPhase - Loader stage reporter (`extension`, then `sessions`)
- * @returns Promise resolving to the list snapshot
- */
-export const fetchSessionsList = (
-  root: string,
-  onPhase: (phase: SessionsPhase) => void,
-): Promise<SessionsList> =>
-  sessionsInstalled(root).pipe(
-    Effect.flatMap((installed) => {
-      onPhase('extension');
-      if (!installed) {
-        const empty: SessionsList = { installed, rows: [] };
-        return Effect.succeed(empty);
-      }
-      onPhase('sessions');
-      return fetchSessions(root).pipe(
         Effect.map((rows) => ({ installed, rows })),
         Effect.mapError((message) => new Error(message)),
       );

@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { type BoxRenderable, SyntaxStyle } from '@opentui/core';
 import { Show, createSignal } from 'solid-js';
 import { Keybinds, formatKeybinds } from './keybinds.js';

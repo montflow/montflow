@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { palette } from './palette.js';
 
 export interface StatusBarProps {

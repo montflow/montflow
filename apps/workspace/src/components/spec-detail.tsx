@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { For, Show } from 'solid-js';
 import type { Specs } from '../services/index.js';
 import { specDetailLines, specMarker } from './spec-markers.js';

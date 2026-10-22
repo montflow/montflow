@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { formatKeybinds, type Keybind } from './keybinds.js';
 import { palette } from './palette.js';
 

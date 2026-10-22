@@ -48,6 +48,12 @@ const profilesTarget = targetOf('profiles');
 const reviewsTarget = targetOf('reviews');
 const skillsTarget = targetOf('skills');
 
+/** The workspace lives under `apps/`, so it needs one more segment than `packages/*`. */
+const workspaceTarget = {
+  directory: fileURLToPath(new URL('../../../apps/workspace', import.meta.url)),
+  name: '@montflow/workspace',
+};
+
 /** The command editor the port drives through `ctx.command.transform`. */
 interface HostCommandEditor {
   add(definition: { readonly name: string }): void;
@@ -110,7 +116,80 @@ interface ServerModule {
 interface TuiModule {
   readonly default: {
     readonly id: string;
-    readonly setup: () => void;
+    readonly setup: (context: TuiHostContext) => (() => void) | undefined;
+  };
+}
+
+/**
+ * The slice of the host TUI context the workspace entry reads. Records every
+ * registration so a page, slot, and keymap claim can be asserted without a
+ * renderer.
+ */
+interface TuiHostContext {
+  readonly location: { readonly directory: string };
+  readonly ui: {
+    readonly dialog: {
+      select<Value>(options: {
+        readonly title: string;
+        readonly options: ReadonlyArray<{ readonly title: string; readonly value: Value }>;
+      }): Promise<Value | undefined>;
+      confirm(options: { readonly title: string; readonly message: string }): Promise<boolean>;
+      prompt(options: { readonly title: string }): Promise<string | undefined>;
+      alert(options: { readonly title: string; readonly message: string }): Promise<void>;
+      show(render: () => object): void;
+      set(options: { readonly size?: string; readonly centered?: boolean }): void;
+      clear(): void;
+    };
+    readonly toast: { show(options: { readonly message: string }): void };
+    readonly router: {
+      register(page: { readonly name: string; readonly render: () => object }): () => void;
+      navigate(destination: { readonly type: string }): void;
+      current(): { readonly type: string };
+    };
+    readonly slot: (claim: {
+      readonly render: () => object;
+      readonly append?: string;
+      readonly prepend?: string;
+    }) => () => void;
+    readonly panel: {
+      open(name: string, options?: { readonly presentation?: string }): boolean;
+      close(): void;
+      current(): { readonly name: string; readonly sessionID: string } | undefined;
+    };
+    readonly model: {
+      current(): { readonly providerID: string; readonly modelID: string } | undefined;
+    };
+  };
+  readonly data: {
+    readonly session: {
+      list(): ReadonlyArray<{ readonly id: string; readonly title?: string }>;
+      get(sessionID: string): { readonly id: string } | undefined;
+      status(sessionID: string): 'idle' | 'running';
+    };
+    readonly location: {
+      readonly vcs: { info(): { readonly branch: string } | undefined };
+      readonly model: {
+        list(): ReadonlyArray<{ readonly providerID: string; readonly id: string }>;
+      };
+    };
+  };
+  readonly attention: {
+    notify(options: { readonly message: string }): Promise<{
+      readonly ok: boolean;
+      readonly notification: boolean;
+      readonly sound: boolean;
+    }>;
+  };
+  readonly keymap: { layer(input: () => object): void };
+  readonly storage: {
+    store<Value extends object>(
+      key: string,
+      options: { readonly initial: Value },
+    ): readonly [Value, (mutation: (draft: Value) => void) => Promise<void>];
+    memory<Value extends object>(
+      key: string,
+      options: { readonly initial: Value },
+    ): readonly [Value, (mutation: (draft: Value) => void) => void];
   };
 }
 
@@ -195,6 +274,73 @@ const makeHost = (directory: string) => {
 
 const run = (server: ServerModule, context: HostContext) =>
   server.default.effect(context).pipe(Effect.scoped, Effect.runPromise);
+
+/**
+ * A TUI host context recording pages, slots, keymap layers, and storage use.
+ * No renderer is attached: the entry registers, it does not paint.
+ */
+const makeTuiHost = (directory: string) => {
+  const pages: Array<string> = [];
+  const unregistered: Array<string> = [];
+  const slots: Array<string> = [];
+  const layers: Array<object> = [];
+  const navigations: Array<string> = [];
+  const context: TuiHostContext = {
+    location: { directory },
+    ui: {
+      dialog: {
+        select: async <Value>(): Promise<Value | undefined> => undefined,
+        confirm: async () => false,
+        prompt: async () => undefined,
+        alert: async () => {},
+        show: () => {},
+        set: () => {},
+        clear: () => {},
+      },
+      toast: { show: () => {} },
+      router: {
+        register: (page) => {
+          pages.push(page.name);
+          return () => unregistered.push(page.name);
+        },
+        navigate: (destination) => navigations.push(destination.type),
+        current: () => ({ type: 'home' }),
+      },
+      slot: (claim) => {
+        slots.push(claim.append ?? '');
+        return () => {};
+      },
+      panel: { open: () => false, close: () => {}, current: () => undefined },
+      model: { current: () => undefined },
+    },
+    data: {
+      session: {
+        list: () => [{ id: 'ses_1', title: 'First' }],
+        get: () => undefined,
+        status: () => 'idle',
+      },
+      location: {
+        vcs: { info: () => undefined },
+        model: { list: () => [] },
+      },
+    },
+    attention: {
+      notify: async () => ({ ok: true, notification: true, sound: true }),
+    },
+    keymap: {
+      layer: (input) => {
+        layers.push(input());
+      },
+    },
+    storage: {
+      store: <Value extends object>(_key: string, options: { readonly initial: Value }) =>
+        [options.initial, async () => {}] as const,
+      memory: <Value extends object>(_key: string, options: { readonly initial: Value }) =>
+        [options.initial, () => {}] as const,
+    },
+  };
+  return { context, pages, unregistered, slots, layers, navigations };
+};
 
 test('Host.resolve prefers the ./server entrypoint over the root export', () => {
   const entries = Host.resolve(specsTarget);
@@ -347,4 +493,48 @@ test('skills publishes the stored skills, /mf-skills, and the dispatch tools', a
   expect(host.commands).toEqual(['mf-skills']);
   expect(host.tools).toEqual(['skill_create', 'skill_modify', 'skill_transform']);
   expect(host.agents).toEqual([]);
+});
+
+test('the workspace package exposes a server and a TUI face', async () => {
+  const entries = Host.resolve(workspaceTarget);
+  expect(entries.server?.endsWith('/src/server.ts')).toBe(true);
+  expect(entries.tui?.endsWith('/src/tui.tsx')).toBe(true);
+  const server = await load<ServerModule>(entries.server, 'server');
+  const tui = await load<TuiModule>(entries.tui, 'tui');
+  expect(server.default.id).toBe('workspace');
+  expect(server.default.effect).toBeTypeOf('function');
+  expect(tui.default.id).toBe('workspace');
+  expect(tui.default.setup).toBeTypeOf('function');
+});
+
+test('the workspace server registers /mf-workspace and workspace_info', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'montflow-workspace-'));
+  const entries = Host.resolve(workspaceTarget);
+  const server = await load<ServerModule>(entries.server, 'server');
+  const host = makeHost(root);
+  try {
+    await run(server, host.context);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+  expect(host.commands).toEqual(['mf-workspace']);
+  expect(host.tools).toEqual(['workspace_info']);
+  expect(host.agents).toEqual([]);
+});
+
+test('the workspace TUI registers the grid route page and its chrome', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'montflow-workspace-'));
+  const entries = Host.resolve(workspaceTarget);
+  const tui = await load<TuiModule>(entries.tui, 'tui');
+  const host = makeTuiHost(root);
+  let cleanup: (() => void) | undefined;
+  try {
+    cleanup = tui.default.setup(host.context);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+  expect(host.pages).toEqual(['workspace']);
+  expect(host.slots).toEqual(['app', 'home.footer.status']);
+  cleanup?.();
+  expect(host.unregistered).toEqual(['workspace']);
 });

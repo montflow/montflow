@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import type { Workspace } from '../modules/index.js';
 import { palette } from './palette.js';
 
