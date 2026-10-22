@@ -1164,19 +1164,28 @@ const parseSlashArgs = (args: string): SlashArgs => {
 };
 
 /**
+ * Resolve a `--dir` value against the caller's workspace. The CLI runs from the
+ * workspace, so it passes nothing; the server plugin supplies one that joins
+ * relative values onto the plugin directory and leaves absolute ones alone.
+ */
+export type ResolveSlashDir = (dir: string) => string;
+
+/**
  * Run the slash-command form used by the Pi extension. Never renders
  * through the CLI; returns text for `ctx.ui.notify` plus an ok flag.
  * @param args - raw slash-command args
  * @param root - default spec root, already resolved against the session cwd
+ * @param resolveDir - resolver for a `--dir` value (identity by default)
  * @returns rendered output plus success flag
  */
 export const runSlash = (
   args: string,
   root: string,
+  resolveDir: ResolveSlashDir = (dir) => dir,
 ): Effect.Effect<SlashReport, SpecStore.StoreError, SpecStore.SpecStore> =>
   Effect.gen(function* () {
     const parsed = parseSlashArgs(args);
-    const dir = parsed.dir === undefined ? root : storeDirOf(parsed.dir);
+    const dir = parsed.dir === undefined ? root : storeDirOf(resolveDir(parsed.dir));
     if (parsed.command === 'create') {
       if (parsed.name === undefined || parsed.name === '') {
         return yield* Effect.fail(

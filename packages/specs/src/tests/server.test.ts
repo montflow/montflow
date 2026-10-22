@@ -128,6 +128,23 @@ Vitest.describe('specs server command', () => {
     }),
   );
 
+  Vitest.it.effect('resolves a relative --dir against the plugin directory', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      try {
+        // The relative name only resolves when it joins onto the plugin
+        // directory; the server process directory has no such checkout.
+        yield* Effect.promise(() => writeSpec(path.join(root, 'nested'), 'nested'));
+        const command = yield* register(root);
+        yield* invoke(command, 'status --name nested --dir nested');
+        Vitest.expect(yield* logged()).toContain('Phase A');
+        Vitest.expect(yield* logged()).not.toContain('failed');
+      } finally {
+        yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      }
+    }),
+  );
+
   Vitest.it.effect('surfaces a store failure instead of swallowing it', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
