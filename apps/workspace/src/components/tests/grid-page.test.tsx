@@ -1,11 +1,17 @@
 /** @jsxImportSource @opentui/solid */
-import { makeTuiPorts, type KeymapLayer, type TuiPortsContext } from '@montflow/opencode/tui';
+import {
+  makeTuiPorts,
+  type KeymapCommand,
+  type KeymapLayer,
+  type TuiPortsContext,
+} from '@montflow/opencode/tui';
 import { testRender } from '@opentui/solid';
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pageRenderer } from '../../grid-page.js';
+import { WorkspaceCommand } from '../../contributions.js';
 import { Dashboard } from '../../modules/index.js';
 import { Query } from '../../services/index.js';
 
@@ -20,7 +26,7 @@ afterEach(async () => {
 });
 
 /** A host TUI context with every seam the page reads, recording keymap layers. */
-const makeContext = (directory: string) => {
+const makeContext = (directory: string, picked?: string) => {
   const layers: Array<KeymapLayer> = [];
   const navigations: Array<string> = [];
   const context: TuiPortsContext = {
@@ -38,7 +44,9 @@ const makeContext = (directory: string) => {
     },
     ui: {
       dialog: {
-        select: async () => undefined,
+        // SAFETY: the page only selects string option values, and the fixture
+        // pins the picked string — Value is string for every call it makes.
+        select: <Value,>() => Promise.resolve(picked as Value | undefined),
         confirm: async () => false,
         prompt: async () => undefined,
         alert: async () => {},
@@ -77,13 +85,58 @@ const makeContext = (directory: string) => {
 const WIDTH = 100;
 const HEIGHT = 32;
 
-const renderPage = async (layout: Dashboard.Layout) => {
+/** Write a minimal skill store so the skills panel has rows to filter. */
+const seedSkills = async (root: string, names: ReadonlyArray<string>): Promise<void> => {
+  await Promise.all(
+    names.map(async (name) => {
+      const dir = path.join(root, '.agents', 'skills', name);
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        path.join(dir, 'SKILL.md'),
+        `---\nname: ${name}\ndescription: ${name} fixture\n---\n`,
+        'utf8',
+      );
+    }),
+  );
+};
+
+/** Render a page until its frame satisfies the predicate (queries are async). */
+const settledFrame = async (
+  setup: Setup,
+  predicate: (frame: string) => boolean,
+): Promise<string> => {
+  // oxlint-disable no-await-in-loop -- sequential polling is the point: each
+  // iteration renders the frame the previous await produced.
+  for (let attempt = 0; attempt < 200; attempt++) {
+    await setup.renderOnce();
+    const frame = setup.captureCharFrame();
+    if (predicate(frame)) return frame;
+    // oxlint-disable-next-line montflow/no-timers -- the store read under test is async by design.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('workspace page did not settle');
+};
+
+/** One page command from the recorded keymap layers. */
+const commandOf = (layers: ReadonlyArray<KeymapLayer>, id: string): KeymapCommand => {
+  const command = layers
+    .flatMap((layer) => layer.commands ?? [])
+    .find((candidate) => candidate.id === id);
+  if (command === undefined) throw new Error(`missing command ${id}`);
+  return command;
+};
+
+const renderPage = async (
+  layout: Dashboard.Layout,
+  options: { readonly picked?: string; readonly panel?: string; readonly skills?: boolean } = {},
+) => {
   const root = await mkdtemp(path.join(tmpdir(), 'montflow-workspace-'));
   roots.push(root);
-  const { context, layers } = makeContext(root);
+  if (options.skills === true) await seedSkills(root, ['alpha', 'beta']);
+  const { context, layers, navigations } = makeContext(root, options.picked);
   const ports = makeTuiPorts(context);
   const focus = ports.storage.store('workspace', {
-    initial: { panel: Dashboard.firstPanel(layout) },
+    initial: { panel: options.panel ?? Dashboard.firstPanel(layout) },
   });
   const setup = await testRender(
     pageRenderer({ layout, root, ports, focus, client: Query.makeQueryClient() }),
@@ -94,7 +147,7 @@ const renderPage = async (layout: Dashboard.Layout) => {
   );
   await setup.renderOnce();
   setups.push(setup);
-  return { setup, layers };
+  return { setup, layers, navigations, ports };
 };
 
 describe('workspace grid page', () => {
@@ -116,8 +169,54 @@ describe('workspace grid page', () => {
     expect(ids).toContain('workspace.panel.skills');
     expect(ids).toContain('workspace.panel.specs');
     expect(ids).toContain('workspace.search');
-    expect(ids).toContain('workspace.open');
+    expect(ids).toContain('workspace.row.open');
     expect(ids).toContain('workspace.refresh');
+  });
+
+  test('the page layer adds no duplicate command ids or bindings to the slot', async () => {
+    const { layers, ports } = await renderPage(Dashboard.DEFAULT_LAYOUT);
+    const slot = await testRender(() => <WorkspaceCommand ports={ports} />, {
+      width: WIDTH,
+      height: HEIGHT,
+    });
+    setups.push(slot);
+    await slot.renderOnce();
+
+    const commands = layers.flatMap((layer) => layer.commands ?? []);
+    const ids = commands.map((command) => command.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    // The always-mounted slot owns `/workspace` and ctrl+w; the page-local
+    // copy opens a row instead of re-registering navigation.
+    expect(ids.filter((id) => id === 'workspace.open')).toHaveLength(1);
+    expect(ids.filter((id) => id === 'workspace.row.open')).toHaveLength(1);
+    const bindings = commands.flatMap((command) =>
+      command.bind === undefined || command.bind === false ? [] : [command.bind],
+    );
+    expect(bindings.filter((bind) => bind === 'ctrl+w')).toHaveLength(1);
+    expect(bindings.filter((bind) => bind === 'return')).toHaveLength(1);
+  });
+
+  test('escape clears the focused panel filter before leaving the page', async () => {
+    const { setup, layers, navigations } = await renderPage(Dashboard.DEFAULT_LAYOUT, {
+      panel: 'skills',
+      skills: true,
+      picked: 'alpha',
+    });
+    await settledFrame(setup, (frame) => frame.includes('alpha') && frame.includes('beta'));
+
+    const searched = commandOf(layers, 'workspace.search');
+    await searched.run();
+    const filtered = await settledFrame(setup, (frame) => frame.includes('/alpha'));
+    expect(filtered).not.toContain('beta');
+    expect(filtered).toContain('esc clear');
+
+    const back = commandOf(layers, 'workspace.back');
+    await back.run();
+    const restored = await settledFrame(setup, (frame) => !frame.includes('/alpha'));
+    expect(restored).toContain('beta');
+    expect(restored).not.toContain('esc clear');
+    // Clearing a filter is not a navigation: esc still never left the page.
+    expect(navigations).toStrictEqual([]);
   });
 
   test('a layout without the sessions cell renders only its own panels', async () => {

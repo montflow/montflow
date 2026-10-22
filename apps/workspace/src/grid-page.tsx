@@ -405,16 +405,6 @@ const WorkspacePage = (props: WorkspacePageProps) => {
   ports.grid.keymapLayer(() => {
     const commands: Array<KeymapCommand> = [
       {
-        id: 'workspace.navigate',
-        title: 'Open the workspace grid',
-        group: 'Workspace',
-        slash: { name: 'workspace' },
-        bind: 'ctrl+w',
-        run: () => {
-          ports.grid.navigate({ type: 'plugin', name: 'workspace' });
-        },
-      },
-      {
         id: 'workspace.search',
         title: 'Search the focused panel',
         group: 'Workspace',
@@ -422,7 +412,7 @@ const WorkspacePage = (props: WorkspacePageProps) => {
         run: () => search(),
       },
       {
-        id: 'workspace.open',
+        id: 'workspace.row.open',
         title: 'Open the highlighted row',
         group: 'Workspace',
         bind: 'return',
@@ -454,10 +444,17 @@ const WorkspacePage = (props: WorkspacePageProps) => {
       },
       {
         id: 'workspace.back',
-        title: 'Close the detail or leave the page',
+        title: 'Clear the filter, close the detail, or leave the page',
         group: 'Workspace',
         bind: 'escape',
         run: () => {
+          const panel = selected();
+          // A filtered list reads as an empty store, so esc always restores
+          // the full list before it closes a detail or leaves the page.
+          if (queryOf(panel) !== '') {
+            setQuery(panel, '');
+            return;
+          }
           if (detail() !== undefined) closeDetail();
           else ports.grid.navigate({ type: 'home' });
         },
@@ -535,7 +532,7 @@ const WorkspacePage = (props: WorkspacePageProps) => {
     }
     if (selected() === 'info') return formatKeybinds([Keybinds.back(), Keybinds.quit()]);
     const entries = [Keybinds.search(), Keybinds.open(), Keybinds.move(), Keybinds.refresh()];
-    if (queryOf(selected()) !== '') entries.push({ key: 'esc', action: 'home' });
+    if (queryOf(selected()) !== '') entries.push(Keybinds.clearFilter());
     return formatKeybinds(entries);
   });
 
