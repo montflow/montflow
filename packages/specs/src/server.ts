@@ -22,17 +22,19 @@ const Live: Layer.Layer<SpecStore.SpecStore> = Layer.provide(
 
 /**
  * OpenCode server plugin entry: registers `/specs` for mechanically verifying
- * specs. Pure filesystem checks — no model, no network.
+ * specs. Pure filesystem checks — no model, no network. The invocation text is
+ * the slash-command argument and the root resolves from the plugin's directory,
+ * not the server process's.
  */
 export default entry(ID, (ports) =>
   ports.command.register({
     name: COMMAND_NAME,
     description: COMMAND_DESCRIPTION,
-    execute: () =>
-      runSlash('', `${process.cwd()}/${DEFAULT_ROOT}`).pipe(
+    execute: (invocation) =>
+      runSlash(invocation.prompt.text, `${ports.cwd}/${DEFAULT_ROOT}`).pipe(
         Effect.provide(Live),
-        Effect.tap((report) => Effect.log(report.output)),
-        Effect.ignore,
+        Effect.tap((report) => Effect.logInfo(report.output)),
+        Effect.catch((error) => Effect.logError(`${error.operation} failed: ${error.reason}`)),
       ),
   }),
 );
