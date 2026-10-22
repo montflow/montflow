@@ -1,5 +1,7 @@
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { defineTool, entry, type ServerPorts } from '@montflow/opencode';
+import { ProfileStore } from '@montflow/profiles';
+import { SpecStore } from '@montflow/specs';
 import { Effect, Layer, Schema } from 'effect';
 import * as Cli from './apps/cli/index.js';
 import { startReview } from './apps/dispatch/index.js';
@@ -15,15 +17,19 @@ export const COMMAND_NAME = Cli.COMMAND_NAME;
 export const COMMAND_DESCRIPTION = Cli.COMMAND_DESCRIPTION;
 
 /** File-backed store with its platform dependencies hidden. */
-const StoreLive: Layer.Layer<ReviewStore.ReviewStore> = Layer.provide(
-  ReviewStore.Default,
-  Layer.merge(NodeFileSystem.layer, NodePath.layer),
-);
+const NodeLive = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 
 /** Every service the headless CLI needs; the probe stays optional at runtime. */
-const Live: Layer.Layer<ReviewStore.ReviewStore | ProfileProbe.ProfileProbe> = Layer.merge(
-  StoreLive,
+const Live: Layer.Layer<
+  | ReviewStore.ReviewStore
+  | ProfileProbe.ProfileProbe
+  | ProfileStore.ProfileStore
+  | SpecStore.SpecStore
+> = Layer.mergeAll(
+  Layer.provide(ReviewStore.Default, NodeLive),
   ProfileProbe.Default,
+  Layer.provide(ProfileStore.Default, NodeLive),
+  Layer.provide(SpecStore.Default, NodeLive),
 );
 
 /** Log a command result where the server host can see it. */
@@ -44,12 +50,15 @@ const createTool = (ports: ServerPorts) =>
       name: Schema.String,
       target: Schema.optional(Schema.String),
       spec: Schema.optional(Schema.String),
+      profile: Schema.optional(Schema.String),
+      round: Schema.optional(Schema.String),
+      phase: Schema.optional(Schema.String),
       model: Schema.optional(Schema.String),
     }),
     execute: (input) =>
       Effect.gen(function* () {
         const result = yield* startReview(ports, { root: ports.cwd, ...input }).pipe(
-          Effect.provide(StoreLive),
+          Effect.provide(Live),
         );
         return `Started review '${result.series}' in session ${result.sessionId}.`;
       }),

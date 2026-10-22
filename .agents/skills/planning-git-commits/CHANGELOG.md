@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0] - 2026-10-13
+
+### Added
+
+- **Pre-flight Hook Check** (Step 4): detect git hooks via `core.hooksPath` / the hooks directory; when present, run them against the working tree before executing the plan, fix failures with mechanical tooling, then commit the whole plan with `--no-verify`
+- Rules: run hooks before execution; scope `--no-verify` to hook-present repos only; fix hook failures mechanically and fold into a planned or final commit
+- Reference: link to the hook pre-flight subsection
+
+### Changed
+
+- **Error Handling**: reworded for hook bypass — commit failures now cover empty commits, staged conflicts, and non-bypassed hooks
+
 ## [1.2.1] - 2026-10-07
 
 ### Added

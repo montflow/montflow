@@ -22,10 +22,18 @@ completion. Work one phase at a time.
   dependencies are all complete may run in parallel.
 - A task with \`Gates: Yes\` must run and pass its \`GATES.md\` before it is marked complete.
 - Never mark a task \`complete\` while any \`depends-on\` target is pending or in-progress.
-- Close the phase with its \`review\` task: dispatch an independent subagent to run \`montflow-adversarial-review\`
-  over the phase and write round \`<NNN>/REVIEW.md\` of the review series that shares the spec's name
-  (\`.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md\`, phase \`A\` → \`001\`, \`B\` → \`002\`, …), keeping the
-  series ledger in step, then resolve accepted findings as \`defect\` or \`execution\` tasks.
+- Close the phase with its \`review\` task by spawning one independent reviewer session **per expected
+  review series**. The expected series are the spec's own \`<name>\` series (the general reviewer,
+  always present) plus one \`<name>-<profile>\` series per slug the task's \`reviewer-profiles\` list
+  declares. Call \`review_create\` once per series, passing \`spec: <name>\`, that series' \`profile\`
+  (omit it for the spec's own series), and the **same** \`round\` and \`phase\` on every call.
+- Rounds are attributed to a phase, not ranked by it. Target \`roundForPhase(phase)\` (\`A\` → \`001\`,
+  \`B\` → \`002\`) when it is free in **every** expected series, else the smallest round
+  \`>= roundForPhase(phase)\` free in every series, so the phase is reviewed at one identical round
+  across all of them. Each reviewer runs \`montflow-adversarial-review\`, writes
+  \`.agents/@montflow/reviews/<series>/<round>/REVIEW.md\` recording \`- Phase: <phase>\` in its
+  metadata, and keeps the series ledger in step. Then resolve accepted findings as \`defect\` or
+  \`execution\` tasks.
 
 ## Finish
 

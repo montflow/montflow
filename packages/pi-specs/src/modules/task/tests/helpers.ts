@@ -7,6 +7,7 @@ export interface TaskFixture {
   readonly originator?: string;
   readonly dependsOn?: string;
   readonly relatedTasks?: string;
+  readonly reviewerProfiles?: string;
   readonly findingRef?: string;
   readonly status?: string;
 }
@@ -23,6 +24,9 @@ export const taskMarkdown = (fixture: TaskFixture): string => {
     `depends-on: ${fixture.dependsOn ?? ''}`,
     `related-tasks: ${fixture.relatedTasks ?? ''}`,
   ];
+  if (fixture.reviewerProfiles !== undefined) {
+    front.push(`reviewer-profiles: ${fixture.reviewerProfiles}`);
+  }
   if (fixture.findingRef !== undefined) front.push(`finding-ref: ${fixture.findingRef}`);
   front.push(`status: ${fixture.status ?? 'pending'}`, '---');
   return [

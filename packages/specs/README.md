@@ -61,8 +61,10 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
   `WorkspaceType`, `parseSpecFile`, `verifySpecFile`, and the task
   table (`TaskRow`, `parseTaskTable`).
 - **`Task`** — `Task` Schema Class, `TaskId`, `TaskType`, `TaskStatus`,
-  `parseTaskDirName`, `parseTaskFile`, `verifyTaskFile`, plus the
-  task-id / directory / originator patterns.
+  `parseTaskDirName`, `parseTaskFile`, `verifyTaskFile`, the optional
+  `reviewer-profiles` list (`REVIEWER_PROFILES_FIELD`) on a review task, the
+  `finding-ref` locator pattern (`FINDING_REF_PATTERN`), plus the task-id /
+  directory / originator patterns.
 - **`Gates`** — `parseGates`, `verifyGatesFile` (stages + checklist
   items, no placeholders).
 - **`Memory`** — `verifyMemoryFile`, `MEMORY_SECTIONS` (title + template
@@ -83,7 +85,8 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
   `buildResumePrompt` (orchestrate a spec). Each injects its skill.
 - **`Scaffold`** — `renderSpecScaffold` / `ScaffoldSpecInput` /
   `ScaffoldTask`: pure renderer for a fresh spec tree (the mechanical
-  half of `mf-specs create`).
+  half of `mf-specs create`), emitting each review task's
+  `reviewer-profiles` list.
 - **`SpecSkill`** — `AUTHORING_SPEC` / `EXECUTING_SPEC`,
   the simplified skill text sent into dispatched sessions (not published as
   workspace skills).
@@ -100,6 +103,43 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
 
 All verification is pure and non-throwing: it returns a `Result` with an
 issue list, so callers can render or repair.
+
+## Migration: multi-reviewer reviews
+
+Multi-reviewer support adds an optional `reviewer-profiles` field to a review
+task and one review series per declared profile. Existing specs and series need
+no change:
+
+1. **No declared profiles is unchanged.** A review task with no
+   `reviewer-profiles` (absent, blank, or `[]`) dispatches one general reviewer
+   into its existing series, exactly as before. `verify:montflow:specs` never
+   reads review series, so a series-free repo gate keeps passing; the per-series
+   link is enforced only by the workspace caller.
+2. **`reviewer-profiles: <a>, <b>` is additive.** Each declared profile adds a
+   series named `<spec>-<profile>`, and the general reviewer always runs the
+   default `<spec>` series alongside it — a profile joins, it never replaces the
+   general reviewer. A phase's review lands on the same round number in every
+   expected series.
+3. **`finding-ref` is now a qualified locator.** A `defect` task's bare
+   `finding-ref: F<n>` becomes `<series>/<round>/F<n>` (for example
+   `ship-login/002/F2`). The accepted grammar is
+   `/^[a-z0-9]+(?:-[a-z0-9]+)*\/\d{3}\/F\d+$/`. Rewrite each existing value
+   once; there are none in this repo.
+4. **Cross-spec series names can collide — accepted.** Because `-` both
+   separates and occurs inside a slug, a profile series `<spec>-<profile>` can
+   equal another spec's default or profile series (spec `foo` declaring profile
+   `bar` composes `foo-bar`, the default series of a spec named `foo-bar`). No
+   injective marker exists within the slug alphabet, and both the verifier and
+   dispatch always hold the spec name, so this is accepted as a low-likelihood
+   limitation.
+5. **Per-round `Phase:` attribution is the binding.** Every spec-phase round
+   records the phase it reviews (`- Phase: <phase>` in its `## Metadata`). A
+   completed phase review is attributed to a round carrying that phase in every
+   expected series, with the round number agreeing across series. The phase rank
+   is the _preferred_ round number only: if an earlier phase's fix→re-review
+   loop has taken it, the phase writes the next round free in every series. No
+   empty or fabricated round is ever seeded, and a `pending` review task
+   requires no round at all.
 
 ## Status
 

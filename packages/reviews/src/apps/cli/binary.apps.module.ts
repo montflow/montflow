@@ -1,5 +1,7 @@
 import { Console, Effect, Layer, Option } from 'effect';
 import { Argument, Command, Flag } from 'effect/unstable/cli';
+import { ProfileStore } from '@montflow/profiles';
+import { SpecStore } from '@montflow/specs';
 import { ProfileProbe, ReviewStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
@@ -133,6 +135,7 @@ const createFlags = {
   dir: dirFlag,
   name: nameArg,
   target: optionalString('target', 'What the series reviews. Defaults to the series name.'),
+  profile: optionalString('profile', 'Reviewer profile to bind the series to.'),
   round: optionalString('round', 'Round directory to create. Default is the next free round.'),
 };
 
@@ -143,6 +146,7 @@ const createCommand = Command.make('create', createFlags, (config) =>
       name: config.name,
       target: opt(config.target),
       round: opt(config.round),
+      profile: opt(config.profile),
     }),
     Renderers.created,
   ),
@@ -155,6 +159,7 @@ const newCommand = Command.make('new', createFlags, (config) =>
       name: config.name,
       target: opt(config.target),
       round: opt(config.round),
+      profile: opt(config.profile),
     }),
     Renderers.created,
   ),
@@ -180,7 +185,14 @@ export const rootCommand = Command.make('mf-reviews').pipe(
     newCommand,
     resumeCommand,
   ]),
-  Command.provide(Layer.merge(ReviewStore.Default, ProfileProbe.Default)),
+  Command.provide(
+    Layer.mergeAll(
+      ReviewStore.Default,
+      ProfileProbe.Default,
+      SpecStore.Default,
+      ProfileStore.Default,
+    ),
+  ),
 );
 
 /** Version reported by `--version`. Mirrors the package version. */

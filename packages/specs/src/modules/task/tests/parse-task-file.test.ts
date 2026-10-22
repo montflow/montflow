@@ -11,7 +11,48 @@ Vitest.describe('Task.parseTaskFile runtime', () => {
     Vitest.expect(task?.originator).toBe('user');
     Vitest.expect(task?.status).toBe('pending');
     Vitest.expect(task?.dependsOn).toStrictEqual([]);
+    Vitest.expect(task?.reviewerProfiles).toStrictEqual([]);
     Vitest.expect(task?.findingRef).toBeUndefined();
+  });
+
+  Vitest.it('splits a comma-separated reviewer-profiles scalar', () => {
+    const task = Task.parseTaskFile(
+      taskMarkdown({
+        id: 'A004',
+        name: 'review-later',
+        type: 'review',
+        reviewerProfiles: 'effect-reviewer, generic-reviewer',
+      }),
+    );
+    Vitest.expect(task?.reviewerProfiles).toStrictEqual(['effect-reviewer', 'generic-reviewer']);
+  });
+
+  Vitest.it('parses an empty reviewer-profiles value as an empty list', () => {
+    const task = Task.parseTaskFile(
+      taskMarkdown({ id: 'A004', name: 'review-later', type: 'review', reviewerProfiles: '' }),
+    );
+    Vitest.expect(task?.reviewerProfiles).toStrictEqual([]);
+  });
+
+  Vitest.it('accepts a YAML - item reviewer-profiles list', () => {
+    const task = Task.parseTaskFile(
+      [
+        '---',
+        'id: A004',
+        'name: review-later',
+        'type: review',
+        'originator: user',
+        'depends-on:',
+        'related-tasks:',
+        'reviewer-profiles:',
+        '  - effect-reviewer',
+        '  - generic-reviewer',
+        'status: pending',
+        '---',
+        '',
+      ].join('\n'),
+    );
+    Vitest.expect(task?.reviewerProfiles).toStrictEqual(['effect-reviewer', 'generic-reviewer']);
   });
 
   Vitest.it('splits comma-separated depends-on and related-tasks', () => {
@@ -34,11 +75,11 @@ Vitest.describe('Task.parseTaskFile runtime', () => {
         name: 'fix-login',
         type: 'defect',
         originator: 'defect:A001',
-        findingRef: 'F2',
+        findingRef: 'ship-login/002/F2',
       }),
     );
     Vitest.expect(task?.originator).toBe('defect:A001');
-    Vitest.expect(task?.findingRef).toBe('F2');
+    Vitest.expect(task?.findingRef).toBe('ship-login/002/F2');
   });
 
   Vitest.it('returns undefined without a frontmatter block', () => {

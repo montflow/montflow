@@ -14,7 +14,13 @@ import {
 } from '../../modules/scaffold/index.js';
 import type { ScaffoldTask } from '../../modules/scaffold/index.js';
 import { type SpecSnapshot, verifySpecTree } from '../../modules/structure/index.js';
-import { type Task, parseTaskDirName, parseTaskFile, phaseOf } from '../../modules/task/index.js';
+import {
+  SLUG_PATTERN,
+  type Task,
+  parseTaskDirName,
+  parseTaskFile,
+  phaseOf,
+} from '../../modules/task/index.js';
 import {
   type Issue,
   type Result,
@@ -680,6 +686,8 @@ export interface ScaffoldOptions {
   readonly workspaceType?: string | undefined;
   /** Raw tasks, each `name[:type[:gates]]`; defaults to one `implement` task. */
   readonly taskSpecs?: ReadonlyArray<string> | undefined;
+  /** Ordered reviewer profile slugs emitted on the phase's review task. */
+  readonly reviewerProfiles?: ReadonlyArray<string> | undefined;
 }
 
 /** What {@link scaffold} wrote. */
@@ -755,6 +763,18 @@ export const scaffold = (
     if (yield* store.exists(root, options.name)) {
       return yield* refuse(`Spec '${options.name}' already exists under ${root}.`);
     }
+    const seenProfiles = new Set<string>();
+    for (const profile of options.reviewerProfiles ?? []) {
+      if (!SLUG_PATTERN.test(profile)) {
+        return yield* refuse(
+          `'${profile}' is not a valid reviewer profile — use a kebab-case slug such as 'effect-reviewer'.`,
+        );
+      }
+      if (seenProfiles.has(profile)) {
+        return yield* refuse(`Reviewer profile '${profile}' is listed more than once.`);
+      }
+      seenProfiles.add(profile);
+    }
     const rawTasks =
       options.taskSpecs === undefined || options.taskSpecs.length === 0
         ? [DEFAULT_SCAFFOLD_TASK]
@@ -773,6 +793,7 @@ export const scaffold = (
       created,
       description: options.description,
       workspaceType,
+      reviewerProfiles: options.reviewerProfiles,
       tasks,
     });
     yield* store.write(root, options.name, rendered.files);
@@ -898,6 +919,10 @@ const createCommand = Command.make(
       Flag.withDescription('Comma-separated tasks, each name[:type[:gates]]. Default: implement.'),
       Flag.optional,
     ),
+    reviewerProfiles: Flag.string('reviewer-profiles').pipe(
+      Flag.withDescription('Comma-separated reviewer profiles for the phase review task.'),
+      Flag.optional,
+    ),
   },
   (config) =>
     Effect.gen(function* () {
@@ -907,6 +932,7 @@ const createCommand = Command.make(
         description: opt(config.description),
         workspaceType: opt(config.workspaceType),
         taskSpecs: csv(opt(config.tasks)),
+        reviewerProfiles: csv(opt(config.reviewerProfiles)),
       });
       yield* Console.log(renderScaffold(report));
     }).pipe(
@@ -1066,6 +1092,7 @@ interface SlashArgs {
   readonly author: string | undefined;
   readonly workspaceType: string | undefined;
   readonly tasks: ReadonlyArray<string>;
+  readonly reviewerProfiles: ReadonlyArray<string>;
 }
 
 /** Flags the slash parser accepts as `--key value` or `--key=value`. */
@@ -1077,6 +1104,7 @@ const SLASH_VALUE_FLAGS = new Set([
   'author',
   'workspace-type',
   'tasks',
+  'reviewer-profiles',
 ]);
 
 const parseSlashArgs = (args: string): SlashArgs => {
@@ -1109,6 +1137,7 @@ const parseSlashArgs = (args: string): SlashArgs => {
   let author: string | undefined;
   let workspaceType: string | undefined;
   let tasks: ReadonlyArray<string> = [];
+  let reviewerProfiles: ReadonlyArray<string> = [];
   let verbose = false;
   let pending = false;
   let strict = false;
@@ -1120,6 +1149,7 @@ const parseSlashArgs = (args: string): SlashArgs => {
     else if (key === 'author') author = value;
     else if (key === 'workspace-type') workspaceType = value;
     else if (key === 'tasks') tasks = csv(value);
+    else if (key === 'reviewer-profiles') reviewerProfiles = csv(value);
   };
   for (let index = 0; index < rest.length; index++) {
     const token = rest[index] ?? '';
@@ -1160,6 +1190,7 @@ const parseSlashArgs = (args: string): SlashArgs => {
     author,
     workspaceType,
     tasks,
+    reviewerProfiles,
   };
 };
 
@@ -1203,6 +1234,7 @@ export const runSlash = (
         description: parsed.description,
         workspaceType: parsed.workspaceType,
         taskSpecs: parsed.tasks,
+        reviewerProfiles: parsed.reviewerProfiles,
       });
       return { output: renderScaffold(report), ok: true };
     }

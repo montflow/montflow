@@ -43,6 +43,7 @@
     "@montflow/pi-specs": "workspace:*",
     "@montflow/profiles": "workspace:*",
     "@montflow/prompts": "workspace:*",
+    "@montflow/reviews": "workspace:*",
     "@montflow/skills": "workspace:*",
     "@tanstack/solid-query": "^5.102.8",
     "effect": "4.0.0-rc.112",

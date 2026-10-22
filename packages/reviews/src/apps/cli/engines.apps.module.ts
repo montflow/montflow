@@ -1,4 +1,6 @@
 import { Clock, Effect } from 'effect';
+import { ProfileStore } from '@montflow/profiles';
+import { SpecStore, Task } from '@montflow/specs';
 import * as Review from '../../modules/review/index.js';
 import { ProfileProbe, ReviewStore } from '../../services/index.js';
 import * as Doctor from '../doctor/index.js';
@@ -326,20 +328,88 @@ export interface VerifyAllReport {
   readonly warnings: ReadonlyArray<string>;
 }
 
+/** Spec store directory, relative to the workspace root (mirrors `@montflow/specs`). */
+const SPECS_PREFIX = '.agents/@montflow/specs';
+
 /**
- * Mechanically verify every series in the store. An absent or empty store is a
- * pass with zero entries — a repository with no reviews yet is not broken.
+ * Resolve every spec's declared `reviewer-profiles` against the profiles store
+ * (F9). Discovery reads `<cwd>/.agents/@montflow/specs` through the specs store
+ * and parses each `TASK.md` with the single-owner task grammar, so a spec with
+ * no series still fails on an unknown profile. An absent specs root is a no-op.
+ * @param scope - store scope
+ * @returns one failing entry per unresolved declared profile
+ */
+export const verifySpecProfiles = (
+  scope: StoreScope,
+): Effect.Effect<
+  ReadonlyArray<VerifyEntry>,
+  never,
+  SpecStore.SpecStore | ProfileStore.ProfileStore
+> =>
+  Effect.gen(function* () {
+    const specs = yield* SpecStore.SpecStore;
+    const profiles = yield* ProfileStore.ProfileStore;
+    const root = `${scope.cwd.replace(/\/+$/, '')}/${SPECS_PREFIX}`;
+    if (!(yield* specs.hasRoot(root))) return [];
+    const names = yield* specs
+      .names(root)
+      .pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));
+    const entries: Array<VerifyEntry> = [];
+    for (const spec of names) {
+      const snapshot = yield* specs
+        .snapshot(root, spec)
+        .pipe(Effect.orElseSucceed(() => undefined));
+      if (snapshot === undefined) continue;
+      for (const file of snapshot.files) {
+        if (!file.path.endsWith('TASK.md')) continue;
+        const task = Task.parseTaskFile(file.content);
+        if (task === undefined || task.type !== 'review') continue;
+        for (const profile of new Set(task.reviewerProfiles)) {
+          const found = yield* profiles
+            .read(scope.cwd, profile)
+            .pipe(Effect.orElseSucceed(() => undefined));
+          if (found !== undefined) continue;
+          entries.push({
+            path: `${SPECS_PREFIX}/${spec}/${file.path}`,
+            result: {
+              valid: false,
+              issues: [
+                {
+                  field: 'reviewer-profiles',
+                  message: `Declared reviewer profile '${profile}' was not found under .agents/@montflow/profiles.`,
+                },
+              ],
+            },
+          });
+        }
+      }
+    }
+    return entries;
+  });
+
+/**
+ * Mechanically verify every series in the store, plus every spec's declared
+ * reviewer profiles (F9). An absent or empty store is a pass with zero entries —
+ * a repository with no reviews yet is not broken.
  * @param scope - store scope
  * @returns every file's result, the total issue count, and any warnings
  */
 export const verifyAll = (
   scope: StoreScope,
-): Effect.Effect<VerifyAllReport, string, ReviewStore.ReviewStore | ProfileProbe.ProfileProbe> =>
+): Effect.Effect<
+  VerifyAllReport,
+  string,
+  | ReviewStore.ReviewStore
+  | ProfileProbe.ProfileProbe
+  | SpecStore.SpecStore
+  | ProfileStore.ProfileStore
+> =>
   Effect.gen(function* () {
     const store = yield* ReviewStore.ReviewStore;
     const names = yield* store.seriesNames(scope.cwd, scope.dir).pipe(Effect.mapError(mapErr));
     const groups = yield* Effect.forEach(names, (name) => verifySeries(scope, name));
-    const entries = groups.flatMap((group) => group.entries);
+    const specProfileEntries = yield* verifySpecProfiles(scope);
+    const entries = [...groups.flatMap((group) => group.entries), ...specProfileEntries];
     const warnings = groups.flatMap((group) => group.warnings);
     const issueCount = entries.reduce((total, entry) => total + entry.result.issues.length, 0);
     return { entries, issueCount, warnings };
@@ -393,6 +463,8 @@ export interface ScaffoldFields extends StoreScope {
   readonly target?: string | undefined;
   /** Round directory to create. Defaults to the next free round. */
   readonly round?: string | undefined;
+  /** Reviewer profile to stamp on the ledger; omitted for the general reviewer. */
+  readonly profile?: string | undefined;
 }
 
 /** What `scaffold` created. */
@@ -438,6 +510,23 @@ export const scaffold = (
 
     const created = yield* today;
     const target = fields.target ?? fields.name;
+    const ledgerRaw = yield* store
+      .readSeries(fields.cwd, fields.name, fields.dir)
+      .pipe(Effect.orElseSucceed(() => ''));
+    const existingProfile = Review.parseSeries(ledgerRaw).metadata['Profile'];
+    const requestedProfile =
+      fields.profile === undefined || fields.profile === '' ? undefined : fields.profile;
+    if (
+      requestedProfile !== undefined &&
+      existingProfile !== undefined &&
+      existingProfile !== '' &&
+      existingProfile !== requestedProfile
+    ) {
+      return yield* Effect.fail(
+        `Series '${fields.name}' is already bound to profile '${existingProfile}'; refusing to bind profile '${requestedProfile}'.`,
+      );
+    }
+    const profile = requestedProfile ?? existingProfile;
 
     const rows: Array<Review.RoundRow> = [];
     const findings: Array<Review.FindingsRow> = [];
@@ -460,6 +549,7 @@ export const scaffold = (
       created,
       rounds: rows,
       findings,
+      profile,
     });
 
     yield* store

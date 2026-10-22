@@ -3,7 +3,7 @@ name: montflow-create-pi-specs
 description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per task (TASK.md, MEMORY.md, GATES.md) — by scaffolding with `mf-specs create` then filling in the rules below. Use when an agent must create a spec directly, without dispatching a session.
 id: 6ebf45d24cb3d3a1
 author: Daniel Montilla
-version: 2.1.0
+version: 2.2.0
 license: MIT
 dependencies:
   - executing-skills
@@ -37,7 +37,8 @@ writes a tree passing `mf-specs check`:
 bun run --cwd packages/pi-specs cli create --name <kebab-name> \
   [--description "<one line>"] [--author "<name>"] \
   [--workspace-type in-place|worktree] \
-  [--tasks "build:execution:gates,explore:exploratory"]
+  [--tasks "build:execution:gates,explore:exploratory"] \
+  [--reviewer-profiles "<a>,<b>"]
 ```
 
 - `<kebab-name>` is required and must be the final directory name.
@@ -47,6 +48,8 @@ bun run --cwd packages/pi-specs cli create --name <kebab-name> \
 - With no `--tasks`, it creates one `implement` execution task.
 - It always appends the phase's `<PHASE>099-review-phase` review task, refuses
   to overwrite an existing spec, and prints the files it wrote.
+- `--reviewer-profiles` seeds the review task's `reviewer-profiles` list
+  (comma-separated, ordered).
 - Inside a Pi session the same engine is
   `/mf-specs create --name <kebab-name> …`.
 
@@ -71,7 +74,7 @@ either `Yes` or `No`.
 
 `TASK.md` frontmatter: `id` (`<LETTERS><NNN>`, matches the directory), `name`
 (matches the directory name after the id), `type`, `originator`, `depends-on`,
-`related-tasks`, `status`.
+`related-tasks`, `reviewer-profiles`, `status`.
 
 `TASK.md` body sections: `## Type: <type>`, `## Description`,
 `## Requirements`, `## Completion`.
@@ -80,6 +83,12 @@ either `Yes` or `No`.
 - `status`: pending | in-progress | complete | blocked (`defect` is a type, never a status).
 - `originator`: `user`, `defect:<task-id>`, or `planner:<task-id>`.
 - `depends-on` may reference only tasks in the same phase or an earlier phase.
+- `reviewer-profiles` (`review` tasks only): comma-separated ordered reviewer
+  profile slugs (`reviewer-profiles: effect-reviewer, generic-reviewer`). Empty
+  or absent keeps the single general reviewer; each entry adds a
+  `<kebab-name>-<profile>` review series that the phase's review round is also
+  written to. Declare `effect-reviewer` on **code phases** — any phase holding an
+  `execution` or `defect` task; exploration and planning phases stay empty.
 
 ## 5. Follow the Phase Rules
 
@@ -110,5 +119,5 @@ hand; a fresh `create` output already verifies.
 # Reference
 
 - **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`).
-- **Scaffold CLI**: `mf-specs create` (or `/mf-specs create` in Pi) — flags `--name`, `--description`, `--author`, `--workspace-type`, `--tasks`.
+- **Scaffold CLI**: `mf-specs create` (or `/mf-specs create` in Pi) — flags `--name`, `--description`, `--author`, `--workspace-type`, `--tasks`, `--reviewer-profiles`.
 - **Contract source**: `packages/pi-specs/src/skills/authoring-spec.ts`, `modules/scaffold`, `modules/lifecycle`, `modules/structure`.
