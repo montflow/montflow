@@ -4,9 +4,7 @@ status: complete
 workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-13
-locked-phases:
-  - A
-  - B
+locked-phases: A, B, C
 ---
 
 # Montflow OpenCode migration
@@ -38,9 +36,8 @@ montflow-owned session engine. Phase A validates that this is feasible and
 surfaces any blocker; Phase B decides it.
 
 Phases A and B are analysis only: they modify no file outside
-`.agents/@montflow/specs/`. Execution phases are authored after Phase B decides
-the target design. The workspace application and every `pi-*` package stay in
-place and working until a later execution phase ports them.
+`.agents/@montflow/specs/`. Phase B decides the target design; Phase C is the
+execution that ports the toolchain onto it, authored from the B005 sequence.
 
 ## Requirements
 
@@ -54,6 +51,10 @@ place and working until a later execution phase ports them.
 - Phase B specifies how the migrated packages are verified (turbo tasks, a plugin-loader smoke test, adapter contract tests) and distributed (peer deps, version pins, CI), without weakening the existing `verify:montflow` gate.
 - Every claim that drives a Phase B decision is grounded in a file path, a type signature, or a runnable check recorded in a task's `MEMORY.md`.
 - Phases A and B modify no file outside `.agents/@montflow/specs/`, and leave every `pi-*` package and the workspace application unchanged.
+- Phase C executes the B005 sequence in order: the adapter and loader proof land first (`@montflow/opencode` + the `pi-specs` pilot), then the pure domain libraries and CLIs, then the child-run and dispatch concerns, then the TUI/workspace, then `pi-sessions` is retired, then verification and distribution finalize.
+- Phase C isolates OpenCode behind the adapter: `@opencode/*` is imported only by `@montflow/opencode`; pure domain modules and every plugin reach the host only through the adapter ports.
+- Phase C is additive until each step's delete: old `pi-*` packages stay installed and loadable until the phase that ports them, and every phase is independently revertible at its own cut.
+- Phase C keeps `verify:montflow` green at every cut and removes `pi-sessions` only after C003–C005 are proven on native sessions.
 
 ## Tasks
 
@@ -73,3 +74,11 @@ place and working until a later execution phase ports them.
 | B005 | plan-migration-sequence            | planning    | complete | No    |
 | B006 | plan-verification-and-distribution | planning    | complete | No    |
 | B099 | review-phase                       | review      | complete | No    |
+| C001 | adapter-spine-and-loader-proof     | execution   | complete | Yes   |
+| C002 | extract-pure-domain-and-clis       | execution   | complete | Yes   |
+| C003 | port-child-run-extensions          | execution   | complete | Yes   |
+| C004 | port-dispatch-extensions           | execution   | complete | Yes   |
+| C005 | port-tui-and-workspace             | execution   | complete | Yes   |
+| C006 | retire-pi-sessions                 | execution   | complete | Yes   |
+| C007 | verification-and-distribution      | execution   | complete | Yes   |
+| C099 | review-phase                       | review      | complete | No    |
