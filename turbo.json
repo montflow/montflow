@@ -7,6 +7,12 @@
         "^build"
       ]
     },
+    "smoke": {
+      "cache": true,
+      "dependsOn": [
+        "^build"
+      ]
+    },
     "ts:check": {
       "cache": true,
       "dependsOn": [
