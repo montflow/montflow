@@ -45,19 +45,51 @@ export type SlotPath =
   | 'sidebar.footer';
 
 /**
- * One slot claim. Exactly one placement key is set; `render` receives the
- * slot's input, which this seam deliberately erases — a plugin reads the
- * input through its own page state, and an erased input keeps the seam from
- * re-declaring the host's whole slot map.
+ * One slot claim. Exactly one placement key is set, matching the host's
+ * mutually exclusive claim variants; `render` receives the slot's input,
+ * which this seam deliberately erases — a plugin reads the input through its
+ * own page state, and an erased input keeps the seam from re-declaring the
+ * host's whole slot map.
  */
-export interface SlotClaim {
+export type SlotClaim = {
   readonly render: () => RenderOutput;
-  readonly prepend?: SlotPath;
-  readonly append?: SlotPath;
-  readonly before?: SlotPath;
-  readonly after?: SlotPath;
-  readonly replace?: SlotPath;
-}
+} & (
+  | {
+      readonly prepend: SlotPath;
+      readonly append?: never;
+      readonly before?: never;
+      readonly after?: never;
+      readonly replace?: never;
+    }
+  | {
+      readonly prepend?: never;
+      readonly append: SlotPath;
+      readonly before?: never;
+      readonly after?: never;
+      readonly replace?: never;
+    }
+  | {
+      readonly prepend?: never;
+      readonly append?: never;
+      readonly before: SlotPath;
+      readonly after?: never;
+      readonly replace?: never;
+    }
+  | {
+      readonly prepend?: never;
+      readonly append?: never;
+      readonly before?: never;
+      readonly after: SlotPath;
+      readonly replace?: never;
+    }
+  | {
+      readonly prepend?: never;
+      readonly append?: never;
+      readonly before?: never;
+      readonly after?: never;
+      readonly replace: SlotPath;
+    }
+);
 
 /** One bindable page command. Mirrors the host keymap command shape. */
 export interface KeymapCommand {

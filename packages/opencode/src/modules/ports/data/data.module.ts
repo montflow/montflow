@@ -8,9 +8,16 @@ export interface SessionSnapshot {
   readonly parentID?: string;
 }
 
-/** Version-control state the host already resolved for the location. */
+/**
+ * Version-control state the host already resolved for the location. Mirrors
+ * the host `VcsInfo`: `branch` is the host's branch record, not a bare name.
+ */
 export interface VcsSnapshot {
-  readonly branch: string;
+  readonly provider?: string;
+  readonly branch: {
+    readonly current?: string;
+    readonly default?: string;
+  };
 }
 
 /** The slice of the host TUI context `DataPort` needs. */

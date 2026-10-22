@@ -59,7 +59,8 @@ export interface ModelContext {
     | {
         readonly location: {
           readonly model: {
-            list(): ReadonlyArray<ModelEntry>;
+            /** The host returns `undefined` until the location catalogue syncs. */
+            list(): ReadonlyArray<ModelEntry> | undefined;
           };
         };
       }

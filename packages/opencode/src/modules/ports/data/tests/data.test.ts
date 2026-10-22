@@ -15,7 +15,7 @@ const makeContext = (): DataPort.DataContext => ({
     },
     location: {
       vcs: {
-        info: () => ({ branch: 'feat/opencode-migration' }),
+        info: () => ({ provider: 'git', branch: { current: 'feat/opencode-migration' } }),
       },
     },
   },
@@ -33,7 +33,10 @@ Vitest.describe('DataPort runtime', () => {
     const port = DataPort.makeDataPort(makeContext());
     Vitest.expect(port.status('ses_2')).toBe('running');
     Vitest.expect(port.status('ses_1')).toBe('idle');
-    Vitest.expect(port.vcs()).toStrictEqual({ branch: 'feat/opencode-migration' });
+    Vitest.expect(port.vcs()).toStrictEqual({
+      provider: 'git',
+      branch: { current: 'feat/opencode-migration' },
+    });
   });
 
   Vitest.it('degrades to an empty read without a TUI context', () => {
