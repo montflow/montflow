@@ -130,6 +130,7 @@ const WorkspacePage = (props: WorkspacePageProps) => {
   const [info, setInfo] = createSignal<Workspace.Info>(
     Workspace.make({ name: Workspace.basename(root), root, branch: '…', clean: true }),
   );
+  const [model, setModel] = createSignal<string | undefined>(undefined);
 
   const [skillsPhase, setSkillsPhase] = createSignal<Skills.SkillsPhase>('extension');
   const skillsQuery = createQuery(() => ({
@@ -215,6 +216,17 @@ const WorkspacePage = (props: WorkspacePageProps) => {
   /** Read workspace metadata once per mount. */
   const loadInfo = (): void => {
     void GitInfo.getInfo(root).pipe(Effect.runPromise).then(setInfo);
+    void ports.model
+      .default()
+      .pipe(
+        Effect.match({
+          onFailure: () => undefined,
+          onSuccess: (entry) =>
+            entry === undefined ? undefined : `${entry.providerID}/${entry.modelID}`,
+        }),
+        Effect.runPromise,
+      )
+      .then(setModel);
   };
   loadInfo();
 
@@ -574,7 +586,7 @@ const WorkspacePage = (props: WorkspacePageProps) => {
                           height={columnCellHeights()[columnIndex()]?.[cellIndex()]}
                         >
                           {cell.panel === 'info' ? (
-                            <InfoPanel info={info()} />
+                            <InfoPanel info={info()} model={model()} />
                           ) : cell.panel === 'skills' ? (
                             <SkillsPanel
                               loading={skillsQuery.isPending}
