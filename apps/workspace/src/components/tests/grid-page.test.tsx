@@ -243,6 +243,40 @@ describe('workspace grid page', () => {
     expect(navigations).toStrictEqual(['home']);
   });
 
+  test('escape closes an open detail before clearing the filter it hides', async () => {
+    const { setup, layers, navigations } = await renderPage(Dashboard.DEFAULT_LAYOUT, {
+      panel: 'skills',
+      skills: true,
+      picked: 'alpha',
+    });
+    await settledFrame(setup, (frame) => frame.includes('alpha') && frame.includes('beta'));
+
+    await commandOf(layers, 'workspace.search').run();
+    await settledFrame(setup, (frame) => frame.includes('/alpha'));
+
+    await commandOf(layers, 'workspace.row.open').run();
+    const opened = await settledFrame(
+      setup,
+      (frame) => frame.includes('Actions') && frame.includes('esc back'),
+    );
+    // The detail renders no query, so the filter behind it is invisible.
+    expect(opened).not.toContain('/alpha');
+
+    const back = commandOf(layers, 'workspace.back');
+    await back.run();
+    const closed = await settledFrame(setup, (frame) => !frame.includes('Actions'));
+    // One press matches the `esc back` banner: the detail closes, the filter
+    // survives, and the list hint now advertises clearing it.
+    expect(closed).toContain('/alpha');
+    expect(closed).toContain('esc clear');
+    expect(navigations).toStrictEqual([]);
+
+    await back.run();
+    const cleared = await settledFrame(setup, (frame) => !frame.includes('/alpha'));
+    expect(cleared).toContain('esc home');
+    expect(navigations).toStrictEqual([]);
+  });
+
   test('escape on a filtered skills panel clears first, then leaves', async () => {
     const { setup, layers, navigations } = await renderPage(Dashboard.DEFAULT_LAYOUT, {
       panel: 'skills',

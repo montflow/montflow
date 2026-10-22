@@ -454,20 +454,26 @@ const WorkspacePage = (props: WorkspacePageProps) => {
       },
       {
         id: 'workspace.back',
-        title: 'Clear the filter, close the detail, or leave the page',
+        title: 'Close the detail, clear the filter, or leave the page',
         group: 'Workspace',
         bind: 'escape',
         run: () => {
           const panel = selected();
+          // The detail owns the screen and its banner advertises `esc back`, so
+          // it closes first — a filter set behind it is not rendered, and
+          // clearing it here would make one press look dead.
+          if (detail() !== undefined) {
+            closeDetail();
+            return;
+          }
           // A filtered list reads as an empty store, so esc restores the full
-          // list first — but only when the focused panel owns that filter.
+          // list next — but only when the focused panel owns that filter.
           // From `info`/`sessions` the key falls through and leaves the page.
           if (isDetailPanel(panel) && queryOf(panel) !== '') {
             setQuery(panel, '');
             return;
           }
-          if (detail() !== undefined) closeDetail();
-          else ports.grid.navigate({ type: 'home' });
+          ports.grid.navigate({ type: 'home' });
         },
       },
       {
@@ -778,7 +784,7 @@ const HelpOverlay = () => (
         ['v', 'toggle preview and full view'],
         ['d', 'delete the open row (skills, profiles, prompts)'],
         ['R', 'refresh every store'],
-        ['esc', 'clear the filter, close the detail, then leave the page'],
+        ['esc', 'close the detail, clear the filter, then leave the page'],
         ['q', 'back to the native session list'],
         ['?', 'this keymap'],
       ]}
