@@ -26,10 +26,13 @@ whether to retry, reinstall, or just retry.
 - `toSkill` / `fromSkill` bridges between dashboard rows and `@montflow/skills`
   `Skill` (validated one way, total the other)
 - `panelInstalled` checks and `installHint` copy per panel
-- `parseModelsStore` / `listModelLabels` / `parseDefaultModel` /
-  `listDefaultModel` — the provider/model labels the info panel reads from the
-  host's model store and session defaults; a missing or malformed file reads as
-  empty, never as a failure
+- `parseModelsStore` / `parseDefaultModel` — pure decoders for the retired
+  Pi model files (`~/.pi/agent/models-store.json`,
+  `~/.pi/agent/settings.json`); malformed input reads as empty, never as a
+  failure. Only the unit tests call them. `listModelLabels` /
+  `listDefaultModel` are their unused file-reading wrappers, left over from
+  the Pi era and marked for deletion — the live model label comes from
+  `ModelPort.default()` in `grid-page.tsx`, not from this module.
 
 ## Does not belong here
 
