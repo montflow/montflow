@@ -26,6 +26,7 @@ import {
 } from '../../modules/verify/index.js';
 import { SpecStore } from '../../services/index.js';
 import { runDoctorAt } from '../doctor/index.js';
+import type { DoctorResult } from '../doctor/index.js';
 
 /** Spec store directory, relative to the workspace root. */
 export const DEFAULT_ROOT = '.agents/@montflow/specs';
@@ -978,24 +979,57 @@ const listCommand = Command.make(
 );
 
 /**
- * `doctor` command: install the packaged spec skills into the repo's
- * `.agents/skills/`. Resolves the repo root from the working directory.
+ * Render a doctor run: the aggregate line, plus one line per skill that needs
+ * attention, and the repair hint.
+ * @param result - doctor outcome
+ * @returns human-readable report
  */
-const doctorCommand = Command.make('doctor', {}, () =>
-  Effect.gen(function* () {
-    const result = yield* runDoctorAt(process.cwd());
-    const names = result.skills.map((skill) => skill.name).join(', ');
-    yield* Console.log(
-      result.status === 'present'
-        ? `Spec skills '${names}' are installed under ${result.root}/.agents/skills/.`
-        : `Installed spec skills '${names}' into ${result.root}/.agents/skills/.`,
-    );
-  }).pipe(
-    Effect.catch((reason) =>
-      Effect.fail(new CliError.UserError({ cause: reason, userMessage: reason })),
+export const renderDoctor = (result: DoctorResult): string => {
+  const names = result.skills.map((skill) => skill.name).join(', ');
+  const head =
+    result.status === 'installed'
+      ? `Installed spec skills '${names}' into ${result.root}/.agents/skills/.`
+      : result.status === 'ok'
+        ? `Spec skills '${names}' are installed and current under ${result.root}/.agents/skills/.`
+        : result.status === 'drifted'
+          ? `Spec skills '${names}' are not current under ${result.root}/.agents/skills/.`
+          : `Spec skills '${names}' are installed under ${result.root}/.agents/skills/.`;
+  const problems = result.skills
+    .filter((skill) => skill.detail !== undefined)
+    .map((skill) => `  ${skill.name}: ${skill.detail}`);
+  return [head, ...problems, ...(result.healthy ? [] : ['Run `mf-specs doctor` to repair.'])].join(
+    '\n',
+  );
+};
+
+/**
+ * `doctor` command: install (or, with `--check`, verify) the packaged spec
+ * skills in the repo's `.agents/skills/`. Resolves the repo root from `--dir`.
+ */
+const doctorCommand = Command.make(
+  'doctor',
+  {
+    dir: dirFlag,
+    check: Flag.boolean('check').pipe(
+      Flag.withDescription('Report only; never write. Exits non-zero when a skill is not current.'),
+      Flag.withDefault(false),
     ),
-  ),
-).pipe(Command.withDescription('Install the packaged spec skills into .agents/skills/.'));
+  },
+  (config) =>
+    Effect.gen(function* () {
+      const result = yield* runDoctorAt(config.dir, { check: config.check });
+      yield* Console.log(renderDoctor(result));
+      if (!result.healthy) {
+        yield* Effect.sync(() => {
+          process.exitCode = 1;
+        });
+      }
+    }).pipe(
+      Effect.catch((reason) =>
+        Effect.fail(new CliError.UserError({ cause: reason, userMessage: reason })),
+      ),
+    ),
+).pipe(Command.withDescription('Install or verify the packaged spec skills in .agents/skills/.'));
 
 /** Root command: `mf-specs <check|status|state|next|list|create|doctor>`. */
 export const rootCommand = Command.make('mf-specs').pipe(

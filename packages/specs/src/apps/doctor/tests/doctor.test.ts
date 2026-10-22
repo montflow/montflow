@@ -55,4 +55,32 @@ Vitest.describe('runDoctor', () => {
       Vitest.expect(Fs.existsSync(installedSkillFile(root, FIND_SPECS_SKILL_NAME))).toBe(true);
     }),
   );
+
+  Vitest.it.effect('check mode reports drift and never writes', () =>
+    Effect.gen(function* () {
+      const root = freshRoot();
+
+      const missing = yield* runDoctor(root, { check: true });
+      Vitest.expect(missing.status).toBe('drifted');
+      Vitest.expect(missing.healthy).toBe(false);
+      Vitest.expect(missing.skills.map((skill) => skill.status)).toStrictEqual([
+        'missing',
+        'missing',
+      ]);
+      Vitest.expect(Fs.existsSync(installedSkillFile(root, CREATE_SPEC_SKILL_NAME))).toBe(false);
+
+      yield* runDoctor(root);
+      const current = yield* runDoctor(root, { check: true });
+      Vitest.expect(current.status).toBe('ok');
+      Vitest.expect(current.healthy).toBe(true);
+
+      Fs.appendFileSync(installedSkillFile(root, CREATE_SPEC_SKILL_NAME), '\nstale\n');
+      const stale = yield* runDoctor(root, { check: true });
+      Vitest.expect(stale.status).toBe('drifted');
+      Vitest.expect(stale.skills.map((skill) => skill.status)).toStrictEqual(['stale', 'ok']);
+      Vitest.expect(
+        Fs.readFileSync(installedSkillFile(root, CREATE_SPEC_SKILL_NAME), 'utf-8'),
+      ).toContain('stale');
+    }),
+  );
 });
