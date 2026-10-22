@@ -319,6 +319,30 @@ Vitest.describe('Sessions modifier dispatch', () => {
     }),
   );
 
+  Vitest.it.effect('reports a session that never settles and skips its completion', () =>
+    Effect.gen(function* () {
+      const { dispatch, messages, store, ports, notify } = harness([entry('reviewer')]);
+      yield* failureOf(
+        ports.modifyFor(
+          '/repo',
+          notify,
+        )({
+          skill: entry('reviewer').skill,
+          instruction: 'x',
+          modelLabel: undefined,
+          inject: [],
+        }),
+      );
+      const session = yield* only(dispatch);
+      store.write('reviewer', 'reviews TypeScript and tests');
+      yield* Deferred.interrupt(dispatch.gate(session.id));
+      yield* Effect.yieldNow;
+      yield* Effect.yieldNow;
+      Vitest.expect(store.saves).toStrictEqual([]);
+      Vitest.expect(messages[1]).toContain('ended before it could be verified');
+    }),
+  );
+
   Vitest.it.effect('reports a settle that removed the skill file', () =>
     Effect.gen(function* () {
       const { dispatch, messages, store, ports, notify } = harness([entry('reviewer')]);

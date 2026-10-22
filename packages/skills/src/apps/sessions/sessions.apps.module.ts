@@ -258,8 +258,9 @@ export const makeSkillSessionPorts = (
     completion: (reply: string | undefined) => Effect.Effect<void>,
   ): Effect.Effect<void> =>
     ports.session.wait(sessionId).pipe(
-      Effect.andThen(ports.session.reply(sessionId)),
-      Effect.orElseSucceed(() => undefined),
+      // A failed wait means the session did not settle, so the completion hook
+      // must not run; only a missing reply degrades to `undefined`.
+      Effect.andThen(ports.session.reply(sessionId).pipe(Effect.orElseSucceed(() => undefined))),
       Effect.flatMap(completion),
       Effect.catchCause(() =>
         Effect.sync(() => {
