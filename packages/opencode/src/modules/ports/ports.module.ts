@@ -2,6 +2,8 @@
 import { makeAgentPort, type AgentContext, type AgentPort } from './agent/index.js';
 // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- same seam: a plain factory, not a Layer-owned service.
 import { makeCommandPort, type CommandContext, type CommandPort } from './command/index.js';
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- same seam: a plain factory, not a Layer-owned service.
+import { makeEventPort, type EventContext, type EventPort } from './event/index.js';
 import {
   // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- same seam: a plain factory, not a Layer-owned service.
   makeInteractionPort,
@@ -17,6 +19,8 @@ import {
   type SessionDispatchPort,
 } from './session-dispatch/index.js';
 // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- same seam: a plain factory, not a Layer-owned service.
+import { makeSkillPort, type SkillContext, type SkillPort } from './skill/index.js';
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- same seam: a plain factory, not a Layer-owned service.
 import { makeToolPort, type ToolContext, type ToolPort } from './tool/index.js';
 
 /**
@@ -27,18 +31,22 @@ import { makeToolPort, type ToolContext, type ToolPort } from './tool/index.js';
 export interface PortsContext
   extends
     CommandContext,
+    EventContext,
     InteractionContext,
     ModelContext,
     SessionDispatchContext,
+    SkillContext,
     ToolContext,
     AgentContext {}
 
 /** Every seam a plugin program receives; each entry supplies the half it can. */
 export interface Ports {
   readonly command: CommandPort;
+  readonly event: EventPort;
   readonly interaction: InteractionPort;
   readonly model: ModelPort;
   readonly session: SessionDispatchPort;
+  readonly skill: SkillPort;
   readonly tool: ToolPort;
   readonly agent: AgentPort;
   /** Project directory owning the stores the plugin reads. */
@@ -48,9 +56,11 @@ export interface Ports {
 /** Construct the seam ports over a server or TUI host context. */
 export const makePorts = (context: PortsContext): Ports => ({
   command: makeCommandPort(context),
+  event: makeEventPort(context),
   interaction: makeInteractionPort(context),
   model: makeModelPort(context),
   session: makeSessionDispatchPort(context),
+  skill: makeSkillPort(context),
   tool: makeToolPort(context),
   agent: makeAgentPort(context),
   cwd: context.location?.directory ?? process.cwd(),
