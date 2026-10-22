@@ -1,6 +1,6 @@
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { defineTool, entry, type Ports } from '@montflow/opencode';
-import { Effect, Layer, Schema } from 'effect';
+import { Effect, Layer, Schema, type Scope } from 'effect';
 import * as Cli from './apps/cli/index.js';
 import * as Interactive from './apps/interactive/index.js';
 import { runProfile, syncAgents } from './apps/server/index.js';
@@ -56,7 +56,7 @@ const loadProfile = (cwd: string, name: string): Effect.Effect<PiProfiles.Profil
   );
 
 /** The `profile_execute` tool: run a profile in a native session. */
-const executeTool = (cwd: string, ports: Ports) =>
+const executeTool = (cwd: string, ports: Ports, scope: Scope.Scope) =>
   defineTool({
     name: 'profile_execute',
     description:
@@ -69,7 +69,7 @@ const executeTool = (cwd: string, ports: Ports) =>
     execute: (input) =>
       Effect.gen(function* () {
         const profile = yield* loadProfile(cwd, input.name);
-        return yield* runProfile(ports, profile, input.task, input.model);
+        return yield* runProfile(ports, profile, input.task, input.model, scope);
       }),
   });
 
@@ -81,6 +81,7 @@ const executeTool = (cwd: string, ports: Ports) =>
  */
 export default entry(ID, (ports) =>
   Effect.gen(function* () {
+    const scope = yield* Effect.scope;
     const profiles = yield* listProfiles(ports.cwd);
     yield* syncAgents(ports, profiles);
     yield* ports.command.register({
@@ -92,6 +93,6 @@ export default entry(ID, (ports) =>
           Effect.catch((message) => Effect.sync(() => notify(message))),
         ),
     });
-    yield* ports.tool.add(executeTool(ports.cwd, ports));
+    yield* ports.tool.add(executeTool(ports.cwd, ports, scope));
   }),
 );
