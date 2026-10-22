@@ -29,8 +29,10 @@ export interface SkillContext {
 export interface SkillPort {
   readonly list: () => Effect.Effect<readonly SkillSchema.Info[]>;
   readonly get: (id: string) => Effect.Effect<SkillSchema.Info | undefined>;
-  readonly add: (skill: SkillSchema.Info) => Effect.Effect<void>;
-  readonly remove: (id: string) => Effect.Effect<void>;
+  /** Registers a transform owned by the calling plugin scope. */
+  readonly add: (skill: SkillSchema.Info) => Effect.Effect<void, never, Scope.Scope>;
+  /** Registers a removal transform owned by the calling plugin scope. */
+  readonly remove: (id: string) => Effect.Effect<void, never, Scope.Scope>;
 }
 
 const unavailable = (): Error =>
@@ -65,7 +67,7 @@ export const defineSkill = (definition: SkillDefinition): SkillSchema.Info => {
 };
 
 /** Run a callback over the host skill editor inside a closed scope. */
-const edit = <A>(context: SkillContext, select: (editor: SkillEditor) => A): Effect.Effect<A> => {
+const read = <A>(context: SkillContext, select: (editor: SkillEditor) => A): Effect.Effect<A> => {
   const domain = context.skill;
   if (domain === undefined) return Effect.die(unavailable());
   return Effect.gen(function* () {
@@ -80,16 +82,24 @@ const edit = <A>(context: SkillContext, select: (editor: SkillEditor) => A): Eff
   }).pipe(Effect.scoped);
 };
 
+/**
+ * Register a mutation with the host transform. The host rebuilds state from
+ * every live transform on each read, so disposing here would discard the
+ * mutation; the registration lives for the caller's plugin scope instead.
+ */
+const write = (
+  context: SkillContext,
+  apply: (editor: SkillEditor) => void,
+): Effect.Effect<void, never, Scope.Scope> => {
+  const domain = context.skill;
+  if (domain === undefined) return Effect.die(unavailable());
+  return Effect.asVoid(domain.transform(apply));
+};
+
 /** Build the skill seam over the host skill domain. */
 export const makeSkillPort = (context: SkillContext): SkillPort => ({
-  list: () => edit(context, (editor) => editor.list()),
-  get: (id) => edit(context, (editor) => editor.get(id)),
-  add: (skill) =>
-    edit(context, (editor) => {
-      editor.add(skill);
-    }),
-  remove: (id) =>
-    edit(context, (editor) => {
-      editor.remove(id);
-    }),
+  list: () => read(context, (editor) => editor.list()),
+  get: (id) => read(context, (editor) => editor.get(id)),
+  add: (skill) => write(context, (editor) => editor.add(skill)),
+  remove: (id) => write(context, (editor) => editor.remove(id)),
 });

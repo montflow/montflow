@@ -129,6 +129,12 @@ Vitest.describe('port seam contract', () => {
     Vitest.expectTypeOf<ReturnType<Ports.Ports['tool']['add']>>().toEqualTypeOf<
       Effect.Effect<void, never, Scope.Scope>
     >();
+    Vitest.expectTypeOf<ReturnType<Ports.Ports['skill']['add']>>().toEqualTypeOf<
+      Effect.Effect<void, never, Scope.Scope>
+    >();
+    Vitest.expectTypeOf<ReturnType<Ports.Ports['agent']['upsert']>>().toEqualTypeOf<
+      Effect.Effect<void, never, Scope.Scope>
+    >();
   });
 
   Vitest.it('the read seams stay infallible and requirement-free', () => {

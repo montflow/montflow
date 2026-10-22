@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Scope } from 'effect';
 import * as Vitest from '@effect/vitest';
 import { Skill as SkillSchema } from '@opencode/schema/skill';
 import * as SkillPort from '../index.js';
@@ -13,35 +13,63 @@ const stored = (id: string): SkillSchema.Info =>
     content: `---\nname: ${id}\ndescription: the ${id} skill\n---\n\nBody.\n`,
   });
 
-interface Calls {
-  readonly added: Array<string>;
-  readonly removed: Array<string>;
-}
+/**
+ * A replaying skill registry: each read rebuilds the state from the registered
+ * transforms over an empty base, exactly like the host `State`. A transform
+ * that disposes itself therefore contributes nothing on the next read.
+ */
+const makeContext = () => {
+  const transforms: Array<(editor: SkillPort.SkillEditor) => void> = [];
+  let state: readonly SkillSchema.Info[] = [];
+  let dirty = true;
 
-const makeContext = (registered: Array<SkillSchema.Info> = []) => {
-  const calls: Calls = { added: [], removed: [] };
+  const reload = (): readonly SkillSchema.Info[] => {
+    if (!dirty) return state;
+    const next: SkillSchema.Info[] = [];
+    const editor: SkillPort.SkillEditor = {
+      list: () => next,
+      get: (id) => next.find((skill) => skill.id === id),
+      add: (skill) => {
+        next.push(skill);
+      },
+      remove: (id) => {
+        const index = next.findIndex((skill) => skill.id === id);
+        if (index !== -1) next.splice(index, 1);
+      },
+    };
+    for (const transform of transforms) transform(editor);
+    state = next;
+    dirty = false;
+    return state;
+  };
+
   const context: SkillPort.SkillContext = {
     skill: {
       transform: (callback) =>
-        Effect.sync(() => {
-          callback({
-            list: () => registered,
-            get: (id) => registered.find((skill) => skill.id === id),
-            add: (skill) => {
-              calls.added.push(skill.id);
-              registered.push(skill);
-            },
-            remove: (id) => {
-              calls.removed.push(id);
-              const index = registered.findIndex((skill) => skill.id === id);
-              if (index !== -1) registered.splice(index, 1);
-            },
+        Effect.gen(function* () {
+          const scope = yield* Scope.Scope;
+          transforms.push(callback);
+          dirty = true;
+          // Host `State.transform` rebuilds synchronously after registering.
+          reload();
+          const dispose = Effect.sync(() => {
+            const index = transforms.indexOf(callback);
+            if (index !== -1) transforms.splice(index, 1);
+            dirty = true;
           });
-          return { dispose: Effect.void };
+          yield* Scope.addFinalizer(scope, dispose);
+          return { dispose };
         }),
     },
   };
-  return { context, calls };
+
+  return {
+    context,
+    reload: Effect.sync(() => {
+      dirty = true;
+    }),
+    visible: reload,
+  };
 };
 
 Vitest.describe('SkillPort runtime', () => {
@@ -73,18 +101,23 @@ Vitest.describe('SkillPort runtime', () => {
     Vitest.expect(skill.autoinvoke).toBeUndefined();
   });
 
-  Vitest.it.effect('add and remove drive the host skill registry', () =>
+  Vitest.it.effect('a registration outlives the add call and survives a reload', () =>
     Effect.gen(function* () {
-      const { context, calls } = makeContext();
+      const { context, reload, visible } = makeContext();
       const port = SkillPort.makeSkillPort(context);
       const skill = stored('authoring-skills');
-      yield* port.add(skill).pipe(Effect.scoped);
-      Vitest.expect(calls.added).toStrictEqual(['authoring-skills']);
-      Vitest.expect(yield* port.list()).toStrictEqual([skill]);
-      Vitest.expect(yield* port.get('authoring-skills')).toStrictEqual(skill);
-      yield* port.remove('authoring-skills').pipe(Effect.scoped);
-      Vitest.expect(calls.removed).toStrictEqual(['authoring-skills']);
-      Vitest.expect(yield* port.list()).toStrictEqual([]);
+      yield* Effect.gen(function* () {
+        yield* port.add(skill);
+        yield* reload;
+        Vitest.expect(visible()).toStrictEqual([skill]);
+        Vitest.expect(yield* port.list()).toStrictEqual([skill]);
+        Vitest.expect(yield* port.get('authoring-skills')).toStrictEqual(skill);
+        yield* port.remove('authoring-skills');
+        yield* reload;
+        Vitest.expect(visible()).toStrictEqual([]);
+      }).pipe(Effect.scoped);
+      // The plugin scope closed, so every registration is gone with it.
+      Vitest.expect(visible()).toStrictEqual([]);
     }),
   );
 

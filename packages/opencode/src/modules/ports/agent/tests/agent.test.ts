@@ -1,48 +1,80 @@
-import { Effect } from 'effect';
+import { Effect, Scope } from 'effect';
 import * as Vitest from '@effect/vitest';
 import { Agent as AgentSchema } from '@opencode/schema/agent';
 import * as AgentPort from '../index.js';
 
 const base = (id: string): AgentSchema.Info => AgentSchema.Info.default(AgentSchema.ID.make(id));
 
-interface Calls {
-  readonly updates: Array<string>;
-  readonly defaults: Array<string | undefined>;
-  readonly removed: Array<string>;
+/** One rebuild of the fake registry. */
+interface Data {
+  readonly agents: Map<string, AgentSchema.Info>;
+  default: string | undefined;
 }
 
-const makeContext = (registered: Array<AgentSchema.Info> = []) => {
-  const calls: Calls = { updates: [], defaults: [], removed: [] };
+/**
+ * A replaying agent registry: each read rebuilds from the registered transforms
+ * over the seeded base, exactly like the host `State`. A transform that disposes
+ * itself therefore contributes nothing on the next read.
+ */
+const makeContext = (seeded: readonly AgentSchema.Info[] = []) => {
+  const transforms: Array<(editor: AgentPort.AgentEditor) => void> = [];
+  let state: Data = { agents: new Map(), default: undefined };
+  let dirty = true;
+
+  const reload = (): Data => {
+    if (!dirty) return state;
+    const next: Data = {
+      agents: new Map(seeded.map((agent) => [agent.id, { ...agent }])),
+      default: undefined,
+    };
+    const editor: AgentPort.AgentEditor = {
+      list: () => [...next.agents.values()],
+      get: (id) => next.agents.get(id),
+      default: (id) => {
+        next.default = id;
+      },
+      update: (id, update) => {
+        const existing = next.agents.get(id) ?? base(id);
+        if (!next.agents.has(id)) next.agents.set(id, existing);
+        update(existing);
+      },
+      remove: (id) => {
+        next.agents.delete(id);
+      },
+    };
+    for (const transform of transforms) transform(editor);
+    state = next;
+    dirty = false;
+    return state;
+  };
+
   const context: AgentPort.AgentContext = {
     agent: {
       transform: (callback) =>
-        Effect.sync(() => {
-          callback({
-            list: () => registered,
-            get: (id) => registered.find((agent) => agent.id === id),
-            default: (id) => {
-              calls.defaults.push(id);
-            },
-            update: (id, update) => {
-              calls.updates.push(id);
-              const existing = registered.find((agent) => agent.id === id);
-              if (existing === undefined) {
-                const created = base(id);
-                update(created);
-                registered.push(created);
-              } else {
-                update(existing);
-              }
-            },
-            remove: (id) => {
-              calls.removed.push(id);
-            },
+        Effect.gen(function* () {
+          const scope = yield* Scope.Scope;
+          transforms.push(callback);
+          dirty = true;
+          // Host `State.transform` rebuilds synchronously after registering.
+          reload();
+          const dispose = Effect.sync(() => {
+            const index = transforms.indexOf(callback);
+            if (index !== -1) transforms.splice(index, 1);
+            dirty = true;
           });
-          return { dispose: Effect.void };
+          yield* Scope.addFinalizer(scope, dispose);
+          return { dispose };
         }),
     },
   };
-  return { context, calls };
+
+  return {
+    context,
+    reload: Effect.sync(() => {
+      dirty = true;
+    }),
+    visible: reload,
+  };
 };
 
 Vitest.describe('AgentPort runtime', () => {
@@ -77,30 +109,40 @@ Vitest.describe('AgentPort runtime', () => {
     ).toThrow();
   });
 
-  Vitest.it.effect('upsert creates the agent through the host editor', () =>
+  Vitest.it.effect('an upsert outlives the call and survives a reload', () =>
     Effect.gen(function* () {
-      const { context, calls } = makeContext();
+      const { context, reload, visible } = makeContext();
       const port = AgentPort.makeAgentPort(context);
       const agent = AgentPort.defineAgent({ id: 'mf-reviewer', name: 'Reviewer' });
-      yield* port.upsert(agent).pipe(Effect.scoped);
-      Vitest.expect(calls.updates).toStrictEqual(['mf-reviewer']);
-      Vitest.expect(yield* port.get('mf-reviewer')).toMatchObject({
-        id: 'mf-reviewer',
-        name: 'Reviewer',
-      });
+      yield* Effect.gen(function* () {
+        yield* port.upsert(agent);
+        yield* reload;
+        Vitest.expect(visible().agents.get('mf-reviewer')).toMatchObject({
+          id: 'mf-reviewer',
+          name: 'Reviewer',
+        });
+        Vitest.expect(yield* port.get('mf-reviewer')).toMatchObject({ name: 'Reviewer' });
+      }).pipe(Effect.scoped);
+      // The plugin scope closed, so every registration is gone with it.
+      Vitest.expect(visible().agents.size).toBe(0);
     }),
   );
 
-  Vitest.it.effect('list, default, and remove read and drive the registry', () =>
+  Vitest.it.effect('list, default, and remove drive the registry until the scope closes', () =>
     Effect.gen(function* () {
       const existing = base('build');
-      const { context, calls } = makeContext([existing]);
+      const { context, reload, visible } = makeContext([existing]);
       const port = AgentPort.makeAgentPort(context);
-      Vitest.expect(yield* port.list()).toStrictEqual([existing]);
-      yield* port.setDefault('build').pipe(Effect.scoped);
-      yield* port.remove('build').pipe(Effect.scoped);
-      Vitest.expect(calls.defaults).toStrictEqual(['build']);
-      Vitest.expect(calls.removed).toStrictEqual(['build']);
+      yield* Effect.gen(function* () {
+        Vitest.expect(yield* port.list()).toStrictEqual([existing]);
+        yield* port.setDefault('build');
+        yield* port.remove('build');
+        yield* reload;
+        Vitest.expect(visible().default).toBe('build');
+        Vitest.expect(visible().agents.has('build')).toBe(false);
+      }).pipe(Effect.scoped);
+      Vitest.expect(visible().agents.has('build')).toBe(true);
+      Vitest.expect(visible().default).toBeUndefined();
     }),
   );
 

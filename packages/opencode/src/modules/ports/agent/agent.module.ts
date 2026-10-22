@@ -31,9 +31,12 @@ export interface AgentContext {
 export interface AgentPort {
   readonly list: () => Effect.Effect<readonly Agent.Info[]>;
   readonly get: (id: string) => Effect.Effect<Agent.Info | undefined>;
-  readonly setDefault: (id: string | undefined) => Effect.Effect<void>;
-  readonly upsert: (agent: Agent.Info) => Effect.Effect<void>;
-  readonly remove: (id: string) => Effect.Effect<void>;
+  /** Registers a default-agent transform owned by the calling plugin scope. */
+  readonly setDefault: (id: string | undefined) => Effect.Effect<void, never, Scope.Scope>;
+  /** Registers an upsert transform owned by the calling plugin scope. */
+  readonly upsert: (agent: Agent.Info) => Effect.Effect<void, never, Scope.Scope>;
+  /** Registers a removal transform owned by the calling plugin scope. */
+  readonly remove: (id: string) => Effect.Effect<void, never, Scope.Scope>;
 }
 
 const unavailable = (): Error =>
@@ -75,7 +78,7 @@ export const defineAgent = (definition: AgentDefinition): Agent.Info => {
 };
 
 /** Run a callback over the host agent editor inside a closed scope. */
-const edit = <A>(context: AgentContext, select: (editor: AgentEditor) => A): Effect.Effect<A> => {
+const read = <A>(context: AgentContext, select: (editor: AgentEditor) => A): Effect.Effect<A> => {
   const domain = context.agent;
   if (domain === undefined) return Effect.die(unavailable());
   return Effect.gen(function* () {
@@ -90,16 +93,30 @@ const edit = <A>(context: AgentContext, select: (editor: AgentEditor) => A): Eff
   }).pipe(Effect.scoped);
 };
 
+/**
+ * Register a mutation with the host transform. The host rebuilds state from
+ * every live transform on each read, so disposing here would discard the
+ * mutation; the registration lives for the caller's plugin scope instead.
+ */
+const write = (
+  context: AgentContext,
+  apply: (editor: AgentEditor) => void,
+): Effect.Effect<void, never, Scope.Scope> => {
+  const domain = context.agent;
+  if (domain === undefined) return Effect.die(unavailable());
+  return Effect.asVoid(domain.transform(apply));
+};
+
 /** Build the agent seam over the host agent domain. */
 export const makeAgentPort = (context: AgentContext): AgentPort => ({
-  list: () => edit(context, (editor) => editor.list()),
-  get: (id) => edit(context, (editor) => editor.get(id)),
-  setDefault: (id) => edit(context, (editor) => editor.default(id)),
+  list: () => read(context, (editor) => editor.list()),
+  get: (id) => read(context, (editor) => editor.get(id)),
+  setDefault: (id) => write(context, (editor) => editor.default(id)),
   upsert: (agent) =>
-    edit(context, (editor) =>
+    write(context, (editor) =>
       editor.update(agent.id, (existing) => {
         Object.assign(existing, agent);
       }),
     ),
-  remove: (id) => edit(context, (editor) => editor.remove(id)),
+  remove: (id) => write(context, (editor) => editor.remove(id)),
 });

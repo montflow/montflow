@@ -1,5 +1,5 @@
 import { defineAgent, type Ports } from '@montflow/opencode';
-import { Effect } from 'effect';
+import { Effect, type Scope } from 'effect';
 import * as PiProfiles from '../../modules/pi-profiles/index.js';
 
 /** Prefix keeping profile-backed agents out of the host's built-in id space. */
@@ -34,7 +34,10 @@ export const agentOf = (profile: PiProfiles.Profile) => {
 };
 
 /** Register every stored profile as a native agent. */
-export const syncAgents = (ports: Ports, profiles: readonly PiProfiles.Profile[]) =>
+export const syncAgents = (
+  ports: Ports,
+  profiles: readonly PiProfiles.Profile[],
+): Effect.Effect<void, never, Scope.Scope> =>
   Effect.forEach(
     profiles,
     (profile) =>
