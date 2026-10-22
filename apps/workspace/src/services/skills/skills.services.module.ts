@@ -2,10 +2,8 @@
 import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for skill files; both go away with the FileSystem migration.
 import { join } from 'node:path';
-// eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: home directory for the pi model catalogue; goes away with the FileSystem migration.
+// eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: home directory for the model catalogue; goes away with the FileSystem migration.
 import { homedir } from 'node:os';
-// eslint-disable-next-line montflow/no-node-platform-imports -- platform adapter at the TUI composition-root boundary: spawns the headless skills agent; migrate to Command when the app moves onto the platform layer graph.
-import { spawn } from 'node:child_process';
 import type { Skill } from '@montflow/skills';
 import { Data, Effect, Schema } from 'effect';
 
@@ -596,124 +594,5 @@ export const listDefaultModel = (
     readFile(join(home, '.pi', 'agent', 'settings.json'), 'utf8').then(
       (raw) => parseDefaultModel(raw),
       () => undefined,
-    ),
-  );
-
-/**
- * Assemble a headless child prompt the same way `AgentRun.buildPrompt`
- * does: preprompt, user prompt, postprompt separated by blank lines.
- * Blank parts drop out.
- * @param preprompt - role and format instructions
- * @param prompt - user request
- * @param postprompt - reply shape
- * @returns assembled prompt text
- */
-export const buildHeadlessPrompt = (
-  preprompt: string,
-  prompt: string,
-  postprompt: string,
-): string =>
-  [preprompt, prompt, postprompt]
-    .map((part) => part.trim())
-    .filter((part) => part !== '')
-    .join('\n\n');
-
-/**
- * `pi -p` arguments for a headless agentic session: ephemeral session, tight
- * tool allowlist, optional model pin. Mirrors the tool scope the pi
- * extension grants its child agents (`read`, `write`, `edit`).
- * @param prompt - assembled child prompt
- * @param modelLabel - `provider/model-id` pin, if any
- * @returns argv for `pi`
- */
-export const headlessArgs = (
-  prompt: string,
-  modelLabel: string | undefined,
-): ReadonlyArray<string> => [
-  '-p',
-  '--no-session',
-  '--tools',
-  'read,write,edit',
-  ...(modelLabel === undefined ? [] : ['--model', modelLabel]),
-  prompt,
-];
-
-/** Failure when a headless agent session fails. Carries tailed CLI output. */
-export class AgentError extends Data.TaggedError('@montflow/SkillsAgentError')<{
-  readonly message: string;
-}> {}
-
-/** Headless sessions get five minutes — skill authoring is one file plus thought. */
-const AGENT_TIMEOUT_MS = 300_000;
-
-/**
- * Run a headless child agent via the `pi` CLI (`-p`, ephemeral, tight
- * tools) in the workspace root. Stdout carries the reply; failures
- * carry tailed output. Spawned (not `execFile`) so the Effect stays
- * interruptible — cancelling the fiber kills the child, and the five
- * minute timeout interrupts the wait the same way. This is the
- * workspace host for the `@montflow/skills` agent prompts — same
- * preprompts the pi extension feeds `AgentRun`, transported over the
- * CLI instead.
- * @param root - workspace root (child working directory)
- * @param prompt - assembled child prompt
- * @param modelLabel - `provider/model-id` pin, if any
- * @returns Effect resolving to the reply text, failing with the reason
- */
-export const runHeadlessAgent = (
-  root: string,
-  prompt: string,
-  modelLabel: string | undefined,
-): Effect.Effect<string, AgentError> =>
-  Effect.callback<string, AgentError>((resume, signal) => {
-    const child = spawn('pi', [...headlessArgs(prompt, modelLabel)], { cwd: root });
-    let stdout = '';
-    let stderr = '';
-    let settled = false;
-    const settle = (finish: () => void): void => {
-      if (settled) return;
-      settled = true;
-      finish();
-    };
-    child.stdout?.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-    child.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-    child.on('error', (cause) => {
-      settle(() =>
-        resume(
-          Effect.fail(
-            new AgentError({
-              message: cause instanceof Error ? cause.message.slice(-2000) : String(cause),
-            }),
-          ),
-        ),
-      );
-    });
-    child.on('close', (code) => {
-      // Post-kill `close` must not resume: the fiber already settled
-      // through the interruption that killed the child.
-      if (signal.aborted) return;
-      settle(() => {
-        if (code === 0) resume(Effect.succeed(stdout));
-        else
-          resume(
-            Effect.fail(
-              new AgentError({ message: (stderr || stdout || `exit ${code}`).slice(-2000) }),
-            ),
-          );
-      });
-    });
-    signal.addEventListener('abort', () => {
-      child.kill();
-    });
-  }).pipe(
-    Effect.timeout(AGENT_TIMEOUT_MS),
-    Effect.mapError((error) =>
-      error instanceof AgentError
-        ? error
-        : new AgentError({ message: 'Agent session timed out after five minutes.' }),
     ),
   );
