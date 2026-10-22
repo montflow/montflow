@@ -109,7 +109,7 @@ export const makeQueryClient = (): QueryClient =>
   });
 
 /**
- * Skills-list query bridge: the staged boot (extension check, then the
+ * Skills-list query bridge: the staged boot (store-directory check, then the
  * list read) as one TanStack query. Resolves the installed flag with
  * the rows so the panel never needs a second read; rejects with a
  * displayable Error the caller toasts. Reports each stage through
@@ -140,7 +140,7 @@ export const fetchSkillsList = (
 
 /**
  * Profiles-list query bridge: same staged boot as `fetchSkillsList`
- * (extension check, then the list read) as one TanStack query.
+ * (store-directory check, then the list read) as one TanStack query.
  * @param root - workspace root (profile store owner)
  * @param onPhase - Loader stage reporter (`extension`, then `profiles`)
  * @returns Promise resolving to the list snapshot
@@ -183,7 +183,7 @@ export const fetchProfileVerify = (root: string, id: string): Promise<ProfileVer
 
 /**
  * Prompts-list query bridge: same staged boot as `fetchSkillsList`
- * (extension check, then the list read) as one TanStack query.
+ * (store-directory check, then the list read) as one TanStack query.
  * @param root - workspace root (prompt store owner)
  * @param onPhase - Loader stage reporter (`extension`, then `prompts`)
  * @returns Promise resolving to the list snapshot
