@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Package references point at `@montflow/prompts` and `packages/prompts`; the skill no longer claims a Pi extension owns the store
+- Package references point at `@montflow/prompts` and `packages/prompts`; the skill no longer routes readers to a retired extension
 
 ## [3.0.0] - 2026-10-06
 
