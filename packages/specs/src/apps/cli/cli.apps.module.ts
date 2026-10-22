@@ -1171,10 +1171,12 @@ const parseSlashArgs = (args: string): SlashArgs => {
 export type ResolveSlashDir = (dir: string) => string;
 
 /**
- * Run the slash-command form used by the Pi extension. Never renders
- * through the CLI; returns text for `ctx.ui.notify` plus an ok flag.
+ * Run the slash-command form registered as the OpenCode `/specs` command
+ * (`src/server.ts`, through `ports.command.register`). Never renders through
+ * the CLI; returns the report for the caller to log — the server writes
+ * `report.output` with `Effect.logInfo` and any failure with `Effect.logError`.
  * @param args - raw slash-command args
- * @param root - default spec root, already resolved against the session cwd
+ * @param root - default spec root, already resolved against the plugin directory
  * @param resolveDir - resolver for a `--dir` value (identity by default)
  * @returns rendered output plus success flag
  */
