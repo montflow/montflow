@@ -4,7 +4,7 @@ import type { Model } from '@opencode/schema/model';
 import { AbsolutePath } from '@opencode/schema/schema';
 import type { Session } from '@opencode/schema/session';
 import type { SessionInbox } from '@opencode/schema/session-inbox';
-import { Effect } from 'effect';
+import { Duration, Effect, Schema } from 'effect';
 
 /** The transcript fields dispatch reads; every host message satisfies this shape. */
 export interface SessionEntry {
@@ -79,6 +79,30 @@ interface SyntheticRequest {
   description?: string;
 }
 
+/** Host call a failed dispatch came from. */
+export type DispatchOperation =
+  | 'create'
+  | 'prompt'
+  | 'interrupt'
+  | 'wait'
+  | 'synthetic'
+  | 'messages'
+  | 'reply';
+
+/** Failure raised when the host session domain rejects a dispatch call. */
+export class DispatchError extends Schema.TaggedError<DispatchError>()('DispatchError', {
+  operation: Schema.Literals([
+    'create',
+    'prompt',
+    'interrupt',
+    'wait',
+    'synthetic',
+    'messages',
+    'reply',
+  ]),
+  message: Schema.String,
+}) {}
+
 /**
  * Native session dispatch seam. Creates a session, prompts it, waits for it
  * to settle, and reads its durable context. Message reads go through the
@@ -86,26 +110,47 @@ interface SyntheticRequest {
  * the plugin domain exposes.
  */
 export interface SessionDispatchPort {
-  readonly create: (input: DispatchInput) => Effect.Effect<Session.ID>;
+  readonly create: (input: DispatchInput) => Effect.Effect<Session.ID, DispatchError>;
   readonly prompt: (
     sessionID: Session.ID,
     text: string,
     delivery?: SessionInbox.Delivery,
-  ) => Effect.Effect<void>;
-  readonly interrupt: (sessionID: Session.ID) => Effect.Effect<void>;
-  readonly wait: (sessionID: Session.ID) => Effect.Effect<void>;
+  ) => Effect.Effect<void, DispatchError>;
+  readonly interrupt: (sessionID: Session.ID) => Effect.Effect<void, DispatchError>;
+  readonly wait: (sessionID: Session.ID) => Effect.Effect<void, DispatchError>;
   readonly synthetic: (
     sessionID: Session.ID,
     text: string,
     description?: string,
-  ) => Effect.Effect<void>;
-  readonly messages: (sessionID: Session.ID) => Effect.Effect<readonly SessionEntry[]>;
+  ) => Effect.Effect<void, DispatchError>;
+  readonly messages: (
+    sessionID: Session.ID,
+  ) => Effect.Effect<readonly SessionEntry[], DispatchError>;
   /** Last assistant text the session produced, or undefined when empty. */
-  readonly reply: (sessionID: Session.ID) => Effect.Effect<string | undefined>;
+  readonly reply: (sessionID: Session.ID) => Effect.Effect<string | undefined, DispatchError>;
 }
 
 const unavailable = (): Error =>
   new Error('SessionDispatchPort requires a server plugin context (ctx.session)');
+
+/** How long one dispatched session may run before `wait` gives up. */
+const WAIT_LIMIT = Duration.minutes(5);
+
+/** Turn a host rejection into the port's tagged, actionable failure. */
+const call = <A>(
+  operation: DispatchOperation,
+  // `cause` is the rule's exempt name for error-cause enrichment.
+  run: Effect.Effect<A, unknown>,
+): Effect.Effect<A, DispatchError> =>
+  run.pipe(
+    Effect.mapError(
+      (cause) =>
+        new DispatchError({
+          operation,
+          message: cause instanceof Error ? cause.message : String(cause),
+        }),
+    ),
+  );
 
 /** Fold an assistant message's text parts into one reply. */
 const assistantText = (message: SessionEntry): string =>
@@ -140,38 +185,46 @@ export const makeSessionDispatchPort = (context: SessionDispatchContext): Sessio
       if (input.title !== undefined) request.title = input.title;
       if (input.agent !== undefined) request.agent = input.agent;
       if (input.model !== undefined) request.model = input.model;
-      return session.create(request).pipe(
-        Effect.orDie,
-        Effect.map((info) => info.id),
-      );
+      return call('create', session.create(request)).pipe(Effect.map((info) => info.id));
     },
     prompt: (sessionID, text, delivery) => {
       if (session === undefined) return Effect.die(unavailable());
       const request: PromptRequest = { sessionID, text };
       if (delivery !== undefined) request.delivery = delivery;
-      return session.prompt(request).pipe(Effect.orDie, Effect.asVoid);
+      return call('prompt', session.prompt(request)).pipe(Effect.asVoid);
     },
     interrupt: (sessionID) => {
       if (session === undefined) return Effect.die(unavailable());
-      return session.interrupt({ sessionID }).pipe(Effect.orDie, Effect.asVoid);
+      return call('interrupt', session.interrupt({ sessionID })).pipe(Effect.asVoid);
     },
     wait: (sessionID) => {
       if (session === undefined) return Effect.die(unavailable());
-      return session.wait({ sessionID }).pipe(Effect.orDie);
+      return call('wait', session.wait({ sessionID })).pipe(
+        Effect.timeoutOrElse({
+          duration: WAIT_LIMIT,
+          orElse: () =>
+            Effect.fail(
+              new DispatchError({
+                operation: 'wait',
+                message: `Session '${sessionID}' did not settle within five minutes. Interrupt it, or rerun the task with a narrower prompt.`,
+              }),
+            ),
+        }),
+      );
     },
     synthetic: (sessionID, text, description) => {
       if (session === undefined) return Effect.die(unavailable());
       const request: SyntheticRequest = { sessionID, text };
       if (description !== undefined) request.description = description;
-      return session.synthetic(request).pipe(Effect.orDie, Effect.asVoid);
+      return call('synthetic', session.synthetic(request)).pipe(Effect.asVoid);
     },
     messages: (sessionID) => {
       if (session === undefined) return Effect.die(unavailable());
-      return session.context({ sessionID }).pipe(Effect.orDie);
+      return call('messages', session.context({ sessionID }));
     },
     reply: (sessionID) => {
       if (session === undefined) return Effect.die(unavailable());
-      return session.context({ sessionID }).pipe(Effect.orDie, Effect.map(lastReply));
+      return call('reply', session.context({ sessionID })).pipe(Effect.map(lastReply));
     },
   };
 };

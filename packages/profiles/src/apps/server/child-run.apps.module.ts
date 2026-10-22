@@ -80,12 +80,17 @@ export const runProfile = (
     const resolved = yield* ports.model
       .resolve(label)
       .pipe(Effect.mapError((error) => error.message));
-    const sessionID = yield* ports.session.create({
-      title: `profile: ${profile.name}`,
-      agent: definition.id,
-      model: resolved,
-    });
-    yield* ports.session.prompt(sessionID, task);
-    yield* ports.session.wait(sessionID);
-    return (yield* ports.session.reply(sessionID)) ?? `Completed session ${sessionID}.`;
+    const sessionID = yield* ports.session
+      .create({
+        title: `profile: ${profile.name}`,
+        agent: definition.id,
+        model: resolved,
+      })
+      .pipe(Effect.mapError((error) => error.message));
+    yield* ports.session.prompt(sessionID, task).pipe(Effect.mapError((error) => error.message));
+    yield* ports.session.wait(sessionID).pipe(Effect.mapError((error) => error.message));
+    const reply = yield* ports.session
+      .reply(sessionID)
+      .pipe(Effect.mapError((error) => error.message));
+    return reply ?? `Completed session ${sessionID}.`;
   });

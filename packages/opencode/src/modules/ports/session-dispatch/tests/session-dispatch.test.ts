@@ -1,5 +1,6 @@
-import { Effect } from 'effect';
+import { Duration, Effect, Fiber } from 'effect';
 import * as Vitest from '@effect/vitest';
+import { TestClock } from 'effect/testing';
 import { Agent } from '@opencode/schema/agent';
 import { Model } from '@opencode/schema/model';
 import { Session } from '@opencode/schema/session';
@@ -28,7 +29,10 @@ interface Calls {
   readonly synthetic: Array<Parameters<SessionDomain['synthetic']>[0]>;
 }
 
-const makeContext = (messages: ReadonlyArray<SessionDispatch.SessionEntry> = []) => {
+const makeContext = (
+  messages: ReadonlyArray<SessionDispatch.SessionEntry> = [],
+  overrides: Partial<SessionDomain> = {},
+) => {
   const calls: Calls = { create: [], prompt: [], interrupt: [], wait: [], synthetic: [] };
   const context: SessionDispatch.SessionDispatchContext = {
     location: { directory: '/project' },
@@ -55,6 +59,7 @@ const makeContext = (messages: ReadonlyArray<SessionDispatch.SessionEntry> = [])
           calls.synthetic.push(input);
         }),
       context: () => Effect.succeed(messages),
+      ...overrides,
     },
   };
   return { context, calls };
@@ -133,6 +138,32 @@ Vitest.describe('SessionDispatchPort runtime', () => {
       const { context } = makeContext([user('hi')]);
       const port = SessionDispatch.makeSessionDispatchPort(context);
       Vitest.expect(yield* port.reply(sessionID)).toBeUndefined();
+    }),
+  );
+
+  Vitest.it.effect('turns a host rejection into a DispatchError', () =>
+    Effect.gen(function* () {
+      const { context } = makeContext([], {
+        create: () => Effect.fail(new Error('unknown agent mf-reviewer')),
+      });
+      const port = SessionDispatch.makeSessionDispatchPort(context);
+      const error = yield* port.create({}).pipe(Effect.flip);
+      Vitest.expect(error).toBeInstanceOf(SessionDispatch.DispatchError);
+      Vitest.expect(error.operation).toBe('create');
+      Vitest.expect(error.message).toBe('unknown agent mf-reviewer');
+    }),
+  );
+
+  Vitest.it.effect('times out a session that never settles', () =>
+    Effect.gen(function* () {
+      const { context } = makeContext([], { wait: () => Effect.never });
+      const port = SessionDispatch.makeSessionDispatchPort(context);
+      const fiber = yield* Effect.forkChild(port.wait(sessionID));
+      yield* TestClock.adjust(Duration.minutes(5));
+      const error = yield* Fiber.join(fiber).pipe(Effect.flip);
+      Vitest.expect(error).toBeInstanceOf(SessionDispatch.DispatchError);
+      Vitest.expect(error.operation).toBe('wait');
+      Vitest.expect(error.message).toContain('did not settle');
     }),
   );
 

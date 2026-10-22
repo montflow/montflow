@@ -24,11 +24,16 @@ export const makePromptExecutor =
         .map((name) => `Load the '${name}' skill before starting.`)
         .join('\n');
       const text = instructions === '' ? request.text : `${instructions}\n\n${request.text}`;
-      const sessionID = yield* ports.session.create({
-        title: `prompt: ${request.name}`,
-        model,
-      });
-      yield* ports.session.prompt(sessionID, text);
-      yield* ports.session.wait(sessionID);
-      return (yield* ports.session.reply(sessionID)) ?? `Completed session ${sessionID}.`;
+      const sessionID = yield* ports.session
+        .create({
+          title: `prompt: ${request.name}`,
+          model,
+        })
+        .pipe(Effect.mapError((error) => error.message));
+      yield* ports.session.prompt(sessionID, text).pipe(Effect.mapError((error) => error.message));
+      yield* ports.session.wait(sessionID).pipe(Effect.mapError((error) => error.message));
+      const reply = yield* ports.session
+        .reply(sessionID)
+        .pipe(Effect.mapError((error) => error.message));
+      return reply ?? `Completed session ${sessionID}.`;
     });

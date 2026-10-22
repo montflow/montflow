@@ -106,8 +106,12 @@ export const startReview = (
     const title = `Review: ${input.name}`;
     const sessionId =
       model === undefined
-        ? yield* ports.session.create({ title })
-        : yield* ports.session.create({ title, model });
-    yield* ports.session.prompt(sessionId, reviewerPrompt(input));
+        ? yield* ports.session.create({ title }).pipe(Effect.mapError((error) => error.message))
+        : yield* ports.session
+            .create({ title, model })
+            .pipe(Effect.mapError((error) => error.message));
+    yield* ports.session
+      .prompt(sessionId, reviewerPrompt(input))
+      .pipe(Effect.mapError((error) => error.message));
     return { sessionId, series: input.name };
   });

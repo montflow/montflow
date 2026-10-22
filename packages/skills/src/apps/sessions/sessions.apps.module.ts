@@ -290,9 +290,13 @@ export const makeSkillSessionPorts = (
       const title = request.title;
       const sessionId =
         model === undefined
-          ? yield* ports.session.create({ title })
-          : yield* ports.session.create({ title, model });
-      yield* ports.session.prompt(sessionId, request.prompt);
+          ? yield* ports.session.create({ title }).pipe(Effect.mapError((error) => error.message))
+          : yield* ports.session
+              .create({ title, model })
+              .pipe(Effect.mapError((error) => error.message));
+      yield* ports.session
+        .prompt(sessionId, request.prompt)
+        .pipe(Effect.mapError((error) => error.message));
       pending.add(sessionId);
       yield* Effect.forkIn(watch(request.root, sessionId, completionFor(sessionId)), options.scope);
       return sessionId;
