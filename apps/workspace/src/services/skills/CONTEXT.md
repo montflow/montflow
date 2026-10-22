@@ -29,10 +29,13 @@ whether to retry, reinstall, or just retry.
 - `parseModelsStore` / `parseDefaultModel` — pure decoders for the retired
   Pi model files (`~/.pi/agent/models-store.json`,
   `~/.pi/agent/settings.json`); malformed input reads as empty, never as a
-  failure. Only the unit tests call them. `listModelLabels` /
-  `listDefaultModel` are their unused file-reading wrappers, left over from
-  the Pi era and marked for deletion — the live model label comes from
-  `ModelPort.default()` in `grid-page.tsx`, not from this module.
+  failure. No production code calls them: only their file-reading wrappers
+  `listModelLabels` / `listDefaultModel` and the unit tests in
+  `tests/skill-write.test.ts` do. Those two wrappers read
+  `~/.pi/agent/models-store.json` and `~/.pi/agent/settings.json` on each call,
+  have no caller anywhere, and are marked `@deprecated` (kept for the tests).
+  The live model label comes from `ModelPort.default()` in `grid-page.tsx`,
+  not from this module.
 
 ## Does not belong here
 

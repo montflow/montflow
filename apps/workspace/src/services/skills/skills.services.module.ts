@@ -483,13 +483,13 @@ export const fetchSkills = (root: string): Effect.Effect<SkillSummary[], string>
     ),
   );
 
-/** One model offered by the picker: `provider/model-id`. */
+/** One model ref: `provider/model-id`. */
 export interface ModelRef {
   readonly provider: string;
   readonly id: string;
 }
 
-/** One catalogue model: only the id matters to the picker. */
+/** One catalogue model: only the id is kept. */
 const CatalogueModel = Schema.Struct({ id: Schema.String });
 
 /** One provider entry: the models payload stays unchecked here so one odd provider never fails the catalogue — each entry is validated below. */
@@ -502,11 +502,11 @@ const CatalogueModels = Schema.Array(Schema.Unknown);
 const Catalogue = Schema.Record(Schema.String, CatalogueEntry);
 
 /**
- * Parse the pi model catalogue (`~/.pi/agent/models-store.json`:
- * provider keys holding `{ models: [{ id }] }`) into picker refs.
- * Decoded by schema at the boundary — malformed JSON or unexpected
- * shapes read as empty, and the picker falls back to the session
- * default.
+ * Parse the retired pi model catalogue (`~/.pi/agent/models-store.json`:
+ * provider keys holding `{ models: [{ id }] }`) into model refs. Decoded
+ * by schema at the boundary — malformed JSON or unexpected shapes read
+ * as empty. Called by `listModelLabels` and the unit tests; no production
+ * caller.
  * @param json - raw catalogue contents
  * @returns `provider/id` refs in catalogue order
  */
@@ -539,8 +539,10 @@ export const parseModelsStore = (json: string): ReadonlyArray<ModelRef> => {
 };
 
 /**
- * List installed pi models for the model picker. Reads the catalogue
- * once per call — failures read as empty, never fail.
+ * Read the retired pi catalogue from `~/.pi/agent/models-store.json`.
+ * Reads the file once per call — failures read as empty, never fail.
+ * Unused: no production caller; kept for tests.
+ * @deprecated The live model label comes from `ModelPort.default()`.
  * @param home - home directory override (defaults to the live one)
  * @returns catalogue refs, or empty when unreadable
  */
@@ -554,17 +556,17 @@ export const listModelLabels = (
     ),
   );
 
-/** The pi session defaults: the provider/model pair headless sessions fall back to. */
+/** The retired pi session defaults file shape: the provider/model pair Pi sessions fell back to. */
 const PiDefaults = Schema.Struct({
   defaultProvider: Schema.optional(Schema.String),
   defaultModel: Schema.optional(Schema.String),
 });
 
 /**
- * Parse the pi session defaults (`~/.pi/agent/settings.json`) into the
- * default model ref — the model the session is on right now. Decoded
- * by schema at the boundary: malformed JSON or a missing pair reads
- * as undefined, and the picker simply marks no row current.
+ * Parse the retired pi session defaults (`~/.pi/agent/settings.json`) into
+ * the default model ref Pi sessions reported. Decoded by schema at the
+ * boundary: malformed JSON or a missing pair reads as undefined. Called by
+ * `listDefaultModel` and the unit tests; no production caller.
  * @param json - raw settings contents
  * @returns default ref, or undefined when absent
  */
@@ -582,8 +584,10 @@ export const parseDefaultModel = (json: string): ModelRef | undefined => {
 };
 
 /**
- * Read the session default model for the model picker. Failures read
- * as undefined, never fail.
+ * Read the retired pi session default from `~/.pi/agent/settings.json`.
+ * Failures read as undefined, never fail. Unused: no production caller;
+ * kept for tests.
+ * @deprecated The live model label comes from `ModelPort.default()`.
  * @param home - home directory override (defaults to the live one)
  * @returns default ref, or undefined when unreadable
  */
