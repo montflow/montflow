@@ -29,7 +29,7 @@ Use when opening a GitHub pull request, writing/updating a PR title or body, or 
    ```
 2. Make sure the head branch is committed and pushed, and note the base branch (`main` unless told otherwise). Commit only through [planning-git-commits](../planning-git-commits/SKILL.md) — it owns Conventional Commit messages, user confirmation, and the pre-flight hook check.
 3. Confirm the working tree is clean (`git status --porcelain`) — don't ship stray scratch files.
-4. Run the repo's verification gate and note the result for the body (montflow: `bun run verify:montflow`; the fast variant `bun run verify:montflow:fast` drops tests).
+4. Run the repo's verification gate and note the result for the body (montflow: `bun run mf:gate`; the fast variant `bun run mf:gate:fast` drops tests).
 
 ## 2. Compose the PR
 
