@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0] - 2026-10-25
+
+### Changed
+
+- Removed the time-estimate rule (old rule 6); rules 7–11 renumbered to 6–10
+- GATES.md now rejects time estimates rather than requiring concrete units
+
 ## [1.2.0] - 2026-08-18
 
 ### Changed
