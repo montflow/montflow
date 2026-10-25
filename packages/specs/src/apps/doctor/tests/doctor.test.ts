@@ -5,7 +5,7 @@ import * as Vitest from '@effect/vitest';
 import { Effect } from 'effect';
 import { CREATE_SPEC_SKILL_NAME, FIND_SPECS_SKILL_NAME, runDoctor, runDoctorAt } from '../index.js';
 
-const freshRoot = (): string => Fs.mkdtempSync(NodePath.join(Os.tmpdir(), 'pi-specs-doctor-'));
+const freshRoot = (): string => Fs.mkdtempSync(NodePath.join(Os.tmpdir(), 'mf-specs-doctor-'));
 
 const installedSkillFile = (root: string, name: string): string =>
   NodePath.join(root, '.agents', 'skills', name, 'SKILL.md');

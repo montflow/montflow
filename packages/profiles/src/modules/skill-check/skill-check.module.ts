@@ -1,10 +1,10 @@
 import { Effect } from 'effect';
-// eslint-disable-next-line montflow/no-node-platform-imports -- the skills store is a platform boundary; pi-skills owns its files, this only asks whether it exists.
+// eslint-disable-next-line montflow/no-node-platform-imports -- the skills store is a platform boundary; the skills store owns its files, this only asks whether it exists.
 import { stat } from 'node:fs/promises';
 import * as PiProfiles from '../pi-profiles/index.js';
 
 /**
- * Check the skills a profile declares by delegating to the pi-skills
+ * Check the skills a profile declares by delegating to the skills
  * `verify` engine — the same engine the `mf-skills` CLI runs, so a
  * profile and the skills CLI can never disagree. Montflow skills
  * (`montflow-*`) are held to the full standard; generic and vendored
@@ -38,7 +38,7 @@ const load = (): Effect.Effect<PiSkillsLib | undefined> =>
   Effect.tryPromise(() => importOnce()).pipe(Effect.orElseSucceed(() => undefined));
 
 /**
- * Whether the pi-skills runtime can be loaded. {@link resolveSkills} returns
+ * Whether the skills runtime can be loaded. {@link resolveSkills} returns
  * undefined both when no skills store exists and when the engine is
  * unavailable; this lets a caller tell the two apart, so only the skipped
  * check the reader asked for is surfaced as a warning.

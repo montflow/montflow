@@ -2,7 +2,7 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for profile files; both go away with the FileSystem migration.
 import { join } from 'node:path';
-import type { Changes } from '@montflow/pi-effect';
+import type { Changes } from '@montflow/opencode';
 import type { Interactive as ProfilesInteractive, PiProfiles } from '@montflow/profiles';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Data, Effect, Fiber, Layer, Stream } from 'effect';

@@ -3,12 +3,12 @@
 Effect-first file-backed store for agent profiles. Persists one
 `PROFILE.md` per profile under
 `.agents/@montflow/profiles/<name>/PROFILE.md` (namespaced to this
-extension like `pi-prompts`).
+extension like `packages/prompts`).
 
 ## Belongs here
 
 - `ProfileStore` context service (`list`, `read`, `save`, `remove`, `readRaw`, `watch`)
-- `watch` — the store's change stream (`@montflow/pi-effect` `Changes`), so
+- `watch` — the store's change stream (`@montflow/opencode` `Changes`), so
   consumers subscribe instead of watching the filesystem; `nameOf` maps a
   watched path to its profile slug
 - Seeding `TEMPLATE.md` into the profiles root on first use

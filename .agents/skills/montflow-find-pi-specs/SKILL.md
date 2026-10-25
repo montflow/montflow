@@ -1,9 +1,9 @@
 ---
 name: montflow-find-pi-specs
-description: Finds and filters montflow specs under .agents/@montflow/specs/ with the `mf-specs list` CLI (or `/mf-specs list` in Pi), reporting each spec's derived lifecycle state. Use when an agent must answer "what is pending?", pick a spec to resume, or list specs by state.
+description: Finds and filters montflow specs under .agents/@montflow/specs/ with the `mf-specs list` CLI (or `/specs list` in the OpenCode host), reporting each spec's derived lifecycle state. Use when an agent must answer "what is pending?", pick a spec to resume, or list specs by state.
 id: f21093485cea4b44
 author: Daniel Montilla
-version: 1.2.0
+version: 1.3.0
 license: MIT
 dependencies:
   - executing-skills
@@ -24,17 +24,17 @@ edits, or executes them.
 
 ## 1. Ensure the Skill Is Installed
 
-Run `mf-specs doctor` (or `bun run --cwd packages/pi-specs cli doctor`).
+Run `mf-specs doctor` (or `bun run --cwd packages/specs cli doctor`).
 It installs `montflow-find-pi-specs` and `montflow-create-pi-specs` into
 `<repo>/.agents/skills/`. Idempotent — a present skill is left untouched.
 
 ## 2. Run `list`
 
 ```bash
-bun run --cwd packages/pi-specs cli list
+bun run --cwd packages/specs cli list
 ```
 
-Inside a Pi session the same engine is the `/mf-specs list` slash command.
+Inside the OpenCode host the same engine is the `/specs list` slash command.
 `list` defaults to the root `.agents/@montflow/specs`; override with `--dir`.
 
 ## 3. Filter by State
@@ -49,10 +49,10 @@ Inside a Pi session the same engine is the `/mf-specs list` slash command.
 
 ```bash
 # unfinished work only
-bun run --cwd packages/pi-specs cli list --pending
+bun run --cwd packages/specs cli list --pending
 
 # finished and idle specs
-bun run --cwd packages/pi-specs cli list --status=complete,pending
+bun run --cwd packages/specs cli list --status=complete,pending
 ```
 
 ## 4. Read the Output
@@ -82,7 +82,7 @@ dispatch `subagent` sessions from the orchestrator.
 
 - **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus
   one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`).
-- **CLI engine**: `packages/pi-specs/src/apps/cli/cli.apps.module.ts` —
+- **CLI engine**: `packages/specs/src/apps/cli/cli.apps.module.ts` —
   `list`, `renderList`, `resolveListOptions`, `scaffold` (the `create` engine).
-- **Lifecycle contract**: `packages/pi-specs/src/modules/lifecycle/lifecycle.module.ts`
+- **Lifecycle contract**: `packages/specs/src/modules/lifecycle/lifecycle.module.ts`
   — the derived states and their meanings.

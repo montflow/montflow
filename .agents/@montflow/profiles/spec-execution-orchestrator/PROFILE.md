@@ -30,8 +30,8 @@ state.**
    they never edit task state.
 4. **Run the gates.** `mf-specs gate run` executes mechanical gates and records
    results. Subjective gates go to a reviewer role, not to you.
-5. **Run the phase review through the pi-reviews extension.** Start it with
-   `mf-reviews start <name>` — or `/mf-reviews start <name>` inside Pi — where `<name>` is a
+5. **Run the phase review through the reviews extension.** Start it with
+   `mf-reviews start <name>` — or `/mf-reviews start <name>` in the OpenCode host — where `<name>` is a
    kebab-case series name for the spec and phase (e.g. `ship-spec-a`); `mf-reviews resume
    <name>` picks up a stopped review (`mf-reviews --help` has the exact verbs). The extension
    spawns the isolated reviewer and drives the findings → fix → re-review loop to a verdict.
@@ -39,7 +39,7 @@ state.**
    re-verify it. Never run a reviewer yourself and never touch the review artifact — the
    extension owns it. A waived phase skips this, with the reason recorded.
    - If `mf-reviews` is not installed, stop and tell the user to install the
-     `@montflow/pi-reviews` extension. Never hand-roll a review.
+     `@montflow/reviews` extension. Never hand-roll a review.
 6. **Get a verdict.** Ask the appraiser (or the reviewer, per the phase's gate
    kind) for `pass | rework | escalate`.
 7. **Advance or stop.** `pass` → `mf-specs lock <phase>`, then `notify_user`.

@@ -1,42 +1,135 @@
-# Repo-wide verification gate, on every push to `main`.
+# Repo-wide verification gate.
 #
-# This is the general gate the repository lacked: lint, format, typecheck,
-# tests, the TUI suite, the loader smoke, the dependency-drift and distribution
-# checks, and the extension verifications (skills, prompts, specs, profiles,
-# reviews).
-# Each matrix cell runs one check through a shared root script (`package.json`)
-# so a failure names a single target and CI, the local `verify:montflow`
-# script, and the Lefthook pre-push hook all execute the same commands.
+# Runs on every push, pull request, merge queue entry, and on demand, so a
+# failure is caught before it lands on `main` instead of after.
 #
-# Boundary with `release.yml`: that workflow is intentionally left untouched.
-# Its `checks` job runs per-package test/typecheck/lint/format but only for
-# packages that are about to be published (public, not ignored, version not
-# yet on npm), and it is skipped when there is nothing to release. It gates
-# publishing, not pushes; this workflow gates pushes. On a push that also
-# releases a package the two can overlap; that overlap is accepted, because
-# release gating stays authoritative for publishing.
+# Shape:
+#   install  -> checkout, `bun install`, pack the workspace *including*
+#               `node_modules` into one artifact.
+#   build    -> restore that artifact, run every package build once, repack
+#               the workspace *including* the build outputs (and Turbo's
+#               local cache) into the same artifact name.
+#   verify   -> matrix of independent checks. Each cell restores the built
+#               workspace, so install and build happen exactly once per run
+#               instead of once per check. The matrix then runs fully in
+#               parallel.
 #
-# Known limitation: only `push` to `main` triggers this. A pull request merged
-# before the push event runs is checked after it lands, and feature branches
-# get no CI. Adding a `pull_request` trigger or a required `Verify` status
-# check is a follow-up.
+# The workspace travels as a single `tar` (not as loose files) because
+# `node_modules` is full of symlinks and hardlinks, and zip-based artifacts
+# do not round-trip those correctly. `.git` is excluded; each job does its own
+# `actions/checkout` so Turborepo keeps a stable git root for its hashing.
+#
+# `TURBO_CACHE_DIR` is pointed at `.turbo/cache` inside the workspace so the
+# cache built by the `build` job travels with the artifact. The verify cells
+# then satisfy their `^build` dependencies from that cache instead of
+# rebuilding their dependencies.
+#
+# Each matrix cell runs one check through a root script (`package.json`) so a
+# failure names a single target and CI, the local `mf:gate` script,
+# and the Lefthook pre-push hook all execute the same commands.
+#
+# Boundary with `release.yml`: that workflow is untouched. Its `checks` job
+# runs per-package test/typecheck/lint/format only for packages about to be
+# published, and it is skipped when there is nothing to release. It gates
+# publishing, not pushes.
 name: Verify
 
 on:
   push:
-    branches: [main]
+  pull_request:
+  merge_group:
+  workflow_dispatch:
 
 concurrency:
-  group: verify-${{ github.ref }}
+  group: verify-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions: {}
 
+env:
+  TURBO_CACHE_DIR: .turbo/cache
+  TURBO_TELEMETRY_DISABLED: "1"
+
 jobs:
-  verify:
-    name: ${{ matrix.target }} (${{ matrix.script }})
+  install:
+    name: Install
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.13"
+
+      - name: Cache Bun install store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-install-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Pack installed workspace
+        run: tar --exclude=.git -cf "$RUNNER_TEMP/workspace.tar" .
+
+      - name: Upload installed workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace
+          path: ${{ runner.temp }}/workspace.tar
+          retention-days: 1
+          if-no-files-found: error
+
+  build:
+    name: Build
+    needs: [install]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download installed workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace
+          path: ${{ runner.temp }}
+
+      - name: Restore installed workspace
+        run: tar -xf "$RUNNER_TEMP/workspace.tar" -C "$GITHUB_WORKSPACE"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.13"
+
+      - name: Build
+        run: bun run build
+
+      - name: Pack built workspace
+        run: tar --exclude=.git -cf "$RUNNER_TEMP/workspace.tar" .
+
+      - name: Upload built workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace
+          path: ${{ runner.temp }}/workspace.tar
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+  verify:
+    name: ${{ matrix.target }}
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
     strategy:
@@ -55,37 +148,32 @@ jobs:
             script: test:tui
           - target: smoke
             script: smoke
-          - target: compat
-            script: verify:montflow:compat
-          - target: distribution
-            script: verify:montflow:distribution
           - target: skills
-            script: verify:montflow:skills
+            script: mf:check:skills
           - target: prompts
-            script: verify:montflow:prompts
+            script: mf:check:prompts
           - target: specs
-            script: verify:montflow:specs
+            script: mf:check:specs
           - target: profiles
-            script: verify:montflow:profiles
+            script: mf:check:profiles
           - target: reviews
-            script: verify:montflow:reviews
+            script: mf:check:reviews
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download built workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace
+          path: ${{ runner.temp }}
+
+      - name: Restore built workspace
+        run: tar -xf "$RUNNER_TEMP/workspace.tar" -C "$GITHUB_WORKSPACE"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.13"
-
-      - name: Cache Bun install store
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-install-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
 
       - name: Run ${{ matrix.target }}
         run: bun run ${{ matrix.script }}

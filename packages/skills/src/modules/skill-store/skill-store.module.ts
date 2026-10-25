@@ -1,4 +1,4 @@
-// eslint-disable-next-line montflow/no-node-platform-imports -- file store reads/writes .agents/skills via node fs; migrate to FileSystem when pi-skills moves onto the platform layer graph.
+// eslint-disable-next-line montflow/no-node-platform-imports -- file store reads/writes .agents/skills via node fs; migrate to FileSystem when the skills store moves onto the platform layer graph.
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for skill files.
 import { join } from 'node:path';

@@ -3,7 +3,7 @@ import * as Doctor from '../doctor/index.js';
 import type { VerifyReport } from './engines.apps.module.js';
 
 /**
- * Pure `data -> text` renderers for both pi-skills front ends. They carry
+ * Pure `data -> text` renderers for both `mf-skills` front ends. They carry
  * the token contract: lean by default, `verbose` only adds detail, and a
  * failure is never suppressed.
  */

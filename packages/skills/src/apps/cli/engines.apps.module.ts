@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import { Skill, SkillStore } from '../../modules/index.js';
 
 /**
- * Shared engines for both pi-skills front ends: the `mf-skills` binary
+ * Shared engines for both `mf-skills` front ends: the `mf-skills` binary
  * and the `/mf-skills` slash command. Structured in, data out — engines
  * know nothing about argv or output, so the two surfaces cannot diverge.
  *

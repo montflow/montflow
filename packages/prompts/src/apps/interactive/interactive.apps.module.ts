@@ -1,5 +1,5 @@
-import { Dialogs, ModelOptions } from '@montflow/pi-interactive';
 import { Effect } from 'effect';
+import * as Interaction from '../../modules/interaction/index.js';
 import * as PromptExecute from '../../modules/prompt-execute/index.js';
 import * as Prompts from '../../modules/prompts/index.js';
 import * as Doctor from '../doctor/index.js';
@@ -13,7 +13,7 @@ export const COMMAND_NAME = 'mf-prompts-tui';
  *
  * Named `mf-prompts-tui` rather than `mf-prompts` so that the headless CLI
  * keeps the plain name: `mf-prompts` is the binary, and `/mf-prompts` is the
- * same command inside a Pi session. This one is the human-facing menu.
+ * same command inside the host. This one is the human-facing menu.
  */
 export const COMMAND_DESCRIPTION =
   'Browse, create (manually or with an agent), show, inspect, modify (manually or with an agent), fill & render, or execute workspace prompts, or install the prompt skills (doctor). For the headless CLI use /mf-prompts.';
@@ -22,20 +22,14 @@ export const COMMAND_DESCRIPTION =
 export const USAGE =
   '/mf-prompts-tui [browse | list | doctor | create [name] | show <name> | inspect <name> | modify [name] | render <name> [key=value ...] | execute <name> [key=value ...] | help]';
 
-/**
- * Failure value when the user cancels a dialog. Shared with the other
- * `/mf-*` commands via `@montflow/pi-interactive`.
- */
-export const CANCELLED = Dialogs.CANCELLED;
+/** Failure value when the user cancels a dialog. Shared with the other `/mf-*` commands. */
+export const CANCELLED = Interaction.CANCELLED;
 
 /** Minimal UI surface the flows need. Shared with the other `/mf-*` commands. */
-export type InteractiveUi = Dialogs.InteractiveUi;
-
-/** UI surface available where custom TUI components can render (TUI mode). */
-export type FilterUi = Dialogs.FilterUi;
+export type InteractiveUi = Interaction.InteractiveUi;
 
 /** TUI model picker port. Shared with the other `/mf-*` commands. */
-export type ModelPickerFn = Dialogs.ModelPickerFn;
+export type ModelPickerFn = Interaction.ModelPickerFn;
 
 /** Command environment: dialogs, cwd, resolved picker options, and TUI ports. */
 export interface CommandEnv {
@@ -64,7 +58,7 @@ export type Action =
     };
 
 /** Split args on whitespace. Shared with the other `/mf-*` commands. */
-export const tokenize = Dialogs.tokenize;
+export const tokenize = Interaction.tokenize;
 
 /**
  * Collect `key=value` pairs from tokens. Supports bare `k=v`, `--set k=v`,
@@ -145,7 +139,7 @@ export const variables = Prompts.templateVariables;
 
 /**
  * Notify the prompt list, or a hint when empty.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param prompts - prompts to list
  * @returns Effect completing once notified
  */
@@ -163,7 +157,7 @@ export const listPrompts = (
 
 /**
  * Notify a prompt's template, failing on unknown names.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param prompts - prompts to search
  * @param name - prompt name
  * @returns Effect completing once notified, failing on unknown names
@@ -186,7 +180,7 @@ export const showPrompt = (
 /**
  * Notify a verify outcome: one line when valid, the full fix-oriented report
  * otherwise (issue, `Fix:` line, and the `variables` JSON to paste).
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param name - verified prompt name
  * @param result - result from `Prompts.verifyPromptFile`
  * @returns Effect completing once notified
@@ -198,7 +192,7 @@ export const notifyVerifyResult = (
 ): Effect.Effect<void> => Effect.sync(() => ui.notify(Prompts.verifyReport(name, result), 'info'));
 
 /** One model offered for agentic runs. Shared with the other `/mf-*` commands. */
-export type ModelOption = Dialogs.ModelOption;
+export type ModelOption = Interaction.ModelOption;
 
 /** Agentic prompt generation port the consuming extension injects (child agent run). */
 export interface GenerateInput {
@@ -221,39 +215,39 @@ export type PromptModifier = (
   input: ModifyInput,
 ) => Effect.Effect<Prompts.Prompt, string, PromptStore.PromptStore>;
 
-/** Minimal model reference carried from the Pi context. Shared. */
-export type ModelRef = ModelOptions.ModelRef;
+/** Minimal model reference carried from the host context. Shared. */
+export type ModelRef = Interaction.ModelRef;
 
-/** Minimal model catalogue carried from the Pi context. Shared. */
-export type ModelCatalog = ModelOptions.ModelCatalog;
+/** Minimal model catalogue carried from the host context. Shared. */
+export type ModelCatalog = Interaction.ModelCatalog;
 
 /** Where the model picker reads from. Shared with the other `/mf-*` commands. */
-export type ModelSource = ModelOptions.ModelSource;
+export type ModelSource = Interaction.ModelSource;
 
 /** Model picker options. Shared with the other `/mf-*` commands. */
-export const modelOptions = ModelOptions.modelOptions;
+export const modelOptions = Interaction.modelOptions;
 
 /** Resolve picker options from the command source. Shared. */
-export const resolveModelOptions = ModelOptions.resolveModelOptions;
+export const resolveModelOptions = Interaction.resolveModelOptions;
 
 /** Subsequence fuzzy match. Shared with the other `/mf-*` commands. */
-export const matchesFilter = ModelOptions.matchesFilter;
+export const matchesFilter = Interaction.matchesFilter;
 
 /** Bottom menu entry opening the filter step. Shared. */
-export const PICK_ANOTHER = ModelOptions.PICK_ANOTHER;
+export const PICK_ANOTHER = Interaction.PICK_ANOTHER;
 
 /** Model picker menu. Shared with the other `/mf-*` commands. */
-export const pickModel = ModelOptions.pickModel;
+export const pickModel = Interaction.pickModel;
 
 /** Pick the authoring model for an agentic run. Shared. */
-export const pickAgenticModel = ModelOptions.pickAgenticModel;
+export const pickAgenticModel = Interaction.pickAgenticModel;
 
 /**
  * Agentic create flow: describe the prompt, pick the authoring model
  * (current session model first), then run the injected generator.
  * Uses the injected TUI widget when provided, else the menu-driven
  * `pickModel`.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param models - picker options from {@link resolveModelOptions}
  * @param generate - injected agentic generation port
  * @param modelPicker - TUI widget port, if available
@@ -276,7 +270,7 @@ export const createAgentic = (
 
 /**
  * Create flow entry: manual vs agentic choice, then the chosen flow.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param models - picker options from {@link resolveModelOptions}
  * @param generate - injected agentic generation port
  * @param name - initial manual name, if already given
@@ -301,7 +295,7 @@ export const createPrompt = (
 
 /**
  * Manual create flow: name (when missing) then template via dialogs.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param name - initial name, if already given
  * @returns Effect resolving to the new descriptor, failing on cancel or blank input
  */
@@ -326,7 +320,7 @@ export const createManual = (
 /**
  * Manual modify flow: enter a new template. Persists nothing itself — the
  * caller saves the returned descriptor.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param prompt - prompt under edit
  * @returns Effect resolving to the updated descriptor, failing on cancel or blank input
  */
@@ -348,7 +342,7 @@ export const modifyManual = (
  * (current session model first), then run the injected modifier.
  * Uses the injected TUI widget when provided, else the menu-driven
  * `pickModel` — same picker as {@link createAgentic}.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param prompt - prompt under edit
  * @param models - picker options from {@link resolveModelOptions}
  * @param modify - injected agentic modification port
@@ -374,7 +368,7 @@ export const modifyAgentic = (
 /**
  * Modify flow entry: pick the prompt (when unnamed), choose manual vs
  * agentic, then run the chosen flow. Persists nothing itself.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param prompts - prompts to search
  * @param models - picker options from {@link resolveModelOptions}
  * @param modify - injected agentic modification port
@@ -417,7 +411,7 @@ export const modifyPrompt = (
  * Render a prompt, prompting for each missing value via dialogs. Variables
  * that already have a value (supplied or defaulted) are not asked for, and an
  * optional variable may be left blank.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param prompt - prompt descriptor
  * @param provided - values already collected (e.g. CLI `key=value` pairs)
  * @returns Effect resolving to the rendered template
@@ -453,7 +447,7 @@ const findOrFail = (
  *
  * Blank re-keeps the previous value, so a second pass can change one field
  * without retyping the rest.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param prompt - prompt descriptor
  * @param initial - previously collected values (re-fill), if any
  * @returns Effect resolving to a complete value map
@@ -500,7 +494,7 @@ export const fillInputs = (
  * The model falls back to the prompt's own `model`; only a prompt that pins
  * none asks the user. `PromptExecute.execute` is then the authority on
  * whether the run may go ahead, so the TUI and the CLI cannot disagree.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param cwd - project working directory
  * @param prompt - prompt to run
  * @param models - picker options from {@link resolveModelOptions}
@@ -545,7 +539,7 @@ export const executeFlow = (
 /**
  * Structured render: fill every input, show the result, offer another pass
  * with the previous values as defaults.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param prompt - prompt descriptor
  * @param initial - previously collected values (re-fill), if any
  * @returns Effect completing once the user declines another pass
@@ -568,7 +562,7 @@ const renderLoop = (
 /**
  * Per-prompt submenu: show, render, modify, delete, or go back. After each
  * action (except delete) the submenu reopens; cancel goes back too.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param cwd - project working directory
  * @param models - picker options from resolveModelOptions
  * @param generate - injected agentic generation port
@@ -656,7 +650,7 @@ const promptMenu = (
 /**
  * Prompt browser: pick a prompt for its submenu, or go back. Re-lists after
  * every visit so creates, modifies, and deletes show immediately.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param cwd - project working directory
  * @param models - picker options from resolveModelOptions
  * @param generate - injected agentic generation port
@@ -706,7 +700,7 @@ const browseMenu = (
 
 /**
  * Main menu loop: pick an area, run it, come back. Cancel exits silently.
- * @param ui - Pi ui dialogs
+ * @param ui - host dialogs
  * @param cwd - project working directory
  * @param models - picker options from resolveModelOptions
  * @param generate - injected agentic generation port

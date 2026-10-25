@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.3.0] - 2026-10-25
+
+### Changed
+
+- The slash-command form is `/specs create` in the OpenCode host; `mf-specs create` is the binary
+
 ## [2.2.0] - 2026-10-15
 
 ### Added

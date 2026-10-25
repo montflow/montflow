@@ -2,7 +2,7 @@
 
 Slash-command flows for `/mf-profiles`: browse, create (manually or
 with an agent), show, modify (manually or with an agent), and delete
-workspace profiles. Mirrors the `pi-prompts` interactive interface —
+workspace profiles. Mirrors the `@montflow/prompts` interactive interface —
 same menu loop, same model picker, same requirements gate, same
 loading modal and TUI menu ports. Creation sessions inject the
 `montflow-create-pi-profiles` workspace skill, modification sessions inject
@@ -24,4 +24,4 @@ so authors follow the profile standards.
 - File persistence — injected `ProfileStore` port (wired in `extension.ts`)
 - Child-agent sessions — injected `ProfileGenerator` / `ProfileModifier` ports
 - Skill installation — injected `SkillInstaller` port
-- TUI widgets — `@montflow/pi-interactive` (injected ports)
+- TUI widgets — `@montflow/opencode` ports (injected)

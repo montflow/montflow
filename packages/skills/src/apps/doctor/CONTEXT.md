@@ -44,7 +44,7 @@ A stale embed is the dangerous failure, so `tests/embedded-payload.test.ts`
 asserts the embed equals `skills/` byte for byte. Regenerate after any edit:
 
 ```bash
-bun run --cwd packages/pi-skills generate:payload
+bun run --cwd packages/skills generate:payload
 ```
 
 ## Does not belong here

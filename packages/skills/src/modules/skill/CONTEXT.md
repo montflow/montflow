@@ -1,6 +1,6 @@
 # Skill module
 
-Schema-class data model for pi-skills. One `Skill` instance equals one
+Schema-class data model for the skills store. One `Skill` instance equals one
 `SKILL.md` file under `.agents/skills/`.
 
 Singular name per the TypeScript modules skill (`skill` → `Skill`).

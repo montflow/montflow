@@ -50,7 +50,7 @@ export interface ReviewDispatchPorts {
 
 /**
  * The prompt the reviewer session receives. The profile's skills are prepended
- * as explicit load instructions, mirroring the `pi-prompts` `executeFor` pattern.
+ * as explicit load instructions, mirroring the `@montflow/prompts` `executeFor` pattern.
  */
 export const reviewerPrompt = (
   input: ReviewDispatchInput,

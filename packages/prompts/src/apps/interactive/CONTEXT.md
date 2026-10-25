@@ -26,12 +26,12 @@ codecs, and the store service stay out (`modules/`, `services/`).
   provided as `live` at invocation — no injected port object
 - Manual vs agentic create/modify (`createAgentic`, `modifyAgentic`) over
   injected generator/modifier ports, with the shared model picker
-  (`ModelOptions.resolveModelOptions/pickModel/pickAgenticModel` from
-  `@montflow/pi-interactive`, re-exported here so tests keep passing)
-- TUI ports (`FilterUi`, `ModelPickerFn` widget with the current session
-  model pinned and single-keystroke keep, `CommandEnv`) wired in
-  `register` via `searchFor`/`modelPickerFor` factories — same shape as
-  `pi-skills`; the port types themselves are aliases of `Dialogs.*`
+  (`Interaction.resolveModelOptions/pickModel/pickAgenticModel` from
+  `../../modules/interaction/`, re-exported here so tests keep passing)
+- TUI port (`ModelPickerFn` widget with the current session model pinned and
+  single-keystroke keep, `CommandEnv`) wired in `register` via
+  `searchFor`/`modelPickerFor` factories — same shape as the `@montflow/skills` interactive app; the port
+  type itself is an alias of `Interaction.*`
 
 ## Does not belong here
 
@@ -40,12 +40,12 @@ codecs, and the store service stay out (`modules/`, `services/`).
 - Inspect / execute planning and the table — `../../modules/prompt-execute/`
   owns the rules; this module only chooses the model and fills the dialogs
 - Running an agent — the `PromptExecutor` port is injected by the extension
-- Dialog ports and arg tokenizing (`InteractiveUi`, `FilterUi`,
-  `ModelPickerFn`, `CANCELLED`, `tokenize`) — those live in
-  `@montflow/pi-interactive` (`Dialogs`); this module re-exports them as
-  aliases so the `/mf-*` commands stay structurally identical
-- Pi UI primitives (`notify`, `confirm`, `select`, `input`) — those live in
-  `@montflow/pi-effect`
+- Dialog ports and arg tokenizing (`InteractiveUi`, `ModelPickerFn`,
+  `CANCELLED`, `tokenize`) — those live in `../../modules/interaction/`;
+  this module re-exports them as aliases so the `/mf-*` commands stay
+  structurally identical
+- Host UI primitives (`notify`, `confirm`, `select`, `input`) — those reach
+  the plugin through `@montflow/opencode`'s `InteractionPort`
 - Persistence — the consuming extension injects a `PromptStore`
   (`list`/`save` Effects); this package holds no filesystem code
 - Future store-backed search/filter — add it here only when a consumer

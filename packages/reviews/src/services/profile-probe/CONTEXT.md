@@ -1,7 +1,7 @@
 # ProfileProbe service
 
 Lazy bridge from a review's optional `Profile:` reference to the
-`@montflow/pi-profiles` extension. It runs `mf-profiles verify <name> --dir
+`@montflow/profiles` extension. It runs `mf-profiles verify <name> --dir
 <workspace root>` and reduces the result to a `ProbeOutcome`, so `mf-reviews
 verify` can delegate profile verification instead of reimplementing the profile
 format.
@@ -18,7 +18,7 @@ format.
 
 - Review format rules — `modules/review` owns those
 - Turning outcomes into issues or warnings — `apps/cli/engines` owns that
-- Profile format rules — the pi-profiles extension owns those
+- Profile format rules — the profiles plugin owns those
 - File IO — `services/review-store` owns the review store
 
 ## Layers

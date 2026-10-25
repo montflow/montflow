@@ -55,12 +55,12 @@ The interactive menu is a different command: `/mf-prompts-tui`,
 
 ```bash
 # from source (Bun required)
-bun run --cwd packages/pi-prompts cli list
-bun packages/pi-prompts/src/apps/cli/main.ts verify commit   # no --cwd: cwd is the store root
+bun run --cwd packages/prompts cli list
+bun packages/prompts/src/apps/cli/main.ts verify commit   # no --cwd: cwd is the store root
 
 # standalone binary — Bun runtime embedded, no install, no node
-bun run --cwd packages/pi-prompts build:cli
-./packages/pi-prompts/dist/mf-prompts list --verbose
+bun run --cwd packages/prompts build:cli
+./packages/prompts/dist/mf-prompts list --verbose
 ```
 
 `build:cli` is `bun build --compile`, preceded by `generate:payload` so the

@@ -1,5 +1,12 @@
 # montflow
 
+## Response Style
+
+- Always respond using the `i-have-adhd` skill
+  (`.agents/skills/i-have-adhd/SKILL.md`) — every turn, every task. Skip it only
+  when the user explicitly says not to (e.g. "don't use i-have-adhd", "skip the
+  ADHD style").
+
 ## Language
 
 TypeScript, Effect v4
@@ -17,12 +24,14 @@ bun@1.3.13 — lockfile is source of truth
 - typecheck: `turbo ts:check`
 - lint: `turbo lint:check` / `turbo lint:fix`
 - format: `turbo format:check` / `turbo format:fix`
-- dependency drift: `bun run verify:montflow:compat`
-- distribution boundary: `bun run verify:montflow:distribution`
+- verify all mf artifacts/invariants: `bun run mf:check`
 - pack plugins for Git install: `bun run pack:plugins`
-- verify (full gate): `bun run verify:montflow`
-- verify (fast, no test suite): `bun run verify:montflow:fast`
+- gate (full): `bun run mf:gate`
+- gate (fast, no test suite): `bun run mf:gate:fast`
 - install pre-push hook: `bun run hooks:install`
+
+Script names follow `[tool]:[action]:[scope]`: `mf:check:<scope>` runs one
+scope, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
 
 ## Verification
 
@@ -43,28 +52,18 @@ bun@1.3.13 — lockfile is source of truth
 
 ## Verification gate
 
-- `bun run verify:montflow` is the repo-wide gate: `lint:check`, `format:check`,
+- `bun run mf:gate` is the repo-wide gate: `lint:check`, `format:check`,
   `ts:check`, `turbo test`, `turbo test:tui` (the workspace TUI `.test.tsx`
-  suite), `turbo smoke` (the `@opencode/plugin` loader smoke),
-  the dependency-drift and distribution checks, then the extension verifies. CI
-  runs each check as its own matrix cell in `.github/workflows/verify.yml` (push
-  to `main`).
-- `verify:montflow:fast` drops the test suite and the smoke. The Lefthook
+  suite), `turbo smoke` (the `@opencode/plugin` loader smoke), then every
+  `mf:check` scope. CI
+  runs each check as its own matrix cell in `.github/workflows/verify.yml` (push,
+  pull request, merge queue, manual). The workflow installs and builds once,
+  saves the resulting workspace as an artifact, then fans the matrix out off
+  that single artifact.
+- `mf:gate:fast` drops the test suite and the smoke. The Lefthook
   `pre-push` hook runs it; install once per clone with
   `bun run hooks:install`, bypass with `git push --no-verify` or `LEFTHOOK=0`.
-- `verify:montflow:compat` asserts every workspace `effect`,
-  `@effect/platform-node`, `@effect/platform-node-shared`, `@effect/vitest`,
-  `@opencode/*`, `@opentui/*`, and `solid-js` pin (declared and resolved, from
-  `bun.lock`) against the installed `@opencode/plugin` catalog. Any divergence
-  fails, and the root `@effect/platform-node-shared` override is required — the
-  `^4.0.0-rc.112` range otherwise resolves to `4.0.3`, which imports the
-  removed `effect/cluster/Runners`.
-- `verify:montflow:distribution` asserts every plugin package is `private`,
-  changeset-ignored, Git-installable (`repository.directory`, resolvable
-  `exports`/`bin`), and packs to a self-contained published artifact with no
-  `workspace:` or `@montflow/*` dependency. `bun run pack:plugins` emits those
-  artifacts under `dist/pack/` for the Git subpath install.
-- Extension verifies, each runnable alone: `verify:montflow:skills`,
+- Utility verifies, each runnable alone: `mf:check:skills`,
   `:prompts`, `:specs`, `:profiles`, `:reviews`. They verify this repo's
   own artifacts (`.agents/skills`, `.agents/@montflow/pi-prompts`,
   `.agents/@montflow/specs`, `.agents/@montflow/profiles`,

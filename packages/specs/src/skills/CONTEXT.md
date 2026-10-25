@@ -3,7 +3,7 @@
 Simplified spec skills as plain text, owned by the package and
 **injected** into a dispatched session's prompt (`modules/prompt`). They are not
 Pi-discovered skills and have no runtime behavior — they align an agent with
-the pi-specs contract (frontmatter, status enum, tree verifier, CLI).
+the spec contract (frontmatter, status enum, tree verifier, CLI).
 
 ## Belongs here
 

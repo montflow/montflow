@@ -26,8 +26,8 @@ and annotation are each a single export.
   about templates and bare variable names but nothing about prompt files
 - Pi business logic (commands, tools, event handlers) — the interactive command
   in `../interactive/` and the CLI in `../cli/`
-- Pi UI primitives (`notify`, `confirm`, `select`, `input`) — those live in
-  `@montflow/pi-effect`
+- Host UI primitives (`notify`, `confirm`, `select`, `input`) — those reach
+  the plugin through `@montflow/opencode`'s `InteractionPort`
 - Persistence — the consuming extension owns prompt files; this module only
   encodes/decodes their content
 

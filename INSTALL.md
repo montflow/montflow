@@ -61,17 +61,13 @@ opencode plugin add "git+https://github.com/montflow/montflow.git#<sha>::path:di
 
 Why two forms: a committed source manifest declares `@montflow/*: workspace:*`,
 which npm cannot resolve outside the monorepo, and its `exports` point at `.ts`
-sources the packaged host does not load. `bun run pack:plugins` produces the
-installable shape — prebuilt ESM bundles, host packages (`@opencode/*`,
-`effect`, `@opentui/*`, `solid-js`) external, every `@montflow/*` dependency
-bundled in, and no `workspace:` specifier. `dist/pack/**` is git-ignored; commit
-it with `-f` on the release ref you pin.
+sources the packaged host does not load. `bun run pack:plugins` produces the installable shape: prebuilt ESM bundles,
+host packages (`@opencode/*`, `effect`, `@opentui/*`, `solid-js`) external, every
+`@montflow/*` dependency bundled in, and no `workspace:` specifier.
+`dist/pack/**` is git-ignored; commit it with `-f` on the release ref you pin.
 
-`bun run verify:montflow:distribution` mechanically asserts both forms stay
-wired: private + changeset-ignored, resolvable `exports`/`bin`, and an artifact
-with no internal or `workspace:` dependency. No plugin is queued for public
-publish — `.changeset/config.json` ignores every private package, and
-`release.yml` skips private manifests.
+No plugin is queued for public publish — `.changeset/config.json` ignores every
+private package, and `release.yml` skips private manifests.
 
 ## Alternative: syncing-skills skill
 

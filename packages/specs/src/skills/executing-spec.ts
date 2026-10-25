@@ -1,5 +1,5 @@
 /**
- * Simplified `executing-spec` skill, aligned with the pi-specs
+ * Simplified `executing-spec` skill, aligned with the spec
  * contract (status enum, lifecycle states, CLI) and the native subagent tool.
  * Injected verbatim into a spec-resume session's prompt — never discovered as
  * a Pi skill.

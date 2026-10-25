@@ -4,7 +4,7 @@ status: complete
 workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-13
-locked-phases: A, B, C
+locked-phases: A, B, C, D
 ---
 
 # Montflow OpenCode migration
@@ -55,6 +55,7 @@ execution that ports the toolchain onto it, authored from the B005 sequence.
 - Phase C isolates OpenCode behind the adapter: `@opencode/*` is imported only by `@montflow/opencode`; pure domain modules and every plugin reach the host only through the adapter ports.
 - Phase C is additive until each step's delete: old `pi-*` packages stay installed and loadable until the phase that ports them, and every phase is independently revertible at its own cut.
 - Phase C keeps `verify:montflow` green at every cut and removes `pi-sessions` only after C003–C005 are proven on native sessions.
+- Phase D finishes the removal: no live `@montflow/pi-*` package or reference remains. The `Changes` store contract lives in `@montflow/opencode`, the dialog and model-picker helpers live in `@montflow/prompts`, and the workspace loads `@montflow/specs`; installing Pi skills and store paths keep their names, and historical spec/review records are left as written.
 
 ## Tasks
 
@@ -82,3 +83,5 @@ execution that ports the toolchain onto it, authored from the B005 sequence.
 | C006 | retire-pi-sessions                 | execution   | complete | Yes   |
 | C007 | verification-and-distribution      | execution   | complete | Yes   |
 | C099 | review-phase                       | review      | complete | No    |
+| D001 | remove-retired-pi-packages         | execution   | complete | Yes |
+| D099 | review-phase                       | review      | complete | No |

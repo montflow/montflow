@@ -3,7 +3,7 @@ name: montflow-create-pi-specs
 description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per task (TASK.md, MEMORY.md, GATES.md) — by scaffolding with `mf-specs create` then filling in the rules below. Use when an agent must create a spec directly, without dispatching a session.
 id: 6ebf45d24cb3d3a1
 author: Daniel Montilla
-version: 2.2.0
+version: 2.3.0
 license: MIT
 dependencies:
   - executing-skills
@@ -34,7 +34,7 @@ The mechanical skeleton is one deterministic, model-free command that already
 writes a tree passing `mf-specs check`:
 
 ```bash
-bun run --cwd packages/pi-specs cli create --name <kebab-name> \
+bun run --cwd packages/specs cli create --name <kebab-name> \
   [--description "<one line>"] [--author "<name>"] \
   [--workspace-type in-place|worktree] \
   [--tasks "build:execution:gates,explore:exploratory"] \
@@ -50,8 +50,8 @@ bun run --cwd packages/pi-specs cli create --name <kebab-name> \
   to overwrite an existing spec, and prints the files it wrote.
 - `--reviewer-profiles` seeds the review task's `reviewer-profiles` list
   (comma-separated, ordered).
-- Inside a Pi session the same engine is
-  `/mf-specs create --name <kebab-name> …`.
+- Inside the OpenCode host the same engine is
+  `/specs create --name <kebab-name> …`.
 
 Then edit the rendered `SPEC.md` and `TASK.md` files so they carry the real
 requirements. If you write the files by hand instead, follow steps 3–6 exactly.
@@ -114,10 +114,10 @@ hand; a fresh `create` output already verifies.
 - `locked-phases:` is empty and the spec is `status: in-progress`.
 - Nothing outside `.agents/@montflow/specs/` was touched.
 - `mf-specs check --name <kebab-name>` reports zero issues
-  (run `bun run --cwd packages/pi-specs cli check --name <kebab-name>`).
+  (run `bun run --cwd packages/specs cli check --name <kebab-name>`).
 
 # Reference
 
 - **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`).
-- **Scaffold CLI**: `mf-specs create` (or `/mf-specs create` in Pi) — flags `--name`, `--description`, `--author`, `--workspace-type`, `--tasks`, `--reviewer-profiles`.
-- **Contract source**: `packages/pi-specs/src/skills/authoring-spec.ts`, `modules/scaffold`, `modules/lifecycle`, `modules/structure`.
+- **Scaffold CLI**: `mf-specs create` (or `/specs create` in the OpenCode host) — flags `--name`, `--description`, `--author`, `--workspace-type`, `--tasks`, `--reviewer-profiles`.
+- **Contract source**: `packages/specs/src/skills/authoring-spec.ts`, `modules/scaffold`, `modules/lifecycle`, `modules/structure`.

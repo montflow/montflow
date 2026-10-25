@@ -53,8 +53,9 @@ and the `mf-skills` binary, both in [../cli](../cli/CONTEXT.md).
 
 - Skill descriptor shapes and codecs — those live in `skill`
   (`../../modules/skill/`); this module constructs via decode
-- Pi UI primitives (`notify`, `confirm`, `select`, `input`) — those live in
-  `@montflow/pi-effect`; this module defines a structural `InteractiveUi`
+- Host UI primitives (`notify`, `confirm`, `select`, `input`) — those reach
+  the plugin through `@montflow/opencode`'s `InteractionPort`; this module
+  defines a structural `InteractiveUi`
   port so any real `ctx.ui` is assignable without a hard dependency
 - Persistence — the consuming extension injects a `SkillStore`
   (`list`/`save`/`delete` Effects); this package holds no filesystem code

@@ -2,7 +2,7 @@
 #
 # `pre-push` runs the fast verification subset — lint, format, typecheck, and
 # every extension verify (skills, prompts, specs, profiles, reviews). It is the
-# same shared entry point (`verify:montflow:fast`) that the `Verify` GitHub
+# same shared entry point (`mf:gate:fast`) that the `Verify` GitHub
 # Actions workflow calls, so the two cannot drift.
 #
 # Install once per clone:
@@ -20,8 +20,8 @@ pre-push:
   commands:
     verify:
       run: |
-        if [ -f package.json ] && grep -q '"verify:montflow:fast"' package.json && [ -x node_modules/.bin/turbo ]; then
-          bun run verify:montflow:fast
+        if [ -f package.json ] && grep -q '"mf:gate:fast"' package.json && [ -x node_modules/.bin/turbo ]; then
+          bun run mf:gate:fast
         else
-          echo "verify:montflow:fast or node_modules not present in this worktree; skipping pre-push verification"
+          echo "mf:gate:fast or node_modules not present in this worktree; skipping pre-push verification"
         fi

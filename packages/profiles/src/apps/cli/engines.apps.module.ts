@@ -12,7 +12,7 @@ import { ProfileStore } from '../../services/index.js';
  * It reads the raw files directly rather than going through
  * `ProfileStore.list`, which silently drops any file it cannot decode.
  *
- * Each profile's declared `skills:` are also verified through the pi-skills
+ * Each profile's declared `skills:` are also verified through the skills
  * engine (resolved in the workspace `.agents/skills/` folder). If that engine
  * cannot be loaded the skill check is skipped and a warning is attached
  * instead of failing the run.
@@ -49,7 +49,7 @@ export interface VerifyOptions {
  * rule so only the latter warns, and only when a skill was declared.
  * @param resolution - the skill resolution, or undefined when it did not resolve
  * @param declaredCount - distinct skills the profiles declared
- * @param engineAvailable - whether the pi-skills runtime loaded
+ * @param engineAvailable - whether the skills runtime loaded
  * @returns the warning, or undefined when no check was actually skipped
  */
 export const skillsEngineWarning = (

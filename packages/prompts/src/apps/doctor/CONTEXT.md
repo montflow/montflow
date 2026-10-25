@@ -59,7 +59,7 @@ the bundle and the binary could neither install nor verify the skills — leavin
 Regenerate after any skill edit:
 
 ```bash
-bun run --cwd packages/pi-prompts generate:payload
+bun run --cwd packages/prompts generate:payload
 ```
 
 ## Does not belong here

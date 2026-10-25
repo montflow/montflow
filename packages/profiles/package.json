@@ -40,7 +40,6 @@
   "dependencies": {
     "@effect/platform-node": "4.0.0-rc.112",
     "@montflow/opencode": "workspace:*",
-    "@montflow/pi-effect": "workspace:*",
     "@montflow/skills": "workspace:*"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-import { Changes } from '@montflow/pi-effect';
+import { Changes } from '@montflow/opencode';
 import { Context, Effect, FileSystem, Layer, Path, Schema, Stream } from 'effect';
 import * as PiProfiles from '../../modules/pi-profiles/index.js';
 

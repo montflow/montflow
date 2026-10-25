@@ -2,7 +2,7 @@
 
 Authoring and resume prompts for dispatched spec sessions. Pure strings — no
 IO, no runtime. Each builder injects the matching skill body from
-`src/skills/` so the agent gets the pi-specs contract inline.
+`src/skills/` so the agent gets the spec contract inline.
 
 ## Belongs here
 

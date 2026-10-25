@@ -1,11 +1,11 @@
 Import skill primitives into a Pi extension in 1 minute.
 
-`@montflow/pi-skills` is the Effect-first home for [skill](./skills.md) descriptors, the `mf-skills` CLI (also `/mf-skills` inside Pi), the `/mf-skills-tui` interactive menu, and the `doctor` that installs the authoring skills.
+`@montflow/skills` is the Effect-first home for [skill](./skills.md) descriptors, the `mf-skills` CLI (also `/mf-skills` in the OpenCode host), the `/mf-skills-tui` interactive menu, and the `doctor` that installs the authoring skills.
 
 ## Use it
 
 ```typescript
-import { Skill } from '@montflow/pi-skills';
+import { Skill } from '@montflow/skills';
 import { Effect } from 'effect';
 
 const program = Effect.gen(function* () {

@@ -12,5 +12,5 @@ descriptors, slug names).
 
 - Pi business logic (commands, tools, event handlers) — that lives in the
   consuming extension
-- Pi UI primitives (`notify`, `confirm`, `select`, `input`) — those live in
-  `@montflow/pi-effect`
+- Host UI primitives (`notify`, `confirm`, `select`, `input`) — those reach
+  the plugin through `@montflow/opencode`'s `InteractionPort`

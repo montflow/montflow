@@ -22,8 +22,8 @@ directory.
 ## Standalone binary
 
 ```bash
-bun run --cwd packages/pi-specs build:cli
-cd packages/pi-specs/fixtures
+bun run --cwd packages/specs build:cli
+cd packages/specs/fixtures
 ../dist/mf-specs check            # exits 1: mock-bad, mock-stale
 ../dist/mf-specs check --verbose  # also lists the passing specs
 ../dist/mf-specs status --name mock-ok        # state pending
@@ -34,7 +34,7 @@ cd packages/pi-specs/fixtures
 ## From source
 
 ```bash
-bun run --cwd packages/pi-specs fixtures:check
+bun run --cwd packages/specs fixtures:check
 ```
 
 ## Automated

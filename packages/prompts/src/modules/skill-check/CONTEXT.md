@@ -14,4 +14,4 @@ the montflow standard.
 
 - Prompt shape verification and parsing — those live in
   [`../prompts/`](../prompts/CONTEXT.md)
-- Skill-contract verification — that lives in `@montflow/pi-skills`
+- Skill-contract verification — that lives in `@montflow/skills`

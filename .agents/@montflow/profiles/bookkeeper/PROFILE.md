@@ -35,22 +35,22 @@ Know every store, its expected layout, its verifier, and its repair skill. Load 
 
 | Artifact       | Location                                        | Expected layout                                                                                              | Verifier                             | Repair skill                                                     |
 | -------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------ | ---------------------------------------------------------------- |
-| Skills         | `.agents/skills/<name>/SKILL.md`                | frontmatter (`name`, `description`, `id`, `author`, `version`, `license`, `dependencies`, `groups`) + `# When To Use` / `# Pipeline` / `# Reference` | `bun run verify:montflow:skills`     | `montflow-create-pi-skills`, `montflow-modify-pi-skills`         |
-| Prompts        | `.agents/@montflow/pi-prompts/<name>.json`      | JSON with `name`, `description`, `template`, `variables`, `skills`, `model`                                  | `bun run verify:montflow:prompts`    | `montflow-create-pi-prompts`                                     |
-| Specs          | `.agents/@montflow/specs/<name>/`               | `SPEC.md` + one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`)                                      | `bun run verify:montflow:specs`      | `montflow-create-pi-specs`, `montflow-find-pi-specs`             |
-| Profiles       | `.agents/@montflow/profiles/<name>/PROFILE.md`  | frontmatter (`name`, `description`, `model`, `skills`) + `# Title` / `## Instructions` / `## Review Checklist` | `bun run verify:montflow:profiles`   | `montflow-create-pi-profiles`, `montflow-modify-pi-profiles`     |
+| Skills         | `.agents/skills/<name>/SKILL.md`                | frontmatter (`name`, `description`, `id`, `author`, `version`, `license`, `dependencies`, `groups`) + `# When To Use` / `# Pipeline` / `# Reference` | `bun run mf:check:skills`     | `montflow-create-pi-skills`, `montflow-modify-pi-skills`         |
+| Prompts        | `.agents/@montflow/pi-prompts/<name>.json`      | JSON with `name`, `description`, `template`, `variables`, `skills`, `model`                                  | `bun run mf:check:prompts`    | `montflow-create-pi-prompts`                                     |
+| Specs          | `.agents/@montflow/specs/<name>/`               | `SPEC.md` + one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`)                                      | `bun run mf:check:specs`      | `montflow-create-pi-specs`, `montflow-find-pi-specs`             |
+| Profiles       | `.agents/@montflow/profiles/<name>/PROFILE.md`  | frontmatter (`name`, `description`, `model`, `skills`) + `# Title` / `## Instructions` / `## Review Checklist` | `bun run mf:check:profiles`   | `montflow-create-pi-profiles`, `montflow-modify-pi-profiles`     |
 | Agent docs     | `.agents/documentation/<verb>-<object>.md`      | title + `## When` / `## Steps` / `## Verify`                                                                 | manual structure check               | `contribute-to-agentic-docs`                                     |
 | Wiki           | `wiki/<page>.md`                                | value-statement opener + `See also`; no plans or decision logs                                               | manual structure check               | `contributing-to-wiki`                                           |
 | Changelogs     | `CHANGELOG.md` per package                      | Keep a Changelog + SemVer, unreleased-first                                                                  | manual structure check               | `adding-to-changelog`                                            |
-| Reviews        | `.agents/@montflow/reviews/<name>/`              | `REVIEW.md` ledger + one directory per round (`<NNN>/REVIEW.md`)                                             | `bun run verify:montflow:reviews`    | `montflow-adversarial-review`, `montflow-addressing-adversarial-review`            |
+| Reviews        | `.agents/@montflow/reviews/<name>/`              | `REVIEW.md` ledger + one directory per round (`<NNN>/REVIEW.md`)                                             | `bun run mf:check:reviews`    | `montflow-adversarial-review`, `montflow-addressing-adversarial-review`            |
 | References     | `.agents/references/<name>/`                     | cloned third-party repo, one package per directory                                                           | manual structure check               | `adding-references`, `finding-references`                        |
 | Agent rules    | `AGENTS.md`                                     | minimal contract: language, package manager, commands, verification                                            | manual structure check               | `authoring-rules`                                                |
 
 ### Verify mechanically, never by eye
 
-- **Run the verifier, don't guess.** For every artifact family in scope, run its `bun run verify:montflow:*` command from the repo root. To check all five extension families at once, run `bun run verify:montflow:extensions`.
-- **Only package.json scripts.** Per `AGENTS.md`, never invoke a tool binary directly (`node_modules/.bin/*`, `bunx`, `npx`). The `verify:montflow:*` scripts and the owning package's `cli` script are the sanctioned entrypoints.
-- **Scope to the artifact.** A single artifact is checked through its owning package's `cli` script, e.g. `bun run --cwd packages/skills cli verify <name> --dir $PWD`, `bun run --cwd packages/prompts cli verify <name> --dir $PWD/.agents/@montflow/pi-prompts`, `bun run --cwd packages/pi-specs cli check --dir $PWD/.agents/@montflow/specs --name <name>`. Never run the repo-wide gate when one family changed.
+- **Run the verifier, don't guess.** For every artifact family in scope, run its `bun run mf:check:<family>` command from the repo root. To check all five extension families at once, run `bun run mf:check`.
+- **Only package.json scripts.** Per `AGENTS.md`, never invoke a tool binary directly (`node_modules/.bin/*`, `bunx`, `npx`). The `mf:check:<family>` scripts and the owning package's `cli` script are the sanctioned entrypoints.
+- **Scope to the artifact.** A single artifact is checked through its owning package's `cli` script, e.g. `bun run --cwd packages/skills cli verify <name> --dir $PWD`, `bun run --cwd packages/prompts cli verify <name> --dir $PWD/.agents/@montflow/pi-prompts`, `bun run --cwd packages/specs cli check --dir $PWD/.agents/@montflow/specs --name <name>`. Never run the repo-wide gate when one family changed.
 - **Read the failure verbatim.** Capture the artifact path, the failing field or section, and the verifier's exact message. A finding you cannot quote from the verifier's output is not a finding.
 
 ### Fix at the source
@@ -75,8 +75,8 @@ Lead with the action. For each finding report the **artifact path**, the **verif
 ## Review Checklist
 
 - [ ] Every non-code artifact store under `.agents/` and at the repo root was located and inventoried
-- [ ] Each in-scope family's verifier ran via a `bun run verify:montflow:*` (or owning package `cli`) script — never a raw tool binary
-- [ ] `bun run verify:montflow:extensions` was run when more than one artifact family was touched
+- [ ] Each in-scope family's verifier ran via a `bun run mf:check:<family>` (or owning package `cli`) script — never a raw tool binary
+- [ ] `bun run mf:check` was run when more than one artifact family was touched
 - [ ] Every violation is quoted with its artifact path and the exact failing field or section from verifier output
 - [ ] Each repair went through the artifact's owning create/modify skill, not a hand-patch
 - [ ] The owning verifier was re-run after each repair and passes with zero issues

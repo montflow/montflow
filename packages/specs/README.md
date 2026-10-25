@@ -112,7 +112,7 @@ no change:
 
 1. **No declared profiles is unchanged.** A review task with no
    `reviewer-profiles` (absent, blank, or `[]`) dispatches one general reviewer
-   into its existing series, exactly as before. `verify:montflow:specs` never
+   into its existing series, exactly as before. `mf:check:specs` never
    reads review series, so a series-free repo gate keeps passing; the per-series
    link is enforced only by the workspace caller.
 2. **`reviewer-profiles: <a>, <b>` is additive.** Each declared profile adds a
@@ -143,5 +143,5 @@ no change:
 
 ## Status
 
-Early (`0.0.1`, private). Targets the spec contract migrated from `pi-specs`.
+Early (`0.0.1`, private). Targets the spec contract inherited from the retired Pi toolchain.
 Source-only — no build step: the OpenCode host loads the `.ts` files directly.

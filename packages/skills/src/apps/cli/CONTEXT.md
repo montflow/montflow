@@ -48,12 +48,12 @@ The interactive menu is a different command: `/mf-skills-tui`,
 
 ```bash
 # from source (Bun required)
-bun run --cwd packages/pi-skills cli list
-bun run --cwd packages/pi-skills cli verify <name>
+bun run --cwd packages/skills cli list
+bun run --cwd packages/skills cli verify <name>
 
 # standalone binary — Bun runtime embedded, no install, no node
-bun run --cwd packages/pi-skills build:cli
-./packages/pi-skills/dist/mf-skills list --verbose
+bun run --cwd packages/skills build:cli
+./packages/skills/dist/mf-skills list --verbose
 ```
 
 `build:cli` is `bun build --compile`, preceded by `generate:payload` so the

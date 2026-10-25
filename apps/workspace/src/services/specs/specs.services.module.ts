@@ -5,20 +5,20 @@ import { join } from 'node:path';
 import { Data, Effect } from 'effect';
 
 /**
- * Lazy handles to the pi-specs and reviews runtimes. Static imports are
+ * Lazy handles to the specs and reviews runtimes. Static imports are
  * type-only (erased at build) — the runtimes resolve here, on first use, never
  * at dashboard boot. A missing extension surfaces as a toast, not a crash.
  */
-type PiSpecsLib = typeof import('@montflow/pi-specs');
+type SpecsLib = typeof import('@montflow/specs');
 type ReviewsLib = typeof import('@montflow/reviews');
 
-/** Failure loading the pi-specs runtime. */
+/** Failure loading the specs runtime. */
 export class ExtensionLoadError extends Data.TaggedError('@montflow/SpecsExtensionLoadError')<{
   readonly message: string;
 }> {}
 
 /** Cached extension module promises. Cleared on failure so retrying reloads them. */
-let cachedLib: Promise<PiSpecsLib> | undefined;
+let cachedLib: Promise<SpecsLib> | undefined;
 let cachedReviews: Promise<ReviewsLib> | undefined;
 
 /** Test hook: drop the cached runtimes so the next load re-imports. */
@@ -28,14 +28,14 @@ export const resetExtensionCache = (): void => {
 };
 
 /**
- * Load the pi-specs runtime as an Effect, caching the module across
+ * Load the specs runtime as an Effect, caching the module across
  * flows.
  * @returns Effect resolving to the extension module namespace
  */
-export const loadPiSpecs = (): Effect.Effect<PiSpecsLib, ExtensionLoadError> =>
+export const loadSpecs = (): Effect.Effect<SpecsLib, ExtensionLoadError> =>
   Effect.tryPromise({
     try: () => {
-      cachedLib ??= import('@montflow/pi-specs').then(
+      cachedLib ??= import('@montflow/specs').then(
         (libs) => libs,
         (cause: unknown) => {
           cachedLib = undefined;
@@ -109,14 +109,14 @@ export interface ReviewSeries {
  * round". Never fails on a missing series.
  * @param root - workspace root (review store owner)
  * @param name - spec directory slug
- * @param libs - loaded pi-specs runtime (series naming)
+ * @param libs - loaded specs runtime (series naming)
  * @param files - the spec's files as read from disk (review-task profiles)
  * @returns the existing linked series, default first
  */
 export const readReviewSeries = async (
   root: string,
   name: string,
-  libs: PiSpecsLib,
+  libs: SpecsLib,
   files: ReadonlyArray<SnapshotFile>,
 ): Promise<ReadonlyArray<ReviewSeries>> => {
   const reviews = await loadReviews();
@@ -263,7 +263,7 @@ const phaseOf = (id: string): string => id.replace(/\d+$/, '');
 
 /** Parsed pieces shared by the summary and the detail builders. */
 const inspect = (
-  libs: PiSpecsLib,
+  libs: SpecsLib,
   id: string,
   files: ReadonlyArray<SnapshotFile>,
   review: ReadonlyArray<ReviewSeries>,
@@ -289,7 +289,7 @@ const inspect = (
 
 /** Bridge one spec directory into a dashboard row. Total by construction. */
 const summarize = (
-  libs: PiSpecsLib,
+  libs: SpecsLib,
   id: string,
   files: ReadonlyArray<SnapshotFile>,
   review: ReadonlyArray<ReviewSeries>,
@@ -309,7 +309,7 @@ const summarize = (
 };
 
 /** List every spec directory as a summary row, alphabetical. */
-const readSpecs = async (root: string, libs: PiSpecsLib): Promise<ReadonlyArray<SpecSummary>> => {
+const readSpecs = async (root: string, libs: SpecsLib): Promise<ReadonlyArray<SpecSummary>> => {
   const dir = specsDir(root);
   const entries = await readdir(dir);
   const names = entries.filter((entry) => !entry.startsWith('.')).toSorted();
@@ -333,7 +333,7 @@ const readSpecs = async (root: string, libs: PiSpecsLib): Promise<ReadonlyArray<
  * @returns Effect resolving to summary rows, failing with displayable message
  */
 export const fetchSpecs = (root: string): Effect.Effect<ReadonlyArray<SpecSummary>, string> =>
-  loadPiSpecs().pipe(
+  loadSpecs().pipe(
     Effect.mapError((error) => error.message),
     Effect.flatMap((libs) =>
       Effect.tryPromise({
@@ -356,7 +356,7 @@ export const fetchSpecs = (root: string): Effect.Effect<ReadonlyArray<SpecSummar
  * @returns Effect resolving to the detail, failing with displayable message
  */
 export const loadSpec = (root: string, id: string): Effect.Effect<SpecDetail, string> =>
-  loadPiSpecs().pipe(
+  loadSpecs().pipe(
     Effect.mapError((error) => error.message),
     Effect.flatMap((libs) =>
       Effect.tryPromise({

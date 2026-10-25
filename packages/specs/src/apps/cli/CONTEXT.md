@@ -1,7 +1,7 @@
 # CLI app
 
 Standalone `mf-specs` command built with `effect/cli`, plus
-the slash-command form the Pi extension reuses. Subcommands for
+the slash-command form the OpenCode server plugin (`/specs`) reuses. Subcommands for
 agents and humans:
 
 - `check` — mechanically verify the whole spec store (`--dir` selects the
@@ -33,7 +33,7 @@ agents and humans:
   `renderScaffold`) — the token-efficiency contract lives here
 - `Command`/`Flag` wiring (`checkCommand`, `statusCommand`, `listCommand`,
   `createCommand`, `doctorCommand`, `rootCommand`)
-- The slash-command form (`runSlash`, `SlashReport`) reused by `extension.ts`
+- The slash-command form (`runSlash`, `SlashReport`) reused by `server.ts`
 - The `main.ts` binary entry
 
 ## Does not belong here
@@ -51,20 +51,20 @@ bunx mf-specs check
 npx mf-specs check --name ship-spec --verbose
 
 # or by package script
-bun run --cwd packages/pi-specs cli check
-bun run --cwd packages/pi-specs cli list --pending
+bun run --cwd packages/specs cli check
+bun run --cwd packages/specs cli list --pending
 
 # install the packaged spec skills into the repo
-bun run --cwd packages/pi-specs cli doctor
+bun run --cwd packages/specs cli doctor
 ```
 
-From a registry, `npx @montflow/pi-specs` / `bunx @montflow/pi-specs`
+From a registry, `npx @montflow/specs` / `bunx @montflow/specs`
 require publishing (the package is `private` today). The `bin` is a `.ts`
 entry with `#!/usr/bin/env bun`, so it needs Bun on the machine; a Node
 target build would be required for `npx` without Bun.
 
-Inside Pi, the same engines are exposed as `/mf-specs` by
-`src/extension.ts` (`check [--name <spec>] [--verbose]` /
+In OpenCode, the same engines are exposed as `/specs` by
+`src/server.ts` (`check [--name <spec>] [--verbose]` /
 `status --name <spec>` / `state --name <spec>` / `next --name <spec>` /
 `list [--pending | --status <states>] [--verbose]` /
 `create --name <spec> [--description <text>] [--author <name>]
@@ -74,12 +74,12 @@ Inside Pi, the same engines are exposed as `/mf-specs` by
 
 Two supported paths — neither needs Node or a model at runtime:
 
-- **Standalone binary (recommended):** `bun run --cwd packages/pi-specs build:cli`
+- **Standalone binary (recommended):** `bun run --cwd packages/specs build:cli`
   emits `dist/mf-specs` via `bun build --compile`. The Bun runtime is
   embedded, so the single file runs anywhere on that platform with no
   install. Cross-compile with `--target=bun-linux-x64`,
   `bun-linux-arm64`, `bun-darwin-x64`, `bun-darwin-arm64`,
-  `bun-windows-x64` — e.g. `bun run --cwd packages/pi-specs build:cli -- --target=bun-darwin-arm64`.
+  `bun-windows-x64` — e.g. `bun run --cwd packages/specs build:cli -- --target=bun-darwin-arm64`.
   Ship the artifact as a GitHub release asset (the npm release workflow
   skips private packages).
 - **`bun run` from source:** the `bin` entry (`src/apps/cli/main.ts`,
@@ -88,7 +88,7 @@ Two supported paths — neither needs Node or a model at runtime:
 
 Everything `check`/`status`/`list`/`create` do is pure filesystem
 work, so the binary and slash command work fully offline. Only agentic
-spec authoring or execution would require Pi and a model.
+spec authoring or execution would require a host and a model.
 
 ## Parallelism
 

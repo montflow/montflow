@@ -1,5 +1,5 @@
 /**
- * Simplified `authoring-spec` skill, aligned with the pi-specs
+ * Simplified `authoring-spec` skill, aligned with the spec
  * contract (frontmatter, status enum, tree verifier, CLI). Injected verbatim
  * into a spec-author session's prompt — never discovered as a Pi skill.
  */
