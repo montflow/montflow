@@ -31,9 +31,7 @@ Vitest.describe('Profiles extension loader', () => {
   });
 
   Vitest.it('classifies missing runtimes', () => {
-    const error = Profiles.classifyLoadError(
-      new Error("Cannot find module '@montflow/pi-profiles'"),
-    );
+    const error = Profiles.classifyLoadError(new Error("Cannot find module '@montflow/profiles'"));
     Vitest.expect(error.cause).toBe('missing');
     Vitest.expect(error.message).toContain('not found');
   });

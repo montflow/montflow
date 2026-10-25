@@ -5,7 +5,7 @@ type: planning
 originator: user
 depends-on: A003, A006
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task B003: Decide to retire pi-sessions onto native sessions and subagents

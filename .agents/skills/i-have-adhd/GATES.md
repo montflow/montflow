@@ -10,7 +10,7 @@
 
 - [ ] No tangents — secondary issues are offered as separate questions
 - [ ] State is restated if this is a multi-turn interaction: "Step X of Y done..."
-- [ ] Time estimates use concrete units (minutes, hours, days) — not "some work" or "a bit"
+- [ ] No time estimates — no durations, ETAs, or "about N minutes"
 - [ ] Completed work is made visible: "Login now works with magic links" not "I've made changes"
 - [ ] Errors are matter-of-fact: cause and fix, never "Uh oh" or "There seems to be a problem"
 - [ ] Lists do not exceed 5 items without splitting into categories

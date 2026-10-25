@@ -68,7 +68,7 @@ const matchesFuse = (label: string, needle: string): boolean =>
  * True when a single label matches the query: exact substring first,
  * then Fuse typo-tolerant hit, then gappy subsequence fallback. Empty
  * query matches everything. The workspace TUI owns this Fuse-based
- * search; the pi-skills extension keeps a zero-dep subsequence matcher.
+ * search; the skills plugin keeps a zero-dep subsequence matcher.
  * @param label - text to search
  * @param query - raw user query
  * @returns true when the label matches

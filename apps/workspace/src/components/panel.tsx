@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import type { BoxRenderable } from '@opentui/core';
 import type { JSX, Ref } from 'solid-js';
 import { palette } from './palette.js';

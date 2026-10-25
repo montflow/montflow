@@ -7,16 +7,20 @@
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": [
-    "@montflow/stlx",
     "@montflow/linting",
-    "@montflow/pi-effect",
-    "@montflow/pi-profiles",
-    "@montflow/pi-prompts",
-    "@montflow/pi-reviews",
-    "@montflow/pi-sessions",
-    "@montflow/pi-skills",
+    "@montflow/opencode",
+    "@montflow/profiles",
+    "@montflow/prompts",
+    "@montflow/reviews",
+    "@montflow/skills",
+    "@montflow/specs",
+    "@montflow/stlx",
+    "@montflow/tooling-pack",
     "@montflow/tooling-oxfmt",
-    "@montflow/tooling-oxlint"
+    "@montflow/tooling-oxlint",
+    "@montflow/tooling-typescript",
+    "@montflow/workspace",
+    "@montflow/workflows"
   ],
   "privatePackages": {
     "version": false,

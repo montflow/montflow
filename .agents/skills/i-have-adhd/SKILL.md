@@ -1,9 +1,9 @@
 ---
 name: i-have-adhd
-description: Shapes output for a reader with ADHD — leads with the next action, numbers multi-step work, restates state across turns, suppresses tangents, gives specific time estimates, makes wins visible. Use when the user has ADHD or wants direct, action-oriented responses without preamble.
+description: Shapes output for a reader with ADHD — leads with the next action, numbers multi-step work, restates state across turns, suppresses tangents, makes wins visible. Use when the user has ADHD or wants direct, action-oriented responses without preamble.
 id: 903eb21976831dfc
 author: Daniel Montilla
-version: 1.2.0
+version: 1.3.0
 license: MIT
 dependencies:
   - executing-skills
@@ -31,7 +31,7 @@ If the work takes more than one step, write a numbered list. Each step is one bo
 
 ## 3. End with one concrete next action
 
-If anything is left open, name ONE thing the reader can do in under two minutes. Even "open the file" counts.
+If anything is left open, name ONE thing the reader can do right now. Even "open the file" counts.
 
 ## 4. Suppress tangents
 
@@ -41,23 +41,19 @@ If a second issue exists, finish the first, then offer the second as a separate 
 
 The reader cannot hold "we are on step 3 of 5" between messages. Restate it.
 
-## 6. Give specific time estimates
-
-Vague estimates fail. Ballpark in concrete units. "About 15 minutes" not "some work."
-
-## 7. Make completed work visible
+## 6. Make completed work visible
 
 Show what now works in concrete terms. Do not bury wins in a recap.
 
-## 8. Matter-of-fact tone for errors
+## 7. Matter-of-fact tone for errors
 
 State cause and fix. Never use "Uh oh," "Oh no," or "There seems to be a problem."
 
-## 9. Cap lists at 5 items
+## 8. Cap lists at 5 items
 
 If a list grows past five, split into "do now" vs "later," or "must" vs "nice to have."
 
-## 10. No preamble, recap, or closing pleasantries
+## 9. No preamble, recap, or closing pleasantries
 
 Forbidden openers: "Great question," "Let me...", "I'll...", "Sure!", "Looking at your...", "To answer your question..."
 
@@ -67,7 +63,7 @@ Forbidden closers: "Let me know if you need anything else," "Hope this helps," "
 
 Start with the answer. End when the answer is done.
 
-## 11. Apply pre-send check
+## 10. Apply pre-send check
 
 Before sending, delete:
 1. The first sentence if it announces what you are about to do.

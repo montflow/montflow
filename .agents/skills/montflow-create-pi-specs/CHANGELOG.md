@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.3.0] - 2026-10-25
+
+### Changed
+
+- The slash-command form is `/specs create` in the OpenCode host; `mf-specs create` is the binary
+
 ## [2.2.0] - 2026-10-15
 
 ### Added
@@ -22,7 +28,7 @@
 ### Changed
 
 - The skill now authors the spec directly (`SPEC.md` plus one directory per task) from its own rules
-- Dropped the `mf-specs create` / `mf-sessions` dispatch pipeline, the model and effort inputs, and the session-id handoff
+- Dropped the `mf-specs create` dispatch pipeline, the model and effort inputs, and the session-id handoff
 
 ## [1.0.0] - 2026-10-06
 

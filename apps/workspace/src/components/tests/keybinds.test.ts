@@ -143,6 +143,10 @@ Vitest.describe('Keybinds dialog and detail sets', () => {
     Vitest.expect(formatKeybinds([Keybinds.goToSession()])).toStrictEqual('g session');
   });
 
+  Vitest.it('matches the page-level home hint', () => {
+    Vitest.expect(formatKeybinds([Keybinds.home()])).toStrictEqual('esc home');
+  });
+
   Vitest.it('matches the session-detail live controls', () => {
     Vitest.expect(formatKeybinds([Keybinds.steer(), Keybinds.interrupt()])).toStrictEqual(
       's steer · x interrupt',

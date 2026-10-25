@@ -7,6 +7,18 @@
         "^build"
       ]
     },
+    "smoke": {
+      "cache": true,
+      "dependsOn": [
+        "^build"
+      ]
+    },
+    "test:tui": {
+      "cache": true,
+      "dependsOn": [
+        "^build"
+      ]
+    },
     "ts:check": {
       "cache": true,
       "dependsOn": [

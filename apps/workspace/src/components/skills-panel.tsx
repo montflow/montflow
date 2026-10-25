@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { For, Show } from 'solid-js';
 import type { Skills } from '../services/index.js';
 import { KeybindBanner } from './keybind-banner.js';

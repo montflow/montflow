@@ -63,31 +63,6 @@ Vitest.describe('Profiles.isValidProfileId runtime', () => {
   });
 });
 
-Vitest.describe('Profiles.installProfiles runtime', () => {
-  Vitest.it('seeds the store directory', () =>
-    Effect.gen(function* () {
-      const root = yield* Effect.promise(() => mkdtemp(join(tmpdir(), 'workspace-profiles-')));
-      yield* Profiles.installProfiles(root);
-      const present = yield* Effect.promise(() =>
-        stat(join(root, '.agents', '@montflow', 'profiles')).then(
-          () => true,
-          () => false,
-        ),
-      );
-      Vitest.expect(present).toStrictEqual(true);
-      const installed = yield* Profiles.isStoreInstalled(root);
-      Vitest.expect(installed).toStrictEqual(true);
-    }).pipe(Effect.runPromise),
-  );
-
-  Vitest.it('reads a missing store as not installed', () =>
-    Effect.gen(function* () {
-      const root = yield* Effect.promise(() => mkdtemp(join(tmpdir(), 'workspace-profiles-')));
-      Vitest.expect(yield* Profiles.isStoreInstalled(root)).toStrictEqual(false);
-    }).pipe(Effect.runPromise),
-  );
-});
-
 Vitest.describe('Profiles.verifyProfile runtime', () => {
   Vitest.it.effect('reports a canonical profile as valid with no issues', () =>
     Effect.gen(function* () {

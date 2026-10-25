@@ -37,7 +37,7 @@ Vitest.describe('Skills extension loader', () => {
   });
 
   Vitest.it('classifies missing runtimes', () => {
-    const error = Skills.classifyLoadError(new Error("Cannot find module '@montflow/pi-skills'"));
+    const error = Skills.classifyLoadError(new Error("Cannot find module '@montflow/skills'"));
     Vitest.expect(error.cause).toBe('missing');
     Vitest.expect(error.message).toContain('not found');
   });

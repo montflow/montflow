@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import type { Skills } from '../services/index.js';
 import { MarkdownBody } from './markdown-body.js';
 import { palette } from './palette.js';

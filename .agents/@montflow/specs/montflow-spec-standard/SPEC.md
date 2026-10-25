@@ -5,6 +5,7 @@ workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-07
 locked-phases:
+  - A
 ---
 
 # Montflow spec standard overhaul
@@ -65,17 +66,17 @@ hand-written mechanics.
 - The payload manifest replaces the hardcoded per-package name lists, the embedded-payload generator is shared instead of duplicated, and packaged binaries keep a working `doctor`.
 - The five spec-role profiles, the two pipeline prompts, the tier instruction files, and a promoted spec-execution skill ship as package payloads and are installed by `doctor`, not hand-copied into a workspace.
 - The CI-mutation and compiled-binary defects found in Phase A are fixed, and every decision lands in the docs and the bookkeeper's artifact ledger so the stores stay accurate.
-- Phase A and Phase B modify no file outside `.agents/@montflow/specs/`.
+- The exploratory and planning tasks (A001, A002, B001–B003) modify no file outside `.agents/@montflow/specs/`; the Phase A execution tasks A003 and A004 are expected to change `packages/pi-specs`, `packages/pi-profiles`, and `packages/pi-prompts`.
 
 ## Tasks
 
 | ID   | Name                                | Type        | Status  | Gates |
 | ---- | ----------------------------------- | ----------- | ------- | ----- |
-| A001 | explore-verification-surface        | exploratory | pending | No    |
-| A002 | explore-payload-doctor-surface      | exploratory | pending | No    |
-| A003 | add-issue-severity-channel          | execution   | pending | Yes   |
-| A004 | add-artifact-reference-resolution   | execution   | pending | Yes   |
-| A099 | review-phase                        | review      | pending | No    |
+| A001 | explore-verification-surface        | exploratory | complete | No    |
+| A002 | explore-payload-doctor-surface      | exploratory | complete | No    |
+| A003 | add-issue-severity-channel          | execution   | complete | Yes   |
+| A004 | add-artifact-reference-resolution   | execution   | complete | Yes   |
+| A099 | review-phase                        | review      | complete | No    |
 | B001 | decide-complexity-tiers             | planning    | pending | No    |
 | B002 | decide-spec-standard-v2             | planning    | pending | No    |
 | B003 | decide-tooling-contract             | planning    | pending | No    |

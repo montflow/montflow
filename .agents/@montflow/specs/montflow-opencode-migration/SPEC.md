@@ -1,10 +1,10 @@
 ---
 name: montflow-opencode-migration
-status: in-progress
+status: complete
 workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-13
-locked-phases:
+locked-phases: A, B, C, D
 ---
 
 # Montflow OpenCode migration
@@ -36,9 +36,8 @@ montflow-owned session engine. Phase A validates that this is feasible and
 surfaces any blocker; Phase B decides it.
 
 Phases A and B are analysis only: they modify no file outside
-`.agents/@montflow/specs/`. Execution phases are authored after Phase B decides
-the target design. The workspace application and every `pi-*` package stay in
-place and working until a later execution phase ports them.
+`.agents/@montflow/specs/`. Phase B decides the target design; Phase C is the
+execution that ports the toolchain onto it, authored from the B005 sequence.
 
 ## Requirements
 
@@ -52,22 +51,37 @@ place and working until a later execution phase ports them.
 - Phase B specifies how the migrated packages are verified (turbo tasks, a plugin-loader smoke test, adapter contract tests) and distributed (peer deps, version pins, CI), without weakening the existing `verify:montflow` gate.
 - Every claim that drives a Phase B decision is grounded in a file path, a type signature, or a runnable check recorded in a task's `MEMORY.md`.
 - Phases A and B modify no file outside `.agents/@montflow/specs/`, and leave every `pi-*` package and the workspace application unchanged.
+- Phase C executes the B005 sequence in order: the adapter and loader proof land first (`@montflow/opencode` + the `pi-specs` pilot), then the pure domain libraries and CLIs, then the child-run and dispatch concerns, then the TUI/workspace, then `pi-sessions` is retired, then verification and distribution finalize.
+- Phase C isolates OpenCode behind the adapter: `@opencode/*` is imported only by `@montflow/opencode`; pure domain modules and every plugin reach the host only through the adapter ports.
+- Phase C is additive until each step's delete: old `pi-*` packages stay installed and loadable until the phase that ports them, and every phase is independently revertible at its own cut.
+- Phase C keeps `verify:montflow` green at every cut and removes `pi-sessions` only after C003–C005 are proven on native sessions.
+- Phase D finishes the removal: no live `@montflow/pi-*` package or reference remains. The `Changes` store contract lives in `@montflow/opencode`, the dialog and model-picker helpers live in `@montflow/prompts`, and the workspace loads `@montflow/specs`; installing Pi skills and store paths keep their names, and historical spec/review records are left as written.
 
 ## Tasks
 
 | ID   | Name                               | Type        | Status  | Gates |
 | ---- | ---------------------------------- | ----------- | ------- | ----- |
-| A001 | explore-pi-extension-surface       | exploratory | pending | No    |
-| A002 | explore-opencode-plugin-api        | exploratory | pending | No    |
-| A003 | explore-session-engine-gap         | exploratory | pending | No    |
-| A004 | explore-workspace-ui-port          | exploratory | pending | No    |
-| A005 | explore-packaging-and-verification | exploratory | pending | No    |
-| A006 | synthesize-migration-contract      | exploratory | pending | No    |
-| A099 | review-phase                       | review      | pending | No    |
-| B001 | decide-package-architecture        | planning    | pending | No    |
-| B002 | decide-adapter-seams               | planning    | pending | No    |
-| B003 | decide-session-engine-mapping      | planning    | pending | No    |
-| B004 | decide-workspace-integration       | planning    | pending | No    |
-| B005 | plan-migration-sequence            | planning    | pending | No    |
-| B006 | plan-verification-and-distribution | planning    | pending | No    |
-| B099 | review-phase                       | review      | pending | No    |
+| A001 | explore-pi-extension-surface       | exploratory | complete | No    |
+| A002 | explore-opencode-plugin-api        | exploratory | complete | No    |
+| A003 | explore-session-engine-gap         | exploratory | complete | No    |
+| A004 | explore-workspace-ui-port          | exploratory | complete | No    |
+| A005 | explore-packaging-and-verification | exploratory | complete | No    |
+| A006 | synthesize-migration-contract      | exploratory | complete | No    |
+| A099 | review-phase                       | review      | complete | No    |
+| B001 | decide-package-architecture        | planning    | complete | No    |
+| B002 | decide-adapter-seams               | planning    | complete | No    |
+| B003 | decide-session-engine-mapping      | planning    | complete | No    |
+| B004 | decide-workspace-integration       | planning    | complete | No    |
+| B005 | plan-migration-sequence            | planning    | complete | No    |
+| B006 | plan-verification-and-distribution | planning    | complete | No    |
+| B099 | review-phase                       | review      | complete | No    |
+| C001 | adapter-spine-and-loader-proof     | execution   | complete | Yes   |
+| C002 | extract-pure-domain-and-clis       | execution   | complete | Yes   |
+| C003 | port-child-run-extensions          | execution   | complete | Yes   |
+| C004 | port-dispatch-extensions           | execution   | complete | Yes   |
+| C005 | port-tui-and-workspace             | execution   | complete | Yes   |
+| C006 | retire-pi-sessions                 | execution   | complete | Yes   |
+| C007 | verification-and-distribution      | execution   | complete | Yes   |
+| C099 | review-phase                       | review      | complete | No    |
+| D001 | remove-retired-pi-packages         | execution   | complete | Yes |
+| D099 | review-phase                       | review      | complete | No |

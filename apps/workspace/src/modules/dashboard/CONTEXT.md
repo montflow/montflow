@@ -16,7 +16,7 @@ signal and renders columns of `PanelCard`s.
 ## Does not belong here
 
 - Workspace identity — that lives in `../workspace/`
-- Layout file IO — `app.tsx` reads the JSON file, this module only decodes
-- Rendering, keyboard handling, signals — those live in `app.tsx` plus
+- Layout file IO — `grid-page.tsx` reads the JSON file, this module only decodes
+- Rendering, keyboard handling, signals — those live in `grid-page.tsx` plus
   `components/`
 - Git reads — the git-info service maps git output into `Workspace.Info`

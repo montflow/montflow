@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.4.2] - 2026-10-22
+
+### Changed
+
+- Front ends are the `mf-prompts` binary, the `/mf-prompts` command, and the `prompt_inspect` / `prompt_execute` tools; the removed Pi TUI menu is no longer documented
+- Package references point at `@montflow/prompts` and `packages/prompts`
+
+## [3.4.1] - 2026-10-21
+
+### Changed
+
+- Step 5 hands the reply to the native `subagent` tool
+
 ## [3.4.0] - 2026-10-07
 
 ### Added
@@ -102,4 +115,4 @@
 
 - Initial release of montflow-execute-pi-prompts
 - List, show, fill, and render guidance for `@montflow/pi-prompts` prompt templates
-- Execution handoff to the current session or a dispatched `@montflow/pi-sessions` session
+- Execution handoff to the current session or a dispatched child session

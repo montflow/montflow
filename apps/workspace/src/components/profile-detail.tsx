@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import type { Profiles } from '../services/index.js';
 import { MarkdownBody } from './markdown-body.js';
 import { palette } from './palette.js';

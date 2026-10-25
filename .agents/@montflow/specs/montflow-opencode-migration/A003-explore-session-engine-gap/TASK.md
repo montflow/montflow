@@ -5,7 +5,7 @@ type: exploratory
 originator: user
 depends-on:
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task A003: Compare the pi-sessions engine with OpenCode sessions

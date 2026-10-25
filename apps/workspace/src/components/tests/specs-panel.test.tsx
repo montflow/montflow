@@ -24,7 +24,6 @@ const row = (id: string): Specs.SpecSummary => ({
   description: '',
   state: 'pending',
   status: 'pending',
-  active: false,
   total: 1,
   complete: 0,
   issues: 0,

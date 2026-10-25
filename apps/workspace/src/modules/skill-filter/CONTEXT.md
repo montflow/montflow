@@ -4,9 +4,9 @@ Pure filter for the skills panel: tiered matching — exact substring
 first (ranked best-first, so precision never loses to a fuzzy
 lookalike), then Fuse.js typo-tolerant matching across name (weighted
 first), id, and description, then a gappy-subsequence fallback for
-sparse fragments. Lives here (not in pi-skills, which keeps a
+sparse fragments. Lives here (not in the skills package, which keeps a
 zero-dep subsequence matcher) so the Fuse dependency stays in the
-workspace TUI and out of the pi extension graph. `app.tsx` wires
+workspace TUI and out of the plugin bundle. `grid-page.tsx` wires
 these helpers to the `SkillSummary` rows the skills service loads.
 
 ## Belongs here
@@ -17,5 +17,5 @@ these helpers to the `SkillSummary` rows the skills service loads.
 ## Does not belong here
 
 - Skill file IO and parsing — that lives in `services/skills/`
-- Rendering, keyboard handling, signals — those live in `app.tsx` plus
+- Rendering, keyboard handling, signals — those live in `grid-page.tsx` plus
   `components/`

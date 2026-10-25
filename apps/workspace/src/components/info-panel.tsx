@@ -1,15 +1,19 @@
+/** @jsxImportSource @opentui/solid */
+import { Show } from 'solid-js';
 import type { Workspace } from '../modules/index.js';
 import { palette } from './palette.js';
 
 export interface InfoPanelProps {
   readonly info: Workspace.Info;
+  /** Current prompt model, read through the adapter `ModelPort`; absent when the host has none. */
+  readonly model?: string | undefined;
 }
 
 /**
- * Workspace info content: name, root, branch, and clean/dirty state as
- * label/value rows. Chromeless — the parent `Panel` owns border,
- * title, and padding.
- * @param props - resolved workspace info
+ * Workspace info content: name, root, branch, clean/dirty state, and the
+ * host's selected model as label/value rows. Chromeless — the parent `Panel`
+ * owns border, title, and padding.
+ * @param props - resolved workspace info and optional model label
  * @returns info content element
  */
 export const InfoPanel = (props: InfoPanelProps) => (
@@ -29,5 +33,11 @@ export const InfoPanel = (props: InfoPanelProps) => (
         {props.info.clean ? '✓ clean' : '✗ dirty'}
       </span>
     </text>
+    <Show when={props.model}>
+      <text>
+        <span style={{ fg: palette.dim }}>model </span>
+        {props.model}
+      </text>
+    </Show>
   </box>
 );

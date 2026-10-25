@@ -29,7 +29,7 @@ Vitest.describe('Prompts extension loader', () => {
   });
 
   Vitest.it('classifies missing runtimes', () => {
-    const error = Prompts.classifyLoadError(new Error("Cannot find module '@montflow/pi-prompts'"));
+    const error = Prompts.classifyLoadError(new Error("Cannot find module '@montflow/prompts'"));
     Vitest.expect(error.cause).toBe('missing');
     Vitest.expect(error.message).toContain('not found');
   });

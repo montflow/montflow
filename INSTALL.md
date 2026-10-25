@@ -42,6 +42,33 @@ npx skills add ./ --list
 
 Pi auto-discovers `.agents/skills/` in `cwd` and ancestors (repo root), so in-repo skills are always live. Installing via `npx skills ... -a pi` makes them available in other projects or globally. Skills register as `/skill:name` commands. Format notes: Pi implements the [Agent Skills spec](https://agentskills.io/specification) and is lenient — unknown frontmatter fields are ignored; missing `description` is the only hard failure.
 
+## OpenCode plugins (private)
+
+The migrated plugins (`@montflow/specs`, `profiles`, `prompts`, `reviews`,
+`skills`, `workspace`) are **private**: they are never published to npm. Install
+them into an OpenCode v2 host by local path or by Git subpath.
+
+```bash
+# Local path (primary): loads the source tree as-is, no npm involved
+opencode plugin add /path/to/montflow/packages/specs
+opencode plugin add /path/to/montflow/apps/workspace
+
+# Git subpath: reads a generated published-shape artifact, never the source manifest
+bun run pack:plugins            # emits dist/pack/@montflow__<name>/
+git add -f dist/pack && git commit -m "build: pack plugins" && git push
+opencode plugin add "git+https://github.com/montflow/montflow.git#<sha>::path:dist/pack/@montflow__specs"
+```
+
+Why two forms: a committed source manifest declares `@montflow/*: workspace:*`,
+which npm cannot resolve outside the monorepo, and its `exports` point at `.ts`
+sources the packaged host does not load. `bun run pack:plugins` produces the installable shape: prebuilt ESM bundles,
+host packages (`@opencode/*`, `effect`, `@opentui/*`, `solid-js`) external, every
+`@montflow/*` dependency bundled in, and no `workspace:` specifier.
+`dist/pack/**` is git-ignored; commit it with `-f` on the release ref you pin.
+
+No plugin is queued for public publish — `.changeset/config.json` ignores every
+private package, and `release.yml` skips private manifests.
+
 ## Alternative: syncing-skills skill
 
 The **syncing-skills** skill is a guided installer: it reads the montflow/montflow repo's available skills, presents them for selection, and installs the chosen ones via `npx skills add`. It runs in any project (or globally) and works with any agent the skills CLI supports.

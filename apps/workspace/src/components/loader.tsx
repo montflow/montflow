@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { createSignal, onCleanup } from 'solid-js';
 import { palette } from './palette.js';
 

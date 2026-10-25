@@ -8,7 +8,6 @@ import {
 } from '../specs/specs.services.module.js';
 import {
   fetchProfiles,
-  isExtensionInstalled as isProfilesExtensionInstalled,
   type ProfileSummary,
   type ProfileVerify,
   type ProfilesPhase,
@@ -16,19 +15,12 @@ import {
 } from '../profiles/profiles.services.module.js';
 import {
   fetchPrompts,
-  isExtensionInstalled as isPromptsExtensionInstalled,
   type PromptSummary,
   type PromptsPhase,
 } from '../prompts/prompts.services.module.js';
 import {
-  fetchSessions,
-  sessionsInstalled,
-  type SessionSummary,
-  type SessionsPhase,
-} from '../sessions/sessions.services.module.js';
-import {
   fetchSkills,
-  isExtensionInstalled,
+  panelInstalled,
   type SkillSummary,
   type SkillsPhase,
 } from '../skills/skills.services.module.js';
@@ -42,7 +34,7 @@ export interface SkillsList {
 /**
  * Query key for the workspace skills list. Single source for the
  * fetch, the delete cache patches, and invalidation — every skills
- * read/write in `app.tsx` goes through this key.
+ * read/write in `grid-page.tsx` goes through this key.
  */
 export const skillsKey = ['skills'] as const;
 
@@ -54,7 +46,7 @@ export interface ProfilesList {
 
 /**
  * Query key for the workspace profiles list. Mirrors `skillsKey` —
- * every profiles read/write in `app.tsx` goes through this key so
+ * every profiles read/write in `grid-page.tsx` goes through this key so
  * flow completions update the UI through the cache, never signals.
  */
 export const profilesKey = ['profiles'] as const;
@@ -77,23 +69,10 @@ export interface PromptsList {
 
 /**
  * Query key for the workspace prompts list. Mirrors `skillsKey` —
- * every prompts read/write in `app.tsx` goes through this key so flow
+ * every prompts read/write in `grid-page.tsx` goes through this key so flow
  * completions update the UI through the cache, never signals.
  */
 export const promptsKey = ['prompts'] as const;
-
-/** Cached sessions-list snapshot behind the `sessions` query key. */
-export interface SessionsList {
-  readonly installed: boolean;
-  readonly rows: ReadonlyArray<SessionSummary>;
-}
-
-/**
- * Query key for the workspace sessions list. Mirrors `skillsKey` —
- * every sessions read/write in `app.tsx` goes through this key so flow
- * completions update the UI through the cache, never signals.
- */
-export const sessionsKey = ['sessions'] as const;
 
 /** Cached specs-list snapshot behind the `specs` query key. */
 export interface SpecsList {
@@ -130,7 +109,7 @@ export const makeQueryClient = (): QueryClient =>
   });
 
 /**
- * Skills-list query bridge: the staged boot (extension check, then the
+ * Skills-list query bridge: the staged boot (store-directory check, then the
  * list read) as one TanStack query. Resolves the installed flag with
  * the rows so the panel never needs a second read; rejects with a
  * displayable Error the caller toasts. Reports each stage through
@@ -143,7 +122,7 @@ export const fetchSkillsList = (
   root: string,
   onPhase: (phase: SkillsPhase) => void,
 ): Promise<SkillsList> =>
-  isExtensionInstalled(root).pipe(
+  panelInstalled(root, 'skills').pipe(
     Effect.flatMap((installed) => {
       onPhase('extension');
       if (!installed) {
@@ -161,7 +140,7 @@ export const fetchSkillsList = (
 
 /**
  * Profiles-list query bridge: same staged boot as `fetchSkillsList`
- * (extension check, then the list read) as one TanStack query.
+ * (store-directory check, then the list read) as one TanStack query.
  * @param root - workspace root (profile store owner)
  * @param onPhase - Loader stage reporter (`extension`, then `profiles`)
  * @returns Promise resolving to the list snapshot
@@ -170,7 +149,7 @@ export const fetchProfilesList = (
   root: string,
   onPhase: (phase: ProfilesPhase) => void,
 ): Promise<ProfilesList> =>
-  isProfilesExtensionInstalled(root).pipe(
+  panelInstalled(root, 'profiles').pipe(
     Effect.flatMap((installed) => {
       onPhase('extension');
       if (!installed) {
@@ -204,7 +183,7 @@ export const fetchProfileVerify = (root: string, id: string): Promise<ProfileVer
 
 /**
  * Prompts-list query bridge: same staged boot as `fetchSkillsList`
- * (extension check, then the list read) as one TanStack query.
+ * (store-directory check, then the list read) as one TanStack query.
  * @param root - workspace root (prompt store owner)
  * @param onPhase - Loader stage reporter (`extension`, then `prompts`)
  * @returns Promise resolving to the list snapshot
@@ -213,7 +192,7 @@ export const fetchPromptsList = (
   root: string,
   onPhase: (phase: PromptsPhase) => void,
 ): Promise<PromptsList> =>
-  isPromptsExtensionInstalled(root).pipe(
+  panelInstalled(root, 'prompts').pipe(
     Effect.flatMap((installed) => {
       onPhase('extension');
       if (!installed) {
@@ -222,33 +201,6 @@ export const fetchPromptsList = (
       }
       onPhase('prompts');
       return fetchPrompts(root).pipe(
-        Effect.map((rows) => ({ installed, rows })),
-        Effect.mapError((message) => new Error(message)),
-      );
-    }),
-    Effect.runPromise,
-  );
-
-/**
- * Sessions-list query bridge: same staged boot as `fetchSkillsList`
- * (store-directory check, then the list read) as one TanStack query.
- * @param root - workspace root (sessions store owner)
- * @param onPhase - Loader stage reporter (`extension`, then `sessions`)
- * @returns Promise resolving to the list snapshot
- */
-export const fetchSessionsList = (
-  root: string,
-  onPhase: (phase: SessionsPhase) => void,
-): Promise<SessionsList> =>
-  sessionsInstalled(root).pipe(
-    Effect.flatMap((installed) => {
-      onPhase('extension');
-      if (!installed) {
-        const empty: SessionsList = { installed, rows: [] };
-        return Effect.succeed(empty);
-      }
-      onPhase('sessions');
-      return fetchSessions(root).pipe(
         Effect.map((rows) => ({ installed, rows })),
         Effect.mapError((message) => new Error(message)),
       );

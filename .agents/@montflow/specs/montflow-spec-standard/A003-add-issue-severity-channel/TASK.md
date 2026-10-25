@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: A001
 related-tasks: A004
-status: pending
+status: complete
 ---
 
 # Task A003: add issue severity channel

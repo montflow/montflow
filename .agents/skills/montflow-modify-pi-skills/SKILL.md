@@ -1,9 +1,9 @@
 ---
 name: montflow-modify-pi-skills
-description: Modifies, updates, extends, or audits an existing workspace skill under .agents/skills/<name>/ while keeping the pi-skills schema valid. Use when an agent must edit a skill, add to it, or fix its shape without dispatching a session.
+description: Modifies, updates, extends, or audits an existing workspace skill under .agents/skills/<name>/ while keeping the skill schema valid. Use when an agent must edit a skill, add to it, or fix its shape without dispatching a session.
 id: c0eec01fb3fdeac6
 author: montflow
-version: 1.0.0
+version: 1.0.1
 license: MIT
 groups:
   - skills
@@ -57,7 +57,7 @@ entry. Present the plan before editing.
 
 ```bash
 mf-skills verify <name>          # the binary, scriptable
-/mf-skills verify <name>         # the same command inside a Pi session
+/mf-skills verify <name>         # the same command in the OpenCode host
 ```
 
 - Nothing outside the target skill directory was touched.
@@ -66,4 +66,4 @@ mf-skills verify <name>          # the binary, scriptable
 
 - **Skill format**: `.agents/skills/<name>/SKILL.md` — one directory per skill.
 - **Creation standard**: [montflow-create-pi-skills](../montflow-create-pi-skills/SKILL.md).
-- **Contract source**: `packages/pi-skills/src/modules/skill/skill.module.ts` (`verifySkillFile`).
+- **Contract source**: `packages/skills/src/modules/skill/skill.module.ts` (`verifySkillFile`).

@@ -5,7 +5,7 @@ type: planning
 originator: user
 depends-on: A006
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task B001: Decide the package and plugin architecture

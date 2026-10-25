@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0] - 2026-10-25
+
+### Changed
+
+- The slash-command form is `/specs list` in the OpenCode host; `mf-specs list` is the binary
+- Package paths point at `packages/specs`
+
 ## [1.2.0] - 2026-10-13
 
 ### Added

@@ -4,7 +4,6 @@ export default defineConfig({
   ignorePatterns: [
     '.agents/**',
     '.github/**',
-    '.pi/**',
     '.vscode/**',
     '**/build/**',
     '**/dist/**',
@@ -89,6 +88,17 @@ export default defineConfig({
         'montflow/no-clock-access': 'off',
         'montflow/no-math-random': 'off',
         'montflow/no-timers': 'off',
+      },
+    },
+    {
+      // @montflow/tooling-pack is a composition root: its whole job is reading
+      // workspace manifests from disk and generating Git-install artifacts.
+      // There is no Effect runtime to provide a platform layer to, and the rule
+      // explicitly sanctions suppressing it where the platform is touched at
+      // the root.
+      files: ['tooling/pack/**'],
+      rules: {
+        'montflow/no-node-platform-imports': 'off',
       },
     },
   ],
