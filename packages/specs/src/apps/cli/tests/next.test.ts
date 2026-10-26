@@ -4,7 +4,7 @@ import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import type { SpecFileEntry } from '../../../modules/structure/index.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import { next, renderNext, renderState, state } from '../index.js';
-import { entry, memory, stubLayer } from './helpers.js';
+import { REPO_SIZING, SPEC_SIZING, entry, memory, stubLayer } from './helpers.js';
 
 const GATES = ['## Stage 0: Core', '', '- [ ] Tests pass', ''].join('\n');
 
@@ -122,6 +122,141 @@ Vitest.describe('Cli.next runtime', () => {
       Vitest.expect(report.state).toBe('complete');
       Vitest.expect(report.ready).toStrictEqual([]);
       Vitest.expect(renderNext(report)).toBe('state complete\nready none');
+    }),
+  );
+});
+
+/** Sizing knobs for the ready-set cases. */
+interface SizedNextOptions {
+  readonly repo?: string;
+  readonly specSizing?: string;
+  readonly a001: string;
+  readonly a002: string;
+  readonly a099: string;
+}
+
+/** Build the two-execution-task phase A with declared sizes. */
+const sizedTree = (options: SizedNextOptions): ReadonlyArray<SpecFileEntry> => [
+  entry(
+    'SPEC.md',
+    specMarkdown({
+      name: 'ship-spec',
+      rows: [
+        { id: 'A001', name: 'build', type: 'execution', status: options.a001, gates: 'No' },
+        { id: 'A002', name: 'wire', type: 'execution', status: options.a002, gates: 'No' },
+        { id: 'A099', name: 'review-phase', type: 'review', status: options.a099, gates: 'No' },
+      ],
+    }),
+  ),
+  ...(options.specSizing === undefined ? [] : [entry('sizing.json', options.specSizing)]),
+  entry(
+    'A001-build/TASK.md',
+    taskMarkdown({ id: 'A001', name: 'build', size: 'tiny', status: options.a001 }),
+  ),
+  entry('A001-build/MEMORY.md', memory),
+  entry(
+    'A002-wire/TASK.md',
+    taskMarkdown({
+      id: 'A002',
+      name: 'wire',
+      size: 'small',
+      dependsOn: 'A001',
+      status: options.a002,
+    }),
+  ),
+  entry('A002-wire/MEMORY.md', memory),
+  entry(
+    'A099-review-phase/TASK.md',
+    taskMarkdown({
+      id: 'A099',
+      name: 'review-phase',
+      type: 'review',
+      size: 'medium',
+      status: options.a099,
+    }),
+  ),
+  entry('A099-review-phase/MEMORY.md', memory),
+];
+
+const runSizedNext = (options: SizedNextOptions) =>
+  next('.agents/@montflow/specs', 'ship-spec').pipe(
+    Effect.provide(
+      stubLayer(
+        new Map([['ship-spec', sizedTree(options)]]),
+        options.repo === undefined ? new Map() : new Map([['sizing.json', options.repo]]),
+      ),
+    ),
+  );
+
+Vitest.describe('Cli.next sizing runtime', () => {
+  Vitest.it.effect('carries the phase budget and the ready task target', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizedNext({
+        repo: REPO_SIZING,
+        specSizing: SPEC_SIZING,
+        a001: 'pending',
+        a002: 'pending',
+        a099: 'pending',
+      });
+      const text = renderNext(report);
+      Vitest.expect(report.budget).toBe(2);
+      Vitest.expect(text.split('\n')[0]).toBe('state pending · phase A · budget 2');
+      Vitest.expect(text).toContain(
+        'A001  execution  build  tiny  fixture/phase-model#high  phase',
+      );
+    }),
+  );
+
+  Vitest.it.effect('resolves the spec layer for the unblocked task', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizedNext({
+        repo: REPO_SIZING,
+        specSizing: SPEC_SIZING,
+        a001: 'complete',
+        a002: 'pending',
+        a099: 'pending',
+      });
+      const text = renderNext(report);
+      Vitest.expect(text).toContain('A002  execution  wire  small  fixture/spec-model  spec');
+    }),
+  );
+
+  Vitest.it.effect('lets the review task inherit', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizedNext({
+        a001: 'complete',
+        a002: 'complete',
+        a099: 'pending',
+      });
+      Vitest.expect(renderNext(report)).toContain('A099  review  review-phase  medium  inherit');
+    }),
+  );
+
+  Vitest.it.effect('names the repo layer when only the repo config exists', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizedNext({
+        repo: REPO_SIZING,
+        a001: 'pending',
+        a002: 'pending',
+        a099: 'pending',
+      });
+      Vitest.expect(renderNext(report)).toContain(
+        'A001  execution  build  tiny  fixture/repo-model#low  repo',
+      );
+    }),
+  );
+
+  Vitest.it.effect('omits targets when the config is invalid', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizedNext({
+        specSizing: '{ not json',
+        a001: 'pending',
+        a002: 'pending',
+        a099: 'pending',
+      });
+      Vitest.expect(renderNext(report)).toBe(
+        'state pending · phase A · budget 2\nA001  execution  build',
+      );
     }),
   );
 });

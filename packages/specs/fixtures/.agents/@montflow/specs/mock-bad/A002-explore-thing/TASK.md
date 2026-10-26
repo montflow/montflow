@@ -3,6 +3,7 @@ id: A002
 name: explore-thing
 type: exploratory
 originator: user
+size: medium
 depends-on:
 related-tasks:
 status: blocked

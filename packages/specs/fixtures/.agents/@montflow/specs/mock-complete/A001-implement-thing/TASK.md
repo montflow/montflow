@@ -3,6 +3,7 @@ id: A001
 name: implement-thing
 type: execution
 originator: user
+size: small
 depends-on:
 related-tasks:
 status: complete

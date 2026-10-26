@@ -3,6 +3,7 @@ id: A003
 name: bad-kind
 type: chore
 originator: user
+size: medium
 depends-on:
 related-tasks:
 status: pending

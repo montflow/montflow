@@ -6,7 +6,7 @@ a whole.
 
 Pure — the caller supplies file paths and contents; this module never
 touches disk. Composes the per-file verifiers from `spec`, `task`,
-`gates`, and `memory`.
+`gates`, `memory`, and `sizing`.
 
 ## Belongs here
 
@@ -15,6 +15,8 @@ touches disk. Composes the per-file verifiers from `spec`, `task`,
   placement, id/name agreement, unique ids, task-table agreement
   (name/type/status/gates), `locked-phases`, dependency existence /
   phase ordering / cycles, one `review` task per phase
+- Allowing a spec-root `sizing.json` and verifying it there, with the spec's
+  real phase ids so a phase override that has no task is a warning
 - Nesting the per-file issues under their path
 
 ## Does not belong here

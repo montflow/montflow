@@ -56,6 +56,56 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
     });
   });
 
+  Vitest.it('allows a valid sizing.json at the spec root', () => {
+    const tree = validTree();
+    const result = Structure.verifySpecTree({
+      name: tree.name,
+      files: [
+        ...tree.files,
+        entry('sizing.json', '{"sizes":{"tiny":{"model":"fixture/tiny-model"}}}'),
+      ],
+    });
+    Vitest.expect(result.issues).toStrictEqual([]);
+    Vitest.expect(result.valid).toBe(true);
+  });
+
+  Vitest.it('verifies a spec-root sizing.json and nests its findings', () => {
+    const tree = validTree();
+    const result = Structure.verifySpecTree({
+      name: tree.name,
+      files: [...tree.files, entry('sizing.json', '{"sizes":{"huge":{"model":"a/b"}}}')],
+    });
+    Vitest.expect(result.issues).toStrictEqual([
+      {
+        code: 'sizing.unknown-size',
+        field: 'sizing.json: sizes.huge',
+        message: "Unknown size 'huge'.",
+        expected: 'tiny, small, medium, large',
+        actual: 'huge',
+        fix: "Rename 'sizes.huge' to one of tiny, small, medium, large, or remove it.",
+      },
+    ]);
+    Vitest.expect(result.valid).toBe(false);
+  });
+
+  Vitest.it('codes malformed JSON in a spec-root sizing.json', () => {
+    const tree = validTree();
+    const result = Structure.verifySpecTree({
+      name: tree.name,
+      files: [...tree.files, entry('sizing.json', '{ nope')],
+    });
+    const issue = result.issues[0];
+    Vitest.expect(issue).toMatchObject({
+      code: 'sizing.malformed-json',
+      field: 'sizing.json: root',
+      message: 'Config is not valid JSON.',
+      expected: 'a JSON object with a "sizes" map',
+      actual: 'unparseable JSON',
+      fix: 'Rewrite ship-spec/sizing.json as valid JSON.',
+    });
+    Vitest.expect(issue?.cause).toBeDefined();
+  });
+
   Vitest.it('flags a task-table type that disagrees with TASK.md', () => {
     const result = Structure.verifySpecTree(
       snapshot([

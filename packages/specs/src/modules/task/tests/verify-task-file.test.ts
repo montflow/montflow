@@ -44,6 +44,75 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
     ]);
   });
 
+  Vitest.it('accepts a declared size', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({ id: 'A001', name: 'implement-login', size: 'large' }),
+    );
+    Vitest.expect(result.issues).toStrictEqual([]);
+    Vitest.expect(result.valid).toBe(true);
+  });
+
+  Vitest.it('requires a size on a pending task', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({ id: 'A001', name: 'implement-login', withoutSize: true }),
+    );
+    Vitest.expect(result.issues).toStrictEqual([
+      {
+        code: 'task.missing-size',
+        field: 'size',
+        message:
+          "Required frontmatter field is missing; a declared size is required for 'pending' tasks.",
+        expected: 'tiny, small, medium, large',
+        actual: 'missing',
+        fix: 'Add `size: medium` to TASK.md frontmatter (tiny, small, medium, large).',
+      },
+    ]);
+    Vitest.expect(result.valid).toBe(false);
+  });
+
+  Vitest.it('warns about a missing size on a complete task', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({
+        id: 'A001',
+        name: 'implement-login',
+        status: 'complete',
+        withoutSize: true,
+      }),
+    );
+    Vitest.expect(result.issues).toStrictEqual([
+      {
+        code: 'task.missing-size',
+        field: 'size',
+        message: 'Completed task declares no size; sizing is advisory for historical work.',
+        severity: 'warning',
+        expected: 'tiny, small, medium, large',
+        actual: 'missing',
+        fix: 'Add `size: medium` to TASK.md frontmatter (tiny, small, medium, large).',
+      },
+    ]);
+    Vitest.expect(result.valid).toBe(true);
+  });
+
+  Vitest.it('rejects an unknown size', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({ id: 'A001', name: 'implement-login', size: 'huge' }),
+    );
+    Vitest.expect(result.issues).toStrictEqual([
+      {
+        code: 'task.unknown-size',
+        field: 'size',
+        message: "Unknown size 'huge'.",
+        expected: 'tiny, small, medium, large',
+        actual: 'huge',
+        fix: 'Change `size: huge` to one of tiny, small, medium, large.',
+      },
+    ]);
+  });
+
   Vitest.it('flags a malformed originator, dependency, and finding ref', () => {
     const result = Task.verifyTaskFile(
       'A001-implement-login',
@@ -142,6 +211,7 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
         'name: implement-login',
         'type: execution',
         'originator: user',
+        'size: medium',
         'status: pending',
         '---',
         '',

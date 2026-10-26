@@ -2,8 +2,15 @@ import { Effect } from 'effect';
 import * as Vitest from '@effect/vitest';
 import * as ModelPort from '../index.js';
 
-/** Minimal catalog entry; the port only reads `providerID` and `id`. */
-const info = (providerID: string, id: string): ModelPort.ModelEntry => ({ providerID, id });
+/** Minimal catalog entry; the port only reads `providerID`, `id`, and variants. */
+const info = (
+  providerID: string,
+  id: string,
+  variants?: readonly ModelPort.ModelVariant[],
+): ModelPort.ModelEntry => {
+  const entry = { providerID, id };
+  return variants === undefined ? entry : { ...entry, variants };
+};
 
 const catalogue = [info('anthropic', 'claude-sonnet-4'), info('openai', 'gpt-5')];
 
@@ -47,6 +54,41 @@ Vitest.describe('ModelPort runtime', () => {
       const port = ModelPort.makeModelPort(makeContext());
       Vitest.expect(yield* port.list('openai')).toStrictEqual([
         { label: 'openai/gpt-5', providerID: 'openai', modelID: 'gpt-5' },
+      ]);
+    }),
+  );
+
+  Vitest.it.effect('list carries effort variants, known-empty, and unknown distinctly', () =>
+    Effect.gen(function* () {
+      const variants = [
+        info('anthropic', 'claude-sonnet-4', [{ id: 'low' }, { id: 'high' }]),
+        info('openai', 'gpt-5', []),
+        info('openai', 'gpt-5-mini'),
+      ];
+      const port = ModelPort.makeModelPort({
+        model: {
+          transform: (callback) =>
+            Effect.sync(() => {
+              callback({
+                list: () => variants,
+                get: () => undefined,
+                default: { get: () => undefined },
+              });
+              return { dispose: Effect.void };
+            }),
+          list: () => Effect.succeed({ data: variants }),
+          default: () => Effect.succeed({ data: undefined }),
+        },
+      });
+      Vitest.expect(yield* port.list()).toStrictEqual([
+        {
+          label: 'anthropic/claude-sonnet-4',
+          providerID: 'anthropic',
+          modelID: 'claude-sonnet-4',
+          variants: ['low', 'high'],
+        },
+        { label: 'openai/gpt-5', providerID: 'openai', modelID: 'gpt-5', variants: [] },
+        { label: 'openai/gpt-5-mini', providerID: 'openai', modelID: 'gpt-5-mini' },
       ]);
     }),
   );
@@ -119,6 +161,32 @@ Vitest.describe('ModelPort TUI half', () => {
       ]);
       Vitest.expect(yield* port.list('anthropic')).toStrictEqual([
         { label: 'anthropic/claude-sonnet-4', providerID: 'anthropic', modelID: 'claude-sonnet-4' },
+      ]);
+    }),
+  );
+
+  Vitest.it.effect('list carries the same variant shape from the TUI catalogue', () =>
+    Effect.gen(function* () {
+      const port = ModelPort.makeModelPort({
+        data: {
+          location: {
+            model: {
+              list: () => [
+                info('anthropic', 'claude-sonnet-4', [{ id: 'max' }]),
+                info('openai', 'gpt-5', []),
+              ],
+            },
+          },
+        },
+      });
+      Vitest.expect(yield* port.list()).toStrictEqual([
+        {
+          label: 'anthropic/claude-sonnet-4',
+          providerID: 'anthropic',
+          modelID: 'claude-sonnet-4',
+          variants: ['max'],
+        },
+        { label: 'openai/gpt-5', providerID: 'openai', modelID: 'gpt-5', variants: [] },
       ]);
     }),
   );

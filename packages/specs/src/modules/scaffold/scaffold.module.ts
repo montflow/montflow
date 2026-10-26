@@ -1,3 +1,4 @@
+import { DEFAULT_SIZE, type Size, isSize } from '../sizing/index.js';
 import type { SpecFileEntry } from '../structure/index.js';
 
 /**
@@ -28,6 +29,8 @@ export interface ScaffoldTask {
   readonly type: ScaffoldTaskType;
   /** Emit a per-task `GATES.md` when true. */
   readonly gates?: boolean | undefined;
+  /** Declared task size; {@link DEFAULT_SIZE} when omitted. */
+  readonly size?: Size | undefined;
   /** Task ids this task depends on (`A001`), rendered comma-separated. */
   readonly dependsOn?: ReadonlyArray<string> | undefined;
   /** Replaces the placeholder `## Description` body. */
@@ -35,6 +38,9 @@ export interface ScaffoldTask {
   /** Replaces the placeholder `## Requirements` bullets. */
   readonly requirements?: ReadonlyArray<string> | undefined;
 }
+
+/** True when `value` is a size a scaffold may emit. */
+export const isScaffoldTaskSize = (value: string): value is Size => isSize(value);
 
 /** Inputs for {@link renderSpecScaffold}. */
 export interface ScaffoldSpecInput {
@@ -138,6 +144,7 @@ const renderTask = (id: string, task: ScaffoldTask): string =>
     `name: ${task.name}`,
     `type: ${task.type}`,
     'originator: user',
+    `size: ${task.size ?? DEFAULT_SIZE}`,
     `depends-on: ${(task.dependsOn ?? []).join(', ')}`,
     'related-tasks:',
     'status: pending',
@@ -175,6 +182,7 @@ const renderReview = (phase: string, id: string, reviewerProfiles: ReadonlyArray
     'name: review-phase',
     'type: review',
     'originator: user',
+    `size: ${DEFAULT_SIZE}`,
     'depends-on:',
     'related-tasks:',
     reviewerProfiles.length > 0

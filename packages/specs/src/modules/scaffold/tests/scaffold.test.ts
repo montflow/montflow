@@ -60,6 +60,25 @@ Vitest.describe('renderSpecScaffold', () => {
     Vitest.expect(verifySpecTree({ name: base.name, files: result.files }).valid).toBe(true);
   });
 
+  Vitest.it('emits a size on every task, defaulting to medium', () => {
+    const result = renderSpecScaffold({
+      ...base,
+      tasks: [
+        { name: 'build', type: 'execution', size: 'large' },
+        { name: 'explore', type: 'exploratory' },
+      ],
+    });
+    const build = result.files.find((file) => file.path === 'A001-build/TASK.md')?.content ?? '';
+    Vitest.expect(build).toContain('size: large');
+    const explore =
+      result.files.find((file) => file.path === 'A002-explore/TASK.md')?.content ?? '';
+    Vitest.expect(explore).toContain('size: medium');
+    const review =
+      result.files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
+    Vitest.expect(review).toContain('size: medium');
+    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }).valid).toBe(true);
+  });
+
   Vitest.it('emits an empty reviewer-profiles line on the review task by default', () => {
     const result = renderSpecScaffold({
       ...base,

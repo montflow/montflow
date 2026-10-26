@@ -3,6 +3,7 @@ id: B001
 name: late-thing
 type: execution
 originator: user
+size: medium
 depends-on:
 related-tasks:
 status: pending

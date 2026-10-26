@@ -18,6 +18,15 @@ directory.
   forward-phase dependency, a `Gates` column with no `GATES.md`, a
   `MEMORY.md` missing a section, a placeholder `GATES.md`, a table row
   with no task directory, and a phase with no `review` task.
+- `sizing.json` at this root — a repo-only sizing config (`tiny`, `small`)
+  proving the repo file is a root config and never a spec.
+- `mock-ok/sizing.json` — the spec layer plus a phase A override, so the
+  fixtures prove repo < spec < phase precedence, whole-entry replacement,
+  and `inherit` fallback. Its task sizes exercise every source: `A001` is
+  `tiny` (phase override), `A002` is `small` (spec layer), the review task
+  is `medium` (`inherit`).
+- `mock-complete` has no spec config and its `A001` is `small`, so the repo
+  layer is the winning source there.
 
 ## Standalone binary
 
@@ -26,9 +35,12 @@ bun run --cwd packages/specs build:cli
 cd packages/specs/fixtures
 ../dist/mf-specs check            # exits 1: mock-bad, mock-stale
 ../dist/mf-specs check --verbose  # also lists the passing specs
-../dist/mf-specs status --name mock-ok        # state pending
-../dist/mf-specs status --name mock-complete  # state complete
+../dist/mf-specs status --name mock-ok        # state pending, sizing sources
+../dist/mf-specs status --name mock-complete  # state complete, repo-only source
 ../dist/mf-specs status --name mock-stale     # state inconsistent, exit 1
+../dist/mf-specs next --name mock-ok          # ready set with target and budget
+../dist/mf-specs resolve --name mock-ok --task A001   # fixture/phase-model#high
+../dist/mf-specs sizing --name mock-ok --task A001 --human  # provenance matrix
 ```
 
 ## From source

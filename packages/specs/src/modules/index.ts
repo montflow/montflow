@@ -9,3 +9,6 @@ export * as Structure from './structure/index.js';
 export * as Prompt from './prompt/index.js';
 export * as Scaffold from './scaffold/index.js';
 export * as ReviewLink from './review-link/index.js';
+export * as Sizing from './sizing/index.js';
+export * as Which from './which/index.js';
+export * as Catalogue from './catalogue/index.js';

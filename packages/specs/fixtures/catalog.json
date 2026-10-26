@@ -1,0 +1,14 @@
+{
+  "default": "fixture/default-model",
+  "models": [
+    { "providerID": "fixture", "modelID": "zeta-model", "variants": [] },
+    {
+      "providerID": "fixture",
+      "modelID": "default-model",
+      "variants": ["high", "low", "high"]
+    },
+    { "providerID": "alpha", "modelID": "a-model" },
+    { "providerID": "fixture", "modelID": "default-model", "variants": ["max"] },
+    { "providerID": "fixture", "modelID": "unknown-model", "variants": null }
+  ]
+}

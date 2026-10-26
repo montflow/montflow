@@ -1,7 +1,8 @@
 import { Schema } from 'effect';
 import { fieldList, fieldString, parseMarkdown } from '../frontmatter/index.js';
 import type { FieldValue } from '../frontmatter/index.js';
-import { type Issue, type Result, issue, noErrors } from '../verify/index.js';
+import { CODES, SIZES, SIZE_HINT, Size, isSize } from '../sizing/index.js';
+import { type Issue, type Result, finding, issue, noErrors } from '../verify/index.js';
 
 // ─── Patterns ─────────────────────────────────────────────────────────
 
@@ -98,6 +99,13 @@ export class Task extends Schema.Class<Task>('SpecTask')({
   reviewerProfiles: Schema.Array(Schema.String.check(Schema.isPattern(SLUG_PATTERN))),
   /** Adversarial-review finding this task addresses (`<series>/<round>/F<n>`), if any. */
   findingRef: Schema.optionalKey(Schema.String.check(Schema.isPattern(FINDING_REF_PATTERN))),
+  /**
+   * Declared task size, as written; absent only on historical completed tasks.
+   * Decoding deliberately keeps a non-enum value so an unknown size stays a
+   * `task.unknown-size` finding instead of deleting the task from every
+   * consumer. {@link verifyTaskSize} owns the enum.
+   */
+  size: Schema.optionalKey(Schema.String),
   /** Current task state. */
   status: TaskStatus,
 }) {}
@@ -118,10 +126,12 @@ interface TaskInput {
   readonly reviewerProfiles: ReadonlyArray<string>;
   readonly status: string;
   readonly findingRef?: string;
+  readonly size?: string;
 }
 
 const taskInput = (fields: Record<string, FieldValue>): TaskInput => {
   const findingRef = fieldString(fields, 'finding-ref');
+  const size = fieldString(fields, 'size');
   const base: TaskInput = {
     id: fieldString(fields, 'id') ?? '',
     name: fieldString(fields, 'name') ?? '',
@@ -132,8 +142,8 @@ const taskInput = (fields: Record<string, FieldValue>): TaskInput => {
     reviewerProfiles: fieldList(fields, REVIEWER_PROFILES_FIELD),
     status: fieldString(fields, 'status') ?? '',
   };
-  if (findingRef === undefined || findingRef === '') return base;
-  return { ...base, findingRef };
+  const withRef = findingRef === undefined || findingRef === '' ? base : { ...base, findingRef };
+  return size === undefined || size === '' ? withRef : { ...withRef, size };
 };
 
 /**
@@ -150,6 +160,15 @@ export const parseTaskFile = (markdown: string): Task | undefined => {
     return undefined;
   }
 };
+
+/**
+ * A parsed task's declared size, or undefined when it declares none or its
+ * value is not one of the four sizes.
+ * @param task - parsed task
+ * @returns the size every resolver can act on
+ */
+export const sizeOf = (task: Task): Size | undefined =>
+  task.size === undefined || !isSize(task.size) ? undefined : task.size;
 
 // ─── Directory name ───────────────────────────────────────────────────
 
@@ -187,6 +206,57 @@ export const parseTaskDirName = (dir: string): TaskDirName | undefined => {
 
 // ─── Mechanical verification ──────────────────────────────────────────
 
+/**
+ * The `size` rule on its own, so an already-parsed task is held to the same
+ * contract as its file: an unknown size is an error, and a missing size is an
+ * error unless the task is complete. Dispatch surfaces call this on the parsed
+ * task, so a dispatchable task can never carry an invalid size.
+ * @param size - declared size, as written
+ * @param status - declared status, as written
+ * @returns the findings, in reporting order
+ */
+export const verifyTaskSize = (
+  size: string | undefined,
+  status: string | undefined,
+): ReadonlyArray<Issue> => {
+  if (size === undefined || size.trim() === '') {
+    if (status === 'complete') {
+      return [
+        finding({
+          code: CODES.missingSize,
+          severity: 'warning',
+          field: 'size',
+          message: 'Completed task declares no size; sizing is advisory for historical work.',
+          expected: SIZE_HINT,
+          actual: 'missing',
+          fix: `Add \`size: medium\` to TASK.md frontmatter (${SIZE_HINT}).`,
+        }),
+      ];
+    }
+    return [
+      finding({
+        code: CODES.missingSize,
+        field: 'size',
+        message: `Required frontmatter field is missing; a declared size is required for '${status ?? 'unknown'}' tasks.`,
+        expected: SIZE_HINT,
+        actual: 'missing',
+        fix: `Add \`size: medium\` to TASK.md frontmatter (${SIZE_HINT}).`,
+      }),
+    ];
+  }
+  if (isSize(size)) return [];
+  return [
+    finding({
+      code: CODES.unknownTaskSize,
+      field: 'size',
+      message: `Unknown size '${size}'.`,
+      expected: SIZE_HINT,
+      actual: size,
+      fix: `Change \`size: ${size}\` to one of ${SIZES.join(', ')}.`,
+    }),
+  ];
+};
+
 /** Required sections of a TASK.md body; `Type:` is a prefixed heading. */
 const TASK_SECTIONS = [
   { label: '## Type:', pattern: /^## Type:\s*\S/m },
@@ -199,7 +269,8 @@ const TASK_SECTIONS = [
  * Mechanically verify a TASK.md file against the spec contract
  * standard: required frontmatter (`id`, `name`, `type`, `originator`,
  * `depends-on`, `related-tasks`, `status`; `id`/`name` matching the
- * directory) plus the body shape. Pure — no IO.
+ * directory), the declared `size` (required unless the task is complete),
+ * plus the body shape. Pure — no IO.
  * @param dirName - task directory name (`A001-explore-auth`)
  * @param markdown - raw TASK.md contents
  * @returns the result; `valid` is true only with zero issues
@@ -285,6 +356,9 @@ export const verifyTaskFile = (dirName: string, markdown: string): Result => {
   } else if (!isTaskStatus(status)) {
     issues.push(issue('status', `Must be one of: ${TASK_STATUSES.join(', ')}.`));
   }
+
+  const size = fieldString(fields, 'size');
+  issues.push(...verifyTaskSize(size, status));
 
   for (const section of TASK_SECTIONS) {
     if (!section.pattern.test(body)) {

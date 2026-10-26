@@ -3,6 +3,7 @@ id: A001
 name: implement-thing
 type: execution
 originator: user
+size: medium
 depends-on: B001
 related-tasks:
 status: pending

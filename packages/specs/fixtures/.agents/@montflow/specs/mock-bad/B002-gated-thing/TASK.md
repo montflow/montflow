@@ -3,6 +3,7 @@ id: B002
 name: gated-thing
 type: execution
 originator: user
+size: medium
 depends-on:
 related-tasks:
 status: pending

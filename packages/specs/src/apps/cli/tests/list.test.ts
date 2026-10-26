@@ -4,7 +4,14 @@ import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import { SpecStore } from '../../../services/index.js';
 import { warning } from '../../../modules/verify/index.js';
-import { LIST_STATUSES, type ListReport, list, renderList, resolveListOptions } from '../index.js';
+import {
+  LIST_STATUSES,
+  type ListReport,
+  NO_SIZING,
+  list,
+  renderList,
+  resolveListOptions,
+} from '../index.js';
 import { entry, memory, stubLayer } from './helpers.js';
 
 const root = '.agents/@montflow/specs';
@@ -101,8 +108,10 @@ Vitest.describe('Cli.list runtime', () => {
               names: () => Effect.succeed([]),
               hasRoot: () => Effect.succeed(false),
               exists: () => Effect.succeed(false),
+              hasFile: () => Effect.succeed(false),
               snapshot: () =>
                 Effect.fail(new SpecStore.StoreError({ operation: 'unused', reason: 'unused' })),
+              readRootFile: () => Effect.succeed(undefined),
               write: () => Effect.void,
             }),
           ),
@@ -146,6 +155,7 @@ Vitest.describe('Cli.renderList runtime', () => {
             valid: true,
             issues: [warning('metrics', 'No metrics recorded.')],
           },
+          sizing: NO_SIZING,
         },
       ],
       total: 1,

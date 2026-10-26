@@ -49,6 +49,7 @@ const task = (
     `name: ${name}`,
     `type: ${type}`,
     'originator: user',
+    'size: small',
     'depends-on:',
     'related-tasks:',
     ...extra,

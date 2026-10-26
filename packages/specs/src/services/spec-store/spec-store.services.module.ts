@@ -5,6 +5,10 @@ import type { SpecFileEntry, SpecSnapshot } from '../../modules/structure/index.
 export class StoreError extends Data.TaggedError('@montflow/SpecStoreError')<{
   readonly operation: string;
   readonly reason: string;
+  /** File the failure concerns, when it concerns one. */
+  readonly path?: string;
+  /** The original platform failure, preserved for the CLI's cause chain. */
+  readonly cause?: unknown;
 }> {}
 
 /** Filesystem surface the CLI needs: list specs, snapshot one spec, write a new tree. */
@@ -15,8 +19,19 @@ export interface Impl {
   readonly hasRoot: (root: string) => Effect.Effect<boolean, never>;
   /** True when `root/<name>` exists. */
   readonly exists: (root: string, name: string) => Effect.Effect<boolean, never>;
+  /** True when `root/<name>/<relative>` exists, without reading the whole spec. */
+  readonly hasFile: (root: string, name: string, relative: string) => Effect.Effect<boolean, never>;
   /** Every file under `root/<name>`, as POSIX-relative paths + contents. */
   readonly snapshot: (root: string, name: string) => Effect.Effect<SpecSnapshot, StoreError>;
+  /**
+   * Read one file directly under `root` (a root config, never a spec). Reads
+   * as `undefined` when the file is absent, so an optional root file never
+   * fails the call.
+   */
+  readonly readRootFile: (
+    root: string,
+    name: string,
+  ) => Effect.Effect<string | undefined, StoreError>;
   /**
    * Write a fresh spec tree under `root/<name>`, creating `root` and every
    * parent directory. `files` carry POSIX-relative paths; an existing file is
@@ -30,10 +45,14 @@ export interface Impl {
 }
 
 const toStoreError =
-  (operation: string) =>
+  (operation: string, target?: string) =>
   // `cause` is the rule's exempt name for error-cause enrichment.
-  (cause: unknown): StoreError =>
-    new StoreError({ operation, reason: cause instanceof Error ? cause.message : String(cause) });
+  (cause: unknown): StoreError => {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    return target === undefined
+      ? new StoreError({ operation, reason, cause })
+      : new StoreError({ operation, reason, cause, path: target });
+  };
 
 /** Normalize platform path separators to POSIX for stable snapshot keys. */
 const toPosix = (value: string): string => value.split('\\').join('/');
@@ -58,16 +77,26 @@ const make = Effect.gen(function* () {
       }),
     );
 
+  const hasFile = (root: string, name: string, relative: string): Effect.Effect<boolean, never> =>
+    fs.access(path.join(root, name, relative)).pipe(
+      Effect.matchEffect({
+        onFailure: () => Effect.succeed(false),
+        onSuccess: () => Effect.succeed(true),
+      }),
+    );
+
   const names = (root: string): Effect.Effect<ReadonlyArray<string>, StoreError> =>
     Effect.gen(function* () {
       const operation = 'SpecStore.names';
-      const entries = yield* fs.readDirectory(root).pipe(Effect.mapError(toStoreError(operation)));
+      const entries = yield* fs
+        .readDirectory(root)
+        .pipe(Effect.mapError(toStoreError(operation, root)));
       const found: Array<string> = [];
       for (const entry of entries) {
         if (entry.startsWith('.')) continue;
         const info = yield* fs
           .stat(path.join(root, entry))
-          .pipe(Effect.mapError(toStoreError(operation)));
+          .pipe(Effect.mapError(toStoreError(operation, path.join(root, entry))));
         if (info.type === 'Directory') found.push(entry);
       }
       return found.toSorted();
@@ -79,18 +108,39 @@ const make = Effect.gen(function* () {
       const dir = path.join(root, name);
       const entries = yield* fs
         .readDirectory(dir, { recursive: true })
-        .pipe(Effect.mapError(toStoreError(operation)));
+        .pipe(Effect.mapError(toStoreError(operation, dir)));
       const files: Array<SpecFileEntry> = [];
       for (const entry of entries) {
         const absolute = path.join(dir, entry);
-        const info = yield* fs.stat(absolute).pipe(Effect.mapError(toStoreError(operation)));
+        const info = yield* fs
+          .stat(absolute)
+          .pipe(Effect.mapError(toStoreError(operation, absolute)));
         if (info.type !== 'File') continue;
         const content = yield* fs
           .readFileString(absolute)
-          .pipe(Effect.mapError(toStoreError(operation)));
+          .pipe(Effect.mapError(toStoreError(operation, absolute)));
         files.push({ path: toPosix(entry), content });
       }
       return { name, files };
+    });
+
+  const readRootFile = (
+    root: string,
+    name: string,
+  ): Effect.Effect<string | undefined, StoreError> =>
+    Effect.gen(function* () {
+      const operation = 'SpecStore.readRootFile';
+      const target = path.join(root, name);
+      const present = yield* fs.access(target).pipe(
+        Effect.matchEffect({
+          onFailure: () => Effect.succeed(false),
+          onSuccess: () => Effect.succeed(true),
+        }),
+      );
+      if (!present) return undefined;
+      return yield* fs
+        .readFileString(target)
+        .pipe(Effect.mapError(toStoreError(operation, target)));
     });
 
   const write = (
@@ -105,14 +155,14 @@ const make = Effect.gen(function* () {
         const target = path.join(dir, file.path);
         yield* fs
           .makeDirectory(path.dirname(target), { recursive: true })
-          .pipe(Effect.mapError(toStoreError(operation)));
+          .pipe(Effect.mapError(toStoreError(operation, path.dirname(target))));
         yield* fs
           .writeFileString(target, file.content)
-          .pipe(Effect.mapError(toStoreError(operation)));
+          .pipe(Effect.mapError(toStoreError(operation, target)));
       }
     });
 
-  return { names, hasRoot, exists, snapshot, write } as const;
+  return { names, hasRoot, exists, hasFile, snapshot, readRootFile, write } as const;
 });
 
 export const Id = '@montflow/SpecStore';

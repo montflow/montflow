@@ -1,4 +1,10 @@
-import { type TaskRow, parseSpecFile, parseTaskTable, verifySpecFile } from '../spec/index.js';
+import {
+  PHASE_PATTERN,
+  type TaskRow,
+  parseSpecFile,
+  parseTaskTable,
+  verifySpecFile,
+} from '../spec/index.js';
 import { parseMarkdown } from '../frontmatter/index.js';
 import { verifyGatesFile } from '../gates/index.js';
 import { verify as verifyLifecycle } from '../lifecycle/index.js';
@@ -16,6 +22,7 @@ import {
   phaseRank,
   verifyTaskFile,
 } from '../task/index.js';
+import { CODES, CONFIG_FILE, type ConfigSource, verifyText } from '../sizing/index.js';
 import { type Issue, type Result, issue, noErrors } from '../verify/index.js';
 
 /**
@@ -43,6 +50,9 @@ const TASK_DIR_FILES = new Set(['TASK.md', 'MEMORY.md', 'GATES.md']);
 
 /** Files every task directory must contain. */
 const TASK_DIR_REQUIRED = ['TASK.md', 'MEMORY.md'] as const;
+
+/** Root files a spec directory may contain; everything else is stray. */
+const SPEC_ROOT_FILES = new Set(['SPEC.md', CONFIG_FILE]);
 
 /** Helpful placement hints for files that belong inside a task directory. */
 const ROOT_STRAY_HINT = new Map<string, string>([
@@ -93,12 +103,36 @@ const nest = (path: string, result: Result): ReadonlyArray<Issue> =>
   result.issues.map((found) => ({ ...found, field: `${path}: ${found.field}` }));
 
 /**
+ * Verify an optional spec-root `sizing.json` against the contract, given the
+ * phase ids the spec actually holds. A phase override with a well-formed id
+ * but no task in this spec is an unused override (warning), not a broken
+ * config; a malformed phase key stays an error.
+ */
+const verifySpecConfig = (name: string, phases: ReadonlyArray<string>, text: string): Result => {
+  const source: ConfigSource = { path: `${name}/${CONFIG_FILE}`, kind: 'spec', phases };
+  const found = verifyText(source, text).issues.map((issueFound) =>
+    issueFound.code === CODES.unknownPhase &&
+    issueFound.actual !== undefined &&
+    PHASE_PATTERN.test(issueFound.actual)
+      ? {
+          ...issueFound,
+          severity: 'warning' as const,
+          message: `Phase '${issueFound.actual}' has no tasks in this spec; the override is unused.`,
+          expected: 'a phase with at least one task',
+          fix: `Remove '${issueFound.field}' from ${CONFIG_FILE}, or add a task in phase ${issueFound.actual}.`,
+        }
+      : issueFound,
+  );
+  return { valid: noErrors(found), issues: found };
+};
+
+/**
  * Mechanically verify the whole on-disk structure of a spec:
  * required files, task-directory naming and placement, id/name agreement,
  * unique ids, task-table agreement (type/status/gates), `TASK.md` /
- * `GATES.md` / `MEMORY.md` content, dependency existence + phase ordering
- * + cycles, a `review` task per phase, and `locked-phases` pointing at
- * real phases. Pure — no IO.
+ * `GATES.md` / `MEMORY.md` content, an optional spec-root `sizing.json`,
+ * dependency existence + phase ordering + cycles, a `review` task per phase,
+ * and `locked-phases` pointing at real phases. Pure — no IO.
  *
  * When `review` is supplied, the tree's review tasks are additionally
  * checked against the convention link (`ReviewLink`): each complete `review`
@@ -116,7 +150,7 @@ export const verifySpecTree = (
   const issues: Array<Issue> = [];
 
   for (const file of snapshot.files) {
-    if (file.path.includes('/') || file.path === 'SPEC.md') continue;
+    if (file.path.includes('/') || SPEC_ROOT_FILES.has(file.path)) continue;
     issues.push(
       issue(file.path, ROOT_STRAY_HINT.get(file.path) ?? 'Unexpected file at the spec root.'),
     );
@@ -270,6 +304,12 @@ export const verifySpecTree = (
 
   const phases = new Set<string>();
   for (const id of tasks.keys()) phases.add(phaseOf(id));
+  const configFile = snapshot.files.find((file) => file.path === CONFIG_FILE);
+  if (configFile !== undefined) {
+    issues.push(
+      ...nest(CONFIG_FILE, verifySpecConfig(snapshot.name, [...phases], configFile.content)),
+    );
+  }
   for (const phase of phases) {
     const hasReview = Array.from(tasks.values()).some(
       (task) => phaseOf(task.id) === phase && task.type === 'review',

@@ -1,0 +1,13 @@
+{
+  "sizes": {
+    "tiny": { "model": "fixture/spec-model", "effort": "medium" },
+    "small": { "model": "fixture/spec-model" }
+  },
+  "phases": {
+    "A": {
+      "sizes": {
+        "tiny": { "model": "fixture/phase-model", "effort": "high" }
+      }
+    }
+  }
+}

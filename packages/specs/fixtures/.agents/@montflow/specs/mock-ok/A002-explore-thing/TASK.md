@@ -3,6 +3,7 @@ id: A002
 name: explore-thing
 type: exploratory
 originator: user
+size: small
 depends-on: A001
 related-tasks:
 status: pending

@@ -9,6 +9,9 @@ export interface TaskFixture {
   readonly relatedTasks?: string;
   readonly reviewerProfiles?: string;
   readonly findingRef?: string;
+  readonly size?: string;
+  /** Omit the `size` line entirely, to exercise the missing-size rules. */
+  readonly withoutSize?: boolean;
   readonly status?: string;
 }
 
@@ -21,6 +24,7 @@ export const taskMarkdown = (fixture: TaskFixture): string => {
     `name: ${fixture.name}`,
     `type: ${type}`,
     `originator: ${fixture.originator ?? 'user'}`,
+    ...(fixture.withoutSize === true ? [] : [`size: ${fixture.size ?? 'medium'}`]),
     `depends-on: ${fixture.dependsOn ?? ''}`,
     `related-tasks: ${fixture.relatedTasks ?? ''}`,
   ];
