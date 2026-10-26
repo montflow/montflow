@@ -32,7 +32,7 @@ const notify = (message: string): void => {
 const loadPrompt = (cwd: string, name: string): Effect.Effect<Prompts.Prompt, string> =>
   Effect.gen(function* () {
     const store = yield* PromptStore.PromptStore;
-    const prompts = yield* store.list(cwd);
+    const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
     const found = prompts.find((candidate) => candidate.name === name);
     return found === undefined
       ? yield* Effect.fail(

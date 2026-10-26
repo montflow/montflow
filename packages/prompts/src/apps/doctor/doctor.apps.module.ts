@@ -18,7 +18,7 @@ import { EMBEDDED_SKILL_PAYLOAD } from './embedded-payload.generated.js';
  */
 
 /** Skills shipped with the package and installed into a repo. */
-export const SKILL_NAMES = ['montflow-create-pi-prompts', 'montflow-execute-pi-prompts'] as const;
+export const SKILL_NAMES = ['montflow-create-prompts', 'montflow-execute-prompts'] as const;
 
 const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 

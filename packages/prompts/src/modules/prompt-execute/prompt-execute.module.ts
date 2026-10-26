@@ -237,7 +237,7 @@ const missingModel = (summary: PromptSummary, invocation: string): ExecuteBlocke
     `Prompt '${summary.name}' has no model, so there is nothing to run it on.`,
     'Do one of these:',
     `  1. pass one: ${invocation} '${summary.name}' --model provider/model-id`,
-    `  2. pin one in the prompt file: set "model" in .agents/@montflow/pi-prompts/${summary.name}.json`,
+    `  2. pin one in the prompt file: set "model" in .agents/@montflow/prompts/${summary.name}.json`,
   ].join('\n'),
   missing: [],
 });
@@ -256,7 +256,7 @@ const missingVariables = (summary: PromptSummary, invocation: string): ExecuteBl
       `  1. supply them: ${invocation} '${summary.name}' --model provider/model-id ${gaps
         .map((variable) => `${example(variable.name)}=<value>`)
         .join(' ')}`,
-      `  2. make them optional: set "required": false in .agents/@montflow/pi-prompts/${summary.name}.json, and give a "default" or a {{#if}} branch if the text depends on them`,
+      `  2. make them optional: set "required": false in .agents/@montflow/prompts/${summary.name}.json, and give a "default" or a {{#if}} branch if the text depends on them`,
     ].join('\n'),
     missing: gaps.map((variable) => variable.name),
   };
@@ -285,7 +285,7 @@ export const execute = (request: ExecuteRequest): ExecutePlan => {
     return {
       ok: false,
       problem: 'empty-template',
-      message: `Prompt '${prompt.name}' has an empty template, so there is nothing to run. Set "template" in .agents/@montflow/pi-prompts/${prompt.name}.json.`,
+      message: `Prompt '${prompt.name}' has an empty template, so there is nothing to run. Set "template" in .agents/@montflow/prompts/${prompt.name}.json.`,
       missing: [],
     };
   }

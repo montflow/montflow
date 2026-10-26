@@ -303,7 +303,7 @@ const deleteCommand = Command.make('delete', { dir: dirFlag, name: nameArg }, (c
 /** The root command the binary runs. */
 export const rootCommand = Command.make('mf-prompts').pipe(
   Command.withDescription(
-    'Inspect, verify, and execute reusable prompt templates stored in .agents/@montflow/pi-prompts.',
+    'Inspect, verify, and execute reusable prompt templates stored in .agents/@montflow/prompts.',
   ),
   Command.withSubcommands([
     doctorCommand,

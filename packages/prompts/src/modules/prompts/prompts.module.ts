@@ -129,7 +129,7 @@ export const VariableEntry = Schema.decodeTo<typeof Variable, typeof VariableSou
  * `{{#if name}}` / `{{#unless name}}` branch on whether the variable has a
  * value, and nothing else is allowed.
  *
- * Persisted by the consuming extension (e.g. `.agents/@montflow/pi-prompts/`);
+ * Persisted by the consuming extension (e.g. `.agents/@montflow/prompts/`);
  * this package holds no filesystem code.
  */
 export class Prompt extends Schema.Class<Prompt>('Prompt')({

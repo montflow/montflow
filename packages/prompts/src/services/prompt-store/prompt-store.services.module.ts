@@ -1,21 +1,29 @@
-import { Context, Effect, FileSystem, Layer, Path, Schema } from 'effect';
+import { Context, Effect, FileSystem, Layer, Path, Predicate, Schema } from 'effect';
 import * as Prompts from '../../modules/prompts/index.js';
 
 /** Failure when a prompt file cannot be read or written. */
 export class StoreError extends Schema.TaggedError<StoreError>()('PromptStore.StoreError', {
   message: Schema.String,
+  /** File the failure concerns, when it concerns one. */
+  path: Schema.optional(Schema.String),
+  /** The original platform failure, preserved for the CLI's cause chain. */
+  cause: Schema.optional(Schema.Defect()),
 }) {}
 
-/** Store directory segments under a working directory. */
-const PROMPTS_DIR = ['.agents', '@montflow', 'pi-prompts'] as const;
+/** True when a platform failure is the absence of a path, not a denial. */
+const isNotFound = (cause: unknown): boolean =>
+  Predicate.hasProperty(cause, 'reason') && Predicate.isTagged(cause.reason, 'NotFound');
 
-/** Prompts root for a working directory: `<cwd>/.agents/@montflow/pi-prompts`. */
+/** Store directory segments under a working directory. */
+const PROMPTS_DIR = ['.agents', '@montflow', 'prompts'] as const;
+
+/** Prompts root for a working directory: `<cwd>/.agents/@montflow/prompts`. */
 const promptsDir = (path: Path.Path, cwd: string): string => path.join(cwd, ...PROMPTS_DIR);
 
 /**
  * Directory the store reads/writes. An explicit `dir` wins (resolved
  * against `cwd`), so callers can target a folder other than the default
- * `<cwd>/.agents/@montflow/pi-prompts`.
+ * `<cwd>/.agents/@montflow/prompts`.
  * @param path - Path service
  * @param cwd - working directory
  * @param dir - explicit store directory, if any
@@ -32,12 +40,28 @@ const make = Effect.gen(function* () {
     const root = storeDir(path, cwd, dir);
     const entries = yield* fs.readDirectory(root).pipe(Effect.orElseSucceed(() => [] as const));
     const files = entries.filter((entry) => entry.endsWith('.json'));
-    const prompts = yield* Effect.forEach(files, (file) =>
-      fs.readFileString(path.join(root, file)).pipe(
-        Effect.flatMap((raw) => Effect.try(() => Schema.decodeUnknownSync(Prompts.FromJson)(raw))),
-        Effect.catch(() => Effect.succeed(undefined)),
-      ),
-    );
+    const prompts = yield* Effect.forEach(files, (file) => {
+      const target = path.join(root, file);
+      return fs.readFileString(target).pipe(
+        // A read failure is not a missing prompt: surface it with its path and
+        // preserved cause instead of silently shortening the list.
+        Effect.mapError(
+          (cause) =>
+            new StoreError({
+              message: `Cannot read '${target}': ${cause.message}`,
+              path: target,
+              cause,
+            }),
+        ),
+        // Only a decode failure drops the file; the untrusted bytes go through
+        // the schema effect, never the throwing synchronous decoder.
+        Effect.flatMap((raw) =>
+          Schema.decodeUnknownEffect(Prompts.FromJson)(raw).pipe(
+            Effect.catchTag('SchemaError', () => Effect.succeed(undefined)),
+          ),
+        ),
+      );
+    });
     return prompts
       .filter((prompt): prompt is Prompts.Prompt => prompt !== undefined)
       .toSorted((a, b) => a.name.localeCompare(b.name));
@@ -96,9 +120,21 @@ const make = Effect.gen(function* () {
       return yield* Effect.fail(new StoreError({ message: `Unknown prompt '${name}'.` }));
     }
     const file = path.join(storeDir(path, cwd, dir), `${name}.json`);
-    const raw = yield* fs
-      .readFileString(file)
-      .pipe(Effect.mapError(() => new StoreError({ message: `Unknown prompt '${name}'.` })));
+    const raw = yield* fs.readFileString(file).pipe(
+      Effect.mapError((cause) =>
+        isNotFound(cause)
+          ? new StoreError({
+              message: `Unknown prompt '${name}'.`,
+              path: file,
+              cause,
+            })
+          : new StoreError({
+              message: `Cannot read '${file}': ${cause.message}`,
+              path: file,
+              cause,
+            }),
+      ),
+    );
     return raw;
   });
 

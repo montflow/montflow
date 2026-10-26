@@ -38,15 +38,14 @@ const INSTALLED_SKILLS_DIR = resolve(
 );
 
 /** Every skill this package ships. */
-const SKILL_NAMES = ['montflow-create-pi-prompts', 'montflow-execute-pi-prompts'] as const;
+const SKILL_NAMES = ['montflow-create-prompts', 'montflow-execute-prompts'] as const;
 
 /** Read one file out of a skill directory. */
 const read = (dir: string, name: string, file: string): string =>
   readFileSync(resolve(dir, name, file), 'utf8');
 
 /** The packaged execute skill — the one carrying a verified output sample. */
-const executeSkill = (): string =>
-  read(PACKAGE_SKILLS_DIR, 'montflow-execute-pi-prompts', 'SKILL.md');
+const executeSkill = (): string => read(PACKAGE_SKILLS_DIR, 'montflow-execute-prompts', 'SKILL.md');
 
 /**
  * The fenced block following a `<!-- verified-output:<name> -->` marker.
@@ -110,7 +109,7 @@ Vitest.describe('packaged skills', () => {
   });
 });
 
-Vitest.describe('montflow-execute-pi-prompts documented output', () => {
+Vitest.describe('montflow-execute-prompts documented output', () => {
   Vitest.it('shows the exact bytes inspect produces for the sample prompt', () => {
     const documented = documentedBlock('inspect');
     Vitest.expect(documented).toBeDefined();
@@ -120,7 +119,7 @@ Vitest.describe('montflow-execute-pi-prompts documented output', () => {
   });
 });
 
-Vitest.describe('montflow-execute-pi-prompts claims', () => {
+Vitest.describe('montflow-execute-prompts claims', () => {
   Vitest.it('only names subcommands the named surface actually implements', () => {
     // The skill names the CLI two ways — `mf-prompts x` for the binary and
     // `/mf-prompts x` for the slash form — and a third surface, the menu,
@@ -194,9 +193,8 @@ Vitest.describe('montflow-execute-pi-prompts claims', () => {
   });
 });
 
-Vitest.describe('montflow-create-pi-prompts claims', () => {
-  const createSkill = (): string =>
-    read(PACKAGE_SKILLS_DIR, 'montflow-create-pi-prompts', 'SKILL.md');
+Vitest.describe('montflow-create-prompts claims', () => {
+  const createSkill = (): string => read(PACKAGE_SKILLS_DIR, 'montflow-create-prompts', 'SKILL.md');
 
   Vitest.it('works its own example: the prompt it teaches verifies clean', () => {
     const raw = JSON.stringify({

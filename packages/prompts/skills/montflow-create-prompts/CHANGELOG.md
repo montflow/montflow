@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.0] - 2026-10-26
+
+### Changed
+
+- Renamed from `montflow-create-pi-prompts` to `montflow-create-prompts`
+- The prompt store path is `.agents/@montflow/prompts/` everywhere in the skill, and the execution cross-reference names `montflow-execute-prompts`
+
 ## [3.0.1] - 2026-10-22
 
 ### Changed
