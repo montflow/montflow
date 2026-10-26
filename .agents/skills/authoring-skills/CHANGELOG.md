@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.1] - 2026-10-26
+
+### Changed
+
+- Group taxonomy examples now point at the scoped `montflow-add-reference` / `montflow-find-reference` skills after the generic `adding-references` / `finding-references` pair was retired
+
 ## [1.6.0] - 2026-10-07
 
 ### Added
