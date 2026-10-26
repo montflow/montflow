@@ -1,9 +1,9 @@
 ---
-name: montflow-create-pi-skills
+name: montflow-create-skills
 description: Authors a workspace skill under .agents/skills/<name>/ — a SKILL.md with the required frontmatter and `# When To Use` / `# Pipeline` / `# Reference` body — from the rules below. Use when an agent must create a skill directly, without dispatching a session or shelling out.
 id: 94b1651acdb76a86
 author: montflow
-version: 1.1.1
+version: 1.2.0
 license: MIT
 groups:
   - skills

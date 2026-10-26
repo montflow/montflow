@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.0] - 2026-10-26
+
+### Changed
+
+- Renamed from `montflow-create-pi-skills` to `montflow-create-skills`; the retired Pi infix is gone from the directory, the frontmatter `name`, and every cross-reference
+
 ## [1.1.1] - 2026-10-22
 
 ### Changed

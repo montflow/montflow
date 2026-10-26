@@ -72,15 +72,15 @@ export const slugify = (name: string): string =>
     .replace(/^-+|-+$/g, '');
 
 /** Skills an agentic creation run needs injected to author well. */
-export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-create-pi-skills'];
+export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-create-skills'];
 
 /** Skills an agentic modification run needs injected to edit well. */
-export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-modify-pi-skills'];
+export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-modify-skills'];
 
 /** Skills an agentic format-transform run needs injected to fix well. */
 export const TRANSFORM_REQUIREMENTS: ReadonlyArray<string> = [
-  'montflow-create-pi-skills',
-  'montflow-modify-pi-skills',
+  'montflow-create-skills',
+  'montflow-modify-skills',
 ];
 
 /** Default frontmatter author when a flow cannot infer one. */

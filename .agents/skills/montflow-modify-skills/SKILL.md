@@ -1,9 +1,9 @@
 ---
-name: montflow-modify-pi-skills
+name: montflow-modify-skills
 description: Modifies, updates, extends, or audits an existing workspace skill under .agents/skills/<name>/ while keeping the skill schema valid. Use when an agent must edit a skill, add to it, or fix its shape without dispatching a session.
 id: c0eec01fb3fdeac6
 author: montflow
-version: 1.0.1
+version: 1.1.0
 license: MIT
 groups:
   - skills
@@ -65,5 +65,5 @@ mf-skills verify <name>          # the binary, scriptable
 # Reference
 
 - **Skill format**: `.agents/skills/<name>/SKILL.md` — one directory per skill.
-- **Creation standard**: [montflow-create-pi-skills](../montflow-create-pi-skills/SKILL.md).
+- **Creation standard**: [montflow-create-skills](../montflow-create-skills/SKILL.md).
 - **Contract source**: `packages/skills/src/modules/skill/skill.module.ts` (`verifySkillFile`).

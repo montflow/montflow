@@ -33,7 +33,7 @@ const INSTALLED_SKILLS_DIR = resolve(
 );
 
 /** Every skill this package ships. */
-const SKILL_NAMES = ['montflow-create-pi-skills', 'montflow-modify-pi-skills'] as const;
+const SKILL_NAMES = ['montflow-create-skills', 'montflow-modify-skills'] as const;
 
 const read = (dir: string, name: string, file: string): string =>
   readFileSync(resolve(dir, name, file), 'utf8');

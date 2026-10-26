@@ -34,8 +34,8 @@ result and reports the outcome. Agents call them through `skill_create` /
 `doctor` installs two skills into the repo's `.agents/skills/` so an agent can
 author skills without shelling out:
 
-- `montflow-create-pi-skills`
-- `montflow-modify-pi-skills`
+- `montflow-create-skills`
+- `montflow-modify-skills`
 
 Agentic sessions inject these (`Skill.GENERATION_REQUIREMENTS` /
 `MODIFICATION_REQUIREMENTS`). The package ships them under `skills/` and embeds

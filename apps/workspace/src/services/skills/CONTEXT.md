@@ -7,7 +7,7 @@ Skills panel: directory presence plus `SKILL.md` frontmatter parsing into
 ## Lazy extension loading
 
 Static imports from `@montflow/skills` are type-only (erased at build). The
-runtime resolves through `loadPiSkills()` — an Effect over a cached dynamic
+runtime resolves through `loadSkills()` — an Effect over a cached dynamic
 `import()`, first called inside `fetchSkills` / `getSkills` / `toSkill`, never
 at dashboard boot. Rejections classify into `ExtensionLoadError` (`network` vs
 `missing` vs `unknown`) via `classifyLoadError`, so the toast tells the user

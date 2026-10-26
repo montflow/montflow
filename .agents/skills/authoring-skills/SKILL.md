@@ -3,7 +3,7 @@ name: authoring-skills
 description: Guides the creation, formatting, and refinement of Skills. Use when the user wants to write a new Skill, convert documentation into a Skill, or audit an existing Skill.
 id: b186a4a0ab10373c
 author: Daniel Montilla
-version: 1.6.0
+version: 1.7.0
 license: MIT
 dependencies:
   - executing-skills
@@ -181,7 +181,7 @@ For error codes, see [ERRORS.md](ERRORS.md).
 The skill `name` equals the directory and must signal **ownership** before **subject**:
 
 - **Montflow-owned code rules** — prefix `montflow-<language>-<subject>`: `montflow-typescript-modules`, `montflow-typescript-file-structure`, `montflow-typescript-services`. The language segment leaves room for other languages later.
-- **Montflow platform tooling** — `montflow-<verb>-pi-<noun>` for skills that drive the montflow CLIs: `montflow-find-pi-specs`, `montflow-create-pi-specs`.
+- **Montflow platform tooling** — `montflow-<verb>-<noun>` for skills that drive the montflow CLIs: `montflow-find-specs`, `montflow-create-specs`.
 - **Generic / reusable skills** keep their own namespace and take no prefix: `applying-solid`, `grilling`, `writing-jsdoc`, `typescript-prefer-inference`.
 - **Vendored upstream skills** keep the upstream name: `effect` (from `kitlangton/skills@effect`).
 

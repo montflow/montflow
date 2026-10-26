@@ -14,7 +14,7 @@ import { Data, Effect, Schema } from 'effect';
  * or missing extension therefore cannot crash the TUI; the failing
  * flow surfaces the load error as a toast instead.
  */
-type PiSkillsLib = typeof import('@montflow/skills');
+type SkillsLib = typeof import('@montflow/skills');
 
 /** Failure loading the skills extension runtime. `cause` classifies the import rejection. */
 export class ExtensionLoadError extends Data.TaggedError('@montflow/ExtensionLoadError')<{
@@ -74,13 +74,13 @@ export const classifyLoadError = (cause: unknown): ExtensionLoadError => {
 };
 
 /** Cached extension module promise. Cleared on failure so installing the extension then retrying reloads it. */
-let cachedLib: Promise<PiSkillsLib> | undefined;
+let cachedLib: Promise<SkillsLib> | undefined;
 
 /** The resolved extension runtime, once a flow has loaded it. Backs the synchronous picker matcher below. */
-let liveLib: PiSkillsLib | undefined;
+let liveLib: SkillsLib | undefined;
 
 /** Single import attempt: resolves the runtime, or rejects with a classified load error. */
-const importOnce = (): Promise<PiSkillsLib> => {
+const importOnce = (): Promise<SkillsLib> => {
   cachedLib ??= import('@montflow/skills').then(
     (libs) => {
       liveLib = libs;
@@ -108,7 +108,7 @@ export const resetExtensionCache = (): void => {
  * re-imports.
  * @returns Effect resolving to the extension module namespace
  */
-export const loadPiSkills = (): Effect.Effect<PiSkillsLib, ExtensionLoadError> =>
+export const loadSkills = (): Effect.Effect<SkillsLib, ExtensionLoadError> =>
   Effect.tryPromise({
     try: () => importOnce(),
     catch: (cause) => (cause instanceof ExtensionLoadError ? cause : classifyLoadError(cause)),
@@ -118,7 +118,7 @@ export const loadPiSkills = (): Effect.Effect<PiSkillsLib, ExtensionLoadError> =
  * The loaded extension runtime, if any flow has loaded it yet.
  * @returns the extension module namespace, or undefined before first load
  */
-export const loadedPiSkills = (): PiSkillsLib | undefined => liveLib;
+export const loadedSkills = (): SkillsLib | undefined => liveLib;
 
 /**
  * The shared subsequence matcher for the TUI filter picker, once a flow
@@ -134,8 +134,8 @@ export const loadedMatcher = (): ((label: string, query: string) => boolean) | u
  * string errors the TUI toasts (install, then retry).
  * @returns Effect resolving to the extension module namespace
  */
-const loadLibs = (): Effect.Effect<PiSkillsLib, string> =>
-  loadPiSkills().pipe(Effect.mapError((error) => error.message));
+const loadLibs = (): Effect.Effect<SkillsLib, string> =>
+  loadSkills().pipe(Effect.mapError((error) => error.message));
 
 /** Panel ids with an installable backing extension. */
 export type ExtensionPanel = 'skills' | 'prompts' | 'profiles';
@@ -143,7 +143,7 @@ export type ExtensionPanel = 'skills' | 'prompts' | 'profiles';
 /** Directory segments (under the workspace root) proving a panel installed. */
 const PANEL_DIRS = {
   skills: ['.agents', 'skills'],
-  prompts: ['.agents', '@montflow', 'pi-prompts'],
+  prompts: ['.agents', '@montflow', 'prompts'],
   profiles: ['.agents', '@montflow', 'profiles'],
 } satisfies Record<ExtensionPanel, ReadonlyArray<string>>;
 
@@ -429,7 +429,7 @@ export const saveSkill = (root: string, skill: SkillSummary): Effect.Effect<void
  * @param row - dashboard skill row
  * @returns Effect resolving to the Skill, failing on invalid rows
  */
-export const toSkill = (libs: PiSkillsLib, row: SkillSummary): Effect.Effect<Skill.Skill, string> =>
+export const toSkill = (libs: SkillsLib, row: SkillSummary): Effect.Effect<Skill.Skill, string> =>
   libs.Skill.decodeUnknown({
     id: row.id,
     name: row.name,
@@ -446,7 +446,7 @@ export const toSkill = (libs: PiSkillsLib, row: SkillSummary): Effect.Effect<Ski
  * @param skill - skills-plugin Skill
  * @returns dashboard row
  */
-export const fromSkill = (libs: PiSkillsLib, skill: Skill.Skill): SkillSummary => {
+export const fromSkill = (libs: SkillsLib, skill: Skill.Skill): SkillSummary => {
   const encoded = libs.Skill.encode(skill);
   return {
     id: encoded.id,
