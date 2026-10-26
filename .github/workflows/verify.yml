@@ -158,6 +158,8 @@ jobs:
             script: mf:check:profiles
           - target: reviews
             script: mf:check:reviews
+          - target: references
+            script: mf:check:references
     steps:
       - uses: actions/checkout@v4
 
