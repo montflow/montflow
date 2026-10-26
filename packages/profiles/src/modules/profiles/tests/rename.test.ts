@@ -1,12 +1,12 @@
 import { Effect } from 'effect';
 import * as Vitest from '@effect/vitest';
-import * as PiProfiles from '../index.js';
+import * as Profiles from '../index.js';
 
-Vitest.describe('PiProfiles.rename', () => {
+Vitest.describe('Profiles.rename', () => {
   Vitest.it.effect('renames a profile to a valid slug', () =>
     Effect.gen(function* () {
-      const renamed = yield* PiProfiles.rename(
-        PiProfiles.make('code-reviewer', 'Reviews code'),
+      const renamed = yield* Profiles.rename(
+        Profiles.make('code-reviewer', 'Reviews code'),
         'security-auditor',
       );
       Vitest.expect(renamed.name).toBe('security-auditor');
@@ -15,8 +15,8 @@ Vitest.describe('PiProfiles.rename', () => {
 
   Vitest.it.effect('fails when the new name is not a valid slug', () =>
     Effect.gen(function* () {
-      const profile = PiProfiles.make('code-reviewer', 'Reviews code');
-      const error = yield* PiProfiles.rename(profile, 'Bad Name').pipe(Effect.flip);
+      const profile = Profiles.make('code-reviewer', 'Reviews code');
+      const error = yield* Profiles.rename(profile, 'Bad Name').pipe(Effect.flip);
       Vitest.expect(error).toStrictEqual("invalid profile name 'Bad Name'");
     }),
   );

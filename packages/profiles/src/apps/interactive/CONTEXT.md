@@ -5,8 +5,8 @@ with an agent), show, modify (manually or with an agent), and delete
 workspace profiles. Mirrors the `@montflow/prompts` interactive interface —
 same menu loop, same model picker, same requirements gate, same
 loading modal and TUI menu ports. Creation sessions inject the
-`montflow-create-pi-profiles` workspace skill, modification sessions inject
-`montflow-modify-pi-profiles`, and format-fix sessions inject both (installable from this repository
+`montflow-create-profiles` workspace skill, modification sessions inject
+`montflow-modify-profiles`, and format-fix sessions inject both (installable from this repository
 via the existing `skills` CLI); the gate injects them into agentic sessions
 so authors follow the profile standards.
 
@@ -20,7 +20,7 @@ so authors follow the profile standards.
 
 ## Does not belong here
 
-- Profile shapes and `PROFILE.md` parsing — `modules/pi-profiles`
+- Profile shapes and `PROFILE.md` parsing — `modules/profiles`
 - File persistence — injected `ProfileStore` port (wired in `extension.ts`)
 - Child-agent sessions — injected `ProfileGenerator` / `ProfileModifier` ports
 - Skill installation — injected `SkillInstaller` port

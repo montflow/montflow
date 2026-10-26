@@ -67,7 +67,7 @@ Examples:
 
 ```text
 /mf-profiles create code-reviewer --description "Senior reviewer focused on security" --instructions "Be strict. Cite files." --checklist "Security issues flagged; Tests cover changes"
-/mf-profiles modify code-reviewer --model anthropic/claude-sonnet-4-5 --skills montflow-create-pi-profiles
+/mf-profiles modify code-reviewer --model anthropic/claude-sonnet-4-5 --skills montflow-create-profiles
 /mf-profiles show code-reviewer
 ```
 
@@ -106,6 +106,6 @@ skills:
 
 ## Standards
 
-`.agents/skills/montflow-create-pi-profiles/SKILL.md` (repo `montflow/montflow`,
-installable via `npx skills add montflow/montflow -s montflow-create-pi-profiles -y`)
+`.agents/skills/montflow-create-profiles/SKILL.md` (repo `montflow/montflow`,
+installable via `npx skills add montflow/montflow -s montflow-create-profiles -y`)
 holds authoring standards. Installed → follow it; rules above = mechanical core.

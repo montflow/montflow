@@ -3,7 +3,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for profile files; both go away with the FileSystem migration.
 import { join } from 'node:path';
 import type { Changes } from '@montflow/opencode';
-import type { Interactive as ProfilesInteractive, PiProfiles } from '@montflow/profiles';
+import type { Interactive as ProfilesInteractive, Profiles } from '@montflow/profiles';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Data, Effect, Fiber, Layer, Stream } from 'effect';
 import * as Skills from '../skills/index.js';
@@ -15,7 +15,7 @@ import * as Skills from '../skills/index.js';
  * or missing extension therefore cannot crash the TUI; the failing
  * flow surfaces the load error as a toast instead.
  */
-type PiProfilesLib = typeof import('@montflow/profiles');
+type ProfilesLib = typeof import('@montflow/profiles');
 
 /** Failure loading the profiles extension runtime. `cause` classifies the import rejection. */
 export class ExtensionLoadError extends Data.TaggedError('@montflow/ProfilesExtensionLoadError')<{
@@ -75,13 +75,13 @@ export const classifyLoadError = (cause: unknown): ExtensionLoadError => {
 };
 
 /** Cached extension module promise. Cleared on failure so retrying reloads it. */
-let cachedLib: Promise<PiProfilesLib> | undefined;
+let cachedLib: Promise<ProfilesLib> | undefined;
 
 /** The resolved extension runtime, once a flow has loaded it. Backs the synchronous picker matcher below. */
-let liveLib: PiProfilesLib | undefined;
+let liveLib: ProfilesLib | undefined;
 
 /** Single import attempt: resolves the runtime, or rejects with a classified load error. */
-const importOnce = (): Promise<PiProfilesLib> => {
+const importOnce = (): Promise<ProfilesLib> => {
   cachedLib ??= import('@montflow/profiles').then(
     (libs) => {
       liveLib = libs;
@@ -109,7 +109,7 @@ export const resetExtensionCache = (): void => {
  * re-imports.
  * @returns Effect resolving to the extension module namespace
  */
-export const loadPiProfiles = (): Effect.Effect<PiProfilesLib, ExtensionLoadError> =>
+export const loadProfiles = (): Effect.Effect<ProfilesLib, ExtensionLoadError> =>
   Effect.tryPromise({
     try: () => importOnce(),
     catch: (cause) => (cause instanceof ExtensionLoadError ? cause : classifyLoadError(cause)),
@@ -119,7 +119,7 @@ export const loadPiProfiles = (): Effect.Effect<PiProfilesLib, ExtensionLoadErro
  * The loaded extension runtime, if any flow has loaded it yet.
  * @returns the extension module namespace, or undefined before first load
  */
-export const loadedPiProfiles = (): PiProfilesLib | undefined => liveLib;
+export const loadedProfiles = (): ProfilesLib | undefined => liveLib;
 
 /**
  * The shared subsequence matcher for the TUI filter picker, once a flow
@@ -135,10 +135,10 @@ export const loadedMatcher = (): ((label: string, query: string) => boolean) | u
  * string errors the TUI toasts (install, then retry).
  * @returns Effect resolving to the extension module namespace
  */
-const loadLibs = (): Effect.Effect<PiProfilesLib, string> =>
-  loadPiProfiles().pipe(Effect.mapError((error) => error.message));
+const loadLibs = (): Effect.Effect<ProfilesLib, string> =>
+  loadProfiles().pipe(Effect.mapError((error) => error.message));
 
-/** One profile row for the dashboard list and detail views. Mirrors `PiProfiles.Profile` with an `id` alias (the slug). */
+/** One profile row for the dashboard list and detail views. Mirrors `Profiles.Profile` with an `id` alias (the slug). */
 export interface ProfileSummary {
   readonly id: string;
   readonly name: string;
@@ -150,12 +150,12 @@ export interface ProfileSummary {
 }
 
 /**
- * Bridge a `PiProfiles.Profile` into a dashboard row. Total — the
+ * Bridge a `Profiles.Profile` into a dashboard row. Total — the
  * profile already carries every field.
- * @param profile - pi-profiles Profile
+ * @param profile - profiles Profile
  * @returns dashboard row
  */
-export const fromProfile = (profile: PiProfiles.Profile): ProfileSummary => ({
+export const fromProfile = (profile: Profiles.Profile): ProfileSummary => ({
   id: profile.name,
   name: profile.name,
   description: profile.description,
@@ -166,7 +166,7 @@ export const fromProfile = (profile: PiProfiles.Profile): ProfileSummary => ({
 });
 
 /**
- * Bridge a dashboard row back into a `PiProfiles.Profile` for the shared
+ * Bridge a dashboard row back into a `Profiles.Profile` for the shared
  * interactive flows. Takes the lazily loaded runtime — no static extension
  * dependency.
  * @param libs - loaded extension runtime
@@ -174,10 +174,10 @@ export const fromProfile = (profile: PiProfiles.Profile): ProfileSummary => ({
  * @returns Effect resolving to the Profile, failing on invalid rows
  */
 export const toProfile = (
-  libs: PiProfilesLib,
+  libs: ProfilesLib,
   row: ProfileSummary,
-): Effect.Effect<PiProfiles.Profile, string> =>
-  libs.PiProfiles.decodeUnknown({
+): Effect.Effect<Profiles.Profile, string> =>
+  libs.Profiles.decodeUnknown({
     name: row.name,
     description: row.description,
     model: row.model,
@@ -189,7 +189,7 @@ export const toProfile = (
 /** Directory segments (under the workspace root) owning the profile store. */
 const PROFILES_DIR = ['.agents', '@montflow', 'profiles'] as const;
 
-/** Slug pattern: lowercase alphanumeric groups joined by single hyphens. Mirrors `PiProfiles.SLUG_PATTERN` without loading the runtime. */
+/** Slug pattern: lowercase alphanumeric groups joined by single hyphens. Mirrors `Profiles.SLUG_PATTERN` without loading the runtime. */
 export const PROFILE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
@@ -252,7 +252,7 @@ export const saveProfile = (root: string, row: ProfileSummary): Effect.Effect<vo
           .then(() =>
             writeFile(
               join(root, ...PROFILES_DIR, row.id, 'PROFILE.md'),
-              libs.PiProfiles.encodeProfileFile(profile),
+              libs.Profiles.encodeProfileFile(profile),
               'utf8',
             ),
           )
@@ -289,12 +289,12 @@ export const readRawProfile = (root: string, id: string): Effect.Effect<string, 
  * extension's `VerifyResult` so the reported shape never drifts from
  * the check that produced it.
  */
-export type ProfileVerify = PiProfiles.VerifyResult;
+export type ProfileVerify = Profiles.VerifyResult;
 
 /**
  * Verify one workspace profile: read its raw `PROFILE.md` and delegate
  * the mechanical check to the loaded extension runtime's
- * `PiProfiles.verifyProfileFile`. The check itself stays in
+ * `Profiles.verifyProfileFile`. The check itself stays in
  * `@montflow/profiles` — this host only supplies the bytes. Fails on
  * unknown, unsafe, or unreadable ids.
  * @param root - workspace root (profile store owner)
@@ -304,9 +304,7 @@ export type ProfileVerify = PiProfiles.VerifyResult;
 export const verifyProfile = (root: string, id: string): Effect.Effect<ProfileVerify, string> =>
   loadLibs().pipe(
     Effect.flatMap((libs) =>
-      readRawProfile(root, id).pipe(
-        Effect.map((raw) => libs.PiProfiles.verifyProfileFile(id, raw)),
-      ),
+      readRawProfile(root, id).pipe(Effect.map((raw) => libs.Profiles.verifyProfileFile(id, raw))),
     ),
   );
 
@@ -315,7 +313,7 @@ const ProfileStoreLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 /** Bridge one extension profile change into a dashboard-row change. */
 const toSummaryChange = (
-  change: Changes.Change<PiProfiles.Profile>,
+  change: Changes.Change<Profiles.Profile>,
 ): Changes.Change<ProfileSummary> =>
   change.value === undefined
     ? { kind: change.kind, id: change.id }
@@ -385,7 +383,7 @@ export type ProfilesPhase = 'extension' | 'profiles';
 /**
  * Profile rows for the TUI boot through the loaded profile module: load
  * the extension runtime, then list the store via file reads decoded with
- * `PiProfiles.decodeProfileFile` (sorted by name). Malformed files skip
+ * `Profiles.decodeProfileFile` (sorted by name). Malformed files skip
  * so the list stays usable. The caller sets the Loader variant per
  * stage — `extension` while the import runs, `profiles` while the list
  * reads — so boot narrates step by step.
@@ -431,7 +429,7 @@ export const fetchProfiles = (root: string): Effect.Effect<ProfileSummary[], str
               Effect.flatMap((raw) =>
                 raw === undefined
                   ? Effect.succeed(undefined)
-                  : libs.PiProfiles.decodeProfileFile(entry, raw).pipe(
+                  : libs.Profiles.decodeProfileFile(entry, raw).pipe(
                       Effect.map(fromProfile),
                       Effect.orElseSucceed(() => undefined),
                     ),
@@ -464,7 +462,7 @@ export const storeFor = (root: string): ProfilesInteractive.ProfileStore => ({
         readEntries(root).pipe(
           Effect.flatMap((entries) => {
             if (!entries.installed) {
-              const none: ReadonlyArray<PiProfiles.Profile> = [];
+              const none: ReadonlyArray<Profiles.Profile> = [];
               return Effect.succeed(none);
             }
             return Effect.forEach(entries.names, (entry) =>
@@ -477,14 +475,14 @@ export const storeFor = (root: string): ProfilesInteractive.ProfileStore => ({
                 Effect.flatMap((raw) =>
                   raw === undefined
                     ? Effect.succeed(undefined)
-                    : libs.PiProfiles.decodeProfileFile(entry, raw).pipe(
+                    : libs.Profiles.decodeProfileFile(entry, raw).pipe(
                         Effect.orElseSucceed(() => undefined),
                       ),
                 ),
               ),
             ).pipe(
               Effect.map((all) =>
-                all.filter((profile): profile is PiProfiles.Profile => profile !== undefined),
+                all.filter((profile): profile is Profiles.Profile => profile !== undefined),
               ),
             );
           }),
@@ -500,7 +498,7 @@ export const storeFor = (root: string): ProfilesInteractive.ProfileStore => ({
               .then(() =>
                 writeFile(
                   join(root, ...PROFILES_DIR, profile.name, 'PROFILE.md'),
-                  libs.PiProfiles.encodeProfileFile(profile),
+                  libs.Profiles.encodeProfileFile(profile),
                   'utf8',
                 ),
               )

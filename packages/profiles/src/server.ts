@@ -4,7 +4,7 @@ import { Effect, Layer, Schema, type Scope } from 'effect';
 import * as Cli from './apps/cli/index.js';
 import * as Interactive from './apps/interactive/index.js';
 import { runProfile, syncAgents } from './apps/server/index.js';
-import type * as PiProfiles from './modules/pi-profiles/index.js';
+import type * as Profiles from './modules/profiles/index.js';
 import { ProfileStore } from './services/index.js';
 
 /** Plugin id shared by the server and TUI entries. */
@@ -39,14 +39,14 @@ const cliUi: Interactive.InteractiveUi = {
 };
 
 /** Every stored profile. */
-const listProfiles = (cwd: string): Effect.Effect<readonly PiProfiles.Profile[]> =>
+const listProfiles = (cwd: string): Effect.Effect<readonly Profiles.Profile[]> =>
   Effect.gen(function* () {
     const store = yield* ProfileStore.ProfileStore;
     return yield* store.list(cwd);
   }).pipe(Effect.provide(Live));
 
 /** Load one profile by name, failing with a readable message. */
-const loadProfile = (cwd: string, name: string): Effect.Effect<PiProfiles.Profile, string> =>
+const loadProfile = (cwd: string, name: string): Effect.Effect<Profiles.Profile, string> =>
   Effect.gen(function* () {
     const store = yield* ProfileStore.ProfileStore;
     return yield* store.read(cwd, name);

@@ -1,6 +1,6 @@
 import { Changes } from '@montflow/opencode';
 import { Context, Effect, FileSystem, Layer, Path, Schema, Stream } from 'effect';
-import * as PiProfiles from '../../modules/pi-profiles/index.js';
+import * as Profiles from '../../modules/profiles/index.js';
 
 /** Failure when a profile file cannot be read or written. */
 export class StoreError extends Schema.TaggedError<StoreError>()('ProfileStore.StoreError', {
@@ -54,7 +54,7 @@ export const nameOf = (path: Path.Path, root: string, eventPath: string): string
   const relative = path.isAbsolute(eventPath) ? path.relative(root, eventPath) : eventPath;
   if (relative === '' || relative.startsWith('..')) return undefined;
   const first = relative.split(/[\\/]/)[0] ?? '';
-  return first !== '' && PiProfiles.isValidName(first) ? first : undefined;
+  return first !== '' && Profiles.isValidName(first) ? first : undefined;
 };
 
 const make = Effect.gen(function* () {
@@ -76,17 +76,17 @@ const make = Effect.gen(function* () {
     const entries = yield* fs.readDirectory(root).pipe(Effect.orElseSucceed(() => [] as const));
     const profiles = yield* Effect.forEach(entries, (entry) =>
       fs.readFileString(path.join(root, entry, PROFILE_FILE)).pipe(
-        Effect.flatMap((raw) => PiProfiles.decodeProfileFile(entry, raw)),
+        Effect.flatMap((raw) => Profiles.decodeProfileFile(entry, raw)),
         Effect.catch(() => Effect.succeed(undefined)),
       ),
     );
     return profiles
-      .filter((profile): profile is PiProfiles.Profile => profile !== undefined)
+      .filter((profile): profile is Profiles.Profile => profile !== undefined)
       .toSorted((a, b) => a.name.localeCompare(b.name));
   });
 
   const read = Effect.fn('ProfileStore.read')(function* (cwd: string, name: string) {
-    if (!PiProfiles.isValidName(name)) {
+    if (!Profiles.isValidName(name)) {
       return yield* Effect.fail(new StoreError({ message: `Invalid profile name '${name}'.` }));
     }
     const file = path.join(profilesRoot(path, cwd), name, PROFILE_FILE);
@@ -101,13 +101,13 @@ const make = Effect.gen(function* () {
           (error) => new StoreError({ message: `Failed to read ${file}: ${error.message}` }),
         ),
       );
-    return yield* PiProfiles.decodeProfileFile(name, raw).pipe(
+    return yield* Profiles.decodeProfileFile(name, raw).pipe(
       Effect.mapError((message) => new StoreError({ message })),
     );
   });
 
-  const save = Effect.fn('ProfileStore.save')(function* (cwd: string, profile: PiProfiles.Profile) {
-    if (!PiProfiles.isValidName(profile.name)) {
+  const save = Effect.fn('ProfileStore.save')(function* (cwd: string, profile: Profiles.Profile) {
+    if (!Profiles.isValidName(profile.name)) {
       return yield* Effect.fail(
         new StoreError({ message: `Invalid profile name '${profile.name}'.` }),
       );
@@ -117,7 +117,7 @@ const make = Effect.gen(function* () {
     yield* fs.makeDirectory(dir, { recursive: true }).pipe(Effect.orElseSucceed(() => undefined));
     const file = path.join(dir, PROFILE_FILE);
     yield* fs
-      .writeFileString(file, PiProfiles.encodeProfileFile(profile))
+      .writeFileString(file, Profiles.encodeProfileFile(profile))
       .pipe(
         Effect.mapError(
           (error) => new StoreError({ message: `Failed to write ${file}: ${error.message}` }),
@@ -126,7 +126,7 @@ const make = Effect.gen(function* () {
   });
 
   const remove = Effect.fn('ProfileStore.remove')(function* (cwd: string, name: string) {
-    if (!PiProfiles.isValidName(name)) {
+    if (!Profiles.isValidName(name)) {
       return yield* Effect.fail(new StoreError({ message: `Unknown profile '${name}'.` }));
     }
     const dir = path.join(profilesRoot(path, cwd), name);
@@ -146,7 +146,7 @@ const make = Effect.gen(function* () {
   });
 
   const readRaw = Effect.fn('ProfileStore.readRaw')(function* (cwd: string, name: string) {
-    if (!PiProfiles.isValidName(name)) {
+    if (!Profiles.isValidName(name)) {
       return yield* Effect.fail(new StoreError({ message: `Unknown profile '${name}'.` }));
     }
     const file = path.join(profilesRoot(path, cwd), name, PROFILE_FILE);
@@ -200,7 +200,7 @@ const make = Effect.gen(function* () {
     (cwd: string) =>
     (
       event: FileSystem.WatchEvent,
-    ): Effect.Effect<ReadonlyArray<Changes.Change<PiProfiles.Profile>>> =>
+    ): Effect.Effect<ReadonlyArray<Changes.Change<Profiles.Profile>>> =>
       Effect.gen(function* () {
         const root = profilesRoot(path, cwd);
         const name = nameOf(path, root, event.path);
@@ -211,7 +211,7 @@ const make = Effect.gen(function* () {
           .readFileString(path.join(root, name, PROFILE_FILE))
           .pipe(Effect.orElseSucceed(() => undefined));
         if (raw === undefined) return [{ kind, id: name }];
-        const value = yield* PiProfiles.decodeProfileFile(name, raw).pipe(
+        const value = yield* Profiles.decodeProfileFile(name, raw).pipe(
           Effect.orElseSucceed(() => undefined),
         );
         return [{ kind, id: name, value }];
@@ -222,7 +222,7 @@ const make = Effect.gen(function* () {
    * workspace subscribes and patches its cache; the Pi extension may too.
    * A missing store yields an empty stream rather than failing.
    */
-  const watch = (cwd: string): Stream.Stream<Changes.Change<PiProfiles.Profile>, never> =>
+  const watch = (cwd: string): Stream.Stream<Changes.Change<Profiles.Profile>, never> =>
     Stream.unwrap(
       Effect.gen(function* () {
         const root = profilesRoot(path, cwd);

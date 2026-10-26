@@ -1,11 +1,11 @@
 # CLI app
 
 Two front ends over one set of engines: the `mf-profiles` binary (Bun +
-`effect/cli`) and the Pi slash command `/mf-profiles-cli`. Both
+`effect/cli`) and the slash command `/mf-profiles-cli`. Both
 expose the same paths — list, show, verify, create, modify, delete — in the
 same shape as [interactive](../interactive/CONTEXT.md). Neither opens a dialog
 or spawns an agent: missing input fails with a message, so agents and scripts
-can drive them mechanically (e.g. over `pi --mode rpc`).
+can drive them mechanically (e.g. from a script or a tool call).
 
 ## Belongs here
 
@@ -17,7 +17,7 @@ can drive them mechanically (e.g. over `pi --mode rpc`).
 - `renderers.apps.module.ts` — pure `data -> text`
 - `binary.apps.module.ts` — the `Command` tree and `rootCommand`
 - `cli.apps.module.ts` — the `/mf-profiles-cli` parser, `run`, and `register`;
-  a hand-rolled parser because Pi passes one argument string, not an argv array
+  a hand-rolled parser because the slash command passes one argument string, not an argv array
 - `main.ts` — the binary entry
 
 ## Rules
@@ -38,7 +38,7 @@ can drive them mechanically (e.g. over `pi --mode rpc`).
 - Agentic workflows — those live in the interactive flows via the
   extension's generator/modifier ports
 - Profile shapes, codecs, and file Effects — those live in
-  `../../modules/pi-profiles/`
+  `../../modules/profiles/`
 - Persistence — the `ProfileStore` service (`../../services/`), provided
   as `live` at invocation; Node layer provisioning stays in the
   extension entry

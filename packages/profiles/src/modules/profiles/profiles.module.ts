@@ -37,7 +37,7 @@ export const decodeUnknown = Schema.decodeUnknownEffect(Profile);
 export const encode = Schema.encodeSync(Profile);
 
 /** Minimal descriptor of an agent profile (legacy alias of {@link Profile}). */
-export type PiProfile = Profile;
+export type ProfileDescriptor = Profile;
 
 /** Slug pattern: lowercase alphanumeric groups joined by single hyphens. */
 export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -92,15 +92,15 @@ export const titleFromName = (name: string): string =>
     .join(' ');
 
 /** Skills an agentic creation session needs injected to author well. */
-export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-create-pi-profiles'];
+export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-create-profiles'];
 
 /** Skills an agentic modification session needs injected to edit well. */
-export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-modify-pi-profiles'];
+export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-modify-profiles'];
 
 /** Skills an agentic format-fix session needs injected to fix well. */
 export const TRANSFORM_REQUIREMENTS: ReadonlyArray<string> = [
-  'montflow-create-pi-profiles',
-  'montflow-modify-pi-profiles',
+  'montflow-create-profiles',
+  'montflow-modify-profiles',
 ];
 
 /**
@@ -186,7 +186,7 @@ export const declaredSkills = (markdown: string): ReadonlyArray<string> => {
 };
 
 /**
- * Mechanically verify a `PROFILE.md` file against the montflow-create-pi-profiles
+ * Mechanically verify a `PROFILE.md` file against the montflow-create-profiles
  * standard: frontmatter `name` (valid slug, matching the directory) +
  * non-empty `description`, plus body `# Title`, `## Instructions`, and
  * `## Review Checklist` with at least one item. When `options.skills` is

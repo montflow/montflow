@@ -18,4 +18,4 @@
 - [ ] Description still says WHAT the agent is (role and job)
 - [ ] Instructions remain concrete behavior, focus areas, and avoidances — no fluff
 - [ ] Terminology is consistent with the profile's existing voice
-- [ ] Changes follow [montflow-create-pi-profiles](../montflow-create-pi-profiles/SKILL.md) conventions
+- [ ] Changes follow [montflow-create-profiles](../montflow-create-profiles/SKILL.md) conventions

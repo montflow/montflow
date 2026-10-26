@@ -1,5 +1,5 @@
 import * as Vitest from '@effect/vitest';
-import * as PiProfiles from '../index.js';
+import * as Profiles from '../index.js';
 
 const profile = `---
 name: effect-reviewer
@@ -20,37 +20,37 @@ Review.
 - [ ] Done
 `;
 
-Vitest.describe('PiProfiles.declaredSkills', () => {
+Vitest.describe('Profiles.declaredSkills', () => {
   Vitest.it('reads the skills list in order', () => {
-    Vitest.expect(PiProfiles.declaredSkills(profile)).toStrictEqual([
+    Vitest.expect(Profiles.declaredSkills(profile)).toStrictEqual([
       'effect',
       'montflow-typescript-services',
     ]);
   });
 
   Vitest.it('reads none when there is no frontmatter block', () => {
-    Vitest.expect(PiProfiles.declaredSkills('# No frontmatter\n')).toStrictEqual([]);
+    Vitest.expect(Profiles.declaredSkills('# No frontmatter\n')).toStrictEqual([]);
   });
 
   Vitest.it('reads none when no skills are declared', () => {
     Vitest.expect(
-      PiProfiles.declaredSkills('---\nname: bare\ndescription: Does X.\n---\n\n# Bare\n'),
+      Profiles.declaredSkills('---\nname: bare\ndescription: Does X.\n---\n\n# Bare\n'),
     ).toStrictEqual([]);
   });
 });
 
-Vitest.describe('PiProfiles.withIssues', () => {
-  const valid = PiProfiles.verifyProfileFile(
+Vitest.describe('Profiles.withIssues', () => {
+  const valid = Profiles.verifyProfileFile(
     'effect-reviewer',
     `---\nname: effect-reviewer\ndescription: Does X.\n---\n\n# Effect Reviewer\n\n## Instructions\n\nDo X.\n\n## Review Checklist\n\n- [ ] Done\n`,
   );
 
   Vitest.it('returns the base result unchanged with no extra issues', () => {
-    Vitest.expect(PiProfiles.withIssues(valid, [])).toStrictEqual(valid);
+    Vitest.expect(Profiles.withIssues(valid, [])).toStrictEqual(valid);
   });
 
   Vitest.it('folds extra issues in and marks the result invalid', () => {
-    const result = PiProfiles.withIssues(valid, [
+    const result = Profiles.withIssues(valid, [
       { field: 'skills', message: "Skill 'missing' is not installed under .agents/skills/." },
     ]);
     Vitest.expect(result.valid).toBe(false);
@@ -60,7 +60,7 @@ Vitest.describe('PiProfiles.withIssues', () => {
   });
 });
 
-Vitest.describe('PiProfiles.verifyProfileFile skills resolution', () => {
+Vitest.describe('Profiles.verifyProfileFile skills resolution', () => {
   const raw = `---
 name: effect-reviewer
 description: Does X.
@@ -80,10 +80,10 @@ Do X.
 - [ ] Done
 `;
   /** Only `effect` is installed; `missing` is the unresolved name. */
-  const skills: PiProfiles.SkillResolution = { root: '/ws', names: new Set(['effect']) };
+  const skills: Profiles.SkillResolution = { root: '/ws', names: new Set(['effect']) };
 
   Vitest.it('reports an unresolved name as a warning and stays valid', () => {
-    const result = PiProfiles.verifyProfileFile('effect-reviewer', raw, { skills });
+    const result = Profiles.verifyProfileFile('effect-reviewer', raw, { skills });
     Vitest.expect(result.valid).toBe(true);
     Vitest.expect(result.issues).toStrictEqual([
       {
@@ -95,14 +95,14 @@ Do X.
   });
 
   Vitest.it('promotes an unresolved name to an error under strict', () => {
-    const result = PiProfiles.verifyProfileFile('effect-reviewer', raw, { skills, strict: true });
+    const result = Profiles.verifyProfileFile('effect-reviewer', raw, { skills, strict: true });
     Vitest.expect(result.valid).toBe(false);
     Vitest.expect(result.issues[0]?.message).toContain("'missing'");
     Vitest.expect(result.issues[0]?.severity).toBe('error');
   });
 
   Vitest.it('stays silent when no store was resolved', () => {
-    Vitest.expect(PiProfiles.verifyProfileFile('effect-reviewer', raw)).toStrictEqual({
+    Vitest.expect(Profiles.verifyProfileFile('effect-reviewer', raw)).toStrictEqual({
       valid: true,
       issues: [],
     });

@@ -6,7 +6,7 @@ import {
   type SessionDispatchPort,
 } from '@montflow/opencode';
 import { Effect, Scope } from 'effect';
-import * as PiProfiles from '../../modules/pi-profiles/index.js';
+import * as Profiles from '../../modules/profiles/index.js';
 
 /** Prefix keeping profile-backed agents out of the host's built-in id space. */
 export const AGENT_PREFIX = 'mf-';
@@ -21,7 +21,7 @@ export const agentIdOf = (name: string): string => `${AGENT_PREFIX}${name}`;
  * @param profile - decoded PROFILE.md
  * @returns a host-free agent descriptor
  */
-export const agentOf = (profile: PiProfiles.Profile) => {
+export const agentOf = (profile: Profiles.Profile) => {
   const checklist =
     profile.checklist.length === 0
       ? ''
@@ -31,7 +31,7 @@ export const agentOf = (profile: PiProfiles.Profile) => {
     .join('\n\n');
   const base = {
     id: agentIdOf(profile.name),
-    name: PiProfiles.titleFromName(profile.name),
+    name: Profiles.titleFromName(profile.name),
     description: profile.description,
     mode: 'subagent' as const,
   };
@@ -42,7 +42,7 @@ export const agentOf = (profile: PiProfiles.Profile) => {
 /** Register every stored profile as a native agent. */
 export const syncAgents = (
   ports: ServerPorts,
-  profiles: readonly PiProfiles.Profile[],
+  profiles: readonly Profiles.Profile[],
 ): Effect.Effect<void, never, Scope.Scope> =>
   Effect.forEach(
     profiles,
@@ -74,7 +74,7 @@ export interface ProfileRunPorts {
  */
 export const runProfile = (
   ports: ProfileRunPorts,
-  profile: PiProfiles.Profile,
+  profile: Profiles.Profile,
   task: string,
   model: string | undefined,
   scope: Scope.Scope,

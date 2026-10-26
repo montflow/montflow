@@ -3,7 +3,7 @@ import { Effect, Layer } from 'effect';
 import { FileSystem } from 'effect/FileSystem';
 import * as Vitest from '@effect/vitest';
 import * as Interactive from '../index.js';
-import * as PiProfiles from '../../../modules/pi-profiles/index.js';
+import * as Profiles from '../../../modules/profiles/index.js';
 
 const validRaw = `---
 name: code-reviewer
@@ -49,7 +49,7 @@ const scriptedUi = (answers: {
 /** Platform layers for the detail-panel skill-resolution test. */
 const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-const testProfile = PiProfiles.decodeUnknown({
+const testProfile = Profiles.decodeUnknown({
   name: 'code-reviewer',
   description: 'Reviews code.',
   model: '',
@@ -212,20 +212,20 @@ Vitest.describe('Interactive.detail verify panel', () => {
   );
 
   Vitest.it('verifies a valid file', () => {
-    const result = PiProfiles.verifyProfileFile('code-reviewer', validRaw);
+    const result = Profiles.verifyProfileFile('code-reviewer', validRaw);
     Vitest.expect(result.valid).toBe(true);
-    Vitest.expect(PiProfiles.verifyInfoLine(result)).toBe('✓ verified');
+    Vitest.expect(Profiles.verifyInfoLine(result)).toBe('✓ verified');
   });
 
   Vitest.it('counts failures apart from warnings in the detail line', () => {
-    const result: PiProfiles.VerifyResult = {
+    const result: Profiles.VerifyResult = {
       valid: false,
       issues: [
         { field: 'body', message: 'Missing the checklist.' },
         { field: 'skills', message: 'Missing skill.', severity: 'warning' },
       ],
     };
-    Vitest.expect(PiProfiles.verifyInfoLine(result)).toBe('✗ not verified — 1 issue · 1 warning');
+    Vitest.expect(Profiles.verifyInfoLine(result)).toBe('✗ not verified — 1 issue · 1 warning');
   });
 
   Vitest.it('counts failures apart from warnings in the re-verify notification', () => {

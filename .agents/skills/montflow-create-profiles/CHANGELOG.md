@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0] - 2026-10-26
+
+### Changed
+
+- Renamed from `montflow-create-pi-profiles` to `montflow-create-profiles`; cross-references name `montflow-modify-profiles`
+- The format-source path is `packages/profiles/src/modules/profiles/`
+
 ## [1.2.0] - 2026-10-06
 
 ### Changed

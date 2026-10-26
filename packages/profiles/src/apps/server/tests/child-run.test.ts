@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import * as Vitest from '@effect/vitest';
 import type { AgentPort, ModelPort, SessionDispatchPort } from '@montflow/opencode';
-import type { Profile } from '../../../modules/pi-profiles/index.js';
+import type { Profile } from '../../../modules/profiles/index.js';
 import { runProfile } from '../index.js';
 
 const profile = (overrides: Partial<Profile> = {}): Profile => ({
