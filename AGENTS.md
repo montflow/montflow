@@ -65,11 +65,29 @@ scope, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
   `bun run hooks:install`, bypass with `git push --no-verify` or `LEFTHOOK=0`.
 - Utility verifies, each runnable alone: `mf:check:skills`,
   `:prompts`, `:specs`, `:profiles`, `:reviews`. They verify this repo's
-  own artifacts (`.agents/skills`, `.agents/@montflow/pi-prompts`,
+  own artifacts (`.agents/skills`, `.agents/@montflow/prompts`,
   `.agents/@montflow/specs`, `.agents/@montflow/profiles`,
   `.agents/@montflow/reviews`) plus packaged-skill freshness.
 - `release.yml` is separate: it gates publishing, not pushes, and keeps its own
   per-package conditions.
+
+## Spec prompts
+
+- `packages/specs/prompts/` is the only source of `spec-create`,
+  `spec-execute`, and `spec-sizing`; `.agents/@montflow/prompts/` is
+  doctor-owned and never hand-edited.
+- Change the package file, then sync with
+  `bun run --cwd packages/specs cli doctor`; verify with `mf:check:specs`.
+- Render with `mf-specs author --request "<text>"`,
+  `mf-specs execute [--name <spec>] [--mode guided|autonomous]`, or
+  `mf-specs sizing-config [--scope repo|spec|phase] [--name <spec>]`. Without
+  `--name`, `execute` resolves the spec from the branch through
+  `mf-specs which` and asks the user only on a miss or ambiguity.
+- `spec-sizing` generates one sizing layer from the live catalogue
+  (`mf-specs models`); never hand-write a model id or an effort into
+  `sizing.json`.
+- `guided` is the default; `autonomous` asks only for destructive or
+  irreversible actions, very dangerous tool calls, or undecidable decisions.
 
 ## Skills
 

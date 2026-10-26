@@ -18,7 +18,7 @@ Not for `core`, `format`, `linting`, `stlx` — no CLI, different rules.
 | `prompts` | `mf-prompts` | `doctor`, `list`, `inspect`, `execute`, `show`, `verify`, `render`, `create`, `modify`, `delete` |
 | `reviews` | `mf-reviews` | `doctor`, `list`, `show`, `verify`, `new` |
 | `skills` | `mf-skills` | `doctor`, `list`, `show`, `verify`, `create`, `modify`, `delete` |
-| `specs` | `mf-specs` | `doctor`, `check`, `status`, `state`, `next`, `list`, `create` |
+| `specs` | `mf-specs` | `doctor`, `check`, `status`, `state`, `next`, `list`, `create`, `author`, `execute`, `which`, `models`, `resolve`, `sizing`, `sizing-config` |
 
 `opencode` (the adapter) and `workflows` are libraries. No CLI.
 

@@ -38,10 +38,10 @@ Source: github.com/montflow/montflow.
 3. Install every portable skill, plus the skills for each installed plugin.
    These are the only extension-bound skills — omit the ones whose plugin is absent:
 
-     @montflow/skills    -> montflow-create-pi-skills, montflow-modify-pi-skills
-     @montflow/specs     -> montflow-create-pi-specs, montflow-find-pi-specs
-     @montflow/profiles  -> montflow-create-pi-profiles, montflow-modify-pi-profiles
-     @montflow/prompts   -> montflow-create-pi-prompts, montflow-execute-pi-prompts
+     @montflow/skills    -> montflow-create-skills, montflow-modify-skills
+     @montflow/specs     -> montflow-create-specs, montflow-find-specs
+     @montflow/profiles  -> montflow-create-profiles, montflow-modify-profiles
+     @montflow/prompts   -> montflow-create-prompts, montflow-execute-prompts
      @montflow/reviews   -> montflow-adversarial-review, montflow-addressing-adversarial-review
 
 4. Install with repeated -s, e.g.
