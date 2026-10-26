@@ -3,6 +3,7 @@ id: C005
 name: implement-mechanical-state-verbs
 type: execution
 originator: planner:B003
+size: large
 depends-on: C001, C004, C003
 related-tasks: C002
 status: pending

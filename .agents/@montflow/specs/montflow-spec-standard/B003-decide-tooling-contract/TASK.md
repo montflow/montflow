@@ -3,6 +3,7 @@ id: B003
 name: decide-tooling-contract
 type: planning
 originator: planner:A099
+size: medium
 depends-on: B001, B002, A002
 related-tasks: A002
 status: pending

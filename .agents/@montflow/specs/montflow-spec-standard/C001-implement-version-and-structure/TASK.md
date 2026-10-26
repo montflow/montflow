@@ -3,6 +3,7 @@ id: C001
 name: implement-version-and-structure
 type: execution
 originator: planner:B002
+size: medium
 depends-on: B002
 related-tasks: A003
 status: pending

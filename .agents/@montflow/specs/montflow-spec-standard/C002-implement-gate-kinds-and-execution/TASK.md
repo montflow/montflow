@@ -3,6 +3,7 @@ id: C002
 name: implement-gate-kinds-and-execution
 type: execution
 originator: planner:B002
+size: medium
 depends-on: C001
 related-tasks:
 status: pending

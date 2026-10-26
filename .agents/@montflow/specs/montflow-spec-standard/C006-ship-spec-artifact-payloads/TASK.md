@@ -3,6 +3,7 @@ id: C006
 name: ship-spec-artifact-payloads
 type: execution
 originator: planner:B003
+size: medium
 depends-on: A004, C004, C005
 related-tasks:
 status: pending

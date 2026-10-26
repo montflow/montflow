@@ -3,6 +3,7 @@ id: C099
 name: review-phase
 type: review
 originator: user
+size: medium
 depends-on: C006, C007
 related-tasks:
 status: pending

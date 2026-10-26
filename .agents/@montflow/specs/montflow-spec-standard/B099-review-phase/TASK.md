@@ -3,6 +3,7 @@ id: B099
 name: review-phase
 type: review
 originator: user
+size: small
 depends-on: B002, B003
 related-tasks:
 status: pending

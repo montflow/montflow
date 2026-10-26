@@ -3,6 +3,7 @@ id: B001
 name: decide-complexity-tiers
 type: planning
 originator: planner:A099
+size: small
 depends-on: A001, A002
 related-tasks:
 status: pending

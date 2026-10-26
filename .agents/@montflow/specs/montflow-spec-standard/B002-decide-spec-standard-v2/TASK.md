@@ -3,6 +3,7 @@ id: B002
 name: decide-spec-standard-v2
 type: planning
 originator: planner:A099
+size: medium
 depends-on: B001
 related-tasks:
 status: pending

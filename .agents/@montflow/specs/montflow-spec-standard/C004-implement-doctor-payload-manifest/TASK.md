@@ -3,6 +3,7 @@ id: C004
 name: implement-doctor-payload-manifest
 type: execution
 originator: planner:B003
+size: medium
 depends-on: B003, A002, A003
 related-tasks: C006
 status: pending

@@ -3,6 +3,7 @@ id: C007
 name: align-docs-and-artifact-ledger
 type: execution
 originator: planner:B003
+size: small
 depends-on: C006
 related-tasks:
 status: pending

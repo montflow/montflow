@@ -3,6 +3,7 @@ id: C003
 name: implement-board-and-mailboxes
 type: execution
 originator: planner:B002
+size: medium
 depends-on: C001
 related-tasks: C005
 status: pending
