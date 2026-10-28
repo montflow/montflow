@@ -91,7 +91,7 @@ resolving.
 | C005 | implement-plugin-tools          | execution   | complete | Yes   |
 | C006 | ship-skills-and-doctor          | execution   | complete | Yes   |
 | C007 | migrate-registry-and-wire-gate  | execution   | complete | Yes   |
-| C099 | review-phase                    | review      | pending | No    |
+| C099 | review-phase                    | review      | complete | No   |
 | D001 | align-skills                    | execution   | pending | Yes   |
 | D002 | align-docs-and-verify           | execution   | pending | Yes   |
 | D099 | review-phase                    | review      | pending | No    |
