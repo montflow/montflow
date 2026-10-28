@@ -1,31 +1,31 @@
 import { Console, Effect, Option } from 'effect';
 import { CliError, Command, Flag } from 'effect/cli';
-import type { DoctorResult } from '../doctor/index.js';
 import { SpecStore } from '../../services/index.js';
+import type { DoctorResult } from '../doctor/index.js';
 import { runDoctorAt } from '../doctor/index.js';
 import {
   DEFAULT_CONCURRENCY,
   LIST_STATUSES,
-  csv,
-  resolveListOptions,
   check,
   checkExitCode,
+  csv,
   list,
+  migrate,
   next,
   renderCheck,
   renderList,
+  renderMigrate,
   renderNext,
   renderScaffold,
   renderState,
   renderStatus,
+  resolveListOptions,
   scaffold,
   state,
   status,
   storeDirOf,
 } from './slash.apps.module.js';
 import type { CheckOptions } from './slash.apps.module.js';
-
-export * from './slash.apps.module.js';
 
 // ─── Commands ─────────────────────────────────────────────────────────
 
@@ -59,14 +59,27 @@ const checkCommand = Command.make(
       Flag.withDescription('Treat warnings as errors.'),
       Flag.withDefault(false),
     ),
+    requireComplete: Flag.Boolean('require-complete').pipe(
+      Flag.withDescription('Fail unless every checked spec status is complete.'),
+      Flag.withDefault(false),
+    ),
   },
   (config) =>
     Effect.gen(function* () {
       const name = Option.isSome(config.name) ? config.name.value : undefined;
       const options: CheckOptions =
         name === undefined
-          ? { concurrency: config.concurrency, strict: config.strict }
-          : { name, concurrency: config.concurrency, strict: config.strict };
+          ? {
+              concurrency: config.concurrency,
+              strict: config.strict,
+              requireComplete: config.requireComplete,
+            }
+          : {
+              name,
+              concurrency: config.concurrency,
+              strict: config.strict,
+              requireComplete: config.requireComplete,
+            };
       const report = yield* check(storeDirOf(config.dir), options);
       yield* Console.log(renderCheck(report, config.verbose));
       const exit = checkExitCode(report);
@@ -141,6 +154,52 @@ const createCommand = Command.make(
 ).pipe(
   Command.withDescription(
     'Scaffold a spec tree: SPEC.md, task directories, and the phase review task. Model-free.',
+  ),
+  Command.provide(SpecStore.Default),
+);
+
+const migrateCommand = Command.make(
+  'migrate',
+  {
+    dir: dirFlag,
+    name: Flag.optional(nameFlag),
+    all: Flag.Boolean('all').pipe(
+      Flag.withDescription('Migrate every spec under the root.'),
+      Flag.withDefault(false),
+    ),
+    dryRun: Flag.Boolean('dry-run').pipe(
+      Flag.withDescription('Print the plan without moving anything.'),
+      Flag.withDefault(false),
+    ),
+  },
+  (config) =>
+    Effect.gen(function* () {
+      const name = Option.isSome(config.name) ? config.name.value : undefined;
+      if (name === undefined && !config.all) {
+        return yield* Effect.fail(
+          new CliError.UserError({
+            cause: 'SpecMigrate',
+            userMessage: 'migrate requires --name <spec> or --all.',
+          }),
+        );
+      }
+      const report = yield* migrate(storeDirOf(config.dir), {
+        name,
+        all: config.all,
+        dryRun: config.dryRun,
+      });
+      yield* Console.log(renderMigrate(report));
+      if (report.specs.some((spec) => spec.status === 'refused' || spec.status === 'failed')) {
+        yield* Effect.sync(() => {
+          process.exitCode = 1;
+        });
+      }
+    }).pipe(
+      Effect.catchTag('@montflow/SpecStoreError', (error) => Effect.fail(toUserError(error))),
+    ),
+).pipe(
+  Command.withDescription(
+    'Move flat task directories under their phase directories, without editing a file.',
   ),
   Command.provide(SpecStore.Default),
 );
@@ -257,7 +316,7 @@ const doctorCommand = Command.make(
     ),
 ).pipe(Command.withDescription('Install or verify the packaged spec skills in .agents/skills/.'));
 
-/** Root command: `mf-specs <check|status|state|next|list|create|doctor>`. */
+/** Root command: `mf-specs <check|status|state|next|list|create|migrate|doctor>`. */
 export const rootCommand = Command.make('mf-specs').pipe(
   Command.withDescription('List, verify, scaffold, and set up montflow specs.'),
   Command.withSubcommands([
@@ -267,6 +326,8 @@ export const rootCommand = Command.make('mf-specs').pipe(
     nextCommand,
     listCommand,
     createCommand,
+    migrateCommand,
     doctorCommand,
   ]),
 );
+

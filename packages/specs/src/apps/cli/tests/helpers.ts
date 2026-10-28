@@ -37,5 +37,28 @@ export const stubLayer = (
         Effect.sync(() => {
           specs.set(name, files);
         }),
+      removeDirectory: () => Effect.void,
+      move: (_root, name, from, to) =>
+        Effect.gen(function* () {
+          const files = specs.get(name) ?? [];
+          if (files.some((file) => file.path === to || file.path.startsWith(`${to}/`))) {
+            return yield* Effect.fail(
+              new SpecStore.StoreError({
+                operation: 'test',
+                reason: `Cannot move '${from}': '${to}' already exists.`,
+              }),
+            );
+          }
+          specs.set(
+            name,
+            files.map((file) =>
+              file.path === from
+                ? { ...file, path: to }
+                : file.path.startsWith(`${from}/`)
+                  ? { ...file, path: `${to}${file.path.slice(from.length)}` }
+                  : file,
+            ),
+          );
+        }),
     }),
   );

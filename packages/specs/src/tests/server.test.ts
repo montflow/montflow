@@ -95,7 +95,7 @@ const freshRoot = (): Promise<string> => mkdtemp(path.join(tmpdir(), 'mf-specs-s
 /** Write one valid spec under `<root>/.agents/@montflow/specs`. */
 const writeSpec = async (root: string, name: string): Promise<void> => {
   const spec = path.join(root, '.agents', '@montflow', 'specs', name);
-  const task = path.join(spec, 'A001-implement-login');
+  const task = path.join(spec, 'A/A001-implement-login');
   await mkdir(task, { recursive: true });
   await writeFile(path.join(spec, 'SPEC.md'), specMarkdown({ name }));
   await writeFile(

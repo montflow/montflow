@@ -18,7 +18,10 @@ bun run --cwd packages/specs cli check
 - `check` — verifies the whole spec root (default
   `.agents/@montflow/specs`) or one `--name`. Token-lean by default
   (failures + summary); `--verbose` also lists passing specs and the
-  root. Exits non-zero when any spec fails.
+  root. Exits non-zero when any spec fails. `--require-complete` adds an error
+  for a spec whose `SPEC.md` status is not `complete`; with no `--name` it gates
+  every spec. CI runs it per `Spec: <name>` commit trailer. The slash form
+  accepts the same flag.
 - `status --name <spec>` — lifecycle, task counts, per-phase task
   list, and verification verdict. Exits non-zero when the spec fails
   verification.
@@ -28,11 +31,16 @@ bun run --cwd packages/specs cli check
   (pending tasks whose `depends-on` targets are complete, review last;
   `gated` marks a task with a `GATES.md`).
 - `create --name <spec>` — deterministic, model-free scaffold: writes
-  `SPEC.md`, one task directory per `--tasks` entry (each
-  `name[:type[:gates]]`), and the phase's `<PHASE>099-review-phase`
-  review task. Refuses to overwrite an existing spec. Optional
-  `--description`, `--author`, `--workspace-type in-place|worktree`.
-  The generated tree passes `check`; edit it to carry the real work.
+  `SPEC.md`, one directory per phase holding one directory per `--tasks`
+  entry (each `name[:type[:gates]]`, at
+  `<PHASE>/<PHASE><NNN>-<name>/`), and the phase's
+  `<PHASE>099-review-phase` review task. Refuses to overwrite an existing
+  spec. Optional `--description`, `--author`, `--workspace-type
+in-place|worktree`. The generated tree passes `check`; edit it to carry the
+  real work.
+- `migrate --name <spec> | --all [--dry-run]` — moves a flat task directory
+  under its phase directory without editing a file. Refuses a mixed tree,
+  is a no-op on an already-migrated spec, and verifies the result.
 - `list [--pending | --status <states>] [--verbose]` — lists every
   spec with its derived lifecycle state and task counts. `--pending`
   keeps every unfinished spec; `--status` takes a comma-separated list
@@ -52,8 +60,8 @@ machine; a Node build would be required for `npx` without Bun.
 
 Built with `effect/cli`. Sample specs for trying the binary
 live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
-`mock-complete` (complete), `mock-stale` (inconsistent), and `mock-bad`
-(10 issues across every failure class).
+`mock-complete` (complete), `mock-stale` (inconsistent), `mock-bad`
+(10 issues), and `mock-stray` (stray file, directory, and deep path).
 
 ## Library surface
 
@@ -76,10 +84,13 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
   `analyze` takes an optional `active` flag (a live session is bound) to
   split idle `pending` from active `in-progress`.
 - **`Structure`** — `verifySpecTree` over an in-memory
-  `SpecSnapshot`: required files, task-directory naming and placement,
-  id/name agreement, task-table agreement (name/type/status/gates),
-  dependency validity (existence, phase order, cycles), one `review` task
-  per phase, and `locked-phases` sanity.
+  `SpecSnapshot`: the phase-directory layout with a strict per-level
+  allowlist (root = `SPEC.md` + phase dirs, phase = task dirs, task =
+  `TASK.md`/`MEMORY.md`/`GATES.md`), directory entries so an empty or stray
+  directory fails, task-directory naming and placement, id/name agreement,
+  task-table agreement (name/type/status/gates), dependency validity
+  (existence, phase order, cycles), one `review` task per phase, and
+  `locked-phases` sanity.
 - **`Prompt`** — `AUTHOR_PREPROMPT` / `AUTHOR_POSTPROMPT` + `buildAuthorPrompt`
   (author one spec) and `RESUME_PREPROMPT` / `RESUME_POSTPROMPT` +
   `buildResumePrompt` (orchestrate a spec). Each injects its skill.
@@ -93,7 +104,7 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
 - **`Verify` / `Frontmatter`** — shared `Issue` / `Result` vocabulary and
   the tolerant frontmatter grammar.
 - **`SpecStore`** — filesystem reader (`names`, `hasRoot`, `exists`,
-  `snapshot`) backing the CLI.
+  `snapshot` including directory entries, `write`, `move`) backing the CLI.
 - **`Cli`** — pure engines (`check`, `status`, `list`), pure renderers
   (`renderCheck`, `renderStatus`, `renderList`, `resolveListOptions`),
   and the `effect/cli` commands.
@@ -103,6 +114,20 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
 
 All verification is pure and non-throwing: it returns a `Result` with an
 issue list, so callers can render or repair.
+
+## Migration: phase directories
+
+A spec is `SPEC.md` plus one directory per phase, and each phase directory holds
+its task directories: `<spec>/<PHASE>/<PHASE><NNN>-<kebab-name>/`. The verifier
+enforces that layout at every level and fails on an empty phase directory or a
+stray file. Move an existing flat spec with the migrate verb:
+
+1. `mf-specs migrate --name <spec> --dry-run` prints the plan and writes nothing.
+2. `mf-specs migrate --name <spec>` renames each task directory under its phase;
+   no file content changes.
+3. `mf-specs migrate --all` migrates the whole store. A mixed tree (flat task
+   directories and phase directories) is refused, and an already-migrated spec
+   is a no-op.
 
 ## Migration: multi-reviewer reviews
 

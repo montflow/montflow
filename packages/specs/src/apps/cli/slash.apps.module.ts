@@ -1,5 +1,5 @@
 import { Clock, Effect } from 'effect';
-import { type Spec, isValidName, parseSpecFile } from '../../modules/spec/index.js';
+import { PHASE_PATTERN, type Spec, isValidName, parseSpecFile } from '../../modules/spec/index.js';
 import {
   type Analysis,
   type State,
@@ -19,12 +19,14 @@ import {
   parseTaskDirName,
   parseTaskFile,
   phaseOf,
+  phaseRank,
 } from '../../modules/task/index.js';
 import {
   type Issue,
   type Result,
   errorCount,
   isWarning,
+  issue,
   noErrors,
   promoteWarnings,
   warningCount,
@@ -84,6 +86,11 @@ export interface CheckOptions {
   readonly concurrency?: number;
   /** Promote warnings to errors, so an advisory finding fails the check. */
   readonly strict?: boolean;
+  /**
+   * Fail a spec whose `SPEC.md` status is not `complete`. The `Spec: <name>`
+   * commit trailer names the specs a change closes; CI runs this per trailer.
+   */
+  readonly requireComplete?: boolean;
 }
 
 /** One spec's findings, before reduction into a report. */
@@ -91,6 +98,26 @@ export interface CheckEntry {
   readonly name: string;
   readonly issues: ReadonlyArray<Issue>;
 }
+
+/**
+ * The completion finding for a spec that a change names but has not finished.
+ * Absent when `SPEC.md` reads `status: complete`, or cannot be parsed (the tree
+ * verifier already reports that).
+ * @param snapshot - the spec directory listing
+ * @returns the finding, or undefined when the spec is complete
+ */
+const completionIssue = (snapshot: SpecSnapshot): Issue | undefined => {
+  const specFile = snapshot.files.find(
+    (entry) => entry.path === 'SPEC.md' && (entry.kind ?? 'file') === 'file',
+  );
+  const spec = specFile === undefined ? undefined : parseSpecFile(specFile.content);
+  if (spec?.status === 'complete') return undefined;
+  const status = spec?.status ?? 'unreadable';
+  return issue(
+    'status',
+    `Spec '${snapshot.name}' is not complete (status: '${status}'); finish it or drop the 'Spec: ${snapshot.name}' trailer.`,
+  );
+};
 
 /**
  * Reduce per-spec findings into a {@link CheckReport}. `strict` promotes every
@@ -147,6 +174,15 @@ export const check = (
         }),
       );
     }
+    if (options.name !== undefined && !isValidName(options.name)) {
+      const issues: ReadonlyArray<Issue> = [
+        {
+          field: options.name,
+          message: `'${options.name}' is not a valid spec name — use a kebab-case slug.`,
+        },
+      ];
+      return reduceCheck(root, [{ name: options.name, issues }], strict);
+    }
     if (options.name !== undefined && !(yield* store.exists(root, options.name))) {
       const issues: ReadonlyArray<Issue> = [
         { field: options.name, message: `Spec directory not found under ${root}.` },
@@ -160,7 +196,11 @@ export const check = (
         store.snapshot(root, name).pipe(
           Effect.map((snapshot): CheckEntry => {
             const result = verifySpecTree(snapshot);
-            return { name, issues: result.issues };
+            const completion =
+              options.requireComplete === true ? completionIssue(snapshot) : undefined;
+            const issues =
+              completion === undefined ? result.issues : [...result.issues, completion];
+            return { name, issues };
           }),
         ),
       { concurrency: options.concurrency ?? DEFAULT_CONCURRENCY },
@@ -437,11 +477,10 @@ export interface NextReport {
 const gatedTaskIds = (snapshot: SpecSnapshot): ReadonlySet<string> => {
   const ids = new Set<string>();
   for (const file of snapshot.files) {
-    const slash = file.path.indexOf('/');
-    if (slash === -1) continue;
-    const dir = file.path.slice(0, slash);
-    if (file.path !== `${dir}/GATES.md`) continue;
-    const parsed = parseTaskDirName(dir);
+    if (!file.path.endsWith('/GATES.md')) continue;
+    const parts = file.path.split('/');
+    if (parts.length !== 3) continue;
+    const parsed = parseTaskDirName(parts[1] ?? '');
     if (parsed !== undefined) ids.add(parsed.id);
   }
   return ids;
@@ -739,8 +778,9 @@ export const parseScaffoldTask = (raw: string): ScaffoldTaskParse => {
 };
 
 /**
- * Scaffold a mechanically valid spec tree under `root/<name>`: `SPEC.md`,
- * one task directory per task, and the phase's review task. Deterministic
+ * Scaffold a mechanically valid spec tree under `root/<name>`: `SPEC.md`, one
+ * directory per phase holding one task directory per task
+ * (`<PHASE>/<PHASE><NNN>-<name>/`), and the phase's review task. Deterministic
  * and model-free — the mechanical half of `mf-specs create`. Refuses to
  * touch an existing spec directory.
  * @param root - spec root directory
@@ -824,6 +864,269 @@ export const renderScaffold = (report: ScaffoldReport): string =>
     ...report.files.map((file) => `  ${file}`),
   ].join('\n');
 
+// ─── Migrate ──────────────────────────────────────────────────────────
+
+/** One task-directory move: flat root directory → phase-prefixed directory. */
+export interface MigrationMove {
+  readonly from: string;
+  readonly to: string;
+}
+
+/** A migration plan for one spec. */
+export type MigrationPlan =
+  | { readonly kind: 'migrate'; readonly moves: ReadonlyArray<MigrationMove> }
+  | { readonly kind: 'already' }
+  | { readonly kind: 'refused'; readonly reason: string };
+
+/** Every root-level directory, declared or implied by a file path. */
+const rootDirsOf = (snapshot: SpecSnapshot): ReadonlyArray<string> => {
+  const dirs = new Set<string>();
+  for (const entry of snapshot.files) {
+    const slash = entry.path.indexOf('/');
+    if (slash !== -1) dirs.add(entry.path.slice(0, slash));
+  }
+  for (const entry of snapshot.files) {
+    if ((entry.kind ?? 'file') !== 'directory' || entry.path.includes('/')) continue;
+    dirs.add(entry.path);
+  }
+  return [...dirs].toSorted();
+};
+
+/**
+ * Plan a flat-to-phase migration from a snapshot: one move per root task
+ * directory, phases in rank order. Pure — the caller applies the moves.
+ * @param snapshot - the spec directory listing
+ * @returns the plan, an already-migrated marker, or a refusal
+ */
+export const planMigration = (snapshot: SpecSnapshot): MigrationPlan => {
+  const rootDirs = rootDirsOf(snapshot);
+  const phaseDirs = rootDirs.filter((dir) => PHASE_PATTERN.test(dir));
+  const flat = rootDirs.filter((dir) => parseTaskDirName(dir) !== undefined);
+
+  if (phaseDirs.length > 0 && flat.length > 0) {
+    return {
+      kind: 'refused',
+      reason: `Spec '${snapshot.name}' mixes task directories at the root with phase directories; resolve it by hand.`,
+    };
+  }
+  const unparsable = rootDirs.filter(
+    (dir) => !PHASE_PATTERN.test(dir) && parseTaskDirName(dir) === undefined,
+  );
+  if (phaseDirs.length === 0 && unparsable.length > 0) {
+    return {
+      kind: 'refused',
+      reason: `Spec '${snapshot.name}' has an unexpected root directory '${unparsable[0]}'; expected a task directory or a phase directory.`,
+    };
+  }
+  const strayFiles = snapshot.files.filter(
+    (file) =>
+      (file.kind ?? 'file') === 'file' && file.path !== 'SPEC.md' && !file.path.includes('/'),
+  );
+  if (phaseDirs.length === 0 && strayFiles.length > 0) {
+    return {
+      kind: 'refused',
+      reason: `Spec '${snapshot.name}' has an unexpected root file '${strayFiles[0]?.path}'; move or remove it before migrating.`,
+    };
+  }
+  if (phaseDirs.length > 0) return { kind: 'already' };
+  if (flat.length === 0) {
+    return {
+      kind: 'refused',
+      reason: `Spec '${snapshot.name}' has no task directories to migrate.`,
+    };
+  }
+
+  const moves = flat
+    .map((dir) => {
+      const phase = parseTaskDirName(dir)?.phase ?? '';
+      return { from: dir, to: `${phase}/${dir}`, phase };
+    })
+    .toSorted((a, b) => phaseRank(a.phase) - phaseRank(b.phase) || a.from.localeCompare(b.from))
+    .map(({ from, to }) => ({ from, to }));
+  return { kind: 'migrate', moves };
+};
+
+/** Outcome for one spec in a migration run. */
+export interface MigrateSpecResult {
+  readonly name: string;
+  readonly status: 'migrated' | 'already' | 'planned' | 'refused' | 'failed';
+  readonly moves: ReadonlyArray<MigrationMove>;
+  readonly issues: ReadonlyArray<Issue>;
+}
+
+/** Whole-run migration result. */
+export interface MigrateReport {
+  readonly root: string;
+  readonly specs: ReadonlyArray<MigrateSpecResult>;
+}
+
+/** Options for {@link migrate}. */
+export interface MigrateOptions {
+  /** Migrate one spec; omitted with `all` migrates the whole store. */
+  readonly name?: string | undefined;
+  /** Migrate every spec under the root. */
+  readonly all?: boolean | undefined;
+  /** Print the plan without moving anything. */
+  readonly dryRun?: boolean | undefined;
+}
+
+/**
+ * Migrate a flat spec (or every spec) into the phase layout. A move never edits
+ * a file; the migrated snapshot is verified before the run reports success.
+ * @param root - spec root directory
+ * @param options - one spec or all, and dry-run
+ * @returns one result per spec
+ */
+export const migrate = (
+  root: string,
+  options: MigrateOptions,
+): Effect.Effect<MigrateReport, SpecStore.StoreError, SpecStore.SpecStore> =>
+  Effect.gen(function* () {
+    const store = yield* SpecStore.SpecStore;
+    const operation = 'SpecMigrate';
+    if (!(yield* store.hasRoot(root))) {
+      return yield* Effect.fail(
+        new SpecStore.StoreError({ operation, reason: `Specs directory not found: ${root}` }),
+      );
+    }
+    const names = options.name === undefined ? yield* store.names(root) : [options.name];
+    if (options.name !== undefined && !(yield* store.exists(root, options.name))) {
+      return yield* Effect.fail(
+        new SpecStore.StoreError({
+          operation,
+          reason: `Spec '${options.name}' not found under ${root}.`,
+        }),
+      );
+    }
+
+    const results: Array<MigrateSpecResult> = [];
+    for (const name of names) {
+      const snapshot = yield* store.snapshot(root, name);
+      const plan = planMigration(snapshot);
+      if (plan.kind === 'refused') {
+        results.push({
+          name,
+          status: 'refused',
+          moves: [],
+          issues: [issue(name, plan.reason)],
+        });
+        continue;
+      }
+      if (plan.kind === 'already') {
+        const verified = verifySpecTree(snapshot);
+        results.push(
+          verified.valid
+            ? { name, status: 'already', moves: [], issues: [] }
+            : { name, status: 'failed', moves: [], issues: verified.issues },
+        );
+        continue;
+      }
+      if (options.dryRun === true) {
+        results.push({ name, status: 'planned', moves: plan.moves, issues: [] });
+        continue;
+      }
+      const applied: Array<MigrationMove> = [];
+      let failure: string | undefined;
+      for (const move of plan.moves) {
+        const outcome = yield* store.move(root, name, move.from, move.to).pipe(Effect.result);
+        if ('failure' in outcome) {
+          failure = outcome.failure.reason;
+          break;
+        }
+        applied.push(move);
+      }
+      if (failure !== undefined) {
+        let rollbackFailed = false;
+        for (const done of applied.toReversed()) {
+          yield* store.move(root, name, done.to, done.from).pipe(
+            Effect.matchEffect({
+              onFailure: () => {
+                rollbackFailed = true;
+                return Effect.void;
+              },
+              onSuccess: () => Effect.void,
+            }),
+          );
+        }
+        const phases = new Set(applied.map((move) => move.to.slice(0, move.to.indexOf('/'))));
+        for (const phase of phases) {
+          yield* store.removeDirectory(root, name, phase).pipe(
+            Effect.matchEffect({
+              onFailure: () => {
+                rollbackFailed = true;
+                return Effect.void;
+              },
+              onSuccess: () => Effect.void,
+            }),
+          );
+        }
+        results.push({
+          name,
+          status: 'failed',
+          moves: [],
+          issues: [
+            issue(
+              name,
+              rollbackFailed
+                ? `Rollback incomplete after '${failure}'; inspect the tree before retrying.`
+                : `Migration rolled back: ${failure}`,
+            ),
+          ],
+        });
+        continue;
+      }
+      const after = yield* store.snapshot(root, name);
+      const verified = verifySpecTree(after);
+      results.push({
+        name,
+        status: verified.valid ? 'migrated' : 'failed',
+        moves: plan.moves,
+        issues: verified.issues,
+      });
+    }
+    return { root, specs: results };
+  });
+
+/**
+ * Render a migration report: one header and moves per spec, findings under a
+ * failure, then a summary line.
+ * @param report - report from {@link migrate}
+ * @returns the display text
+ */
+export const renderMigrate = (report: MigrateReport): string => {
+  const lines: Array<string> = [];
+  for (const spec of report.specs) {
+    if (spec.status === 'already') {
+      lines.push(`• ${spec.name} is already in the phase layout — nothing to migrate.`);
+      continue;
+    }
+    if (spec.status === 'refused') {
+      lines.push(`✗ ${spec.name}`);
+      for (const found of spec.issues) lines.push(`  ${found.field}: ${found.message}`);
+      continue;
+    }
+    if (spec.status === 'failed') {
+      lines.push(`✗ ${spec.name}`);
+      for (const move of spec.moves) lines.push(`  moved '${move.from}' -> '${move.to}'`);
+      for (const found of spec.issues) lines.push(`  ${found.field}: ${found.message}`);
+      continue;
+    }
+    const verb = spec.status === 'planned' ? 'would move' : 'moved';
+    lines.push(`✓ ${spec.name} (${spec.moves.length})`);
+    for (const move of spec.moves) lines.push(`  ${verb} '${move.from}' -> '${move.to}'`);
+  }
+  const moved = report.specs.filter((spec) => spec.status === 'migrated').length;
+  const planned = report.specs.filter((spec) => spec.status === 'planned').length;
+  const bad = report.specs.filter(
+    (spec) => spec.status === 'refused' || spec.status === 'failed',
+  ).length;
+  lines.push('');
+  lines.push(
+    `${report.specs.length} spec${report.specs.length === 1 ? '' : 's'} · ${moved} migrated · ${planned} planned · ${bad} failed`,
+  );
+  return lines.join('\n');
+};
+
 // ─── Slash-command form ───────────────────────────────────────────────
 
 /** Result of the slash-command form: rendered output plus a success flag. */
@@ -834,7 +1137,7 @@ export interface SlashReport {
 
 /** Parsed slash args: `check`/`status`/`state`/`next`/`list`/`create` plus their flags. */
 interface SlashArgs {
-  readonly command: 'check' | 'status' | 'state' | 'next' | 'list' | 'create';
+  readonly command: 'check' | 'status' | 'state' | 'next' | 'list' | 'create' | 'migrate';
   readonly name: string | undefined;
   readonly dir: string | undefined;
   readonly verbose: boolean;
@@ -846,6 +1149,9 @@ interface SlashArgs {
   readonly workspaceType: string | undefined;
   readonly tasks: ReadonlyArray<string>;
   readonly reviewerProfiles: ReadonlyArray<string>;
+  readonly all: boolean;
+  readonly dryRun: boolean;
+  readonly requireComplete: boolean;
 }
 
 /** Flags the slash parser accepts as `--key value` or `--key=value`. */
@@ -874,14 +1180,17 @@ const parseSlashArgs = (args: string): SlashArgs => {
             ? 'list'
             : head === 'create'
               ? 'create'
-              : 'check';
+              : head === 'migrate'
+                ? 'migrate'
+                : 'check';
   const known =
     head === 'check' ||
     head === 'status' ||
     head === 'state' ||
     head === 'next' ||
     head === 'list' ||
-    head === 'create';
+    head === 'create' ||
+    head === 'migrate';
   const rest = known ? tokens.slice(1) : tokens;
   let name: string | undefined;
   let dir: string | undefined;
@@ -894,6 +1203,9 @@ const parseSlashArgs = (args: string): SlashArgs => {
   let verbose = false;
   let pending = false;
   let strict = false;
+  let all = false;
+  let dryRun = false;
+  let requireComplete = false;
   const assign = (key: string, value: string): void => {
     if (key === 'name') name = value;
     else if (key === 'dir') dir = value;
@@ -916,6 +1228,18 @@ const parseSlashArgs = (args: string): SlashArgs => {
     }
     if (token === '--strict') {
       strict = true;
+      continue;
+    }
+    if (token === '--all') {
+      all = true;
+      continue;
+    }
+    if (token === '--dry-run') {
+      dryRun = true;
+      continue;
+    }
+    if (token === '--require-complete') {
+      requireComplete = true;
       continue;
     }
     const inline = /^--([\w-]+)=(.*)$/.exec(token);
@@ -944,6 +1268,9 @@ const parseSlashArgs = (args: string): SlashArgs => {
     workspaceType,
     tasks,
     reviewerProfiles,
+    all,
+    dryRun,
+    requireComplete,
   };
 };
 
@@ -955,10 +1282,10 @@ const parseSlashArgs = (args: string): SlashArgs => {
 export type ResolveSlashDir = (dir: string) => string;
 
 /**
- * Run the slash-command form registered as the OpenCode `/mf-specs` command
+ * Run the slash-command form registered as the OpenCode `/specs` command
  * (`src/server.ts`, through `ports.command.register`). Never renders through
- * the CLI; returns the report so the server can post `report.output` into the
- * invoking session, or its failure text when the run fails.
+ * the CLI; returns the report for the caller to log — the server writes
+ * `report.output` with `Effect.logInfo` and any failure with `Effect.logError`.
  * @param args - raw slash-command args
  * @param root - default spec root, already resolved against the plugin directory
  * @param resolveDir - resolver for a `--dir` value (identity by default)
@@ -972,6 +1299,22 @@ export const runSlash = (
   Effect.gen(function* () {
     const parsed = parseSlashArgs(args);
     const dir = parsed.dir === undefined ? root : storeDirOf(resolveDir(parsed.dir));
+    if (parsed.command === 'migrate') {
+      const name = parsed.name === '' ? undefined : parsed.name;
+      if (name === undefined && !parsed.all) {
+        return yield* Effect.fail(
+          new SpecStore.StoreError({
+            operation: 'SpecMigrate',
+            reason: 'migrate requires --name <spec> or --all.',
+          }),
+        );
+      }
+      const report = yield* migrate(dir, { name, all: parsed.all, dryRun: parsed.dryRun });
+      return {
+        output: renderMigrate(report),
+        ok: report.specs.every((spec) => spec.status !== 'refused' && spec.status !== 'failed'),
+      };
+    }
     if (parsed.command === 'create') {
       if (parsed.name === undefined || parsed.name === '') {
         return yield* Effect.fail(
@@ -1039,8 +1382,17 @@ export const runSlash = (
     }
     const options: CheckOptions =
       parsed.name === undefined
-        ? { concurrency: DEFAULT_CONCURRENCY, strict: parsed.strict }
-        : { name: parsed.name, concurrency: DEFAULT_CONCURRENCY, strict: parsed.strict };
+        ? {
+            concurrency: DEFAULT_CONCURRENCY,
+            strict: parsed.strict,
+            requireComplete: parsed.requireComplete,
+          }
+        : {
+            name: parsed.name,
+            concurrency: DEFAULT_CONCURRENCY,
+            strict: parsed.strict,
+            requireComplete: parsed.requireComplete,
+          };
     const report = yield* check(dir, options);
     return { output: renderCheck(report, parsed.verbose), ok: report.failed === 0 };
   });

@@ -11,7 +11,7 @@ completion. Work one phase at a time.
 
 ## Read the state
 
-- Read \`SPEC.md\` and every \`TASK.md\`. The active phase is the first phase holding any
+- Read \`SPEC.md\`, each phase directory, and every \`TASK.md\`. The active phase is the first phase holding any
   \`pending\` or \`in-progress\` task.
 - Derived states: pending (idle), in-progress (work has started), blocked, complete,
   inconsistent.

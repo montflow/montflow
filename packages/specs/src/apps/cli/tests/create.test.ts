@@ -18,8 +18,8 @@ Vitest.describe('Cli.scaffold engine', () => {
       Vitest.expect(report.phase).toBe('A');
       Vitest.expect(report.taskCount).toBe(2);
       Vitest.expect(report.files).toContain('SPEC.md');
-      Vitest.expect(report.files).toContain('A001-implement/TASK.md');
-      Vitest.expect(report.files).toContain('A099-review-phase/TASK.md');
+      Vitest.expect(report.files).toContain('A/A001-implement/TASK.md');
+      Vitest.expect(report.files).toContain('A/A099-review-phase/TASK.md');
       Vitest.expect(specs.has('ship-login')).toBe(true);
     }),
   );
@@ -79,7 +79,8 @@ Vitest.describe('Cli.scaffold engine', () => {
         reviewerProfiles: ['effect-reviewer'],
       }).pipe(Effect.provide(stubLayer(specs)));
       const files = specs.get('ship-login') ?? [];
-      const review = files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
+      const review =
+        files.find((file) => file.path === 'A/A099-review-phase/TASK.md')?.content ?? '';
       Vitest.expect(review).toContain('reviewer-profiles: effect-reviewer');
       const checked = yield* runSlash('check --name ship-login', root).pipe(
         Effect.provide(stubLayer(specs)),
@@ -93,7 +94,8 @@ Vitest.describe('Cli.scaffold engine', () => {
       const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
       yield* scaffold(root, { name: 'ship-login' }).pipe(Effect.provide(stubLayer(specs)));
       const files = specs.get('ship-login') ?? [];
-      const review = files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
+      const review =
+        files.find((file) => file.path === 'A/A099-review-phase/TASK.md')?.content ?? '';
       Vitest.expect(review).toContain('reviewer-profiles:');
       Vitest.expect(review).not.toContain('reviewer-profiles: effect-reviewer');
     }),
@@ -174,7 +176,8 @@ Vitest.describe('Cli.runSlash create', () => {
       ).pipe(Effect.provide(stubLayer(specs)));
       Vitest.expect(created.ok).toBe(true);
       const files = specs.get('ship-login') ?? [];
-      const review = files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
+      const review =
+        files.find((file) => file.path === 'A/A099-review-phase/TASK.md')?.content ?? '';
       Vitest.expect(review).toContain('reviewer-profiles: effect-reviewer');
       const checked = yield* runSlash('check --name ship-login', root).pipe(
         Effect.provide(stubLayer(specs)),

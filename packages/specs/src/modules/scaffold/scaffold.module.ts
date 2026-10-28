@@ -1,3 +1,4 @@
+import { PHASE_PATTERN } from '../spec/index.js';
 import type { SpecFileEntry } from '../structure/index.js';
 
 /**
@@ -242,15 +243,18 @@ const renderGates = (): string =>
 
 /**
  * Render a complete, mechanically valid spec tree from a small task list:
- * `SPEC.md`, one `<PHASE><NNN>-<name>/` per task with `TASK.md` +
+ * `SPEC.md`, one `<PHASE>/<PHASE><NNN>-<name>/` per task with `TASK.md` +
  * `MEMORY.md` (+ `GATES.md` when gated), and the phase's single
  * `review` task. Pure — the caller owns writing the files and choosing
- * the `created` date.
+ * the `created` date. An invalid phase is a programming error and throws.
  * @param input - spec metadata, phase, and tasks
  * @returns the files plus the phase and task ids they carry
  */
 export const renderSpecScaffold = (input: ScaffoldSpecInput): ScaffoldResult => {
   const phase = input.phase ?? 'A';
+  if (!PHASE_PATTERN.test(phase)) {
+    throw new Error(`Invalid scaffold phase '${phase}' — use one or two capital letters.`);
+  }
   const numbered = input.tasks.map((task, index) => ({ id: taskId(phase, index + 1), task }));
   const reviewId = taskId(phase, REVIEW_NUMBER);
   const rows: Array<TableRow> = numbered.map(({ id, task }) => ({
@@ -263,12 +267,12 @@ export const renderSpecScaffold = (input: ScaffoldSpecInput): ScaffoldResult => 
 
   const files: Array<SpecFileEntry> = [{ path: 'SPEC.md', content: renderSpec(input, rows) }];
   for (const { id, task } of numbered) {
-    const dir = dirName(id, task.name);
+    const dir = `${phase}/${dirName(id, task.name)}`;
     files.push({ path: `${dir}/TASK.md`, content: renderTask(id, task) });
     files.push({ path: `${dir}/MEMORY.md`, content: renderMemory() });
     if (task.gates === true) files.push({ path: `${dir}/GATES.md`, content: renderGates() });
   }
-  const reviewDir = dirName(reviewId, 'review-phase');
+  const reviewDir = `${phase}/${dirName(reviewId, 'review-phase')}`;
   files.push({
     path: `${reviewDir}/TASK.md`,
     content: renderReview(phase, reviewId, input.reviewerProfiles ?? []),

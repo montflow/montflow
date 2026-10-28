@@ -3,7 +3,7 @@ name: montflow-find-specs
 description: Finds and filters montflow specs under .agents/@montflow/specs/ with the `mf-specs list` CLI (or `/mf-specs list` in the OpenCode host), reporting each spec's derived lifecycle state. Use when an agent must answer "what is pending?", pick a spec to resume, or list specs by state.
 id: f21093485cea4b44
 author: Daniel Montilla
-version: 1.3.0
+version: 1.4.0
 license: MIT
 dependencies:
   - executing-skills
@@ -81,7 +81,8 @@ dispatch `subagent` sessions from the orchestrator.
 # Reference
 
 - **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus
-  one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`).
+  one directory per phase, each holding its task directories (`TASK.md`,
+  `MEMORY.md`, `GATES.md`).
 - **CLI engine**: `packages/specs/src/apps/cli/cli.apps.module.ts` —
   `list`, `renderList`, `resolveListOptions`, `scaffold` (the `create` engine).
 - **Lifecycle contract**: `packages/specs/src/modules/lifecycle/lifecycle.module.ts`
