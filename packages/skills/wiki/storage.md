@@ -8,7 +8,7 @@ All skills live under one root in your project. Learn the [skill concept](./skil
 .agents/skills/
 ```
 
-Created on first use. `/mf-skills-tui` and the `mf-skills` CLI edit here, so both surfaces stay in sync.
+Created on first use. The `mf-skills` CLI and the workspace dashboard edit here, so both surfaces stay in sync.
 
 ## Layout
 
@@ -39,7 +39,7 @@ File shape inside each `SKILL.md` is fixed — see [format](./format.md).
 1. Create `.agents/skills/<slug>/SKILL.md`.
 2. Write frontmatter (`name`, `description`, `id`, `author`, `version`) plus body instructions.
 3. Save — it appears in `mf-skills list` immediately.
-4. Check it with `mf-skills verify <slug>` (or `/mf-skills-tui` browse).
+4. Check it with `mf-skills verify <slug>` (or the `/mf-skills` picker).
 
 ## See also
 

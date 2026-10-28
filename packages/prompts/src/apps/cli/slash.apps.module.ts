@@ -318,19 +318,19 @@ export const run = (
       case 'Verify': {
         if (action.all || action.name === undefined) {
           const report = yield* Engines.verifyAll({ cwd: action.dir ?? cwd });
-          yield* say(Renderers.verifyAll(report));
+          const rendered = Renderers.verifyAll(report);
           if (report.entries.some((entry) => !entry.result.valid)) {
-            return yield* Effect.fail(`verification failed:\n${Renderers.verifyAll(report)}`);
+            return yield* Effect.fail(`verification failed:\n${rendered}`);
           }
+          yield* say(rendered);
           return;
         }
         const result = yield* Engines.verify({ cwd: action.dir ?? cwd }, action.name);
-        yield* say(Renderers.verify(action.name, result));
+        const rendered = Renderers.verify(action.name, result);
         if (!result.valid) {
-          return yield* Effect.fail(
-            `'${action.name}' failed verification:\n${Renderers.verify(action.name, result)}`,
-          );
+          return yield* Effect.fail(`'${action.name}' failed verification:\n${rendered}`);
         }
+        yield* say(rendered);
         return;
       }
       case 'Create': {

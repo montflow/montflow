@@ -1,6 +1,6 @@
 # Interactive app
 
-Interactive `/mf-skills-tui` command for the skills extension. App layer:
+Interactive skill flows used by the dispatch tools (not a slash command). App layer:
 dialog-driven flows (browse, create manually or with an agent, show,
 modify manually or with an agent, delete). Pure shapes, codecs, and slug helpers stay in `modules/`.
 

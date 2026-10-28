@@ -39,6 +39,10 @@ export interface PickerContext {
         readonly placeholder?: string;
         readonly options: ReadonlyArray<DialogSelectOption<Value>>;
         readonly current?: Value;
+        readonly search?: (
+          query: string,
+          options: ReadonlyArray<DialogSelectOption<Value>>,
+        ) => ReadonlyArray<DialogSelectOption<Value>>;
       }): Promise<Value | undefined>;
     };
     readonly toast: {
@@ -66,6 +70,11 @@ export interface PickerConfig<T> {
   readonly formatItem: (item: T) => PickerItem<T>;
   /** Text inserted into the composer for the chosen item. */
   readonly getInsertText: (item: T) => string;
+  /** Optional filter override; defaults to case-insensitive title + description. */
+  readonly search?: (
+    query: string,
+    items: ReadonlyArray<PickerItem<T>>,
+  ) => ReadonlyArray<PickerItem<T>>;
   /**
    * Forward every non-list argument to the server command of the same name,
    * so one slash command owns both interactive and headless behaviour.
@@ -77,6 +86,20 @@ export interface PickerConfig<T> {
 const INSERT_ATTEMPTS = 5;
 /** Delay between insertion retries; the host restores dialog focus first. */
 const INSERT_RETRY_MS = 40;
+
+/** Case-insensitive match over title and description, in display order. */
+const defaultSearch = <T>(
+  query: string,
+  items: ReadonlyArray<PickerItem<T>>,
+): ReadonlyArray<PickerItem<T>> => {
+  const needle = query.trim().toLowerCase();
+  if (needle === '') return items;
+  return items.filter(
+    (item) =>
+      item.title.toLowerCase().includes(needle) ||
+      (item.description ?? '').toLowerCase().includes(needle),
+  );
+};
 
 /** Strip an optional description so the row matches the host's exact options. */
 const toOption = <T>(item: PickerItem<T>): DialogSelectOption<T> => {
@@ -157,10 +180,24 @@ export const registerPicker = <T>(context: PickerContext, config: PickerConfig<T
       warn('No items found.');
       return;
     }
+    const rows = items.map((item) => config.formatItem(item));
+    const search = config.search ?? defaultSearch;
     const chosen = await context.ui.dialog.select<T>({
       title: config.title,
       placeholder: `Search ${config.title.toLowerCase()}`,
-      options: items.map((item) => toOption(config.formatItem(item))),
+      options: rows.map(toOption),
+      search: (query, options) => {
+        // SAFETY: the host passes back the same rows this call supplied.
+        const candidates = options as ReadonlyArray<DialogSelectOption<T>>;
+        const byValue = new Map(rows.map((row) => [row.value, row]));
+        return search(
+          query,
+          candidates.flatMap((option) => {
+            const row = byValue.get(option.value);
+            return row === undefined ? [] : [row];
+          }),
+        ).map(toOption);
+      },
     });
     if (chosen === undefined || cancelled) return;
     insertText(config.getInsertText(chosen), routeKey);

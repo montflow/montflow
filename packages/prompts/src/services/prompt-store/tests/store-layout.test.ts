@@ -38,7 +38,7 @@ Vitest.describe('PromptStore layout', () => {
     }).pipe(Effect.provide(StoreLive)),
   );
 
-  Vitest.it.effect('writes to the current store even when only the retired one exists', () =>
+  Vitest.it.effect('migrates a legacy-only store on the first write', () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -46,12 +46,18 @@ Vitest.describe('PromptStore layout', () => {
       const legacy = path.join(cwd, ...LEGACY);
       const current = path.join(cwd, ...CURRENT);
       yield* fs.makeDirectory(legacy, { recursive: true });
+      yield* fs.writeFileString(path.join(legacy, 'old.json'), promptJson('old'));
 
       const store = yield* PromptStore.PromptStore;
       yield* store.write(cwd, 'fresh', promptJson('fresh'));
 
       Vitest.expect(yield* fs.exists(path.join(current, 'fresh.json'))).toBe(true);
-      Vitest.expect(yield* fs.exists(path.join(legacy, 'fresh.json'))).toBe(false);
+      Vitest.expect(yield* fs.exists(path.join(current, 'old.json'))).toBe(true);
+      Vitest.expect(yield* fs.exists(legacy)).toBe(false);
+
+      // Both prompts stay visible to every reader after the move.
+      const prompts = yield* store.list(cwd);
+      Vitest.expect(prompts.map((prompt) => prompt.name)).toStrictEqual(['fresh', 'old']);
     }).pipe(Effect.provide(StoreLive)),
   );
 

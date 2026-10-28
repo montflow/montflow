@@ -209,10 +209,11 @@ export const run = (
       case 'Verify': {
         if (action.all || action.name === undefined) {
           const report = yield* Engines.verifyAll({ cwd: action.dir ?? cwd });
-          yield* say(Renderers.verifyAll(report));
+          const rendered = Renderers.verifyAll(report);
           if (report.issueCount > 0) {
-            return yield* Effect.fail(`verification failed:\n${Renderers.verifyAll(report)}`);
+            return yield* Effect.fail(`verification failed:\n${rendered}`);
           }
+          yield* say(rendered);
           return;
         }
         const report = yield* Engines.verifySeries({ cwd: action.dir ?? cwd }, action.name);

@@ -19,6 +19,7 @@ const makeContext = (options: {
   const commands: Array<{ readonly name: string; readonly text: string }> = [];
   let editor: { insertText(text: string): void; gotoBufferEnd?(): void } | null = null;
   let route = 'session:ses_1';
+  let searchQuery: string | undefined;
 
   const context: PickerContext = {
     location: options.directory === undefined ? undefined : { directory: options.directory },
@@ -43,11 +44,35 @@ const makeContext = (options: {
     ui: {
       dialog: {
         select: async <Value>(input: {
-          readonly options: ReadonlyArray<{ readonly value: Value }>;
+          readonly title: string;
+          readonly options: ReadonlyArray<{
+            readonly title: string;
+            readonly value: Value;
+            readonly description?: string;
+          }>;
+          readonly search?: (
+            query: string,
+            rows: ReadonlyArray<{
+              readonly title: string;
+              readonly value: Value;
+              readonly description?: string;
+            }>,
+          ) => ReadonlyArray<{
+            readonly title: string;
+            readonly value: Value;
+            readonly description?: string;
+          }>;
         }): Promise<Value | undefined> => {
           const values = input.options.map((option) => option.value);
           // SAFETY: this fake only ever receives the picker's Item rows, which the test controls.
           const items = values as ReadonlyArray<Item>;
+          const query = searchQuery;
+          if (query !== undefined && input.search !== undefined) {
+            const matched = input.search(query, input.options);
+            const found = matched[0];
+            // SAFETY: matched rows come from the same options array the picker supplied.
+            return found?.value as Value | undefined;
+          }
           // SAFETY: the chosen Item is one of the same rows the picker passed in.
           return options.chosen?.(items) as Value | undefined;
         },
@@ -79,6 +104,9 @@ const makeContext = (options: {
     },
     setRoute(next: string) {
       route = next;
+    },
+    setSearchQuery(next: string | undefined) {
+      searchQuery = next;
     },
   };
 };
@@ -247,6 +275,49 @@ describe('registerPicker', () => {
     await flushTimers();
 
     expect(host.inserted).toStrictEqual([]);
+    vi.useRealTimers();
+  });
+
+  it('filters by description through the host search callback', async () => {
+    vi.useFakeTimers();
+    const host = makeContext({ directory: '/repo', chosen: () => undefined });
+    host.setEditor({ insertText: (text) => host.inserted.push(text) });
+    host.setSearchQuery('retry');
+    registerPicker(
+      host.context,
+      config(async () => [
+        { name: 'one', body: 'body one', about: 'mentions retry' },
+        { name: 'two', body: 'body two', about: 'nothing here' },
+      ]),
+    );
+
+    await commandOf(host.layers).run('list');
+    await flushTimers();
+
+    // Only the description match survives the filter, so it is inserted.
+    expect(host.inserted).toStrictEqual(['body one']);
+    expect(host.toasts).toStrictEqual([]);
+    vi.useRealTimers();
+  });
+
+  it('returns every row for an empty query', async () => {
+    vi.useFakeTimers();
+    const host = makeContext({ directory: '/repo', chosen: () => undefined });
+    host.setSearchQuery('');
+    host.setEditor({ insertText: (text) => host.inserted.push(text) });
+    registerPicker(
+      host.context,
+      config(async () => [
+        { name: 'one', body: 'body one' },
+        { name: 'two', body: 'body two' },
+      ]),
+    );
+
+    await commandOf(host.layers).run('list');
+    await flushTimers();
+
+    // An empty query keeps display order, so the first row is chosen.
+    expect(host.inserted).toStrictEqual(['body one']);
     vi.useRealTimers();
   });
 

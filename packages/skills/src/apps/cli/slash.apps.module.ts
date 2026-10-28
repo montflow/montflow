@@ -537,10 +537,11 @@ export const run = (args: string, ui: CliUi, cwd: string): Effect.Effect<void, s
       }
       case 'Verify': {
         const report = yield* Engines.verify({ cwd, dir: paths.dir }, action.name);
-        yield* say(Renderers.verify(report, { verbose: action.verbose }));
+        const rendered = Renderers.verify(report, { verbose: action.verbose });
         if (!report.valid) {
-          return yield* Effect.fail(`Verification failed:\n${Renderers.verify(report)}`);
+          return yield* Effect.fail(`Verification failed:\n${rendered}`);
         }
+        yield* say(rendered);
         return;
       }
       case 'Create': {

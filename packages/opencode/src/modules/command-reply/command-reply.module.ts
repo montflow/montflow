@@ -37,9 +37,14 @@ export const makeCommandReply = (
       Effect.forEach(
         pending.splice(0),
         (entry) =>
-          session
-            .prompt(invocation.sessionID, entry.message, invocation.delivery)
-            .pipe(Effect.catchCause(() => Effect.void)),
+          session.prompt(invocation.sessionID, entry.message, invocation.delivery).pipe(
+            // A failed reply must not abort the command, but it must leave a trace.
+            Effect.catchCause((cause) =>
+              Effect.logWarning(
+                `command reply could not be posted to ${invocation.sessionID}: ${String(cause)}`,
+              ),
+            ),
+          ),
         { discard: true },
       ),
   };

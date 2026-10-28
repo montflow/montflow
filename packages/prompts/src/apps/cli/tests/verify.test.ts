@@ -104,10 +104,11 @@ Vitest.describe('Cli.run runtime', () => {
         unusedExecutor,
       ).pipe(Effect.provide(stubLayer(invalidRaw)), Effect.flip);
       Vitest.expect(error).toContain('failed verification');
-      Vitest.expect(notifies.length).toBe(1);
-      Vitest.expect(notifies[0]).toContain("✗ 'commit' has 1 issue.");
-      Vitest.expect(notifies[0]).toContain('1. [template]');
-      Vitest.expect(notifies[0]).toContain('Fix: Write the prompt text.');
+      // The failure carries the report; notifying as well would post it twice.
+      Vitest.expect(notifies).toStrictEqual([]);
+      Vitest.expect(error).toContain("✗ 'commit' has 1 issue.");
+      Vitest.expect(error).toContain('1. [template]');
+      Vitest.expect(error).toContain('Fix: Write the prompt text.');
     }),
   );
 
@@ -122,12 +123,15 @@ Vitest.describe('Cli.run runtime', () => {
         skills: [],
         model: '',
       });
-      yield* Cli.run('verify audit', scriptedUi(notifies), '/repo', unusedExecutor).pipe(
-        Effect.provide(stubLayer(unordered)),
-        Effect.flip,
-      );
-      Vitest.expect(notifies[0]).toContain('first-appearance order');
-      Vitest.expect(notifies[0]).toContain('"name": "files"');
+      const error = yield* Cli.run(
+        'verify audit',
+        scriptedUi(notifies),
+        '/repo',
+        unusedExecutor,
+      ).pipe(Effect.provide(stubLayer(unordered)), Effect.flip);
+      Vitest.expect(error).toContain('first-appearance order');
+      Vitest.expect(error).toContain('"name": "files"');
+      Vitest.expect(notifies).toStrictEqual([]);
     }),
   );
 });

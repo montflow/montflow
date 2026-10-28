@@ -8,7 +8,7 @@ import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
 import { Effect, Layer, Path } from 'effect';
 import { entry, makeCommandReply } from '@montflow/opencode';
-import { DEFAULT_ROOT, runSlash } from './apps/cli/cli.apps.module.js';
+import { DEFAULT_ROOT, runSlash } from './apps/cli/slash.apps.module.js';
 import { SpecStore } from './services/index.js';
 
 /** Help text shown for the slash command. */

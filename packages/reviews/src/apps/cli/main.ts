@@ -17,6 +17,8 @@ const program = Command.run(rootCommand, { version: VERSION }).pipe(
   Effect.provide(NodeServices.layer),
 );
 
-program.pipe(Effect.runPromise).catch(() => {
+program.pipe(Effect.runPromise).catch((cause: unknown) => {
+  // A silent non-zero exit hides the cause the CLI already rendered; keep it.
+  process.stderr.write(`${cause instanceof Error ? cause.message : String(cause)}\n`);
   process.exitCode = 1;
 });

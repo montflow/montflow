@@ -66,6 +66,29 @@ export const storeLayout = Effect.fn('PromptStore.storeLayout')(function* (
   return { writeRoot: current, readRoot: current, legacy: false } satisfies StoreLayout;
 });
 
+/**
+ * Directory writes target, migrating a legacy-only store first. A write that
+ * landed in the current layout while the retired one still existed would make
+ * every reader prefer the current layout and hide the legacy prompts, so the
+ * first write moves them instead.
+ */
+const ensureWritableRoot = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  cwd: string,
+  dir: string | undefined,
+): Effect.Effect<string, StoreError> =>
+  Effect.gen(function* () {
+    const layout = yield* storeLayout(fs, path, cwd, dir);
+    if (!layout.legacy) return layout.writeRoot;
+    yield* fs.rename(layout.readRoot, layout.writeRoot).pipe(
+      Effect.mapError(toStoreError('PromptStore.migrate')),
+      // Losing the race to another migrator is fine: the current store exists.
+      Effect.catch(() => Effect.succeed(undefined)),
+    );
+    return layout.writeRoot;
+  });
+
 const make = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -158,12 +181,12 @@ const make = Effect.gen(function* () {
     if (!Prompts.isValidName(name)) {
       return yield* Effect.fail(new StoreError({ message: `Invalid prompt name '${name}'.` }));
     }
-    const layout = yield* storeLayout(fs, path, cwd, dir);
+    const root = yield* ensureWritableRoot(fs, path, cwd, dir);
     yield* fs
-      .makeDirectory(layout.writeRoot, { recursive: true })
+      .makeDirectory(root, { recursive: true })
       .pipe(Effect.mapError(toStoreError('PromptStore.write')));
     yield* fs
-      .writeFileString(path.join(layout.writeRoot, `${name}.json`), contents)
+      .writeFileString(path.join(root, `${name}.json`), contents)
       .pipe(Effect.mapError(toStoreError('PromptStore.write')));
   });
 

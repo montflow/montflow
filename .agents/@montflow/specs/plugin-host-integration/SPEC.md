@@ -81,5 +81,5 @@ host loader.
 | C002 | add-shared-tui-picker | execution | complete | Yes |
 | C003 | wire-plugin-pickers | execution | complete | Yes |
 | C004 | retire-pi-naming | execution | complete | Yes |
-| C005 | verify-host-integration | execution | complete | Yes |
-| C099 | review-phase | review | complete | No |
+| C005 | verify-host-integration | execution | in-progress | Yes |
+| C099 | review-phase | review | in-progress | No |
