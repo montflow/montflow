@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: C001
 related-tasks: C003
-status: pending
+status: complete
 ---
 
 # Task C002: realtime-canvas
@@ -46,9 +46,9 @@ phase B DOM row list with the canvas renderer.
 
 ## Completion
 
-- [ ] The chosen canvas surface renders a session timeline with lanes, axis, zoom, pan, and minimap.
-- [ ] A running session appends spans within one second without a full reload; follow-tail pauses on manual scroll and resumes explicitly.
-- [ ] The 20k acceptance test in `C001-canvas-surface/MEMORY.md` passes.
-- [ ] `/telemetry` starts and stops the viewer with no process left behind; nothing listens before the command.
-- [ ] The data layer is unchanged and the ingest isolation tests still pass.
-- [ ] `bun run --cwd packages/telemetry test ts:check lint:check format:check` passes.
+- [x] The chosen canvas surface renders a session timeline with lanes, axis, zoom, pan, and minimap.
+- [x] A running session appends spans within one second without a full reload; follow-tail pauses on manual scroll and resumes explicitly.
+- [x] The 20k acceptance test in `C001-canvas-surface/MEMORY.md` passes.
+- [x] `/telemetry` starts and stops the viewer with no process left behind; nothing listens before the command.
+- [x] The data layer is unchanged and the ingest isolation tests still pass.
+- [x] `bun run --cwd packages/telemetry test ts:check lint:check format:check` passes.

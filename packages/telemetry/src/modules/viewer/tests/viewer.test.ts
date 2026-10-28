@@ -46,16 +46,22 @@ const post = <T>(viewer: Viewer.Viewer, path: string, body: T): Promise<Response
   });
 
 describe('Viewer.start runtime', () => {
-  it('serves the shell, empty state, and row budget', async () => {
+  it('serves the canvas shell, empty state, and Pixi module', async () => {
     await withStore(async (directory) => {
       const viewer = await Viewer.start({ directory, idleMs: 60_000 });
       try {
         const html = await (await get(viewer, '/')).text();
         expect(html).toContain('No telemetry yet');
-        expect(html).toContain(`MAX_WINDOW = ${Viewer.WINDOW_ROWS}`);
-        expect(Viewer.WINDOW_ROWS).toBeLessThanOrEqual(120);
+        expect(html).toContain('/pixi.mjs');
+        expect(html).toContain('id="trace"');
+        expect(html).toContain('id="follow"');
+        expect(html).toContain('permission');
         expect(await (await get(viewer, '/api/sessions')).json()).toStrictEqual([]);
         expect(viewer.foldError).toBeNull();
+        const pixi = await get(viewer, '/pixi.mjs');
+        expect(pixi.status).toBe(200);
+        expect(pixi.headers.get('content-type')).toContain('javascript');
+        expect((await pixi.text()).length).toBeGreaterThan(10_000);
       } finally {
         await viewer.stop();
       }
@@ -318,41 +324,15 @@ describe('Viewer.start runtime', () => {
     expect(html).toContain('\\u003c/script');
   });
 
-  it('ships parseable page scripts that use the shared window math', () => {
+  it('ships a parseable canvas script that loads Pixi locally', () => {
     const html = Viewer.page('ses_fixture');
-    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/gu)].map(
+    const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gu)].map(
       (match) => match[1] ?? '',
     );
-    expect(scripts).toHaveLength(2);
-    for (const script of scripts) expect(() => new Function(script)).not.toThrow();
-    expect(scripts[1]).toContain('windowRange(');
-    expect(html).toContain('MAX_WINDOW = 120');
-    expect(html).toContain('No spans match this filter.');
-  });
-});
-
-// SAFETY: the evaluated source is this module's own CLIENT_SCRIPT plus a literal expression written by the test.
-const evaluate = <T>(expression: string): T =>
-  new Function(`${Viewer.CLIENT_SCRIPT}\nreturn (${expression});`)() as T;
-
-describe('Viewer client script', () => {
-  it('keeps the window under the row budget for a 20k trace', () => {
-    const ranges = evaluate<Array<{ start: number; end: number }>>(
-      `[0, 1000, 100000, 319840].map((offset) => windowRange(20000, offset, 16, 60, 10))`,
-    );
-    for (const range of ranges) {
-      expect(range.end - range.start).toBeLessThanOrEqual(80);
-      expect(range.start).toBeGreaterThanOrEqual(0);
-      expect(range.end).toBeLessThanOrEqual(20_000);
-    }
-  });
-
-  it('sums cost and tokens from step-ended spans only', () => {
-    const total = evaluate<{ cost: number; input: number; output: number }>(`summaryOf([
-      { type: 'session.step.ended', payload: { cost: 0.0012, tokens: { input: 120, output: 30 } } },
-      { type: 'session.usage.updated', payload: { cost: 0.0012, tokens: { input: 120, output: 30 } } },
-      { type: 'session.idle', payload: {} }
-    ])`);
-    expect(total).toStrictEqual({ cost: 0.0012, input: 120, output: 30 });
+    expect(scripts).toHaveLength(1);
+    expect(() => new Function(`return (async () => {${scripts[0] ?? ''}})()`)).not.toThrow();
+    expect(scripts[0]).toContain("await import('/pixi.mjs')");
+    expect(scripts[0]).toContain('const LANES');
+    expect(html).toContain('following');
   });
 });

@@ -36,7 +36,8 @@
   },
   "dependencies": {
     "@opencode/plugin": "2.0.18",
-    "effect": "4.0.0-rc.112"
+    "effect": "4.0.0-rc.112",
+    "pixi.js": "8.22.0"
   },
   "devDependencies": {
     "@effect/vitest": "4.0.0-rc.112",

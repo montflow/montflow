@@ -2,11 +2,8 @@ import { Option, Schema } from 'effect';
 import type { Line } from '../event/index.js';
 import * as Fold from '../fold/index.js';
 import { file } from '../path/index.js';
-import { Fs } from '../platform/index.js';
+import { dirname, Fs, fileURLToPath } from '../platform/index.js';
 import * as Tail from '../tail/index.js';
-
-/** Maximum recycled row elements; the page sizes between 60 and this. */
-export const WINDOW_ROWS = 120;
 
 /** Default idle timeout: five minutes without a page heartbeat. */
 export const DEFAULT_IDLE_MS = 5 * 60 * 1_000;
@@ -31,26 +28,15 @@ export interface ViewerOptions {
   readonly closeDelayMs?: number;
 }
 
-/** Browser-side window math and totals, shared verbatim with the page and tests. */
-export const CLIENT_SCRIPT = `
-function windowRange(total, scrollTop, rowHeight, visible, buffer) {
-  if (total === 0) return { start: 0, end: 0 };
-  const first = Math.floor(scrollTop / rowHeight);
-  const start = Math.max(0, first - buffer);
-  return { start, end: Math.min(total, start + visible + buffer * 2) };
-}
-function summaryOf(spans) {
-  let cost = 0, input = 0, output = 0;
-  for (const span of spans) {
-    if (span.type !== 'session.step.ended') continue;
-    const payload = span.payload || {};
-    if (typeof payload.cost === 'number') cost += payload.cost;
-    const tokens = payload.tokens;
-    if (tokens) { input += tokens.input || 0; output += tokens.output || 0; }
+/** The bundled Pixi module path, resolved from the installed dependency. */
+export const pixiModule = (): string | undefined => {
+  try {
+    const manifest = fileURLToPath(import.meta.resolve('pixi.js/package.json'));
+    return `${dirname(manifest)}/dist/pixi.min.mjs`;
+  } catch {
+    return undefined;
   }
-  return { cost, input, output };
-}
-`;
+};
 
 const LiveRequest = Schema.Struct({
   cursors: Schema.optional(Schema.Record(Schema.String, Schema.Number)),
@@ -94,216 +80,370 @@ const live = (
 const scriptJson = (value: string | null): string =>
   JSON.stringify(value).replaceAll('<', '\\u003c');
 
-/** The self-contained page. One shell for live and history; the data layer is fetched. */
+/** The self-contained page: DOM shell plus the Pixi timeline. */
 export const page = (sessionID: string | undefined): string => `<!doctype html>
 <html><head><meta charset="utf-8" /><title>telemetry</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   body { margin: 0; background: #0f1115; color: #d7dbe0; font: 12px/16px ui-monospace, monospace; }
-  #app { display: grid; grid-template-columns: 240px 1fr; height: 100vh; }
+  #app { display: grid; grid-template-columns: 210px 1fr; height: 100vh; }
   aside { border-right: 1px solid #242a33; overflow: auto; padding: 8px; }
   aside h1 { font-size: 12px; margin: 0 0 8px; color: #8b95a5; font-weight: normal; }
   aside a { display: block; color: #d7dbe0; padding: 4px 6px; text-decoration: none; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   aside a.active, aside a:hover { background: #1c2330; }
-  main { display: flex; flex-direction: column; min-width: 0; }
-  header { display: flex; gap: 12px; align-items: center; padding: 8px; border-bottom: 1px solid #242a33; }
+  main { display: flex; flex-direction: column; min-width: 0; position: relative; }
+  header { display: flex; gap: 10px; align-items: center; padding: 8px; border-bottom: 1px solid #242a33; }
   header input { flex: 1; background: #0b0d11; color: inherit; border: 1px solid #2a313c; padding: 4px 6px; font: inherit; }
+  header button { background: #1c2330; color: inherit; border: 1px solid #2a313c; padding: 4px 8px; font: inherit; cursor: pointer; }
   header span { color: #8b95a5; white-space: nowrap; }
-  #viewport { flex: 1; overflow: auto; position: relative; }
-  #spacer { position: relative; }
-  .row { position: absolute; left: 0; right: 0; height: 16px; padding: 0 8px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+  #trace { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+  #trace canvas { display: block; }
+  #tip { position: absolute; z-index: 3; max-width: 360px; padding: 6px 8px; background: #171b23; border: 1px solid #2a313c; border-radius: 4px; pointer-events: none; white-space: pre-wrap; }
+  #detail { position: absolute; right: 0; top: 41px; bottom: 0; width: 360px; overflow: auto; padding: 10px; background: #12161d; border-left: 1px solid #242a33; z-index: 2; }
+  #detail pre { white-space: pre-wrap; word-break: break-word; font: 11px/1.5 ui-monospace, monospace; }
+  #detail button { background: #1c2330; color: inherit; border: 1px solid #2a313c; padding: 3px 8px; font: inherit; cursor: pointer; }
   .empty { padding: 24px; color: #8b95a5; }
 </style></head>
 <body><div id="app">
   <aside><h1>sessions</h1><div id="sessions"></div></aside>
   <main>
-    <header><strong id="title">live</strong><input id="filter" placeholder="filter spans" /><span id="totals"></span></header>
-    <div id="empty" class="empty" hidden>No telemetry yet. Run a session and reopen /telemetry.</div>
-    <div id="viewport"><div id="spacer"></div></div>
+    <header><strong id="title">live</strong><input id="filter" placeholder="filter spans" /><button id="follow">following</button><span id="totals"></span></header>
+    <div id="trace" tabindex="0"><div id="tip" hidden></div><div id="empty" class="empty">No telemetry yet. Run a session and reopen /telemetry.</div></div>
+    <div id="detail" hidden><button id="close-detail">close</button><button id="copy-detail">copy</button><pre id="detail-body"></pre></div>
   </main>
 </div>
-<script>${CLIENT_SCRIPT}</script>
-<script>
-const SESSION = new URLSearchParams(location.search).get('session') ?? ${scriptJson(sessionID ?? null)};
+<script type="module">
+const SESSION = ${scriptJson(sessionID ?? null)};
 const CLIENT_ID = crypto.randomUUID();
-const ROW = 16, MAX_WINDOW = ${WINDOW_ROWS};
-const viewport = document.getElementById('viewport');
-const spacer = document.getElementById('spacer');
+const trace = document.getElementById('trace');
+const tip = document.getElementById('tip');
+const detail = document.getElementById('detail');
+const detailBody = document.getElementById('detail-body');
 const sessionsEl = document.getElementById('sessions');
-const emptyEl = document.getElementById('empty');
+const titleEl = document.getElementById('title');
 const totalsEl = document.getElementById('totals');
 const filterEl = document.getElementById('filter');
-const titleEl = document.getElementById('title');
+const emptyEl = document.getElementById('empty');
+const followEl = document.getElementById('follow');
+const PIXI = await import('/pixi.mjs');
+
+const LANES = ['session', 'step', 'tool', 'permission', 'compaction'];
+const LANE_Y = { session: 40, step: 84, tool: 128, permission: 172, compaction: 216 };
+const COLORS = { session: 0x6ea8fe, step: 0x8ce99a, tool: 0xffd43b, permission: 0xff8787, compaction: 0xb197fc };
+const GUTTER = 100;
 const history = new Map();
 const liveBySession = new Map();
+const cursors = {};
 let active = SESSION;
 let spans = [];
-let visible = [];
-let rows = [];
-let scrollStart = -1;
-let foldError = null;
-const text = (span) => [span.type, span.agent, modelOf(span), span.sessionID].filter(Boolean).join(' ');
-const modelOf = (span) => typeof span.model === 'string'
-  ? span.model
-  : span.model
-    ? (span.model.providerID || '-') + '/' + (span.model.id || '-')
-    : '-';
-const tokens = (span) => (span.payload && span.payload.tokens ? span.payload.tokens : null);
-const cost = (span) => (span.payload && typeof span.payload.cost === 'number' ? span.payload.cost : 0);
-function searchable(span) {
-  return (text(span) + ' ' + JSON.stringify(span.payload || {})).toLowerCase();
-}
-function merged(sessionID) {
-  return [...(history.get(sessionID) ?? []), ...(liveBySession.get(sessionID) ?? [])];
-}
-function ensureRows() {
-  const wanted = Math.min(MAX_WINDOW, Math.max(60, Math.ceil(viewport.clientHeight / ROW) + 10));
-  if (rows.length === wanted) return;
-  rows = [];
-  spacer.replaceChildren();
-  for (let i = 0; i < wanted; i += 1) {
-    const el = document.createElement('div');
-    el.className = 'row';
-    spacer.appendChild(el);
-    rows.push(el);
+let minTs = Infinity;
+let maxTs = -Infinity;
+let baseScale = 0.05;
+let zoom = 1;
+let viewStart = 0;
+let follow = true;
+let selected = -1;
+let seeded = false;
+let polling = false;
+let drag = null;
+
+const laneOf = (type) => {
+  if (type === 'session.created' || type === 'session.idle' || type.startsWith('session.execution') || type === 'session.usage.updated' || type === 'session.inbox.enqueued') return 'session';
+  if (type.startsWith('session.step')) return 'step';
+  if (type.startsWith('session.tool')) return 'tool';
+  if (type.startsWith('permission')) return 'permission';
+  if (type.startsWith('session.compaction')) return 'compaction';
+  return 'session';
+};
+const modelOf = (line) => typeof line.model === 'string' ? line.model : line.model ? (line.model.providerID || '-') + '/' + (line.model.id || '-') : '-';
+const payloadOf = (line) => line.payload || {};
+const costOf = (line) => typeof payloadOf(line).cost === 'number' ? payloadOf(line).cost : 0;
+const tokensOf = (line) => payloadOf(line).tokens || null;
+
+const app = new PIXI.Application();
+await app.init({ background: '#0f1115', antialias: false, autoDensity: true, resolution: window.devicePixelRatio || 1, resizeTo: trace, preference: 'webgl' });
+trace.appendChild(app.canvas);
+const container = new PIXI.ParticleContainer({ texture: PIXI.Texture.WHITE, dynamicProperties: { position: true } });
+app.stage.addChild(container);
+const laneLabels = LANES.map((lane, index) => {
+  const label = new PIXI.Text({ text: lane, style: { fill: '#8b95a5', fontFamily: 'monospace', fontSize: 10 } });
+  label.position.set(8, LANE_Y[lane] - 5);
+  app.stage.addChild(label);
+  return label;
+});
+const axisLabels = Array.from({ length: 5 }, () => {
+  const label = new PIXI.Text({ text: '', style: { fill: '#8b95a5', fontFamily: 'monospace', fontSize: 10 } });
+  label.position.set(GUTTER, 12);
+  app.stage.addChild(label);
+  return label;
+});
+const minimap = new PIXI.Graphics();
+app.stage.addChild(minimap);
+
+const width = () => Math.max(320, app.screen.width);
+const height = () => Math.max(240, app.screen.height);
+const viewWidth = () => (width() - GUTTER - 20) / (baseScale * zoom);
+const timeOf = (x) => viewStart + (x - GUTTER) / (baseScale * zoom);
+const xOf = (ts) => GUTTER + (ts - viewStart) * baseScale * zoom;
+const tailStart = (ts) => Math.max(minTs, ts - viewWidth() * 0.9);
+const colorOf = (line) => COLORS[laneOf(line.type)] ?? 0x6ea8fe;
+
+const makeView = (line) => ({ line, lane: laneOf(line.type), color: colorOf(line), particle: null });
+const addParticle = (view) => {
+  view.particle = new PIXI.Particle({
+    texture: PIXI.Texture.WHITE,
+    x: (view.line.ts || 0) * baseScale,
+    y: LANE_Y[view.lane],
+    scaleX: 4,
+    scaleY: 14,
+    color: view.color,
+  });
+  container.addParticle(view.particle);
+};
+const clearParticles = () => {
+  container.removeParticles();
+};
+const applyView = () => {
+  container.x = GUTTER - viewStart * baseScale * zoom;
+  container.scale.x = zoom;
+  const start = viewStart;
+  const end = viewStart + viewWidth();
+  for (let index = 0; index < axisLabels.length; index += 1) {
+    const label = axisLabels[index];
+    const ts = start + ((end - start) * index) / (axisLabels.length - 1);
+    label.text = new Date(ts).toISOString().slice(11, 19);
+    label.x = GUTTER + ((width() - GUTTER - 20) * index) / (axisLabels.length - 1);
   }
-  scrollStart = -1;
-}
-function applyFilter() {
-  const query = filterEl.value.trim().toLowerCase();
-  visible = query ? spans.filter((span) => span.search.includes(query)) : spans;
-  summarize();
-  render();
-}
-function summarize() {
-  const total = summaryOf(visible);
-  totalsEl.textContent = visible.length + ' spans · $' + total.cost.toFixed(4) + ' · ' + total.input + ' in / ' + total.output + ' out';
-  emptyEl.hidden = visible.length !== 0;
-  if (visible.length === 0) {
-    emptyEl.textContent = foldError
-      ? 'History unavailable: ' + foldError
-      : spans.length === 0
-        ? 'No telemetry yet. Run a session and reopen /telemetry.'
-        : 'No spans match this filter.';
+  const mapY = height() - 18;
+  minimap.clear();
+  minimap.rect(GUTTER, mapY, width() - GUTTER - 20, 4).fill(0x242a33);
+  const span = Math.max(1, maxTs - minTs);
+  const left = GUTTER + ((viewStart - minTs) / span) * (width() - GUTTER - 20);
+  const w = Math.max(2, (viewWidth() / span) * (width() - GUTTER - 20));
+  minimap.rect(left, mapY, w, 4).fill(0x6ea8fe);
+};
+const refreshTotals = () => {
+  let cost = 0;
+  let input = 0;
+  let output = 0;
+  for (const view of spans) {
+    if (view.line.type !== 'session.step.ended') continue;
+    cost += costOf(view.line);
+    const tokens = tokensOf(view.line);
+    if (tokens) { input += tokens.input || 0; output += tokens.output || 0; }
   }
-}
-function render() {
-  ensureRows();
-  spacer.style.height = (visible.length * ROW) + 'px';
-  const { start } = windowRange(visible.length, viewport.scrollTop, ROW, rows.length, 10);
-  scrollStart = start;
-  for (let i = 0; i < rows.length; i += 1) {
-    const index = start + i;
-    const span = visible[index];
-    const el = rows[i];
-    el.style.transform = 'translateY(' + (index * ROW) + 'px)';
-    el.textContent = span ? format(span) : '';
+  totalsEl.textContent = spans.length + ' spans · $' + cost.toFixed(4) + ' · ' + input + ' in / ' + output + ' out';
+  emptyEl.hidden = spans.length !== 0;
+};
+const fit = () => {
+  const span = Math.max(1, maxTs - minTs);
+  baseScale = Math.max(0.000001, (width() - GUTTER - 20) / span);
+  zoom = 1;
+  viewStart = minTs === Infinity ? 0 : minTs;
+  applyView();
+};
+const addLine = (line) => {
+  if (line.sessionID !== active) return;
+  if (!Number.isFinite(line.ts)) return;
+  minTs = Math.min(minTs, line.ts);
+  maxTs = Math.max(maxTs, line.ts);
+  if (spans.length === 0) fit();
+  const view = makeView(line);
+  spans.push(view);
+  addParticle(view);
+  if (follow) viewStart = tailStart(line.ts);
+  applyView();
+  refreshTotals();
+};
+const rebuild = () => {
+  clearParticles();
+  spans = [];
+  minTs = Infinity;
+  maxTs = -Infinity;
+  for (const line of [...(history.get(active) ?? []), ...(liveBySession.get(active) ?? [])]) {
+    if (!Number.isFinite(line.ts)) continue;
+    minTs = Math.min(minTs, line.ts);
+    maxTs = Math.max(maxTs, line.ts);
   }
-}
-function format(span) {
-  const t = tokens(span);
-  const c = cost(span);
-  return (span.type + ' ' + (span.agent || '-') + ' ' + modelOf(span) +
-    (c ? ' $' + c.toFixed(4) : '') + (t ? ' ' + (t.input || 0) + '/' + (t.output || 0) : '')).slice(0, 200);
-}
-function activate(sessionID) {
-  active = sessionID;
-  titleEl.textContent = sessionID;
-  spans = merged(sessionID);
+  fit();
+  const lines = [...(history.get(active) ?? []), ...(liveBySession.get(active) ?? [])];
+  for (const line of lines) {
+    const view = makeView(line);
+    spans.push(view);
+    addParticle(view);
+  }
+  applyView();
+  refreshTotals();
   applyFilter();
-  for (const link of sessionsEl.querySelectorAll('a')) {
-    link.className = link.dataset.session === sessionID ? 'active' : '';
+};
+const applyFilter = () => {
+  const query = filterEl.value.trim().toLowerCase();
+  for (const view of spans) {
+    const hay = (view.line.type + ' ' + (view.line.agent || '') + ' ' + modelOf(view.line)).toLowerCase();
+    if (view.particle) view.particle.y = query === '' || hay.includes(query) ? LANE_Y[view.lane] : -100;
   }
-}
-async function loadSessions() {
-  let list = [];
-  try { list = await (await fetch('/api/sessions')).json(); } catch {}
-  const known = new Set(list.map((session) => session.sessionID));
-  for (const id of liveBySession.keys()) {
-    if (!known.has(id)) { list.push({ sessionID: id, title: null }); known.add(id); }
-  }
-  if (active !== null && !known.has(active)) list.push({ sessionID: active, title: null });
+};
+
+const sessionIds = () => {
+  const ids = new Set((history.get('__list__') ?? []).map((session) => session.sessionID));
+  for (const id of liveBySession.keys()) ids.add(id);
+  if (active !== null) ids.add(active);
+  return [...ids];
+};
+let sessionList = [];
+const renderSessions = () => {
   sessionsEl.replaceChildren();
-  for (const session of list) {
+  const ids = new Set(sessionList.map((session) => session.sessionID));
+  for (const id of liveBySession.keys()) {
+    if (!ids.has(id)) { sessionList.push({ sessionID: id, title: null }); ids.add(id); }
+  }
+  if (active !== null && !ids.has(active)) sessionList.push({ sessionID: active, title: null });
+  for (const session of sessionList) {
     const link = document.createElement('a');
     link.href = '#';
-    link.dataset.session = session.sessionID;
     link.textContent = session.title || session.sessionID;
     link.className = session.sessionID === active ? 'active' : '';
     link.onclick = (event) => { event.preventDefault(); void openSession(session.sessionID); };
     sessionsEl.appendChild(link);
   }
-  if (active === null && list.length > 0) active = list[0].sessionID;
-}
-async function openSession(sessionID) {
+};
+const loadSessions = async () => {
+  try { sessionList = await (await fetch('/api/sessions')).json(); } catch { sessionList = []; }
+  renderSessions();
+};
+const openSession = async (sessionID) => {
+  active = sessionID;
+  titleEl.textContent = sessionID;
   if (!history.has(sessionID)) {
     try {
-      const loaded = await (await fetch('/api/spans?session=' + encodeURIComponent(sessionID))).json();
-      history.set(sessionID, loaded.map((span) => ({ ...span, search: searchable(span) })));
+      const rows = await (await fetch('/api/spans?session=' + encodeURIComponent(sessionID))).json();
+      history.set(sessionID, rows.map((row) => ({ ...row, type: row.type, ts: row.ts, payload: row.payload || {}, model: row.model })));
     } catch { history.set(sessionID, []); }
   }
-  activate(sessionID);
-}
-const cursors = {};
-let seeded = false;
-let polling = false;
-async function seekFold() {
+  rebuild();
+  renderSessions();
+};
+const showTip = (view, x, y) => {
+  const line = view.line;
+  const tokens = tokensOf(line);
+  tip.textContent = line.type + '  ' + (line.agent || '-') + '  ' + modelOf(line) +
+    '\\n' + new Date(line.ts).toISOString() +
+    (costOf(line) ? '\\ncost $' + costOf(line).toFixed(4) : '') +
+    (tokens ? '\\ntokens ' + (tokens.input || 0) + ' in / ' + (tokens.output || 0) + ' out' : '');
+  tip.hidden = false;
+  tip.style.left = Math.min(x + 12, trace.clientWidth - 380) + 'px';
+  tip.style.top = Math.min(y + 12, trace.clientHeight - 100) + 'px';
+};
+const hideTip = () => { tip.hidden = true; };
+const showDetail = (view) => {
+  selected = spans.indexOf(view);
+  detail.hidden = false;
+  detailBody.textContent = JSON.stringify(view.line, null, 2);
+};
+const pick = (x, y) => {
+  const ts = timeOf(x);
+  let best = null;
+  for (const view of spans) {
+    const laneY = LANE_Y[view.lane];
+    if (Math.abs(y - (laneY + 7)) > 12) continue;
+    if (Math.abs((view.line.ts || 0) - ts) > Math.max(5, viewWidth() * 0.002)) continue;
+    if (best === null || Math.abs((view.line.ts || 0) - ts) < Math.abs((best.line.ts || 0) - ts)) best = view;
+  }
+  return best;
+};
+const heartbeat = () => {
+  fetch('/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: CLIENT_ID }) }).catch(() => {});
+};
+const seekFold = async () => {
   try {
-    const response = await fetch('/api/live', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ fromFold: true }),
-    });
-    const body = await response.json();
+    const body = await (await fetch('/api/live', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fromFold: true }) })).json();
     Object.assign(cursors, body.cursors);
   } catch {}
-}
-async function poll() {
+};
+const poll = async () => {
   if (!seeded || polling) return;
   polling = true;
   try {
-    const response = await fetch('/api/live', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ cursors }),
-    });
+    const response = await fetch('/api/live', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cursors }) });
     if (!response.ok) return;
     const body = await response.json();
     Object.assign(cursors, body.cursors);
-    let touched = false;
     for (const line of body.lines) {
-      const entry = { ...line, search: searchable(line) };
       const buffer = liveBySession.get(line.sessionID) ?? [];
-      buffer.push(entry);
+      buffer.push(line);
       liveBySession.set(line.sessionID, buffer);
-      if (line.sessionID === active) touched = true;
+      if (line.sessionID === active) addLine(line);
     }
-    if (touched) {
-      spans = merged(active);
-      applyFilter();
+    if (body.lines.length > 0) {
+      await loadSessions();
+      if (active === null && sessionList.length > 0) await openSession(sessionList[0].sessionID);
     }
   } catch {}
   finally { polling = false; }
-}
-async function bootstrap() {
-  try {
-    const status = await (await fetch('/api/status')).json();
-    foldError = status.foldError || null;
-  } catch {}
+};
+const bootstrap = async () => {
+  let status = {};
+  try { status = await (await fetch('/api/status')).json(); } catch {}
+  if (status.foldError) titleEl.textContent = 'history unavailable: ' + status.foldError;
   await loadSessions();
+  if (active === null && sessionList.length > 0) active = sessionList[0].sessionID;
   if (active !== null) await openSession(active);
-  else applyFilter();
+  else { fit(); applyView(); }
   await seekFold();
   seeded = true;
   await poll();
-}
-viewport.addEventListener('scroll', () => requestAnimationFrame(render), { passive: true });
+};
+
+trace.addEventListener('wheel', (event) => {
+  event.preventDefault();
+  const rect = trace.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const before = timeOf(x);
+  zoom = Math.min(50, Math.max(0.2, zoom * (event.deltaY < 0 ? 1.15 : 1 / 1.15)));
+  viewStart = before - (x - GUTTER) / (baseScale * zoom);
+  follow = false;
+  followEl.textContent = 'paused';
+  applyView();
+}, { passive: false });
+trace.addEventListener('pointerdown', (event) => {
+  drag = { x: event.clientX, start: viewStart };
+  trace.setPointerCapture(event.pointerId);
+});
+trace.addEventListener('pointermove', (event) => {
+  const rect = trace.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  if (drag !== null) {
+    viewStart = drag.start - (event.clientX - drag.x) / (baseScale * zoom);
+    follow = false;
+    followEl.textContent = 'paused';
+    applyView();
+    return;
+  }
+  const view = pick(x, y);
+  if (view === null) hideTip(); else showTip(view, x, y);
+});
+trace.addEventListener('pointerup', () => { drag = null; });
+trace.addEventListener('pointerleave', () => { drag = null; hideTip(); });
+trace.addEventListener('click', (event) => {
+  const rect = trace.getBoundingClientRect();
+  const view = pick(event.clientX - rect.left, event.clientY - rect.top);
+  if (view !== null) showDetail(view);
+});
+trace.addEventListener('keydown', (event) => {
+  if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+  event.preventDefault();
+  if (spans.length === 0) return;
+  selected = Math.max(0, Math.min(spans.length - 1, selected + (event.key === 'ArrowRight' ? 1 : -1)));
+  const view = spans[selected];
+  if (view) { showDetail(view); viewStart = Math.max(minTs, (view.line.ts || 0) - viewWidth() / 2); applyView(); }
+});
+followEl.onclick = () => { follow = true; followEl.textContent = 'following'; viewStart = tailStart(maxTs === -Infinity ? 0 : maxTs); applyView(); };
+document.getElementById('close-detail').onclick = () => { detail.hidden = true; };
+document.getElementById('copy-detail').onclick = () => { navigator.clipboard?.writeText(detailBody.textContent || '').catch(() => {}); };
 filterEl.addEventListener('input', applyFilter);
-window.addEventListener('resize', () => requestAnimationFrame(render), { passive: true });
-function heartbeat() {
-  fetch('/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: CLIENT_ID }) }).catch(() => {});
-}
+window.addEventListener('resize', () => { app.renderer.resize(trace.clientWidth, trace.clientHeight); applyView(); });
 window.addEventListener('pagehide', () => { navigator.sendBeacon('/close', JSON.stringify({ id: CLIENT_ID })); });
 window.addEventListener('pageshow', heartbeat);
 heartbeat();
@@ -313,14 +453,12 @@ setInterval(() => { void loadSessions(); }, 5000);
 void bootstrap();
 </script></body></html>`;
 
+const forbidden = (): Response => new Response('forbidden', { status: 403 });
+
 /**
  * Fold history, then serve the page and its data endpoints on loopback. Nothing
  * binds until `start` is called; `stop` closes the socket and resolves `done`.
- * A pagehide schedules a close after a grace period so a refresh can cancel it
- * with a heartbeat, while a closed tab still exits.
  */
-const forbidden = (): Response => new Response('forbidden', { status: 403 });
-
 export const start = async (options: ViewerOptions): Promise<Viewer> => {
   const directory = options.directory;
   const database = file(directory, 'telemetry.db');
@@ -331,15 +469,16 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
     foldError = String(cause);
     console.error(`viewer: history fold failed: ${foldError}`);
   }
-  const fingerprints = new Map<string, string>();
-  const liveSessions = new Set<string>();
-  if (options.sessionID !== undefined) liveSessions.add(options.sessionID);
+  const pixi = pixiModule();
   const idleMs = options.idleMs ?? DEFAULT_IDLE_MS;
   const closeDelayMs = options.closeDelayMs ?? DEFAULT_CLOSE_DELAY_MS;
   let lastHeartbeat = performance.now();
   let closeAt: number | undefined;
-  const clients = new Map<string, number>();
   let stopped = false;
+  const clients = new Map<string, number>();
+  const liveSessions = new Set<string>();
+  if (options.sessionID !== undefined) liveSessions.add(options.sessionID);
+  const fingerprints = new Map<string, string>();
   const { promise: done, resolve: resolveDone } = Promise.withResolvers<void>();
 
   const server = Bun.serve({
@@ -357,6 +496,10 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
         return new Response(page(options.sessionID), {
           headers: { 'content-type': 'text/html; charset=utf-8' },
         });
+      }
+      if (url.pathname === '/pixi.mjs') {
+        if (pixi === undefined) return new Response('pixi.js is not installed', { status: 500 });
+        return new Response(Bun.file(pixi), { headers: { 'content-type': 'text/javascript' } });
       }
       if (url.pathname === '/api/status') return Response.json({ foldError });
       if (url.pathname === '/api/sessions') {
@@ -416,8 +559,8 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
       if (url.pathname === '/heartbeat' || url.pathname === '/close') {
         let id = 'default';
         try {
-          const body = JSON.parse((await request.text()) || '{}');
-          const decoded = Option.getOrUndefined(decodeClientRequest(body));
+          const parsed = JSON.parse((await request.text()) || '{}');
+          const decoded = Option.getOrUndefined(decodeClientRequest(parsed));
           if (decoded?.id !== undefined) id = decoded.id;
         } catch {
           // A beacon without a JSON body still counts as the default client.

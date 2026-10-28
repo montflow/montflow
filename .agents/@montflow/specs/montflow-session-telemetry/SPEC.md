@@ -53,6 +53,6 @@ and shipped the data layer. `B001`'s DOM surface is superseded by `C001`.
 | B002 | dashboard | execution | complete | Yes |
 | B099 | review-phase | review | complete | No |
 | C001 | canvas-surface | exploratory | complete | No |
-| C002 | realtime-canvas | execution | pending | Yes |
+| C002 | realtime-canvas | execution | complete | Yes |
 | C003 | trace-embeds | execution | pending | Yes |
 | C099 | review-phase | review | pending | No |

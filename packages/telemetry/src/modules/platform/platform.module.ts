@@ -2,6 +2,8 @@
 import * as Fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 /* oxlint-enable montflow/no-node-platform-imports */
 
-export { createHash, Fs, homedir };
+export { createHash, dirname, fileURLToPath, Fs, homedir };
