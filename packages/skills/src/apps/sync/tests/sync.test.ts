@@ -457,6 +457,7 @@ Vitest.describe('Sync.runSync', () => {
         const refusal = yield* Sync.runSync({
           from: sandbox.checkout,
           dir: sandbox.workspace,
+          force: true,
         }).pipe(Effect.flip);
 
         Vitest.expect(refusal).toContain('refusing to write');
@@ -805,6 +806,7 @@ Vitest.describe('Sync.runSync', () => {
         const refusal = yield* Sync.runSync({
           from: sandbox.checkout,
           dir: sandbox.workspace,
+          force: true,
         }).pipe(Effect.flip);
 
         Vitest.expect(refusal).toContain('cannot write');
@@ -988,6 +990,111 @@ Vitest.describe('sync manifest runtime', () => {
         );
         yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
         Vitest.expect(yield* Effect.promise(() => readManifest(sandbox.workspace))).toBeDefined();
+      }),
+    ),
+  );
+});
+
+Vitest.describe('sync drift outcomes runtime', () => {
+  Vitest.it.effect('reports current, stale, diverged, and unmanaged', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        const current = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+        Vitest.expect(current.skills[0]?.drift).toBe('current');
+        Vitest.expect(current.drifted).toBe(false);
+
+        yield* Effect.promise(() =>
+          write(
+            sandbox.checkout,
+            '.agents/skills/alpha/SKILL.md',
+            skillFile('alpha', 'version: 2.0.0\n'),
+          ),
+        );
+        const stale = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+        Vitest.expect(stale.skills[0]?.drift).toBe('stale');
+        Vitest.expect(stale.drifted).toBe(true);
+
+        yield* Effect.promise(() =>
+          write(sandbox.workspace, '.agents/skills/alpha/SKILL.md', 'tampered\n'),
+        );
+        const diverged = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+        Vitest.expect(diverged.skills[0]?.drift).toBe('diverged');
+        Vitest.expect(diverged.skills[0]?.differingFiles).toStrictEqual(['SKILL.md']);
+        Vitest.expect(diverged.drifted).toBe(true);
+
+        const unmanaged = yield* withSandbox((other) =>
+          Effect.gen(function* () {
+            yield* Effect.promise(() => writeSkill(other.checkout, 'alpha'));
+            yield* Effect.promise(() => writeSkill(other.workspace, 'alpha'));
+            return yield* Sync.runSync({
+              from: other.checkout,
+              dir: other.workspace,
+              check: true,
+            });
+          }),
+        );
+        Vitest.expect(unmanaged.skills[0]?.drift).toBe('unmanaged');
+      }),
+    ),
+  );
+
+  Vitest.it.effect('refuses to overwrite a diverged skill unless forced', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        const target = join(store(sandbox.workspace), 'alpha', 'SKILL.md');
+        yield* Effect.promise(() => writeFile(target, 'hand edited\n'));
+
+        const refused = yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        Vitest.expect(refused.refused).toStrictEqual(['alpha']);
+        Vitest.expect(yield* Effect.promise(() => readFile(target, 'utf8'))).toBe('hand edited\n');
+
+        const forced = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          force: true,
+        });
+        Vitest.expect(forced.refused).toStrictEqual([]);
+        Vitest.expect(yield* Effect.promise(() => readFile(target, 'utf8'))).toBe(
+          skillFile('alpha'),
+        );
+      }),
+    ),
+  );
+
+  Vitest.it.effect('keeps byte-comparison behaviour for an unmanaged store', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Effect.promise(() =>
+          write(sandbox.workspace, '.agents/skills/alpha/SKILL.md', 'old\n'),
+        );
+
+        const result = yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        Vitest.expect(result.skills[0]?.drift).toBe('unmanaged');
+        Vitest.expect(result.skills[0]?.outcome).toBe('updated');
+        Vitest.expect(
+          yield* Effect.promise(() =>
+            readFile(join(store(sandbox.workspace), 'alpha', 'SKILL.md'), 'utf8'),
+          ),
+        ).toBe(skillFile('alpha'));
       }),
     ),
   );

@@ -72,7 +72,7 @@ interface FlagGrammar {
 
 /** `doctor`: `--check`/`--verbose` switches, `--dir` value, no positional. */
 const DOCTOR_GRAMMAR: FlagGrammar = {
-  booleans: new Set(['check', 'verbose']),
+  booleans: new Set(['check', 'verbose', 'force']),
   values: new Set(['dir']),
   positionals: NO_POSITIONALS,
 };
@@ -315,6 +315,7 @@ export type CliAction =
       /** Canonical `--target`; `--dir` is the alias folded into it. */
       readonly target: string | undefined;
       readonly check: boolean;
+      readonly force: boolean;
       readonly verbose: boolean;
     };
 
@@ -384,6 +385,7 @@ export const parseCliArgs = (args: string): CliAction => {
         source: one(split.values['source']) ?? one(split.values['from']),
         target: one(split.values['target']) ?? one(split.values['dir']),
         check: split.booleans['check'] ?? false,
+        force: split.booleans['force'] ?? false,
         verbose: split.booleans['verbose'] ?? false,
       };
     }
@@ -513,6 +515,7 @@ export const run = (args: string, ui: CliUi, cwd: string): Effect.Effect<void, s
           // every other store command.
           dir: paths.target ?? cwd,
           check: action.check,
+          force: action.force,
           cwd,
           invocation: '/mf-skills sync',
         });
@@ -521,6 +524,9 @@ export const run = (args: string, ui: CliUi, cwd: string): Effect.Effect<void, s
         yield* say(Renderers.sync(result, { verbose: action.verbose }));
         if (result.check && result.drifted) {
           return yield* Effect.fail(Renderers.syncRefusal(result));
+        }
+        if (result.refused.length > 0) {
+          return yield* Effect.fail(Renderers.forceRefusal(result));
         }
         return;
       }

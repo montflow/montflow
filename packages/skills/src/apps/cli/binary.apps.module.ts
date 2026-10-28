@@ -261,6 +261,10 @@ const syncCommand = Command.make(
       'check',
       'Report only; never write. Non-zero when the target is behind.',
     ),
+    force: optionalBoolean(
+      'force',
+      'Overwrite a skill whose files were edited since the last sync.',
+    ),
     verbose: verboseFlag,
     from: fromFlag,
     dir: targetAliasFlag,
@@ -271,12 +275,17 @@ const syncCommand = Command.make(
         from: firstGiven(opt(config.source), opt(config.from)),
         dir: firstGiven(opt(config.target), opt(config.dir)) ?? process.cwd(),
         check: config.check,
+        force: config.force,
         cwd: process.cwd(),
         invocation: 'mf-skills sync',
       });
       yield* Console.log(Renderers.sync(result, { verbose: config.verbose }));
       if (result.check && result.drifted) {
         yield* Console.log(Renderers.syncRefusal(result));
+        yield* exitFailed;
+      }
+      if (result.refused.length > 0) {
+        yield* Console.log(Renderers.forceRefusal(result));
         yield* exitFailed;
       }
       return yield* Effect.void;

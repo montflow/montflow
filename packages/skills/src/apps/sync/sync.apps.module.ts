@@ -86,7 +86,10 @@ export const resolveDefaultSource = (options: {
   }).pipe(Effect.provide(NodeLive));
 
 /** Fate of one skill in a sync run. */
-export type SyncOutcome = 'added' | 'updated' | 'unchanged' | 'skipped';
+export type SyncOutcome = 'added' | 'updated' | 'unchanged' | 'skipped' | 'refused';
+
+/** Drift between one skill on disk, its manifest entry, and the source. */
+export type SkillDrift = 'current' | 'stale' | 'diverged' | 'unmanaged';
 
 /** Fate of one file inside a synced skill. */
 export type SyncFileOutcome = 'added' | 'updated' | 'unchanged';
@@ -109,6 +112,12 @@ export interface SyncSkillStatus {
   readonly reason?: string | undefined;
   /** One entry per source file; empty for an internal (`skipped`) skill. */
   readonly files: ReadonlyArray<SyncFileStatus>;
+  /** Drift against the previous manifest; `unmanaged` when the store has none. */
+  readonly drift?: SkillDrift | undefined;
+  /** Commit the skill was installed from, for a diverged report. */
+  readonly manifestCommit?: string | undefined;
+  /** Files whose bytes differ from the manifest, for a diverged skill. */
+  readonly differingFiles?: ReadonlyArray<string> | undefined;
 }
 
 /** Outcome of a sync run across every skill in the source store. */
@@ -128,7 +137,9 @@ export interface SyncResult {
   readonly skills: ReadonlyArray<SyncSkillStatus>;
   /** Names that were added or updated; empty when the target is current. */
   readonly changed: ReadonlyArray<string>;
-  /** True when the target is behind the source. */
+  /** Names refused because they diverged and `--force` was not given. */
+  readonly refused: ReadonlyArray<string>;
+  /** True when the target is behind the source or locally diverged. */
   readonly drifted: boolean;
 }
 
@@ -147,6 +158,8 @@ export interface SyncOptions {
   readonly dir?: string | undefined;
   /** Report only — compute the same outcomes, write nothing. */
   readonly check?: boolean;
+  /** Overwrite a skill whose target bytes diverged from its manifest. */
+  readonly force?: boolean;
   /**
    * Caller's working directory. Used only as a last-resort source checkout
    * when the package-relative one is not a checkout; the engine never reads
@@ -672,7 +685,10 @@ const syncSkill = (
   targetRoot: string,
   store: StoreRoot,
   check: boolean,
-): Effect.Effect<SyncSkillStatus | undefined, string> =>
+  manifest: Store.SyncManifest | undefined,
+  sourceCommit: string | undefined,
+  force: boolean,
+) =>
   Effect.gen(function* () {
     const source = path.join(sourceRoot, name);
     const target = path.join(targetRoot, name);
@@ -710,15 +726,66 @@ const syncSkill = (
       }),
     );
 
+    const sourceHash = yield* Store.hashSkill(
+      Object.fromEntries(plan.map((file) => [file.file, file.bytes])),
+    );
+    const entry = manifest?.skills.find((skill) => skill.name === name && skill.removed !== true);
+    let drift: SkillDrift = 'unmanaged';
+    let differingFiles: ReadonlyArray<string> | undefined;
+    if (manifest !== undefined) {
+      if (entry === undefined) {
+        drift = 'stale';
+      } else {
+        const targetBytes = targetPresent ? yield* skillBytes(fs, path, target) : undefined;
+        const targetHash =
+          targetBytes === undefined ? undefined : yield* Store.hashSkill(targetBytes);
+        if (targetHash !== undefined && targetHash.sha256 !== entry.sha256) {
+          const names = new Set([
+            ...Object.keys(targetHash.files),
+            ...Object.keys(entry.files ?? {}),
+          ]);
+          differingFiles = [...names]
+            .filter((file) => targetHash.files[file] !== (entry.files ?? {})[file])
+            .toSorted();
+          drift = 'diverged';
+        } else if (
+          sourceHash.sha256 !== entry.sha256 ||
+          (manifest.source.commit !== undefined &&
+            sourceCommit !== undefined &&
+            manifest.source.commit !== sourceCommit)
+        ) {
+          drift = 'stale';
+        } else {
+          drift = 'current';
+        }
+      }
+    }
+
+    const refused = drift === 'diverged' && !check && !force;
     const pending = plan.filter((file) => file.outcome !== 'unchanged');
-    if (!check && pending.length > 0) {
+    if (!check && !refused && pending.length > 0) {
       yield* writeStaged(fs, path, pending, yield* Clock.currentTimeMillis);
     }
 
     const statuses = plan.map(({ file, outcome }) => ({ file, outcome }));
     const changed = statuses.some((status) => status.outcome !== 'unchanged');
-    const outcome: SyncOutcome = !targetPresent ? 'added' : changed ? 'updated' : 'unchanged';
-    return { name, outcome, source, target, files: statuses };
+    const outcome: SyncOutcome = refused
+      ? 'refused'
+      : !targetPresent
+        ? 'added'
+        : changed
+          ? 'updated'
+          : 'unchanged';
+    return {
+      name,
+      outcome,
+      source,
+      target,
+      files: statuses,
+      drift,
+      manifestCommit: manifest?.source.commit,
+      differingFiles,
+    };
   });
 
 /**
@@ -878,12 +945,24 @@ export const runSync = (options: SyncOptions = {}) =>
 
     const names = yield* directoryNames(fs, path, source);
     const store = yield* storeRootOf(fs, path, target);
+    const previousState = yield* Store.read(targetRoot);
+    const previous = previousState.status === 'managed' ? previousState.manifest : undefined;
+    const facts = yield* BuildInfo.checkoutFacts(sourceRoot);
     const skills: Array<SyncSkillStatus> = [];
     const applied: Array<SyncSkillStatus> = [];
     for (const name of names) {
-      const status = yield* syncSkill(fs, path, name, source, target, store, check).pipe(
-        Effect.mapError((message) => failureReport(message, applied, name)),
-      );
+      const status = yield* syncSkill(
+        fs,
+        path,
+        name,
+        source,
+        target,
+        store,
+        check,
+        previous,
+        facts.commit,
+        options.force === true,
+      ).pipe(Effect.mapError((message) => failureReport(message, applied, name)));
       if (status === undefined) continue;
       skills.push(status);
       if (status.outcome === 'added' || status.outcome === 'updated') applied.push(status);
@@ -906,8 +985,6 @@ export const runSync = (options: SyncOptions = {}) =>
       const publicNames = skills
         .filter((skill) => skill.outcome !== 'skipped')
         .map((skill) => skill.name);
-      const previousState = yield* Store.read(targetRoot);
-      const previous = previousState.status === 'managed' ? previousState.manifest : undefined;
       const manifest = yield* buildManifest(fs, path, sourceRoot, publicNames, previous);
       if (previous === undefined || !Store.same(previous, manifest)) {
         yield* Store.write(targetRoot, manifest);
@@ -923,6 +1000,9 @@ export const runSync = (options: SyncOptions = {}) =>
       invocation,
       skills,
       changed,
-      drifted: changed.length > 0,
+      refused: skills.filter((skill) => skill.outcome === 'refused').map((skill) => skill.name),
+      drifted:
+        changed.length > 0 ||
+        skills.some((skill) => skill.drift === 'stale' || skill.drift === 'diverged'),
     };
   }).pipe(Effect.provide(NodeLive));

@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: D001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task D002: add-store-drift-states
@@ -27,4 +27,4 @@ Distinguish "behind the checkout" from "locally edited" so an agent following th
 
 ## Completion
 
-- [ ] Done.
+- [x] Done.
