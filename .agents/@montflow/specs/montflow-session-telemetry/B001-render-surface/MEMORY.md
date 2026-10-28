@@ -108,9 +108,9 @@ browser. The page is the single surface for both the live session tail and the
    DOM nodes** after first paint.
 2. **First row visible ≤ 1000ms** after navigation (measured 23.2ms).
 3. Over 120 programmatic scroll steps: **p95 rAF interval ≤ 20ms** and
-   **≤ 2 frames > 20ms** (measured 16.8ms, 0). Recorded with the headless
-   Chromium harness; CI asserts row/node budget and lifecycle, and the perf
-   numbers are recorded in this file.
+   **≤ 2 frames over 20ms** (measured 16.8ms, 0). Recorded with a headless
+   Chromium harness; CI covers script parsing, the shared window math, and the
+   lifecycle, and the browser numbers are recorded in B002's MEMORY.
 4. **JS heap ≤ 50MB** at 20k spans (measured 3.0MB).
 5. An event appended to the live NDJSON file appears in the page **≤ 1000ms**.
 6. No listener before `/telemetry`; after close or 5-minute idle, the port is

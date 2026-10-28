@@ -33,7 +33,7 @@ Vitest.describe('Fold.run runtime', () => {
       Vitest.expect(sessions).toHaveLength(1);
       const [session] = sessions;
       Vitest.expect(session?.sessionID).toBe('ses_fixture');
-      Vitest.expect(session?.title).toBe('Telemetry');
+      Vitest.expect(session?.title).toBe('telemetry');
       Vitest.expect(session?.spanCount).toBe(12);
       Vitest.expect(session?.costUSD).toBeCloseTo(0.0012);
       Vitest.expect(session?.inputTokens).toBe(120);
@@ -93,6 +93,41 @@ Vitest.describe('Fold.run runtime', () => {
       Vitest.expect(
         await Fold.run({ directory: join(directory, 'missing'), database }),
       ).toStrictEqual({ files: 0, spans: 0 });
+    });
+  });
+
+  Vitest.it('resets a file that shrank instead of skipping it forever', async () => {
+    await withStore(async (directory) => {
+      const path = seed(directory);
+      const database = join(directory, 'telemetry.db');
+      await Fold.run({ directory, database });
+      Vitest.expect(await Fold.spans(database, 'ses_fixture')).toHaveLength(12);
+      writeFileSync(
+        path,
+        `${JSON.stringify({
+          v: 1,
+          ts: 1,
+          type: 'session.created',
+          sessionID: 'ses_fixture',
+          payload: { sessionID: 'ses_fixture', slug: 'rewritten' },
+        })}\n`,
+      );
+      const result = await Fold.run({ directory, database });
+      Vitest.expect(result.spans).toBe(1);
+      const spans = await Fold.spans(database, 'ses_fixture');
+      Vitest.expect(spans).toHaveLength(1);
+      Vitest.expect(spans[0]?.type).toBe('session.created');
+      Vitest.expect((await Fold.sessions(database))[0]?.title).toBe('rewritten');
+    });
+  });
+
+  Vitest.it('serializes two concurrent folds without duplicating spans', async () => {
+    await withStore(async (directory) => {
+      seed(directory);
+      const database = join(directory, 'telemetry.db');
+      await Promise.all([Fold.run({ directory, database }), Fold.run({ directory, database })]);
+      Vitest.expect(await Fold.spans(database, 'ses_fixture')).toHaveLength(12);
+      Vitest.expect(await Fold.offsets(database)).toHaveProperty('2026-10-28.ndjson');
     });
   });
 });

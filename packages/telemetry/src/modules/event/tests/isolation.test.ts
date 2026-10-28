@@ -27,7 +27,10 @@ const sources = walk(sourceRoot).map((file) => ({
 const INGEST = [
   'server.ts',
   'modules/config/',
+  'modules/digest/',
   'modules/event/',
+  'modules/path/',
+  'modules/platform/',
   'modules/plugin/',
   'modules/store/',
 ];

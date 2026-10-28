@@ -95,10 +95,10 @@ const BODY_FIELDS = new Map<AllowedType, readonly string[]>([
   ['permission.asked', ['message', 'metadata']],
 ]);
 
-const bodyFields = (type: string): readonly string[] | undefined => {
-  // SAFETY: `admits` already restricted `type` to TYPES ∪ DELTA_TYPES, which is exactly `AllowedType`.
-  return BODY_FIELDS.get(type as AllowedType);
-};
+const bodyFields = (type: AllowedType): readonly string[] | undefined => BODY_FIELDS.get(type);
+
+/** Whether a string is one of the allowlisted types, independent of capture flags. */
+const isKnownType = (type: string): type is AllowedType => ALWAYS.has(type) || DELTAS.has(type);
 
 /** The host event shape after boundary decoding: unknown keys dropped. */
 const Incoming = Schema.Struct({
@@ -113,9 +113,21 @@ const ModelSchema = Schema.Struct({
   variant: Schema.optional(Schema.String),
 });
 
+/** The persisted line contract, shared by the tail reader. */
+export const LineSchema = Schema.Struct({
+  v: Schema.Literal(1),
+  ts: Schema.Number,
+  type: Schema.String,
+  sessionID: Schema.String,
+  agent: Schema.optional(Schema.String),
+  model: Schema.optional(ModelSchema),
+  payload: Schema.JsonObject,
+});
+
 const decodeEvent = Schema.decodeUnknownOption(Incoming);
 const decodeModel = Schema.decodeUnknownOption(ModelSchema);
 const decodeString = Schema.decodeUnknownOption(Schema.String);
+export const decodeLine = Schema.decodeUnknownOption(LineSchema);
 
 /** Largest timestamp a JavaScript Date can represent, in milliseconds. */
 const MAX_TS = 8_640_000_000_000_000;
@@ -136,7 +148,7 @@ const digest = (value: JsonValue, hash: Hash): JsonObject => {
   };
 };
 
-const redact = (data: JsonObject, type: string, settings: Capture, hash: Hash): JsonObject => {
+const redact = (data: JsonObject, type: AllowedType, settings: Capture, hash: Hash): JsonObject => {
   if (settings.captureBodies) return data;
   if (settings.captureDeltas && DELTAS.has(type)) return data;
   const fields = bodyFields(type);
@@ -171,6 +183,8 @@ export const extract = (
   if (!admits(input.type, settings.captureDeltas)) return undefined;
   const decoded = Option.getOrUndefined(decodeEvent(input));
   if (decoded === undefined) return undefined;
+  const type = decoded.type;
+  if (!isKnownType(type)) return undefined;
   const data = decoded.data ?? {};
   const sessionID = asString(data['sessionID']);
   if (sessionID === undefined) return undefined;
@@ -179,9 +193,9 @@ export const extract = (
   const line: Line = {
     v: 1,
     ts: timestamp(decoded.created, now),
-    type: decoded.type,
+    type,
     sessionID,
-    payload: redact(data, decoded.type, settings, hash),
+    payload: redact(data, type, settings, hash),
   };
   if (agent !== undefined) line.agent = agent;
   if (model !== undefined) line.model = model;

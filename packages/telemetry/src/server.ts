@@ -1,12 +1,12 @@
 import { Plugin } from '@opencode/plugin';
-// oxlint-disable-next-line montflow/no-node-platform-imports -- the plugin is the composition root: it resolves the user's data directory from the OS, and the telemetry package deliberately has no Effect platform layer on the collection path.
-import { homedir } from 'node:os';
+import { homedir } from './modules/platform/index.js';
 import type { Environment, RawOptions } from './modules/config/index.js';
 import { resolve } from './modules/config/index.js';
 import { sha256 } from './modules/digest/index.js';
 import type { IncomingInput } from './modules/event/index.js';
 import { consume, ID } from './modules/plugin/index.js';
 import { make, once, prune } from './modules/store/index.js';
+import type { Viewer } from './modules/viewer/index.js';
 
 /** Cleanup returned to the host; idempotent. */
 export type Cleanup = () => Promise<void> | void;
@@ -86,6 +86,7 @@ export const setup = async (context: HostSlice): Promise<Cleanup> => {
       notifyWrite,
     );
     let dispose: (() => Promise<void>) | undefined;
+    let viewer: Viewer | undefined;
     if (context.command !== undefined) {
       try {
         const registration = await context.command.transform((editor) => {
@@ -93,8 +94,26 @@ export const setup = async (context: HostSlice): Promise<Cleanup> => {
             name: 'telemetry',
             description: 'Open /telemetry: the live trace and history viewer for this session.',
             execute: async (input) => {
-              const { launch } = await import('./apps/viewer/launch.js');
-              await launch({ directory: settings.directory, sessionID: input.sessionID });
+              try {
+                if (viewer !== undefined) {
+                  const { open } = await import('./apps/viewer/index.js');
+                  open(viewer.url);
+                  return;
+                }
+                const { start } = await import('./modules/viewer/index.js');
+                const { open } = await import('./apps/viewer/index.js');
+                const started = await start({
+                  directory: settings.directory,
+                  sessionID: input.sessionID,
+                });
+                viewer = started;
+                void started.done.then(() => {
+                  if (viewer === started) viewer = undefined;
+                });
+                open(started.url);
+              } catch (cause) {
+                notifySetup(`viewer failed: ${String(cause)}`);
+              }
             },
           });
         });
@@ -113,6 +132,11 @@ export const setup = async (context: HostSlice): Promise<Cleanup> => {
         writer.close();
       } catch (cause) {
         notifySetup(`cleanup failed: ${String(cause)}`);
+      }
+      try {
+        await viewer?.stop();
+      } catch (cause) {
+        notifySetup(`viewer shutdown failed: ${String(cause)}`);
       }
       try {
         await dispose?.();

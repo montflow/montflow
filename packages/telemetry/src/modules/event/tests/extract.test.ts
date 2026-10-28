@@ -223,6 +223,21 @@ Vitest.describe('Event.extract runtime', () => {
         'item',
       ],
       [
+        'session.compaction.started',
+        { sessionID: SESSION, reason: 'auto', recent: 'private tail' },
+        'recent',
+      ],
+      [
+        'session.tool.failed',
+        {
+          sessionID: SESSION,
+          id: 'call_1',
+          content: [{ type: 'text', text: 'private' }],
+          executed: true,
+        },
+        'content',
+      ],
+      [
         'permission.asked',
         {
           id: 'perm_1',
@@ -230,8 +245,20 @@ Vitest.describe('Event.extract runtime', () => {
           action: 'write',
           resources: ['/tmp/private'],
           message: 'Allow?',
+          metadata: { detail: 'private' },
         },
         'message',
+      ],
+      [
+        'permission.asked',
+        {
+          id: 'perm_1',
+          sessionID: SESSION,
+          action: 'write',
+          resources: ['/tmp/private'],
+          metadata: { detail: 'private' },
+        },
+        'metadata',
       ],
     ] as const;
     for (const [type, data, field] of cases) {

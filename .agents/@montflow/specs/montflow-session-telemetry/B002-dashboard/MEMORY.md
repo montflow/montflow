@@ -8,44 +8,48 @@ plus the surface-independent data layer (NDJSON tail + SQLite fold).
 
 ## Progress
 
-- 2026-10-28: complete. `bun run --cwd packages/telemetry test` = 110 tests
-  (102 vitest + 8 bun:test), `ts:check`, `lint:check`, `format:check` green.
+- 2026-10-28: complete. `bun run --cwd packages/telemetry test` = **154 tests**
+  (139 vitest + 15 bun:test), `ts:check`, `lint:check`, `format:check` green
+  (41 formatted files).
 - 20k acceptance run against the real viewer with a 20,000-line fixture
   (headless Chromium 144):
-  - first row **124.8ms** (worst observed across runs 237ms; budget 1000ms)
-  - **60 rows / 80 DOM nodes** (budget 120 rows / 300 nodes)
-  - scroll over 120 steps: avg **16.53ms**, p95 **16.8ms**, max **17.3ms**,
+  - first row **129.7ms** (worst observed across runs 237ms; budget 1000ms)
+  - **60 rows / 81 DOM nodes** (budget 120 rows / 300 nodes)
+  - scroll over 120 steps: avg **16.67ms**, p95 **16.8ms**, max **16.8ms**,
     **0** frames over 20ms
-  - JS heap **11.3MB** (budget 50MB)
+  - JS heap **11.5MB** (budget 50MB)
   - appended NDJSON line visible in the page in **303ms** (budget 1000ms)
+  - totals at 20k: `20000 spans · $23.9988 · 2399880 in / 599970 out` (cost and
+    tokens from `session.step.ended` only)
 - Real command path: a standalone OpenCode server loaded the local plugin
   directory; `POST /api/session/{id}/command` with `name: telemetry` returned
-  200, `xdg-open` received a `127.0.0.1` viewer URL, the page served 200, and
-  `POST /close` closed the port and exited the viewer process.
+  200, `xdg-open` received a `127.0.0.1` viewer URL, the page served 200;
+  `POST /close` closed the loopback port after the 10s grace period while the
+  OpenCode server stayed up (no separate viewer process exists).
 - Data layer: `modules/tail` (byte-offset reads, complete lines only),
-  `modules/fold` (idempotent fold into `telemetry.db` with a per-file offset),
+  `modules/fold` (idempotent fold into `telemetry.db` with per-file offsets),
   `modules/sqlite` (the only driver adapter). Surface reads only these modules.
 
 ## Open Questions
 
-- None blocking. The viewer child needs a `bun` executable on `PATH`
-  (`Bun.which('bun')`); a machine that only has the compiled OpenCode binary
-  cannot start the child until a bun runtime is available. The failure is
-  swallowed, so collection and the session are unaffected.
+- None blocking. The viewer runs in the plugin's server process; history and
+  live data are memory-mapped through the same process, so a very large page
+  competes with the session for memory. 20k spans measured at 11.5MB JS heap and
+  the fold at ~144ms, well inside the budget.
 
 ## Handoff
 
 ### Shape
 
-- `/telemetry` (registered by `setup` through `context.command`) imports
-  `apps/viewer/launch` **dynamically** (so the ingest path stays free of the
-  viewer), spawns `apps/viewer/main.ts` with `--directory`/`--session`, waits
-  for the first stdout line, and hands the URL to `xdg-open`/`open`/`start`.
-- `apps/viewer/main.ts` starts the module, prints the URL, and waits for
-  `done`; SIGINT/SIGTERM stop it.
-- `modules/viewer` folds history at start (best effort), serves `/`, the JSON
-  APIs, heartbeat, and close. Idle timeout is 5 minutes; the page heartbeats
-  every 30s and beacons `/close` on `pagehide`.
+- `/telemetry` (registered by `setup` through `context.command`) dynamically
+  imports `modules/viewer` (so the ingest path stays free of the viewer), starts
+  a loopback server in-process, and hands the URL to `xdg-open`/`open`/`start`.
+  Re-running the command reopens the active viewer URL; cleanup stops it.
+- `modules/viewer` folds history at start (best effort, failure surfaced via
+  `/api/status`), serves `/`, the JSON APIs, heartbeat, and close. Idle timeout
+  is 5 minutes; the page heartbeats every 30s.
+- The page's `pagehide` schedules close after a 10s grace period. A refresh
+  re-heartbeats and cancels it; a closed tab exits after the grace period.
 - Data layer files: `modules/tail`, `modules/fold`, `modules/sqlite`. The
   viewer imports them; none of them imports the viewer.
 
@@ -54,14 +58,21 @@ plus the surface-independent data layer (NDJSON tail + SQLite fold).
 - `Line` files are `<UTC day>.ndjson`; tail ignores a trailing partial line and
   skips malformed lines. Offsets are byte offsets at the last newline.
 - `telemetry.db` is derived state, safe to delete: `files(path, offset)`,
-  `sessions(...)`, `spans(...)`. Cost tokens are summed from
-  `session.step.ended` only (not `usage.updated`, which is cumulative).
-- The page keeps exactly 60 recycled `.row` elements; `windowRange` clamps to
-  the dataset. Summary totals are computed on data change, not per scroll frame.
-- Live polling is 400ms; `/api/live` accepts `{ sessionID, cursors }` and
-  returns new lines plus updated cursors. `{ fromEnd: true }` seeks to the
-  current file sizes after history is loaded, so DB rows and live rows never
-  duplicate.
+  `sessions(...)`, `spans(..., file, ...)`, with `PRAGMA user_version = 1`.
+  Cost/tokens are summed from `session.step.ended` only (`usage.updated` is
+  cumulative and would double-count).
+- Folding uses a per-file `BEGIN IMMEDIATE`, so overlapping viewers serialize
+  instead of duplicating rows. A file smaller than its stored offset has its
+  spans replaced and its sessions rebuilt from the remaining rows.
+- The page recycles between 60 and 120 `.row` elements based on viewport
+  height; `windowRange` (in `CLIENT_SCRIPT`, shared with tests) computes the
+  window. Totals are computed on data change, not per scroll frame.
+- Live polling is 400ms. The page seeds cursors from the fold's per-file
+  offsets (`{ fromFold: true }`), so bytes appended between the fold and page
+  load are delivered. `/api/live` returns lines for every session and the page
+  buffers them per session, so a sidebar switch does not drop a tail.
+- The page rejects foreign `Host`/`Origin` headers, escapes the embedded
+  session id, and renders fold failures separately from an empty store.
 
 ### Verification
 
@@ -69,10 +80,20 @@ plus the surface-independent data layer (NDJSON tail + SQLite fold).
   sqlite under Node exercising the `node:sqlite` fallback; `bun test` for the
   viewer because it uses `Bun.serve`).
 - The browser acceptance harness was throwaway and is deleted; the numbers
-  above are the recorded pass condition from B001.
+  above are the recorded pass condition from B001. CI covers the page script
+  parsing, the shared window/summary functions, the API layer, the lifecycle,
+  and the packaged-artifact entry shape.
 
 ## Deviations
 
+- **Viewer lifecycle is in-process**, not a dedicated child (B001's note
+  proposed a child). The packaged artifact only emits `server.js`/`index.js`,
+  so a child entry cannot survive `pack:plugins`; running the loopback server in
+  the plugin process keeps `/telemetry` working on the shipped install and
+  removes the launcher/orphan class of defects. `/telemetry` still starts it
+  only on explicit action, and close/idle stops the listener.
+- **Close uses a 10s grace period** so a refresh can re-heartbeat and cancel
+  the shutdown. Closing a tab leaves only that listener for at most 10s.
 - Viewer tests run under `bun test`, not `@effect/vitest`: the viewer needs
   `Bun.serve`/`Bun.sleep`, which are absent in the vitest Node worker. The
   package `test` script runs `vitest run --typecheck` then

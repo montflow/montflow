@@ -1,5 +1,4 @@
-// oxlint-disable-next-line montflow/no-node-platform-imports -- NDJSON append is the ingest path and must stay a bare `node:fs` write: the server plugin has no Effect layer to provide FileSystem to, and a native/async adapter would add weight the spec forbids.
-import * as Fs from 'node:fs';
+import { Fs } from '../platform/index.js';
 import type { Line } from '../event/index.js';
 import { file } from '../path/index.js';
 

@@ -1,36 +1,11 @@
-// oxlint-disable-next-line montflow/no-node-platform-imports -- the read path tails NDJSON with a bare file read; the viewer is not an Effect service and must not pull a platform layer into the plugin.
-import * as Fs from 'node:fs';
-import { Option, Schema } from 'effect';
-import type { Line } from '../event/index.js';
+import { Fs } from '../platform/index.js';
+import { Option } from 'effect';
+import { decodeLine, type Line } from '../event/index.js';
 
 /** One incremental read: the complete lines after `offset`, and the byte offset after them. */
 export interface Result {
   readonly lines: Line[];
   readonly nextOffset: number;
-}
-
-const Model = Schema.Struct({
-  providerID: Schema.String,
-  id: Schema.String,
-  variant: Schema.optional(Schema.String),
-});
-
-const LineSchema = Schema.Struct({
-  v: Schema.Literal(1),
-  ts: Schema.Number,
-  type: Schema.String,
-  sessionID: Schema.String,
-  agent: Schema.optional(Schema.String),
-  model: Schema.optional(Model),
-  payload: Schema.JsonObject,
-});
-
-const decodeLine = Schema.decodeUnknownOption(LineSchema);
-
-interface MutableModel {
-  providerID: string;
-  id: string;
-  variant?: string;
 }
 
 const parse = (row: string): Line | undefined => {
@@ -45,14 +20,7 @@ const parse = (row: string): Line | undefined => {
       payload: decoded.payload,
     };
     if (decoded.agent !== undefined) line.agent = decoded.agent;
-    if (decoded.model !== undefined) {
-      const model: MutableModel = {
-        providerID: decoded.model.providerID,
-        id: decoded.model.id,
-      };
-      if (decoded.model.variant !== undefined) model.variant = decoded.model.variant;
-      line.model = model;
-    }
+    if (decoded.model !== undefined) line.model = decoded.model;
     return line;
   } catch {
     return undefined;

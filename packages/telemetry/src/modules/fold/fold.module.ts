@@ -1,8 +1,7 @@
-// oxlint-disable-next-line montflow/no-node-platform-imports -- the fold is a filesystem pass over the telemetry directory; there is no Effect platform layer in the viewer and the adapter owns the driver.
-import * as Fs from 'node:fs';
 import { Option, Schema } from 'effect';
 import type { JsonObject, Line } from '../event/index.js';
 import { file } from '../path/index.js';
+import { Fs } from '../platform/index.js';
 import * as Sqlite from '../sqlite/index.js';
 import * as Tail from '../tail/index.js';
 
@@ -38,11 +37,15 @@ export interface FoldResult {
   readonly spans: number;
 }
 
+/** Bumped when the derived schema changes incompatibly. */
+const SCHEMA_VERSION = 1;
+
 const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, offset INTEGER NOT NULL);',
   'CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, title TEXT, agent TEXT, model TEXT, started_at INTEGER, ended_at INTEGER, span_count INTEGER NOT NULL DEFAULT 0, cost_usd REAL NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0);',
-  'CREATE TABLE IF NOT EXISTS spans (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, ts INTEGER NOT NULL, type TEXT NOT NULL, agent TEXT, model TEXT, cost REAL, input_tokens INTEGER, output_tokens INTEGER, payload TEXT NOT NULL);',
+  "CREATE TABLE IF NOT EXISTS spans (id INTEGER PRIMARY KEY AUTOINCREMENT, file TEXT NOT NULL DEFAULT '', session_id TEXT NOT NULL, ts INTEGER NOT NULL, type TEXT NOT NULL, agent TEXT, model TEXT, cost REAL, input_tokens INTEGER, output_tokens INTEGER, payload TEXT NOT NULL);",
   'CREATE INDEX IF NOT EXISTS spans_session ON spans(session_id, ts, id);',
+  'CREATE INDEX IF NOT EXISTS spans_file ON spans(file);',
 ].join('\n');
 
 const num = (value: Sqlite.SqlValue | undefined, fallback = 0): number => {
@@ -61,31 +64,39 @@ const optionalNumber = (value: Sqlite.SqlValue | undefined): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const decodeNumber = Schema.decodeUnknownOption(Schema.Number);
+const decodeObject = Schema.decodeUnknownOption(Schema.JsonObject);
+const decodeString = Schema.decodeUnknownOption(Schema.String);
+
 const numberField = (payload: JsonObject, key: string): number =>
-  Option.getOrElse(Schema.decodeUnknownOption(Schema.Number)(payload[key]), () => 0);
+  Option.getOrElse(decodeNumber(payload[key]), () => 0);
 
 const objectField = (payload: JsonObject, key: string): JsonObject | undefined =>
-  Option.getOrUndefined(Schema.decodeUnknownOption(Schema.JsonObject)(payload[key]));
+  Option.getOrUndefined(decodeObject(payload[key]));
 
 const stringField = (payload: JsonObject, key: string): string | undefined =>
-  Option.getOrUndefined(Schema.decodeUnknownOption(Schema.String)(payload[key]));
+  Option.getOrUndefined(decodeString(payload[key]));
 
 const modelLabel = (line: Line): string | null =>
   line.model === undefined ? null : `${line.model.providerID}/${line.model.id}`;
 
-const applySpan = (db: Sqlite.Database, line: Line): void => {
+const applySpan = (db: Sqlite.Database, line: Line, fileName: string): void => {
   const stepEnded = line.type === 'session.step.ended';
   const cost = stepEnded ? numberField(line.payload, 'cost') : 0;
   const tokens = stepEnded ? objectField(line.payload, 'tokens') : undefined;
   const inputTokens = tokens === undefined ? 0 : numberField(tokens, 'input');
   const outputTokens = tokens === undefined ? 0 : numberField(tokens, 'output');
   const model = modelLabel(line);
+  // The collector hashes `title`; `slug` is the only non-sensitive label left.
   const title =
-    line.type === 'session.created' ? (stringField(line.payload, 'title') ?? null) : null;
+    line.type === 'session.created'
+      ? (stringField(line.payload, 'title') ?? stringField(line.payload, 'slug') ?? null)
+      : null;
 
   db.run(
-    'INSERT INTO spans (session_id, ts, type, agent, model, cost, input_tokens, output_tokens, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO spans (file, session_id, ts, type, agent, model, cost, input_tokens, output_tokens, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
+      fileName,
       line.sessionID,
       line.ts,
       line.type,
@@ -124,11 +135,45 @@ const applySpan = (db: Sqlite.Database, line: Line): void => {
   );
 };
 
+const rebuildSession = (db: Sqlite.Database, sessionID: string): void => {
+  db.run('DELETE FROM sessions WHERE session_id = ?', [sessionID]);
+  db.run(
+    `INSERT INTO sessions (session_id, title, agent, model, started_at, ended_at, span_count, cost_usd, input_tokens, output_tokens)
+     SELECT session_id, NULL, MAX(agent), MAX(model), MIN(ts), MAX(ts), COUNT(*),
+            COALESCE(SUM(cost), 0), COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0)
+     FROM spans WHERE session_id = ? GROUP BY session_id`,
+    [sessionID],
+  );
+};
+
+/** Drop one file's spans (after a truncate/rewrite) and rebuild affected sessions. */
+const resetFile = (db: Sqlite.Database, fileName: string): void => {
+  const dirty = db
+    .all('SELECT DISTINCT session_id FROM spans WHERE file = ?', [fileName])
+    .map((row) => text(row['session_id']))
+    .filter((value): value is string => value !== null);
+  db.run('DELETE FROM spans WHERE file = ?', [fileName]);
+  for (const sessionID of dirty) rebuildSession(db, sessionID);
+};
+
+const ensureSchema = (db: Sqlite.Database): void => {
+  db.exec(SCHEMA);
+  const columns = db.all('PRAGMA table_info(spans)').map((row) => text(row['name']));
+  if (!columns.includes('file'))
+    db.exec("ALTER TABLE spans ADD COLUMN file TEXT NOT NULL DEFAULT '';");
+  const version = num(db.all('PRAGMA user_version')[0]?.['user_version']);
+  if (version > SCHEMA_VERSION) {
+    throw new Error(`telemetry.db schema ${version} is newer than ${SCHEMA_VERSION}`);
+  }
+  db.exec(`PRAGMA user_version = ${SCHEMA_VERSION};`);
+};
+
 /**
  * Fold every NDJSON day file into `telemetry.db`, resuming each file at the
- * byte offset of its last complete line. Running twice without new bytes
- * inserts nothing; an appended file folds only its new lines. Malformed lines
- * are skipped by the tail reader.
+ * byte offset of its last complete line. A per-file `BEGIN IMMEDIATE` makes two
+ * concurrent folds serialize instead of inserting the same lines twice; a file
+ * that shrank (truncate + rewrite) has its spans replaced. Running twice
+ * without new bytes inserts nothing. Malformed lines are skipped by the tail.
  */
 export const run = async (options: {
   readonly directory: string;
@@ -139,21 +184,30 @@ export const run = async (options: {
   let files = 0;
   let spans = 0;
   try {
-    db.exec(SCHEMA);
+    ensureSchema(db);
     for (const name of Fs.readdirSync(options.directory)) {
       if (!name.endsWith('.ndjson')) continue;
       const path = file(options.directory, name);
       const size = Fs.statSync(path).size;
-      const previous = db.all('SELECT offset FROM files WHERE path = ?', [name])[0];
-      const offset = previous === undefined ? 0 : num(previous['offset']);
-      if (size <= offset) continue;
-      const tail = Tail.read(path, offset);
-      if (tail.lines.length === 0 && tail.nextOffset === offset) continue;
-      files += 1;
-      db.exec('BEGIN');
+      db.exec('BEGIN IMMEDIATE');
       try {
+        const previous = db.all('SELECT offset FROM files WHERE path = ?', [name])[0];
+        let offset = previous === undefined ? 0 : num(previous['offset']);
+        if (size < offset) {
+          resetFile(db, name);
+          offset = 0;
+        }
+        if (size <= offset) {
+          db.exec('COMMIT');
+          continue;
+        }
+        const tail = Tail.read(path, offset);
+        if (tail.lines.length === 0 && tail.nextOffset === offset) {
+          db.exec('COMMIT');
+          continue;
+        }
         for (const line of tail.lines) {
-          applySpan(db, line);
+          applySpan(db, line, name);
           spans += 1;
         }
         db.run(
@@ -161,6 +215,7 @@ export const run = async (options: {
           [name, tail.nextOffset],
         );
         db.exec('COMMIT');
+        files += 1;
       } catch (cause) {
         db.exec('ROLLBACK');
         throw cause;
@@ -223,6 +278,22 @@ export const spans = async (database: string, sessionID: string): Promise<SpanRo
     return db
       .all('SELECT * FROM spans WHERE session_id = ? ORDER BY ts, id', [sessionID])
       .map(spanOf);
+  } finally {
+    db.close();
+  }
+};
+
+/** Byte offset already folded for every day file; live tails resume here. */
+export const offsets = async (database: string): Promise<Record<string, number>> => {
+  const db = await readOnly(database);
+  if (db === undefined) return {};
+  try {
+    const result: Record<string, number> = {};
+    for (const row of db.all('SELECT path, offset FROM files')) {
+      const path = text(row['path']);
+      if (path !== null) result[path] = num(row['offset']);
+    }
+    return result;
   } finally {
     db.close();
   }
