@@ -5,7 +5,7 @@ type: exploratory
 originator: user
 depends-on: B002
 related-tasks: C002, C003
-status: pending
+status: complete
 ---
 
 # Task C001: canvas-surface
@@ -46,8 +46,8 @@ from the renderer, and reject it if it only adds a paradigm.
 
 ## Completion
 
-- [ ] `C001-canvas-surface/MEMORY.md` (§ Handoff) records the matrix and measured spike numbers.
-- [ ] One surface is chosen (hybrid or all-canvas), with Ritmo accepted or rejected for a stated reason.
-- [ ] C002's acceptance test is measurable: first paint, append latency, pan/zoom p95, heap, and 20k span count.
-- [ ] The icon/tooltip hooks for C003 are named.
-- [ ] Any spike code is deleted.
+- [x] `C001-canvas-surface/MEMORY.md` (§ Handoff) records the matrix and measured spike numbers.
+- [x] One surface is chosen (hybrid or all-canvas), with Ritmo accepted or rejected for a stated reason.
+- [x] C002's acceptance test is measurable: first paint, append latency, pan/zoom p95, heap, and 20k span count.
+- [x] The icon/tooltip hooks for C003 are named.
+- [x] Any spike code is deleted.
