@@ -1,6 +1,6 @@
 ---
 name: spec-optimizations
-status: complete
+status: in-progress
 workspace-type: worktree
 author: Daniel Montilla
 created: 2026-10-26
@@ -55,6 +55,25 @@ four sizes with reasoning including effort, ask the user to confirm, then write
 exactly one layer and prove it with `check` and `sizing --human`. Generation never
 invents a model id or an effort token, never edits a task size, and never drops an
 unrelated config entry.
+
+Phases E-G are a post-completion audit follow-up. Phase E closes the correctness
+and safety gaps the audit surfaced: raw spec names reach the store, so
+`status --name ..` mixes tasks from every spec and a crafted `sizing-config`
+name renders a write target outside the specs root; a fresh `mf-specs doctor`
+install cannot render `execute` or `sizing-config`; `next` disagrees with `check`
+about dispatchability; `models --verify` reports a bare success after checking
+zero entries; and the README transcript runs a catalogue command that fails
+outside the host.
+
+Phase F restores signal and record integrity. `check` groups its 79 historical
+size warnings instead of printing 640 lines, a complete task exposes unchecked
+completion and gate items, the review-round budget becomes mechanical instead of
+prose-only, and four small output inconsistencies close.
+
+Phase G pays down structure and proof. Catalogue omissions become visible,
+`check --catalog` can prove a config, `execute` reads each spec once, sizing and
+catalogue share one JSON verifier, `apps/cli` splits into command modules, and
+prompt loading stops depending on an app.
 
 ## Requirements
 
@@ -131,6 +150,21 @@ unrelated config entry.
 - README and the authoring skill document the wizard checkpoints, catalogue-driven generation, the effort-from-variants rule, open versus fixed scope, `inherit`, merge, and the verification loop. The package and workspace skill copies stay byte-identical.
 - Tests use fixture catalogues only — variants known, known-empty, and unknown, duplicate and unsorted entries, a missing host context, and a malformed `--catalog` file. They cover `--verify` aggregation, the open scope plus every fixed scope and each conflict, the doctor gate, the slash and tool wiring, and a rendered prompt for open, repo, spec, and phase scope. No test writes a real `sizing.json` into the workspace.
 - Generating the repo config is allowed only from the live catalogue and only when the run's scope is repo; the phase itself commits no repo config and no model id as test data.
+- Every CLI and host surface that accepts a spec name validates it against the slug grammar before any store read, and every phase flag validates against the phase grammar. Malformed names and phases fail with a coded usage diagnostic; well-formed unknown identifiers keep their existing per-command behavior.
+- The three shipped prompts render from a fresh workspace that has only `mf-specs doctor` applied. A non-doctor skill is either installed by doctor or explicitly advisory; a missing doctor-owned skill still fails.
+- `status`, `next`, and `check` never disagree about dispatchability: `next` exits non-zero on every error `check` reports, and `models --verify` always states how many entries it checked and skipped.
+- The sizing README transcript and budget sentence match the binary: outside the host, catalogue reads use `--catalog` or `spec_models`; compact `sizing` omits the budget and `--human` prints it.
+- `mf-specs check` groups task-size and record warnings by spec and code, with full detail under `--verbose`; errors still render in full and aggregate.
+- A complete task with unchecked completion items or an all-unchecked `GATES.md` is a warning, and a phase review that exceeds its size-derived cycle budget is an error.
+- The review budget is verified mechanically from the review series, not only stated in the execute prompt.
+- Catalogue normalization reports omitted host models, variants, and defaults instead of dropping them silently; the omission is visible in the table and the JSON document.
+- `mf-specs check --catalog <path>` cross-checks every config entry and fails on an unknown model or effort; without the flag, `check` remains host-free.
+- `execute` derives its state and ready set from one snapshot and one config read per invocation.
+- Sizing and catalogue share one JSON-fault vocabulary, and sizing verifies through its schemas rather than a parallel hand-written walker.
+- `apps/cli` splits into command modules behind a stable barrel, with no source file above roughly 1,000 lines.
+- No module under `src/modules/**` imports `src/apps/**`; prompt loading depends on a module-level doctor gate, not an app.
+- Small surface inconsistencies close: the sizing budget label, the provider-filtered JSON default, the `which` prefix boundary, and slash-flag validation.
+- Historical locked phases, completed task records, and review rounds A-D are not rewritten; phases E-G append to the spec and treat this audit as their origin.
 
 ## Tasks
 
@@ -157,3 +191,18 @@ unrelated config entry.
 | D003 | config-command | execution | complete | Yes |
 | D004 | docs-and-handoffs | execution | complete | Yes |
 | D099 | review-phase | review | complete | No |
+| E001 | validate-names | execution | pending | Yes |
+| E002 | skill-gate | execution | pending | Yes |
+| E003 | dispatch-truth | execution | pending | Yes |
+| E004 | docs-truth | execution | pending | Yes |
+| E099 | review-phase | review | pending | No |
+| F001 | warning-grouping | execution | pending | Yes |
+| F002 | record-checks | execution | pending | Yes |
+| F003 | surface-nits | execution | pending | Yes |
+| F099 | review-phase | review | pending | No |
+| G001 | catalogue-proof | execution | pending | Yes |
+| G002 | single-snapshot | execution | pending | Yes |
+| G003 | shared-json | execution | pending | Yes |
+| G004 | split-cli | execution | pending | Yes |
+| G005 | doctor-module | execution | pending | Yes |
+| G099 | review-phase | review | pending | No |
