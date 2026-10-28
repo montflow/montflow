@@ -1,6 +1,7 @@
 import { Console, Effect, Option } from 'effect';
 import { Argument, Command, Flag } from 'effect/unstable/cli';
 import * as Doctor from '../doctor/index.js';
+import * as Sync from '../sync/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
 
@@ -16,6 +17,13 @@ import * as Renderers from './renderers.apps.module.js';
 /** Collapse an optional flag to `string | undefined`. */
 const opt = (value: Option.Option<string>): string | undefined => Option.getOrUndefined(value);
 
+/**
+ * The first value that is actually present. `--source=` is absent, so an empty
+ * canonical flag falls through to its alias instead of shadowing it.
+ */
+const firstGiven = (...values: ReadonlyArray<string | undefined>): string | undefined =>
+  values.find((value) => value !== undefined && value !== '');
+
 /** Optional string flag. */
 const optionalString = (name: string, description: string) =>
   Flag.string(name).pipe(Flag.withDescription(description), Flag.optional);
@@ -29,6 +37,24 @@ const dirFlag = optionalString(
   'dir',
   'Workspace root containing .agents/skills. Defaults to the working directory.',
 );
+
+/** `sync` source: the checkout whose public skills are copied out. */
+const sourceFlag = optionalString(
+  'source',
+  'Checkout to copy skills from. Defaults to the checkout this package runs from.',
+);
+
+/** `sync` source alias. */
+const fromFlag = optionalString('from', 'Alias for --source.');
+
+/** `sync` target: the workspace root that receives `.agents/skills`. */
+const targetFlag = optionalString(
+  'target',
+  'Workspace root to write .agents/skills into. Defaults to the working directory.',
+);
+
+/** `sync` target alias. */
+const targetAliasFlag = optionalString('dir', 'Alias for --target.');
 
 /** `--verbose`: add per-item detail without hiding anything. */
 const verboseFlag = optionalBoolean('verbose', 'Show per-item detail. Default is token-lean.');
@@ -207,6 +233,46 @@ const deleteCommand = Command.make('delete', { dir: dirFlag, name: nameArg }, (c
   report(Engines.remove(scope(config.dir), config.name), () => Renderers.deleted(config.name)),
 ).pipe(Command.withDescription('Delete a skill directory.'));
 
+/**
+ * `sync`: publish this checkout's public skills into a workspace store. The
+ * engine owns classification, outcomes, and copying; this handler resolves the
+ * two defaults and turns `--check` drift into a non-zero exit. `--source` and
+ * `--target` are canonical; `--from` and `--dir` stay as aliases, and the
+ * canonical flag wins when both are given.
+ */
+const syncCommand = Command.make(
+  'sync',
+  {
+    source: sourceFlag,
+    target: targetFlag,
+    check: optionalBoolean(
+      'check',
+      'Report only; never write. Non-zero when the target is behind.',
+    ),
+    verbose: verboseFlag,
+    from: fromFlag,
+    dir: targetAliasFlag,
+  },
+  (config) =>
+    Effect.gen(function* () {
+      const result = yield* Sync.runSync({
+        from: firstGiven(opt(config.source), opt(config.from)),
+        dir: firstGiven(opt(config.target), opt(config.dir)) ?? process.cwd(),
+        check: config.check,
+        cwd: process.cwd(),
+        invocation: 'mf-skills sync',
+      });
+      yield* Console.log(Renderers.sync(result, { verbose: config.verbose }));
+      if (result.check && result.drifted) {
+        yield* Console.log(Renderers.syncRefusal(result));
+        yield* exitFailed;
+      }
+      return yield* Effect.void;
+    }).pipe(Effect.catch((message) => Console.log(message).pipe(Effect.andThen(exitFailed)))),
+).pipe(
+  Command.withDescription('Copy a checkout public skills into a workspace .agents/skills store.'),
+);
+
 /** The root command the binary runs. */
 export const rootCommand = Command.make('mf-skills').pipe(
   Command.withDescription('Inspect, verify, and manage workspace skills in .agents/skills.'),
@@ -218,6 +284,7 @@ export const rootCommand = Command.make('mf-skills').pipe(
     createCommand,
     modifyCommand,
     deleteCommand,
+    syncCommand,
   ]),
 );
 
