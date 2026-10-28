@@ -143,7 +143,7 @@ export type ExtensionPanel = 'skills' | 'prompts' | 'profiles';
 /** Directory segments (under the workspace root) proving a panel installed. */
 const PANEL_DIRS = {
   skills: ['.agents', 'skills'],
-  prompts: ['.agents', '@montflow', 'pi-prompts'],
+  prompts: ['.agents', '@montflow', 'prompts'],
   profiles: ['.agents', '@montflow', 'profiles'],
 } satisfies Record<ExtensionPanel, ReadonlyArray<string>>;
 
@@ -557,7 +557,7 @@ export const listModelLabels = (
     ),
   );
 
-/** The retired pi session defaults file shape: the provider/model pair Pi sessions fell back to. */
+/** The retired pi session defaults file shape: the provider/model pair OpenCode sessions fell back to. */
 const PiDefaults = Schema.Struct({
   defaultProvider: Schema.optional(Schema.String),
   defaultModel: Schema.optional(Schema.String),
@@ -565,7 +565,7 @@ const PiDefaults = Schema.Struct({
 
 /**
  * Parse the retired pi session defaults (`~/.pi/agent/settings.json`) into
- * the default model ref Pi sessions reported. Decoded by schema at the
+ * the default model ref OpenCode sessions reported. Decoded by schema at the
  * boundary: malformed JSON or a missing pair reads as undefined. Called by
  * `listDefaultModel` and the unit tests; no production caller.
  * @param json - raw settings contents

@@ -13,34 +13,57 @@ const LEGACY_PROMPTS_DIR = ['.agents', '@montflow', 'pi-prompts'] as const;
 /** Prompts root for a working directory: `<cwd>/.agents/@montflow/prompts`. */
 const promptsDir = (path: Path.Path, cwd: string): string => path.join(cwd, ...PROMPTS_DIR);
 
-const legacyPromptsDirPath = (path: Path.Path, cwd: string): string =>
+/** Retired prompts root for a working directory: `<cwd>/.agents/@montflow/pi-prompts`. */
+export const legacyPromptsDir = (path: Path.Path, cwd: string): string =>
   path.join(cwd, ...LEGACY_PROMPTS_DIR);
 
+/** Turn any filesystem failure into the one error domain this service declares. */
+const toStoreError =
+  (operation: string) =>
+  (cause: { readonly message: string }): StoreError =>
+    new StoreError({ message: `${operation} failed: ${cause.message}` });
+
+/** The store layout for one workspace: where new files go, and where reads may look. */
+export interface StoreLayout {
+  /** Directory writes always target. */
+  readonly writeRoot: string;
+  /** Directory reads resolve against; the legacy root until a migration runs. */
+  readonly readRoot: string;
+  /** True when reads fell back to the retired layout. */
+  readonly legacy: boolean;
+}
+
 /**
- * Directory the store reads/writes. An explicit `dir` wins (resolved
- * against `cwd`), so callers can target a folder other than the default
- * `<cwd>/.agents/@montflow/prompts`. Falls back to legacy `pi-prompts` if new dir missing.
- * @param path - Path service
+ * Resolve the store layout for a workspace. An explicit `dir` wins (resolved
+ * against `cwd`) and disables the legacy fallback. Otherwise reads use the
+ * current layout when it exists, else the retired layout when that exists, and
+ * writes always land in the current layout so the migration converges.
+ *
+ * @param fs - filesystem service
+ * @param path - path service
  * @param cwd - working directory
  * @param dir - explicit store directory, if any
- * @returns absolute store directory
+ * @returns resolved write and read roots
  */
-const storeDir = Effect.fn('PromptStore.storeDir')(function* (
+export const storeLayout = Effect.fn('PromptStore.storeLayout')(function* (
   fs: FileSystem.FileSystem,
   path: Path.Path,
   cwd: string,
   dir: string | undefined,
 ) {
   if (dir !== undefined && dir !== '') {
-    return path.resolve(cwd, dir);
+    const explicit = path.resolve(cwd, dir);
+    return { writeRoot: explicit, readRoot: explicit, legacy: false } satisfies StoreLayout;
   }
-  const target = promptsDir(path, cwd);
-  const exists = yield* fs.exists(target).pipe(Effect.orElseSucceed(() => false));
-  if (exists) return target;
-  const legacy = legacyPromptsDirPath(path, cwd);
+  const current = promptsDir(path, cwd);
+  const legacy = legacyPromptsDir(path, cwd);
+  const currentExists = yield* fs.exists(current).pipe(Effect.orElseSucceed(() => false));
+  if (currentExists)
+    return { writeRoot: current, readRoot: current, legacy: false } satisfies StoreLayout;
   const legacyExists = yield* fs.exists(legacy).pipe(Effect.orElseSucceed(() => false));
-  if (legacyExists) return legacy;
-  return target;
+  if (legacyExists)
+    return { writeRoot: current, readRoot: legacy, legacy: true } satisfies StoreLayout;
+  return { writeRoot: current, readRoot: current, legacy: false } satisfies StoreLayout;
 });
 
 const make = Effect.gen(function* () {
@@ -48,11 +71,17 @@ const make = Effect.gen(function* () {
   const path = yield* Path.Path;
 
   const list = Effect.fn('PromptStore.list')(function* (cwd: string, dir?: string) {
-    const root = yield* storeDir(fs, path, cwd, dir);
-    const entries = yield* fs.readDirectory(root).pipe(Effect.orElseSucceed(() => [] as const));
+    const layout = yield* storeLayout(fs, path, cwd, dir);
+    const exists = yield* fs.exists(layout.readRoot).pipe(Effect.orElseSucceed(() => false));
+    // A missing store is an empty store, not a read failure: `list` powers the
+    // empty-state message, while `readAllRaw` fails loudly for verification.
+    if (!exists) return [] as const;
+    const entries = yield* fs
+      .readDirectory(layout.readRoot)
+      .pipe(Effect.mapError(toStoreError('PromptStore.list')));
     const files = entries.filter((entry) => entry.endsWith('.json'));
     const prompts = yield* Effect.forEach(files, (file) =>
-      fs.readFileString(path.join(root, file)).pipe(
+      fs.readFileString(path.join(layout.readRoot, file)).pipe(
         Effect.flatMap((raw) => Effect.try(() => Schema.decodeUnknownSync(Prompts.FromJson)(raw))),
         Effect.catch(() => Effect.succeed(undefined)),
       ),
@@ -70,13 +99,13 @@ const make = Effect.gen(function* () {
     if (!Prompts.isValidName(name)) {
       return yield* Effect.fail(new StoreError({ message: `Invalid prompt name '${name}'.` }));
     }
-    const root = yield* storeDir(fs, path, cwd, dir);
-    const file = path.join(root, `${name}.json`);
+    const layout = yield* storeLayout(fs, path, cwd, dir);
+    const file = path.join(layout.readRoot, `${name}.json`);
     const exists = yield* fs.exists(file).pipe(Effect.orElseSucceed(() => false));
     if (!exists) {
       return yield* Effect.fail(new StoreError({ message: `Prompt not found: '${name}'.` }));
     }
-    yield* fs.remove(file);
+    yield* fs.remove(file).pipe(Effect.mapError(toStoreError('PromptStore.remove')));
   });
 
   const readRaw = Effect.fn('PromptStore.readRaw')(function* (
@@ -87,27 +116,35 @@ const make = Effect.gen(function* () {
     if (!Prompts.isValidName(name)) {
       return yield* Effect.fail(new StoreError({ message: `Unknown prompt '${name}'.` }));
     }
-    const root = yield* storeDir(fs, path, cwd, dir);
-    const file = path.join(root, `${name}.json`);
+    const layout = yield* storeLayout(fs, path, cwd, dir);
+    const file = path.join(layout.readRoot, `${name}.json`);
+    const exists = yield* fs.exists(file).pipe(Effect.orElseSucceed(() => false));
+    if (!exists) {
+      return yield* Effect.fail(new StoreError({ message: `Unknown prompt '${name}'.` }));
+    }
     return yield* fs
       .readFileString(file)
-      .pipe(
-        Effect.catch(() => Effect.fail(new StoreError({ message: `Unknown prompt '${name}'.` }))),
-      );
+      .pipe(Effect.mapError(toStoreError(`PromptStore.readRaw '${name}'`)));
   });
 
   const readAllRaw = Effect.fn('PromptStore.readAllRaw')(function* (cwd: string, dir?: string) {
-    const root = yield* storeDir(fs, path, cwd, dir);
-    const entries = yield* fs.readDirectory(root);
+    const layout = yield* storeLayout(fs, path, cwd, dir);
+    const exists = yield* fs.exists(layout.readRoot).pipe(Effect.orElseSucceed(() => false));
+    if (!exists) {
+      return yield* Effect.fail(
+        new StoreError({ message: `Prompts store not found at '${layout.readRoot}'.` }),
+      );
+    }
+    const entries = yield* fs
+      .readDirectory(layout.readRoot)
+      .pipe(Effect.mapError(toStoreError('PromptStore.readAllRaw')));
     const files = entries.filter((entry) => entry.endsWith('.json')).toSorted();
     return yield* Effect.forEach(files, (file) =>
-      fs.readFileString(path.join(root, file)).pipe(
+      fs.readFileString(path.join(layout.readRoot, file)).pipe(
         Effect.map((contents) => ({ name: file.replace(/\.json$/u, ''), contents })),
-        Effect.catch(() => Effect.succeed(undefined)),
-      ),
-    ).pipe(
-      Effect.map((items) =>
-        items.filter((item): item is { name: string; contents: string } => item !== undefined),
+        // Keep the entry with empty content: verification must report the file
+        // rather than silently drop a prompt it could not read.
+        Effect.catch(() => Effect.succeed({ name: file.replace(/\.json$/u, ''), contents: '' })),
       ),
     );
   });
@@ -121,9 +158,13 @@ const make = Effect.gen(function* () {
     if (!Prompts.isValidName(name)) {
       return yield* Effect.fail(new StoreError({ message: `Invalid prompt name '${name}'.` }));
     }
-    const root = yield* storeDir(fs, path, cwd, dir);
-    yield* fs.makeDirectory(root, { recursive: true });
-    yield* fs.writeFileString(path.join(root, `${name}.json`), contents);
+    const layout = yield* storeLayout(fs, path, cwd, dir);
+    yield* fs
+      .makeDirectory(layout.writeRoot, { recursive: true })
+      .pipe(Effect.mapError(toStoreError('PromptStore.write')));
+    yield* fs
+      .writeFileString(path.join(layout.writeRoot, `${name}.json`), contents)
+      .pipe(Effect.mapError(toStoreError('PromptStore.write')));
   });
 
   const save = Effect.fn('PromptStore.save')(function* (
@@ -131,7 +172,7 @@ const make = Effect.gen(function* () {
     prompt: Prompts.Prompt,
     dir?: string,
   ) {
-    const contents = JSON.stringify(prompt, null, 2) + '\n';
+    const contents = JSON.stringify(Prompts.encode(prompt), null, 2) + '\n';
     yield* write(cwd, prompt.name, contents, dir);
   });
 
@@ -145,4 +186,5 @@ export type Service = Effect.Success<typeof make>;
 
 export class PromptStore extends Context.Service<PromptStore, Service>()(Id) {}
 
+/** File-backed store; provide `NodeFileSystem` + `NodePath` at the composition root. */
 export const Default = Layer.effect(PromptStore, make);

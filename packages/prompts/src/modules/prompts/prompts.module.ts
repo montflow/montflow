@@ -217,6 +217,12 @@ export const encode = Schema.encodeSync(Prompt);
 /** Schema that decodes/encodes a whole prompt file to/from a JSON string. */
 export const FromJson = Schema.fromJsonString(Prompt);
 
+/** Current prompt-store segments under a workspace root. */
+export const STORE_SEGMENTS = ['.agents', '@montflow', 'prompts'] as const;
+
+/** Retired prompt-store segments; read-only fallback until `doctor` migrates. */
+export const LEGACY_STORE_SEGMENTS = ['.agents', '@montflow', 'pi-prompts'] as const;
+
 /**
  * Every variable name the template mentions, in first-appearance order, whether
  * it is substituted (`{{name}}`) or guards a branch (`{{#if name}}`). The

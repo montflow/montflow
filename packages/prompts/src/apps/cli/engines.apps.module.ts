@@ -174,7 +174,7 @@ export const list = (
     const store = yield* PromptStore.PromptStore;
     const prompts = yield* store
       .list(scope.cwd, scope.dir)
-      .pipe(Effect.mapError((error: any) => error.message));
+      .pipe(Effect.mapError((error) => error.message));
     const sorted = [...prompts].toSorted((a, b) => a.name.localeCompare(b.name));
     const status = options.status;
     if (status === undefined) return sorted.map((prompt) => ({ prompt, warningCount: 0 }));
@@ -182,7 +182,7 @@ export const list = (
     const skills = yield* SkillCheck.resolveSkills(scope.cwd);
     const verdicts = yield* Effect.forEach(sorted, (prompt) =>
       store.readRaw(scope.cwd, prompt.name, scope.dir).pipe(
-        Effect.mapError((error: any) => error.message),
+        Effect.mapError((error) => error.message),
         Effect.map((raw) => {
           const result = Prompts.verifyPromptFile(prompt.name, raw, { skills });
           return { prompt, valid: result.valid, warningCount: Prompts.warningCount(result.issues) };
@@ -221,7 +221,7 @@ export const readRaw = (
     const store = yield* PromptStore.PromptStore;
     return yield* store
       .readRaw(scope.cwd, name, scope.dir)
-      .pipe(Effect.mapError((error: any) => error.message));
+      .pipe(Effect.mapError((error) => error.message));
   });
 
 /**
@@ -271,7 +271,7 @@ export const verifyAll = (
     const store = yield* PromptStore.PromptStore;
     const raws = yield* store
       .readAllRaw(scope.cwd, scope.dir)
-      .pipe(Effect.mapError((error: any) => error.message));
+      .pipe(Effect.mapError((error) => error.message));
     const skills = yield* SkillCheck.resolveSkills(scope.cwd);
     const entries = raws.map((entry: any) => ({
       name: entry.name,
@@ -407,7 +407,7 @@ export const create = (
     const store = yield* PromptStore.PromptStore;
     yield* store
       .save(fields.cwd, prompt, fields.dir)
-      .pipe(Effect.mapError((error: any) => error.message));
+      .pipe(Effect.mapError((error) => error.message));
     return prompt;
   });
 
@@ -447,7 +447,7 @@ export const modify = (
     const store = yield* PromptStore.PromptStore;
     yield* store
       .save(fields.cwd, updated, fields.dir)
-      .pipe(Effect.mapError((error: any) => error.message));
+      .pipe(Effect.mapError((error) => error.message));
     return updated;
   });
 
@@ -461,7 +461,7 @@ export const remove = (
     const store = yield* PromptStore.PromptStore;
     yield* store
       .remove(scope.cwd, prompt.name, scope.dir)
-      .pipe(Effect.mapError((error: any) => error.message));
+      .pipe(Effect.mapError((error) => error.message));
   });
 
 /** Parse a comma-separated flag into specs, for the binary's `--variable`. */

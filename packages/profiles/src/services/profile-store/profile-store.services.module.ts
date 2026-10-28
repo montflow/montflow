@@ -219,7 +219,7 @@ const make = Effect.gen(function* () {
 
   /**
    * Watch the profiles directory for changes. Shared across hosts: the
-   * workspace subscribes and patches its cache; the Pi extension may too.
+   * workspace subscribes and patches its cache; the OpenCode plugin may too.
    * A missing store yields an empty stream rather than failing.
    */
   const watch = (cwd: string): Stream.Stream<Changes.Change<PiProfiles.Profile>, never> =>

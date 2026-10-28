@@ -2,9 +2,9 @@
 import { readdir } from 'node:fs/promises';
 // oxlint-disable-next-line montflow/no-node-platform-imports -- path needed for store location resolution
 import path from 'node:path';
-import type { TuiPlugin } from '@montflow/opencode';
+import type { TuiPlugin, TuiPluginContext } from '@montflow/opencode';
 import { registerPicker } from '@montflow/opencode/tui';
-import { ID, COMMAND_NAME } from './server.js';
+import { ID, COMMAND_NAME } from './ids.js';
 
 /** Profiles directory segments. */
 const PROFILES_DIR = ['.agents', '@montflow', 'profiles'] as const;
@@ -23,8 +23,8 @@ const loadProfiles = async (directory: string): Promise<ReadonlyArray<string>> =
 
 export default {
   id: ID,
-  setup: (context: any) => {
-    registerPicker(context, {
+  setup: (context: TuiPluginContext) => {
+    const cleanup = registerPicker(context, {
       commandName: COMMAND_NAME,
       title: 'Profiles',
       description: 'Pick a profile',
@@ -37,6 +37,6 @@ export default {
       getInsertText: (profile: string) => profile,
       forwardNonListToServer: true,
     });
-    return () => {};
+    return cleanup;
   },
 } satisfies TuiPlugin;

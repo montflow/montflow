@@ -1,5 +1,5 @@
 import { Console, Effect, Option } from 'effect';
-import { Argument, Command, Flag } from 'effect/unstable/cli';
+import { Argument, Command, Flag } from 'effect/cli';
 import * as Doctor from '../doctor/index.js';
 import * as Sync from '../sync/index.js';
 import * as Engines from './engines.apps.module.js';
@@ -26,11 +26,11 @@ const firstGiven = (...values: ReadonlyArray<string | undefined>): string | unde
 
 /** Optional string flag. */
 const optionalString = (name: string, description: string) =>
-  Flag.string(name).pipe(Flag.withDescription(description), Flag.optional);
+  Flag.String(name).pipe(Flag.withDescription(description), Flag.optional);
 
 /** Boolean flag, defaulting to false. */
 const optionalBoolean = (name: string, description: string) =>
-  Flag.boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
+  Flag.Boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
 
 /** Store root override, on every store-touching command. */
 const dirFlag = optionalString(
@@ -60,7 +60,7 @@ const targetAliasFlag = optionalString('dir', 'Alias for --target.');
 const verboseFlag = optionalBoolean('verbose', 'Show per-item detail. Default is token-lean.');
 
 /** The `name` positional the single-skill commands take. */
-const nameArg = Argument.string('name').pipe(
+const nameArg = Argument.String('name').pipe(
   Argument.withDescription('Skill name (the directory slug).'),
 );
 
@@ -167,7 +167,7 @@ const verifyCommand = Command.make(
   'verify',
   {
     dir: dirFlag,
-    name: Argument.string('name').pipe(
+    name: Argument.String('name').pipe(
       Argument.withDescription('Skill name; omit to verify every skill.'),
       Argument.optional,
     ),
@@ -187,7 +187,7 @@ const createCommand = Command.make(
   {
     ...editFlags,
     name: nameArg,
-    description: Flag.string('description').pipe(
+    description: Flag.String('description').pipe(
       Flag.withDescription('One or two sentences saying when to use the skill.'),
     ),
   },

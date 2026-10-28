@@ -210,3 +210,77 @@ Vitest.describe('Doctor.doctorGateMessage', () => {
     Vitest.expect(message).toContain('a (not installed); b (not installed)');
   });
 });
+
+/** Write one JSON file into the retired store. */
+const seedLegacy = async (root: string, name: string): Promise<void> => {
+  const dir = join(root, '.agents', '@montflow', 'pi-prompts');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, `${name}.json`), '{"name":"legacy"}\n', 'utf8');
+};
+
+/** File contents, or undefined when absent. */
+const readMaybe = async (file: string): Promise<string | undefined> => {
+  try {
+    return await readFile(file, 'utf8');
+  } catch {
+    return undefined;
+  }
+};
+
+Vitest.describe('Doctor.runDoctor store migration', () => {
+  Vitest.it.effect('moves a legacy-only store into the current layout', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      yield* Effect.promise(() => seedLegacy(root, 'legacy'));
+
+      const result = yield* Doctor.runDoctor(root);
+      const current = join(root, '.agents', '@montflow', 'prompts', 'legacy.json');
+
+      Vitest.expect(result.store?.status).toBe('migrated');
+      Vitest.expect(result.message).toContain('prompts store');
+      Vitest.expect(yield* Effect.promise(() => readMaybe(current))).toBeDefined();
+      Vitest.expect(
+        yield* Effect.promise(() => readMaybe(join(root, '.agents', '@montflow', 'pi-prompts'))),
+      ).toBeUndefined();
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+    }),
+  );
+
+  Vitest.it.effect('reports a pending move in check mode without writing', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      yield* Effect.promise(() => seedLegacy(root, 'legacy'));
+
+      const result = yield* Doctor.runDoctor(root, { check: true });
+
+      Vitest.expect(result.store?.status).toBe('pending');
+      Vitest.expect(result.status).toBe('drifted');
+      Vitest.expect(
+        yield* Effect.promise(() =>
+          readMaybe(join(root, '.agents', '@montflow', 'pi-prompts', 'legacy.json')),
+        ),
+      ).toBeDefined();
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+    }),
+  );
+
+  Vitest.it.effect('leaves the legacy store alone when the current one exists', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      yield* Effect.promise(() => seedLegacy(root, 'legacy'));
+      yield* Effect.promise(() =>
+        mkdir(join(root, '.agents', '@montflow', 'prompts'), { recursive: true }),
+      );
+
+      const result = yield* Doctor.runDoctor(root);
+
+      Vitest.expect(result.store?.status).toBe('ok');
+      Vitest.expect(
+        yield* Effect.promise(() =>
+          readMaybe(join(root, '.agents', '@montflow', 'pi-prompts', 'legacy.json')),
+        ),
+      ).toBeDefined();
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+    }),
+  );
+});

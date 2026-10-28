@@ -33,6 +33,50 @@ export const shippedSkillsDir = (path: Path.Path): string =>
 export const installedSkillDir = (path: Path.Path, root: string, name: string): string =>
   path.join(root, '.agents', 'skills', name);
 
+/** Current prompt-store segments under a workspace root. */
+const PROMPTS_DIR = ['.agents', '@montflow', 'prompts'] as const;
+
+/** Retired prompt-store segments under a workspace root. */
+const LEGACY_PROMPTS_DIR = ['.agents', '@montflow', 'pi-prompts'] as const;
+
+/**
+ * Move the retired `pi-prompts` store into the current `prompts` directory
+ * when the current one is absent. Never merges: if both exist, the current
+ * directory wins and the legacy one is reported untouched, because silently
+ * combining two stores can resurrect prompts the user already moved.
+ *
+ * @param fs - filesystem service
+ * @param path - path service
+ * @param root - workspace root that owns `.agents/@montflow`
+ * @param check - report without writing
+ * @returns migration outcome for the report
+ */
+const migrateStore = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  root: string,
+  check: boolean,
+): Effect.Effect<StoreStatus, string> =>
+  Effect.gen(function* () {
+    const to = path.join(root, ...PROMPTS_DIR);
+    const from = path.join(root, ...LEGACY_PROMPTS_DIR);
+    const toExists = yield* fs.exists(to).pipe(Effect.orElseSucceed(() => false));
+    const fromExists = yield* fs.exists(from).pipe(Effect.orElseSucceed(() => false));
+    if (!fromExists) return { status: 'ok', from, to, detail: 'no legacy store' };
+    if (toExists) {
+      return { status: 'ok', from, to, detail: 'legacy store left in place; current store exists' };
+    }
+    if (check) {
+      return { status: 'pending', from, to, detail: `would move ${from} → ${to}` };
+    }
+    yield* fs
+      .rename(from, to)
+      .pipe(
+        Effect.mapError((cause) => `doctor: cannot move '${from}' to '${to}': ${reasonOf(cause)}`),
+      );
+    return { status: 'migrated', from, to, detail: `moved ${from} → ${to}` };
+  });
+
 /**
  * A skill's packaged files, as filename → contents.
  *
@@ -85,8 +129,26 @@ export interface DoctorResult {
   /** True when nothing is wrong, whether or not doctor had to fix it. */
   readonly healthy: boolean;
   readonly skills: ReadonlyArray<SkillStatus>;
+  /** Prompt-store layout outcome for the retired `pi-prompts` directory. */
+  readonly store?: StoreStatus;
   /** One-line summary, and the whole explanation when unhealthy. */
   readonly message: string;
+}
+
+/** Outcome for the retired prompt store (`pi-prompts` → `prompts`). */
+export interface StoreStatus {
+  /**
+   * `ok` — nothing to move.
+   * `migrated` — doctor moved the legacy directory into place.
+   * `pending` — `--check` found a legacy directory it would have moved.
+   */
+  readonly status: 'ok' | 'migrated' | 'pending';
+  /** Retired directory. */
+  readonly from: string;
+  /** Current directory. */
+  readonly to: string;
+  /** One-line explanation for the report. */
+  readonly detail: string;
 }
 
 /** How to run: repair what can be repaired, or only report. */
@@ -300,16 +362,21 @@ export const runDoctor = (
       });
 
     const skills = yield* Effect.forEach(SKILL_NAMES, installSkill);
+    const store = yield* migrateStore(fs, path, root, check);
     const unhealthy = skills.filter((skill) => !usable(skill.status));
-    const changed = skills.some((skill) => skill.status !== 'ok' && usable(skill.status));
+    const changed =
+      skills.some((skill) => skill.status !== 'ok' && usable(skill.status)) ||
+      store.status === 'migrated';
+    const storePending = store.status === 'pending';
     const status: DoctorResult['status'] =
-      unhealthy.length > 0 ? 'drifted' : changed ? 'repaired' : 'ok';
+      unhealthy.length > 0 || storePending ? 'drifted' : changed ? 'repaired' : 'ok';
     const healthy = unhealthy.length === 0;
     return {
       status,
       healthy,
       skills,
-      message: doctorMessageFor({ status, healthy, skills }, invocation),
+      store,
+      message: doctorMessageFor({ status, healthy, skills, store }, invocation),
     };
   }).pipe(Effect.provide(NodeLive));
 
@@ -323,6 +390,7 @@ const doctorMessageFor = (
     readonly status: DoctorResult['status'];
     readonly healthy: boolean;
     readonly skills: ReadonlyArray<SkillStatus>;
+    readonly store?: StoreStatus | undefined;
   },
   invocation: string,
 ): string => {
@@ -338,10 +406,21 @@ const doctorMessageFor = (
             : skill.detail;
     return `${mark} ${skill.name}: ${note} → ${skill.target}`;
   });
+  const store = result.store;
+  if (store !== undefined && store.status !== 'ok') {
+    const mark = store.status === 'migrated' ? '+' : '✗';
+    lines.push(`${mark} prompts store: ${store.detail}`);
+  } else if (store !== undefined && store.detail !== 'no legacy store') {
+    lines.push(`✓ prompts store: ${store.detail}`);
+  }
+  const storeNeedsWork = store?.status === 'pending';
   if (result.status === 'ok') {
     return ['✓ prompts skills are installed and up to date.', ...lines].join('\n');
   }
-  if (result.healthy) return ['+ prompts skills repaired.', ...lines].join('\n');
+  if (result.healthy && !storeNeedsWork) return ['+ prompts skills repaired.', ...lines].join('\n');
+  if (result.healthy) {
+    return ['✗ prompts store migration pending.', ...lines, `Run: ${invocation}`].join('\n');
+  }
   return [
     '✗ prompts skills are not usable.',
     ...lines,

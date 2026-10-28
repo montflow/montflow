@@ -25,7 +25,9 @@
     "./package.json": "./package.json",
     ".": "./src/index.ts",
     "./server": "./src/server.ts",
-    "./tui": "./src/tui.ts"
+    "./tui": "./src/tui.ts",
+    "./services": "./src/services/index.ts",
+    "./modules": "./src/modules/index.ts"
   },
   "scripts": {
     "cli": "bun run src/apps/cli/main.ts",

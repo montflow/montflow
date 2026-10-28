@@ -1,7 +1,7 @@
 # CLI app
 
 Two front ends over one set of engines: the `mf-profiles` binary (Bun +
-`effect/cli`) and the Pi slash command `/mf-profiles-cli`. Both
+`effect/cli`) and the OpenCode slash command `/mf-profiles`. Both
 expose the same paths — list, show, verify, create, modify, delete — in the
 same shape as [interactive](../interactive/CONTEXT.md). Neither opens a dialog
 or spawns an agent: missing input fails with a message, so agents and scripts
@@ -16,7 +16,7 @@ can drive them mechanically (e.g. over `pi --mode rpc`).
   [`SkillCheck`](../../modules/skill-check/CONTEXT.md)
 - `renderers.apps.module.ts` — pure `data -> text`
 - `binary.apps.module.ts` — the `Command` tree and `rootCommand`
-- `cli.apps.module.ts` — the `/mf-profiles-cli` parser, `run`, and `register`;
+- `cli.apps.module.ts` — the `/mf-profiles` parser, `run`, and `register`;
   a hand-rolled parser because Pi passes one argument string, not an argv array
 - `main.ts` — the binary entry
 

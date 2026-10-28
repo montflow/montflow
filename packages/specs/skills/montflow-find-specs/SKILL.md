@@ -1,6 +1,6 @@
 ---
 name: montflow-find-specs
-description: Finds and filters montflow specs under .agents/@montflow/specs/ with the `mf-specs list` CLI (or `/specs list` in the OpenCode host), reporting each spec's derived lifecycle state. Use when an agent must answer "what is pending?", pick a spec to resume, or list specs by state.
+description: Finds and filters montflow specs under .agents/@montflow/specs/ with the `mf-specs list` CLI (or `/mf-specs list` in the OpenCode host), reporting each spec's derived lifecycle state. Use when an agent must answer "what is pending?", pick a spec to resume, or list specs by state.
 id: f21093485cea4b44
 author: Daniel Montilla
 version: 1.3.0
@@ -34,7 +34,7 @@ It installs `montflow-find-specs` and `montflow-create-specs` into
 bun run --cwd packages/specs cli list
 ```
 
-Inside the OpenCode host the same engine is the `/specs list` slash command.
+Inside the OpenCode host the same engine is the `/mf-specs list` slash command.
 `list` defaults to the root `.agents/@montflow/specs`; override with `--dir`.
 
 ## 3. Filter by State

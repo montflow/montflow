@@ -2,9 +2,9 @@
 import { readdir } from 'node:fs/promises';
 // oxlint-disable-next-line montflow/no-node-platform-imports -- path needed for store location resolution
 import path from 'node:path';
-import type { TuiPlugin } from '@montflow/opencode';
+import type { TuiPlugin, TuiPluginContext } from '@montflow/opencode';
 import { registerPicker } from '@montflow/opencode/tui';
-import { ID, COMMAND_NAME } from './server.js';
+import { ID, COMMAND_NAME } from './ids.js';
 
 /** Skills directory segments. */
 const SKILLS_DIR = ['.agents', 'skills'] as const;
@@ -25,8 +25,8 @@ const loadSkills = async (directory: string): Promise<ReadonlyArray<string>> => 
 
 export default {
   id: ID,
-  setup: (context: any) => {
-    registerPicker(context, {
+  setup: (context: TuiPluginContext) => {
+    const cleanup = registerPicker(context, {
       commandName: COMMAND_NAME,
       title: 'Skills',
       description: 'Pick a skill',
@@ -39,6 +39,6 @@ export default {
       getInsertText: (skill: string) => skill,
       forwardNonListToServer: true,
     });
-    return () => {};
+    return cleanup;
   },
 } satisfies TuiPlugin;

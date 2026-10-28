@@ -8,7 +8,7 @@ import * as Renderers from './renderers.apps.module.js';
  * The `/mf-prompts` slash-command front end: a hand-rolled parser over the
  * same engines the `mf-prompts` binary uses.
  *
- * A bespoke parser rather than `effect/cli` for one reason — a Pi
+ * A bespoke parser rather than `effect/cli` for one reason — an OpenCode
  * slash command receives a single argument *string*, not an argv array, so the
  * bin's `Command` tree cannot be reused here. Everything below the parser is
  * shared; only the tokenizing differs, which is exactly the seam worth

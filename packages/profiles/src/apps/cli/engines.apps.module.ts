@@ -6,7 +6,7 @@ import { ProfileStore } from '../../services/index.js';
 /**
  * Headless verification engine for the profiles store.
  *
- * The `/mf-profiles-cli verify [<name>...]` action needs a Pi session. This
+ * The `/mf-profiles verify [<name>...]` action needs a OpenCode session. This
  * module verifies profiles as a plain Effect so the binary (and the CI gate)
  * can run it with no session — the whole store, or only the named profiles.
  * It reads the raw files directly rather than going through

@@ -1,12 +1,15 @@
+import { COMMAND_NAME, ID } from './ids.js';
+
+export { ID, COMMAND_NAME };
 // Subpath imports, not the package root: the root re-exports `NodeClusterHttp`,
 // which deep-imports `effect/dist/...`, and the OpenCode plugin loader refuses
 // those specifiers. Subpaths pull only `effect/*` and node builtins.
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
-import { defineTool, entry, type ServerPorts } from '@montflow/opencode';
+import { defineTool, entry, makeCommandReply, type ServerPorts } from '@montflow/opencode';
 import { Effect, Layer, Schema } from 'effect';
 // The slash module, not the `apps/cli` barrel: the barrel also exports the
-// binary, whose `effect/unstable/cli` import reaches `effect/dist/...`, which
+// binary, whose `effect/cli` import reaches `effect/dist/...`, which
 // the OpenCode plugin loader refuses.
 import * as Cli from './apps/cli/slash.apps.module.js';
 // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- native child-run factory, not an Effect service; B002 §6 keeps dispatch out of a Layer.
@@ -14,12 +17,6 @@ import { makePromptExecutor } from './apps/server/index.js';
 import * as PromptExecute from './modules/prompt-execute/index.js';
 import * as Prompts from './modules/prompts/index.js';
 import { PromptStore } from './services/index.js';
-
-/** Plugin id shared by the server and TUI entries. */
-export const ID = 'prompts';
-
-/** Slash command registered by the server plugin (invoke as `/mf-prompts`). */
-export const COMMAND_NAME = Cli.COMMAND_NAME;
 
 /** Help text shown for the slash command. */
 export const COMMAND_DESCRIPTION = Cli.COMMAND_DESCRIPTION;
@@ -30,16 +27,11 @@ const Live: Layer.Layer<PromptStore.PromptStore> = Layer.provide(
   Layer.merge(NodeFileSystem.layer, NodePath.layer),
 );
 
-/** Log a command result where the server host can see it. */
-const notify = (message: string): void => {
-  Effect.logInfo(message).pipe(Effect.runSync);
-};
-
 /** Load one prompt by name, failing with an agent-readable message. */
 const loadPrompt = (cwd: string, name: string): Effect.Effect<Prompts.Prompt, string> =>
   Effect.gen(function* () {
     const store = yield* PromptStore.PromptStore;
-    const prompts = yield* store.list(cwd);
+    const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
     const found = prompts.find((candidate) => candidate.name === name);
     return found === undefined
       ? yield* Effect.fail(
@@ -110,10 +102,19 @@ export default entry(ID, (ports) =>
       name: COMMAND_NAME,
       description: COMMAND_DESCRIPTION,
       execute: (invocation) =>
-        Cli.run(invocation.prompt.text, { notify }, ports.cwd, executor).pipe(
-          Effect.provide(Live),
-          Effect.catch((message) => Effect.sync(() => notify(message))),
-        ),
+        Effect.gen(function* () {
+          const reply = makeCommandReply(ports.session, invocation);
+          yield* Cli.run(
+            invocation.prompt.text,
+            { notify: reply.notify },
+            ports.cwd,
+            executor,
+          ).pipe(
+            Effect.provide(Live),
+            Effect.catch((message) => Effect.sync(() => reply.notify(message, 'error'))),
+          );
+          yield* reply.flush();
+        }),
     });
     yield* ports.tool.add(inspectTool(ports.cwd));
     yield* ports.tool.add(executeTool(ports.cwd, ports));

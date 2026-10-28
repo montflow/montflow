@@ -1,17 +1,15 @@
-import { NodeFileSystem, NodePath } from '@effect/platform-node';
-import { defineTool, entry, type ServerPorts } from '@montflow/opencode';
+import { COMMAND_NAME, ID } from './ids.js';
+
+export { ID, COMMAND_NAME };
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import * as NodePath from '@effect/platform-node/NodePath';
+import { defineTool, entry, makeCommandReply, type ServerPorts } from '@montflow/opencode';
 import { Effect, Layer, Schema, type Scope } from 'effect';
-import * as Cli from './apps/cli/index.js';
+import * as Cli from './apps/cli/cli.apps.module.js';
 import * as Interactive from './apps/interactive/index.js';
 import { runProfile, syncAgents } from './apps/server/index.js';
 import type * as PiProfiles from './modules/pi-profiles/index.js';
 import { ProfileStore } from './services/index.js';
-
-/** Plugin id shared by the server and TUI entries. */
-export const ID = 'profiles';
-
-/** Slash command registered by the server plugin (invoke as `/mf-profiles`). */
-export const COMMAND_NAME = Interactive.COMMAND_NAME;
 
 /** Help text shown for the slash command. */
 export const COMMAND_DESCRIPTION = Interactive.COMMAND_DESCRIPTION;
@@ -22,21 +20,18 @@ const Live: Layer.Layer<ProfileStore.ProfileStore> = Layer.provide(
   Layer.merge(NodeFileSystem.layer, NodePath.layer),
 );
 
-/** Log a command result where the server host can see it. */
-const notify = (message: string): void => {
-  Effect.logInfo(message).pipe(Effect.runSync);
-};
-
 /**
  * Notify-only dialog surface for the headless CLI. `Cli.run` never opens a
  * dialog; the stubs keep the interactive type honest if that changes.
  */
-const cliUi: Interactive.InteractiveUi = {
+const cliUi = (
+  notify: (message: string, tone?: 'info' | 'warning' | 'error') => void,
+): Interactive.InteractiveUi => ({
   select: () => Promise.resolve(undefined),
   confirm: () => Promise.resolve(false),
   input: () => Promise.resolve(undefined),
   notify,
-};
+});
 
 /** Every stored profile. */
 const listProfiles = (cwd: string): Effect.Effect<readonly PiProfiles.Profile[]> =>
@@ -88,10 +83,14 @@ export default entry(ID, (ports) =>
       name: COMMAND_NAME,
       description: COMMAND_DESCRIPTION,
       execute: (invocation) =>
-        Cli.run(invocation.prompt.text, cliUi, ports.cwd).pipe(
-          Effect.provide(Live),
-          Effect.catch((message) => Effect.sync(() => notify(message))),
-        ),
+        Effect.gen(function* () {
+          const reply = makeCommandReply(ports.session, invocation);
+          yield* Cli.run(invocation.prompt.text, cliUi(reply.notify), ports.cwd).pipe(
+            Effect.provide(Live),
+            Effect.catch((message) => Effect.sync(() => reply.notify(message, 'error'))),
+          );
+          yield* reply.flush();
+        }),
     });
     yield* ports.tool.add(executeTool(ports.cwd, ports, scope));
   }),

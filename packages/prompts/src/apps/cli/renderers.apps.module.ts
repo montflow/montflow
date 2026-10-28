@@ -100,7 +100,7 @@ export const show = (prompt: Prompts.Prompt): string =>
 
 /**
  * The variable table, straight from the shared renderer so the CLI, the TUI,
- * the Pi tool, and the skill documentation all show the same bytes.
+ * the host tool, and the skill documentation all show the same bytes.
  */
 export const inspect = (summary: PromptExecute.PromptSummary): string =>
   PromptExecute.table(summary);

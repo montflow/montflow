@@ -1,4 +1,5 @@
-import { PiProfiles, ProfileStore } from '@montflow/profiles';
+import { ProfileStore } from '@montflow/profiles/services';
+import { PiProfiles } from '@montflow/profiles/modules';
 import type { ModelPort, SessionDispatchPort } from '@montflow/opencode';
 import { Clock, Effect } from 'effect';
 import * as Review from '../../modules/review/index.js';

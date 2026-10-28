@@ -152,7 +152,7 @@ export interface ProfileSummary {
 /**
  * Bridge a `PiProfiles.Profile` into a dashboard row. Total — the
  * profile already carries every field.
- * @param profile - pi-profiles Profile
+ * @param profile - stored profile
  * @returns dashboard row
  */
 export const fromProfile = (profile: PiProfiles.Profile): ProfileSummary => ({

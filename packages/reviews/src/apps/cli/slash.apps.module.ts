@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
-import type { ProfileStore } from '@montflow/profiles';
-import type { SpecStore } from '@montflow/specs';
+import type { ProfileStore } from '@montflow/profiles/services';
+import type { SpecStore } from '@montflow/specs/services';
 import { ProfileProbe, ReviewStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
@@ -9,7 +9,7 @@ import * as Renderers from './renderers.apps.module.js';
  * The `/mf-reviews` slash-command front end: a hand-rolled parser over the
  * same engines the `mf-reviews` binary uses.
  *
- * A bespoke parser rather than `effect/cli` because a Pi slash command
+ * A bespoke parser rather than `effect/cli` because a OpenCode slash command
  * receives a single argument *string*, not an argv array, so the bin's
  * `Command` tree cannot be reused here. Everything below the parser is shared.
  */

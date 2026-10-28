@@ -25,7 +25,8 @@
     "./package.json": "./package.json",
     ".": "./src/index.ts",
     "./server": "./src/server.ts",
-    "./tui": "./src/tui.ts"
+    "./tui": "./src/tui.ts",
+    "./services": "./src/modules/index.ts"
   },
   "scripts": {
     "build:cli": "bun run scripts/generate-embedded-skills.ts && bun build src/apps/cli/main.ts --compile --outfile dist/mf-skills",

@@ -9,7 +9,7 @@ import * as Prompts from '../prompts/index.js';
  *
  * Both entry points are pure. `execute` resolves a plan rather than
  * dispatching a run, so the validation an agent has to satisfy is testable
- * without a model, and so the same plan can drive the CLI, the TUI, and a Pi
+ * without a model, and so the same plan can drive the CLI, the TUI, and an OpenCode
  * tool. Dispatching it is the caller's job, through {@link PromptExecutor}.
  */
 
@@ -215,7 +215,7 @@ export interface ExecuteRequest extends InspectRequest {
   /**
    * How *this* caller invokes `execute`, used verbatim in the fix-it advice of
    * every refusal — e.g. `mf-prompts execute` for the binary, or
-   * `/mf-prompts execute` for the Pi slash command. Passed in rather than
+   * `/mf-prompts execute` for the OpenCode slash command. Passed in rather than
    * hardcoded because the two front ends spell the same action differently, and
    * advice naming a form the reader cannot type is worse than no advice.
    */

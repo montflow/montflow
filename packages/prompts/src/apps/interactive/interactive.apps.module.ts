@@ -598,31 +598,31 @@ const promptMenu = (
     if (chosen === undefined || chosen === '← Back') return;
     switch (chosen) {
       case 'Show': {
-        const prompts = yield* store.list(cwd);
+        const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
         yield* showPrompt(ui, prompts, name);
         return yield* again;
       }
       case 'Inspect': {
-        const prompts = yield* store.list(cwd);
+        const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
         const prompt = yield* findOrFail(prompts, name);
         const summary = PromptExecute.inspect({ prompt });
         yield* Effect.sync(() => ui.notify(PromptExecute.table(summary), 'info'));
         return yield* again;
       }
       case 'Fill & render': {
-        const prompts = yield* store.list(cwd);
+        const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
         const prompt = yield* findOrFail(prompts, name);
         yield* renderLoop(ui, prompt, {});
         return yield* again;
       }
       case 'Execute': {
-        const prompts = yield* store.list(cwd);
+        const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
         const prompt = yield* findOrFail(prompts, name);
         yield* executeFlow(ui, cwd, prompt, models, {}, execute, modelPicker);
         return yield* again;
       }
       case 'Modify': {
-        const prompts = yield* store.list(cwd);
+        const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
         const prompt = yield* modifyPrompt(ui, prompts, models, modify, name, modelPicker);
         yield* store.save(cwd, prompt).pipe(Effect.mapError((error) => error.message));
         yield* Effect.sync(() => ui.notify(`Saved prompt '${prompt.name}'.`, 'info'));
@@ -664,7 +664,7 @@ const browseMenu = (
 ): Effect.Effect<void, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const store = yield* PromptStore.PromptStore;
-    const prompts = yield* store.list(cwd);
+    const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
     if (prompts.length === 0) {
       const chosen = yield* Effect.promise(() =>
         ui.select('No prompts yet', ['Create prompt', '← Back']),
@@ -770,7 +770,10 @@ export const run = (
         return;
       }
       case 'List': {
-        yield* store.list(cwd).pipe(Effect.flatMap((prompts) => listPrompts(ui, prompts)));
+        yield* store.list(cwd).pipe(
+          Effect.mapError((error) => error.message),
+          Effect.flatMap((prompts) => listPrompts(ui, prompts)),
+        );
         return;
       }
       case 'Create': {
@@ -780,32 +783,32 @@ export const run = (
         return;
       }
       case 'Inspect': {
-        const prompts = yield* store.list(cwd);
+        const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
         const prompt = yield* findOrFail(prompts, action.name);
         const summary = PromptExecute.inspect({ prompt, values: action.values });
         yield* Effect.sync(() => ui.notify(PromptExecute.table(summary), 'info'));
         return;
       }
       case 'Execute': {
-        const prompts = yield* store.list(cwd);
+        const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
         const prompt = yield* findOrFail(prompts, action.name);
         yield* executeFlow(ui, cwd, prompt, models, action.values, execute, modelPicker);
         return;
       }
       case 'Show': {
-        const prompts = yield* store.list(cwd);
+        const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
         yield* showPrompt(ui, prompts, action.name);
         return;
       }
       case 'Modify': {
-        const prompts = yield* store.list(cwd);
+        const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
         const prompt = yield* modifyPrompt(ui, prompts, models, modify, action.name, modelPicker);
         yield* store.save(cwd, prompt).pipe(Effect.mapError((error) => error.message));
         yield* Effect.sync(() => ui.notify(`Saved prompt '${prompt.name}'.`, 'info'));
         return;
       }
       case 'Render': {
-        const prompts = yield* store.list(cwd);
+        const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
         const prompt = yield* findOrFail(prompts, action.name);
         const rendered = yield* renderValues(ui, prompt, action.values);
         yield* Effect.sync(() => ui.notify(rendered, 'info'));

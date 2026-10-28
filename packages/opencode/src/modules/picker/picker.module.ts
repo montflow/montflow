@@ -1,39 +1,25 @@
-/**
- * Shared TUI picker helper for montflow plugins.
- * Uses host APIs: ui.dialog.select, keymap.layer, renderer.currentFocusedEditor.insertText (with retry).
- */
+import type { DialogSelectOption } from '../ports/interaction/index.js';
+import type { KeymapLayer } from '../ports/grid-page/index.js';
+import type { TuiCleanup } from '../ports/plugin-entry/index.js';
 
-export interface PickerItem<T = unknown> {
+/** One row a plugin offers the shared picker. */
+export interface PickerItem<T> {
   readonly title: string;
   readonly description?: string | undefined;
   readonly value: T;
 }
 
-export interface PickerConfig<T> {
-  readonly commandName: string;
-  readonly title: string;
-  readonly description: string;
-  readonly group?: string;
-  readonly loadItems: (cwd: string) => Promise<ReadonlyArray<T>>;
-  readonly formatItem: (item: T) => PickerItem<T>;
-  readonly getInsertText: (item: T) => string;
-  readonly search?: (
-    query: string,
-    items: ReadonlyArray<PickerItem<T>>,
-  ) => ReadonlyArray<PickerItem<T>>;
-  readonly forwardNonListToServer?: boolean;
+/** The editor surface insertion writes through. */
+export interface PickerEditor {
+  insertText(text: string): void;
+  gotoBufferEnd?(): void;
 }
 
-// SAFETY: host session.command returns opaque payload; callers do not read fields here.
-export interface SessionCommandResult extends Record<string, unknown> {}
-
+/** The slices of the host TUI context the picker reads. */
 export interface PickerContext {
   readonly location?: { readonly directory?: string | undefined } | undefined;
   readonly renderer: {
-    readonly currentFocusedEditor?: {
-      insertText?(text: string): void;
-      gotoBufferEnd?(): void;
-    } | null;
+    readonly currentFocusedEditor: PickerEditor | null;
     requestRender?(): void;
   };
   readonly client: {
@@ -42,47 +28,17 @@ export interface PickerContext {
         readonly sessionID: string;
         readonly name: string;
         readonly text: string;
-      }): Promise<SessionCommandResult>;
+      }): Promise<void>;
     };
   };
-  readonly keymap: {
-    layer(
-      factory: () => {
-        readonly mode?: string;
-        readonly commands: ReadonlyArray<{
-          readonly id: string;
-          readonly title: string;
-          readonly description?: string;
-          readonly group?: string;
-          readonly palette?: boolean;
-          readonly slash?: { readonly name: string; readonly arguments?: boolean };
-          readonly run: (input?: string) => void | Promise<void>;
-        }>;
-      },
-    ): void;
-  };
+  readonly keymap?: { layer(input: () => KeymapLayer): void } | undefined;
   readonly ui: {
     readonly dialog: {
       select<Value>(options: {
         readonly title: string;
         readonly placeholder?: string;
-        readonly options: ReadonlyArray<{
-          readonly title: string;
-          readonly value: Value;
-          readonly description?: string;
-        }>;
-        readonly search?: (
-          query: string,
-          options: ReadonlyArray<{
-            readonly title: string;
-            readonly value: Value;
-            readonly description?: string;
-          }>,
-        ) => ReadonlyArray<{
-          readonly title: string;
-          readonly value: Value;
-          readonly description?: string;
-        }>;
+        readonly options: ReadonlyArray<DialogSelectOption<Value>>;
+        readonly current?: Value;
       }): Promise<Value | undefined>;
     };
     readonly toast: {
@@ -97,107 +53,141 @@ export interface PickerContext {
   };
 }
 
-const scheduleInsert = (callback: () => void, delayMs: number): void => {
-  // SAFETY: retry scheduling is a UI timing concern in the TUI context; host expects direct timers here and tests control via context.
-  // oxlint-disable-next-line montflow/no-timers -- UI retry timing required by host API
-  setTimeout(callback, delayMs);
+/** What one plugin contributes to the shared picker. */
+export interface PickerConfig<T> {
+  /** Slash command the picker hangs off, shared with the server command. */
+  readonly commandName: string;
+  readonly title: string;
+  readonly description: string;
+  readonly group?: string;
+  /** Read the plugin's store for the active project directory. */
+  readonly loadItems: (cwd: string) => Promise<ReadonlyArray<T>>;
+  /** Map one item to its dialog row. */
+  readonly formatItem: (item: T) => PickerItem<T>;
+  /** Text inserted into the composer for the chosen item. */
+  readonly getInsertText: (item: T) => string;
+  /**
+   * Forward every non-list argument to the server command of the same name,
+   * so one slash command owns both interactive and headless behaviour.
+   */
+  readonly forwardNonListToServer?: boolean;
+}
+
+/** Attempts before the picker admits it cannot reach the composer. */
+const INSERT_ATTEMPTS = 5;
+/** Delay between insertion retries; the host restores dialog focus first. */
+const INSERT_RETRY_MS = 40;
+
+/** Strip an optional description so the row matches the host's exact options. */
+const toOption = <T>(item: PickerItem<T>): DialogSelectOption<T> => {
+  if (item.description === undefined) return { title: item.title, value: item.value };
+  return { title: item.title, value: item.value, description: item.description };
 };
 
-const insertText = (context: PickerContext, text: string, attempt = 0): void => {
-  scheduleInsert(
-    () => {
-      const editor = context.renderer.currentFocusedEditor;
-      if (editor?.insertText !== undefined) {
-        editor.insertText(text);
-        editor.gotoBufferEnd?.();
-        context.renderer.requestRender?.();
-        return;
-      }
-      if (attempt < 4) {
-        insertText(context, text, attempt + 1);
-        return;
-      }
-      context.ui.toast.show({
-        message: 'Could not reach the composer — focus the prompt and try again.',
-        variant: 'warning',
-      });
-    },
-    attempt === 0 ? 0 : 40,
-  );
-};
+/** Human-readable reason for an unknown rejection. */
+const reasonOf = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
 
-const defaultSearch = <T>(
-  query: string,
-  items: ReadonlyArray<PickerItem<T>>,
-): ReadonlyArray<PickerItem<T>> => {
-  const needle = query.trim().toLowerCase();
-  if (needle === '') return items;
-  return items.filter(
-    (entry) =>
-      entry.title.toLowerCase().includes(needle) ||
-      (entry.description ?? '').toLowerCase().includes(needle),
-  );
-};
+/**
+ * Register the shared picker behind a plugin's single slash command.
+ *
+ * `list` (or no argument) opens a select dialog over the plugin's store and
+ * inserts the plugin-specific text into the composer. Any other argument is
+ * forwarded to the server command when the plugin asks for forwarding.
+ *
+ * The host's `dialog.select` owns filtering, so the picker does not ship a
+ * second search implementation; descriptions stay visible in each row.
+ *
+ * @param context - host TUI context slices the picker reads
+ * @param config - plugin-specific store, mapping, and insertion
+ * @returns cleanup that cancels pending insertion retries
+ */
+export const registerPicker = <T>(context: PickerContext, config: PickerConfig<T>): TuiCleanup => {
+  let cancelled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
-export const registerPicker = <T>(context: PickerContext, config: PickerConfig<T>): void => {
+  const cancel = (): void => {
+    cancelled = true;
+    if (timer !== undefined) {
+      // oxlint-disable-next-line montflow/no-timers -- cancelling the picker's own UI retry timer
+      clearTimeout(timer);
+      timer = undefined;
+    }
+  };
+
+  const warn = (message: string): void => {
+    context.ui.toast.show({ message, variant: 'warning' });
+  };
+
+  const insertText = (text: string, route: string, attempt = 0): void => {
+    if (cancelled) return;
+    // oxlint-disable-next-line montflow/no-timers -- composer focus restore is UI timing, not Effect work
+    timer = setTimeout(
+      () => {
+        if (cancelled) return;
+        const current = context.ui.router.current();
+        if (`${current.type}:${current.sessionID ?? ''}` !== route) return;
+        const editor = context.renderer.currentFocusedEditor;
+        if (editor !== null) {
+          editor.insertText(text);
+          editor.gotoBufferEnd?.();
+          context.renderer.requestRender?.();
+          return;
+        }
+        if (attempt < INSERT_ATTEMPTS - 1) {
+          insertText(text, route, attempt + 1);
+          return;
+        }
+        warn('Could not reach the composer — focus the prompt and try again.');
+      },
+      attempt === 0 ? 0 : INSERT_RETRY_MS,
+    );
+  };
+
   const pick = async (): Promise<void> => {
-    const directory = context.location?.directory ?? process.cwd();
-    const items = await config.loadItems(directory);
-    if (items.length === 0) {
-      context.ui.toast.show({
-        message: 'No items found.',
-        variant: 'warning',
-      });
+    const directory = context.location?.directory;
+    if (directory === undefined) {
+      warn('Open a project first.');
       return;
     }
-    const pickerItems = items.map((item) => config.formatItem(item));
-    const searchFn = config.search ?? defaultSearch;
+    const route = context.ui.router.current();
+    const routeKey = `${route.type}:${route.sessionID ?? ''}`;
+    const items = await config.loadItems(directory);
+    if (items.length === 0) {
+      warn('No items found.');
+      return;
+    }
     const chosen = await context.ui.dialog.select<T>({
       title: config.title,
       placeholder: `Search ${config.title.toLowerCase()}`,
-      options: pickerItems.map((item) => {
-        if (item.description !== undefined) {
-          return { title: item.title, value: item.value, description: item.description };
-        }
-        return { title: item.title, value: item.value };
-      }),
-      search: (query, all) => {
-        const mapped: ReadonlyArray<PickerItem<T>> = all.map((opt) => {
-          if (opt.description !== undefined) {
-            return { title: opt.title, value: opt.value, description: opt.description };
-          }
-          return { title: opt.title, value: opt.value };
-        });
-        const result = searchFn(query, mapped);
-        return result.map((item) => {
-          if (item.description !== undefined) {
-            return { title: item.title, value: item.value, description: item.description };
-          }
-          return { title: item.title, value: item.value };
-        });
-      },
+      options: items.map((item) => toOption(config.formatItem(item))),
     });
-    if (chosen === undefined) return;
-    insertText(context, config.getInsertText(chosen));
+    if (chosen === undefined || cancelled) return;
+    insertText(config.getInsertText(chosen), routeKey);
   };
 
   const forward = async (text: string): Promise<void> => {
     const route = context.ui.router.current();
     if (route.type !== 'session' || route.sessionID === undefined) {
-      context.ui.toast.show({ message: 'Open a session first', variant: 'warning' });
+      warn('Open a session first');
       return;
     }
     await context.client.session
       .command({ sessionID: route.sessionID, name: config.commandName, text })
       .catch((cause: unknown) =>
-        context.ui.toast.show({
-          message: cause instanceof Error ? cause.message : String(cause),
-          variant: 'error',
-        }),
+        context.ui.toast.show({ message: reasonOf(cause), variant: 'error' }),
       );
   };
 
-  context.keymap.layer(() => ({
+  const report = async (run: () => Promise<void>): Promise<void> => {
+    try {
+      await run();
+    } catch (cause) {
+      context.ui.toast.show({ message: reasonOf(cause), variant: 'error' });
+    }
+  };
+
+  const layer = (): KeymapLayer => ({
     mode: 'global',
     commands: [
       {
@@ -211,16 +201,23 @@ export const registerPicker = <T>(context: PickerContext, config: PickerConfig<T
           const args = (input ?? '').trim();
           const [verb] = args.split(/\s+/u);
           if (verb === undefined || verb === '' || verb === 'list') {
-            await pick();
+            await report(pick);
             return;
           }
-          if (config.forwardNonListToServer) {
-            await forward(args);
+          if (config.forwardNonListToServer === true) {
+            await report(() => forward(args));
             return;
           }
-          await pick();
+          await report(pick);
         },
       },
     ],
-  }));
+  });
+
+  // External TUI plugin contexts carry no slot claim, so the layer is
+  // registered directly; the host scopes it to the plugin registration and
+  // disposes it with the plugin.
+  context.keymap?.layer(layer);
+
+  return cancel;
 };

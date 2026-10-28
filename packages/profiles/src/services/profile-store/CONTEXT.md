@@ -19,5 +19,5 @@ extension like `packages/prompts`).
   `modules/pi-profiles`
 - Interactive flows (menus, dialogs, agentic sessions) — those live in
   `apps/interactive`
-- Pi extension wiring (preprompts, model runtime) — that lives in
+- OpenCode plugin wiring (preprompts, model runtime) — that lives in
   `extension.ts`

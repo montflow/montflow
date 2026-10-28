@@ -1,6 +1,6 @@
 # PiProfiles module
 
-Effect-first agent profile primitives for Pi extensions (profile
+Effect-first agent profile primitives for OpenCode plugins (profile
 descriptors, slug names).
 
 ## Belongs here

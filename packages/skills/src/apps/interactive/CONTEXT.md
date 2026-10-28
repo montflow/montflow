@@ -4,7 +4,7 @@ Interactive `/mf-skills-tui` command for the skills extension. App layer:
 dialog-driven flows (browse, create manually or with an agent, show,
 modify manually or with an agent, delete). Pure shapes, codecs, and slug helpers stay in `modules/`.
 
-The headless CLI is a separate command and app: `/mf-skills` in a Pi session
+The headless CLI is a separate command and app: `/mf-skills` in a OpenCode session
 and the `mf-skills` binary, both in [../cli](../cli/CONTEXT.md).
 
 ## Belongs here
@@ -22,7 +22,7 @@ and the `mf-skills` binary, both in [../cli](../cli/CONTEXT.md).
 - Main menu renders through the injected `MenuFn` widget when available
   (`Menu.menuDialog`: plain `Skills` heading, `Batch.box` info panel with one
   generic dependency line — `✓ dependencies installed` or
-  `✗ dependencies missing` — then options); without it a Pi-native
+  `✗ dependencies missing` — then options); without it an OpenCode-native
   `select` on the plain heading
 - Requirements gate (`ensureRequirements`): before an agentic session, checklist
   the `Skill.*_REQUIREMENTS` (checked = will inject, toggle by picking;

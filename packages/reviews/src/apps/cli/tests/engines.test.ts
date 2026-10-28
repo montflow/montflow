@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Effect, Layer } from 'effect';
 import * as Vitest from '@effect/vitest';
-import { ProfileStore } from '@montflow/profiles';
-import { SpecStore } from '@montflow/specs';
+import { ProfileStore } from '@montflow/profiles/services';
+import { SpecStore } from '@montflow/specs/services';
 import { ProfileProbe, ReviewStore } from '../../../services/index.js';
 import * as Engines from '../engines.apps.module.js';
 
