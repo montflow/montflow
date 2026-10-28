@@ -53,6 +53,12 @@ export interface PickerConfig<T> {
 
 export interface PickerContext {
   readonly location?: { readonly directory?: string | undefined } | undefined;
+  /** Host data, used to find an open session when the router is not on one. */
+  readonly data?: {
+    readonly session: {
+      list(): ReadonlyArray<{ readonly id: string }>;
+    };
+  };
   readonly renderer: {
     readonly currentFocusedEditor?: {
       insertText?(text: string): void;
@@ -204,13 +210,15 @@ export const registerPicker = <T>(context: PickerContext, config: PickerConfig<T
 
   const forward = async (text: string): Promise<void> => {
     const route = context.ui.router.current();
-    if (route.type !== 'session' || route.sessionID === undefined) {
+    const sessionID =
+      route.type === 'session' ? route.sessionID : context.data?.session.list()[0]?.id;
+    if (sessionID === undefined) {
       context.ui.toast.show({ message: 'Open a session first', variant: 'warning' });
       return;
     }
     await context.client.session
       .command({
-        sessionID: route.sessionID,
+        sessionID,
         name: config.forwardCommandName ?? config.commandName,
         text,
       })

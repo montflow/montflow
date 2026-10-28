@@ -1,5 +1,11 @@
 // oxlint-disable-next-line montflow/no-node-platform-imports -- this TUI entry is the composition root for its plugin store.
+import { execFile } from 'node:child_process';
+// oxlint-disable-next-line montflow/no-node-platform-imports -- this TUI entry is the composition root for its plugin store.
 import { access, readdir, readFile, stat } from 'node:fs/promises';
+// oxlint-disable-next-line montflow/no-node-platform-imports -- promisify only wraps the local CLI call below.
+import { promisify } from 'node:util';
+// oxlint-disable-next-line montflow/no-node-platform-imports -- resolve this module's own path for the local CLI.
+import { fileURLToPath } from 'node:url';
 // oxlint-disable-next-line montflow/no-node-platform-imports -- the TUI entry resolves its store path during host setup.
 import path from 'node:path';
 import type { TuiPlugin } from '@montflow/opencode';
@@ -7,6 +13,14 @@ import { type PickerContext, registerPicker } from '@montflow/opencode/tui';
 import { Effect, Schema } from 'effect';
 import * as Prompts from './modules/prompts/index.js';
 import { ID, COMMAND_NAME } from './server.js';
+
+const execFileAsync = promisify(execFile);
+
+/** The specs CLI entry in this checkout, used to render the execution prompt. */
+const SPECS_CLI = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../packages/specs/src/apps/cli/main.ts',
+);
 
 /** Store directory segments under a working directory. */
 const PROMPTS_DIR = ['.agents', '@montflow', 'prompts'] as const;
@@ -212,7 +226,20 @@ export default {
             ],
           });
           if (mode === undefined) return undefined;
-          return `/specs execute --name ${spec} --mode ${mode}`;
+          try {
+            const { stdout } = await execFileAsync(
+              'bun',
+              ['run', SPECS_CLI, 'execute', '--dir', directory, '--name', spec, '--mode', mode],
+              { cwd: directory, maxBuffer: 10_000_000 },
+            );
+            return stdout.trimEnd();
+          } catch (cause) {
+            pickerContext.ui.toast.show({
+              message: cause instanceof Error ? cause.message : String(cause),
+              variant: 'error',
+            });
+            return undefined;
+          }
         }
         if (prompt.variables.some((variable) => variable.internal === true && variable.required)) {
           pickerContext.ui.toast.show({
