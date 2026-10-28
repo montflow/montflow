@@ -33,6 +33,7 @@ import {
 import { SpecStore } from '../../services/index.js';
 import { runDoctorAt } from '../doctor/index.js';
 import type { DoctorResult } from '../doctor/index.js';
+import { Cli } from '@montflow/version';
 
 /** Spec store directory, relative to the workspace root. */
 export const DEFAULT_ROOT = '.agents/@montflow/specs';
@@ -1068,6 +1069,7 @@ export const rootCommand = Command.make('mf-specs').pipe(
     listCommand,
     createCommand,
     doctorCommand,
+    Cli.versionCommand({ packageRoot: `${import.meta.dirname}/../../..` }),
   ]),
 );
 

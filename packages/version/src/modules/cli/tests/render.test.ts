@@ -1,0 +1,175 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { NodeServices } from '@effect/platform-node';
+import { Effect } from 'effect';
+import * as Vitest from '@effect/vitest';
+import { Cli, Store } from '../../../index.js';
+import type { Identity } from '../../build-info/index.js';
+
+/**
+ * Rendering is the contract an agent parses: the human form must name every
+ * field, the JSON form must stay one object with stable keys, and the store
+ * line must be present only when the workspace actually has a store.
+ *
+ * Store fixtures are real files on disk, so `Store.read` exercises the same
+ * paths the binary does.
+ */
+
+const identity: Identity = {
+  name: '@montflow/skills',
+  version: '1.4.2',
+  commit: 'a'.repeat(40),
+  dirty: false,
+  ref: 'main',
+  checkout: '/checkout',
+  source: 'package',
+};
+
+/** One throwaway workspace root. */
+const withWorkspace = <A, E>(use: (root: string) => Effect.Effect<A, E>): Effect.Effect<A, E> =>
+  Effect.acquireUseRelease(
+    Effect.promise(() => mkdtemp(join(tmpdir(), 'mf-version-cli-'))),
+    use,
+    (root) => Effect.promise(() => rm(root, { recursive: true, force: true })),
+  );
+
+/** Read a workspace store with the platform layer the binary provides. */
+const readStore = (root: string): Effect.Effect<Store.StoreState> =>
+  Store.read(root).pipe(Effect.provide(NodeServices.layer));
+
+/** Write a manifest into a workspace's skill store. */
+const writeManifest = async (root: string): Promise<void> => {
+  const store = join(root, '.agents', 'skills');
+  await mkdir(store, { recursive: true });
+  await writeFile(
+    join(store, '.montflow-sync.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        source: {
+          path: '/checkout',
+          remote: 'https://github.com/montflow/montflow',
+          commit: 'b'.repeat(40),
+          ref: 'main',
+          version: '9.8.7',
+        },
+        syncedAt: '2026-10-28T00:00:00.000Z',
+        skills: [{ name: 'alpha', version: '1.0.0', sha256: 'c'.repeat(64) }],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+};
+
+Vitest.describe('Cli.human runtime', () => {
+  Vitest.it.effect('prints every identity field when the workspace has no store', () =>
+    withWorkspace((root) =>
+      Effect.gen(function* () {
+        const value = Cli.report(identity, yield* readStore(root));
+
+        Vitest.expect(Cli.human(value)).toBe(
+          [
+            'name      @montflow/skills',
+            'version   1.4.2',
+            `commit    ${'a'.repeat(40)}`,
+            'dirty     no',
+            'ref       main',
+            'checkout  /checkout',
+          ].join('\n'),
+        );
+      }),
+    ),
+  );
+
+  Vitest.it.effect('reports a store without a manifest as unmanaged', () =>
+    withWorkspace((root) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => mkdir(join(root, '.agents', 'skills'), { recursive: true }));
+
+        const value = Cli.report(identity, yield* readStore(root));
+
+        Vitest.expect(Cli.human(value).split('\n').at(-1)).toBe('store     unmanaged');
+      }),
+    ),
+  );
+
+  Vitest.it.effect('reports the manifest source version and commit as the store', () =>
+    withWorkspace((root) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeManifest(root));
+
+        const value = Cli.report(identity, yield* readStore(root));
+
+        Vitest.expect(Cli.human(value).split('\n').at(-1)).toBe(
+          `store     9.8.7 (${'b'.repeat(40)})`,
+        );
+      }),
+    ),
+  );
+
+  Vitest.it.effect('prints the dirty flag as yes when the tree is dirty', () =>
+    withWorkspace((root) =>
+      Effect.gen(function* () {
+        const value = Cli.report({ ...identity, dirty: true }, yield* readStore(root));
+
+        Vitest.expect(Cli.human(value)).toContain('dirty     yes');
+      }),
+    ),
+  );
+});
+
+Vitest.describe('Cli.json runtime', () => {
+  Vitest.it.effect('emits one JSON object with the identity and the store', () =>
+    withWorkspace((root) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeManifest(root));
+        const value = Cli.report(identity, yield* readStore(root));
+
+        const parsed: unknown = JSON.parse(Cli.json(value));
+
+        Vitest.expect(parsed).toStrictEqual({
+          name: '@montflow/skills',
+          version: '1.4.2',
+          commit: 'a'.repeat(40),
+          dirty: false,
+          ref: 'main',
+          checkout: '/checkout',
+          source: 'package',
+          store: {
+            status: 'managed',
+            version: '9.8.7',
+            commit: 'b'.repeat(40),
+            syncedAt: '2026-10-28T00:00:00.000Z',
+          },
+        });
+      }),
+    ),
+  );
+
+  Vitest.it.effect('omits git facts outside a checkout and the store when absent', () =>
+    withWorkspace((root) =>
+      Effect.gen(function* () {
+        const value = Cli.report(
+          {
+            name: '@montflow/skills',
+            version: '1.4.2',
+            checkout: '/checkout',
+            source: 'package',
+          },
+          yield* readStore(root),
+        );
+
+        const parsed: unknown = JSON.parse(Cli.json(value));
+
+        Vitest.expect(parsed).toStrictEqual({
+          name: '@montflow/skills',
+          version: '1.4.2',
+          checkout: '/checkout',
+          source: 'package',
+        });
+      }),
+    ),
+  );
+});

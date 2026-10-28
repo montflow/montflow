@@ -31,8 +31,10 @@
     "test": "vitest run --typecheck",
     "ts:check": "tsc --noEmit"
   },
+  "dependencies": {
+    "@effect/platform-node": "4.0.0-rc.112"
+  },
   "devDependencies": {
-    "@effect/platform-node": "4.0.0-rc.112",
     "@effect/vitest": "4.0.0-rc.112",
     "@types/node": "^26.1.2",
     "effect": "4.0.0-rc.112",

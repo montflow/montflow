@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: A001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task A002: wire-version-command

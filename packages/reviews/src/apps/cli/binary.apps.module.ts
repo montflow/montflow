@@ -5,6 +5,7 @@ import { SpecStore } from '@montflow/specs';
 import { ProfileProbe, ReviewStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
+import { Cli } from '@montflow/version';
 
 /**
  * The `mf-reviews` binary's command tree, built with `effect/cli`.
@@ -184,6 +185,7 @@ export const rootCommand = Command.make('mf-reviews').pipe(
     createCommand,
     newCommand,
     resumeCommand,
+    Cli.versionCommand({ packageRoot: `${import.meta.dirname}/../../..` }),
   ]),
   Command.provide(
     Layer.mergeAll(
@@ -194,6 +196,3 @@ export const rootCommand = Command.make('mf-reviews').pipe(
     ),
   ),
 );
-
-/** Version reported by `--version`. Mirrors the package version. */
-export const VERSION = '0.0.1';

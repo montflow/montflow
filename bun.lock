@@ -128,6 +128,7 @@
         "@effect/platform-node": "4.0.0-rc.112",
         "@montflow/opencode": "workspace:*",
         "@montflow/skills": "workspace:*",
+        "@montflow/version": "workspace:*",
       },
       "devDependencies": {
         "@effect/vitest": "4.0.0-rc.112",
@@ -151,6 +152,7 @@
       "dependencies": {
         "@effect/platform-node": "4.0.0-rc.112",
         "@montflow/opencode": "workspace:*",
+        "@montflow/version": "workspace:*",
         "handlebars": "4.7.9",
       },
       "devDependencies": {
@@ -177,6 +179,7 @@
         "@montflow/opencode": "workspace:*",
         "@montflow/profiles": "workspace:*",
         "@montflow/specs": "workspace:*",
+        "@montflow/version": "workspace:*",
       },
       "devDependencies": {
         "@effect/vitest": "4.0.0-rc.112",
@@ -200,6 +203,7 @@
       "dependencies": {
         "@effect/platform-node": "4.0.0-rc.112",
         "@montflow/opencode": "workspace:*",
+        "@montflow/version": "workspace:*",
       },
       "devDependencies": {
         "@effect/vitest": "4.0.0-rc.112",
@@ -223,6 +227,7 @@
       "dependencies": {
         "@effect/platform-node": "4.0.0-rc.112",
         "@montflow/opencode": "workspace:*",
+        "@montflow/version": "workspace:*",
       },
       "devDependencies": {
         "@effect/vitest": "4.0.0-rc.112",
@@ -257,8 +262,10 @@
     "packages/version": {
       "name": "@montflow/version",
       "version": "0.0.1",
-      "devDependencies": {
+      "dependencies": {
         "@effect/platform-node": "4.0.0-rc.112",
+      },
+      "devDependencies": {
         "@effect/vitest": "4.0.0-rc.112",
         "@types/node": "^26.1.2",
         "effect": "4.0.0-rc.112",
