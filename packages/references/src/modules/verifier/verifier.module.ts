@@ -71,37 +71,6 @@ export interface VerifyOptions {
 /** Default invocation used when a caller does not pass one. */
 export const DEFAULT_INVOCATION = '/mf-references';
 
-/** Every store-scope issue id, as a closed list for docs and tests. */
-export const STORE_ISSUE_IDS = [
-  'frontmatter-missing',
-  'name-missing',
-  'name-slug',
-  'name-length',
-  'name-directory',
-  'directory-slug',
-  'entry-missing',
-  'entry-extra-file',
-  'url-missing',
-  'url-scheme',
-  'url-shape',
-  'purpose-missing',
-  'purpose-length',
-  'purpose-scalar',
-  'purpose-terminal',
-  'added-missing',
-  'added-format',
-  'ref-shape',
-  'ref-empty',
-  'field-forbidden',
-  'field-unknown',
-  'duplicate-slug',
-  'duplicate-url',
-  'body-missing',
-  'body-multiple-h1',
-  'body-derived',
-  'store-root-missing',
-] as const;
-
 /** Every clone-scope issue id, emitted only by `verify --clones`. */
 export const CLONE_ISSUE_IDS = [
   'clone-missing',

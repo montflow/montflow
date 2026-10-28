@@ -50,11 +50,19 @@ Vitest.describe('mf-references binary', () => {
     Vitest.expect(binaryText).toContain('process.exitCode = 1');
   });
 
-  Vitest.it('wires doctor --check to the one exit helper on drift', async () => {
-    const binaryText = await source('binary.apps.module.ts');
-    Vitest.expect(binaryText).toContain("'doctor'");
-    Vitest.expect(binaryText).toContain('Engines.doctor(');
-    Vitest.expect(binaryText).toContain('if (!result.healthy) yield* exitFailed;');
+  Vitest.it('exits non-zero on doctor drift and repairs without --check', async () => {
+    const root = await freshRoot();
+    try {
+      const drift = await runCli(['doctor', '--check', '--dir', root]);
+      Vitest.expect(drift.code).toBe(1);
+      Vitest.expect(drift.stdout).toContain('summary checks=8 failed=7 repaired=0');
+      const repair = await runCli(['doctor', '--dir', root]);
+      Vitest.expect(repair.code).toBe(0);
+      const after = await runCli(['doctor', '--check', '--dir', root]);
+      Vitest.expect(after.code).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   Vitest.it('reports the package version from package.json', () => {

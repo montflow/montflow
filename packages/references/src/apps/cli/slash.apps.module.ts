@@ -602,9 +602,14 @@ export const run = (
         });
         return yield* say(Renderers.removed(result, renderMode(action)));
       }
+      default:
+        return assertNever(action);
     }
   });
 };
+
+/** Compile-time exhaustiveness guard: a new `CliAction` member must gain a case. */
+const assertNever = (value: never): never => value;
 
 /** Log a command result where the server host can see it. */
 const notify = (message: string): void => {

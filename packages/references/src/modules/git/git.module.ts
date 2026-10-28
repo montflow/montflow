@@ -1,5 +1,5 @@
 // oxlint-disable-next-line montflow/no-node-platform-imports -- Git.Default is the package's single git composition seam; every command is argv-only and no other module spawns a process.
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { Context, Effect, Layer } from 'effect';
 import { COMMIT_PATTERN } from '../reference/index.js';
 
@@ -188,25 +188,65 @@ export const resolveRemoteRef = (
   rows.find((row) => row.ref === `refs/heads/${ref}`)?.sha ??
   rows.find((row) => row.ref === `refs/remotes/origin/${ref}`)?.sha;
 
-/** Run one `git` command with the stable `C` locale. */
+/** Run one `git` command with the stable `C` locale. Interruption kills the child. */
 const runGit = (
   args: ReadonlyArray<string>,
   timeout = TIMEOUT_MS,
 ): Effect.Effect<GitCommandResult> =>
-  Effect.promise(
-    () =>
-      new Promise<GitCommandResult>((resolve) => {
-        // oxlint-disable-next-line montflow/no-process-env -- Git.Default is the one composition seam that spawns git; LC_ALL=C keeps stderr text stable for messages.
-        const env = { ...process.env, LC_ALL: 'C' };
-        execFile('git', [...args], { timeout, env }, (error, stdout, stderr) => {
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      // oxlint-disable-next-line montflow/no-process-env -- Git.Default is the one composition seam that spawns git; LC_ALL=C keeps stderr text stable for messages.
+      const env = { ...process.env, LC_ALL: 'C' };
+      return spawn('git', [...args], {
+        env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        signal: AbortSignal.timeout(timeout),
+      });
+    }),
+    (child) =>
+      Effect.callback<GitCommandResult>((resume) => {
+        let stdout = '';
+        let stderr = '';
+        let settled = false;
+        const settle = (result: GitCommandResult): void => {
+          if (settled) return;
+          settled = true;
+          resume(Effect.succeed(result));
+        };
+        child.stdout?.on('data', (chunk: Buffer) => {
+          stdout += chunk.toString();
+        });
+        child.stderr?.on('data', (chunk: Buffer) => {
+          stderr += chunk.toString();
+        });
+        child.on('error', (error: NodeJS.ErrnoException) => {
+          const missingBinary = error.code === 'ENOENT';
+          settle({
+            ok: false,
+            stdout: stdout.trim(),
+            stderr: stderr.trim(),
+            message: missingBinary
+              ? 'git is not installed or not on PATH'
+              : firstLine(error.message),
+            missingBinary,
+          });
+        });
+        child.on('close', (code) => {
           const out = stdout.trim();
           const err = stderr.trim();
-          const missingBinary = error !== null && error.code === 'ENOENT';
-          const message = missingBinary
-            ? 'git is not installed or not on PATH'
-            : firstLine(err) || error?.message || '';
-          resolve({ ok: error === null, stdout: out, stderr: err, message, missingBinary });
+          settle({
+            ok: code === 0,
+            stdout: out,
+            stderr: err,
+            message: firstLine(err) || (code === 0 ? '' : `git exited with code ${code ?? 'null'}`),
+            missingBinary: false,
+          });
         });
+        return Effect.void;
+      }),
+    (child) =>
+      Effect.sync(() => {
+        if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
       }),
   );
 
@@ -457,7 +497,7 @@ const make = Effect.sync(() => {
   });
 
   const clone = Effect.fn('Git.clone')(function* (url: string, path: string) {
-    return yield* runGit(['clone', '--quiet', url, path], CLONE_TIMEOUT_MS);
+    return yield* runGit(['clone', '--quiet', '--', url, path], CLONE_TIMEOUT_MS);
   });
 
   const fetch = Effect.fn('Git.fetch')(function* (path: string) {
