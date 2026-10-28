@@ -151,6 +151,39 @@ Vitest.describe('/mf-references parser', () => {
     });
   });
 
+  Vitest.it('parses boolean flag values the same way the binary does', () => {
+    Vitest.expect(Slash.parseCliArgs('doctor --check=false')).toMatchObject({
+      kind: 'Doctor',
+      check: false,
+    });
+    Vitest.expect(Slash.parseCliArgs('doctor --check=true')).toMatchObject({
+      kind: 'Doctor',
+      check: true,
+    });
+    Vitest.expect(Slash.parseCliArgs('verify --clones=false')).toMatchObject({
+      kind: 'Verify',
+      clones: false,
+    });
+    Vitest.expect(Slash.parseCliArgs('update alpha --force=false')).toMatchObject({
+      kind: 'Update',
+      target: 'alpha',
+      force: false,
+    });
+    Vitest.expect(Slash.parseCliArgs('remove alpha --keep-clone=false')).toMatchObject({
+      kind: 'Remove',
+      keepClone: false,
+    });
+    Vitest.expect(Slash.parseCliArgs('sync alpha --all=false')).toMatchObject({
+      kind: 'Sync',
+      name: 'alpha',
+      all: false,
+    });
+    Vitest.expect(Slash.parseCliArgs('doctor --check=maybe')).toMatchObject({
+      kind: 'Usage',
+      message: "usage: invalid value 'maybe' for flag '--check'",
+    });
+  });
+
   Vitest.it('enforces exactly one positional for show and remove', () => {
     Vitest.expect(Slash.parseCliArgs('show alpha beta')).toMatchObject({ kind: 'Usage' });
     Vitest.expect(Slash.parseCliArgs('remove alpha beta')).toMatchObject({ kind: 'Usage' });

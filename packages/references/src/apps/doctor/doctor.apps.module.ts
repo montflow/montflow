@@ -131,6 +131,7 @@ const listFiles = (fs: FileSystem.FileSystem, dir: string): Effect.Effect<Readon
 type PackageRead =
   | { readonly kind: 'files'; readonly files: SkillPayload }
   | { readonly kind: 'no-skill' }
+  | { readonly kind: 'unreadable-dir' }
   | { readonly kind: 'not-a-file'; readonly entry: string }
   | { readonly kind: 'unreadable'; readonly entry: string };
 
@@ -141,7 +142,12 @@ const readFromPackage = (
   dir: string,
 ): Effect.Effect<PackageRead> =>
   Effect.gen(function* () {
-    const names = (yield* listFiles(fs, dir)).filter((name) => !name.startsWith('.')).toSorted();
+    const entries = yield* fs.readDirectory(dir).pipe(Effect.orElseSucceed(() => undefined));
+    if (entries === undefined) {
+      const present = yield* exists(fs, dir);
+      return present ? ({ kind: 'unreadable-dir' } as const) : ({ kind: 'no-skill' } as const);
+    }
+    const names = entries.filter((name) => !name.startsWith('.')).toSorted();
     if (!names.includes('SKILL.md')) return { kind: 'no-skill' } as const;
     const files: Record<string, string> = {};
     for (const name of names) {
@@ -317,9 +323,11 @@ export const verifyPackagedSkills = (
               ? dirPresent
                 ? `Packaged skill '${name}' has no SKILL.md.`
                 : `Packaged skill '${name}' is missing from '${sourceDir}'.`
-              : read.kind === 'not-a-file'
-                ? `Packaged skill '${name}' contains '${read.entry}', which is not a regular file and cannot be carried in the payload.`
-                : `Packaged skill '${name}' has an unreadable '${read.entry}'.`;
+              : read.kind === 'unreadable-dir'
+                ? `Packaged skill '${name}' has an unreadable directory.`
+                : read.kind === 'not-a-file'
+                  ? `Packaged skill '${name}' contains '${read.entry}', which is not a regular file and cannot be carried in the payload.`
+                  : `Packaged skill '${name}' has an unreadable '${read.entry}'.`;
           issues.push(Verifier.issue('payload', message));
         }
       } else {

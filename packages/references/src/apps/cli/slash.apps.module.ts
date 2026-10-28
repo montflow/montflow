@@ -131,6 +131,7 @@ interface SplitTokens {
   readonly flags: Record<string, string>;
   readonly unknown: readonly string[];
   readonly missingValues: readonly string[];
+  readonly invalidValues: ReadonlyArray<{ readonly name: string; readonly value: string }>;
 }
 
 /**
@@ -150,6 +151,7 @@ const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => 
   const pairs: Array<[string, string]> = [];
   const unknown: Array<string> = [];
   const missingValues: Array<string> = [];
+  const invalidValues: Array<{ name: string; value: string }> = [];
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index] ?? '';
     if (!token.startsWith('--')) {
@@ -160,8 +162,18 @@ const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => 
     const equals = body.indexOf('=');
     if (equals > 0) {
       const name = body.slice(0, equals);
-      if (!strings.has(name) && !booleans.has(name)) unknown.push(`--${name}`);
-      pairs.push([name, body.slice(equals + 1)]);
+      const value = body.slice(equals + 1);
+      if (booleans.has(name)) {
+        if (value === 'false') continue;
+        if (value === 'true') {
+          pairs.push([name, '']);
+        } else {
+          invalidValues.push({ name: `--${name}`, value });
+        }
+        continue;
+      }
+      if (!strings.has(name)) unknown.push(`--${name}`);
+      pairs.push([name, value]);
       continue;
     }
     if (booleans.has(body)) {
@@ -180,7 +192,7 @@ const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => 
     }
     unknown.push(`--${body}`);
   }
-  return { positionals, flags: Object.fromEntries(pairs), unknown, missingValues };
+  return { positionals, flags: Object.fromEntries(pairs), unknown, missingValues, invalidValues };
 };
 
 /** Keep the token's value verbatim: only `undefined` means the flag was absent. */
@@ -210,7 +222,11 @@ const flagProblem = (verb: string, split: SplitTokens): CliAction | undefined =>
     );
   }
   const missing = split.missingValues[0];
-  return missing === undefined ? undefined : usage(`usage: missing value for flag '${missing}'`);
+  if (missing !== undefined) return usage(`usage: missing value for flag '${missing}'`);
+  const invalid = split.invalidValues[0];
+  return invalid === undefined
+    ? undefined
+    : usage(`usage: invalid value '${invalid.value}' for flag '${invalid.name}'`);
 };
 
 /**

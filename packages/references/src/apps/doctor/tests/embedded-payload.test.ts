@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -185,6 +193,25 @@ Vitest.describe('Doctor.verifyPackagedSkills', () => {
       const messages = block?.issues.map((issue) => issue.message).join(' ') ?? '';
       Vitest.expect(messages).toContain(`contains 'references', which is not a regular file`);
       Vitest.expect(messages).not.toContain('has no SKILL.md');
+      drop(root);
+    }).pipe(Effect.provide(NodeLive)),
+  );
+
+  Vitest.it.effect('reports an unreadable skill directory instead of a missing SKILL.md', () =>
+    Effect.gen(function* () {
+      if (process.platform === 'win32' || process.getuid?.() === 0) return;
+      const { root, skills } = bareRoot();
+      const [name] = Doctor.SKILL_NAMES;
+      const dir = join(skills, name);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'SKILL.md'), '---\nname: X\n---\n', 'utf8');
+      chmodSync(dir, 0o000);
+      const reports = yield* Doctor.verifyPackagedSkills({ skillsDir: skills });
+      chmodSync(dir, 0o755);
+      const block = reports.find((entry) => entry.path.includes(name));
+      Vitest.expect(block?.issues.map((issue) => issue.message).join(' ')).toContain(
+        'has an unreadable directory',
+      );
       drop(root);
     }).pipe(Effect.provide(NodeLive)),
   );
