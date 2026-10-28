@@ -1024,6 +1024,12 @@ const make = Effect.gen(function* () {
         message: notice,
       } satisfies AddResult;
     }
+    const unusable = loaded.invalid.find(
+      (entry) =>
+        entry.url !== undefined &&
+        Reference.normalizeUrl(entry.url) === Reference.normalizeUrl(url),
+    );
+    if (unusable !== undefined) return invalidEntryFailure('refused', unusable, invocation);
 
     const slug = input.name ?? Reference.deriveSlug(url);
     if (slug === undefined) {

@@ -136,7 +136,11 @@ export const decodeReferenceFileDetailed = (markdown: string): ReferenceDecode =
   try {
     reference = Schema.decodeUnknownSync(Reference)(referenceInput(parsed.fields));
   } catch {
-    return { kind: 'invalid', reason: 'frontmatter does not match the entry schema' };
+    const declared = parsed.fields['url'];
+    const url = Array.isArray(declared) ? undefined : declared;
+    return url === undefined
+      ? { kind: 'invalid', reason: 'frontmatter does not match the entry schema' }
+      : { kind: 'invalid', reason: 'frontmatter does not match the entry schema', url };
   }
   const problems = entryProblems(reference);
   if (problems.length > 0) {

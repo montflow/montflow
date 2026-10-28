@@ -496,6 +496,42 @@ Vitest.describe('GitLifecycle add', () => {
       yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
     }),
   );
+  Vitest.it.effect('refuses add when an unusable entry already claims the url', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(makeWorkspace);
+      const origin = yield* Effect.promise(makeOrigin);
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const dir = join(root, Reference.STORE_DIR, 'badslug');
+        yield* Effect.promise(() => mkdir(dir, { recursive: true }));
+        yield* Effect.promise(() =>
+          writeFile(
+            join(dir, Reference.ENTRY_FILE),
+            [
+              '---',
+              'name: Bad Slug',
+              `url: ${URL}`,
+              `purpose: ${PURPOSE}`,
+              'added: 2026-10-26',
+              '---',
+              '',
+              '# Notes',
+              '',
+            ].join('\n'),
+          ),
+        );
+        return yield* lifecycle.add(root, { url: URL, purpose: PURPOSE });
+      }).pipe(Effect.provide(cloningLive(origin.dir, counters())));
+
+      Vitest.expect(outcome).toMatchObject({ kind: 'refused', code: 'invalid-entry' });
+      Vitest.expect(
+        yield* Effect.promise(() => fileExists(join(root, Reference.STORE_DIR, 'fixture'))),
+      ).toBe(false);
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
 });
 
 Vitest.describe('GitLifecycle update', () => {
