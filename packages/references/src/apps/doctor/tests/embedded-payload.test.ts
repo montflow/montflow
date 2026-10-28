@@ -168,8 +168,23 @@ Vitest.describe('Doctor.verifyPackagedSkills', () => {
       const block = reports.find((entry) => entry.path.includes(empty));
       Vitest.expect(block?.valid).toBe(false);
       Vitest.expect(block?.issues.map((issue) => issue.message).join(' ')).toContain(
-        'has no readable SKILL.md',
+        'has no SKILL.md',
       );
+      drop(root);
+    }).pipe(Effect.provide(NodeLive)),
+  );
+
+  Vitest.it.effect('names a subdirectory entry instead of blaming SKILL.md', () =>
+    Effect.gen(function* () {
+      const { root, skills } = bareRoot();
+      const [name] = Doctor.SKILL_NAMES;
+      mkdirSync(join(skills, name, 'references'), { recursive: true });
+      writeFileSync(join(skills, name, 'SKILL.md'), '---\nname: X\n---\n', 'utf8');
+      const reports = yield* Doctor.verifyPackagedSkills({ skillsDir: skills });
+      const block = reports.find((entry) => entry.path.includes(name));
+      const messages = block?.issues.map((issue) => issue.message).join(' ') ?? '';
+      Vitest.expect(messages).toContain(`contains 'references', which is not a regular file`);
+      Vitest.expect(messages).not.toContain('has no SKILL.md');
       drop(root);
     }).pipe(Effect.provide(NodeLive)),
   );

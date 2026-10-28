@@ -123,21 +123,37 @@ const readIfPresent = (
 const listFiles = (fs: FileSystem.FileSystem, dir: string): Effect.Effect<ReadonlyArray<string>> =>
   fs.readDirectory(dir).pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));
 
-/** Read a skill's files from a directory on disk, keyed by file name. */ const readFromPackage = (
+/**
+ * Outcome of reading one packaged skill's own files: a payload, or the reason
+ * it cannot be one. A skill payload is a flat name→text map, so a directory
+ * (or any non-regular entry) beside `SKILL.md` is not carryable.
+ */
+type PackageRead =
+  | { readonly kind: 'files'; readonly files: SkillPayload }
+  | { readonly kind: 'no-skill' }
+  | { readonly kind: 'not-a-file'; readonly entry: string }
+  | { readonly kind: 'unreadable'; readonly entry: string };
+
+/** Read a skill's files from a directory on disk, keyed by file name. */
+const readFromPackage = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
   dir: string,
-): Effect.Effect<SkillPayload | undefined> =>
+): Effect.Effect<PackageRead> =>
   Effect.gen(function* () {
     const names = (yield* listFiles(fs, dir)).filter((name) => !name.startsWith('.')).toSorted();
-    if (!names.includes('SKILL.md')) return undefined;
+    if (!names.includes('SKILL.md')) return { kind: 'no-skill' } as const;
     const files: Record<string, string> = {};
     for (const name of names) {
-      const text = yield* readIfPresent(fs, path.join(dir, name));
-      if (text === undefined) return undefined;
+      const full = path.join(dir, name);
+      const info = yield* fs.stat(full).pipe(Effect.orElseSucceed(() => undefined));
+      if (info === undefined) return { kind: 'unreadable', entry: name } as const;
+      if (info.type !== 'File') return { kind: 'not-a-file', entry: name } as const;
+      const text = yield* readIfPresent(fs, full);
+      if (text === undefined) return { kind: 'unreadable', entry: name } as const;
       files[name] = text;
     }
-    return files;
+    return { kind: 'files', files } as const;
   }).pipe(Effect.orDie);
 
 /**
@@ -157,9 +173,9 @@ export const readPayload = (
 ): Effect.Effect<ResolvedPayload | undefined> =>
   readFromPackage(fs, path, path.join(shippedDir, name)).pipe(
     Effect.map((fromDisk) => {
-      if (fromDisk !== undefined) {
+      if (fromDisk.kind === 'files') {
         return {
-          files: fromDisk,
+          files: fromDisk.files,
           origin: 'package',
           source: path.join(shippedDir, name),
         } satisfies ResolvedPayload;
@@ -289,18 +305,34 @@ export const verifyPackagedSkills = (
     for (const name of SKILL_NAMES) {
       const issues: Array<Verifier.Issue> = [];
       const sourceDir = path.join(shipped, name);
-      const files = shippedPresent
-        ? yield* readFromPackage(fs, path, sourceDir)
-        : (yield* readPayload(fs, path, name, shipped))?.files;
-      if (files === undefined) {
-        const dirPresent = shippedPresent && (yield* exists(fs, sourceDir));
-        const message = !shippedPresent
-          ? `Packaged skill '${name}' is unavailable in this build.`
-          : dirPresent
-            ? `Packaged skill '${name}' has no readable SKILL.md.`
-            : `Packaged skill '${name}' is missing from '${sourceDir}'.`;
-        issues.push(Verifier.issue('payload', message));
+      let files: SkillPayload | undefined;
+      if (shippedPresent) {
+        const read = yield* readFromPackage(fs, path, sourceDir);
+        if (read.kind === 'files') {
+          files = read.files;
+        } else {
+          const dirPresent = yield* exists(fs, sourceDir);
+          const message =
+            read.kind === 'no-skill'
+              ? dirPresent
+                ? `Packaged skill '${name}' has no SKILL.md.`
+                : `Packaged skill '${name}' is missing from '${sourceDir}'.`
+              : read.kind === 'not-a-file'
+                ? `Packaged skill '${name}' contains '${read.entry}', which is not a regular file and cannot be carried in the payload.`
+                : `Packaged skill '${name}' has an unreadable '${read.entry}'.`;
+          issues.push(Verifier.issue('payload', message));
+        }
       } else {
+        const payload = yield* readPayload(fs, path, name, shipped);
+        if (payload === undefined) {
+          issues.push(
+            Verifier.issue('payload', `Packaged skill '${name}' is unavailable in this build.`),
+          );
+        } else {
+          files = payload.files;
+        }
+      }
+      if (files !== undefined) {
         const markdown = files['SKILL.md'];
         if (markdown === undefined) {
           issues.push(Verifier.issue('payload', `Packaged skill '${name}' has no SKILL.md.`));
