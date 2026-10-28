@@ -139,6 +139,7 @@ interface VariableFileValue {
   readonly type?: 'text' | 'textarea' | 'select';
   readonly options?: readonly string[];
   readonly source?: 'specs';
+  readonly internal?: boolean;
   readonly required?: boolean;
   readonly default?: string;
 }
@@ -218,6 +219,15 @@ Vitest.describe('Prompts.VariableEntry codec', () => {
       options: ['one', 'two'],
       source: 'specs',
       required: false,
+    };
+    Vitest.expect(encode(decode(file))).toStrictEqual(file);
+  });
+
+  Vitest.it('round-trips an internal variable the CLI fills', () => {
+    const file: VariableFileValue = {
+      name: 'state',
+      type: 'textarea',
+      internal: true,
     };
     Vitest.expect(encode(decode(file))).toStrictEqual(file);
   });

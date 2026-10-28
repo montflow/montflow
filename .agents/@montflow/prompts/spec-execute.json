@@ -13,18 +13,21 @@
       "name": "state",
       "label": "Derived state",
       "description": "Derived by `mf-specs state --name <spec>`; `/specs execute` fills this.",
-      "type": "textarea"
+      "type": "textarea",
+      "internal": true
     },
     {
       "name": "next",
       "label": "Ready set",
       "description": "Derived by `mf-specs next --name <spec>`; `/specs execute` fills this.",
-      "type": "textarea"
+      "type": "textarea",
+      "internal": true
     },
     {
       "name": "reviewBudget",
       "label": "Review-cycle budget",
-      "description": "Review cycles the active phase may spend. Derived by `/specs execute`."
+      "description": "Review cycles the active phase may spend. Derived by `/specs execute`.",
+      "internal": true
     },
     {
       "name": "phase",
@@ -42,6 +45,7 @@
       "name": "unsupervised",
       "label": "Autonomous",
       "description": "Internal flag for the public `autonomous` mode. The caller derives it from `--mode`: non-empty for `autonomous`, blank for `guided` (the default). Set by the executor, never typed by the user.",
+      "internal": true,
       "required": false
     }
   ],

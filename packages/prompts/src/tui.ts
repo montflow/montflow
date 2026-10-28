@@ -214,7 +214,18 @@ export default {
           if (mode === undefined) return undefined;
           return `/specs execute --name ${spec} --mode ${mode}`;
         }
+        if (prompt.variables.some((variable) => variable.internal === true && variable.required)) {
+          pickerContext.ui.toast.show({
+            message: 'This prompt is filled by its owning CLI; run it there instead.',
+            variant: 'warning',
+          });
+          return undefined;
+        }
         for (const variable of prompt.variables) {
+          if (variable.internal === true) {
+            if (variable.default !== '') values[variable.name] = variable.default;
+            continue;
+          }
           if (variable.source === 'specs') {
             // oxlint-disable-next-line no-await-in-loop -- dialogs must be answered in declaration order.
             const specs = await loadSpecNames(directory);

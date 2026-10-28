@@ -22,6 +22,12 @@ export class Variable extends Schema.Class<Variable>('PromptVariable')({
   /** Dynamic option source, such as the specs in this workspace. */
   source: Schema.optionalKey(Schema.Literals(['specs'])),
   /**
+   * True when the owning CLI computes this value and no dialog should ask for
+   * it. The generic prompt picker skips internal variables and refuses a
+   * prompt whose required values are internal.
+   */
+  internal: Schema.optionalKey(Schema.Boolean),
+  /**
    * True when the run dialog must collect a value before the prompt can
    * dispatch. Defaults to true, which preserves the pre-schema behaviour
    * where every `{{name}}` had to be filled in.
@@ -43,6 +49,7 @@ const VariableFile = Schema.Struct({
   type: Schema.optionalKey(Schema.Literals(['text', 'textarea', 'select'])),
   options: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)),
   source: Schema.optionalKey(Schema.Literals(['specs'])),
+  internal: Schema.optionalKey(Schema.Boolean),
   required: Schema.optionalKey(Schema.Boolean),
   default: Schema.optionalKey(Schema.String),
 });
@@ -55,6 +62,7 @@ interface VariableFileValue {
   readonly type?: 'text' | 'textarea' | 'select';
   readonly options?: readonly string[];
   readonly source?: 'specs';
+  readonly internal?: boolean;
   readonly required?: boolean;
   readonly default?: string;
 }
@@ -70,6 +78,7 @@ interface MutableVariableFile {
   type?: 'text' | 'textarea' | 'select';
   options?: Array<string>;
   source?: 'specs';
+  internal?: boolean;
   required?: boolean;
   default?: string;
 }
@@ -92,6 +101,7 @@ const toFile = (variable: Variable): VariableFileValue => {
     file.options = [...variable.options];
   }
   if (variable.source !== undefined) file.source = variable.source;
+  if (variable.internal === true) file.internal = true;
   if (!variable.required) file.required = false;
   if (variable.default !== '') file.default = variable.default;
   return file;
@@ -105,6 +115,7 @@ interface ResolvedVariableFile {
   readonly type: 'text' | 'textarea' | 'select';
   readonly options: ReadonlyArray<string>;
   readonly source?: 'specs';
+  readonly internal?: boolean;
   readonly required: boolean;
   readonly default: string;
 }
@@ -131,7 +142,8 @@ const resolveFile = (entry: string | VariableFileValue): ResolvedVariableFile =>
     required: entry.required ?? true,
     default: entry.default ?? '',
   };
-  return entry.source === undefined ? resolved : { ...resolved, source: entry.source };
+  const withSource = entry.source === undefined ? resolved : { ...resolved, source: entry.source };
+  return entry.internal === true ? { ...withSource, internal: true } : withSource;
 };
 
 /**
