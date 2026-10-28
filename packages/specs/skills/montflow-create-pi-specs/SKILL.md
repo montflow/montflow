@@ -1,9 +1,9 @@
 ---
 name: montflow-create-pi-specs
-description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per task (TASK.md, MEMORY.md, GATES.md) — by scaffolding with `mf-specs create` then filling in the rules below. Use when an agent must create a spec directly, without dispatching a session.
+description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per phase, each holding one directory per task (TASK.md, MEMORY.md, GATES.md) — by scaffolding with `mf-specs create` then filling in the rules below. Use when an agent must create a spec directly, without dispatching a session.
 id: 6ebf45d24cb3d3a1
 author: Daniel Montilla
-version: 2.3.0
+version: 3.0.0
 license: MIT
 dependencies:
   - executing-skills
@@ -46,15 +46,16 @@ bun run --cwd packages/specs cli create --name <kebab-name> \
   `execution` (one of exploratory | execution | planning | interruptor | defect);
   the trailing `gates` token (or `true`) emits a `GATES.md`.
 - With no `--tasks`, it creates one `implement` execution task.
-- It always appends the phase's `<PHASE>099-review-phase` review task, refuses
-  to overwrite an existing spec, and prints the files it wrote.
+- It writes every task under its phase directory — `<PHASE>/<PHASE><NNN>-<name>/` — with `SPEC.md` at the spec root. It always appends the phase's `<PHASE>099-review-phase` review task, refuses to overwrite an existing spec, and prints the files it wrote.
 - `--reviewer-profiles` seeds the review task's `reviewer-profiles` list
   (comma-separated, ordered).
 - Inside the OpenCode host the same engine is
   `/specs create --name <kebab-name> …`.
 
 Then edit the rendered `SPEC.md` and `TASK.md` files so they carry the real
-requirements. If you write the files by hand instead, follow steps 3–6 exactly.
+requirements. `create` scaffolds phase `A` only; add later phases by repeating
+steps 4–5 for `B`, `C`, … If an existing spec is still flat, run
+`mf-specs migrate --name <spec>` before editing it. If you write the files by hand instead, follow steps 3–6 exactly.
 
 ## 3. Write `SPEC.md`
 
@@ -69,8 +70,10 @@ either `Yes` or `No`.
 
 ## 4. Write One Directory per Task
 
-`<PHASE_LETTERS><NNN>-<kebab-name>/` containing `TASK.md` and `MEMORY.md`, plus
-`GATES.md` when the task's `Gates` is `Yes`.
+Each phase is a real directory named by its letters (`A/`, `B/`, `AA/`), holding
+only task directories. One task directory is
+`<PHASE>/<PHASE_LETTERS><NNN>-<kebab-name>/` containing `TASK.md` and `MEMORY.md`,
+plus `GATES.md` when the task's `Gates` is `Yes`.
 
 `TASK.md` frontmatter: `id` (`<LETTERS><NNN>`, matches the directory), `name`
 (matches the directory name after the id), `type`, `originator`, `depends-on`,
@@ -107,9 +110,13 @@ should see. Do not invent extra context.
 Only edit files if you skipped the `create` scaffold or changed the tree by
 hand; a fresh `create` output already verifies.
 
-- Every task directory matches a row in `## Tasks`, and every row has a directory.
+- Every task directory sits under its phase directory and matches a row in
+  `## Tasks`; every row has a directory.
 - Each `TASK.md` `id` equals its directory id, and `name` equals the directory name after the id.
-- Each phase ends with exactly one `<PHASE>099-review-phase` review task.
+- Each phase directory holds only task directories and ends with exactly one
+  `<PHASE>099-review-phase` review task.
+- No file lives at a phase-directory level, and no directory lives inside a task
+  directory; an empty phase directory fails.
 - `depends-on` references stay in the same phase or an earlier phase.
 - `locked-phases:` is empty and the spec is `status: in-progress`.
 - Nothing outside `.agents/@montflow/specs/` was touched.
@@ -118,6 +125,7 @@ hand; a fresh `create` output already verifies.
 
 # Reference
 
-- **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`).
+- **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus one directory per phase, each holding one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`).
 - **Scaffold CLI**: `mf-specs create` (or `/specs create` in the OpenCode host) — flags `--name`, `--description`, `--author`, `--workspace-type`, `--tasks`, `--reviewer-profiles`.
+- **Migrate CLI**: `mf-specs migrate --name <spec>` / `--all` — moves flat task directories under their phases without editing a file; `--dry-run` prints the plan.
 - **Contract source**: `packages/specs/src/skills/authoring-spec.ts`, `modules/scaffold`, `modules/lifecycle`, `modules/structure`.

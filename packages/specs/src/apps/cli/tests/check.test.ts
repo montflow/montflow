@@ -8,13 +8,13 @@ import { entry, memory, stubLayer } from './helpers.js';
 
 const okFiles = [
   entry('SPEC.md', specMarkdown({ name: 'ok' })),
-  entry('A001-implement-login/TASK.md', taskMarkdown({ id: 'A001', name: 'implement-login' })),
-  entry('A001-implement-login/MEMORY.md', memory),
+  entry('A/A001-implement-login/TASK.md', taskMarkdown({ id: 'A001', name: 'implement-login' })),
+  entry('A/A001-implement-login/MEMORY.md', memory),
   entry(
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
   ),
-  entry('A099-review-phase/MEMORY.md', memory),
+  entry('A/A099-review-phase/MEMORY.md', memory),
 ];
 
 const specs = new Map([
@@ -81,12 +81,12 @@ Vitest.describe('Cli.check runtime', () => {
               }),
             ),
             entry(
-              'A001-implement-login/TASK.md',
+              'A/A001-implement-login/TASK.md',
               taskMarkdown({ id: 'A001', name: 'implement-login', status: 'complete' }),
             ),
-            entry('A001-implement-login/MEMORY.md', memory),
+            entry('A/A001-implement-login/MEMORY.md', memory),
             entry(
-              'A099-review-phase/TASK.md',
+              'A/A099-review-phase/TASK.md',
               taskMarkdown({
                 id: 'A099',
                 name: 'review-phase',
@@ -94,7 +94,7 @@ Vitest.describe('Cli.check runtime', () => {
                 status: 'complete',
               }),
             ),
-            entry('A099-review-phase/MEMORY.md', memory),
+            entry('A/A099-review-phase/MEMORY.md', memory),
           ],
         ],
       ]);

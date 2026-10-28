@@ -22,15 +22,15 @@ const tree = (specStatus: string, lockedPhases: string, a001: string, a099: stri
     }),
   ),
   entry(
-    'A001-implement-login/TASK.md',
+    'A/A001-implement-login/TASK.md',
     taskMarkdown({ id: 'A001', name: 'implement-login', status: a001 }),
   ),
-  entry('A001-implement-login/MEMORY.md', memory),
+  entry('A/A001-implement-login/MEMORY.md', memory),
   entry(
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: a099 }),
   ),
-  entry('A099-review-phase/MEMORY.md', memory),
+  entry('A/A099-review-phase/MEMORY.md', memory),
 ];
 
 const runStatus = (files: ReadonlyArray<SpecFileEntry>) =>

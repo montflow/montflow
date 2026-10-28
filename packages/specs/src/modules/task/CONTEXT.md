@@ -14,7 +14,7 @@ Note: namespace + class share the name, so call-site reads `Task.Task`.
 - `Task` Schema Class, `TaskId`, `TaskType`, `TaskStatus`
 - Patterns: `TASK_ID_PATTERN`, `TASK_DIR_PATTERN`, `ORIGINATOR_PATTERN`,
   `FINDING_REF_PATTERN`
-- `parseTaskDirName`, `parseTaskFile`, `verifyTaskFile`, `decodeUnknown`
+- `parseTaskDirName`, `parseTaskFile`, `verifyTaskFile` (takes the leaf task-directory name), `decodeUnknown`
 - Type/status guards (`isTaskType`, `isTaskStatus`, `isReview`)
 
 ## Does not belong here

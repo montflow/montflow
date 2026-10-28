@@ -66,10 +66,12 @@ const loadReviews = async (): Promise<ReviewsLib> => {
   return cachedReviews;
 };
 
-/** One file inside a spec directory, POSIX-relative to the spec root. */
+/** One entry inside a spec directory, POSIX-relative to the spec root. */
 export interface SnapshotFile {
   readonly path: string;
   readonly content: string;
+  /** `file` when absent; a directory entry carries empty content. */
+  readonly kind?: 'file' | 'directory';
 }
 
 /**
@@ -164,7 +166,7 @@ export const specsInstalled = (root: string): Effect.Effect<boolean, never> =>
     ),
   );
 
-/** Read every file under one spec directory as POSIX-relative paths. */
+/** Read every file and directory under one spec directory as POSIX-relative paths. */
 const readSnapshot = async (root: string, name: string): Promise<ReadonlyArray<SnapshotFile>> => {
   const dir = join(specsDir(root), name);
   const entries = await readdir(dir, { recursive: true });
@@ -172,10 +174,14 @@ const readSnapshot = async (root: string, name: string): Promise<ReadonlyArray<S
     entries.map(async (entry): Promise<SnapshotFile | undefined> => {
       const absolute = join(dir, entry);
       const info = await stat(absolute);
+      if (info.isDirectory()) {
+        return { path: entry.split('\\').join('/'), content: '', kind: 'directory' };
+      }
       if (!info.isFile()) return undefined;
       return {
         path: entry.split('\\').join('/'),
         content: await readFile(absolute, 'utf8'),
+        kind: 'file',
       };
     }),
   );

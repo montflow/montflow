@@ -24,16 +24,31 @@ Vitest.describe('CLI fixtures runtime', () => {
       const snapshot = yield* store.snapshot(Root, 'mock-bad');
       const result = verifySpecTree(snapshot);
       Vitest.expect(result.valid).toBe(false);
+      Vitest.expect(result.issues).toHaveLength(10);
       const fields = result.issues.map((issue) => issue.field);
       Vitest.expect(fields).toContain('SPEC.md: tasks');
-      Vitest.expect(fields).toContain('A002-explore-thing/MEMORY.md');
-      Vitest.expect(fields).toContain('A003-bad-kind/TASK.md: type');
-      Vitest.expect(fields).toContain('B001-late-thing/MEMORY.md: body');
-      Vitest.expect(fields).toContain('B002-gated-thing/GATES.md: Stage 0: Core Validation');
+      Vitest.expect(fields).toContain('A/A002-explore-thing/MEMORY.md');
+      Vitest.expect(fields).toContain('A/A003-bad-kind/TASK.md: type');
+      Vitest.expect(fields).toContain('B/B001-late-thing/MEMORY.md: body');
+      Vitest.expect(fields).toContain('B/B002-gated-thing/GATES.md: Stage 0: Core Validation');
       Vitest.expect(fields).toContain('task A001');
       Vitest.expect(fields).toContain('phase A');
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
   );
+  Vitest.it.effect('mock-stray surfaces the stray file and directory findings', () =>
+    Effect.gen(function* () {
+      const store = yield* SpecStore.SpecStore;
+      const snapshot = yield* store.snapshot(Root, 'mock-stray');
+      const result = verifySpecTree(snapshot);
+      Vitest.expect(result.valid).toBe(false);
+      Vitest.expect(result.issues).toHaveLength(3);
+      const fields = result.issues.map((issue) => issue.field);
+      Vitest.expect(fields).toContain('A/notes.txt');
+      Vitest.expect(fields).toContain('A/A001-implement-thing/scratch');
+      Vitest.expect(fields).toContain('A/A001-implement-thing/scratch/notes.txt');
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
+  );
+
   Vitest.it.effect('mock-complete is fully consistent', () =>
     Effect.gen(function* () {
       const store = yield* SpecStore.SpecStore;
@@ -48,6 +63,7 @@ Vitest.describe('CLI fixtures runtime', () => {
       const store = yield* SpecStore.SpecStore;
       const result = verifySpecTree(yield* store.snapshot(Root, 'mock-stale'));
       Vitest.expect(result.valid).toBe(false);
+      Vitest.expect(result.issues).toHaveLength(1);
       Vitest.expect(result.issues).toContainEqual({
         field: 'status',
         message:

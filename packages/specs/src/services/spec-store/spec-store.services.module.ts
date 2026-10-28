@@ -15,8 +15,27 @@ export interface Impl {
   readonly hasRoot: (root: string) => Effect.Effect<boolean, never>;
   /** True when `root/<name>` exists. */
   readonly exists: (root: string, name: string) => Effect.Effect<boolean, never>;
-  /** Every file under `root/<name>`, as POSIX-relative paths + contents. */
+  /** Every file and directory under `root/<name>`, as POSIX-relative entries. */
   readonly snapshot: (root: string, name: string) => Effect.Effect<SpecSnapshot, StoreError>;
+  /**
+   * Rename one entry inside a spec, creating the destination's parent directory.
+   * Refuses an existing destination. Used by `migrate`.
+   */
+  readonly move: (
+    root: string,
+    name: string,
+    from: string,
+    to: string,
+  ) => Effect.Effect<void, StoreError>;
+  /**
+   * Remove one empty directory inside a spec. Fails when it is not empty; used
+   * by `migrate` to undo the phase directory a rolled-back move created.
+   */
+  readonly removeDirectory: (
+    root: string,
+    name: string,
+    path: string,
+  ) => Effect.Effect<void, StoreError>;
   /**
    * Write a fresh spec tree under `root/<name>`, creating `root` and every
    * parent directory. `files` carry POSIX-relative paths; an existing file is
@@ -84,11 +103,15 @@ const make = Effect.gen(function* () {
       for (const entry of entries) {
         const absolute = path.join(dir, entry);
         const info = yield* fs.stat(absolute).pipe(Effect.mapError(toStoreError(operation)));
+        if (info.type === 'Directory') {
+          files.push({ path: toPosix(entry), content: '', kind: 'directory' });
+          continue;
+        }
         if (info.type !== 'File') continue;
         const content = yield* fs
           .readFileString(absolute)
           .pipe(Effect.mapError(toStoreError(operation)));
-        files.push({ path: toPosix(entry), content });
+        files.push({ path: toPosix(entry), content, kind: 'file' });
       }
       return { name, files };
     });
@@ -112,7 +135,52 @@ const make = Effect.gen(function* () {
       }
     });
 
-  return { names, hasRoot, exists, snapshot, write } as const;
+  const move = (
+    root: string,
+    name: string,
+    from: string,
+    to: string,
+  ): Effect.Effect<void, StoreError> =>
+    Effect.gen(function* () {
+      const operation = 'SpecStore.move';
+      const dir = path.join(root, name);
+      const target = path.join(dir, to);
+      if (yield* exists(dir, to)) {
+        return yield* Effect.fail(
+          new StoreError({
+            operation,
+            reason: `Cannot move '${from}': '${to}' already exists.`,
+          }),
+        );
+      }
+      yield* fs
+        .makeDirectory(path.dirname(target), { recursive: true })
+        .pipe(Effect.mapError(toStoreError(operation)));
+      yield* fs.rename(path.join(dir, from), target).pipe(Effect.mapError(toStoreError(operation)));
+    });
+
+  const removeDirectory = (
+    root: string,
+    name: string,
+    target: string,
+  ): Effect.Effect<void, StoreError> =>
+    Effect.gen(function* () {
+      const operation = 'SpecStore.removeDirectory';
+      const absolute = path.join(root, name, target);
+      const entries = yield* fs
+        .readDirectory(absolute)
+        .pipe(Effect.mapError(toStoreError(operation)));
+      if (entries.length > 0) {
+        return yield* Effect.fail(
+          new StoreError({ operation, reason: `Directory '${target}' is not empty.` }),
+        );
+      }
+      yield* fs
+        .remove(absolute, { recursive: true })
+        .pipe(Effect.mapError(toStoreError(operation)));
+    });
+
+  return { names, hasRoot, exists, snapshot, write, move, removeDirectory } as const;
 });
 
 export const Id = '@montflow/SpecStore';
