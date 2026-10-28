@@ -3,7 +3,7 @@ name: montflow-add-reference
 description: Registers a third-party repository as a reference — an https URL, a one-sentence purpose, an optional branch/tag/commit pin, a committed `REFERENCE.md` entry, and a clone under `.agents/references/`. Use when the user asks to add, register, pin, or track reference source code, or when a task needs a dependency's source available locally. A URL that is already registered routes to `update`; that notice is not a completed add.
 id: f9ecf21554e66e1b
 author: Daniel Montilla
-version: 1.0.0
+version: 1.1.0
 license: MIT
 groups:
   - references
@@ -41,6 +41,7 @@ mf-references add <url> --purpose "<one sentence>" [--name <slug>] [--ref <branc
 - `<url>` must be the **https** remote. ssh, scp-style, `file://`, and local paths are refused before any write; ask the user for the https URL and do not work around the refusal.
 - `--purpose` is required for a URL that is not registered yet. It must be one sentence, 1–280 characters, end with `.`, and contain no `#` or `": "`.
 - `--ref` is a branch, tag, or 7–40 character commit id. Omit it to track the default branch.
+- Every verb is agent-first: the default output is compact and parseable. Pass `--human` for a readable table when a person will read the result, and `--verbose` for additive detail; `--human --verbose` composes. A routed add refuses a `--ref` it cannot apply rather than dropping it.
 - `add` creates `.agents/references/`, its `.gitkeep`, and the `.gitignore` entry itself. Never run `mkdir`, `touch`, `git clone`, or edit `.gitignore` for it.
 - When the binary is not on `PATH` but the montflow monorepo is the workspace, the equivalent local form is `bun run --cwd packages/references cli add … --dir "$PWD"`.
 

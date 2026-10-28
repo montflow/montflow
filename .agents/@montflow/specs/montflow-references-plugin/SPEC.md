@@ -92,7 +92,7 @@ resolving.
 | C006 | ship-skills-and-doctor          | execution   | complete | Yes   |
 | C007 | migrate-registry-and-wire-gate  | execution   | complete | Yes   |
 | C099 | review-phase                    | review      | complete | No   |
-| D001 | align-skills                    | execution   | pending | Yes   |
+| D001 | align-skills                    | execution   | complete | Yes  |
 | D002 | align-docs-and-verify           | execution   | pending | Yes   |
 | D099 | review-phase                    | review      | pending | No    |
 | E001 | audit-scoped-verification       | exploratory | pending | No    |

@@ -3,7 +3,7 @@ name: montflow-find-reference
 description: Finds registered third-party source code in the reference store and reports its slug, clone path, purpose, URL, and pinned ref. Use when the user asks where a library's source lives, whether a reference is cloned, or which registered reference covers a topic. Resolves through the store, offers `sync` for a missing clone, and never claims git state it did not read.
 id: 02784d07a0e2c73f
 author: Daniel Montilla
-version: 1.0.0
+version: 1.1.0
 license: MIT
 groups:
   - references
@@ -38,7 +38,7 @@ Idempotent: it installs `montflow-add-reference` and `montflow-find-reference` i
 mf-references list --dir "$PWD"
 ```
 
-Each row is `installed|missing <slug>  <purpose>`. Read the state and the purpose column to answer a topic question. `installed` means the clone path exists; it is not a claim that the clone is clean or on the recorded pin.
+Each row is `installed|missing <slug>  <purpose>`. Read the state and the purpose column to answer a topic question. `installed` means the clone path exists; it is not a claim that the clone is clean or on the recorded pin. The default output is agent-first: add `--human` when a person will read the table, and `--verbose` for additive detail (`--human --verbose` composes).
 
 For a narrower ask, filter:
 

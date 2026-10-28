@@ -11,6 +11,7 @@ TUI plugins; the text stores and CLIs live in the same packages.
 - `@montflow/profiles` — profile store, `mf-profiles` CLI, `profile_execute` tool
 - `@montflow/reviews` — review series format, `mf-reviews` CLI, `review_create` tool
 - `@montflow/skills` — skill store, `mf-skills` CLI, `skill_create` / `skill_modify` tools
+- `@montflow/references` — reference store, `mf-references` CLI, `reference_add` / `reference_find` tools
 - `@montflow/workspace` — TUI dashboard route (grid, panels, detail views)
 
 ## Skills

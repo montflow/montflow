@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.0] - 2026-10-28
+
+### Changed
+
+- Documents the shipped output modes: the default is agent-first and compact, `--human` renders readable tables for people, `--verbose` adds detail, and the two compose.
+
 ## [1.0.0] - 2026-10-26
 
 ### Added
