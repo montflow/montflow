@@ -5,7 +5,7 @@ type: exploratory
 originator: user
 depends-on:
 related-tasks:
-status: done
+status: complete
 ---
 
 # Task A001: explore-host-integration

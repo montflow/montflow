@@ -1,5 +1,5 @@
 ---
-name: montflow-create-pi-profiles
+name: montflow-create-profiles
 description: Guides the creation, formatting, and refinement of agent profiles (PROFILE.md). Use when the user wants to write a new profile, convert a role description into a profile, or audit an existing profile.
 id: 34d1cf4fc4c93cc8
 author: Daniel Montilla
@@ -78,7 +78,7 @@ Create `.agents/@montflow/profiles/<name>/PROFILE.md` with the format above. If 
 # Reference
 
 - **Store**: `.agents/@montflow/profiles/<name>/PROFILE.md` — the frontmatter and sections above are the whole contract; author the file directly.
-- **Modifying an existing profile**: skill [montflow-modify-pi-profiles](../montflow-modify-pi-profiles/SKILL.md)
+- **Modifying an existing profile**: skill [montflow-modify-profiles](../montflow-modify-profiles/SKILL.md)
 - **Format source**: `packages/pi-profiles/src/modules/pi-profiles/` (`parseProfileFile`, `verifyProfileFile`)
 
 # What a Profile Never Does

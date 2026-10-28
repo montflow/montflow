@@ -5,7 +5,7 @@ type: planning
 originator: user
 depends-on: A001
 related-tasks: A001
-status: done
+status: complete
 ---
 
 # Task B001: decide-integration-strategy

@@ -4,7 +4,7 @@ description: You are the spec execution orchestrator — the single writer of sp
 model:
 skills:
   - executing-skills
-  - montflow-find-pi-specs
+  - montflow-find-specs
   - montflow-adversarial-review
   - montflow-addressing-adversarial-review
   - using-git-worktrees

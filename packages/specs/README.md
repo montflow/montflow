@@ -39,7 +39,7 @@ bun run --cwd packages/specs cli check
   of `pending`, `in-progress`, `blocked`, `complete`, `inconsistent`
   (`completed` is accepted as an alias for `complete`).
 - `doctor` — checks `<root>/.agents/skills/` and installs the packaged
-  `montflow-create-pi-specs` and `montflow-find-pi-specs` skills
+  `montflow-create-specs` and `montflow-find-specs` skills
   when missing. Idempotent; resolves the repo root from the working
   directory.
 

@@ -6,8 +6,8 @@ author and discover specs.
 ## Belongs here
 
 - `runDoctor(root)` — checks `<root>/.agents/skills/<name>` for each name in
-  `SPEC_SKILL_NAMES` (`montflow-create-pi-specs`,
-  `montflow-find-pi-specs`) and copies the packaged skill in when missing;
+  `SPEC_SKILL_NAMES` (`montflow-create-specs`,
+  `montflow-find-specs`) and copies the packaged skill in when missing;
   idempotent
 - `runDoctorAt(startDir)` — resolves the nearest repo root, then runs `doctor`
 - `resolveRepoRoot(startDir)` — nearest ancestor with a `.git` entry

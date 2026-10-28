@@ -7,7 +7,7 @@ import { Effect, FileSystem, Layer, Path } from 'effect';
  */
 
 /** Skills shipped with the package and installed into a repo. */
-export const SPEC_SKILL_NAMES = ['montflow-create-pi-specs', 'montflow-find-pi-specs'] as const;
+export const SPEC_SKILL_NAMES = ['montflow-create-specs', 'montflow-find-specs'] as const;
 
 /** The spec-creation skill name. */
 export const CREATE_SPEC_SKILL_NAME = SPEC_SKILL_NAMES[0];

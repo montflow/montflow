@@ -40,7 +40,7 @@ const program = Effect.gen(function* () {
    create, show, modify, delete, re-verify.
    Agentic sessions dispatch through the adapter's `SessionDispatchPort`;
    `doctor` installs the
-   `montflow-create-pi-skills` / `montflow-modify-pi-skills` authoring skills.
+   `montflow-create-skills` / `montflow-modify-skills` authoring skills.
 
 Storage paths and file shape are documented separately — see [storage](./storage.md) and [format](./format.md).
 

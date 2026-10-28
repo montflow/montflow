@@ -73,13 +73,13 @@ host loader.
 
 | ID | Name | Type | Status | Gates |
 | --- | --- | --- | --- | --- |
-| A001 | explore-host-integration | exploratory | pending | No |
-| A099 | review-phase | review | pending | No |
-| B001 | decide-integration-strategy | planning | pending | No |
-| B099 | review-phase | review | pending | No |
-| C001 | fix-plugin-host-loading | execution | pending | Yes |
-| C002 | add-shared-tui-picker | execution | pending | Yes |
-| C003 | wire-plugin-pickers | execution | pending | Yes |
-| C004 | retire-pi-naming | execution | pending | Yes |
-| C005 | verify-host-integration | execution | pending | Yes |
-| C099 | review-phase | review | pending | No |
+| A001 | explore-host-integration | exploratory | complete | No |
+| A099 | review-phase | review | complete | No |
+| B001 | decide-integration-strategy | planning | complete | No |
+| B099 | review-phase | review | complete | No |
+| C001 | fix-plugin-host-loading | execution | complete | Yes |
+| C002 | add-shared-tui-picker | execution | complete | Yes |
+| C003 | wire-plugin-pickers | execution | complete | Yes |
+| C004 | retire-pi-naming | execution | complete | Yes |
+| C005 | verify-host-integration | execution | complete | Yes |
+| C099 | review-phase | review | complete | No |

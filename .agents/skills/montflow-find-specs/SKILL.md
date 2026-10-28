@@ -1,5 +1,5 @@
 ---
-name: montflow-find-pi-specs
+name: montflow-find-specs
 description: Finds and filters montflow specs under .agents/@montflow/specs/ with the `mf-specs list` CLI (or `/specs list` in the OpenCode host), reporting each spec's derived lifecycle state. Use when an agent must answer "what is pending?", pick a spec to resume, or list specs by state.
 id: f21093485cea4b44
 author: Daniel Montilla
@@ -25,7 +25,7 @@ edits, or executes them.
 ## 1. Ensure the Skill Is Installed
 
 Run `mf-specs doctor` (or `bun run --cwd packages/specs cli doctor`).
-It installs `montflow-find-pi-specs` and `montflow-create-pi-specs` into
+It installs `montflow-find-specs` and `montflow-create-specs` into
 `<repo>/.agents/skills/`. Idempotent — a present skill is left untouched.
 
 ## 2. Run `list`
@@ -74,7 +74,7 @@ Each line is `<mark> <name>  <declared> · <derived> · <task counts>`, plus a
 
 The listing reflects the spec files on disk. If `list` reports no specs,
 none exist under the root — do not invent one. To author a new spec use
-`montflow-create-pi-specs` (or scaffold the skeleton with
+`montflow-create-specs` (or scaffold the skeleton with
 `mf-specs create --name <spec>`); to run work against an existing spec,
 dispatch `subagent` sessions from the orchestrator.
 

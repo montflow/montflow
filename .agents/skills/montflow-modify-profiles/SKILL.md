@@ -1,5 +1,5 @@
 ---
-name: montflow-modify-pi-profiles
+name: montflow-modify-profiles
 description: Modifies, updates, extends, or audits existing agent profiles in .agents/@montflow/profiles/. Use when the user wants to edit an existing profile, add content to a profile, audit a profile for quality, or update profile metadata.
 id: 6be1129292870a51
 author: Daniel
@@ -30,7 +30,7 @@ Read the profile's `PROFILE.md` in full: frontmatter (`name`, `description`, `mo
 
 ## 3. Audit (if applicable)
 
-If the task involves quality review, assess against [montflow-create-pi-profiles conventions](../montflow-create-pi-profiles/SKILL.md):
+If the task involves quality review, assess against [montflow-create-profiles conventions](../montflow-create-profiles/SKILL.md):
 
 - `name` is a kebab-case slug matching the directory name
 - `description` is one line saying WHAT the agent is (role and job)
@@ -59,7 +59,7 @@ Apply changes using Edit/Write tools. Follow these conventions:
 - Keep `description` saying WHAT the agent is (its role and job — it drives profile selection)
 - Reference existing skills only (check `.agents/skills/` SKILL.md frontmatter `name:` values); drop unknown names instead of inventing them
 - Keep at least one `## Review Checklist` item
-- If `.agents/skills/montflow-create-pi-profiles/SKILL.md` exists, follow its standards
+- If `.agents/skills/montflow-create-profiles/SKILL.md` exists, follow its standards
 - Edit only the named profile under `.agents/@montflow/profiles/` — do not touch anything else
 
 ## 6. Verify
@@ -68,6 +68,6 @@ Run through [GATES.md](GATES.md) checks. Fix any failures.
 
 # Reference
 
-- **Profile authoring standards**: [montflow-create-pi-profiles](../montflow-create-pi-profiles/SKILL.md)
+- **Profile authoring standards**: [montflow-create-profiles](../montflow-create-profiles/SKILL.md)
 - **Skill execution**: [executing-skills](../executing-skills/SKILL.md)
-- **Profile creation**: [montflow-create-pi-profiles](../montflow-create-pi-profiles/SKILL.md)
+- **Profile creation**: [montflow-create-profiles](../montflow-create-profiles/SKILL.md)

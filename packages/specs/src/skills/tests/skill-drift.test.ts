@@ -8,7 +8,7 @@ import { AUTHORING_SPEC, EXECUTING_SPEC } from '../index.js';
 
 /**
  * The specs contract is told to an agent twice: the packaged create-spec skill
- * (`skills/montflow-create-pi-specs/`, mirrored into `.agents/skills/` by
+ * (`skills/montflow-create-specs/`, mirrored into `.agents/skills/` by
  * `doctor`) and the injected `AUTHORING_SPEC`/`EXECUTING_SPEC` prompts. Both must
  * name the same on-disk field (`REVIEWER_PROFILES_FIELD`) the task verifier
  * enforces, so the instructions cannot drift from the contract.
@@ -42,7 +42,7 @@ Vitest.describe('spec skill drift', () => {
   });
 
   Vitest.it('the packaged create-spec skill names the reviewer-profiles field', () => {
-    const body = read(PACKAGED_DIR, 'montflow-create-pi-specs', 'SKILL.md');
+    const body = read(PACKAGED_DIR, 'montflow-create-specs', 'SKILL.md');
     Vitest.expect(body).toContain(REVIEWER_PROFILES_FIELD);
     Vitest.expect(body).toContain('effect-reviewer');
     Vitest.expect(body).toContain('--reviewer-profiles');

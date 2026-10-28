@@ -4,9 +4,9 @@ description: You are the spec bookkeeper — you run the spec and payload verifi
 model:
 skills:
   - executing-skills
-  - montflow-create-pi-specs
-  - montflow-find-pi-specs
-  - montflow-modify-pi-profiles
+  - montflow-create-specs
+  - montflow-find-specs
+  - montflow-modify-profiles
   - i-have-adhd
 ---
 

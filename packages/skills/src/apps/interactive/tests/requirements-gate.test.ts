@@ -31,13 +31,13 @@ const skillInput = (id: string, dependencies: ReadonlyArray<string> = []) => ({
   body: `${id} body.`,
 });
 
-const required = ['montflow-create-pi-skills'];
+const required = ['montflow-create-skills'];
 
 Vitest.describe('Interactive.ensureRequirements', () => {
   Vitest.it.effect('returns installed skills with dependencies first', () =>
     Effect.gen(function* () {
       const authoring = yield* Skill.decodeUnknown(
-        skillInput('montflow-create-pi-skills', ['executing-skills']),
+        skillInput('montflow-create-skills', ['executing-skills']),
       );
       const executing = yield* Skill.decodeUnknown(skillInput('executing-skills'));
       const ui = scriptedUi({ selects: ['Continue with checked skills'] });
@@ -56,17 +56,17 @@ Vitest.describe('Interactive.ensureRequirements', () => {
       );
       Vitest.expect(injected.map((skill) => skill.id)).toStrictEqual([
         'executing-skills',
-        'montflow-create-pi-skills',
+        'montflow-create-skills',
       ]);
     }),
   );
 
   Vitest.it.effect('unchecking skips injection', () =>
     Effect.gen(function* () {
-      const authoring = yield* Skill.decodeUnknown(skillInput('montflow-create-pi-skills'));
+      const authoring = yield* Skill.decodeUnknown(skillInput('montflow-create-skills'));
       const ui = scriptedUi({
         selects: [
-          '✓ montflow-create-pi-skills — installed, will inject',
+          '✓ montflow-create-skills — installed, will inject',
           'Continue with checked skills',
         ],
       });
@@ -89,7 +89,7 @@ Vitest.describe('Interactive.ensureRequirements', () => {
 
   Vitest.it.effect('installs missing skills before continuing', () =>
     Effect.gen(function* () {
-      const authoring = yield* Skill.decodeUnknown(skillInput('montflow-create-pi-skills'));
+      const authoring = yield* Skill.decodeUnknown(skillInput('montflow-create-skills'));
       const installed: Array<Skill.Skill> = [];
       const installedNames: Array<ReadonlyArray<string>> = [];
       const notifies: Array<string> = [];
@@ -114,9 +114,9 @@ Vitest.describe('Interactive.ensureRequirements', () => {
         required,
         'agentic skill creation',
       );
-      Vitest.expect(installedNames).toStrictEqual([['montflow-create-pi-skills']]);
-      Vitest.expect(injected.map((skill) => skill.id)).toStrictEqual(['montflow-create-pi-skills']);
-      Vitest.expect(notifies).toStrictEqual(['Installed montflow-create-pi-skills.']);
+      Vitest.expect(installedNames).toStrictEqual([['montflow-create-skills']]);
+      Vitest.expect(injected.map((skill) => skill.id)).toStrictEqual(['montflow-create-skills']);
+      Vitest.expect(notifies).toStrictEqual(['Installed montflow-create-skills.']);
     }),
   );
 
@@ -124,7 +124,7 @@ Vitest.describe('Interactive.ensureRequirements', () => {
     Effect.gen(function* () {
       const notifies: Array<string> = [];
       const ui = scriptedUi({
-        selects: ['✗ montflow-create-pi-skills — not installed', 'Continue with checked skills'],
+        selects: ['✗ montflow-create-skills — not installed', 'Continue with checked skills'],
         notifies,
       });
       const store: Interactive.SkillStore = {
@@ -142,7 +142,7 @@ Vitest.describe('Interactive.ensureRequirements', () => {
       );
       Vitest.expect(injected).toStrictEqual([]);
       Vitest.expect(notifies).toStrictEqual([
-        "'montflow-create-pi-skills' is not installed — install missing skills first.",
+        "'montflow-create-skills' is not installed — install missing skills first.",
       ]);
     }),
   );
@@ -170,7 +170,7 @@ Vitest.describe('Interactive.ensureRequirements', () => {
       Vitest.expect(options).toStrictEqual([
         [
           'Continue with checked skills',
-          '✗ montflow-create-pi-skills — not installed',
+          '✗ montflow-create-skills — not installed',
           'Install missing skills',
         ],
       ]);

@@ -5,13 +5,13 @@ description: You are a bookkeeper who keeps every non-code artifact in order —
 model:
 # Skills this profile must load (names from SKILL.md frontmatter)
 skills:
-  - montflow-create-pi-skills
-  - montflow-modify-pi-skills
-  - montflow-create-pi-prompts
-  - montflow-create-pi-specs
-  - montflow-find-pi-specs
-  - montflow-create-pi-profiles
-  - montflow-modify-pi-profiles
+  - montflow-create-skills
+  - montflow-modify-skills
+  - montflow-create-prompts
+  - montflow-create-specs
+  - montflow-find-specs
+  - montflow-create-profiles
+  - montflow-modify-profiles
   - contribute-to-agentic-docs
   - contributing-to-wiki
   - adding-to-changelog
@@ -35,10 +35,10 @@ Know every store, its expected layout, its verifier, and its repair skill. Load 
 
 | Artifact       | Location                                        | Expected layout                                                                                              | Verifier                             | Repair skill                                                     |
 | -------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------ | ---------------------------------------------------------------- |
-| Skills         | `.agents/skills/<name>/SKILL.md`                | frontmatter (`name`, `description`, `id`, `author`, `version`, `license`, `dependencies`, `groups`) + `# When To Use` / `# Pipeline` / `# Reference` | `bun run mf:check:skills`     | `montflow-create-pi-skills`, `montflow-modify-pi-skills`         |
-| Prompts        | `.agents/@montflow/pi-prompts/<name>.json`      | JSON with `name`, `description`, `template`, `variables`, `skills`, `model`                                  | `bun run mf:check:prompts`    | `montflow-create-pi-prompts`                                     |
-| Specs          | `.agents/@montflow/specs/<name>/`               | `SPEC.md` + one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`)                                      | `bun run mf:check:specs`      | `montflow-create-pi-specs`, `montflow-find-pi-specs`             |
-| Profiles       | `.agents/@montflow/profiles/<name>/PROFILE.md`  | frontmatter (`name`, `description`, `model`, `skills`) + `# Title` / `## Instructions` / `## Review Checklist` | `bun run mf:check:profiles`   | `montflow-create-pi-profiles`, `montflow-modify-pi-profiles`     |
+| Skills         | `.agents/skills/<name>/SKILL.md`                | frontmatter (`name`, `description`, `id`, `author`, `version`, `license`, `dependencies`, `groups`) + `# When To Use` / `# Pipeline` / `# Reference` | `bun run mf:check:skills`     | `montflow-create-skills`, `montflow-modify-skills`         |
+| Prompts        | `.agents/@montflow/pi-prompts/<name>.json`      | JSON with `name`, `description`, `template`, `variables`, `skills`, `model`                                  | `bun run mf:check:prompts`    | `montflow-create-prompts`                                     |
+| Specs          | `.agents/@montflow/specs/<name>/`               | `SPEC.md` + one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`)                                      | `bun run mf:check:specs`      | `montflow-create-specs`, `montflow-find-specs`             |
+| Profiles       | `.agents/@montflow/profiles/<name>/PROFILE.md`  | frontmatter (`name`, `description`, `model`, `skills`) + `# Title` / `## Instructions` / `## Review Checklist` | `bun run mf:check:profiles`   | `montflow-create-profiles`, `montflow-modify-profiles`     |
 | Agent docs     | `.agents/documentation/<verb>-<object>.md`      | title + `## When` / `## Steps` / `## Verify`                                                                 | manual structure check               | `contribute-to-agentic-docs`                                     |
 | Wiki           | `wiki/<page>.md`                                | value-statement opener + `See also`; no plans or decision logs                                               | manual structure check               | `contributing-to-wiki`                                           |
 | Changelogs     | `CHANGELOG.md` per package                      | Keep a Changelog + SemVer, unreleased-first                                                                  | manual structure check               | `adding-to-changelog`                                            |

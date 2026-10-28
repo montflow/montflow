@@ -1,3 +1,4 @@
+# Memory
 # A001: explore-host-integration - Memory
 
 ## Goal
@@ -71,3 +72,18 @@ From grep results:
 ## 8) Composer insertion
 No supported API in host TUI plugin API to write to composer directly. Fallback is renderer.currentFocusedEditor.insertText with retry (stopgap tui.ts lines ~111-132). Failure modes: editor not focused/available, dialog focus restoration timing, toast warning on failure.
 
+
+## Context
+See above.
+
+## Progress
+Completed exploration.
+
+## Open Questions
+None.
+
+## Handoff
+See summary.
+
+## Deviations
+None.
