@@ -119,6 +119,36 @@ Vitest.describe('renderers agent default', () => {
     });
     Vitest.expect(clean).toBe('summary entries=0 issues=0 warnings=0');
 
+    const skills = ['montflow-add-reference', 'montflow-find-reference'].map((name) => ({
+      path: `packages/references/skills/${name}/SKILL.md`,
+      valid: true,
+      issues: [],
+    }));
+    Vitest.expect(
+      Renderers.verify({
+        entries: [],
+        issueCount: 0,
+        warningCount: 0,
+        storeMissing: false,
+        skills,
+      }),
+    ).toBe('summary entries=0 issues=0 warnings=0');
+
+    const fourteen = Array.from({ length: 14 }, (_unused, index) => ({
+      path: `.agents/@montflow/references/entry-${index}/REFERENCE.md`,
+      valid: true,
+      issues: [],
+    }));
+    Vitest.expect(
+      Renderers.verify({
+        entries: fourteen,
+        issueCount: 0,
+        warningCount: 0,
+        storeMissing: false,
+        skills,
+      }),
+    ).toContain('summary entries=14 issues=0 warnings=0');
+
     const added = Renderers.added({
       kind: 'created',
       slug: 'alpha',

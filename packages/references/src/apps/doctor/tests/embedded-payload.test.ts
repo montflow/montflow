@@ -140,6 +140,41 @@ Vitest.describe('Doctor.readPayload', () => {
   );
 });
 
+Vitest.describe('Doctor.verifyPackagedSkills', () => {
+  Vitest.it.effect('fails on a committed tree missing one skill instead of using the embed', () =>
+    Effect.gen(function* () {
+      const { root, skills } = bareRoot();
+      const [missing, present] = Doctor.SKILL_NAMES;
+      mkdirSync(join(skills, present), { recursive: true });
+      for (const [file, text] of Object.entries(EMBEDDED_SKILL_PAYLOAD[present] ?? {})) {
+        writeFileSync(join(skills, present, file), text, 'utf8');
+      }
+      const reports = yield* Doctor.verifyPackagedSkills({ skillsDir: skills });
+      const block = reports.find((entry) => entry.path.includes(missing));
+      Vitest.expect(block?.valid).toBe(false);
+      Vitest.expect(block?.issues.map((issue) => issue.message).join(' ')).toContain(
+        'is missing from',
+      );
+      drop(root);
+    }).pipe(Effect.provide(NodeLive)),
+  );
+
+  Vitest.it.effect('fails on a committed skill directory with no SKILL.md', () =>
+    Effect.gen(function* () {
+      const { root, skills } = bareRoot();
+      const [empty] = Doctor.SKILL_NAMES;
+      mkdirSync(join(skills, empty), { recursive: true });
+      const reports = yield* Doctor.verifyPackagedSkills({ skillsDir: skills });
+      const block = reports.find((entry) => entry.path.includes(empty));
+      Vitest.expect(block?.valid).toBe(false);
+      Vitest.expect(block?.issues.map((issue) => issue.message).join(' ')).toContain(
+        'has no readable SKILL.md',
+      );
+      drop(root);
+    }).pipe(Effect.provide(NodeLive)),
+  );
+});
+
 Vitest.describe('a skills tree installed from the embed', () => {
   Vitest.it.effect('reports as current because it is byte-identical to the embed', () =>
     Effect.gen(function* () {

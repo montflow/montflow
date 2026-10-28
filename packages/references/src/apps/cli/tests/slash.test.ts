@@ -131,6 +131,26 @@ Vitest.describe('/mf-references parser', () => {
     Vitest.expect(Slash.tokenize('add x --purpose ""')).toEqual(['add', 'x', '--purpose', '']);
   });
 
+  Vitest.it('refuses a string flag with no value instead of treating it as absent', () => {
+    for (const args of [
+      'list --status',
+      'status --dir',
+      'add https://example.test/o/n.git --purpose',
+      'add https://example.test/o/n.git --ref',
+    ]) {
+      Vitest.expect(Slash.parseCliArgs(args)).toMatchObject({
+        kind: 'Usage',
+        message: `usage: missing value for flag '${args.slice(args.lastIndexOf('--'))}'`,
+      });
+    }
+    Vitest.expect(Slash.parseCliArgs('list --status=missing')).toMatchObject({ kind: 'List' });
+    Vitest.expect(Slash.parseCliArgs('verify --clones alpha')).toMatchObject({
+      kind: 'Verify',
+      name: 'alpha',
+      clones: true,
+    });
+  });
+
   Vitest.it('enforces exactly one positional for show and remove', () => {
     Vitest.expect(Slash.parseCliArgs('show alpha beta')).toMatchObject({ kind: 'Usage' });
     Vitest.expect(Slash.parseCliArgs('remove alpha beta')).toMatchObject({ kind: 'Usage' });

@@ -268,6 +268,9 @@ export interface PackagedSkillOptions {
  *
  * `doctor` owns the installed copies and their freshness; this pass owns the
  * committed source, so `verify` alone can fail on a broken packaged skill.
+ * When the shipped `skills/` directory exists it is the source of truth: a
+ * missing skill directory or `SKILL.md` is an issue, never a fallback to the
+ * embedded copy (that fallback is only for a compiled binary with no source).
  * Never fails: unavailable evidence is reported as an error issue.
  * @param options - shipped-directory override
  * @returns one block per shipped skill
@@ -279,18 +282,26 @@ export const verifyPackagedSkills = (
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const shipped = options.skillsDir ?? shippedSkillsDir(path);
+    const shippedPresent = yield* exists(fs, shipped);
     const libs = yield* loadSkills();
     const reports: Array<PackagedSkillReport> = [];
 
     for (const name of SKILL_NAMES) {
       const issues: Array<Verifier.Issue> = [];
-      const payload = yield* readPayload(fs, path, name, shipped);
-      if (payload === undefined) {
-        issues.push(
-          Verifier.issue('payload', `Packaged skill '${name}' is unavailable in this build.`),
-        );
+      const sourceDir = path.join(shipped, name);
+      const files = shippedPresent
+        ? yield* readFromPackage(fs, path, sourceDir)
+        : (yield* readPayload(fs, path, name, shipped))?.files;
+      if (files === undefined) {
+        const dirPresent = shippedPresent && (yield* exists(fs, sourceDir));
+        const message = !shippedPresent
+          ? `Packaged skill '${name}' is unavailable in this build.`
+          : dirPresent
+            ? `Packaged skill '${name}' has no readable SKILL.md.`
+            : `Packaged skill '${name}' is missing from '${sourceDir}'.`;
+        issues.push(Verifier.issue('payload', message));
       } else {
-        const markdown = payload.files['SKILL.md'];
+        const markdown = files['SKILL.md'];
         if (markdown === undefined) {
           issues.push(Verifier.issue('payload', `Packaged skill '${name}' has no SKILL.md.`));
         } else if (libs === undefined) {
@@ -307,7 +318,7 @@ export const verifyPackagedSkills = (
         }
         if (options.skillsDir === undefined) {
           const embedded = EMBEDDED_SKILL_PAYLOAD[name];
-          if (embedded !== undefined && !samePayload(embedded, payload.files)) {
+          if (embedded !== undefined && !samePayload(embedded, files)) {
             issues.push(
               Verifier.issue(
                 'payload',

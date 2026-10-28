@@ -224,8 +224,8 @@ export const verify = (report: Engines.VerifyReport, options: RenderOptions = AG
     }
   }
   const summary = options.human
-    ? `entries ${allEntries.length} · errors ${report.issueCount} · warnings ${report.warningCount}`
-    : `summary entries=${allEntries.length} issues=${report.issueCount} warnings=${report.warningCount}`;
+    ? `entries ${report.entries.length} · errors ${report.issueCount} · warnings ${report.warningCount}`
+    : `summary entries=${report.entries.length} issues=${report.issueCount} warnings=${report.warningCount}`;
   blocks.push(summary);
   return blocks.join('\n\n');
 };

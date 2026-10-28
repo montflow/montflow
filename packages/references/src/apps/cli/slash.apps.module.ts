@@ -130,16 +130,18 @@ interface SplitTokens {
   readonly positionals: readonly string[];
   readonly flags: Record<string, string>;
   readonly unknown: readonly string[];
+  readonly missingValues: readonly string[];
 }
 
 /**
  * Split raw tokens into positionals and typed flags.
  *
  * A boolean flag never consumes the following token, so
- * `verify --clones alpha` keeps `alpha` positional.
+ * `verify --clones alpha` keeps `alpha` positional. A string flag with no value
+ * — last, or followed by another flag — is a missing value, never an absent flag.
  * @param tokens - tokens to split
  * @param spec - the verb's accepted flags
- * @returns the split, with any unrecognised flag names collected
+ * @returns the split, with any unrecognised or valueless flag names collected
  */
 const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => {
   const strings = new Set(spec.strings);
@@ -147,6 +149,7 @@ const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => 
   const positionals: Array<string> = [];
   const pairs: Array<[string, string]> = [];
   const unknown: Array<string> = [];
+  const missingValues: Array<string> = [];
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index] ?? '';
     if (!token.startsWith('--')) {
@@ -167,15 +170,17 @@ const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => 
     }
     if (strings.has(body)) {
       const next = tokens[index + 1];
-      if (next !== undefined && !next.startsWith('--')) {
-        pairs.push([body, next]);
-        index++;
+      if (next === undefined || next.startsWith('--')) {
+        missingValues.push(`--${body}`);
+        continue;
       }
+      pairs.push([body, next]);
+      index++;
       continue;
     }
     unknown.push(`--${body}`);
   }
-  return { positionals, flags: Object.fromEntries(pairs), unknown };
+  return { positionals, flags: Object.fromEntries(pairs), unknown, missingValues };
 };
 
 /** Keep the token's value verbatim: only `undefined` means the flag was absent. */
@@ -198,12 +203,15 @@ export const tokenize = (args: string): readonly string[] => {
 
 const usage = (message: string): CliAction => ({ kind: 'Usage', message });
 
-const unknownFlag = (verb: string, split: SplitTokens): CliAction | undefined =>
-  split.unknown.length > 0
-    ? usage(
-        `usage: unknown flag '${split.unknown[0] ?? ''}' for ${verb}; run '/mf-references help'`,
-      )
-    : undefined;
+const flagProblem = (verb: string, split: SplitTokens): CliAction | undefined => {
+  if (split.unknown.length > 0) {
+    return usage(
+      `usage: unknown flag '${split.unknown[0] ?? ''}' for ${verb}; run '/mf-references help'`,
+    );
+  }
+  const missing = split.missingValues[0];
+  return missing === undefined ? undefined : usage(`usage: missing value for flag '${missing}'`);
+};
 
 /**
  * Parse raw slash-command args into a {@link CliAction}.
@@ -217,7 +225,7 @@ export const parseCliArgs = (args: string): CliAction => {
   switch (head) {
     case 'doctor': {
       const split = splitTokens(tokens.slice(1), withFlags(OUTPUT_FLAGS, [], ['check']));
-      const bad = unknownFlag('doctor', split);
+      const bad = flagProblem('doctor', split);
       if (bad !== undefined) return bad;
       if (split.positionals.length > 0)
         return usage('usage: /mf-references doctor [--check] [--dir path]');
@@ -231,7 +239,7 @@ export const parseCliArgs = (args: string): CliAction => {
     }
     case 'list': {
       const split = splitTokens(tokens.slice(1), withFlags(OUTPUT_FLAGS, ['status'], []));
-      const bad = unknownFlag('list', split);
+      const bad = flagProblem('list', split);
       if (bad !== undefined) return bad;
       if (split.positionals.length > 0)
         return usage('usage: /mf-references list [--status installed|missing]');
@@ -245,7 +253,7 @@ export const parseCliArgs = (args: string): CliAction => {
     }
     case 'show': {
       const split = splitTokens(tokens.slice(1), { strings: ['dir'], booleans: [] });
-      const bad = unknownFlag('show', split);
+      const bad = flagProblem('show', split);
       if (bad !== undefined) return bad;
       if (split.positionals.length !== 1) {
         return usage('usage: /mf-references show <name> [--dir path]');
@@ -258,7 +266,7 @@ export const parseCliArgs = (args: string): CliAction => {
     }
     case 'verify': {
       const split = splitTokens(tokens.slice(1), withFlags(OUTPUT_FLAGS, [], ['all', 'clones']));
-      const bad = unknownFlag('verify', split);
+      const bad = flagProblem('verify', split);
       if (bad !== undefined) return bad;
       if (split.positionals.length > 1) return usage('usage: /mf-references verify [<name>|--all]');
       const name = split.positionals[0];
@@ -279,7 +287,7 @@ export const parseCliArgs = (args: string): CliAction => {
         tokens.slice(1),
         withFlags(OUTPUT_FLAGS, ['name', 'ref', 'purpose'], []),
       );
-      const bad = unknownFlag('add', split);
+      const bad = flagProblem('add', split);
       if (bad !== undefined) return bad;
       const url = split.positionals[0];
       if (url === undefined) {
@@ -299,7 +307,7 @@ export const parseCliArgs = (args: string): CliAction => {
     }
     case 'update': {
       const split = splitTokens(tokens.slice(1), withFlags(OUTPUT_FLAGS, [], ['all', 'force']));
-      const bad = unknownFlag('update', split);
+      const bad = flagProblem('update', split);
       if (bad !== undefined) return bad;
       if (split.positionals.length > 1)
         return usage('usage: /mf-references update <name|url>|--all');
@@ -322,7 +330,7 @@ export const parseCliArgs = (args: string): CliAction => {
     }
     case 'sync': {
       const split = splitTokens(tokens.slice(1), withFlags(OUTPUT_FLAGS, [], ['all']));
-      const bad = unknownFlag('sync', split);
+      const bad = flagProblem('sync', split);
       if (bad !== undefined) return bad;
       if (split.positionals.length > 1) return usage('usage: /mf-references sync <name>|--all');
       const name = split.positionals[0];
@@ -342,7 +350,7 @@ export const parseCliArgs = (args: string): CliAction => {
     }
     case 'status': {
       const split = splitTokens(tokens.slice(1), withFlags(OUTPUT_FLAGS, [], ['fetch']));
-      const bad = unknownFlag('status', split);
+      const bad = flagProblem('status', split);
       if (bad !== undefined) return bad;
       if (split.positionals.length > 1) return usage('usage: /mf-references status [<name>]');
       return {
@@ -356,7 +364,7 @@ export const parseCliArgs = (args: string): CliAction => {
     }
     case 'remove': {
       const split = splitTokens(tokens.slice(1), withFlags(OUTPUT_FLAGS, [], ['keep-clone']));
-      const bad = unknownFlag('remove', split);
+      const bad = flagProblem('remove', split);
       if (bad !== undefined) return bad;
       if (split.positionals.length !== 1) {
         return usage('usage: /mf-references remove <name> [--keep-clone]');
