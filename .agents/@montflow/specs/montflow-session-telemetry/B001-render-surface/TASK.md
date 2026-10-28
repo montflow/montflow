@@ -5,7 +5,7 @@ type: exploratory
 originator: user
 depends-on:
 related-tasks: B002
-status: pending
+status: complete
 ---
 
 # Task B001: render-surface
@@ -39,7 +39,7 @@ Candidates to evaluate, at minimum:
 
 ## Completion
 
-- [ ] `B001-render-surface/MEMORY.md` (§ Handoff) records the matrix and measured spike numbers.
-- [ ] One surface is chosen, with a stated reason each other surface was rejected.
-- [ ] B002's acceptance test is written to be measurable, not aspirational.
-- [ ] Any spike code is deleted.
+- [x] `B001-render-surface/MEMORY.md` (§ Handoff) records the matrix and measured spike numbers.
+- [x] One surface is chosen, with a stated reason each other surface was rejected (on-demand web UI; TUI, static, native webview, and third-party rejected with numbers).
+- [x] B002's acceptance test is written to be measurable, not aspirational (8 numbered pass conditions with thresholds).
+- [x] Any spike code is deleted (`apps/workspace/scratchpad/spike-*.ts` and `/tmp/telemetry-spikes/*` removed).
