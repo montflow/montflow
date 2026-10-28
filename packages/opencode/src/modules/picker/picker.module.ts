@@ -20,6 +20,8 @@ export interface PickerItem<T> {
 
 export interface PickerConfig<T> {
   readonly commandName: string;
+  /** Server command that receives forwarded arguments; defaults to commandName. */
+  readonly forwardCommandName?: string;
   readonly title: string;
   readonly description: string;
   readonly group?: string;
@@ -206,7 +208,11 @@ export const registerPicker = <T>(context: PickerContext, config: PickerConfig<T
       return;
     }
     await context.client.session
-      .command({ sessionID: route.sessionID, name: config.commandName, text })
+      .command({
+        sessionID: route.sessionID,
+        name: config.forwardCommandName ?? config.commandName,
+        text,
+      })
       .catch((cause: unknown) =>
         context.ui.toast.show({
           message: cause instanceof Error ? cause.message : String(cause),
