@@ -113,3 +113,49 @@ Vitest.describe('version across all five CLIs runtime', () => {
     ),
   );
 });
+
+Vitest.describe('compiled binary runtime', () => {
+  Vitest.it(
+    'a compiled CLI still answers --version, version, and its own commands',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'mf-version-compiled-'));
+      try {
+        const manifest = await manifestOf('profiles');
+        const artifact = join(root, 'mf-profiles');
+        const build = spawnSync(
+          'bun',
+          [
+            'build',
+            join(packageDir('profiles'), 'src/apps/cli/main.ts'),
+            '--compile',
+            '--outfile',
+            artifact,
+          ],
+          { cwd: packageDir('profiles'), encoding: 'utf8' },
+        );
+        Vitest.expect(build.status, build.stderr).toBe(0);
+
+        const flag = spawnSync(artifact, ['--version'], { encoding: 'utf8' });
+        Vitest.expect(flag.status).toBe(0);
+        Vitest.expect(flag.stdout.trim().endsWith(`v${manifest.version}`)).toBe(true);
+
+        const json = spawnSync(artifact, ['version', '--json', '--dir', root], {
+          encoding: 'utf8',
+        });
+        Vitest.expect(json.status, json.stderr).toBe(0);
+        const identity: unknown = JSON.parse(json.stdout.trim());
+        Vitest.expect(identity).toMatchObject({
+          name: manifest.name,
+          version: manifest.version,
+          source: 'generated',
+        });
+
+        const list = spawnSync(artifact, ['list', '--dir', root], { encoding: 'utf8' });
+        Vitest.expect(list.status, list.stderr).toBe(0);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    120_000,
+  );
+});

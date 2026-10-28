@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeServices } from '@effect/platform-node';
@@ -10,7 +10,8 @@ import * as BuildInfo from '../index.js';
 /**
  * Identity against real repositories rather than a mocked git: the contract is
  * about what a checkout on disk actually says, and every degradation path
- * (missing manifest, non-git directory) is a real filesystem shape.
+ * (missing manifest, non-git directory, generated binary identity) is a real
+ * filesystem shape.
  */
 
 /** One throwaway package directory. */
@@ -34,8 +35,15 @@ const writeManifest = (root: string, name: string, version: string): Promise<voi
   writeFile(join(root, 'package.json'), `${JSON.stringify({ name, version }, null, 2)}\n`);
 
 /** Run git in a directory and fail loudly when the fixture cannot be built. */
-const git = (cwd: string, args: ReadonlyArray<string>): string => {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+const git = (
+  cwd: string,
+  args: ReadonlyArray<string>,
+  env?: Readonly<Record<string, string>>,
+): string => {
+  const result =
+    env === undefined
+      ? spawnSync('git', args, { cwd, encoding: 'utf8' })
+      : spawnSync('git', args, { cwd, encoding: 'utf8', env });
   if (result.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${result.stderr}`);
   return result.stdout.trim();
 };
@@ -57,8 +65,8 @@ const initRepo = async (root: string, file: string, contents: string): Promise<v
 };
 
 /** The identity effect with the Node platform layer every CLI provides. */
-const identity = (packageRoot: string) =>
-  BuildInfo.describe({ packageRoot }).pipe(Effect.provide(NodeServices.layer));
+const identity = (packageRoot: string, env?: Readonly<Record<string, string | undefined>>) =>
+  BuildInfo.describe({ packageRoot, env }).pipe(Effect.provide(NodeServices.layer));
 
 Vitest.describe('BuildInfo.describe runtime', () => {
   Vitest.it.effect('reports the package version and the checkout commit', () =>
@@ -97,6 +105,24 @@ Vitest.describe('BuildInfo.describe runtime', () => {
     ),
   );
 
+  Vitest.it.effect('marks an untracked file dirty even when git config hides it', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        const config = join(sandbox.root, 'gitconfig');
+        yield* Effect.promise(() => writeFile(config, '[status]\n  showUntrackedFiles = no\n'));
+        const packageRoot = join(sandbox.root, 'package');
+        yield* Effect.promise(() => mkdir(packageRoot, { recursive: true }));
+        yield* Effect.promise(() => writeManifest(packageRoot, '@montflow/skills', '1.2.3'));
+        yield* Effect.promise(() => initRepo(packageRoot, 'SKILL.md', '# skill\n'));
+        yield* Effect.promise(() => writeFile(join(packageRoot, 'notes.md'), '# untracked\n'));
+
+        const found = yield* identity(packageRoot, { GIT_CONFIG_GLOBAL: config });
+
+        Vitest.expect(found.dirty).toBe(true);
+      }),
+    ),
+  );
+
   Vitest.it.effect('degrades to name, version, and checkout outside git', () =>
     withSandbox((sandbox) =>
       Effect.gen(function* () {
@@ -121,40 +147,53 @@ Vitest.describe('BuildInfo.describe runtime', () => {
       Effect.gen(function* () {
         yield* Effect.promise(() => mkdir(join(sandbox.root, 'nested'), { recursive: true }));
 
-        const message = yield* identity(join(sandbox.root, 'nested')).pipe(Effect.flip);
-
-        Vitest.expect(message).toContain('build-info: cannot read a package.json');
-        Vitest.expect(message).toContain(join(sandbox.root, 'nested'));
+        const error = yield* identity(join(sandbox.root, 'nested')).pipe(Effect.flip);
+        Vitest.expect(error.message).toContain('build-info: cannot read a package.json');
+        Vitest.expect(error.message).toContain(join(sandbox.root, 'nested'));
       }),
     ),
   );
 
-  Vitest.it.effect('uses a generated identity when the manifest is not on disk', () =>
+  Vitest.it.effect('uses a generated identity without borrowing the enclosing checkout', () =>
     withSandbox((sandbox) =>
       Effect.gen(function* () {
+        yield* Effect.promise(() => initRepo(sandbox.root, 'README.md', '# repo\n'));
+        const packageRoot = join(sandbox.root, 'compiled');
+        yield* Effect.promise(() => mkdir(packageRoot, { recursive: true }));
+
         const found = yield* BuildInfo.describe({
-          packageRoot: join(sandbox.root, 'compiled'),
+          packageRoot,
           generated: { name: '@montflow/reviews', version: '3.1.0' },
         }).pipe(Effect.provide(NodeServices.layer));
 
-        Vitest.expect(found.name).toBe('@montflow/reviews');
-        Vitest.expect(found.version).toBe('3.1.0');
-        Vitest.expect(found.source).toBe('generated');
-        Vitest.expect(found.commit).toBeUndefined();
+        Vitest.expect(found).toStrictEqual({
+          name: '@montflow/reviews',
+          version: '3.1.0',
+          checkout: packageRoot,
+          source: 'generated',
+        });
       }),
     ),
   );
 
-  Vitest.it.effect('does not create files in the package directory', () =>
+  Vitest.it.effect('does not write the git index while reading identity', () =>
     withSandbox((sandbox) =>
       Effect.gen(function* () {
         yield* Effect.promise(() => writeManifest(sandbox.root, '@montflow/profiles', '0.0.1'));
         yield* Effect.promise(() => initRepo(sandbox.root, 'profile.md', '# profile\n'));
-        const before = git(sandbox.root, ['status', '--porcelain']);
+        yield* Effect.promise(() => writeFile(join(sandbox.root, 'profile.md'), '# edited\n'));
+        const index = join(sandbox.root, '.git', 'index');
+        const [beforeBytes, beforeStat] = yield* Effect.promise(() =>
+          readFile(index).then(async (bytes) => [bytes, await stat(index)] as const),
+        );
 
         yield* identity(sandbox.root);
 
-        Vitest.expect(git(sandbox.root, ['status', '--porcelain'])).toBe(before);
+        const [afterBytes, afterStat] = yield* Effect.promise(() =>
+          readFile(index).then(async (bytes) => [bytes, await stat(index)] as const),
+        );
+        Vitest.expect(afterBytes.equals(beforeBytes)).toBe(true);
+        Vitest.expect(afterStat.mtimeMs).toBe(beforeStat.mtimeMs);
       }),
     ),
   );

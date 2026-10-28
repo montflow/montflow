@@ -2,10 +2,21 @@ import { Console, Effect, Layer, Option } from 'effect';
 import { Argument, Command, Flag } from 'effect/unstable/cli';
 import { ProfileStore } from '@montflow/profiles';
 import { SpecStore } from '@montflow/specs';
+import { Cli } from '@montflow/version';
+import type { BuildInfo } from '@montflow/version';
+import manifest from '../../../package.json' with { type: 'json' };
 import { ProfileProbe, ReviewStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
-import { Cli } from '@montflow/version';
+
+/** This package's root: three levels up from `src/apps/cli`. */
+export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
+
+/** Identity embedded from this package's manifest, so a compiled binary keeps it. */
+export const PACKAGE_IDENTITY = {
+  name: manifest.name,
+  version: manifest.version,
+} satisfies BuildInfo.GeneratedIdentity;
 
 /**
  * The `mf-reviews` binary's command tree, built with `effect/cli`.
@@ -185,7 +196,7 @@ export const rootCommand = Command.make('mf-reviews').pipe(
     createCommand,
     newCommand,
     resumeCommand,
-    Cli.versionCommand({ packageRoot: `${import.meta.dirname}/../../..` }),
+    Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
   Command.provide(
     Layer.mergeAll(

@@ -48,6 +48,8 @@ export interface SyncManifest {
 export type StoreState =
   | { readonly status: 'absent' }
   | { readonly status: 'unmanaged' }
+  | { readonly status: 'corrupt' }
+  | { readonly status: 'unsupported'; readonly schemaVersion: number }
   | { readonly status: 'managed'; readonly manifest: SyncManifest };
 
 const ManifestSkillSchema = Schema.Struct({
@@ -92,29 +94,29 @@ export const file = (path: Path.Path, root: string): string =>
 
 /**
  * Read what `root`'s skill store is: absent, present without a manifest
- * (`unmanaged`, the pre-manifest install), or managed with a decoded manifest.
+ * (`unmanaged`, the pre-manifest install), corrupt, written by a newer schema,
+ * or managed with a decoded manifest.
  *
- * A corrupt manifest reads as `unmanaged`, not as a failure: the workspace is
- * still usable, and every caller's fallback is the byte comparison that
- * predates manifests.
+ * A corrupt or future manifest is reported as its own state, never folded into
+ * `unmanaged`: the caller can keep the workspace usable (byte comparison) while
+ * telling the reader why the manifest is not authoritative.
  * @param root - workspace root owning `.agents/skills`
  * @returns the store state, never a failure
  */
-export const read = (
-  root: string,
-): Effect.Effect<StoreState, never, FileSystem.FileSystem | Path.Path> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const store = dir(path, root);
-    const exists = yield* fs.exists(store).pipe(Effect.orElseSucceed(() => false));
-    if (!exists) return { status: 'absent' } as const;
-    const text = yield* fs
-      .readFileString(file(path, root))
-      .pipe(Effect.orElseSucceed(() => undefined));
-    if (text === undefined) return { status: 'unmanaged' } as const;
-    const manifest = decode(text);
-    return manifest === undefined
-      ? ({ status: 'unmanaged' } as const)
-      : ({ status: 'managed', manifest } as const);
-  });
+export const read = Effect.fn('Store.read')(function* (root: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const store = dir(path, root);
+  const exists = yield* fs.exists(store).pipe(Effect.orElseSucceed(() => false));
+  if (!exists) return { status: 'absent' } as const;
+  const text = yield* fs
+    .readFileString(file(path, root))
+    .pipe(Effect.orElseSucceed(() => undefined));
+  if (text === undefined) return { status: 'unmanaged' } as const;
+  const manifest = decode(text);
+  if (manifest === undefined) return { status: 'corrupt' } as const;
+  if (manifest.schemaVersion !== SCHEMA_VERSION) {
+    return { status: 'unsupported', schemaVersion: manifest.schemaVersion } as const;
+  }
+  return { status: 'managed', manifest } as const;
+});

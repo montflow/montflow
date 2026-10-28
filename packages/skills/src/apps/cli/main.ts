@@ -1,14 +1,12 @@
 #!/usr/bin/env bun
 import { Cli } from '@montflow/version';
-import { rootCommand } from './binary.apps.module.js';
+import { PACKAGE_IDENTITY, rootCommand } from './binary.apps.module.js';
 
 /**
  * `mf-skills` binary entry.
  *
- * Identity, the shared `version` subcommand, platform layers, and exit codes
- * live in `@montflow/version`; this file only names its own command tree.
+ * The version comes from this package's embedded manifest and the command
+ * tree owns its `version` subcommand; everything else — argv, help, platform
+ * layers, exit codes — lives in `@montflow/version`.
  */
-Cli.run({
-  packageRoot: `${import.meta.dirname}/../../..`,
-  command: rootCommand,
-});
+Cli.run({ version: PACKAGE_IDENTITY.version, command: rootCommand });

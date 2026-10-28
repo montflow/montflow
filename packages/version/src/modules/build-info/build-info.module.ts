@@ -12,7 +12,7 @@ import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSp
  * failing the command.
  */
 
-/** Where the version came from: the package manifest, or a build-time fallback. */
+/** Where the version came from: the package manifest, or a build-time identity. */
 export type IdentitySource = 'package' | 'generated';
 
 /** What `describe` reports. Optional git fields are absent outside a checkout. */
@@ -48,7 +48,14 @@ export interface DescribeOptions {
    * the compiled-binary case. Absent means an unreadable manifest is an error.
    */
   readonly generated?: GeneratedIdentity | undefined;
+  /** Extra environment for the git probes, mainly for deterministic tests. */
+  readonly env?: Readonly<Record<string, string | undefined>> | undefined;
 }
+
+/** The owning package manifest could not be read. */
+export class BuildInfoError extends Schema.TaggedError<BuildInfoError>()('BuildInfo.Error', {
+  message: Schema.String,
+}) {}
 
 const Manifest = Schema.Struct({
   name: Schema.String,
@@ -70,9 +77,13 @@ interface GitAnswer {
 const git = (
   cwd: string,
   args: ReadonlyArray<string>,
+  env: Readonly<Record<string, string | undefined>> | undefined,
 ): Effect.Effect<GitAnswer, never, ChildProcessSpawner> =>
   Effect.gen(function* () {
-    const handle = yield* ChildProcess.make('git', args, { cwd, stderr: 'ignore' });
+    const handle =
+      env === undefined
+        ? yield* ChildProcess.make('git', args, { cwd, stderr: 'ignore' })
+        : yield* ChildProcess.make('git', args, { cwd, stderr: 'ignore', env, extendEnv: true });
     const stdout = yield* handle.stdout.pipe(Stream.decodeText(), Stream.mkString);
     const code = yield* handle.exitCode;
     return { stdout: code === 0 ? stdout.trim() : undefined };
@@ -90,18 +101,33 @@ interface GitFacts {
 }
 
 /** Ask git for the checkout root, `HEAD`, its branch, and tree cleanliness. */
-const gitFacts = (cwd: string): Effect.Effect<GitFacts, never, ChildProcessSpawner> =>
+const gitFacts = (
+  cwd: string,
+  env: Readonly<Record<string, string | undefined>> | undefined,
+): Effect.Effect<GitFacts, never, ChildProcessSpawner> =>
   Effect.gen(function* () {
-    const root = yield* git(cwd, ['rev-parse', '--show-toplevel']);
+    const root = yield* git(cwd, ['rev-parse', '--show-toplevel'], env);
     if (root.stdout === undefined) {
       return { checkout: undefined, commit: undefined, dirty: undefined, ref: undefined };
     }
-    const commit = yield* git(cwd, ['rev-parse', 'HEAD']);
-    const ref = yield* git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    const commit = yield* git(cwd, ['rev-parse', 'HEAD'], env);
+    const ref = yield* git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD'], env);
     // `--no-optional-locks` keeps this status read from refreshing the index.
-    // Untracked files count as dirty: a checkout with unshipped files is not
-    // the commit it claims to be.
-    const status = yield* git(cwd, ['--no-optional-locks', 'status', '--porcelain']);
+    // `--untracked-files=normal` overrides `status.showUntrackedFiles=no`: a
+    // checkout with unshipped files is not the commit it claims to be, whatever
+    // the user's git config says. `--ignore-submodules=none` does the same for
+    // submodule dirtiness.
+    const status = yield* git(
+      cwd,
+      [
+        '--no-optional-locks',
+        'status',
+        '--porcelain',
+        '--untracked-files=normal',
+        '--ignore-submodules=none',
+      ],
+      env,
+    );
     return {
       checkout: root.stdout,
       commit: commit.stdout,
@@ -144,39 +170,42 @@ const readManifest = (
  * one that package declares. Git facts are read from the checkout containing
  * that directory; a non-git directory yields name, version, checkout, and
  * source only. When the manifest is missing and `generated` is supplied, the
- * generated identity is used and `source` says so; with neither, the effect
- * fails with a readable message instead of inventing a version.
- * @param options - the CLI package directory and an optional generated identity
- * @returns the identity, or a message naming the unreadable manifest
+ * generated identity is used verbatim and `source` says so — no git facts are
+ * borrowed from whatever checkout happens to contain the package root, because
+ * that checkout is not the one that produced the build. With neither a manifest
+ * nor a generated identity, the effect fails instead of inventing a version.
+ * @param options - the CLI package directory, generated fallback, and probe env
+ * @returns the identity, or a tagged failure naming the unreadable manifest
  */
-export const describe = (
-  options: DescribeOptions,
-): Effect.Effect<Identity, string, FileSystem.FileSystem | Path.Path | ChildProcessSpawner> =>
-  Effect.gen(function* () {
-    const path = yield* Path.Path;
-    const packageRoot = path.resolve(options.packageRoot);
-    const manifest = yield* readManifest(packageRoot);
-    if (manifest === undefined && options.generated === undefined) {
+export const describe = Effect.fn('BuildInfo.describe')(function* (options: DescribeOptions) {
+  const path = yield* Path.Path;
+  const packageRoot = path.resolve(options.packageRoot);
+  const manifest = yield* readManifest(packageRoot);
+
+  if (manifest === undefined) {
+    if (options.generated === undefined) {
       return yield* Effect.fail(
-        `build-info: cannot read a package.json at '${packageRoot}' — run the CLI from its checkout, or supply a generated identity`,
+        new BuildInfoError({
+          message: `build-info: cannot read a package.json at '${packageRoot}' — run the CLI from its checkout, or supply a generated identity`,
+        }),
       );
     }
-
-    const facts = yield* gitFacts(packageRoot);
-    const base = manifest ?? options.generated;
-    if (base === undefined) {
-      return yield* Effect.fail(
-        `build-info: cannot read a package.json at '${packageRoot}' — run the CLI from its checkout, or supply a generated identity`,
-      );
-    }
-
     return {
-      name: base.name,
-      version: base.version,
-      commit: facts.commit,
-      dirty: facts.dirty,
-      ref: facts.ref,
-      checkout: facts.checkout ?? packageRoot,
-      source: manifest === undefined ? 'generated' : 'package',
+      name: options.generated.name,
+      version: options.generated.version,
+      checkout: packageRoot,
+      source: 'generated' as const,
     };
-  });
+  }
+
+  const facts = yield* gitFacts(packageRoot, options.env);
+  return {
+    name: manifest.name,
+    version: manifest.version,
+    commit: facts.commit,
+    dirty: facts.dirty,
+    ref: facts.ref,
+    checkout: facts.checkout ?? packageRoot,
+    source: 'package' as const,
+  };
+});

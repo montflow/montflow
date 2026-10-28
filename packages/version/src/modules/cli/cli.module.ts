@@ -1,24 +1,31 @@
 import { NodeServices } from '@effect/platform-node';
 import { Console, Effect, Option } from 'effect';
 import { Command, Flag } from 'effect/unstable/cli';
-import { describe, type Identity } from '../build-info/index.js';
+import {
+  type BuildInfoError,
+  describe,
+  type GeneratedIdentity,
+  type Identity,
+} from '../build-info/index.js';
 import { read as readStore, type StoreState } from '../store/index.js';
 
 /**
  * The shared CLI surface for build identity.
  *
- * One runner (`run`) resolves the owning package's identity for `--version`
- * and runs the command tree; one factory (`versionCommand`) builds the
- * `version` subcommand each CLI registers. Rendering lives here too, so the
+ * One runner (`run`) executes the command tree with the version its package
+ * manifest declares; one factory (`versionCommand`) builds the `version`
+ * subcommand each CLI registers; one effect (`versionReport`) resolves the
+ * full identity plus the installed store. Rendering lives here too, so the
  * human form, `--json`, and `--version` cannot disagree.
  */
 
 /** The installed skill store, when the workspace has one. */
 export interface StoreReport {
-  readonly status: 'managed' | 'unmanaged';
+  readonly status: 'managed' | 'unmanaged' | 'corrupt' | 'unsupported';
   readonly version?: string | undefined;
   readonly commit?: string | undefined;
   readonly syncedAt?: string | undefined;
+  readonly schemaVersion?: number | undefined;
 }
 
 /** Identity plus what the workspace under `--dir` received. */
@@ -30,6 +37,10 @@ export interface VersionReport extends Identity {
 export const storeReport = (state: StoreState): StoreReport | undefined => {
   if (state.status === 'absent') return undefined;
   if (state.status === 'unmanaged') return { status: 'unmanaged' };
+  if (state.status === 'corrupt') return { status: 'corrupt' };
+  if (state.status === 'unsupported') {
+    return { status: 'unsupported', schemaVersion: state.schemaVersion };
+  }
   return {
     status: 'managed',
     version: state.manifest.source.version,
@@ -48,9 +59,11 @@ const orUnknown = (value: string | undefined): string => value ?? 'unknown';
 const orUnknownBoolean = (value: boolean | undefined): string =>
   value === undefined ? 'unknown' : value ? 'yes' : 'no';
 
-/** One store line: `unmanaged`, or `<version> (<commit>)`. */
+/** One store line: a state, or `<version> (<commit>)` for a managed store. */
 const storeLine = (store: StoreReport): string => {
   if (store.status === 'unmanaged') return 'unmanaged';
+  if (store.status === 'corrupt') return 'corrupt manifest';
+  if (store.status === 'unsupported') return `unsupported manifest (schema ${store.schemaVersion})`;
   const version = orUnknown(store.version);
   return store.commit === undefined ? version : `${version} (${store.commit})`;
 };
@@ -96,30 +109,63 @@ const dirFlag = Flag.string('dir').pipe(
   Flag.optional,
 );
 
+/** Options for resolving the full version report. */
+export interface VersionReportOptions {
+  /** Directory holding the CLI's own `package.json`. */
+  readonly packageRoot: string;
+  /**
+   * Build-time identity used when the manifest is not on disk, so a compiled
+   * binary still reports a version.
+   */
+  readonly generated?: GeneratedIdentity | undefined;
+  /** Workspace root containing `.agents/skills`; defaults to the process's. */
+  readonly dir?: string | undefined;
+}
+
+/**
+ * Resolve one CLI's identity and the workspace store state.
+ *
+ * Shared by the `version` subcommand and the tests, so the command itself stays
+ * a thin renderer.
+ * @param options - package directory, generated fallback, and workspace root
+ * @returns the report, or a tagged manifest failure
+ */
+export const versionReport = Effect.fn('Cli.versionReport')(function* (
+  options: VersionReportOptions,
+) {
+  const identity = yield* describe({
+    packageRoot: options.packageRoot,
+    generated: options.generated,
+  });
+  const store = yield* readStore(options.dir ?? process.cwd());
+  return report(identity, store);
+});
+
 /** Options for the `version` subcommand. */
 export interface VersionCommandOptions {
   /** Directory holding the CLI's own `package.json`. */
   readonly packageRoot: string;
-  /** Working directory used when `--dir` is absent. */
-  readonly cwd?: string | undefined;
+  /** Build-time identity used when the manifest is not on disk. */
+  readonly generated?: GeneratedIdentity | undefined;
 }
 
 /**
  * Build the `version` subcommand for one CLI.
  *
- * The manifest is read here rather than passed in, so this command stays a
+ * The report is resolved here rather than passed in, so this command stays a
  * plain subcommand a package can register in its own tree — keeping that
  * tree's `Command.provide` layers in force.
- * @param options - the CLI package directory and the default workspace root
+ * @param options - the CLI package directory and its generated fallback
  * @returns the command to register alongside the CLI's other subcommands
  */
 export const versionCommand = (options: VersionCommandOptions) =>
   Command.make('version', { json: jsonFlag, dir: dirFlag }, (config) =>
     Effect.gen(function* () {
-      const identity = yield* describe({ packageRoot: options.packageRoot });
-      const root = Option.getOrUndefined(config.dir) ?? options.cwd ?? process.cwd();
-      const store = yield* readStore(root);
-      const value = report(identity, store);
+      const value = yield* versionReport({
+        packageRoot: options.packageRoot,
+        generated: options.generated,
+        dir: Option.getOrUndefined(config.dir),
+      });
       yield* Console.log(config.json ? json(value) : human(value));
     }),
   ).pipe(Command.withDescription('Print this CLI build identity and the installed store version.'));
@@ -128,30 +174,40 @@ export const versionCommand = (options: VersionCommandOptions) =>
 export interface RunOptions<Name extends string, Input, ContextInput, E> {
   /** The CLI's root command, including its own `version` subcommand. */
   readonly command: Command.Command<Name, Input, ContextInput, E, NodeServices.NodeServices>;
-  /** Directory holding the CLI's own `package.json`. */
-  readonly packageRoot: string;
+  /** Version the package manifest declares, used by `--version`. */
+  readonly version: string;
 }
 
 /**
  * Run one `mf-*` binary.
  *
- * Resolves the identity once for `--version`, then delegates argv, help,
- * completion, and error rendering to `effect/cli`. An identity failure prints
- * its message to stderr and exits 1; command failures keep the
- * [`Command.run`] behaviour each binary already had.
- * @param options - root command and package directory
+ * Delegates argv, help, `--version`, completion, and error rendering to
+ * `effect/cli`, providing the Node platform layer. The version is passed in
+ * from the package's own manifest, so no identity probe runs on commands that
+ * do not ask for one.
+ * @param options - root command and manifest version
+ * @returns the program effect, for tests that drive it with a fake Stdio
+ */
+export const execute = <Name extends string, Input, ContextInput, E>(
+  options: RunOptions<Name, Input, ContextInput, E>,
+): Effect.Effect<
+  void,
+  E | import('effect/unstable/cli/CliError').CliError,
+  NodeServices.NodeServices
+> => Command.run(options.command, { version: options.version });
+
+/**
+ * Run one `mf-*` binary and translate a failure into a non-zero exit.
+ * @param options - root command and manifest version
  */
 export const run = <Name extends string, Input, ContextInput, E>(
   options: RunOptions<Name, Input, ContextInput, E>,
 ): void => {
-  const program = Effect.gen(function* () {
-    const identity = yield* describe({ packageRoot: options.packageRoot }).pipe(
-      Effect.tapError((message) => Console.error(message)),
-    );
-    yield* Command.run(options.command, { version: identity.version });
-  }).pipe(Effect.provide(NodeServices.layer));
-
-  program.pipe(Effect.runPromise).catch(() => {
-    process.exitCode = 1;
-  });
+  execute(options)
+    .pipe(Effect.provide(NodeServices.layer), Effect.runPromise)
+    .catch(() => {
+      process.exitCode = 1;
+    });
 };
+
+export type { BuildInfoError };

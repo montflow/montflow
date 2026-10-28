@@ -1,10 +1,21 @@
 import { Console, Effect, Option } from 'effect';
 import { Argument, Command, Flag } from 'effect/unstable/cli';
+import { Cli } from '@montflow/version';
+import type { BuildInfo } from '@montflow/version';
+import manifest from '../../../package.json' with { type: 'json' };
 import * as Doctor from '../doctor/index.js';
 import * as Sync from '../sync/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
-import { Cli } from '@montflow/version';
+
+/** This package's root: three levels up from `src/apps/cli`. */
+export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
+
+/** Identity embedded from this package's manifest, so a compiled binary keeps it. */
+export const PACKAGE_IDENTITY = {
+  name: manifest.name,
+  version: manifest.version,
+} satisfies BuildInfo.GeneratedIdentity;
 
 /**
  * The `mf-skills` binary's command tree, built with `effect/cli`.
@@ -286,6 +297,6 @@ export const rootCommand = Command.make('mf-skills').pipe(
     modifyCommand,
     deleteCommand,
     syncCommand,
-    Cli.versionCommand({ packageRoot: `${import.meta.dirname}/../../..` }),
+    Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
 );

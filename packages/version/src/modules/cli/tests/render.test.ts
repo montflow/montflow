@@ -118,6 +118,44 @@ Vitest.describe('Cli.human runtime', () => {
       }),
     ),
   );
+  Vitest.it.effect('reports a corrupt manifest as corrupt, not unmanaged', () =>
+    withWorkspace((root) =>
+      Effect.gen(function* () {
+        const store = join(root, '.agents', 'skills');
+        yield* Effect.promise(() => mkdir(store, { recursive: true }));
+        yield* Effect.promise(() => writeFile(join(store, '.montflow-sync.json'), '{ not json'));
+
+        const value = Cli.report(identity, yield* readStore(root));
+
+        Vitest.expect(value.store).toStrictEqual({ status: 'corrupt' });
+        Vitest.expect(Cli.human(value).split('\n').at(-1)).toBe('store     corrupt manifest');
+      }),
+    ),
+  );
+
+  Vitest.it.effect('reports a newer manifest schema as unsupported', () =>
+    withWorkspace((root) =>
+      Effect.gen(function* () {
+        const store = join(root, '.agents', 'skills');
+        yield* Effect.promise(() => mkdir(store, { recursive: true }));
+        yield* Effect.promise(() =>
+          writeFile(
+            join(store, '.montflow-sync.json'),
+            JSON.stringify({
+              schemaVersion: 2,
+              source: { path: '/checkout' },
+              syncedAt: '2026-10-28T00:00:00.000Z',
+              skills: [],
+            }),
+          ),
+        );
+
+        const value = Cli.report(identity, yield* readStore(root));
+
+        Vitest.expect(value.store).toStrictEqual({ status: 'unsupported', schemaVersion: 2 });
+      }),
+    ),
+  );
 });
 
 Vitest.describe('Cli.json runtime', () => {
@@ -169,6 +207,43 @@ Vitest.describe('Cli.json runtime', () => {
           checkout: '/checkout',
           source: 'package',
         });
+      }),
+    ),
+  );
+});
+
+Vitest.describe('Cli.versionReport runtime', () => {
+  Vitest.it.effect('reports the version the package manifest declares', () =>
+    withWorkspace((root) =>
+      Effect.gen(function* () {
+        const packageRoot = join(root, 'cli');
+        yield* Effect.promise(() => mkdir(packageRoot, { recursive: true }));
+        yield* Effect.promise(() =>
+          writeFile(
+            join(packageRoot, 'package.json'),
+            JSON.stringify({ name: '@montflow/skills', version: '9.9.9' }),
+          ),
+        );
+
+        const value = yield* Cli.versionReport({ packageRoot, dir: root }).pipe(
+          Effect.provide(NodeServices.layer),
+        );
+
+        Vitest.expect(value.name).toBe('@montflow/skills');
+        Vitest.expect(value.version).toBe('9.9.9');
+        Vitest.expect(value.source).toBe('package');
+      }),
+    ),
+  );
+
+  Vitest.it.effect('fails with a tagged error when no identity is available', () =>
+    withWorkspace((root) =>
+      Effect.gen(function* () {
+        const error = yield* Cli.versionReport({
+          packageRoot: join(root, 'missing'),
+          dir: root,
+        }).pipe(Effect.provide(NodeServices.layer), Effect.flip);
+        Vitest.expect(error.message).toContain('cannot read a package.json');
       }),
     ),
   );
