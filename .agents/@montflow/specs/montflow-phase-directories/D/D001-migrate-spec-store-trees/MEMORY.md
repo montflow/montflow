@@ -27,8 +27,9 @@ ones, `montflow-spec-standard`, and this spec's own tree). No hand moves.
 ### 2. Rename proof
 
 - `git add -A` then `git diff --cached -M --summary`: 275 renames, every one at
-  `(100%)` similarity — zero content changes. The 58 added files were, at that
-  point, all inside this spec's new directory; later tasks add more.
+  `(100%)` similarity — zero content changes (measured again at `53695fc`: 275
+  renames, 72 added files — 61 in this spec tree, 10 `mock-stray`, 1 migrate
+  test).
 - `git diff --cached -M --name-status | grep '^M'` under `.agents/@montflow/specs`
   is empty: no existing spec file was modified, only moved.
 - `mf-specs list` states match the pre-migration baseline: five complete

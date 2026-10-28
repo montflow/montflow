@@ -36,6 +36,10 @@ states the layout makes newly observable and audits the rest.
   `mock-legacy` plans one move to `A/A099-review-phase`.
 - `fixtures/README.md` lists six fixtures with their verdicts and a `migrate
   --dry-run` example.
+- `migrate --all --dry-run` over the fixtures (the audit this task required):
+  5 specs, 0 migrated, 0 planned, 3 failed — `mock-bad`, `mock-stale`, and
+  `mock-stray` fail their own trees by design; `mock-ok` and `mock-complete` are
+  reported already migrated. Recorded here because the run itself changes nothing.
 - No other test pinned a flat path after C002/D001.
 
 ### 2. Gates

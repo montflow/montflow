@@ -5,7 +5,7 @@ type: execution
 originator: planner:E099
 depends-on: E099
 related-tasks: D001
-status: pending
+status: complete
 ---
 
 # Task F001: reconcile with main
@@ -37,7 +37,7 @@ change on main is exactly where a silent conflict can hide.
 
 ## Completion
 
-- [ ] The branch contains `origin/main`; a merge commit exists or a no-op is recorded with the counts
-- [ ] No conflict was resolved by dropping a main-side change
-- [ ] All scoped gates pass and are quoted in MEMORY.md
-- [ ] `git status` is clean apart from the task's MEMORY.md update
+- [x] The branch contains `origin/main`; a merge commit exists or a no-op is recorded with the counts
+- [x] No conflict was resolved by dropping a main-side change
+- [x] All scoped gates pass and are quoted in MEMORY.md
+- [x] `git status` is clean apart from the task's MEMORY.md update

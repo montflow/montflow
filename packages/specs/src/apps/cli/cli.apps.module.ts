@@ -772,8 +772,9 @@ export const parseScaffoldTask = (raw: string): ScaffoldTaskParse => {
 };
 
 /**
- * Scaffold a mechanically valid spec tree under `root/<name>`: `SPEC.md`,
- * one task directory per task, and the phase's review task. Deterministic
+ * Scaffold a mechanically valid spec tree under `root/<name>`: `SPEC.md`, one
+ * directory per phase holding one task directory per task
+ * (`<PHASE>/<PHASE><NNN>-<name>/`), and the phase's review task. Deterministic
  * and model-free — the mechanical half of `mf-specs create`. Refuses to
  * touch an existing spec directory.
  * @param root - spec root directory

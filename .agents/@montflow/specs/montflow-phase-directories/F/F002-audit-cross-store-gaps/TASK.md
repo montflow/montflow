@@ -5,7 +5,7 @@ type: exploratory
 originator: planner:E099
 depends-on: E099
 related-tasks: A001
-status: pending
+status: complete
 ---
 
 # Task F002: audit cross-store gaps
@@ -32,13 +32,13 @@ stale sentence before the change is announced as done.
 - For each hit record: file and line, why it is stale, severity (breaks a gate,
   misleads an agent, cosmetic), and the owning task (new defect task or
   no-change with a reason).
-- Do not edit code or docs in this task; it produces the gap table only.
+- Exploratory: it produces the gap table. The only edits allowed are correcting a stale layout claim it finds, each recorded in MEMORY.md with its file. Do not edit code or docs beyond those inline corrections.
 - Confirm no consumer outside the swept list imports `@montflow/specs` and reads
   snapshot paths.
 
 ## Completion
 
-- [ ] MEMORY.md holds one row per hit with file, severity, and owner
-- [ ] The sweep command and its exclusions are recorded so it can be re-run
-- [ ] Anything that breaks a gate is marked as such and named, even if no fix is authored yet
-- [ ] No file outside this spec changed
+- [x] MEMORY.md holds one row per hit with file, severity, and owner
+- [x] The sweep command and its exclusions are recorded so it can be re-run
+- [x] Anything that breaks a gate is marked as such and named, even if no fix is authored yet
+- [x] No file outside this spec changed

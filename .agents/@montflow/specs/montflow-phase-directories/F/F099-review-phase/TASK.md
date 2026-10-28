@@ -6,7 +6,7 @@ originator: user
 depends-on: F001, F002
 related-tasks: E099
 reviewer-profiles: effect-reviewer
-status: pending
+status: complete
 ---
 
 # Task F099: Review phase
@@ -33,5 +33,5 @@ the audit is the last place a stale layout claim can survive.
 
 ## Completion
 
-- [ ] Findings written and reviewed.
-- [ ] Every gate-breaking gap has an owner or a recorded decision.
+- [x] Findings written and reviewed.
+- [x] Every gate-breaking gap has an owner or a recorded decision.

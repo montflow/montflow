@@ -1,10 +1,10 @@
 ---
 name: montflow-phase-directories
-status: in-progress
+status: complete
 workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-28
-locked-phases: A, B, C, D, E
+locked-phases: A, B, C, D, E, F
 ---
 
 # montflow phase directories
@@ -135,6 +135,6 @@ ports the layout, the allowlist, and the directory snapshot only.
 | E003 | align-review-evidence-and-docs      | defect      | complete | Yes   |
 | E004 | document-review-link-scope          | defect      | complete | Yes   |
 | E099 | review-phase                        | review      | complete | No    |
-| F001 | reconcile-with-main                 | execution   | pending | Yes   |
-| F002 | audit-cross-store-gaps              | exploratory | pending | No    |
-| F099 | review-phase                        | review      | pending | No    |
+| F001 | reconcile-with-main                 | execution   | complete | Yes   |
+| F002 | audit-cross-store-gaps              | exploratory | complete | No    |
+| F099 | review-phase                        | review      | complete | No    |
