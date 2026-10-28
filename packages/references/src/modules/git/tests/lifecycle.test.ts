@@ -781,17 +781,31 @@ Vitest.describe('GitLifecycle sync', () => {
       yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
       yield* Effect.promise(() => git(origin.dir, ['branch', '-m', 'main', 'trunk']));
 
-      const outcome = yield* Effect.gen(function* () {
+      const before = yield* Effect.gen(function* () {
         const lifecycle = yield* Git.GitLifecycle;
         const store = yield* ReferenceStore.ReferenceStore;
         yield* seed(root, store, entry({ name: 'fixture' }));
+        return yield* lifecycle.status(root, { fetch: true });
+      }).pipe(Effect.provide(realLive));
+      if (!('rows' in before)) throw new Error('expected a status report');
+      Vitest.expect(before.rows[0]?.state).toBe('ref-mismatch');
+
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
         return yield* lifecycle.sync(root, { name: 'fixture' });
       }).pipe(Effect.provide(realLive));
 
       if (!('entries' in outcome)) throw new Error('expected a sync report');
-      Vitest.expect(outcome.entries[0]?.kind).not.toBe('skipped');
-      Vitest.expect(outcome.entries[0]?.kind).not.toBe('failed');
       Vitest.expect(outcome.failed).toBe(false);
+      Vitest.expect(
+        yield* Effect.promise(() =>
+          git(Reference.clonePath(root, 'fixture'), [
+            'symbolic-ref',
+            '--short',
+            'refs/remotes/origin/HEAD',
+          ]),
+        ),
+      ).toBe('origin/trunk');
 
       const updated = yield* Effect.gen(function* () {
         const lifecycle = yield* Git.GitLifecycle;

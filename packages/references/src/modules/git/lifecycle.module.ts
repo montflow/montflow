@@ -1286,12 +1286,21 @@ const make = Effect.gen(function* () {
         continue;
       }
 
+      // Unpinned: sync is a repair verb, so refresh first. A fetch prunes a
+      // stale `refs/remotes/origin/main` and makes `origin/HEAD` detectable as
+      // dangling, which is what `setHeadAuto` then repairs.
+      const fetched = yield* git.fetch(clone);
+      if (!fetched.ok) {
+        results.push({
+          kind: 'failed',
+          slug: reference.name,
+          message: `failed ${reference.name} fetch: ${fetched.message}`,
+        });
+        continue;
+      }
       let branch = yield* git.defaultBranch(clone);
       if (branch === undefined) {
-        // A stale `origin/HEAD` (upstream renamed its default branch) is the one
-        // repairable cause; sync is a repair verb, so refresh and retry once.
-        const fetched = yield* git.fetch(clone);
-        if (fetched.ok) yield* git.setHeadAuto(clone);
+        yield* git.setHeadAuto(clone);
         branch = yield* git.defaultBranch(clone);
       }
       if (branch === undefined) {
@@ -1524,8 +1533,15 @@ const make = Effect.gen(function* () {
             ),
           };
         } else if (ref === '') {
-          const branch = observed.defaultBranch;
-          if (branch !== undefined) {
+          const branch = yield* git.defaultBranch(observed.path);
+          if (branch === undefined) {
+            row = {
+              slug,
+              state: 'ref-mismatch',
+              message: `ref-mismatch ${slug} no-upstream`,
+              refused: false,
+            };
+          } else {
             const counts = yield* git.counts(observed.path, `refs/remotes/origin/${branch}`);
             if (counts !== undefined) {
               row = {
