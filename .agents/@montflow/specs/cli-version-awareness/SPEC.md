@@ -1,10 +1,10 @@
 ---
 name: cli-version-awareness
-status: in-progress
+status: complete
 workspace-type: worktree
 author: Daniel Montilla
 created: 2026-10-28
-locked-phases:
+locked-phases: A, B, C, D, E
 ---
 
 # cli-version-awareness
@@ -77,5 +77,5 @@ own state. `guides/updating.md` becomes the destination every warning names.
 | D003 | write-updating-guide      | execution | complete | Yes   |
 | D099 | review-phase              | review    | complete | No    |
 | E001 | reconcile-with-main       | execution | complete | Yes   |
-| E002 | verify-pr-checks          | execution | in-progress | Yes   |
-| E099 | review-phase              | review    | pending | No    |
+| E002 | verify-pr-checks          | execution | complete | Yes   |
+| E099 | review-phase              | review    | complete | No    |

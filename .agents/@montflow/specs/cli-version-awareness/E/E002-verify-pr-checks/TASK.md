@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: E001
 related-tasks:
-status: in-progress
+status: complete
 ---
 
 # Task E002: verify-pr-checks
@@ -33,4 +33,4 @@ request against `main`, and confirm every required check is green.
 
 ## Completion
 
-- [ ] Done.
+- [x] Done.

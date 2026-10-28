@@ -151,7 +151,12 @@ jobs:
           BASE_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          if [ -n "${BASE_SHA:-}" ] && git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+          # A PR synchronize event's "before" is only the previous head; scan
+          # the whole PR range so every declared spec is gated.
+          if [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ] || [ "${GITHUB_EVENT_NAME:-}" = "merge_group" ]; then
+            git fetch --no-tags origin "${BASE_REF}"
+            range="origin/${BASE_REF}..HEAD"
+          elif [ -n "${BASE_SHA:-}" ] && git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
             range="${BASE_SHA}..HEAD"
           else
             git fetch --no-tags origin "${BASE_REF}"

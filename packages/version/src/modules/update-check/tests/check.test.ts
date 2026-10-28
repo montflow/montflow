@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeServices } from '@effect/platform-node';
-import { Duration, Effect, Fiber } from 'effect';
+import { Deferred, Duration, Effect, Fiber } from 'effect';
 import { TestClock } from 'effect/testing';
 import * as Vitest from '@effect/vitest';
 import * as UpdateCheck from '../index.js';
@@ -357,7 +357,10 @@ Vitest.describe('UpdateCheck.check runtime', () => {
   Vitest.it.effect('times out after two seconds and reports unknown', () =>
     withCache((dir) =>
       Effect.gen(function* () {
-        const probe: UpdateCheck.Probe = { refs: () => Effect.never };
+        const started = yield* Deferred.make<void>();
+        const probe: UpdateCheck.Probe = {
+          refs: () => Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
+        };
         const fiber = yield* Effect.forkChild(
           run({
             ...MANIFEST,
@@ -366,10 +369,9 @@ Vitest.describe('UpdateCheck.check runtime', () => {
             probe,
           }),
         );
-        // Let the forked probe register its timeout before advancing the clock;
-        // a cold CI worker otherwise loses the race and hangs the test.
-        yield* Effect.yieldNow;
-        yield* TestClock.adjust(Duration.millis(1));
+        // The probe signalling proves the two-second timeout is armed; advancing
+        // before that loses the race on a cold CI worker.
+        yield* Deferred.await(started);
         yield* TestClock.adjust(Duration.seconds(2));
         const result = yield* Fiber.join(fiber);
 
