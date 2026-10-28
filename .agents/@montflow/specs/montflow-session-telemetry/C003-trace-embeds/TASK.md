@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: C002
 related-tasks: C002
-status: pending
+status: complete
 ---
 
 # Task C003: trace-embeds
@@ -42,8 +42,8 @@ of the C002 canvas; it must not turn the renderer into a network client.
 
 ## Completion
 
-- [ ] Provider/model and tool icons render on spans with deterministic fallbacks.
-- [ ] Hover and keyboard focus show a tooltip with the required fields and no raw redacted body.
-- [ ] The detail inspector opens from click and keyboard and copies the span payload.
-- [ ] Icons are local, within the recorded size budget, and licensed in the asset note.
-- [ ] `bun run --cwd packages/telemetry test ts:check lint:check format:check` passes.
+- [x] Provider/model and tool icons render on spans with deterministic fallbacks.
+- [x] Hover and keyboard focus show a tooltip with the required fields and no raw redacted body.
+- [x] The detail inspector opens from click and keyboard and copies the span payload.
+- [x] Icons are local, within the recorded size budget, and licensed in the asset note.
+- [x] `bun run --cwd packages/telemetry test ts:check lint:check format:check` passes.

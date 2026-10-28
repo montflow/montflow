@@ -333,6 +333,9 @@ describe('Viewer.start runtime', () => {
     expect(() => new Function(`return (async () => {${scripts[0] ?? ''}})()`)).not.toThrow();
     expect(scripts[0]).toContain("await import('/pixi.mjs')");
     expect(scripts[0]).toContain('const LANES');
+    expect(scripts[0]).toContain('const ICONS');
+    expect(scripts[0]).toContain('iconPool');
+    expect(html).toContain('id="detail-icon"');
     expect(html).toContain('following');
   });
 });

@@ -2,6 +2,7 @@ export * from './config/index.js';
 export * from './digest/index.js';
 export * from './event/index.js';
 export * from './fold/index.js';
+export * from './icons/index.js';
 export * from './path/index.js';
 export * from './plugin/index.js';
 export * from './sqlite/index.js';

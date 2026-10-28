@@ -1,6 +1,7 @@
 import { Option, Schema } from 'effect';
 import type { Line } from '../event/index.js';
 import * as Fold from '../fold/index.js';
+import { catalog } from '../icons/index.js';
 import { file } from '../path/index.js';
 import { dirname, Fs, fileURLToPath } from '../platform/index.js';
 import * as Tail from '../tail/index.js';
@@ -110,16 +111,18 @@ export const page = (sessionID: string | undefined): string => `<!doctype html>
   <main>
     <header><strong id="title">live</strong><input id="filter" placeholder="filter spans" /><button id="follow">following</button><span id="totals"></span></header>
     <div id="trace" tabindex="0"><div id="tip" hidden></div><div id="empty" class="empty">No telemetry yet. Run a session and reopen /telemetry.</div></div>
-    <div id="detail" hidden><button id="close-detail">close</button><button id="copy-detail">copy</button><pre id="detail-body"></pre></div>
+    <div id="detail" hidden><button id="close-detail">close</button><button id="copy-detail">copy</button><img id="detail-icon" width="14" height="14" alt="" style="vertical-align:middle;margin-left:8px" /><pre id="detail-body"></pre></div>
   </main>
 </div>
 <script type="module">
 const SESSION = ${scriptJson(sessionID ?? null)};
+const ICONS = ${JSON.stringify(catalog()).replaceAll('<', '\\u003c')};
 const CLIENT_ID = crypto.randomUUID();
 const trace = document.getElementById('trace');
 const tip = document.getElementById('tip');
 const detail = document.getElementById('detail');
 const detailBody = document.getElementById('detail-body');
+const detailIcon = document.getElementById('detail-icon');
 const sessionsEl = document.getElementById('sessions');
 const titleEl = document.getElementById('title');
 const totalsEl = document.getElementById('totals');
@@ -180,6 +183,12 @@ const axisLabels = Array.from({ length: 5 }, () => {
 });
 const minimap = new PIXI.Graphics();
 app.stage.addChild(minimap);
+const iconPool = Array.from({ length: 60 }, () => {
+  const label = new PIXI.Text({ text: '', style: { fill: '#d7dbe0', fontFamily: 'monospace', fontSize: 10 } });
+  label.visible = false;
+  app.stage.addChild(label);
+  return label;
+});
 
 const width = () => Math.max(320, app.screen.width);
 const height = () => Math.max(240, app.screen.height);
@@ -188,8 +197,40 @@ const timeOf = (x) => viewStart + (x - GUTTER) / (baseScale * zoom);
 const xOf = (ts) => GUTTER + (ts - viewStart) * baseScale * zoom;
 const tailStart = (ts) => Math.max(minTs, ts - viewWidth() * 0.9);
 const colorOf = (line) => COLORS[laneOf(line.type)] ?? 0x6ea8fe;
+const providerOf = (line) => line.model && typeof line.model === 'object' ? line.model.providerID : undefined;
+const toolNameOf = (line) => {
+  const payload = payloadOf(line);
+  return typeof payload.name === 'string' ? payload.name : typeof payload.tool === 'string' ? payload.tool : undefined;
+};
+const iconOf = (line) => {
+  if (laneOf(line.type) === 'tool') {
+    const key = (toolNameOf(line) || 'unknown').toLowerCase();
+    return ICONS.tools[key] ?? ICONS.tools.unknown;
+  }
+  const key = (providerOf(line) || 'unknown').toLowerCase();
+  return ICONS.providers[key] ?? ICONS.providers.unknown;
+};
+const startedAt = new Map();
+const durationOf = (line) => {
+  const payload = payloadOf(line);
+  const key = (line.type.startsWith('session.step') ? 'step:' : line.type.startsWith('session.tool') ? 'tool:' : '') + (payload.assistantMessageID || payload.id || '');
+  if (line.type.endsWith('.started') || line.type.endsWith('.called')) { startedAt.set(key, line.ts); return null; }
+  const start = startedAt.get(key);
+  if (start !== undefined && (line.type.endsWith('.ended') || line.type.endsWith('.failed') || line.type.endsWith('.success'))) { startedAt.delete(key); return line.ts - start; }
+  return null;
+};
+const lowerBound = (ts) => {
+  let low = 0;
+  let high = spans.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if ((spans[mid].line.ts || 0) < ts) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+};
 
-const makeView = (line) => ({ line, lane: laneOf(line.type), color: colorOf(line), particle: null });
+const makeView = (line) => ({ line, lane: laneOf(line.type), color: colorOf(line), duration: durationOf(line), particle: null });
 const addParticle = (view) => {
   view.particle = new PIXI.Particle({
     texture: PIXI.Texture.WHITE,
@@ -222,6 +263,29 @@ const applyView = () => {
   const left = GUTTER + ((viewStart - minTs) / span) * (width() - GUTTER - 20);
   const w = Math.max(2, (viewWidth() / span) * (width() - GUTTER - 20));
   minimap.rect(left, mapY, w, 4).fill(0x6ea8fe);
+  let slot = 0;
+  if (zoom >= 0.6) {
+    const first = lowerBound(viewStart);
+    for (let index = first; index < spans.length && slot < iconPool.length; index += 1) {
+      const view = spans[index];
+      const x = xOf(view.line.ts || 0);
+      if (x < GUTTER - 2) continue;
+      if (x > width() - 16) break;
+      const icon = iconOf(view.line);
+      const label = iconPool[slot];
+      if (label === undefined) break;
+      label.text = icon.glyph;
+      label.style.fill = icon.color;
+      label.x = x + 1;
+      label.y = LANE_Y[view.lane] - 2;
+      label.visible = true;
+      slot += 1;
+    }
+  }
+  for (; slot < iconPool.length; slot += 1) {
+    const label = iconPool[slot];
+    if (label !== undefined) label.visible = false;
+  }
 };
 const refreshTotals = () => {
   let cost = 0;
@@ -258,6 +322,7 @@ const addLine = (line) => {
 };
 const rebuild = () => {
   clearParticles();
+  startedAt.clear();
   spans = [];
   minTs = Infinity;
   maxTs = -Infinity;
@@ -327,10 +392,23 @@ const openSession = async (sessionID) => {
 const showTip = (view, x, y) => {
   const line = view.line;
   const tokens = tokensOf(line);
-  tip.textContent = line.type + '  ' + (line.agent || '-') + '  ' + modelOf(line) +
+  const icon = iconOf(line);
+  const body = line.type + '  ' + icon.label + '  ' + (line.agent || '-') + '  ' + modelOf(line) +
     '\\n' + new Date(line.ts).toISOString() +
     (costOf(line) ? '\\ncost $' + costOf(line).toFixed(4) : '') +
-    (tokens ? '\\ntokens ' + (tokens.input || 0) + ' in / ' + (tokens.output || 0) + ' out' : '');
+    (tokens ? '\\ntokens ' + (tokens.input || 0) + ' in / ' + (tokens.output || 0) + ' out' : '') +
+    (view.duration === null ? '' : '\\nduration ' + Math.round(view.duration) + 'ms');
+  tip.replaceChildren();
+  const image = document.createElement('img');
+  image.src = icon.svg;
+  image.width = 12;
+  image.height = 12;
+  image.alt = icon.label;
+  image.style.verticalAlign = 'middle';
+  const text = document.createElement('span');
+  text.style.whiteSpace = 'pre-wrap';
+  text.textContent = ' ' + body;
+  tip.append(image, text);
   tip.hidden = false;
   tip.style.left = Math.min(x + 12, trace.clientWidth - 380) + 'px';
   tip.style.top = Math.min(y + 12, trace.clientHeight - 100) + 'px';
@@ -338,8 +416,11 @@ const showTip = (view, x, y) => {
 const hideTip = () => { tip.hidden = true; };
 const showDetail = (view) => {
   selected = spans.indexOf(view);
+  const icon = iconOf(view.line);
+  detailIcon.src = icon.svg;
+  detailIcon.alt = icon.label;
   detail.hidden = false;
-  detailBody.textContent = JSON.stringify(view.line, null, 2);
+  detailBody.textContent = JSON.stringify({ ...view.line, duration: view.duration }, null, 2);
 };
 const pick = (x, y) => {
   const ts = timeOf(x);
