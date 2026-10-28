@@ -131,6 +131,7 @@ const listFiles = (fs: FileSystem.FileSystem, dir: string): Effect.Effect<Readon
 type PackageRead =
   | { readonly kind: 'files'; readonly files: SkillPayload }
   | { readonly kind: 'no-skill' }
+  | { readonly kind: 'not-a-dir' }
   | { readonly kind: 'unreadable-dir' }
   | { readonly kind: 'not-a-file'; readonly entry: string }
   | { readonly kind: 'unreadable'; readonly entry: string };
@@ -144,8 +145,11 @@ const readFromPackage = (
   Effect.gen(function* () {
     const entries = yield* fs.readDirectory(dir).pipe(Effect.orElseSucceed(() => undefined));
     if (entries === undefined) {
-      const present = yield* exists(fs, dir);
-      return present ? ({ kind: 'unreadable-dir' } as const) : ({ kind: 'no-skill' } as const);
+      const info = yield* fs.stat(dir).pipe(Effect.orElseSucceed(() => undefined));
+      if (info === undefined) return { kind: 'no-skill' } as const;
+      return info.type === 'Directory'
+        ? ({ kind: 'unreadable-dir' } as const)
+        : ({ kind: 'not-a-dir' } as const);
     }
     const names = entries.filter((name) => !name.startsWith('.')).toSorted();
     if (!names.includes('SKILL.md')) return { kind: 'no-skill' } as const;
@@ -324,10 +328,12 @@ export const verifyPackagedSkills = (
                 ? `Packaged skill '${name}' has no SKILL.md.`
                 : `Packaged skill '${name}' is missing from '${sourceDir}'.`
               : read.kind === 'unreadable-dir'
-                ? `Packaged skill '${name}' has an unreadable directory.`
-                : read.kind === 'not-a-file'
-                  ? `Packaged skill '${name}' contains '${read.entry}', which is not a regular file and cannot be carried in the payload.`
-                  : `Packaged skill '${name}' has an unreadable '${read.entry}'.`;
+                ? `Packaged skill '${name}' directory '${sourceDir}' cannot be read.`
+                : read.kind === 'not-a-dir'
+                  ? `Packaged skill '${name}' path '${sourceDir}' is not a directory.`
+                  : read.kind === 'not-a-file'
+                    ? `Packaged skill '${name}' contains '${read.entry}', which is not a regular file and cannot be carried in the payload.`
+                    : `Packaged skill '${name}' has an unreadable '${read.entry}'.`;
           issues.push(Verifier.issue('payload', message));
         }
       } else {

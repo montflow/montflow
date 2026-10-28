@@ -128,11 +128,18 @@ export type CliAction =
 
 interface SplitTokens {
   readonly positionals: readonly string[];
+  /** String flags, value verbatim. Boolean flags are never recorded here. */
   readonly flags: Record<string, string>;
+  /** Boolean flags, last occurrence wins, exactly like the binary's flag parser. */
+  readonly toggles: Record<string, boolean>;
   readonly unknown: readonly string[];
   readonly missingValues: readonly string[];
   readonly invalidValues: ReadonlyArray<{ readonly name: string; readonly value: string }>;
 }
+
+/** The boolean spellings the binary's `Flag.boolean` accepts, case-sensitive. */
+const TRUE_VALUES = new Set(['true', '1', 'yes', 'on', 'y']);
+const FALSE_VALUES = new Set(['false', '0', 'no', 'off', 'n']);
 
 /**
  * Split raw tokens into positionals and typed flags.
@@ -140,6 +147,7 @@ interface SplitTokens {
  * A boolean flag never consumes the following token, so
  * `verify --clones alpha` keeps `alpha` positional. A string flag with no value
  * — last, or followed by another flag — is a missing value, never an absent flag.
+ * A repeated boolean is last-wins: `--check --check=false` turns the check off.
  * @param tokens - tokens to split
  * @param spec - the verb's accepted flags
  * @returns the split, with any unrecognised or valueless flag names collected
@@ -149,6 +157,7 @@ const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => 
   const booleans = new Set(spec.booleans);
   const positionals: Array<string> = [];
   const pairs: Array<[string, string]> = [];
+  const togglePairs: Array<[string, boolean]> = [];
   const unknown: Array<string> = [];
   const missingValues: Array<string> = [];
   const invalidValues: Array<{ name: string; value: string }> = [];
@@ -164,9 +173,10 @@ const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => 
       const name = body.slice(0, equals);
       const value = body.slice(equals + 1);
       if (booleans.has(name)) {
-        if (value === 'false') continue;
-        if (value === 'true') {
-          pairs.push([name, '']);
+        if (TRUE_VALUES.has(value)) {
+          togglePairs.push([name, true]);
+        } else if (FALSE_VALUES.has(value)) {
+          togglePairs.push([name, false]);
         } else {
           invalidValues.push({ name: `--${name}`, value });
         }
@@ -177,7 +187,7 @@ const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => 
       continue;
     }
     if (booleans.has(body)) {
-      pairs.push([body, '']);
+      togglePairs.push([body, true]);
       continue;
     }
     if (strings.has(body)) {
@@ -192,7 +202,14 @@ const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => 
     }
     unknown.push(`--${body}`);
   }
-  return { positionals, flags: Object.fromEntries(pairs), unknown, missingValues, invalidValues };
+  return {
+    positionals,
+    flags: Object.fromEntries(pairs),
+    toggles: Object.fromEntries(togglePairs),
+    unknown,
+    missingValues,
+    invalidValues,
+  };
 };
 
 /** Keep the token's value verbatim: only `undefined` means the flag was absent. */
@@ -247,9 +264,9 @@ export const parseCliArgs = (args: string): CliAction => {
         return usage('usage: /mf-references doctor [--check] [--dir path]');
       return {
         kind: 'Doctor',
-        check: split.flags['check'] !== undefined,
-        human: split.flags['human'] !== undefined,
-        verbose: split.flags['verbose'] !== undefined,
+        check: split.toggles['check'] === true,
+        human: split.toggles['human'] === true,
+        verbose: split.toggles['verbose'] === true,
         dir: one(split.flags['dir']),
       };
     }
@@ -262,8 +279,8 @@ export const parseCliArgs = (args: string): CliAction => {
       return {
         kind: 'List',
         status: one(split.flags['status']),
-        human: split.flags['human'] !== undefined,
-        verbose: split.flags['verbose'] !== undefined,
+        human: split.toggles['human'] === true,
+        verbose: split.toggles['verbose'] === true,
         dir: one(split.flags['dir']),
       };
     }
@@ -286,15 +303,15 @@ export const parseCliArgs = (args: string): CliAction => {
       if (bad !== undefined) return bad;
       if (split.positionals.length > 1) return usage('usage: /mf-references verify [<name>|--all]');
       const name = split.positionals[0];
-      const all = split.flags['all'] !== undefined;
+      const all = split.toggles['all'] === true;
       if (name !== undefined && all) return usage('usage: pass either <name> or --all, not both');
       return {
         kind: 'Verify',
         name,
         all,
-        clones: split.flags['clones'] !== undefined,
-        human: split.flags['human'] !== undefined,
-        verbose: split.flags['verbose'] !== undefined,
+        clones: split.toggles['clones'] === true,
+        human: split.toggles['human'] === true,
+        verbose: split.toggles['verbose'] === true,
         dir: one(split.flags['dir']),
       };
     }
@@ -316,8 +333,8 @@ export const parseCliArgs = (args: string): CliAction => {
         name: one(split.flags['name']),
         ref: one(split.flags['ref']),
         purpose: one(split.flags['purpose']),
-        human: split.flags['human'] !== undefined,
-        verbose: split.flags['verbose'] !== undefined,
+        human: split.toggles['human'] === true,
+        verbose: split.toggles['verbose'] === true,
         dir: one(split.flags['dir']),
       };
     }
@@ -328,7 +345,7 @@ export const parseCliArgs = (args: string): CliAction => {
       if (split.positionals.length > 1)
         return usage('usage: /mf-references update <name|url>|--all');
       const target = split.positionals[0];
-      const all = split.flags['all'] !== undefined;
+      const all = split.toggles['all'] === true;
       if (target !== undefined && all)
         return usage('usage: pass either <name|url> or --all, not both');
       if (target === undefined && !all) {
@@ -338,9 +355,9 @@ export const parseCliArgs = (args: string): CliAction => {
         kind: 'Update',
         target,
         all,
-        force: split.flags['force'] !== undefined,
-        human: split.flags['human'] !== undefined,
-        verbose: split.flags['verbose'] !== undefined,
+        force: split.toggles['force'] === true,
+        human: split.toggles['human'] === true,
+        verbose: split.toggles['verbose'] === true,
         dir: one(split.flags['dir']),
       };
     }
@@ -350,7 +367,7 @@ export const parseCliArgs = (args: string): CliAction => {
       if (bad !== undefined) return bad;
       if (split.positionals.length > 1) return usage('usage: /mf-references sync <name>|--all');
       const name = split.positionals[0];
-      const all = split.flags['all'] !== undefined;
+      const all = split.toggles['all'] === true;
       if (name !== undefined && all) return usage('usage: pass either <name> or --all, not both');
       if (name === undefined && !all) {
         return usage('usage: /mf-references sync <name> (or /mf-references sync --all)');
@@ -359,8 +376,8 @@ export const parseCliArgs = (args: string): CliAction => {
         kind: 'Sync',
         name,
         all,
-        human: split.flags['human'] !== undefined,
-        verbose: split.flags['verbose'] !== undefined,
+        human: split.toggles['human'] === true,
+        verbose: split.toggles['verbose'] === true,
         dir: one(split.flags['dir']),
       };
     }
@@ -372,9 +389,9 @@ export const parseCliArgs = (args: string): CliAction => {
       return {
         kind: 'Status',
         name: split.positionals[0],
-        fetch: split.flags['fetch'] !== undefined,
-        human: split.flags['human'] !== undefined,
-        verbose: split.flags['verbose'] !== undefined,
+        fetch: split.toggles['fetch'] === true,
+        human: split.toggles['human'] === true,
+        verbose: split.toggles['verbose'] === true,
         dir: one(split.flags['dir']),
       };
     }
@@ -388,9 +405,9 @@ export const parseCliArgs = (args: string): CliAction => {
       return {
         kind: 'Remove',
         name: split.positionals[0] ?? '',
-        keepClone: split.flags['keep-clone'] !== undefined,
-        human: split.flags['human'] !== undefined,
-        verbose: split.flags['verbose'] !== undefined,
+        keepClone: split.toggles['keep-clone'] === true,
+        human: split.toggles['human'] === true,
+        verbose: split.toggles['verbose'] === true,
         dir: one(split.flags['dir']),
       };
     }

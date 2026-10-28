@@ -182,6 +182,21 @@ Vitest.describe('/mf-references parser', () => {
       kind: 'Usage',
       message: "usage: invalid value 'maybe' for flag '--check'",
     });
+    Vitest.expect(Slash.parseCliArgs('doctor --check=TRUE')).toMatchObject({ kind: 'Usage' });
+    Vitest.expect(Slash.parseCliArgs('doctor --check=yes')).toMatchObject({ check: true });
+    Vitest.expect(Slash.parseCliArgs('doctor --check=1')).toMatchObject({ check: true });
+    Vitest.expect(Slash.parseCliArgs('doctor --check=off')).toMatchObject({ check: false });
+    Vitest.expect(Slash.parseCliArgs('doctor --check=0')).toMatchObject({ check: false });
+    Vitest.expect(Slash.parseCliArgs('doctor --check --check=false')).toMatchObject({
+      check: false,
+    });
+    Vitest.expect(Slash.parseCliArgs('doctor --check=false --check')).toMatchObject({
+      check: true,
+    });
+    Vitest.expect(Slash.parseCliArgs('update alpha --force --force=false')).toMatchObject({
+      kind: 'Update',
+      force: false,
+    });
   });
 
   Vitest.it('enforces exactly one positional for show and remove', () => {

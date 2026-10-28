@@ -210,7 +210,42 @@ Vitest.describe('Doctor.verifyPackagedSkills', () => {
       chmodSync(dir, 0o755);
       const block = reports.find((entry) => entry.path.includes(name));
       Vitest.expect(block?.issues.map((issue) => issue.message).join(' ')).toContain(
-        'has an unreadable directory',
+        'cannot be read',
+      );
+      drop(root);
+    }).pipe(Effect.provide(NodeLive)),
+  );
+
+  Vitest.it.effect('reports a non-directory skill path instead of an unreadable directory', () =>
+    Effect.gen(function* () {
+      const { root, skills } = bareRoot();
+      const [name] = Doctor.SKILL_NAMES;
+      mkdirSync(skills, { recursive: true });
+      writeFileSync(join(skills, name), 'not a directory\n', 'utf8');
+      const reports = yield* Doctor.verifyPackagedSkills({ skillsDir: skills });
+      const block = reports.find((entry) => entry.path.includes(name));
+      Vitest.expect(block?.issues.map((issue) => issue.message).join(' ')).toContain(
+        'is not a directory',
+      );
+      drop(root);
+    }).pipe(Effect.provide(NodeLive)),
+  );
+
+  Vitest.it.effect('reports an unreadable file inside a skill', () =>
+    Effect.gen(function* () {
+      if (process.platform === 'win32' || process.getuid?.() === 0) return;
+      const { root, skills } = bareRoot();
+      const [name] = Doctor.SKILL_NAMES;
+      const dir = join(skills, name);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'SKILL.md'), '---\nname: X\n---\n', 'utf8');
+      writeFileSync(join(dir, 'CHANGELOG.md'), '# changelog\n', 'utf8');
+      chmodSync(join(dir, 'CHANGELOG.md'), 0o000);
+      const reports = yield* Doctor.verifyPackagedSkills({ skillsDir: skills });
+      chmodSync(join(dir, 'CHANGELOG.md'), 0o644);
+      const block = reports.find((entry) => entry.path.includes(name));
+      Vitest.expect(block?.issues.map((issue) => issue.message).join(' ')).toContain(
+        "has an unreadable 'CHANGELOG.md'",
       );
       drop(root);
     }).pipe(Effect.provide(NodeLive)),
