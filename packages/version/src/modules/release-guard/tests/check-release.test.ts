@@ -42,6 +42,7 @@ const runGuard = (root: string) =>
   spawnSync('bun', ['run', SCRIPT, '--root', root], { encoding: 'utf8' });
 
 interface MutableManifest {
+  name?: string;
   version?: string;
   private?: boolean;
 }
@@ -94,6 +95,114 @@ Vitest.describe('release guard runtime', () => {
       const result = runGuard(root);
       Vitest.expect(result.status).toBe(1);
       Vitest.expect(result.stderr).toContain('release-versus-checkout');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+interface MutableConfig {
+  fixed?: unknown;
+  ignore?: string[];
+  privatePackages?: { version?: boolean; tag?: boolean };
+}
+
+const editConfig = async (root: string, edit: (value: MutableConfig) => void) => {
+  const file = join(root, '.changeset', 'config.json');
+  const config: MutableConfig = JSON.parse(await readFile(file, 'utf8'));
+  edit(config);
+  await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
+};
+
+Vitest.describe('release guard drift branches runtime', () => {
+  Vitest.it('fails when the fixed group loses a CLI', async () => {
+    const root = await fixture();
+    try {
+      await editConfig(root, (config) => {
+        config.fixed = [['@montflow/skills', '@montflow/specs']];
+      });
+      Vitest.expect(runGuard(root).status).toBe(1);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  Vitest.it('fails when @montflow/core joins the fixed group', async () => {
+    const root = await fixture();
+    try {
+      await editConfig(root, (config) => {
+        config.fixed = [
+          [
+            '@montflow/skills',
+            '@montflow/specs',
+            '@montflow/prompts',
+            '@montflow/profiles',
+            '@montflow/reviews',
+            '@montflow/core',
+          ],
+        ];
+      });
+      const result = runGuard(root);
+      Vitest.expect(result.status).toBe(1);
+      Vitest.expect(result.stderr).toContain('@montflow/core');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  Vitest.it('fails when a CLI is ignored or loses private tagging', async () => {
+    const ignored = await fixture();
+    const untagged = await fixture();
+    try {
+      await editConfig(ignored, (config) => {
+        config.ignore = ['@montflow/skills'];
+      });
+      await editConfig(untagged, (config) => {
+        config.privatePackages = { version: true, tag: false };
+      });
+      Vitest.expect(runGuard(ignored).status).toBe(1);
+      Vitest.expect(runGuard(untagged).status).toBe(1);
+    } finally {
+      await rm(ignored, { recursive: true, force: true });
+      await rm(untagged, { recursive: true, force: true });
+    }
+  });
+
+  Vitest.it('fails when a manifest loses its version or name', async () => {
+    const missingVersion = await fixture();
+    const renamed = await fixture();
+    try {
+      await editManifest(missingVersion, '@montflow/skills', (manifest) => {
+        delete manifest.version;
+      });
+      await editManifest(renamed, '@montflow/skills', (manifest) => {
+        manifest.name = '@montflow/phantom';
+      });
+      Vitest.expect(runGuard(missingVersion).status).toBe(1);
+      Vitest.expect(runGuard(renamed).status).toBe(1);
+    } finally {
+      await rm(missingVersion, { recursive: true, force: true });
+      await rm(renamed, { recursive: true, force: true });
+    }
+  });
+
+  Vitest.it('fails when a CHANGELOG is absent', async () => {
+    const root = await fixture();
+    try {
+      await rm(join(root, cliDir('@montflow/reviews'), 'CHANGELOG.md'));
+      const result = runGuard(root);
+      Vitest.expect(result.status).toBe(1);
+      Vitest.expect(result.stderr).toContain('CHANGELOG.md is missing');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  Vitest.it('accepts the --root=/path form', async () => {
+    const root = await fixture();
+    try {
+      const result = spawnSync('bun', ['run', SCRIPT, `--root=${root}`], { encoding: 'utf8' });
+      Vitest.expect(result.status).toBe(0);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

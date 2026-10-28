@@ -12,10 +12,14 @@ import { join, resolve } from 'node:path';
 
 import { CHANGELOG_MARKER, CLIS } from '../src/modules/release-guard/index.js';
 
-const rootFlag = process.argv.indexOf('--root');
-const root = resolve(
-  rootFlag === -1 ? process.cwd() : (process.argv[rootFlag + 1] ?? process.cwd()),
-);
+const rootArg = process.argv.find((arg) => arg === '--root' || arg.startsWith('--root='));
+const rootValue =
+  rootArg === undefined
+    ? process.cwd()
+    : rootArg.startsWith('--root=')
+      ? rootArg.slice('--root='.length)
+      : (process.argv[process.argv.indexOf('--root') + 1] ?? process.cwd());
+const root = resolve(rootValue);
 
 const failures: string[] = [];
 
@@ -34,6 +38,9 @@ const readJson = (file: string): Record<string, unknown> => {
 const versions = new Map<string, string>();
 for (const name of CLIS) {
   const manifest = readJson(manifestPath(name));
+  if (manifest.name !== name) {
+    failures.push(`${name}: package.json name is '${String(manifest.name)}'`);
+  }
   const version = manifest.version;
   if (typeof version !== 'string') {
     failures.push(`${name}: package.json has no version string`);
@@ -55,7 +62,14 @@ if (distinct.size > 1) {
 }
 
 const config = readJson(join(root, '.changeset', 'config.json'));
-const fixed = Array.isArray(config.fixed) ? config.fixed.flat() : [];
+const fixedGroups = Array.isArray(config.fixed) ? config.fixed : [];
+if (fixedGroups.length !== 1 || !Array.isArray(fixedGroups[0])) {
+  failures.push('.changeset/config.json: expected exactly one fixed group');
+}
+const fixed = Array.isArray(fixedGroups[0]) ? fixedGroups[0] : [];
+if (fixed.length !== CLIS.length) {
+  failures.push('.changeset/config.json: the fixed group must hold exactly the five CLIs');
+}
 for (const name of CLIS) {
   if (!fixed.includes(name)) failures.push(`.changeset/config.json: fixed group is missing ${name}`);
   const ignored = Array.isArray(config.ignore) ? config.ignore : [];

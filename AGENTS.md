@@ -25,13 +25,15 @@ bun@1.3.13 — lockfile is source of truth
 - lint: `turbo lint:check` / `turbo lint:fix`
 - format: `turbo format:check` / `turbo format:fix`
 - verify all mf artifacts/invariants: `bun run mf:check`
+- verify release metadata (fixed version, tags, changelogs): `bun run mf:check:release`
 - pack plugins for Git install: `bun run pack:plugins`
 - gate (full): `bun run mf:gate`
 - gate (fast, no test suite): `bun run mf:gate:fast`
 - install pre-push hook: `bun run hooks:install`
 
 Script names follow `[tool]:[action]:[scope]`: `mf:check:<scope>` runs one
-scope, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
+scope, `mf:check:release-and-skills` is the CI alias for the release + skills
+pair, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
 
 ## Verification
 
