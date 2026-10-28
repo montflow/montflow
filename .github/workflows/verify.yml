@@ -204,7 +204,7 @@ jobs:
             script: test:tui
           - target: smoke
             script: smoke
-          - target: release-and-skills
+          - target: skills
             script: mf:check:release-and-skills
           - target: prompts
             script: mf:check:prompts
