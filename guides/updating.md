@@ -4,6 +4,12 @@ This guide is the destination every stale notice names. It covers reading the
 warning, checking on demand, updating the checkout, re-syncing installed
 stores, and every opt-out.
 
+Set `M` to the checkout you run the CLIs from:
+
+```bash
+export M="${M:-$HOME/src/montflow}"
+```
+
 The `mf-*` CLIs are run from a git checkout, not installed from npm. An update
 is a `git pull` plus `bun install` in that checkout; the network check is
 optional and only tells you an update exists.
@@ -82,10 +88,10 @@ bun run --cwd "$M/packages/reviews" cli version --json
 
 ## Installed stores
 
-A workspace installed with `mf-skills sync` records what it received in
-`.agents/skills/.montflow-sync.json`. `mf-skills version --dir <workspace>`
-reports that store version; `mf-skills sync --check` reports whether it is
-behind, and `mf-skills sync` refreshes it.
+A workspace installed with `mf-skills sync` records what it received once the
+sync manifest exists; `mf-skills version --dir <workspace>` reports the store
+version when it does. `mf-skills sync --check` reports whether installed files
+differ from the source, and `mf-skills sync` refreshes them.
 
 ## Opting out
 

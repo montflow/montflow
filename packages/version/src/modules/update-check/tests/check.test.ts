@@ -67,7 +67,14 @@ const ttlOf = (file: string): Effect.Effect<number | undefined> =>
       entries: Record<string, { checkedAt: number; expiresAt: number }>;
     };
     const entry =
-      cache.entries[UpdateCheck.cacheKey(MANIFEST.packageName, MANIFEST.checkout, '0.0.1')];
+      cache.entries[
+        UpdateCheck.cacheKey(
+          MANIFEST.packageName,
+          MANIFEST.checkout,
+          '0.0.1',
+          MANIFEST.currentCommit,
+        )
+      ];
     return entry === undefined ? undefined : entry.expiresAt - entry.checkedAt;
   });
 
@@ -255,7 +262,12 @@ Vitest.describe('UpdateCheck.check runtime', () => {
           schemaVersion: number;
           entries: Record<string, { checkedAt: number; expiresAt: number }>;
         };
-        const key = UpdateCheck.cacheKey(MANIFEST.packageName, MANIFEST.checkout, '0.0.1');
+        const key = UpdateCheck.cacheKey(
+          MANIFEST.packageName,
+          MANIFEST.checkout,
+          '0.0.1',
+          MANIFEST.currentCommit,
+        );
         const entry = cache.entries[key] ?? { checkedAt: 0, expiresAt: 0 };
         yield* Effect.promise(() =>
           writeFile(
@@ -489,7 +501,12 @@ Vitest.describe('UpdateCheck cache hygiene runtime', () => {
     withCache((dir) =>
       Effect.gen(function* () {
         const file = cacheFile(dir);
-        const key = UpdateCheck.cacheKey(MANIFEST.packageName, MANIFEST.checkout, '0.0.1');
+        const key = UpdateCheck.cacheKey(
+          MANIFEST.packageName,
+          MANIFEST.checkout,
+          '0.0.1',
+          MANIFEST.currentCommit,
+        );
         yield* Effect.promise(() =>
           writeFile(
             file,
@@ -545,6 +562,115 @@ Vitest.describe('UpdateCheck cache hygiene runtime', () => {
 
         Vitest.expect(first).toBe(true);
         Vitest.expect(second).toBe(false);
+      }),
+    ),
+  );
+});
+
+Vitest.describe('UpdateCheck diverged and stale-remote runtime', () => {
+  Vitest.it.effect('reports diverged when both sides moved', () =>
+    withCache((dir) =>
+      withRepo((repo) =>
+        Effect.gen(function* () {
+          git(repo.root, ['checkout', '-b', 'side', repo.first]);
+          yield* Effect.promise(() => writeFile(join(repo.root, 'side.txt'), 'side\n'));
+          git(repo.root, ['add', '.']);
+          git(repo.root, [
+            '-c',
+            'user.name=T',
+            '-c',
+            'user.email=t@example.com',
+            'commit',
+            '-m',
+            'side',
+          ]);
+          const side = git(repo.root, ['rev-parse', 'HEAD']);
+          const fake = fakeProbe(Effect.succeed([mainRef(repo.second)]));
+          const result = yield* run({
+            packageName: MANIFEST.packageName,
+            checkout: repo.root,
+            currentCommit: side,
+            currentVersion: '0.0.1',
+            cacheFile: cacheFile(dir),
+            probe: fake.probe,
+          });
+
+          Vitest.expect(result.verdict).toStrictEqual({
+            state: 'diverged',
+            available: repo.second.slice(0, 7),
+          });
+        }),
+      ),
+    ),
+  );
+
+  Vitest.it.effect('reports behind when the remote moved but its commit is not fetched', () =>
+    withCache((dir) =>
+      Effect.gen(function* () {
+        const origin = yield* Effect.promise(() => mkdtemp(join(tmpdir(), 'mf-origin-')));
+        const clone = yield* Effect.promise(() => mkdtemp(join(tmpdir(), 'mf-clone-')));
+        try {
+          yield* Effect.promise(async () => {
+            await writeFile(join(origin, 'file.txt'), 'one\n');
+            git(origin, ['init', '-b', 'main']);
+            git(origin, ['add', '.']);
+            git(origin, [
+              '-c',
+              'user.name=T',
+              '-c',
+              'user.email=t@example.com',
+              'commit',
+              '-m',
+              'one',
+            ]);
+            await writeFile(join(origin, 'file.txt'), 'two\n');
+            git(origin, ['add', '.']);
+            git(origin, [
+              '-c',
+              'user.name=T',
+              '-c',
+              'user.email=t@example.com',
+              'commit',
+              '-m',
+              'two',
+            ]);
+            git(clone, ['clone', origin, '.']);
+          });
+          const current = git(clone, ['rev-parse', 'HEAD']);
+          yield* Effect.promise(async () => {
+            await writeFile(join(origin, 'file.txt'), 'three\n');
+            git(origin, ['add', '.']);
+            git(origin, [
+              '-c',
+              'user.name=T',
+              '-c',
+              'user.email=t@example.com',
+              'commit',
+              '-m',
+              'three',
+            ]);
+          });
+          const remote = git(origin, ['rev-parse', 'HEAD']);
+          const fake = fakeProbe(Effect.succeed([mainRef(remote)]));
+          const result = yield* run({
+            packageName: MANIFEST.packageName,
+            checkout: clone,
+            currentCommit: current,
+            currentVersion: '0.0.1',
+            cacheFile: cacheFile(dir),
+            probe: fake.probe,
+          });
+
+          Vitest.expect(result.verdict).toStrictEqual({
+            state: 'behind',
+            available: remote.slice(0, 7),
+            basis: 'commit',
+            commit: remote,
+          });
+        } finally {
+          yield* Effect.promise(() => rm(origin, { recursive: true, force: true }));
+          yield* Effect.promise(() => rm(clone, { recursive: true, force: true }));
+        }
       }),
     ),
   );

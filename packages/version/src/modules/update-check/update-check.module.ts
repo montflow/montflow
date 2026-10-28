@@ -34,6 +34,7 @@ export type Verdict =
     }
   | { readonly state: 'current' }
   | { readonly state: 'ahead'; readonly available: string }
+  | { readonly state: 'diverged'; readonly available: string }
   | { readonly state: 'unknown'; readonly reason: string }
   | { readonly state: 'skipped'; readonly reason: 'env' | 'flag' | 'ci' };
 
@@ -109,6 +110,7 @@ const VerdictSchema = Schema.Union([
   }),
   Schema.Struct({ state: Schema.Literal('current') }),
   Schema.Struct({ state: Schema.Literal('ahead'), available: Schema.String }),
+  Schema.Struct({ state: Schema.Literal('diverged'), available: Schema.String }),
   Schema.Struct({ state: Schema.Literal('unknown'), reason: Schema.String }),
   Schema.Struct({
     state: Schema.Literal('skipped'),
@@ -292,8 +294,12 @@ const writeCache = (
   });
 
 /** Cache key: a package version in a checkout, never a package alone. */
-export const cacheKey = (packageName: string, checkout: string, version: string) =>
-  `${packageName}\u0000${checkout}\u0000${version}`;
+export const cacheKey = (
+  packageName: string,
+  checkout: string,
+  version: string,
+  commit: string | undefined,
+) => `${packageName}\u0000${checkout}\u0000${version}\u0000${commit ?? ''}`;
 
 /** Decide from the ref list, or `unknown` when there is nothing to compare. */
 export const decide = (
@@ -355,6 +361,28 @@ export const isAncestor = (
     return undefined;
   }).pipe(
     Effect.scoped,
+    Effect.timeoutOption(PROBE_TIMEOUT_MS),
+    Effect.map((answer) => (Option.isNone(answer) ? undefined : answer.value)),
+    Effect.orElseSucceed(() => undefined),
+  );
+
+/** Resolve a local ref to a commit, or `undefined` when it is not present. */
+const revParse = (
+  checkout: string,
+  ref: string,
+  env: Readonly<Record<string, string | undefined>> | undefined,
+): Effect.Effect<string | undefined, never, ChildProcessSpawner> =>
+  Effect.gen(function* () {
+    const handle = yield* ChildProcess.make(
+      'git',
+      ['--no-optional-locks', 'rev-parse', '--verify', ref],
+      { cwd: checkout, stderr: 'ignore', env: probeEnv(env), extendEnv: true },
+    );
+    const stdout = yield* handle.stdout.pipe(Stream.decodeText(), Stream.mkString);
+    const code = yield* handle.exitCode;
+    return code === 0 ? stdout.trim() : undefined;
+  }).pipe(
+    Effect.scoped,
     Effect.orElseSucceed(() => undefined),
   );
 
@@ -366,16 +394,54 @@ const classifyCommit = (
   Effect.gen(function* () {
     if (verdict.state !== 'behind' || verdict.basis !== 'commit') return verdict;
     if (options.currentCommit === undefined || verdict.commit === undefined) return verdict;
-    const ancestor = yield* isAncestor(
+
+    const localIsAncestor = yield* isAncestor(
       options.checkout,
       options.currentCommit,
       verdict.commit,
       options.env,
     );
-    if (ancestor === true) return verdict;
-    if (ancestor === false) {
-      return { state: 'ahead', available: verdict.commit.slice(0, 7) };
+    if (localIsAncestor === true) return verdict;
+    if (localIsAncestor === false) {
+      const remoteIsAncestor = yield* isAncestor(
+        options.checkout,
+        verdict.commit,
+        options.currentCommit,
+        options.env,
+      );
+      if (remoteIsAncestor === true) {
+        return { state: 'ahead', available: verdict.commit.slice(0, 7) };
+      }
+      if (remoteIsAncestor === false)
+        return { state: 'diverged', available: verdict.commit.slice(0, 7) };
     }
+
+    // The remote main object is not fetched. Compare against the last known
+    // origin/main instead: equal/ancestor means upstream moved ahead, while
+    // local commits on top of it mean both sides moved.
+    const knownMain = yield* revParse(options.checkout, 'origin/main', options.env);
+    if (knownMain === undefined) {
+      return {
+        state: 'unknown',
+        reason: 'cannot compare the local commit with refs/heads/main',
+      };
+    }
+    if (knownMain === options.currentCommit) return verdict;
+    const currentOnKnown = yield* isAncestor(
+      options.checkout,
+      options.currentCommit,
+      knownMain,
+      options.env,
+    );
+    if (currentOnKnown === true) return verdict;
+    const knownOnCurrent = yield* isAncestor(
+      options.checkout,
+      knownMain,
+      options.currentCommit,
+      options.env,
+    );
+    if (knownOnCurrent === true)
+      return { state: 'diverged', available: verdict.commit.slice(0, 7) };
     return {
       state: 'unknown',
       reason: 'cannot compare the local commit with refs/heads/main',
@@ -440,7 +506,12 @@ export const check = Effect.fn('UpdateCheck.check')(function* (options: CheckOpt
   const now = yield* Clock.currentTimeMillis;
   const file = options.cacheFile ?? cacheFileFor(path, options.env);
   const checkout = path.resolve(options.checkout);
-  const key = cacheKey(options.packageName, checkout, options.currentVersion);
+  const key = cacheKey(
+    options.packageName,
+    checkout,
+    options.currentVersion,
+    options.currentCommit,
+  );
 
   if (!options.force && file !== undefined) {
     const cache = yield* readCache(file);
@@ -507,6 +578,7 @@ export const shouldAnnounce = (args: ReadonlyArray<string>): boolean => {
 export const claimNotice = Effect.fn('UpdateCheck.claimNotice')(function* (options: {
   readonly packageName: string;
   readonly currentVersion: string;
+  readonly currentCommit?: string | undefined;
   readonly checkout: string;
   readonly env?: Readonly<Record<string, string | undefined>> | undefined;
   readonly cacheFile?: string | undefined;
@@ -517,7 +589,12 @@ export const claimNotice = Effect.fn('UpdateCheck.claimNotice')(function* (optio
   if (file === undefined) return true;
 
   const cache = yield* readCache(file);
-  const key = cacheKey(options.packageName, path.resolve(options.checkout), options.currentVersion);
+  const key = cacheKey(
+    options.packageName,
+    path.resolve(options.checkout),
+    options.currentVersion,
+    options.currentCommit,
+  );
   const entry = cache.entries[key];
   if (entry?.notifiedAt !== undefined && now - entry.notifiedAt < SUCCESS_TTL_MS) {
     return false;

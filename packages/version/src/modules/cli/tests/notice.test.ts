@@ -21,7 +21,14 @@ const TOPLEVEL = spawnSync('git', ['rev-parse', '--show-toplevel'], {
   cwd: REPO_ROOT,
   encoding: 'utf8',
 }).stdout.trim();
-const KEY = UpdateCheck.cacheKey('@montflow/skills', TOPLEVEL, '0.0.1');
+const HEAD = spawnSync('git', ['rev-parse', 'HEAD'], {
+  cwd: REPO_ROOT,
+  encoding: 'utf8',
+}).stdout.trim();
+const VERSION: string = JSON.parse(
+  spawnSync('cat', [`${REPO_ROOT}/packages/skills/package.json`], { encoding: 'utf8' }).stdout,
+).version;
+const KEY = UpdateCheck.cacheKey('@montflow/skills', TOPLEVEL, VERSION, HEAD);
 const FAR_FUTURE = 4_102_444_800_000;
 
 interface VerdictSeed {
@@ -57,8 +64,13 @@ const runCli = (home: string, args: ReadonlyArray<string>) =>
   spawnSync('bun', ['run', MAIN, ...args], {
     cwd: REPO_ROOT,
     encoding: 'utf8',
-    // oxlint-disable-next-line montflow/no-process-env -- the spawned binary needs the runner's PATH; only the cache home is overridden.
-    env: { ...process.env, XDG_CACHE_HOME: home },
+    env: {
+      // oxlint-disable-next-line montflow/no-process-env -- the spawned binary needs the runner's PATH; only the cache home is overridden.
+      ...process.env,
+      CI: undefined,
+      MONTFLOW_NO_UPDATE_CHECK: undefined,
+      XDG_CACHE_HOME: home,
+    },
   });
 
 const runList = (home: string, workspace: string, extra: ReadonlyArray<string> = []) =>
@@ -217,4 +229,48 @@ Vitest.describe('notice anchors runtime', () => {
       }
     }),
   );
+});
+
+Vitest.describe('version --check runtime', () => {
+  Vitest.it(
+    'exits 0 when current and 1 when the local remote has a newer tag',
+    async () => {
+      const repo = await mkdtemp(join(tmpdir(), 'mf-check-remote-'));
+      const home = await mkdtemp(join(tmpdir(), 'mf-check-home-'));
+      try {
+        await writeFile(join(repo, 'file.txt'), 'one\n');
+        const git = (args: ReadonlyArray<string>) => {
+          const result = spawnSync('git', args, { cwd: repo, encoding: 'utf8' });
+          if (result.status !== 0) throw new Error(result.stderr);
+          return result.stdout.trim();
+        };
+        git(['init', '-b', 'main']);
+        git(['add', '.']);
+        git(['-c', 'user.name=T', '-c', 'user.email=t@example.com', 'commit', '-m', 'one']);
+        git(['tag', '@montflow/skills@0.0.1']);
+
+        const current = runCli(home, ['version', '--check', '--remote', repo]);
+        Vitest.expect(current.status).toBe(0);
+        Vitest.expect(current.stdout).toContain('current');
+
+        git(['tag', '@montflow/skills@0.0.2']);
+        const behind = runCli(home, ['version', '--check', '--remote', repo]);
+        Vitest.expect(behind.status).toBe(1);
+        Vitest.expect(behind.stdout).toContain('behind 0.0.2');
+      } finally {
+        await rm(repo, { recursive: true, force: true });
+        await rm(home, { recursive: true, force: true });
+      }
+    },
+    60_000,
+  );
+});
+
+Vitest.describe('Cli.checkExit runtime', () => {
+  Vitest.it('treats diverged as an available update and everything else as current', () => {
+    Vitest.expect(Cli.checkExit({ state: 'diverged', available: 'abc1234' })).toBe(1);
+    Vitest.expect(Cli.checkLine({ state: 'diverged', available: 'abc1234' })).toBe(
+      'diverged from abc1234',
+    );
+  });
 });

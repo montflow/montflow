@@ -129,13 +129,15 @@ export const checkLine = (verdict: Verdict) =>
     Match.when({ state: 'behind' }, (behind) => `behind ${behind.available}`),
     Match.when({ state: 'current' }, () => 'current'),
     Match.when({ state: 'ahead' }, (ahead) => `ahead of ${ahead.available}`),
+    Match.when({ state: 'diverged' }, (diverged) => `diverged from ${diverged.available}`),
     Match.when({ state: 'unknown' }, (unknown) => `unknown: ${unknown.reason}`),
     Match.when({ state: 'skipped' }, (skipped) => `skipped: ${skipped.reason}`),
     Match.exhaustive,
   );
 
 /** Exit code for a forced check: 1 only when an update is available. */
-export const checkExit = (verdict: Verdict): 0 | 1 => (verdict.state === 'behind' ? 1 : 0);
+export const checkExit = (verdict: Verdict): 0 | 1 =>
+  verdict.state === 'behind' || verdict.state === 'diverged' ? 1 : 0;
 
 /** The process environment, read once at the binary composition root. */
 const environment = (): Readonly<Record<string, string | undefined>> =>
@@ -160,6 +162,12 @@ const dirFlag = Flag.string('dir').pipe(
 const checkFlag = Flag.boolean('check').pipe(
   Flag.withDescription('Check upstream now (bypasses the cache) and exit 1 when behind.'),
   Flag.withDefault(false),
+);
+
+/** Override the remote for `--check`, mainly for a local mirror or tests. */
+const remoteFlag = Flag.string('remote').pipe(
+  Flag.withDescription('Remote repository for --check. Defaults to the montflow GitHub repo.'),
+  Flag.optional,
 );
 
 /** Options for resolving the full version report. */
@@ -212,40 +220,44 @@ export interface VersionCommandOptions {
  * @returns the command to register alongside the CLI's other subcommands
  */
 export const versionCommand = (options: VersionCommandOptions) =>
-  Command.make('version', { json: jsonFlag, dir: dirFlag, check: checkFlag }, (config) =>
-    Effect.gen(function* () {
-      if (config.check) {
-        const identity = yield* describe({
+  Command.make(
+    'version',
+    { json: jsonFlag, dir: dirFlag, check: checkFlag, remote: remoteFlag },
+    (config) =>
+      Effect.gen(function* () {
+        if (config.check) {
+          const identity = yield* describe({
+            packageRoot: options.packageRoot,
+            generated: options.generated,
+          });
+          const result = yield* runUpdateCheck({
+            packageName: identity.name,
+            currentVersion: identity.version,
+            checkout: identity.checkout ?? options.packageRoot,
+            currentCommit: identity.commit,
+            remote: Option.getOrUndefined(config.remote),
+            env: environment(),
+            args: process.argv.slice(2),
+            force: true,
+          });
+          yield* Console.log(
+            config.json ? JSON.stringify(result.verdict) : checkLine(result.verdict),
+          );
+          if (checkExit(result.verdict) === 1) {
+            yield* Effect.sync(() => {
+              process.exitCode = 1;
+            });
+          }
+          return;
+        }
+
+        const value = yield* versionReport({
           packageRoot: options.packageRoot,
           generated: options.generated,
+          dir: Option.getOrUndefined(config.dir),
         });
-        const result = yield* runUpdateCheck({
-          packageName: identity.name,
-          currentVersion: identity.version,
-          checkout: identity.checkout ?? options.packageRoot,
-          currentCommit: identity.commit,
-          env: environment(),
-          args: process.argv.slice(2),
-          force: true,
-        });
-        yield* Console.log(
-          config.json ? JSON.stringify(result.verdict) : checkLine(result.verdict),
-        );
-        if (checkExit(result.verdict) === 1) {
-          yield* Effect.sync(() => {
-            process.exitCode = 1;
-          });
-        }
-        return;
-      }
-
-      const value = yield* versionReport({
-        packageRoot: options.packageRoot,
-        generated: options.generated,
-        dir: Option.getOrUndefined(config.dir),
-      });
-      yield* Console.log(config.json ? json(value) : human(value));
-    }),
+        yield* Console.log(config.json ? json(value) : human(value));
+      }),
   ).pipe(Command.withDescription('Print this CLI build identity and the installed store version.'));
 
 /** Options for the shared binary runner. */
@@ -297,6 +309,7 @@ export const announce = Effect.fn('Cli.announce')(function* (options: AnnounceOp
   const claimed = yield* claimNotice({
     packageName: identity.name,
     currentVersion: identity.version,
+    currentCommit: identity.commit,
     checkout,
     env: environment(),
   });
@@ -312,9 +325,9 @@ export const announce = Effect.fn('Cli.announce')(function* (options: AnnounceOp
  *
  * Delegates argv, help, `--version`, completion, and error rendering to
  * `effect/cli`, providing the Node platform layer. The version is passed in
- * from the package's own manifest, so no identity probe runs on commands that
- * do not ask for one; the stale notice runs before the command and cannot
- * change its exit code.
+ * from the package's own manifest. The notice reads argv/env at this boundary
+ * and skips its identity probe whenever the check is opted out; it runs before
+ * the command and cannot change its exit code.
  * @param options - root command, embedded identity, and package directory
  * @returns the program effect, for tests that drive it with a fake Stdio
  */
