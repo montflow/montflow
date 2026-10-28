@@ -29,15 +29,15 @@ const specTree = (
     }),
   ),
   entry(
-    'A001-do-thing/TASK.md',
+    'A/A001-do-thing/TASK.md',
     taskMarkdown({ id: 'A001', name: 'do-thing', status: taskStatus }),
   ),
-  entry('A001-do-thing/MEMORY.md', memory),
+  entry('A/A001-do-thing/MEMORY.md', memory),
   entry(
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: taskStatus }),
   ),
-  entry('A099-review-phase/MEMORY.md', memory),
+  entry('A/A099-review-phase/MEMORY.md', memory),
 ];
 
 const specs = new Map([
@@ -104,6 +104,8 @@ Vitest.describe('Cli.list runtime', () => {
               snapshot: () =>
                 Effect.fail(new SpecStore.StoreError({ operation: 'unused', reason: 'unused' })),
               write: () => Effect.void,
+              move: () => Effect.void,
+              removeDirectory: () => Effect.void,
             }),
           ),
         ),

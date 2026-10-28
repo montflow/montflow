@@ -10,13 +10,16 @@ const specs = new Map([
     'ok',
     [
       entry('SPEC.md', specMarkdown({ name: 'ok' })),
-      entry('A001-implement-login/TASK.md', taskMarkdown({ id: 'A001', name: 'implement-login' })),
-      entry('A001-implement-login/MEMORY.md', memory),
       entry(
-        'A099-review-phase/TASK.md',
+        'A/A001-implement-login/TASK.md',
+        taskMarkdown({ id: 'A001', name: 'implement-login' }),
+      ),
+      entry('A/A001-implement-login/MEMORY.md', memory),
+      entry(
+        'A/A099-review-phase/TASK.md',
         taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
       ),
-      entry('A099-review-phase/MEMORY.md', memory),
+      entry('A/A099-review-phase/MEMORY.md', memory),
     ],
   ],
   ['bad', [entry('SPEC.md', specMarkdown({ name: 'bad' }))]],

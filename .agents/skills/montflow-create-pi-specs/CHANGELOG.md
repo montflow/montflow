@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.0.0] - 2026-10-28
+
+### Changed
+
+- **Breaking:** a spec is `SPEC.md` plus one directory per phase, each holding one directory per task (`<spec>/<PHASE>/<PHASE><NNN>-<name>/`); a task id's letters must match its phase directory
+- The strict per-level allowlist: root = `SPEC.md` + phase dirs, phase = task dirs, task = `TASK.md`/`MEMORY.md`/`GATES.md`; an empty phase directory or a stray file/directory fails
+- `mf-specs create` writes the nested layout; `create` still scaffolds phase A only
+
+### Added
+
+- `mf-specs migrate --name <spec>` / `--all` (with `--dry-run`) moves a flat spec under its phases without editing a file
+
 ## [2.3.0] - 2026-10-25
 
 ### Changed
