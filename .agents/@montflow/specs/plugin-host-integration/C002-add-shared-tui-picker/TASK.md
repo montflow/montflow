@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: C001
 related-tasks: B001, C001
-status: pending
+status: in-progress
 ---
 
 # Task C002: add-shared-tui-picker
