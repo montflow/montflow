@@ -1,18 +1,21 @@
 # Updating
 
-This guide is the destination every stale notice names. It covers reading the
-warning, checking on demand, updating the checkout, re-syncing installed
-stores, and every opt-out.
-
-Set `M` to the checkout you run the CLIs from:
-
-```bash
-export M="${M:-$HOME/src/montflow}"
-```
+This guide is the single destination every stale notice names. It covers
+reading the warning, checking on demand, updating the checkout, re-syncing an
+installed store, verifying the result, and every opt-out.
 
 The `mf-*` CLIs are run from a git checkout, not installed from npm. An update
 is a `git pull` plus `bun install` in that checkout; the network check is
 optional and only tells you an update exists.
+
+```bash
+export M="${M:-$HOME/src/montflow}"
+M="$(cd "$M" && pwd)"
+```
+
+Every step below works offline against a local checkout. Only
+`version --check` and the automatic notice talk to the network, and both are
+opt-outable.
 
 ## Reading the warning
 
@@ -23,17 +26,30 @@ mf-skills 0.0.1 is behind 0.0.2 in /path/to/montflow — update: guides/updating
 ```
 
 It names the installed version, the available version, the checkout, and the
-section below for that CLI. Stdout and the command's exit code are unchanged.
+section below for that CLI. A `diverged` checkout gets the same line with
+`has diverged from`. Stdout and the command's exit code are unchanged, and the
+line appears at most once per checkout per 24 hours.
+
+## Update the checkout
+
+```bash
+git -C "$M" pull
+(cd "$M" && bun install)
+```
+
+`bun install` is required after a pull: workspace dependencies are linked from
+the lockfile. The guide never asks for a global install or an npm package.
 
 ## mf-skills
+
+Check on demand:
 
 ```bash
 bun run --cwd "$M/packages/skills" cli version --check
 ```
 
-Exits `0` with `current`, `unknown`, `ahead`, or `skipped`, and `1` with
-`behind` or `diverged`.
-Prove the update took effect:
+Exit codes: `0` for `current`, `unknown`, `ahead`, or `skipped`; `1` for
+`behind` or `diverged`. Prove the update took effect:
 
 ```bash
 bun run --cwd "$M/packages/skills" cli version --json
@@ -89,18 +105,58 @@ bun run --cwd "$M/packages/reviews" cli version --json
 
 ## Installed stores
 
-A workspace installed with `mf-skills sync` records what it received once the
-sync manifest exists; `mf-skills version --dir <workspace>` reports the store
-version when it does. `mf-skills sync --check` reports whether installed files
-differ from the source, and `mf-skills sync` refreshes them.
+A workspace installed with `mf-skills sync` records what it received in
+`.agents/skills/.montflow-sync.json`: source path, remote, commit, ref,
+version, sync time, and a version plus content hash per skill.
+
+Report the store from any checkout:
+
+```bash
+bun run --cwd "$M/packages/skills" cli version --dir "$PWD"
+```
+
+`store` lines mean the workspace is managed; no line means no store.
+
+Re-sync and inspect drift before writing:
+
+```bash
+bun run --cwd "$M/packages/skills" cli sync --source "$M" --target "$PWD" --check
+```
+
+Each skill reports `current`, `stale`, `diverged`, or `unmanaged`. `--check`
+writes nothing and exits `1` for `stale` or `diverged`, `0` for `current`. An
+`unmanaged` store keeps the older byte comparison.
+
+Apply an update:
+
+```bash
+bun run --cwd "$M/packages/skills" cli sync --source "$M" --target "$PWD"
+```
+
+A normal sync overwrites `stale` skills and refreshes the manifest. It refuses
+to overwrite a skill marked `diverged` (someone edited it locally). Review the
+named files, then pass `--force` to replace them:
+
+```bash
+bun run --cwd "$M/packages/skills" cli sync --source "$M" --target "$PWD" --force
+```
+
+Prove the store is current:
+
+```bash
+bun run --cwd "$M/packages/skills" cli sync --source "$M" --target "$PWD" --check
+```
+
+It is updated when every skill reports `current` and the exit code is `0`.
 
 ## Opting out
 
-Set any one of these to skip the check entirely:
+Set any one of these to skip the automatic check entirely:
 
 - `MONTFLOW_NO_UPDATE_CHECK=1`
 - `--no-update-check` on any command
 - `CI=true`
 
 There is no TTY detection: agents capture output, so the warning must still be
-visible without a terminal.
+visible without a terminal. An explicit `version --check` is the only path that
+turns staleness into a non-zero exit.

@@ -98,7 +98,14 @@ if (fixed.includes('@montflow/core')) {
   failures.push('.changeset/config.json: @montflow/core must not join the CLI fixed group');
 }
 
+const guidePath = join(root, 'guides', 'updating.md');
+const guide = existsSync(guidePath) ? readFileSync(guidePath, 'utf8') : '';
+if (guide === '') failures.push('guides/updating.md is missing');
 for (const name of CLIS) {
+  const cli = `mf-${name.replace('@montflow/', '')}`;
+  if (guide !== '' && !guide.includes(`## ${cli}`)) {
+    failures.push(`guides/updating.md: no '## ${cli}' heading for the notice anchor`);
+  }
   const changelog = join(root, 'packages', name.replace('@montflow/', ''), 'CHANGELOG.md');
   if (!existsSync(changelog)) {
     failures.push(`${name}: CHANGELOG.md is missing`);

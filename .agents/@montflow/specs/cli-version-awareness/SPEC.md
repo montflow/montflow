@@ -74,5 +74,5 @@ own state. `guides/updating.md` becomes the destination every warning names.
 | C099 | review-phase              | review    | complete | No    |
 | D001 | add-sync-manifest         | execution | complete | Yes   |
 | D002 | add-store-drift-states    | execution | complete | Yes   |
-| D003 | write-updating-guide      | execution | pending | Yes   |
+| D003 | write-updating-guide      | execution | complete | Yes   |
 | D099 | review-phase              | review    | pending | No    |

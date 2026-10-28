@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: B002, C002, D002
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task D003: write-updating-guide
@@ -27,4 +27,4 @@ Author `guides/updating.md` as the single destination every warning and document
 
 ## Completion
 
-- [ ] Done.
+- [x] Done.

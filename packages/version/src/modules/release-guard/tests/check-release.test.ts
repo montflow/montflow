@@ -33,6 +33,9 @@ const fixture = async (): Promise<string> => {
     cp(join(PACKAGE_ROOT, '../../.changeset/config.json'), join(root, '.changeset/config.json'), {
       recursive: true,
     }),
+    cp(join(PACKAGE_ROOT, '../../guides/updating.md'), join(root, 'guides/updating.md'), {
+      recursive: true,
+    }),
     ...sources.map(({ from, to }) => cp(from, to, { recursive: true })),
   ]);
   return root;
@@ -203,6 +206,22 @@ Vitest.describe('release guard drift branches runtime', () => {
     try {
       const result = spawnSync('bun', ['run', SCRIPT, `--root=${root}`], { encoding: 'utf8' });
       Vitest.expect(result.status).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+Vitest.describe('release guard guide anchors runtime', () => {
+  Vitest.it('fails when a notice anchor has no matching heading', async () => {
+    const root = await fixture();
+    try {
+      const guide = join(root, 'guides/updating.md');
+      const text = await readFile(guide, 'utf8');
+      await writeFile(guide, text.replace('## mf-skills', '## skills-cli'));
+      const result = runGuard(root);
+      Vitest.expect(result.status).toBe(1);
+      Vitest.expect(result.stderr).toContain("no '## mf-skills' heading");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

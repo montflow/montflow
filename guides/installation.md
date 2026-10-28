@@ -355,3 +355,10 @@ Every store derives from it: `<root>/.agents/@montflow/<domain>`, skills at
 `<root>/.agents/skills`. Pass it on every command that writes. `mf-skills sync`
 is the exception: it takes `--source <checkout>` and `--target <workspace-root>`
 (keeping `--from` and `--dir` as aliases), while every other CLI uses `--dir`.
+
+## Updating
+
+See [guides/updating.md](./updating.md) for the single update path: read the
+stale warning, run `mf-<cli> version --check`, pull the checkout and run
+`bun install`, re-sync installed stores, and verify the result. Every step works
+offline against a local checkout.
