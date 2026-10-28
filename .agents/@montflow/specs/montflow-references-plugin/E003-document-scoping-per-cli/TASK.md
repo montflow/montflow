@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: E002
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task E003: Document scoping per CLI

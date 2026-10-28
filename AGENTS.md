@@ -39,9 +39,14 @@ scope, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
   (`node_modules/.bin/*`, `bunx`, `npx`) — e.g. never run `vitest`, `oxlint`,
   `oxfmt`, or `tsc` by hand.
 - Always scope verification to the working area. Never run repo-wide checks when
-  you touched one package:
+  you touched one package. This rule is unconditional: whole-store forms
+  (`mf:check:<domain>`, `mf:check`, `mf:gate`) run only when the change spans
+  scopes, at the final gate, or when the user asks for them.
   - package scope: `turbo <task> --filter=<package>` from the root, or
     `bun run --cwd <pkg-path> <script>` (e.g. `bun run --cwd packages/core test`).
+  - single artifact: the owning package's CLI in its single-artifact form with
+    `--dir $PWD` — see the scoped-invocation table in
+    `.agents/documentation/author-mf-utility-cli.md`.
   - single test file: `bun run --cwd <pkg-path> test -- <path-to-test-file>`
     (vitest treats the positional arg as a filename filter).
   - lint/format are package-scoped by design (`oxlint .`, `oxfmt .` cover the

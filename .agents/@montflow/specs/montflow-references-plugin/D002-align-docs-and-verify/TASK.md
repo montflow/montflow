@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: D001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task D002: Align the docs and verify

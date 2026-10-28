@@ -16,24 +16,20 @@ No checkout. The agent must bring montflow in as a reference before anything is
 installed. The workspace must be a git repository; run `git init` first if it is
 not.
 
-1. **Bootstrap the clone — mandatory.** Load and run the
-   [adding-references](../.agents/skills/adding-references/SKILL.md) skill
-   against `https://github.com/montflow/montflow` through its clone step. It
-   creates `.agents/references/`, gitignores it, and clones montflow to
-   `.agents/references/montflow`.
-2. **Register the reference — mandatory.** Append the `montflow` row to
-   `.agents/references/registry.md`, the local overlay `finding-references`
-   reads. The file lives outside `.agents/skills/`, so sync never touches it:
+1. **Bootstrap the clone — mandatory.** Run the
+   [montflow-add-reference](../.agents/skills/montflow-add-reference/SKILL.md) pipeline (or `mf-references add` from a checkout) against
+   `https://github.com/montflow/montflow`. It creates `.agents/references/`,
+   gitignores it, clones montflow to `.agents/references/montflow`, and writes
+   `.agents/@montflow/references/montflow/REFERENCE.md`.
+2. **Confirm the entry — mandatory.**
 
    ```bash
    export M="$PWD/.agents/references/montflow"
-   REGISTRY=.agents/references/registry.md
-   [ -f "$REGISTRY" ] || printf '# Reference Registry\n\n| Reference | Path | URL |\n| --- | --- | --- |\n' > "$REGISTRY"
-   printf '| montflow | .agents/references/montflow | https://github.com/montflow/montflow |\n' >> "$REGISTRY"
+   bun run --cwd "$M/packages/references" cli show montflow --dir "$PWD"
    ```
 
 3. **Read the inventory.** Load
-   [finding-references](../.agents/skills/finding-references/SKILL.md) and
+   [montflow-find-reference](../.agents/skills/montflow-find-reference/SKILL.md) and
    confirm the `montflow` entry resolves to `.agents/references/montflow`. The
    reference is read-only for source files; local mode writes only its untracked
    `node_modules`.
@@ -72,7 +68,7 @@ Then follow the answer:
 | Answer | Do this |
 | --- | --- |
 | `all` | Run the [install-all recipe](#4-install-everything-all-five). |
-| `none` | Write no utility store. Report each of the five as skipped. A remote-mode reference clone, if any, stays in place; nothing under `.agents/skills` or `.agents/@montflow` is written. |
+| `none` | Write no utility store. Report each of the six as skipped. A remote-mode reference clone, if any, stays in place; nothing under `.agents/skills` or `.agents/@montflow` is written. |
 | subset | Run only the named sections in [step 3](#3-install-only-the-utilities-you-chose), in guide order. Report the rest as skipped. |
 | anything else | Ask again. Install nothing. |
 
@@ -98,7 +94,7 @@ Re-run `bun install` in `$M` after `git pull`.
 
 Each section below is optional and independent. Run one, run several, or stop
 after any one: none assumes another was installed. They are ordered skills →
-specs → prompts → profiles → reviews.
+specs → prompts → profiles → reviews → references.
 
 #### Skills (optional)
 
@@ -239,11 +235,40 @@ It is working when `verify --all` exits `0` with `0 issues`. An empty store
 already verifies clean ("No review series yet"), so the create proves the
 write path.
 
-### 4. Install everything (all five)
+#### References (optional)
+
+Adds the committed reference store `.agents/@montflow/references/<slug>/` and
+plain git clones under `.agents/references/`. It also installs the two scoped
+skills `montflow-add-reference` and `montflow-find-reference`.
+
+Install — repairs scaffolding and installs the packaged skills:
+
+```bash
+bun run --cwd "$M/packages/references" cli doctor --dir "$PWD"
+```
+
+Create your first entry (https URLs only; a registered URL routes to `update`):
+
+```bash
+bun run --cwd "$M/packages/references" cli add https://github.com/montflow/montflow \
+  --name montflow --purpose "The montflow monorepo, used as the install source." \
+  --dir "$PWD"
+```
+
+Verify:
+
+```bash
+bun run --cwd "$M/packages/references" cli verify --all --dir "$PWD"
+```
+
+It is working when `verify --all` reports `0 issues` and `doctor --check`
+reports `failed=0`. Clones stay gitignored and read-only.
+
+### 4. Install everything (all six)
 
 Use this for the `all` answer, or for a reader who wants the lot without walking
-the five sections. It runs the same commands as step 3, in the same fixed order:
-skills, specs, prompts, profiles, reviews. Set `M` first (step 2); run it from
+the six sections. It runs the same commands as step 3, in the same fixed order:
+skills, specs, prompts, profiles, reviews, references. Set `M` first (step 2); run it from
 the workspace root.
 
 It runs setup and verification only — **no first entries**. When a utility's
@@ -318,6 +343,12 @@ bun run --cwd "$M/packages/reviews" cli doctor --dir "$PWD"
 installed+=(reviews)
 bun run --cwd "$M/packages/reviews" cli verify --all --dir "$PWD"
 clean+=(reviews)
+
+step references
+bun run --cwd "$M/packages/references" cli doctor --dir "$PWD"
+installed+=(references)
+bun run --cwd "$M/packages/references" cli verify --all --dir "$PWD"
+clean+=(references)
 
 printf '\nInstalled: %s\n' "${installed[*]:-none}"
 printf 'Verified clean: %s\n' "${clean[*]:-none}"

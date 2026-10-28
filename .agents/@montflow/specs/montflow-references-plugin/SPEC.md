@@ -104,11 +104,11 @@ fetches.
 | C007 | migrate-registry-and-wire-gate  | execution   | complete | Yes   |
 | C099 | review-phase                    | review      | complete | No   |
 | D001 | align-skills                    | execution   | complete | Yes  |
-| D002 | align-docs-and-verify           | execution   | pending | Yes   |
+| D002 | align-docs-and-verify           | execution   | complete | Yes  |
 | D099 | review-phase                    | review      | pending | No    |
-| E001 | audit-scoped-verification       | exploratory | pending | No    |
-| E002 | fix-agents-rule-and-spec-scoping | execution  | pending | Yes   |
-| E003 | document-scoping-per-cli        | execution   | pending | Yes   |
+| E001 | audit-scoped-verification       | exploratory | complete | No   |
+| E002 | fix-agents-rule-and-spec-scoping | execution  | complete | Yes  |
+| E003 | document-scoping-per-cli        | execution   | complete | Yes  |
 | E099 | review-phase                    | review      | pending | No    |
 | F001 | pull-and-reconcile               | execution   | pending | Yes   |
 | F002 | prepare-pull-request             | execution   | pending | Yes   |

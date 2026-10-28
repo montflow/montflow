@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: E001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task E002: Fix the agents rule and spec scoping
