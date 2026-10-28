@@ -1,6 +1,6 @@
 import * as Vitest from '@effect/vitest';
 import { Effect } from 'effect';
-import { CliError } from 'effect/unstable/cli';
+import { CliError } from 'effect/cli';
 import { TestConsole } from 'effect/testing';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';

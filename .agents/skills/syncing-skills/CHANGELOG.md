@@ -1,15 +1,24 @@
+## [4.0.0] - 2026-10-26
+
+### Changed
+
+- Switched the flow from the external skills installer to the in-repo `mf-skills sync` command: resolve the source checkout (local clone or an `adding-references` reference), sync public skills into `<root>/.agents/skills/` with `--source`/`--target` (`--from`/`--dir` remain aliases), and verify with `--check`.
+- Sync is project-local only: removed every global-install instruction, `-g` flag, agent-target table, and external-CLI maintenance command.
+- Documented the public/internal split — `metadata.internal: true` skills are skipped, reported, and never copied.
+- Earlier entries reworded to name the external skills CLI rather than its invocation; the installer is no longer used.
+
 ## [3.0.0] - 2026-08-18
 
 ### Changed
 
-- Complete rewrite: no longer copies files from this repo. Now a guided installer — reads the repo's available skills via `npx skills add montflow/montflow --list`, presents them for selection, and installs the chosen ones with `npx skills add ... -s <skill>`.
+- Complete rewrite: no longer copies files from this repo. Now a guided installer — reads the repo's available skills through the external skills CLI, presents them for selection, and installs the chosen ones.
 - Removed version conflict resolution, changelog preservation, sparse checkout, and subagent orchestration (obsolete with CLI-driven installs)
 
 ## [2.2.2] - 2026-08-17
 
 ### Added
 
-- `metadata.internal: true` frontmatter — the `skills` CLI now excludes this skill from discovery, listing, and installs. Force-install via `-s syncing-skills` or `INSTALL_INTERNAL_SKILLS=1`.
+- `metadata.internal: true` frontmatter — the external skills CLI excludes this skill from discovery, listing, and installs.
 
 ## [2.2.1] - 2026-08-17
 

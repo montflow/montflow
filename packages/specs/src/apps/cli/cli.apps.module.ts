@@ -9,7 +9,7 @@ import {
   Option,
   Result as EffectResult,
 } from 'effect';
-import { CliError, Command, Flag } from 'effect/unstable/cli';
+import { CliError, Command, Flag } from 'effect/cli';
 import { PromptStore } from '@montflow/prompts';
 import {
   type LoadedPrompt,
@@ -3102,12 +3102,12 @@ export const renderScaffold = (report: ScaffoldReport): string =>
 
 // ─── Commands ─────────────────────────────────────────────────────────
 
-const dirFlag = Flag.string('dir').pipe(
+const dirFlag = Flag.String('dir').pipe(
   Flag.withDescription('Workspace root. Defaults to the working directory.'),
   Flag.withDefault('.'),
 );
 
-const nameFlag = Flag.string('name').pipe(Flag.withDescription('Spec directory name.'));
+const nameFlag = Flag.String('name').pipe(Flag.withDescription('Spec directory name.'));
 
 /** Collapse an optional flag to `string | undefined`. */
 const opt = (value: Option.Option<string>): string | undefined => Option.getOrUndefined(value);
@@ -3169,7 +3169,7 @@ export const runDiagnosed = <A, E, R>(
   );
 
 /** Detailed mode includes the cause chain and the stack of an internal defect. */
-const verboseFlag = Flag.boolean('verbose').pipe(
+const verboseFlag = Flag.Boolean('verbose').pipe(
   Flag.withDescription('Detailed output: provenance matrix, cause chain, and stack.'),
   Flag.withDefault(false),
 );
@@ -3179,15 +3179,15 @@ const checkCommand = Command.make(
   {
     dir: dirFlag,
     name: Flag.optional(nameFlag),
-    verbose: Flag.boolean('verbose').pipe(
+    verbose: Flag.Boolean('verbose').pipe(
       Flag.withDescription('Show passing specs and the root path.'),
       Flag.withDefault(false),
     ),
-    concurrency: Flag.integer('concurrency').pipe(
+    concurrency: Flag.Int('concurrency').pipe(
       Flag.withDescription('Specs verified in parallel.'),
       Flag.withDefault(DEFAULT_CONCURRENCY),
     ),
-    strict: Flag.boolean('strict').pipe(
+    strict: Flag.Boolean('strict').pipe(
       Flag.withDescription('Treat warnings as errors.'),
       Flag.withDefault(false),
     ),
@@ -3253,25 +3253,25 @@ const createCommand = Command.make(
   {
     dir: dirFlag,
     name: nameFlag,
-    author: Flag.string('author').pipe(
+    author: Flag.String('author').pipe(
       Flag.withDescription('Author stamped into SPEC.md.'),
       Flag.optional,
     ),
-    description: Flag.string('description').pipe(
+    description: Flag.String('description').pipe(
       Flag.withDescription('One-line spec description.'),
       Flag.optional,
     ),
-    workspaceType: Flag.string('workspace-type').pipe(
+    workspaceType: Flag.String('workspace-type').pipe(
       Flag.withDescription("How work is isolated: 'in-place' (default) or 'worktree'."),
       Flag.optional,
     ),
-    tasks: Flag.string('tasks').pipe(
+    tasks: Flag.String('tasks').pipe(
       Flag.withDescription(
         'Comma-separated tasks, each name[:type[:gates[:size]]]. Default: implement.',
       ),
       Flag.optional,
     ),
-    reviewerProfiles: Flag.string('reviewer-profiles').pipe(
+    reviewerProfiles: Flag.String('reviewer-profiles').pipe(
       Flag.withDescription('Comma-separated reviewer profiles for the phase review task.'),
       Flag.optional,
     ),
@@ -3374,7 +3374,7 @@ const nextCommand = Command.make(
 );
 
 /** `resolve` and `sizing` share the required task selector. */
-const taskFlag = Flag.string('task').pipe(Flag.withDescription('Task id, e.g. A001.'));
+const taskFlag = Flag.String('task').pipe(Flag.withDescription('Task id, e.g. A001.'));
 
 const resolveCommand = Command.make(
   'resolve',
@@ -3405,7 +3405,7 @@ const sizingCommand = Command.make(
     name: nameFlag,
     task: taskFlag,
     verbose: verboseFlag,
-    human: Flag.boolean('human').pipe(
+    human: Flag.Boolean('human').pipe(
       Flag.withDescription('Alias for --verbose: the full provenance matrix.'),
       Flag.withDefault(false),
     ),
@@ -3434,20 +3434,20 @@ const modelsCommand = Command.make(
   {
     dir: dirFlag,
     provider: Flag.optional(
-      Flag.string('provider').pipe(
+      Flag.String('provider').pipe(
         Flag.withDescription('Keep one provider id; a miss is a diagnostic.'),
       ),
     ),
-    json: Flag.boolean('json').pipe(
+    json: Flag.Boolean('json').pipe(
       Flag.withDescription('Print the stable JSON document (also valid --catalog input).'),
       Flag.withDefault(false),
     ),
     catalog: Flag.optional(
-      Flag.string('catalog').pipe(
+      Flag.String('catalog').pipe(
         Flag.withDescription('Read a catalogue file instead of the host model port.'),
       ),
     ),
-    verify: Flag.boolean('verify').pipe(
+    verify: Flag.Boolean('verify').pipe(
       Flag.withDescription('Cross-check sizing config entries; warnings exit 0.'),
       Flag.withDefault(false),
     ),
@@ -3491,7 +3491,7 @@ const modelsCommand = Command.make(
  * the process directory.
  */
 const workspaceDirFlag = Flag.optional(
-  Flag.string('dir').pipe(
+  Flag.String('dir').pipe(
     Flag.withDescription('Workspace root. Defaults to the nearest repository root.'),
   ),
 );
@@ -3501,7 +3501,7 @@ const whichCommand = Command.make(
   {
     dir: workspaceDirFlag,
     branch: Flag.optional(
-      Flag.string('branch').pipe(
+      Flag.String('branch').pipe(
         Flag.withDescription('Branch to resolve instead of reading .git/HEAD (tests and CI).'),
       ),
     ),
@@ -3532,11 +3532,11 @@ const authorCommand = Command.make(
   'author',
   {
     dir: workspaceDirFlag,
-    request: Flag.string('request').pipe(
+    request: Flag.String('request').pipe(
       Flag.withDescription('What the spec should accomplish, as the user asked it.'),
     ),
     notes: Flag.optional(
-      Flag.string('notes').pipe(Flag.withDescription('Extra constraints for the authoring run.')),
+      Flag.String('notes').pipe(Flag.withDescription('Extra constraints for the authoring run.')),
     ),
     verbose: verboseFlag,
   },
@@ -3569,17 +3569,17 @@ const executeCommand = Command.make(
     dir: workspaceDirFlag,
     name: Flag.optional(nameFlag),
     phase: Flag.optional(
-      Flag.string('phase').pipe(
+      Flag.String('phase').pipe(
         Flag.withDescription('Restrict the session to one phase id (default: the active phase).'),
       ),
     ),
     focus: Flag.optional(
-      Flag.string('focus').pipe(
+      Flag.String('focus').pipe(
         Flag.withDescription('Extra direction to steer into every worker this session.'),
       ),
     ),
     mode: Flag.optional(
-      Flag.string('mode').pipe(
+      Flag.String('mode').pipe(
         Flag.withDescription(`Interaction mode: ${MODE_HINT}. Default: guided.`),
       ),
     ),
@@ -3617,7 +3617,7 @@ const sizingConfigCommand = Command.make(
   {
     dir: workspaceDirFlag,
     scope: Flag.optional(
-      Flag.string('scope').pipe(
+      Flag.String('scope').pipe(
         Flag.withDescription(
           `Config layer to size: ${SIZING_SCOPES.join(', ')}. Omit to let the prompt ask.`,
         ),
@@ -3625,17 +3625,17 @@ const sizingConfigCommand = Command.make(
     ),
     name: Flag.optional(nameFlag),
     phase: Flag.optional(
-      Flag.string('phase').pipe(
+      Flag.String('phase').pipe(
         Flag.withDescription('Phase whose sizes are overridden (requires --name).'),
       ),
     ),
     focus: Flag.optional(
-      Flag.string('focus').pipe(
+      Flag.String('focus').pipe(
         Flag.withDescription('Extra direction to steer into the sizing run.'),
       ),
     ),
     mode: Flag.optional(
-      Flag.string('mode').pipe(
+      Flag.String('mode').pipe(
         Flag.withDescription(`Interaction mode: ${MODE_HINT}. Default: guided.`),
       ),
     ),
@@ -3672,15 +3672,15 @@ const listCommand = Command.make(
   {
     dir: dirFlag,
     status: Flag.optional(
-      Flag.string('status').pipe(
+      Flag.String('status').pipe(
         Flag.withDescription(`Comma-separated states to keep: ${LIST_STATUSES.join(', ')}.`),
       ),
     ),
-    pending: Flag.boolean('pending').pipe(
+    pending: Flag.Boolean('pending').pipe(
       Flag.withDescription('Keep only unfinished specs (state is not `complete`).'),
       Flag.withDefault(false),
     ),
-    verbose: Flag.boolean('verbose').pipe(
+    verbose: Flag.Boolean('verbose').pipe(
       Flag.withDescription('Show the root path.'),
       Flag.withDefault(false),
     ),
@@ -3857,7 +3857,7 @@ const doctorCommand = Command.make(
   'doctor',
   {
     dir: workspaceDirFlag,
-    check: Flag.boolean('check').pipe(
+    check: Flag.Boolean('check').pipe(
       Flag.withDescription(
         'Report only; never write. Exits non-zero when a skill or prompt is not current.',
       ),

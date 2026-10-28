@@ -16,18 +16,44 @@ mf-skills <subcommand> …      # the binary — scriptable, real exit codes
 ```
 
 Subcommands: `doctor`, `list`, `show`, `verify [name]`, `create`, `modify`,
-`delete`. `list` accepts `--status valid|invalid` to keep only skills whose
-`SKILL.md` passes or fails verification. `verify` checks each `SKILL.md`
+`delete`, `sync`. `list` accepts `--status valid|invalid` to keep only skills
+whose `SKILL.md` passes or fails verification. `verify` checks each `SKILL.md`
 against its ownership class (`Skill.verifySkillFile`): montflow skills
 (`montflow-*`) must satisfy the full standard, while generic and vendored
 skills only have to exist. It exits non-zero when a skill fails. Store commands
-accept `--dir` to target a workspace root other than the working directory.
+accept `--dir` to target a workspace root other than the working directory;
+`sync` instead takes `--source`/`--target` (see below).
 
 Agentic create, modify, and transform dispatch a native OpenCode session
 instead of running a child agent inline: the command names the session id and
 unwinds, the session writes the `SKILL.md`, and a settle watcher re-encodes the
 result and reports the outcome. Agents call them through `skill_create` /
 `skill_modify`.
+
+## Sync
+
+`sync` copies every public skill from a montflow checkout into a workspace:
+
+```bash
+mf-skills sync --source <checkout> --target <workspace-root> [--check] [--verbose]
+```
+
+- `--target` is the workspace root; skills land in `<root>/.agents/skills/<name>/`.
+  Project-local only — never install machine-wide.
+- `--source` names the checkout to copy from, defaulting to the montflow
+  checkout the package runs from.
+- `--from` and `--dir` remain aliases for `--source` and `--target`; when both
+  a canonical flag and its alias are given, the canonical one wins.
+- Public means the `SKILL.md` frontmatter does not carry
+  `metadata.internal: true`. Internal skills (e.g. `syncing-skills`) are
+  skipped, reported, and never copied.
+- Each skill directory is copied whole — `SKILL.md`, plus `CHANGELOG.md`,
+  `GATES.md`, and any other file when present — and unrelated skills at the
+  target are left untouched.
+- Outcomes are grouped as `Created`, `Updated`, `Unchanged`, and `Skipped`,
+  with a count line; `--check` adds `✓ current.` or a `✗ drift` line.
+- `--check` reports the same outcomes, writes nothing, and exits `1` on drift.
+- `--verbose` adds one line per file under the skill it came from.
 
 ## Packaged skills
 

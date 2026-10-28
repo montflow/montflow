@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.3.0] - 2026-10-26
+
+### Changed
+
+- Reads the local overlay `.agents/references/registry.md` alongside the built-in Reference Registry, so locally registered references are found without editing the skill file that sync overwrites.
+
 ## [2.2.0] - 2026-07-24
 
 ### Added

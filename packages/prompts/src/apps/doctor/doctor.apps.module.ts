@@ -1,4 +1,7 @@
-import { NodeFileSystem, NodePath } from '@effect/platform-node';
+// Subpath imports keep the OpenCode plugin loader happy: the package root
+// re-exports `NodeClusterHttp`, which deep-imports `effect/dist/...`.
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import * as NodePath from '@effect/platform-node/NodePath';
 import { Effect, FileSystem, Layer, Path } from 'effect';
 import { EMBEDDED_SKILL_PAYLOAD } from './embedded-payload.generated.js';
 

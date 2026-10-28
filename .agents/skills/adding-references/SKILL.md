@@ -3,7 +3,7 @@ name: adding-references
 description: Adds and manages third-party reference source code as cloned git repositories. Use when the user wants to add reference source code for local reading or analysis.
 id: e85e16a365fa6115
 author: Daniel Montilla
-version: 2.2.0
+version: 2.3.0
 license: MIT
 dependencies:
   - executing-skills
@@ -51,11 +51,17 @@ ls -R .agents/references/<reference-name>
 
 ### Register Reference
 
-Add the reference to `.agents/skills/finding-references/SKILL.md` table:
+Append the reference to `.agents/references/registry.md` — a local,
+gitignored file that `mf-skills sync` never writes. Create it with its header
+when missing:
 
-```markdown
-| <reference-name> | .agents/references/<reference-name> | <repo-url> |
+```bash
+REGISTRY=.agents/references/registry.md
+[ -f "$REGISTRY" ] || printf '# Reference Registry\n\n| Reference | Path | URL |\n| --- | --- | --- |\n' > "$REGISTRY"
+printf '| <reference-name> | .agents/references/<reference-name> | <repo-url> |\n' >> "$REGISTRY"
 ```
+
+`finding-references` reads this overlay alongside its built-in table.
 
 ## 3. Maintain Reference
 
@@ -85,6 +91,6 @@ cd .agents/references/<reference-name> && git reset --hard HEAD && cd -
 |--------|---------|
 | Add reference | `git clone <url> .agents/references/<name>` |
 | Verify | `ls -R .agents/references/<name>` |
-| Register reference | Edit `.agents/skills/finding-references/SKILL.md` |
+| Register reference | Append a row to `.agents/references/registry.md` |
 | Update to latest | `cd .agents/references/<name> && git pull` |
 | Reset reference | `cd .agents/references/<name> && git reset --hard HEAD && cd -` |

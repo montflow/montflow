@@ -1,13 +1,42 @@
+// oxlint-disable-next-line montflow/no-node-platform-imports -- this TUI entry is the composition root for its plugin store.
+import { readdir } from 'node:fs/promises';
+// oxlint-disable-next-line montflow/no-node-platform-imports -- the TUI entry resolves its store path during host setup.
+import path from 'node:path';
 import type { TuiPlugin } from '@montflow/opencode';
-import { ID } from './server.js';
+import { registerPicker } from '@montflow/opencode/tui';
+import { ID, COMMAND_NAME } from './server.js';
 
-/**
- * OpenCode TUI plugin entry. The profiles surface is the server command
- * (`/mf-profiles`), native agent registration, and the `profile_execute` tool;
- * the Pi-era interactive menu is not ported. This face registers the plugin id
- * and mounts nothing — the host still loads both entrypoints from the package.
- */
+/** Profiles directory segments. */
+const PROFILES_DIR = ['.agents', '@montflow', 'profiles'] as const;
+
+const loadProfiles = async (directory: string): Promise<ReadonlyArray<string>> => {
+  const root = path.join(directory, ...PROFILES_DIR);
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const profiles: string[] = [];
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      profiles.push(entry.name);
+    }
+  }
+  return profiles.toSorted();
+};
+
 export default {
   id: ID,
-  setup: () => () => {},
+  setup: (context: any) => {
+    registerPicker(context, {
+      commandName: COMMAND_NAME,
+      title: 'Profiles',
+      description: 'Pick a profile',
+      group: 'Profiles',
+      loadItems: loadProfiles,
+      formatItem: (profile: string) => ({
+        title: profile,
+        value: profile,
+      }),
+      getInsertText: (profile: string) => profile,
+      forwardNonListToServer: true,
+    });
+    return () => {};
+  },
 } satisfies TuiPlugin;

@@ -149,7 +149,7 @@ const PANEL_DIRS = {
 
 /** Copy shown behind the install keybind per panel. */
 const INSTALL_HINTS = {
-  skills: 'npx skills add montflow/montflow -a pi -y',
+  skills: 'bun run --cwd <montflow>/packages/skills cli sync --target .',
   prompts: 'prompt packs land next',
   profiles: 'profile sync lands next',
 } satisfies Record<ExtensionPanel, string>;

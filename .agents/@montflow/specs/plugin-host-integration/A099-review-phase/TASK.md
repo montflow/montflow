@@ -1,0 +1,27 @@
+---
+id: A099
+name: review-phase
+type: review
+size: small
+originator: user
+depends-on:
+related-tasks:
+reviewer-profiles:
+status: complete
+---
+
+# Task A099: Review phase
+
+## Type: review
+
+## Description
+
+Run an independent adversarial review over phase A.
+
+## Requirements
+
+- Findings written to the phase review round.
+
+## Completion
+
+- [ ] Findings written and reviewed.

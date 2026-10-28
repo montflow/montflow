@@ -3,7 +3,7 @@ name: finding-references
 description: Finds, explores, and reports on third-party reference source code cloned into the project. Use when the user wants to examine reference code, find a specific reference package, or understand available reference dependencies.
 id: e0b85938c06a1fe9
 author: Daniel Montilla
-version: 2.2.0
+version: 2.3.0
 license: MIT
 dependencies:
   - executing-skills
@@ -28,7 +28,7 @@ Determine which reference or type of reference code the user needs based on thei
 
 ## 2. Locate Reference
 
-Search the `.agents/references/` directory for matching reference packages using Glob. Cross-reference with the Reference Registry in the Reference section below.
+Search the `.agents/references/` directory for matching reference packages using Glob. Read the local overlay `.agents/references/registry.md` when present, and cross-reference the Reference Registry in the Reference section below.
 
 ## 3. Clone Missing Reference (if needed)
 
@@ -51,7 +51,11 @@ If the user wants to read or analyze reference source, navigate to the reference
 
 # Reference
 
-> **⚠️ References are READ ONLY.** They are plain git clones included for local reference and analysis only. They are **not** dependencies of the monorepo, its packages, services, or applications. Do not modify reference files or import from them in production code.
+> **⚠️ References are READ ONLY.** They are plain git clones included for local reference and analysis only. They are **not** dependencies of the monorepo, its packages, services, or applications. Do not modify reference source files or import from them in production code. A montflow checkout used to run its `mf-*` CLIs is the one exception: `bun install` may write its untracked `node_modules`; source files stay read-only.
+
+Local additions are registered in `.agents/references/registry.md` by
+`adding-references`; read that overlay first. The table below lists the
+built-in known references.
 
 | Reference | Path | URL |
 |-----------|------|-----|

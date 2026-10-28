@@ -17,7 +17,7 @@ Not for `core`, `format`, `linting`, `stlx` — no CLI, different rules.
 | `profiles` | `mf-profiles` | `list`, `show`, `verify`, `create`, `modify`, `delete` |
 | `prompts` | `mf-prompts` | `doctor`, `list`, `inspect`, `execute`, `show`, `verify`, `render`, `create`, `modify`, `delete` |
 | `reviews` | `mf-reviews` | `doctor`, `list`, `show`, `verify`, `new` |
-| `skills` | `mf-skills` | `doctor`, `list`, `show`, `verify`, `create`, `modify`, `delete` |
+| `skills` | `mf-skills` | `doctor`, `list`, `show`, `verify`, `create`, `modify`, `delete`, `sync` |
 | `specs` | `mf-specs` | `doctor`, `check`, `status`, `state`, `next`, `list`, `create`, `author`, `execute`, `which`, `models`, `resolve`, `sizing`, `sizing-config` |
 
 `opencode` (the adapter) and `workflows` are libraries. No CLI.
@@ -47,15 +47,19 @@ Conform every `mf-*` binary to this contract.
 | `create` / `modify` / `delete` (`mf-reviews` uses `new`) | CRUD over store files | 1 on refusal |
 | `help` / `--help` | usage | 0 |
 
-Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`).
+Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`;
+`mf-skills`: `sync`).
 
 ### Flags
 
-- `--dir <path>` = **workspace root**. Every store derives from it: `<root>/.agents/@montflow/<domain>`, skills at `<root>/.agents/skills`. Default `process.cwd()`.
+- `--dir <path>` = **workspace root**. Every store derives from it: `<root>/.agents/@montflow/<domain>`, skills at `<root>/.agents/skills`. Default `process.cwd()`. Domain exceptions must say so in their section.
 - `doctor` reads the same root and installs/verifies `<root>/.agents/skills/`.
 - `--verbose` adds per-item detail; never hides failures. Default token-lean.
 - `--status valid|invalid` on `list` for file stores; lifecycle states on `list` for `mf-specs`.
 - `--check` on `doctor`: report-only, non-zero when unhealthy.
+- `--check` on `sync`: report-only, non-zero on drift.
+- `--source <path>` on `sync`: source checkout to copy from; `--from` is its alias.
+- `--target <path>` on `sync`: workspace root to write into; `--dir` is its alias. Canonical wins when both are given.
 - `--all` on `verify`: whole store.
 - Accept `--flag value` and `--flag=value`. Unknown flag → usage, exit 1.
 

@@ -126,8 +126,8 @@ export type LoadingFn = <A, E>(
 ) => Effect.Effect<A, E>;
 
 /**
- * Skill installer port the consuming extension injects (fetches missing
- * skills into the workspace store — `npx skills add montflow/montflow`).
+ * Skill installer port the consuming extension injects (syncs missing
+ * skills into the workspace store — `mf-skills sync --target <workspace root>`).
  */
 export type SkillInstaller = (names: ReadonlyArray<string>) => Effect.Effect<void, string>;
 

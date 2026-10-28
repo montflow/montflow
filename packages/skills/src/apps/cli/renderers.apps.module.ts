@@ -1,5 +1,6 @@
 import type { Skill } from '../../modules/index.js';
 import * as Doctor from '../doctor/index.js';
+import type * as Sync from '../sync/index.js';
 import type { VerifyReport } from './engines.apps.module.js';
 
 /**
@@ -68,6 +69,87 @@ export const verify = (
   );
   return lines.join('\n');
 };
+
+/** `3 skills`, `1 skill`. */
+const counted = (count: number, noun: string): string =>
+  `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+/**
+ * Every outcome in report order: the group heading, and the label its count
+ * uses in the footer. A write run says `Created`; the engine calls it `added`.
+ */
+const SYNC_GROUPS = [
+  { outcome: 'added', heading: 'Created', total: 'created' },
+  { outcome: 'updated', heading: 'Updated', total: 'updated' },
+  { outcome: 'unchanged', heading: 'Unchanged', total: 'unchanged' },
+  { outcome: 'skipped', heading: 'Skipped', total: 'skipped' },
+] as const;
+
+/**
+ * The footer: counts for the outcomes that are present, in group order, then
+ * the verdict the exit code agrees with. A write run has no verdict line: its
+ * `Synced` header and counts are the confirmation.
+ * @param result - result from `Sync.runSync`
+ * @returns the summary and verdict, newline-joined
+ */
+const syncFooter = (result: Sync.SyncResult): string => {
+  const totals = SYNC_GROUPS.map((group) => ({
+    total: group.total,
+    count: result.skills.filter((skill) => skill.outcome === group.outcome).length,
+  }))
+    .filter((entry) => entry.count > 0)
+    .map((entry) => `${entry.count} ${entry.total}`)
+    .join(' \u00b7 ');
+  if (!result.check) return totals;
+  return result.drifted
+    ? `${totals}\n\u2717 drift \u2014 ${counted(result.changed.length, 'skill')} would change.`
+    : `${totals}\n\u2713 current.`;
+};
+
+/**
+ * A `sync` report: a header naming both roots, one group per present outcome,
+ * then counts and (for `--check`) a verdict. `verbose` adds one line per file
+ * under the skill it came from. Both front ends render through here, so the
+ * same store state prints the same bytes.
+ * @param result - result from `Sync.runSync`
+ * @param options - per-file detail
+ * @returns the rendered report
+ */
+export const sync = (
+  result: Sync.SyncResult,
+  options: { readonly verbose?: boolean } = {},
+): string => {
+  const lines = [
+    `${result.check ? 'Checked' : 'Synced'} ${result.sourceRoot} \u2192 ${result.targetRoot}`,
+  ];
+  for (const group of SYNC_GROUPS) {
+    const skills = result.skills.filter((skill) => skill.outcome === group.outcome);
+    if (skills.length === 0) continue;
+    lines.push(`${group.heading} (${skills.length})`);
+    for (const skill of skills) {
+      lines.push(
+        skill.outcome === 'skipped'
+          ? `  ${skill.name} \u2014 ${skill.reason ?? 'internal'}`
+          : `  ${skill.name}`,
+      );
+      if (options.verbose === true) {
+        for (const file of skill.files) lines.push(`    ${file.file}: ${file.outcome}`);
+      }
+    }
+  }
+  if (result.skills.length === 0) lines.push('No skills in the source store.');
+  lines.push('', syncFooter(result));
+  return lines.join('\n');
+};
+
+/**
+ * The one-line fix after a `--check` run reports drift. Shared by both front
+ * ends so the invocation is always the caller's own typeable form.
+ * @param result - result from `Sync.runSync`
+ * @returns the refusal line
+ */
+export const syncRefusal = (result: Sync.SyncResult): string =>
+  `Re-run without --check to apply: ${result.invocation}`;
 
 /** Confirmation after a create. */
 export const created = (skill: Skill.Skill): string =>
