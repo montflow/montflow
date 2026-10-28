@@ -10,9 +10,16 @@ const base = { captureDeltas: false, captureBodies: false };
 
 const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 
+const lineOf = (
+  input: Event.IncomingInput,
+  settings: Event.Capture = base,
+  now = NOW,
+  hash = sha256,
+): Event.Line | undefined => Event.extract(input, settings, now, hash);
+
 Vitest.describe('Event.extract runtime', () => {
   Vitest.it('normalizes an allowlisted event to the stable line shape', () => {
-    const line = Event.extract(
+    const line = lineOf(
       {
         type: 'session.step.started',
         created: CREATED,
@@ -46,7 +53,7 @@ Vitest.describe('Event.extract runtime', () => {
 
   Vitest.it('skips types outside the allowlist', () => {
     Vitest.expect(
-      Event.extract(
+      lineOf(
         { type: 'filesystem.changed', created: CREATED, data: { sessionID: SESSION } },
         base,
         NOW,
@@ -60,15 +67,15 @@ Vitest.describe('Event.extract runtime', () => {
       created: CREATED,
       data: { sessionID: SESSION, assistantMessageID: 'msg_1', ordinal: 1, delta: 'hello' },
     };
-    Vitest.expect(Event.extract(delta, base, NOW)).toBeUndefined();
-    Vitest.expect(Event.extract(delta, { ...base, captureDeltas: true }, NOW)?.type).toBe(
+    Vitest.expect(lineOf(delta, base, NOW)).toBeUndefined();
+    Vitest.expect(lineOf(delta, { ...base, captureDeltas: true }, NOW)?.type).toBe(
       'session.text.delta',
     );
   });
 
   Vitest.it('hashes message bodies by default', () => {
     const text = 'compact this conversation';
-    const line = Event.extract(
+    const line = lineOf(
       {
         type: 'session.compaction.ended',
         created: CREATED,
@@ -90,7 +97,7 @@ Vitest.describe('Event.extract runtime', () => {
   });
 
   Vitest.it('keeps raw bodies when captureBodies is on', () => {
-    const line = Event.extract(
+    const line = lineOf(
       {
         type: 'session.compaction.ended',
         created: CREATED,
@@ -105,7 +112,7 @@ Vitest.describe('Event.extract runtime', () => {
 
   Vitest.it('keeps cost and token counts untouched', () => {
     const tokens = { input: 120, output: 30, reasoning: 0, cache: { read: 0, write: 0 } };
-    const line = Event.extract(
+    const line = lineOf(
       {
         type: 'session.step.ended',
         created: CREATED,
@@ -126,15 +133,113 @@ Vitest.describe('Event.extract runtime', () => {
 
   Vitest.it('skips an event with no usable session id', () => {
     Vitest.expect(
-      Event.extract({ type: 'session.idle', created: CREATED, data: { sessionID: 42 } }, base, NOW),
+      lineOf({ type: 'session.idle', created: CREATED, data: { sessionID: 42 } }, base, NOW),
     ).toBeUndefined();
     Vitest.expect(
-      Event.extract({ type: 'session.idle', created: CREATED, data: {} }, base, NOW),
+      lineOf({ type: 'session.idle', created: CREATED, data: {} }, base, NOW),
     ).toBeUndefined();
   });
 
   Vitest.it('falls back to the injected clock when the event has no created time', () => {
-    const line = Event.extract({ type: 'session.idle', data: { sessionID: SESSION } }, base, NOW);
+    const line = lineOf({ type: 'session.idle', data: { sessionID: SESSION } }, base, NOW);
     Vitest.expect(line?.ts).toBe(NOW);
+  });
+
+  Vitest.it('falls back to now for an out-of-range created timestamp', () => {
+    const line = lineOf(
+      { type: 'session.idle', created: 1e308, data: { sessionID: SESSION } },
+      base,
+      NOW,
+    );
+    Vitest.expect(line?.ts).toBe(NOW);
+  });
+
+  Vitest.it('redacts prompt-derived session text but keeps the project slug', () => {
+    const line = lineOf(
+      {
+        type: 'session.created',
+        created: CREATED,
+        data: {
+          sessionID: SESSION,
+          title: 'Debug the private customer export',
+          slug: 'telemetry',
+          metadata: { note: 'private' },
+        },
+      },
+      base,
+      NOW,
+    );
+    Vitest.expect(line?.payload['title']).toMatchObject({ redacted: true });
+    Vitest.expect(line?.payload['metadata']).toMatchObject({ redacted: true });
+    Vitest.expect(line?.payload['slug']).toBe('telemetry');
+  });
+
+  Vitest.it('keeps delta text readable when captureDeltas is on', () => {
+    const line = lineOf(
+      {
+        type: 'session.text.delta',
+        created: CREATED,
+        data: { sessionID: SESSION, assistantMessageID: 'msg_1', ordinal: 0, delta: 'hello' },
+      },
+      { captureDeltas: true, captureBodies: false },
+      NOW,
+    );
+    Vitest.expect(line?.payload['delta']).toBe('hello');
+  });
+
+  Vitest.it('uses the injected hash seam', () => {
+    const line = lineOf(
+      {
+        type: 'session.compaction.ended',
+        created: CREATED,
+        data: { sessionID: SESSION, text: 'secret' },
+      },
+      base,
+      NOW,
+      (text) => `h:${text.length}`,
+    );
+    Vitest.expect(line?.payload['text']).toStrictEqual({
+      redacted: true,
+      sha256: 'h:6',
+      bytes: 6,
+    });
+  });
+
+  Vitest.it('redacts every mapped body field by default', () => {
+    const cases = [
+      [
+        'session.tool.called',
+        { sessionID: SESSION, id: 'call_1', input: { filePath: '/tmp/private' }, executed: true },
+        'input',
+      ],
+      [
+        'session.tool.success',
+        { sessionID: SESSION, id: 'call_1', content: [{ type: 'text', text: 'private' }] },
+        'content',
+      ],
+      [
+        'session.inbox.enqueued',
+        { sessionID: SESSION, inboxID: 'msg_1', item: { text: 'private prompt' } },
+        'item',
+      ],
+      [
+        'permission.asked',
+        {
+          id: 'perm_1',
+          sessionID: SESSION,
+          action: 'write',
+          resources: ['/tmp/private'],
+          message: 'Allow?',
+        },
+        'message',
+      ],
+    ] as const;
+    for (const [type, data, field] of cases) {
+      const line = lineOf({ type, created: CREATED, data }, base, NOW);
+      Vitest.expect(line?.payload[field]).toMatchObject({
+        redacted: true,
+        sha256: Vitest.expect.any(String),
+      });
+    }
   });
 });

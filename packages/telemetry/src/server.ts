@@ -3,6 +3,7 @@ import { Plugin } from '@opencode/plugin';
 import { homedir } from 'node:os';
 import type { Environment, RawOptions } from './modules/config/index.js';
 import { resolve } from './modules/config/index.js';
+import { sha256 } from './modules/digest/index.js';
 import type { IncomingInput } from './modules/event/index.js';
 import { consume, ID } from './modules/plugin/index.js';
 import { make, once, prune } from './modules/store/index.js';
@@ -54,25 +55,35 @@ const readEnvironment = (): Environment => {
  * subscription appending NDJSON; the viewer is spawned only when the command
  * runs. Nothing listens and nothing is spawned at setup.
  */
+const log = (message: string): void => {
+  console.error(`[${ID}] ${message}`);
+};
+
 export const setup = async (context: HostSlice): Promise<Cleanup> => {
+  const notifySetup = once(log);
+  const notifyPrune = once(log);
+  const notifyWrite = once(log);
   try {
     const settings = resolve(context.options, readEnvironment());
-    const notify = once((message) => {
-      console.error(`[${ID}] ${message}`);
-    });
-    const writer = make({ directory: settings.directory, notify });
-    prune({
-      directory: settings.directory,
-      retentionDays: settings.retentionDays,
-      now: clock(),
-      notify,
-    });
+    const writer = make({ directory: settings.directory, notify: notifyWrite });
+    try {
+      prune({
+        directory: settings.directory,
+        retentionDays: settings.retentionDays,
+        now: clock(),
+        notify: notifyPrune,
+      });
+    } catch (cause) {
+      notifyPrune(`prune failed: ${String(cause)}`);
+    }
     const controller = new AbortController();
     const done = consume(
       context.event.subscribe({ signal: controller.signal }),
       writer,
       settings,
       clock,
+      sha256,
+      notifyWrite,
     );
     let dispose: (() => Promise<void>) | undefined;
     if (context.command !== undefined) {
@@ -88,17 +99,29 @@ export const setup = async (context: HostSlice): Promise<Cleanup> => {
           });
         });
         dispose = registration.dispose;
-      } catch {
-        // A host without command support still collects.
+      } catch (cause) {
+        notifySetup(`command registration failed: ${String(cause)}`);
       }
     }
+    let closed = false;
     return async () => {
-      controller.abort();
-      await done;
-      writer.close();
-      await dispose?.();
+      if (closed) return;
+      closed = true;
+      try {
+        controller.abort();
+        await done;
+        writer.close();
+      } catch (cause) {
+        notifySetup(`cleanup failed: ${String(cause)}`);
+      }
+      try {
+        await dispose?.();
+      } catch (cause) {
+        notifySetup(`cleanup failed: ${String(cause)}`);
+      }
     };
-  } catch {
+  } catch (cause) {
+    notifySetup(`setup failed: ${String(cause)}`);
     return () => {};
   }
 };

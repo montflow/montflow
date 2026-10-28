@@ -2,6 +2,7 @@
 import * as Fs from 'node:fs';
 import { Option, Schema } from 'effect';
 import type { JsonObject, Line } from '../event/index.js';
+import { file } from '../path/index.js';
 import * as Sqlite from '../sqlite/index.js';
 import * as Tail from '../tail/index.js';
 
@@ -141,7 +142,7 @@ export const run = async (options: {
     db.exec(SCHEMA);
     for (const name of Fs.readdirSync(options.directory)) {
       if (!name.endsWith('.ndjson')) continue;
-      const path = `${options.directory.replace(/\/+$/u, '')}/${name}`;
+      const path = file(options.directory, name);
       const size = Fs.statSync(path).size;
       const previous = db.all('SELECT offset FROM files WHERE path = ?', [name])[0];
       const offset = previous === undefined ? 0 : num(previous['offset']);

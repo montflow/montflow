@@ -109,4 +109,41 @@ Vitest.describe('Server.setup runtime', () => {
       Vitest.expect(disposed).toBe(true);
     });
   });
+
+  Vitest.it('keeps collecting when retentionDays is negative', async () => {
+    await withTemp(async (directory) => {
+      const context = {
+        ...contextOf(directory, recorded()),
+        options: { directory, retentionDays: -5 },
+      };
+      const cleanup = await setup(context);
+      if (cleanup !== undefined) await cleanup();
+      const rows = readFileSync(join(directory, '2026-10-28.ndjson'), 'utf8')
+        .split('\n')
+        .filter((row) => row.length > 0);
+      Vitest.expect(rows).toHaveLength(11);
+    });
+  });
+
+  Vitest.it('is idempotent and swallows a rejecting command dispose', async () => {
+    await withTemp(async (directory) => {
+      const context: HostSlice = {
+        ...contextOf(directory, []),
+        command: {
+          transform: async (callback) => {
+            callback({ add: () => {} });
+            return {
+              dispose: async () => {
+                throw new Error('host dispose failed');
+              },
+            };
+          },
+        },
+      };
+      const cleanup = await setup(context);
+      if (cleanup === undefined) throw new Error('expected cleanup');
+      await Vitest.expect(cleanup()).resolves.toBeUndefined();
+      await Vitest.expect(cleanup()).resolves.toBeUndefined();
+    });
+  });
 });

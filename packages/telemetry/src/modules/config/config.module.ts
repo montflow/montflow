@@ -1,5 +1,6 @@
 import { Option, Schema } from 'effect';
 import type { JsonValue } from '../event/index.js';
+import { trim } from '../path/index.js';
 
 /** The process environment slice the default store location needs. */
 export interface Environment {
@@ -18,40 +19,46 @@ export interface Settings {
 /** Days of NDJSON history kept before `setup` prunes the rest. */
 export const DEFAULT_RETENTION_DAYS = 30;
 
-/** Matches the host's untyped plugin options; decoding narrows it. */
-const Raw = Schema.Struct({
-  directory: Schema.optional(Schema.String),
-  retentionDays: Schema.optional(Schema.Number),
-  captureDeltas: Schema.optional(Schema.Boolean),
-  captureBodies: Schema.optional(Schema.Boolean),
-});
+/** Upper bound for retention; keeps the date math inside the Date range. */
+export const MAX_RETENTION_DAYS = 3650;
 
-const decode = Schema.decodeUnknownOption(Raw);
+/** Plugin options as the host hands them over: an untyped record. */
+export type RawOptions = Readonly<Record<string, JsonValue | undefined>>;
 
-const stripTrailingSlashes = (value: string): string => value.replace(/\/+$/u, '');
+const decodeString = Schema.decodeUnknownOption(Schema.String);
+const decodeNumber = Schema.decodeUnknownOption(Schema.Number);
+const decodeBoolean = Schema.decodeUnknownOption(Schema.Boolean);
 
 /** `$XDG_DATA_HOME/opencode/telemetry`, else `$HOME/.local/share/opencode/telemetry`. */
 export const defaultDirectory = (environment: Environment): string => {
   const xdg = environment.XDG_DATA_HOME;
   if (xdg !== undefined && xdg.length > 0) {
-    return `${stripTrailingSlashes(xdg)}/opencode/telemetry`;
+    return `${trim(xdg)}/opencode/telemetry`;
   }
-  return `${stripTrailingSlashes(environment.HOME)}/.local/share/opencode/telemetry`;
+  return `${trim(environment.HOME)}/.local/share/opencode/telemetry`;
 };
 
-/** Plugin options as the host hands them over: an untyped record. */
-export type RawOptions = Readonly<Record<string, JsonValue | undefined>>;
-
 /**
- * Decode plugin options over the defaults. Invalid option shapes fall back to
- * the defaults wholesale: telemetry configuration must never fail a session.
+ * Decode plugin options one key at a time so one malformed value cannot
+ * discard the others. Invalid values fall back to their defaults: telemetry
+ * configuration must never fail a session.
  */
 export const resolve = (options: RawOptions, environment: Environment): Settings => {
-  const raw: Schema.Schema.Type<typeof Raw> = Option.getOrUndefined(decode(options)) ?? {};
+  const directory = Option.getOrUndefined(decodeString(options['directory']));
+  const retention = Option.getOrUndefined(decodeNumber(options['retentionDays']));
   return {
-    directory: raw.directory ?? defaultDirectory(environment),
-    retentionDays: raw.retentionDays ?? DEFAULT_RETENTION_DAYS,
-    captureDeltas: raw.captureDeltas ?? false,
-    captureBodies: raw.captureBodies ?? false,
+    directory:
+      directory !== undefined && directory.length > 0
+        ? trim(directory)
+        : defaultDirectory(environment),
+    retentionDays:
+      retention !== undefined &&
+      Number.isSafeInteger(retention) &&
+      retention >= 0 &&
+      retention <= MAX_RETENTION_DAYS
+        ? retention
+        : DEFAULT_RETENTION_DAYS,
+    captureDeltas: Option.getOrUndefined(decodeBoolean(options['captureDeltas'])) ?? false,
+    captureBodies: Option.getOrUndefined(decodeBoolean(options['captureBodies'])) ?? false,
   };
 };

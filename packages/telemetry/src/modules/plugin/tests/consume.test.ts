@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as Config from '../../config/index.js';
+import { sha256 } from '../../digest/index.js';
 import type { IncomingInput, Line } from '../../event/index.js';
 import * as Store from '../../store/index.js';
 import * as Plugin from '../index.js';
@@ -35,6 +36,13 @@ const linesOf = (path: string): Line[] =>
     .filter((row) => row.length > 0)
     .map((row) => JSON.parse(row));
 
+const consume = (
+  events: AsyncIterable<IncomingInput>,
+  writer: Store.Writer,
+  resolved: Config.Settings,
+  notify: (message: string) => void = () => {},
+) => Plugin.consume(events, writer, resolved, () => 0, sha256, notify);
+
 const withTemp = async (run: (directory: string) => Promise<void>): Promise<void> => {
   const directory = mkdtempSync(join(tmpdir(), 'telemetry-plugin-'));
   try {
@@ -49,7 +57,7 @@ Vitest.describe('Plugin.consume runtime', () => {
     await withTemp(async (directory) => {
       const events = recorded();
       const writer = Store.make({ directory, notify: () => {} });
-      await Plugin.consume(stream(events), writer, settings({ directory }), () => 0);
+      await consume(stream(events), writer, settings({ directory }));
       writer.close();
       const written = linesOf(join(directory, '2026-10-28.ndjson'));
       Vitest.expect(written.map((line) => line.type)).toStrictEqual(
@@ -68,12 +76,7 @@ Vitest.describe('Plugin.consume runtime', () => {
   Vitest.it('persists deltas when captureDeltas is enabled', async () => {
     await withTemp(async (directory) => {
       const writer = Store.make({ directory, notify: () => {} });
-      await Plugin.consume(
-        stream(recorded()),
-        writer,
-        settings({ directory, captureDeltas: true }),
-        () => 0,
-      );
+      await consume(stream(recorded()), writer, settings({ directory, captureDeltas: true }));
       writer.close();
       const written = linesOf(join(directory, '2026-10-28.ndjson'));
       Vitest.expect(written).toHaveLength(12);
@@ -91,26 +94,31 @@ Vitest.describe('Plugin.consume runtime', () => {
         },
       });
       await Vitest.expect(
-        Plugin.consume(stream(recorded()), writer, settings({ directory }), () => 0),
+        consume(stream(recorded()), writer, settings({ directory })),
       ).resolves.toBeUndefined();
       Vitest.expect(writer.disabled).toBe(true);
     });
   });
 
-  Vitest.it('does not reject when the subscription fails mid-stream', async () => {
+  Vitest.it('reports a stream failure once and does not reject', async () => {
     await withTemp(async (directory) => {
       const writer = Store.make({ directory, notify: () => {} });
+      const [first] = recorded();
+      if (first === undefined) throw new Error('fixture is empty');
       const broken: AsyncIterable<IncomingInput> = {
         async *[Symbol.asyncIterator]() {
-          yield recorded()[0]!;
+          yield first;
           throw new Error('socket closed');
         },
       };
+      const reported: string[] = [];
       await Vitest.expect(
-        Plugin.consume(broken, writer, settings({ directory }), () => 0),
+        consume(broken, writer, settings({ directory }), (message) => reported.push(message)),
       ).resolves.toBeUndefined();
       writer.close();
       Vitest.expect(linesOf(join(directory, '2026-10-28.ndjson'))).toHaveLength(1);
+      Vitest.expect(reported).toHaveLength(1);
+      Vitest.expect(reported[0]).toContain('socket closed');
     });
   });
 });

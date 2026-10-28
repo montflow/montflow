@@ -3,6 +3,7 @@ import * as Fs from 'node:fs';
 import { Option, Schema } from 'effect';
 import type { Line } from '../event/index.js';
 import * as Fold from '../fold/index.js';
+import { file } from '../path/index.js';
 import * as Tail from '../tail/index.js';
 
 /** Rows painted at once; the page keeps this many recycled elements. */
@@ -51,7 +52,7 @@ const live = (
   const next: Record<string, number> = {};
   const lines: Line[] = [];
   for (const name of dayFiles(directory)) {
-    const path = `${directory.replace(/\/+$/u, '')}/${name}`;
+    const path = file(directory, name);
     if (fromEnd) {
       next[name] = Tail.fileSize(path);
       continue;
@@ -255,7 +256,7 @@ const json = <T>(value: T): Response => Response.json(value);
  */
 export const start = async (options: ViewerOptions): Promise<Viewer> => {
   const directory = options.directory;
-  const database = `${directory.replace(/\/+$/u, '')}/telemetry.db`;
+  const database = file(directory, 'telemetry.db');
   try {
     await Fold.run({ directory, database });
   } catch {

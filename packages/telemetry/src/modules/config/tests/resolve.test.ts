@@ -46,13 +46,25 @@ Vitest.describe('Config.resolve runtime', () => {
     });
   });
 
-  Vitest.it('falls back to defaults on a malformed options record', () => {
-    const malformed: Config.RawOptions = JSON.parse('{"retentionDays":"thirty"}');
+  Vitest.it('keeps valid options when one value is malformed', () => {
+    const malformed: Config.RawOptions = JSON.parse(
+      '{"directory":"/tmp/telemetry-tests","retentionDays":"thirty","captureDeltas":"yes"}',
+    );
     Vitest.expect(Config.resolve(malformed, environment)).toStrictEqual({
-      directory: '/home/tester/.local/share/opencode/telemetry',
+      directory: '/tmp/telemetry-tests',
       retentionDays: Config.DEFAULT_RETENTION_DAYS,
       captureDeltas: false,
       captureBodies: false,
     });
+  });
+
+  Vitest.it('rejects negative, infinite, and fractional retention windows', () => {
+    for (const retentionDays of [-5, Number.POSITIVE_INFINITY, Number.NaN, 1.5, 1e10]) {
+      Vitest.expect(Config.resolve({ retentionDays }, environment).retentionDays).toBe(
+        Config.DEFAULT_RETENTION_DAYS,
+      );
+    }
+    Vitest.expect(Config.resolve({ retentionDays: 0 }, environment).retentionDays).toBe(0);
+    Vitest.expect(Config.resolve({ retentionDays: 30 }, environment).retentionDays).toBe(30);
   });
 });

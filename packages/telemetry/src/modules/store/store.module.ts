@@ -1,8 +1,12 @@
 // oxlint-disable-next-line montflow/no-node-platform-imports -- NDJSON append is the ingest path and must stay a bare `node:fs` write: the server plugin has no Effect layer to provide FileSystem to, and a native/async adapter would add weight the spec forbids.
 import * as Fs from 'node:fs';
 import type { Line } from '../event/index.js';
+import { file } from '../path/index.js';
 
 const DAY_MS = 86_400_000;
+
+/** Largest timestamp a JavaScript Date can represent, in milliseconds. */
+const MAX_TS = 8_640_000_000_000_000;
 
 /** Write syscall seam; tests inject a throwing writer. */
 export type Write = (fd: number, data: Uint8Array) => number;
@@ -39,10 +43,12 @@ export const once = (log: (message: string) => void): ((message: string) => void
   };
 };
 
-const dayOf = (ts: number): string => new Date(ts).toISOString().slice(0, 10);
+const dayOf = (ts: number): string | undefined => {
+  if (!Number.isFinite(ts) || Math.abs(ts) > MAX_TS) return undefined;
+  return new Date(ts).toISOString().slice(0, 10);
+};
 
-const fileOf = (directory: string, day: string): string =>
-  `${directory.replace(/\/+$/u, '')}/${day}.ndjson`;
+const fileOf = (directory: string, day: string): string => file(directory, `${day}.ndjson`);
 
 /**
  * A SIGKILL during `write` can leave a torn final line. Truncate it before the
@@ -126,13 +132,27 @@ export const make = (options: WriterOptions): Writer => {
     if (disabled) return;
     try {
       const nextDay = dayOf(line.ts);
+      if (nextDay === undefined) return;
       if (fd === undefined || nextDay !== day) {
         closeHandle(true);
         open(nextDay);
       }
       if (fd === undefined) return;
-      write(fd, encoder.encode(`${JSON.stringify(line)}\n`));
+      const data = encoder.encode(`${JSON.stringify(line)}\n`);
+      let offset = 0;
+      while (offset < data.byteLength) {
+        const written = write(fd, data.subarray(offset));
+        if (written <= 0) throw new Error('write returned no bytes');
+        offset += written;
+      }
     } catch (cause) {
+      if (fd !== undefined) {
+        try {
+          repairTail(fd);
+        } catch {
+          // The tail is already suspect; the writer is about to be disabled.
+        }
+      }
       fail(`write failed: ${String(cause)}`);
     }
   };
@@ -161,8 +181,20 @@ export const make = (options: WriterOptions): Writer => {
  * alone. Failure to prune is reported once and otherwise ignored.
  */
 export const prune = (options: PruneOptions): void => {
+  if (
+    !Number.isSafeInteger(options.retentionDays) ||
+    options.retentionDays < 0 ||
+    options.retentionDays > 3650
+  ) {
+    options.notify(`prune skipped: invalid retentionDays ${String(options.retentionDays)}`);
+    return;
+  }
   if (!Fs.existsSync(options.directory)) return;
   const cutoff = dayOf(options.now - options.retentionDays * DAY_MS);
+  if (cutoff === undefined) {
+    options.notify(`prune skipped: invalid clock ${String(options.now)}`);
+    return;
+  }
   let entries: string[];
   try {
     entries = Fs.readdirSync(options.directory);

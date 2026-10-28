@@ -7,6 +7,7 @@ import {
   readFileSync,
   rmSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -106,6 +107,50 @@ Vitest.describe('Store.make runtime', () => {
       Vitest.expect(written.map((entry) => entry.sessionID)).toStrictEqual(['ses_old', 'ses_new']);
     });
   });
+
+  Vitest.it('completes a line when the sink accepts fewer bytes per call', async () => {
+    await withTemp((directory) => {
+      const writer = Store.make({
+        directory,
+        notify: () => {},
+        write: (fd, data) => writeSync(fd, data.subarray(0, Math.min(5, data.byteLength))),
+      });
+      writer.append(line(OCT_28));
+      writer.close();
+      Vitest.expect(linesOf(join(directory, '2026-10-28.ndjson'))).toHaveLength(1);
+    });
+  });
+
+  Vitest.it(
+    'disables the writer and truncates the torn line when the sink writes nothing',
+    async () => {
+      await withTemp((directory) => {
+        const reported: string[] = [];
+        const writer = Store.make({
+          directory,
+          notify: (message) => reported.push(message),
+          write: () => 0,
+        });
+        writer.append(line(OCT_28));
+        Vitest.expect(writer.disabled).toBe(true);
+        Vitest.expect(reported).toHaveLength(1);
+        Vitest.expect(linesOf(join(directory, '2026-10-28.ndjson'))).toStrictEqual([]);
+      });
+    },
+  );
+
+  Vitest.it('skips an out-of-range timestamp instead of disabling the writer', async () => {
+    await withTemp((directory) => {
+      const writer = Store.make({ directory, notify: () => {} });
+      writer.append({ ...line(OCT_28), ts: 1e308 });
+      writer.append(line(OCT_28, 'ses_ok'));
+      writer.close();
+      Vitest.expect(writer.disabled).toBe(false);
+      Vitest.expect(
+        linesOf(join(directory, '2026-10-28.ndjson')).map((entry) => entry.sessionID),
+      ).toStrictEqual(['ses_ok']);
+    });
+  });
 });
 
 Vitest.describe('Store.prune runtime', () => {
@@ -144,6 +189,25 @@ Vitest.describe('Store.prune runtime', () => {
         }),
       ).not.toThrow();
       Vitest.expect(reported).toStrictEqual([]);
+    });
+  });
+
+  Vitest.it('refuses a negative or non-finite retention window', async () => {
+    await withTemp((directory) => {
+      const path = join(directory, '2026-10-28.ndjson');
+      writeFileSync(path, '');
+      const reported: string[] = [];
+      for (const retentionDays of [-1, Number.POSITIVE_INFINITY, 1e10]) {
+        Store.prune({
+          directory,
+          retentionDays,
+          now: OCT_28,
+          notify: (message) => reported.push(message),
+        });
+      }
+      Vitest.expect(existsSync(path)).toBe(true);
+      Vitest.expect(reported).toHaveLength(3);
+      Vitest.expect(reported.every((message) => message.includes('prune skipped'))).toBe(true);
     });
   });
 });
