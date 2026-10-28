@@ -1,6 +1,6 @@
 ## Stage 0: Verification
 
-- [ ] formatting passes
-- [ ] linting passes
-- [ ] typecheck passes
-- [ ] tests pass
+- [x] formatting passes
+- [x] linting passes
+- [x] typecheck passes
+- [x] tests pass
