@@ -23,7 +23,8 @@ flow:
 1. Resolve the source checkout — a local clone, or a reference registered by
    [adding-references](../adding-references/SKILL.md)
 2. Sync the public skills into the target workspace with `mf-skills sync`
-3. Verify with `--check`, then report each skill's outcome
+3. Verify with `--check` (or update with `--force` when a skill diverged), then
+   report each skill's outcome
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md)
 > skill before running this pipeline. It governs how skills are loaded,
@@ -84,7 +85,8 @@ bun run --cwd "$S/packages/skills" cli sync --source "$S" --target "$PWD"
 ```
 
 Sync is idempotent and leaves unrelated skills untouched. The report groups
-skills as `Created`, `Updated`, `Unchanged`, and `Skipped` (internal), with a
+skills as `Created`, `Updated`, `Unchanged`, `Refused` (diverged without
+`--force`), and `Skipped` (internal), with a
 count line beneath.
 
 ## 4. Verify
@@ -94,7 +96,14 @@ bun run --cwd "$S/packages/skills" cli sync --source "$S" --target "$PWD" --chec
 ```
 
 `--check` reports the same outcomes, writes nothing, and exits `1` on drift. A
-non-zero exit means the target is behind the source — re-run step 3.
+non-zero exit means the target is behind the source — re-run step 3. Each
+outcome is `current`, `stale`, `diverged`, or `unmanaged`; a `diverged` skill
+was edited locally, so review the named files before passing `--force`.
+
+Sync writes `.agents/skills/.montflow-sync.json` recording the source path,
+remote, commit, ref, version, and a version plus hash per skill. `mf-skills
+version --dir <workspace>` reports it. The full update path, including
+re-syncing a store, is [guides/updating.md](../../../guides/updating.md).
 
 ## 5. Report
 

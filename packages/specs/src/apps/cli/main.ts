@@ -1,13 +1,12 @@
 #!/usr/bin/env bun
-import { NodeServices } from '@effect/platform-node';
-import { Effect } from 'effect';
-import { Command } from 'effect/unstable/cli';
-import { rootCommand } from './cli.apps.module.js';
+import { Cli } from '@montflow/version';
+import { PACKAGE_IDENTITY, PACKAGE_ROOT, rootCommand } from './cli.apps.module.js';
 
-const program = Command.run(rootCommand, { version: '0.0.1' }).pipe(
-  Effect.provide(NodeServices.layer),
-);
-
-program.pipe(Effect.runPromise).catch(() => {
-  process.exitCode = 1;
-});
+/**
+ * `mf-specs` binary entry.
+ *
+ * The version comes from this package's embedded manifest and the command
+ * tree owns its `version` subcommand; everything else — argv, help, platform
+ * layers, exit codes — lives in `@montflow/version`.
+ */
+Cli.run({ identity: PACKAGE_IDENTITY, packageRoot: PACKAGE_ROOT, command: rootCommand });
