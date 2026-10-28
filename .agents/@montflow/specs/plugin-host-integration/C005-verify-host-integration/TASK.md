@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: C004
 related-tasks: C001, C002, C003, C004
-status: pending
+status: done
 ---
 
 # Task C005: verify-host-integration
