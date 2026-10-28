@@ -39,6 +39,14 @@ export interface PickerConfig<T> {
     args: string,
     context: PickerContext,
   ) => Promise<string | undefined> | string | undefined;
+  /**
+   * Resolve the text inserted after a pick. Use it when the text depends on
+   * dialogs, such as filling a template's variables. Return undefined to cancel.
+   */
+  readonly resolveInsertText?: (
+    item: T,
+    context: PickerContext,
+  ) => Promise<string | undefined> | string | undefined;
 }
 
 export interface PickerContext {
@@ -98,6 +106,12 @@ export interface PickerContext {
           readonly description?: string;
         }>;
       }): Promise<Value | undefined>;
+      prompt(options: {
+        readonly title: string;
+        readonly description?: string;
+        readonly placeholder?: string;
+        readonly value?: string;
+      }): Promise<string | undefined>;
     };
     readonly toast: {
       show(options: {
@@ -178,7 +192,11 @@ export const registerPicker = <T>(context: PickerContext, config: PickerConfig<T
       },
     });
     if (chosen === undefined) return;
-    insertText(context, config.getInsertText(chosen));
+    const text =
+      config.resolveInsertText === undefined
+        ? config.getInsertText(chosen)
+        : await config.resolveInsertText(chosen, context);
+    if (text !== undefined) insertText(context, text);
   };
 
   const forward = async (text: string): Promise<void> => {
