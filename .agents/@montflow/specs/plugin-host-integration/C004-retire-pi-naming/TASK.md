@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: C003
 related-tasks: C001
-status: in-progress
+status: done
 ---
 
 # Task C004: retire-pi-naming
