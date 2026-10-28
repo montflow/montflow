@@ -3,7 +3,7 @@ name: montflow-create-specs
 description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per task (TASK.md, MEMORY.md, GATES.md) — by scaffolding with `mf-specs create` then filling in the rules below. Use when an agent must create a spec directly, without dispatching a session.
 id: 6ebf45d24cb3d3a1
 author: Daniel Montilla
-version: 2.7.0
+version: 2.8.0
 license: MIT
 dependencies:
   - executing-skills
@@ -159,6 +159,21 @@ binary, `/specs sizing-config` or the `spec_sizing` tool in the host — and the
 Never type a model id or an effort into a config by hand: a valid id is only one
 `mf-specs models` prints, and an effort is only one that model's known variants
 list contains. `variants unknown` and `variants none` both mean no effort.
+
+Omitting `--scope` leaves the layer **open**: the wizard asks which one to write.
+The flags only narrow an inferred layer — `--name <spec>` implies the spec layer,
+`--name <spec> --phase <PHASE>` implies that phase — while an explicit `--scope`
+wins and refuses flags it cannot honour (`--scope repo` takes neither,
+`--scope spec` takes no `--phase`). `sizing-config --name` alone never pins a
+layer.
+
+Prove a generated config in this order, scoped to what was touched:
+
+1. `mf-specs models --verify` (add `--name <spec>` for the spec layer) — every
+   entry must be a catalogue model with a known variant.
+2. `mf-specs check --name <kebab-name>` — zero issues.
+3. `mf-specs sizing --name <kebab-name> --task <id> --human` for one task per
+   explicit target — the winning layer must be the one you wrote.
 
 ## 6. Follow the Phase Rules
 

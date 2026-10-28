@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.0] - 2026-10-28
+
+### Added
+
+- Open-versus-fixed scope: omitting `--scope` leaves the layer open and the wizard asks; `--name` implies the spec layer, `--name --phase` implies that phase, and an explicit `--scope` wins and refuses flags it cannot honour
+- The proof loop for a generated config: `models --verify` for the touched scope, then `check`, then `sizing --task <id> --human` for one task per explicit target
+
 ## [2.7.0] - 2026-10-26
 
 ### Added
