@@ -1,5 +1,5 @@
 import { Console, Effect, Option } from 'effect';
-import { Argument, Command, Flag } from 'effect/unstable/cli';
+import { Argument, Command, Flag } from 'effect/cli';
 import packageJson from '../../../package.json';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
@@ -18,11 +18,11 @@ const opt = (value: Option.Option<string>): string | undefined => Option.getOrUn
 
 /** Optional string flag. */
 const optionalString = (name: string, description: string) =>
-  Flag.string(name).pipe(Flag.withDescription(description), Flag.optional);
+  Flag.String(name).pipe(Flag.withDescription(description), Flag.optional);
 
 /** Boolean flag, defaulting to false. */
 const optionalBoolean = (name: string, description: string) =>
-  Flag.boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
+  Flag.Boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
 
 /** Workspace-root override, on every command. */
 const dirFlag = optionalString('dir', 'Workspace root. Defaults to the working directory.');
@@ -133,7 +133,7 @@ const listCommand = Command.make(
 const showCommand = Command.make(
   'show',
   {
-    name: Argument.string('name').pipe(
+    name: Argument.String('name').pipe(
       Argument.withDescription('Reference slug (the entry directory name).'),
     ),
     dir: dirFlag,
@@ -144,7 +144,7 @@ const showCommand = Command.make(
 const verifyCommand = Command.make(
   'verify',
   {
-    name: Argument.string('name').pipe(
+    name: Argument.String('name').pipe(
       Argument.withDescription('Reference slug. Omit to verify the whole store.'),
       Argument.optional,
     ),
@@ -174,7 +174,7 @@ const verifyCommand = Command.make(
 const addCommand = Command.make(
   'add',
   {
-    url: Argument.string('url').pipe(Argument.withDescription('https repository URL to clone.')),
+    url: Argument.String('url').pipe(Argument.withDescription('https repository URL to clone.')),
     name: optionalString('name', 'Slug to register as. Defaults to the URL’s final segment.'),
     ref: optionalString('ref', 'Branch, tag, or commit pin.'),
     purpose: optionalString('purpose', 'One sentence explaining why the reference exists.'),
@@ -201,7 +201,7 @@ const addCommand = Command.make(
 const updateCommand = Command.make(
   'update',
   {
-    target: Argument.string('target').pipe(
+    target: Argument.String('target').pipe(
       Argument.withDescription('Reference slug or https URL. Omit when using --all.'),
       Argument.optional,
     ),
@@ -244,7 +244,7 @@ const updateCommand = Command.make(
 const syncCommand = Command.make(
   'sync',
   {
-    name: Argument.string('name').pipe(
+    name: Argument.String('name').pipe(
       Argument.withDescription('Reference slug. Omit when using --all.'),
       Argument.optional,
     ),
@@ -275,7 +275,7 @@ const syncCommand = Command.make(
 const statusCommand = Command.make(
   'status',
   {
-    name: Argument.string('name').pipe(
+    name: Argument.String('name').pipe(
       Argument.withDescription('Reference slug. Omit to report every entry.'),
       Argument.optional,
     ),
@@ -306,7 +306,7 @@ const statusCommand = Command.make(
 const removeCommand = Command.make(
   'remove',
   {
-    name: Argument.string('name').pipe(Argument.withDescription('Reference slug to unregister.')),
+    name: Argument.String('name').pipe(Argument.withDescription('Reference slug to unregister.')),
     'keep-clone': optionalBoolean(
       'keep-clone',
       'Unregister the entry but keep its clone directory.',
