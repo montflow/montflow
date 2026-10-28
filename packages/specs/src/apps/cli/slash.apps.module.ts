@@ -1,4 +1,6 @@
 import { Clock, Effect } from 'effect';
+import type { BuildInfo } from '@montflow/version';
+import manifest from '../../../package.json' with { type: 'json' };
 import { PHASE_PATTERN, type Spec, isValidName, parseSpecFile } from '../../modules/spec/index.js';
 import {
   type Analysis,
@@ -32,6 +34,15 @@ import {
   warningCount,
 } from '../../modules/verify/index.js';
 import { SpecStore } from '../../services/index.js';
+
+/** This package's root: three levels up from `src/apps/cli`. */
+export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
+
+/** Identity embedded from this package's manifest, so a compiled binary keeps it. */
+export const PACKAGE_IDENTITY = {
+  name: manifest.name,
+  version: manifest.version,
+} satisfies BuildInfo.GeneratedIdentity;
 
 /** Spec store directory, relative to the workspace root. */
 export const DEFAULT_ROOT = '.agents/@montflow/specs';
@@ -1282,10 +1293,10 @@ const parseSlashArgs = (args: string): SlashArgs => {
 export type ResolveSlashDir = (dir: string) => string;
 
 /**
- * Run the slash-command form registered as the OpenCode `/mf-specs` command
+ * Run the slash-command form registered as the OpenCode `/specs` command
  * (`src/server.ts`, through `ports.command.register`). Never renders through
- * the CLI; returns the report so the server can post `report.output` into the
- * invoking session, or its failure text when the run fails.
+ * the CLI; returns the report for the caller to log — the server writes
+ * `report.output` with `Effect.logInfo` and any failure with `Effect.logError`.
  * @param args - raw slash-command args
  * @param root - default spec root, already resolved against the plugin directory
  * @param resolveDir - resolver for a `--dir` value (identity by default)

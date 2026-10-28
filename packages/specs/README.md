@@ -7,12 +7,8 @@ text injected into dispatched sessions.
 ## CLI
 
 ```bash
-# from anywhere in the repo (workspace bin link via the root devDependency)
-bunx mf-specs check --name ship-spec
-npx mf-specs check --name ship-spec
-
-# or by package script
-bun run --cwd packages/specs cli check
+# from the checkout; there is no npm or global install
+bun run --cwd packages/specs cli check --name ship-spec
 ```
 
 - `check` — verifies the whole spec root (default
@@ -51,12 +47,10 @@ in-place|worktree`. The generated tree passes `check`; edit it to carry the
   when missing. Idempotent; resolves the repo root from the working
   directory.
 
-`npx`/`bunx` resolve the workspace `bin` link inside this repo (the root
-`devDependencies` entry is what creates it). From a registry
-(`npx @montflow/specs` / `bunx @montflow/specs`) the package
-must be published first — it is `private` today. The `bin` is a `.ts`
-entry with `#!/usr/bin/env bun`, so registry use needs Bun on the
-machine; a Node build would be required for `npx` without Bun.
+The `mf-*` CLIs are run from a git checkout, never installed globally or from
+npm. `version` reports the checkout and package identity; `--version` prints the
+same package version. See
+[guides/updating.md](../../guides/updating.md) to update it.
 
 Built with `effect/cli`. Sample specs for trying the binary
 live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),

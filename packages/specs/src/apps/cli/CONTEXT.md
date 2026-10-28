@@ -50,8 +50,8 @@ agents and humans:
 
 ```bash
 # from anywhere in the repo (workspace bin link created by the root devDependency)
-bunx mf-specs check
-npx mf-specs check --name ship-spec --verbose
+bun run --cwd packages/specs cli check
+bun run --cwd packages/specs cli mf-specs check --name ship-spec --verbose
 
 # or by package script
 bun run --cwd packages/specs cli check
@@ -61,10 +61,9 @@ bun run --cwd packages/specs cli list --pending
 bun run --cwd packages/specs cli doctor
 ```
 
-From a registry, `npx @montflow/specs` / `bunx @montflow/specs`
-require publishing (the package is `private` today). The `bin` is a `.ts`
-entry with `#!/usr/bin/env bun`, so it needs Bun on the machine; a Node
-target build would be required for `npx` without Bun.
+The CLI is run from this checkout only; there is no npm or global install.
+`version` reports the checkout and package identity. The `bin` is a `.ts` entry
+with `#!/usr/bin/env bun`, so Bun must be on the machine.
 
 In OpenCode, the same engines are exposed as `/mf-specs` by
 `src/server.ts` (`check [--name <spec>] [--verbose]` /

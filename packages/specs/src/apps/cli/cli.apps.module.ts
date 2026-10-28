@@ -1,10 +1,14 @@
 import { Console, Effect, Option } from 'effect';
+import * as Cli from '@montflow/version/cli';
 import { CliError, Command, Flag } from 'effect/cli';
 import { SpecStore } from '../../services/index.js';
 import type { DoctorResult } from '../doctor/index.js';
 import { runDoctorAt } from '../doctor/index.js';
+export { PACKAGE_IDENTITY, PACKAGE_ROOT } from './slash.apps.module.js';
 import {
   DEFAULT_CONCURRENCY,
+  PACKAGE_IDENTITY,
+  PACKAGE_ROOT,
   LIST_STATUSES,
   check,
   checkExitCode,
@@ -269,7 +273,7 @@ const listCommand = Command.make(
  * @param result - doctor outcome
  * @returns human-readable report
  */
-const renderDoctor = (result: DoctorResult): string => {
+export const renderDoctor = (result: DoctorResult): string => {
   const names = result.skills.map((skill) => skill.name).join(', ');
   const head =
     result.status === 'installed'
@@ -328,5 +332,6 @@ export const rootCommand = Command.make('mf-specs').pipe(
     createCommand,
     migrateCommand,
     doctorCommand,
+    Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
 );

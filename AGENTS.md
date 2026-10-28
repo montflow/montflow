@@ -25,13 +25,15 @@ bun@1.3.13 — lockfile is source of truth
 - lint: `turbo lint:check` / `turbo lint:fix`
 - format: `turbo format:check` / `turbo format:fix`
 - verify all mf artifacts/invariants: `bun run mf:check`
+- verify release metadata (fixed version, tags, changelogs): `bun run mf:check:release`
 - pack plugins for Git install: `bun run pack:plugins`
 - gate (full): `bun run mf:gate`
 - gate (fast, no test suite): `bun run mf:gate:fast`
 - install pre-push hook: `bun run hooks:install`
 
 Script names follow `[tool]:[action]:[scope]`: `mf:check:<scope>` runs one
-scope, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
+scope, `mf:check:release-and-skills` is the CI alias for the release + skills
+pair, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
 
 ## Verification
 
@@ -63,13 +65,14 @@ scope, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
 - `mf:gate:fast` drops the test suite and the smoke. The Lefthook
   `pre-push` hook runs it; install once per clone with
   `bun run hooks:install`, bypass with `git push --no-verify` or `LEFTHOOK=0`.
-- Utility verifies, each runnable alone: `mf:check:skills`,
-  `:prompts`, `:specs`, `:profiles`, `:reviews`, `:naming`. The first five
-  verify this repo's own artifacts (`.agents/skills`,
-  `.agents/@montflow/prompts`, `.agents/@montflow/specs`,
-  `.agents/@montflow/profiles`, `.agents/@montflow/reviews`) plus
-  packaged-skill freshness; `:naming` fails when a live file carries a retired
-  pre-OpenCode name (frozen history and the migration constant excepted).
+- Utility verifies, each runnable alone: `mf:check:release`,
+  `mf:check:skills`, `:prompts`, `:specs`, `:profiles`, `:reviews`, `:naming`.
+  They verify release metadata (CLI versions, tags, changelogs) and this repo's
+  own artifacts (`.agents/skills`, `.agents/@montflow/prompts`,
+  `.agents/@montflow/specs`, `.agents/@montflow/profiles`,
+  `.agents/@montflow/reviews`) plus packaged-skill freshness; `:naming` fails
+  when a live file carries a retired pre-OpenCode name (frozen history and the
+  migration constant excepted).
 - `release.yml` is separate: it gates publishing, not pushes, and keeps its own
   per-package conditions.
 

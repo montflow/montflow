@@ -39,11 +39,6 @@ const ALLOWED_LINES: ReadonlyArray<{ readonly file: string; readonly line: RegEx
     file: 'apps/workspace/src/services/prompts/prompts.services.module.ts',
     line: /LEGACY_PROMPTS_DIR = \['\.agents', '@montflow', 'pi-prompts'\]/,
   },
-  {
-    // Third-party reference repository name, not ours.
-    file: '.agents/skills/finding-references/SKILL.md',
-    line: /pi-subagents/,
-  },
 ];
 
 /** Below this many tracked files the scan is not trustworthy. */

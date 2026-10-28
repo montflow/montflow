@@ -42,7 +42,8 @@
     "@effect/platform-node": "4.0.1",
     "@montflow/opencode": "workspace:*",
     "@montflow/profiles": "workspace:*",
-    "@montflow/specs": "workspace:*"
+    "@montflow/specs": "workspace:*",
+    "@montflow/version": "workspace:*"
   },
   "devDependencies": {
     "@effect/vitest": "4.0.1",

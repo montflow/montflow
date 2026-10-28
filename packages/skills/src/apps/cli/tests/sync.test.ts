@@ -241,8 +241,8 @@ Vitest.describe('Renderers.sync', () => {
           [
             `Checked ${sandbox.checkout} \u2192 ${sandbox.workspace}`,
             'Unchanged (2)',
-            '  alpha',
-            '  beta',
+            '  alpha \u2014 current',
+            '  beta \u2014 current',
             '',
             '2 unchanged',
             '\u2713 current.',
@@ -261,9 +261,9 @@ Vitest.describe('Renderers.sync', () => {
           [
             `Checked ${sandbox.checkout} \u2192 ${sandbox.workspace}`,
             'Updated (1)',
-            '  alpha',
+            '  alpha \u2014 diverged (SKILL.md; manifest @unknown)',
             'Unchanged (1)',
-            '  beta',
+            '  beta \u2014 current',
             '',
             '1 updated \u00b7 1 unchanged',
             '\u2717 drift \u2014 1 skill would change.',
@@ -392,7 +392,7 @@ Vitest.describe('slash sync end to end', () => {
             [
               `Checked ${sandbox.checkout} \u2192 ${sandbox.workspace}`,
               'Updated (1)',
-              '  alpha',
+              '  alpha \u2014 diverged (SKILL.md; manifest @unknown)',
               '    SKILL.md: updated',
               '',
               '1 updated',
@@ -527,7 +527,11 @@ Vitest.describe('mf-skills sync binary', () => {
           Vitest.expect(drift.stdout).toContain('Re-run without --check to apply: mf-skills sync');
           Vitest.expect((yield* Effect.promise(() => readFile(target))).equals(before)).toBe(true);
 
-          Vitest.expect((yield* Effect.sync(() => runBinary(args))).status).toBe(0);
+          const refused = yield* Effect.sync(() => runBinary(args));
+          Vitest.expect(refused.status).toBe(1);
+          Vitest.expect(refused.stdout).toContain('Refused (1)');
+          Vitest.expect(refused.stdout).toContain('diverged');
+          Vitest.expect((yield* Effect.sync(() => runBinary([...args, '--force']))).status).toBe(0);
           const current = yield* Effect.sync(() => runBinary([...args, '--check']));
           Vitest.expect(current.status).toBe(0);
           Vitest.expect(current.stdout).toContain('✓ current.');
@@ -923,6 +927,7 @@ Vitest.describe('sync front-end parity', () => {
       source: '/tmp/checkout',
       target: '/tmp/work',
       check: true,
+      force: false,
       verbose: true,
     });
   });
@@ -937,6 +942,7 @@ Vitest.describe('sync front-end parity', () => {
       source: '/tmp/checkout',
       target: '/tmp/work',
       check: true,
+      force: false,
       verbose: true,
     });
   });
@@ -949,6 +955,7 @@ Vitest.describe('sync front-end parity', () => {
       source: '/tmp/checkout',
       target: '/tmp/work',
       check: true,
+      force: false,
       verbose: true,
     });
     Vitest.expect(Slash.parseCliArgs('sync --from=/tmp/checkout --dir=/tmp/work')).toStrictEqual({
@@ -956,6 +963,7 @@ Vitest.describe('sync front-end parity', () => {
       source: '/tmp/checkout',
       target: '/tmp/work',
       check: false,
+      force: false,
       verbose: false,
     });
   });
@@ -970,6 +978,7 @@ Vitest.describe('sync front-end parity', () => {
       source: '/canonical-source',
       target: '/canonical-target',
       check: false,
+      force: false,
       verbose: false,
     });
     // Reversed order: source/target still win over the aliases.
@@ -982,6 +991,7 @@ Vitest.describe('sync front-end parity', () => {
       source: '/canonical-source',
       target: '/canonical-target',
       check: false,
+      force: false,
       verbose: false,
     });
     // An empty canonical flag is absent, so the alias still applies.
@@ -992,6 +1002,7 @@ Vitest.describe('sync front-end parity', () => {
       source: '/alias-source',
       target: '/alias-target',
       check: false,
+      force: false,
       verbose: false,
     });
   });
@@ -1006,6 +1017,7 @@ Vitest.describe('sync front-end parity', () => {
       source: '/tmp/checkout',
       target: '/tmp/work',
       check: false,
+      force: false,
       verbose: false,
     });
     Vitest.expect(Slash.parseCliArgs('sync --check false --verbose true')).toStrictEqual({
@@ -1013,6 +1025,7 @@ Vitest.describe('sync front-end parity', () => {
       source: undefined,
       target: undefined,
       check: false,
+      force: false,
       verbose: true,
     });
     Vitest.expect(Slash.parseCliArgs('sync --check true')).toStrictEqual({
@@ -1020,6 +1033,7 @@ Vitest.describe('sync front-end parity', () => {
       source: undefined,
       target: undefined,
       check: true,
+      force: false,
       verbose: false,
     });
   });
@@ -1047,6 +1061,7 @@ Vitest.describe('sync front-end parity', () => {
       source: undefined,
       target: undefined,
       check: false,
+      force: false,
       verbose: false,
     });
     // A path flag with no value is `Missing value for flag` on the binary.
