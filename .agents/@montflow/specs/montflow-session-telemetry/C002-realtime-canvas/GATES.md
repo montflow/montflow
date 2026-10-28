@@ -3,7 +3,7 @@
 - [x] formatting passes (`bun run --cwd packages/telemetry format:check` — 44 files)
 - [x] linting passes (`bun run --cwd packages/telemetry lint:check` — no warnings)
 - [x] typecheck passes (`bun run --cwd packages/telemetry ts:check`)
-- [x] tests pass (`bun run --cwd packages/telemetry test` — 168 tests: 152 vitest + 16 bun)
+- [x] tests pass (`bun run --cwd packages/telemetry test` — 172 tests: 156 vitest + 16 bun)
 
 ## Stage 1: Realtime growth
 

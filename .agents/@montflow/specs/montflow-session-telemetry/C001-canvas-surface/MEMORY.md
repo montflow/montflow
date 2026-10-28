@@ -122,3 +122,6 @@ baseline stays only as a fallback for the row/table view; it is not the trace.
   not a missing measurement.
 - The 40 canvas labels are static; MSDF/LOD text is a C002 implementation
   detail, not a C001 spike result.
+- The matrix pairs hybrid warm (177ms) with all-canvas cold (528ms). Hybrid
+  cold is 563ms; both meet the 1000ms gate, but the warm-vs-cold pairing is
+  not apples-to-apples and is called out rather than hidden.

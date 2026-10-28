@@ -136,7 +136,27 @@ for (let i = 0; i < 40; i += 1) {
 }
 const metrics = await send('Performance.getMetrics');
 const heap = metrics.metrics?.find((metric) => metric.name === 'JSHeapUsedSize')?.value;
-console.log(JSON.stringify({ ready, errors, followAfterPan, followAfterResume, detailVisible, pan, append: { before, after, liveMs: liveMs === null ? null : Math.round(liveMs) }, heapMb: Math.round((heap / 1048576) * 10) / 10 }));
+const result = {
+  ready,
+  errors,
+  followAfterPan,
+  followAfterResume,
+  detailVisible,
+  pan,
+  append: { before, after, liveMs: liveMs === null ? null : Math.round(liveMs) },
+  heapMb: Math.round((heap / 1048576) * 10) / 10,
+};
+const failures: string[] = [];
+if (ready === null) failures.push('page did not reach 20k spans');
+if ((ready?.firstPaintMs ?? Infinity) > 1000) failures.push('first paint over 1000ms');
+if ((pan?.p95 ?? Infinity) > 20) failures.push('pan p95 over 20ms');
+if ((pan?.max ?? Infinity) > 50) failures.push('pan max over 50ms');
+if (liveMs === null || liveMs > 1000) failures.push('live append over 1000ms');
+if (result.heapMb > 50) failures.push('heap over 50MB');
+if (followAfterResume !== 'following' || !detailVisible) failures.push('follow-tail/inspector state failed');
+if ((errors as unknown[]).length > 0) failures.push('page errors');
+console.log(JSON.stringify({ ...result, failures }));
+if (failures.length > 0) process.exitCode = 1;
 
 socket.close();
 chrome.kill();

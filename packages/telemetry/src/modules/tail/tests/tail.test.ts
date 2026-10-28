@@ -57,3 +57,24 @@ Vitest.describe('Tail.read runtime', () => {
     });
   });
 });
+
+Vitest.describe('Tail.fingerprint runtime', () => {
+  Vitest.it('is stable across appends and changes when the folded prefix changes', async () => {
+    await withFile((path) => {
+      writeFileSync(path, `${row('ses_a', 1)}\n`);
+      const before = Tail.fingerprint(path, Buffer.byteLength(`${row('ses_a', 1)}\n`, 'utf8'));
+      Vitest.expect(before).not.toBe('');
+      writeFileSync(path, `${row('ses_b', 2)}\n`, { flag: 'a' });
+      Vitest.expect(
+        Tail.fingerprint(
+          path,
+          before.length === 0 ? 0 : Buffer.byteLength(`${row('ses_a', 1)}\n`, 'utf8'),
+        ),
+      ).toBe(before);
+      writeFileSync(path, `${row('ses_c', 3)}\n`);
+      Vitest.expect(
+        Tail.fingerprint(path, Buffer.byteLength(`${row('ses_a', 1)}\n`, 'utf8')),
+      ).not.toBe(before);
+    });
+  });
+});

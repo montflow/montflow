@@ -57,10 +57,18 @@ const keyOf = (value: string | undefined): string =>
   value === undefined ? 'unknown' : value.toLowerCase();
 
 /** Resolve a provider id; unknown providers get a neutral mark. */
-export const providerIcon = (providerID: string | undefined): Icon =>
-  PROVIDERS[keyOf(providerID)] ??
-  PROVIDERS['unknown'] ??
-  icon('unknown', 'Provider', '•', '#8b95a5');
+export const providerIcon = (providerID: string | undefined): Icon => {
+  const known = PROVIDERS[keyOf(providerID)];
+  if (known !== undefined) return known;
+  const glyph =
+    providerID === undefined || providerID.length === 0 ? '•' : providerID.charAt(0).toUpperCase();
+  return {
+    ...(PROVIDERS['unknown'] ?? icon('unknown', 'Provider', '•', '#8b95a5')),
+    glyph,
+    label: providerID ?? 'Provider',
+    svg: svg(glyph, '#8b95a5'),
+  };
+};
 
 /** Resolve a tool name; unknown tools get a neutral mark. */
 export const toolIcon = (name: string | undefined): Icon =>

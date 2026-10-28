@@ -121,6 +121,38 @@ Vitest.describe('Fold.run runtime', () => {
     });
   });
 
+  Vitest.it('detects a larger rewrite that keeps the first line', async () => {
+    await withStore(async (directory) => {
+      const path = seed(directory);
+      const database = join(directory, 'telemetry.db');
+      await Fold.run({ directory, database });
+      const first = JSON.stringify({
+        v: 1,
+        ts: 1,
+        type: 'session.created',
+        sessionID: 'ses_fixture',
+        payload: { sessionID: 'ses_fixture', slug: 'bench' },
+      });
+      const steps = Array.from({ length: 40 }, (_, index) =>
+        JSON.stringify({
+          v: 1,
+          ts: 2 + index,
+          type: 'session.idle',
+          sessionID: 'ses_fixture',
+          payload: {},
+        }),
+      );
+      writeFileSync(
+        path,
+        `${[first, ...steps].join('\n')}
+`,
+      );
+      await Fold.run({ directory, database });
+      Vitest.expect(await Fold.spans(database, 'ses_fixture')).toHaveLength(41);
+      Vitest.expect((await Fold.sessions(database))[0]?.spanCount).toBe(41);
+    });
+  });
+
   Vitest.it('detects a same-size or larger rewrite via the file fingerprint', async () => {
     await withStore(async (directory) => {
       const path = seed(directory);

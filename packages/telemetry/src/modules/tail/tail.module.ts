@@ -28,16 +28,22 @@ const parse = (row: string): Line | undefined => {
 };
 
 /** Prefix fingerprint: changes when a file is rewritten, stable across appends. */
-export const fingerprint = (path: string): string => {
+export const fingerprint = (path: string, bytes: number): string => {
   try {
+    if (bytes < 16) return '';
     const fd = Fs.openSync(path, 'r');
     try {
       const size = Fs.fstatSync(fd).size;
-      if (size < 64) return '';
-      const length = 64;
-      const buffer = Buffer.alloc(length);
-      if (length > 0) Fs.readSync(fd, buffer, 0, length, 0);
-      return createHash('sha256').update(buffer).digest('hex');
+      if (bytes > size) return '';
+      const window = Math.min(bytes, 64 * 1024);
+      const head = Buffer.alloc(window);
+      Fs.readSync(fd, head, 0, window, 0);
+      const tail = Buffer.alloc(window);
+      Fs.readSync(fd, tail, 0, window, Math.max(0, bytes - window));
+      const hash = createHash('sha256');
+      hash.update(head);
+      if (bytes > window) hash.update(tail);
+      return hash.digest('hex');
     } finally {
       Fs.closeSync(fd);
     }

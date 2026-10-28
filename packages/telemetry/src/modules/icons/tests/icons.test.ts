@@ -11,6 +11,7 @@ Vitest.describe('Icons.resolve runtime', () => {
 
   Vitest.it('falls back deterministically for unknown identities', () => {
     Vitest.expect(providerIcon('acme').id).toBe('unknown');
+    Vitest.expect(providerIcon('acme').glyph).toBe('A');
     Vitest.expect(providerIcon(undefined).id).toBe('unknown');
     Vitest.expect(toolIcon('nope').id).toBe('unknown');
     Vitest.expect(toolIcon(undefined).id).toBe('unknown');

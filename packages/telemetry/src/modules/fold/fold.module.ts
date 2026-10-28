@@ -212,9 +212,9 @@ export const run = async (options: {
       const size = Fs.statSync(path).size;
       db.exec('BEGIN IMMEDIATE');
       try {
-        const previous = db.all('SELECT offset FROM files WHERE path = ?', [name])[0];
+        const previous = db.all('SELECT offset, fingerprint FROM files WHERE path = ?', [name])[0];
         let offset = previous === undefined ? 0 : num(previous['offset']);
-        const current = Tail.fingerprint(path);
+        const current = Tail.fingerprint(path, offset);
         const previousPrint = previous === undefined ? '' : (text(previous['fingerprint']) ?? '');
         if (
           size < offset ||
@@ -238,7 +238,7 @@ export const run = async (options: {
         }
         db.run(
           'INSERT INTO files (path, offset, fingerprint) VALUES (?, ?, ?) ON CONFLICT(path) DO UPDATE SET offset = excluded.offset, fingerprint = excluded.fingerprint',
-          [name, tail.nextOffset, current],
+          [name, tail.nextOffset, Tail.fingerprint(path, tail.nextOffset)],
         );
         db.exec('COMMIT');
         files += 1;

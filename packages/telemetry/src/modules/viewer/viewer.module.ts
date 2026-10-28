@@ -61,24 +61,27 @@ const live = (
   directory: string,
   cursors: Record<string, number>,
   fingerprints: Map<string, string>,
+  bases: Map<string, number>,
 ) => {
   const next: Record<string, number> = {};
   const lines: Line[] = [];
+  const resetSessions = new Set<string>();
   let reset = false;
   for (const name of dayFiles(directory)) {
     const path = file(directory, name);
-    const current = Tail.fingerprint(path);
-    const rewritten =
-      current !== '' && fingerprints.has(name) && fingerprints.get(name) !== current;
-    fingerprints.set(name, current);
+    const current = Tail.fingerprint(path, bases.get(name) ?? 0);
+    const stored = fingerprints.get(name);
+    const rewritten = current !== '' && stored !== undefined && stored !== '' && stored !== current;
+    if (current !== '') fingerprints.set(name, current);
     const cursor = rewritten ? 0 : Math.max(0, cursors[name] ?? 0);
     const shrunk = Tail.fileSize(path) < cursor;
     if (rewritten || shrunk) reset = true;
     const result = Tail.read(path, shrunk ? 0 : cursor);
     next[name] = result.nextOffset;
+    if (rewritten || shrunk) for (const line of result.lines) resetSessions.add(line.sessionID);
     lines.push(...result.lines);
   }
-  return { lines, cursors: next, reset };
+  return { lines, cursors: next, reset, resetSessions: [...resetSessions] };
 };
 
 /** JSON safe to embed inside a `<script>` element. */
@@ -115,7 +118,7 @@ export const page = (sessionID: string | undefined): string => `<!doctype html>
   <main>
     <header><strong id="title">live</strong><input id="filter" placeholder="filter spans" /><button id="follow">following</button><span id="totals"></span></header>
     <div id="trace" tabindex="0"><div id="tip" hidden></div><div id="empty" class="empty">No telemetry yet. Run a session and reopen /telemetry.</div></div>
-    <div id="detail" hidden><button id="close-detail">close</button><button id="copy-detail">copy</button><img id="detail-icon" width="14" height="14" alt="" style="vertical-align:middle;margin-left:8px" /><pre id="detail-body"></pre></div>
+    <div id="detail" role="dialog" aria-label="Span detail" tabindex="-1" hidden><button id="close-detail">close</button><button id="copy-detail">copy</button><img id="detail-icon" width="14" height="14" alt="" style="vertical-align:middle;margin-left:8px" /><pre id="detail-body"></pre></div>
   </main>
 </div>
 <script type="module">
@@ -151,6 +154,7 @@ let zoom = 1;
 let viewStart = 0;
 let follow = true;
 let foldError = null;
+let historyError = null;
 let selected = -1;
 let seeded = false;
 let polling = false;
@@ -211,6 +215,7 @@ const toolNameOf = (line) => {
   const payload = payloadOf(line);
   return typeof payload.name === 'string' ? payload.name : typeof payload.tool === 'string' ? payload.tool : undefined;
 };
+const svgFor = (glyph, color) => 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" rx="3" fill="' + color + '"/><text x="8" y="12" text-anchor="middle" font-family="monospace" font-size="10" fill="#0f1115">' + glyph + '</text></svg>');
 const iconOf = (line) => {
   if (laneOf(line.type) === 'tool') {
     const key = (toolNameOf(line) || 'unknown').toLowerCase();
@@ -220,7 +225,7 @@ const iconOf = (line) => {
   const key = (provider || 'unknown').toLowerCase();
   if (ICONS.providers[key] !== undefined) return ICONS.providers[key];
   const glyph = provider === undefined || provider.length === 0 ? '•' : provider.charAt(0).toUpperCase();
-  return { ...ICONS.providers.unknown, glyph, label: provider || 'Provider' };
+  return { ...ICONS.providers.unknown, glyph, svg: svgFor(glyph, '#8b95a5'), label: provider || 'Provider' };
 };
 const startedAt = new Map();
 const durationOf = (line) => {
@@ -314,7 +319,17 @@ const refreshTotals = () => {
     if (tokens) { input += tokens.input || 0; output += tokens.output || 0; }
   }
   totalsEl.textContent = visibleCount + ' spans · $' + cost.toFixed(4) + ' · ' + input + ' in / ' + output + ' out';
-  emptyEl.hidden = spans.length !== 0;
+  emptyEl.hidden = visibleCount !== 0;
+  if (visibleCount === 0) {
+    const query = filterEl.value.trim();
+    emptyEl.textContent = query !== ''
+      ? 'No spans match this filter.'
+      : historyError !== null
+        ? 'History unavailable: ' + historyError
+        : foldError !== null
+          ? 'History unavailable: ' + foldError
+          : 'No telemetry yet. Run a session and reopen /telemetry.';
+  }
 };
 const fit = () => {
   const span = Math.max(1000, maxTs - minTs);
@@ -398,16 +413,17 @@ const loadSessions = async () => {
 };
 const openSession = async (sessionID) => {
   active = sessionID;
-  titleEl.textContent = sessionID + (foldError ? ' · history unavailable' : '');
+  titleEl.textContent = sessionID;
   detail.hidden = true;
   selected = -1;
   if (!history.has(sessionID)) {
     try {
       const rows = await (await fetch('/api/spans?session=' + encodeURIComponent(sessionID))).json();
       history.set(sessionID, rows.map((row) => ({ ...row, type: row.type, ts: row.ts, payload: row.payload || {}, model: row.model })));
+      historyError = null;
     } catch {
       history.delete(sessionID);
-      foldError = 'history request failed';
+      historyError = 'history request failed';
       titleEl.textContent = sessionID + ' · history unavailable';
     }
   }
@@ -423,7 +439,7 @@ const showTip = (view, x, y) => {
     (costOf(line) ? '\\ncost $' + costOf(line).toFixed(4) : '') +
     (tokens ? '\\ntokens ' + (tokens.input || 0) + ' in / ' + (tokens.output || 0) + ' out' : '') +
     (view.duration === null ? '' : '\\nduration ' + Math.round(view.duration) + 'ms') +
-    '\\npayload ' + JSON.stringify(payloadOf(line)).slice(0, 120);
+    '\\npayload keys ' + Object.keys(payloadOf(line)).join(', ');
   tip.replaceChildren();
   const image = document.createElement('img');
   image.src = icon.svg;
@@ -447,6 +463,7 @@ const showDetail = (view) => {
   detailIcon.alt = icon.label;
   detail.hidden = false;
   detailBody.textContent = JSON.stringify({ ...view.line, duration: view.duration }, null, 2);
+  detail.focus();
 };
 const pick = (x, y) => {
   let best = null;
@@ -478,12 +495,15 @@ const poll = async () => {
     if (!response.ok) return;
     const body = await response.json();
     Object.assign(cursors, body.cursors);
-    if (body.reset === true) {
-      liveBySession.clear();
-      if (active !== null) history.set(active, []);
+    const resetActive = body.reset === true && active !== null && (body.resetSessions ?? []).includes(active);
+    if (resetActive && active !== null) {
+      const activeLines = body.lines.filter((line) => line.sessionID === active);
+      history.set(active, []);
+      liveBySession.set(active, activeLines);
       rebuild();
     }
     for (const line of body.lines) {
+      if (resetActive && line.sessionID === active) continue;
       const buffer = liveBySession.get(line.sessionID) ?? [];
       buffer.push(line);
       liveBySession.set(line.sessionID, buffer);
@@ -515,7 +535,7 @@ trace.addEventListener('wheel', (event) => {
   const rect = trace.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const before = timeOf(x);
-  zoom = Math.min(50, Math.max(0.2, zoom * (event.deltaY < 0 ? 1.15 : 1 / 1.15)));
+  zoom = Math.min(50, Math.max(0.01, zoom * (event.deltaY < 0 ? 1.15 : 1 / 1.15)));
   viewStart = before - (x - GUTTER) / (baseScale * zoom);
   follow = false;
   followEl.textContent = 'paused';
@@ -547,12 +567,22 @@ trace.addEventListener('click', (event) => {
   const view = pick(event.clientX - rect.left, event.clientY - rect.top);
   if (view !== null) showDetail(view);
 });
-trace.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') { tip.hidden = true; detail.hidden = true; return; }
+const handleKey = (event) => {
+  if (event.key === 'Escape') { tip.hidden = true; detail.hidden = true; trace.focus(); return; }
   if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
   event.preventDefault();
   if (spans.length === 0) return;
-  selected = Math.max(0, Math.min(spans.length - 1, selected + (event.key === 'ArrowRight' ? 1 : -1)));
+  let next = selected;
+  let found = false;
+  for (let step = 0; step < spans.length; step += 1) {
+    const candidateIndex = Math.max(0, Math.min(spans.length - 1, next + (event.key === 'ArrowRight' ? 1 : -1)));
+    if (candidateIndex === next) break;
+    next = candidateIndex;
+    const candidate = spans[next];
+    if (candidate !== undefined && !candidate.hidden) { found = true; break; }
+  }
+  if (!found) return;
+  selected = next;
   const view = spans[selected];
   if (view) {
     showDetail(view);
@@ -560,9 +590,11 @@ trace.addEventListener('keydown', (event) => {
     viewStart = Math.max(minTs, (view.line.ts || 0) - viewWidth() / 2);
     applyView();
   }
-});
+};
+trace.addEventListener('keydown', handleKey);
+detail.addEventListener('keydown', handleKey);
 followEl.onclick = () => { follow = true; followEl.textContent = 'following'; viewStart = tailStart(maxTs === -Infinity ? 0 : maxTs); applyView(); };
-document.getElementById('close-detail').onclick = () => { detail.hidden = true; };
+document.getElementById('close-detail').onclick = () => { detail.hidden = true; trace.focus(); };
 document.getElementById('copy-detail').onclick = () => { navigator.clipboard?.writeText(detailBody.textContent || '').catch(() => {}); };
 filterEl.addEventListener('input', applyFilter);
 window.addEventListener('resize', () => { app.renderer.resize(trace.clientWidth, trace.clientHeight); applyView(); });
@@ -601,6 +633,17 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
   const liveSessions = new Set<string>();
   if (options.sessionID !== undefined) liveSessions.add(options.sessionID);
   const fingerprints = new Map<string, string>();
+  const bases = new Map<string, number>();
+  try {
+    const offsets = await Fold.offsets(database);
+    for (const name of dayFiles(directory)) {
+      const base = offsets[name] ?? 0;
+      bases.set(name, base);
+      fingerprints.set(name, Tail.fingerprint(file(directory, name), base));
+    }
+  } catch {
+    // Missing history is handled by the empty state.
+  }
   const { promise: done, resolve: resolveDone } = Promise.withResolvers<void>();
 
   const server = Bun.serve({
@@ -674,17 +717,20 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
           return Response.json({ lines: [], cursors: {} }, { status: 400 });
         }
         if (decoded.fromFold === true) {
-          for (const name of dayFiles(directory)) {
-            fingerprints.set(name, Tail.fingerprint(file(directory, name)));
-          }
           try {
-            return Response.json({ lines: [], cursors: await Fold.offsets(database) });
+            const offsets = await Fold.offsets(database);
+            for (const name of dayFiles(directory)) {
+              const base = offsets[name] ?? 0;
+              bases.set(name, base);
+              fingerprints.set(name, Tail.fingerprint(file(directory, name), base));
+            }
+            return Response.json({ lines: [], cursors: offsets });
           } catch {
             return Response.json({ lines: [], cursors: {} });
           }
         }
         try {
-          const result = live(directory, decoded.cursors ?? {}, fingerprints);
+          const result = live(directory, decoded.cursors ?? {}, fingerprints, bases);
           for (const line of result.lines) liveSessions.add(line.sessionID);
           return Response.json(result);
         } catch (cause) {
