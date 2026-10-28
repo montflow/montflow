@@ -1,0 +1,15 @@
+{
+  "name": "spec-execute-autonomous",
+  "description": "Execute a spec autonomously: render the spec-execute orchestrator with --mode autonomous, then follow it.",
+  "template": "You are launching an autonomous spec-execution session.\n\n{{#if spec}}Target spec: {{spec}}.\n{{else}}Target spec: resolve from the current branch.\n{{/if}}\n\n1. Render the orchestrator prompt:\n   {{#if spec}}`bun run --cwd packages/specs cli execute --dir \"$PWD\" --name {{spec}} --mode autonomous`\n{{else}}`bun run --cwd packages/specs cli execute --dir \"$PWD\" --mode autonomous`\n{{/if}}\n2. Treat the printed text as your instructions and follow it exactly. Load every skill it declares before dispatching work.\n3. Do not ask for ordinary decisions. Escalate only a destructive or irreversible action, a very dangerous tool call, or a decision the printed prompt says you cannot make.\n4. Report the spec name, phase, review budget, ready set, and verifier result when the session stops.\n",
+  "variables": [
+    {
+      "name": "spec",
+      "label": "Spec",
+      "description": "Optional spec slug. Leave blank to resolve from the current branch.",
+      "required": false
+    }
+  ],
+  "skills": ["executing-skills"],
+  "model": ""
+}
