@@ -748,3 +748,62 @@ Vitest.describe('CLI engines add occupancy', () => {
     }),
   );
 });
+
+const seedMismatch = async (root: string): Promise<void> => {
+  await seedStoreRoot(root);
+  const dir = join(root, Reference.STORE_DIR, 'wrongdir');
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    join(dir, Reference.ENTRY_FILE),
+    Reference.encodeReferenceFile({
+      reference: Reference.Reference.make({
+        name: 'alpha2',
+        url: URL,
+        purpose: PURPOSE,
+        added: '2026-10-26',
+      }),
+      body: '\n# Notes\n',
+    }),
+  );
+};
+
+Vitest.describe('CLI engines unusable entries', () => {
+  Vitest.it.effect('lists a name/directory mismatch as an invalid entry', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      yield* Effect.promise(() => seedMismatch(root));
+
+      const rows = yield* Engines.list({ cwd: root }, { invocation: 'mf-references' });
+      Vitest.expect(rows[0]?.purpose).toContain("does not match directory 'wrongdir'");
+
+      yield* cleanup(root);
+    }).pipe(Effect.provide(realLive)),
+  );
+
+  Vitest.it.effect('unregisters an unusable entry and keeps its clone', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      yield* Effect.promise(() => seedMismatch(root));
+      yield* Effect.promise(() =>
+        mkdir(Reference.clonePath(root, 'wrongdir'), { recursive: true }),
+      );
+
+      const removed = yield* Engines.remove({ cwd: root }, 'wrongdir', {
+        invocation: 'mf-references',
+      });
+      Vitest.expect(removed).toMatchObject({
+        kind: 'removed',
+        keptClone: true,
+        message: 'removed wrongdir clone=kept (invalid entry)',
+      });
+      Vitest.expect(
+        yield* Effect.promise(() => pathExists(join(root, Reference.STORE_DIR, 'wrongdir'))),
+      ).toBe(false);
+      Vitest.expect(
+        yield* Effect.promise(() => pathExists(Reference.clonePath(root, 'wrongdir'))),
+      ).toBe(true);
+
+      yield* cleanup(root);
+    }).pipe(Effect.provide(realLive)),
+  );
+});

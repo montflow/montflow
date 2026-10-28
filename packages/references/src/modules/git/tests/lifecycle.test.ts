@@ -827,6 +827,28 @@ Vitest.describe('GitLifecycle sync', () => {
 });
 
 Vitest.describe('GitLifecycle status', () => {
+  Vitest.it.effect('a named status run ignores unusable siblings', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'alpha' }));
+        yield* seed(root, store, entry({ name: 'broken', url: '/tmp/not-a-repo' }));
+        return yield* lifecycle.status(root, { name: 'alpha' });
+      }).pipe(Effect.provide(cloningLive(origin.dir, counters())));
+
+      if (!('rows' in outcome)) throw new Error('expected a status report');
+      Vitest.expect(outcome.rows).toHaveLength(1);
+      Vitest.expect(outcome.summary).toContain('total=1');
+      Vitest.expect(outcome.summary).toContain('invalid=0');
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
   Vitest.it.effect('reports an unusable entry as an invalid status row', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);

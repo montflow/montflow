@@ -224,6 +224,8 @@ const failure = (kind: 'refused' | 'failed', code: string, message: string): Lif
 export interface InvalidEntry {
   readonly slug: string;
   readonly reason: string;
+  /** The entry's own url, when it decoded but failed another rule. */
+  readonly url?: string | undefined;
 }
 
 /** The one refusal for a missing store root, shared by every verb. */
@@ -387,6 +389,7 @@ const make = Effect.gen(function* () {
         invalid.push({
           slug: entry.slug,
           reason: `name: '${decoded.document.reference.name}' does not match directory '${entry.slug}'`,
+          url: decoded.document.reference.url,
         });
       } else if (decoded.kind === 'valid') {
         entries.push(decoded.document.reference);
@@ -655,7 +658,11 @@ const make = Effect.gen(function* () {
       const unusable =
         classification.kind === 'name'
           ? loaded.invalid.find((entry) => entry.slug === classification.value)
-          : undefined;
+          : loaded.invalid.find(
+              (entry) =>
+                entry.url !== undefined &&
+                Reference.normalizeUrl(entry.url) === Reference.normalizeUrl(target),
+            );
       if (unusable !== undefined) return invalidEntryFailure('refused', unusable, invocation);
       if (classification.kind === 'url') {
         return failure(

@@ -124,8 +124,10 @@ export const list = (
         entry.raw === undefined
           ? ({ kind: 'missing' } as const)
           : Reference.decodeReferenceFileDetailed(entry.raw);
-      const purpose =
-        decoded.kind === 'valid'
+      const mismatched = decoded.kind === 'valid' && decoded.document.reference.name !== entry.slug;
+      const purpose = mismatched
+        ? `(invalid entry: name '${decoded.document.reference.name}' does not match directory '${entry.slug}')`
+        : decoded.kind === 'valid'
           ? decoded.document.reference.purpose
           : decoded.kind === 'invalid'
             ? `(invalid entry: ${decoded.reason})`
@@ -136,13 +138,13 @@ export const list = (
       const row: ReferenceRow = {
         slug: entry.slug,
         purpose,
-        url: decoded.kind === 'valid' ? decoded.document.reference.url : '',
+        url: decoded.kind === 'valid' && !mismatched ? decoded.document.reference.url : '',
         installed,
         entryPath: Reference.entryPath(entry.slug),
         path: relativeClone(entry.slug),
       };
       rows.push(
-        decoded.kind === 'valid' && decoded.document.reference.ref !== undefined
+        decoded.kind === 'valid' && !mismatched && decoded.document.reference.ref !== undefined
           ? { ...row, ref: decoded.document.reference.ref }
           : row,
       );
@@ -505,7 +507,8 @@ export const remove = (
       Effect.mapError((error) => `failed: ${error.reason}`),
       Effect.option,
     );
-    const reference = Option.getOrUndefined(decoded);
+    const read = Option.getOrUndefined(decoded);
+    const reference = read !== undefined && read.name === name ? read : undefined;
     const clone = Reference.clonePath(root, name);
     const relative = relativeClone(name);
     const keepClone = options.keepClone === true;
