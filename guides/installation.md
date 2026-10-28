@@ -22,6 +22,7 @@ not.
    ```bash
    tmp="$(mktemp -d)"
    git clone --depth 1 https://github.com/montflow/montflow "$tmp/montflow"
+   bun install --cwd "$tmp/montflow"
    bun run --cwd "$tmp/montflow/packages/references" cli add https://github.com/montflow/montflow \
      --name montflow \
      --purpose "The montflow monorepo, used as the install source." \
@@ -32,10 +33,12 @@ not.
    `add` creates `.agents/references/`, its `.gitkeep`, the `.gitignore` entry,
    the clone at `.agents/references/montflow`, and the committed
    `.agents/@montflow/references/montflow/REFERENCE.md`.
-2. **Confirm the entry — mandatory.**
+2. **Confirm the entry — mandatory.** The reference clone has no dependencies
+   yet, so install them once before running its CLI:
 
    ```bash
    export M="$PWD/.agents/references/montflow"
+   bun install --cwd "$M"
    bun run --cwd "$M/packages/references" cli show montflow --dir "$PWD"
    ```
 
@@ -73,6 +76,8 @@ Ask one question listing each utility and its one-line reason:
 > - **profiles** — reusable agent roles with instructions and a review
 >   checklist.
 > - **reviews** — adversarial review series with one directory per round.
+> - **references** — the committed third-party source registry and its clones,
+>   plus the two `montflow-*reference` skills.
 
 Then follow the answer:
 

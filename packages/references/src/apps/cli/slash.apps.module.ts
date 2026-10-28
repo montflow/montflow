@@ -18,7 +18,7 @@ export const COMMAND_NAME = 'mf-references';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Run the mf-references CLI headlessly: doctor [--check], list [--status installed|missing], show <name>, verify [<name>|--all] [--clones], add <url> [--name <slug>] [--ref <ref>] [--purpose <text>], update <name|url>|--all [--force], sync <name>|--all, status [<name>] [--fetch], remove <name> [--keep-clone], or help. Every verb accepts --human, --verbose, and --dir to target a workspace root other than the working directory.';
+  'Run the mf-references CLI headlessly: doctor [--check], list [--status installed|missing], show <name>, verify [<name>|--all] [--clones], add <url> [--name <slug>] [--ref <ref>] [--purpose <text>], update <name|url>|--all [--force], sync <name>|--all, status [<name>] [--fetch], remove <name> [--keep-clone], or help. Every verb accepts --dir to target a workspace root; the verbs that render rows also accept --human and --verbose.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE = `/mf-references doctor [--check] [--human] [--verbose] [--dir path]

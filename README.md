@@ -34,3 +34,14 @@ so in-repo skills need no install.
 
 Install, flags, verification, and the `mf-*` CLIs:
 [guides/installation.md](./guides/installation.md).
+
+### Skill sync matrix
+
+| Source | Skills | How they arrive |
+| --- | --- | --- |
+| `packages/skills` | every workspace skill (authoring, review, TypeScript, specs, …) | `mf-skills sync --source <checkout> --target <workspace>` |
+| `packages/references` | `montflow-add-reference`, `montflow-find-reference` | `mf-references doctor` installs and freshness-checks them |
+| `packages/specs` / `reviews` / `prompts` / `profiles` | their packaged skills | each package's `doctor` |
+
+Workspace skills live in `.agents/skills/`; packaged skills live in
+`packages/*/skills/` and are installed by their owning CLI's `doctor`.
