@@ -394,7 +394,11 @@ const make = Effect.gen(function* () {
       } else if (decoded.kind === 'valid') {
         entries.push(decoded.document.reference);
       } else {
-        invalid.push({ slug: entry.slug, reason: decoded.reason });
+        invalid.push(
+          decoded.url === undefined
+            ? { slug: entry.slug, reason: decoded.reason }
+            : { slug: entry.slug, reason: decoded.reason, url: decoded.url },
+        );
       }
     }
     return {

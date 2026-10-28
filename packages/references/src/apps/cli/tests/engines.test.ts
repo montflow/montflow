@@ -767,6 +767,24 @@ const seedMismatch = async (root: string): Promise<void> => {
   );
 };
 
+const seedBadPurpose = async (root: string): Promise<void> => {
+  await seedStoreRoot(root);
+  const dir = join(root, Reference.STORE_DIR, 'badpurpose');
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    join(dir, Reference.ENTRY_FILE),
+    Reference.encodeReferenceFile({
+      reference: Reference.Reference.make({
+        name: 'badpurpose',
+        url: URL,
+        purpose: 'no terminal dot',
+        added: '2026-10-26',
+      }),
+      body: '\n# Notes\n',
+    }),
+  );
+};
+
 Vitest.describe('CLI engines unusable entries', () => {
   Vitest.it.effect('lists a name/directory mismatch as an invalid entry', () =>
     Effect.gen(function* () {
@@ -775,6 +793,8 @@ Vitest.describe('CLI engines unusable entries', () => {
 
       const rows = yield* Engines.list({ cwd: root }, { invocation: 'mf-references' });
       Vitest.expect(rows[0]?.purpose).toContain("does not match directory 'wrongdir'");
+      Vitest.expect(rows[0]?.url).toBe('');
+      Vitest.expect(rows[0]?.ref).toBeUndefined();
 
       yield* cleanup(root);
     }).pipe(Effect.provide(realLive)),
@@ -801,6 +821,33 @@ Vitest.describe('CLI engines unusable entries', () => {
       ).toBe(false);
       Vitest.expect(
         yield* Effect.promise(() => pathExists(Reference.clonePath(root, 'wrongdir'))),
+      ).toBe(true);
+
+      yield* cleanup(root);
+    }).pipe(Effect.provide(realLive)),
+  );
+
+  Vitest.it.effect('unregisters a decode-invalid entry and keeps any clone', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      yield* Effect.promise(() => seedBadPurpose(root));
+      yield* Effect.promise(() =>
+        mkdir(Reference.clonePath(root, 'badpurpose'), { recursive: true }),
+      );
+
+      const removed = yield* Engines.remove({ cwd: root }, 'badpurpose', {
+        invocation: 'mf-references',
+      });
+      Vitest.expect(removed).toMatchObject({
+        kind: 'removed',
+        keptClone: true,
+        message: 'removed badpurpose clone=kept (invalid entry)',
+      });
+      Vitest.expect(
+        yield* Effect.promise(() => pathExists(join(root, Reference.STORE_DIR, 'badpurpose'))),
+      ).toBe(false);
+      Vitest.expect(
+        yield* Effect.promise(() => pathExists(Reference.clonePath(root, 'badpurpose'))),
       ).toBe(true);
 
       yield* cleanup(root);

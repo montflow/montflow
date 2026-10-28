@@ -121,7 +121,7 @@ export const entryProblems = (reference: Reference): ReadonlyArray<EntryProblem>
 /** A decoded entry, or the reason it is unusable. */
 export type ReferenceDecode =
   | { readonly kind: 'valid'; readonly document: ReferenceDocument }
-  | { readonly kind: 'invalid'; readonly reason: string };
+  | { readonly kind: 'invalid'; readonly reason: string; readonly url?: string | undefined };
 
 /**
  * Decode one entry and report *why* it is unusable, so the lifecycle verbs can
@@ -143,6 +143,7 @@ export const decodeReferenceFileDetailed = (markdown: string): ReferenceDecode =
     return {
       kind: 'invalid',
       reason: problems.map((one) => `${one.field}: ${one.reason}`).join('; '),
+      url: reference.url,
     };
   }
   return { kind: 'valid', document: { reference, body: parsed.body } };

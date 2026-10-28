@@ -674,6 +674,26 @@ Vitest.describe('GitLifecycle update', () => {
       yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
     }),
   );
+  Vitest.it.effect('refuses a registered-but-unusable entry by name and by URL', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'badpurpose', purpose: 'no terminal dot' }));
+        const byName = yield* lifecycle.update(root, 'badpurpose');
+        const byUrl = yield* lifecycle.update(root, URL);
+        return { byName, byUrl };
+      }).pipe(Effect.provide(cloningLive(origin.dir, counters())));
+
+      Vitest.expect(outcome.byName).toMatchObject({ kind: 'refused', code: 'invalid-entry' });
+      Vitest.expect(outcome.byUrl).toMatchObject({ kind: 'refused', code: 'invalid-entry' });
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
 });
 
 Vitest.describe('GitLifecycle sync', () => {
@@ -804,6 +824,28 @@ Vitest.describe('GitLifecycle sync', () => {
     }),
   );
 
+  Vitest.it.effect('sync <name> ignores unusable siblings', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'alpha' }));
+        yield* seed(root, store, entry({ name: 'broken', url: '/tmp/not-a-repo' }));
+        return yield* lifecycle.sync(root, { name: 'alpha' });
+      }).pipe(Effect.provide(cloningLive(origin.dir, counters())));
+
+      if (!('entries' in outcome)) throw new Error('expected a sync report');
+      Vitest.expect(outcome.entries).toHaveLength(1);
+      Vitest.expect(outcome.entries[0]).toMatchObject({ kind: 'created', slug: 'alpha' });
+      Vitest.expect(outcome.failed).toBe(false);
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
   Vitest.it.effect('refuses every verb when the store root is missing', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
@@ -864,6 +906,36 @@ Vitest.describe('GitLifecycle status', () => {
       Vitest.expect(outcome.refused).toBe(true);
       Vitest.expect(outcome.rows[0]).toMatchObject({ slug: 'broken', state: 'invalid' });
       Vitest.expect(outcome.rows[0]?.message).toContain('url:');
+      Vitest.expect(outcome.summary).toContain('invalid=1');
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
+  Vitest.it.effect('rejects an entry whose name differs from its directory', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const dir = join(root, Reference.STORE_DIR, 'wrongdir');
+        yield* Effect.promise(() => mkdir(dir, { recursive: true }));
+        yield* Effect.promise(() =>
+          writeFile(
+            join(dir, Reference.ENTRY_FILE),
+            Reference.encodeReferenceFile({
+              reference: entry({ name: 'alpha2' }),
+              body: '\n# Notes\n',
+            }),
+          ),
+        );
+        return yield* lifecycle.status(root, {});
+      }).pipe(Effect.provide(cloningLive(origin.dir, counters())));
+
+      if (!('rows' in outcome)) throw new Error('expected a status report');
+      Vitest.expect(outcome.rows[0]).toMatchObject({ slug: 'wrongdir', state: 'invalid' });
+      Vitest.expect(outcome.rows[0]?.message).toContain('does not match directory');
       Vitest.expect(outcome.summary).toContain('invalid=1');
 
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
