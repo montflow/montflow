@@ -146,6 +146,7 @@ Vitest.describe('Doctor store manifest runtime', () => {
 
       const withManifest = yield* Doctor.runDoctor(root);
       Vitest.expect(withManifest.store).toStrictEqual({
+        state: 'managed',
         version: '7.6.5',
         commit: 'a'.repeat(40),
         syncedAt: '2026-10-28T00:00:00.000Z',

@@ -676,6 +676,21 @@ const writeStaged = (
     );
   });
 
+/** Remove files the source no longer has, so an update cannot stay diverged. */
+const pruneExtraFiles = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  target: string,
+  sourceFiles: ReadonlySet<string>,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const present = yield* filesUnder(fs, path, target).pipe(Effect.orElseSucceed(() => []));
+    for (const file of present) {
+      if (sourceFiles.has(file)) continue;
+      yield* fs.remove(path.join(target, file), { force: true }).pipe(Effect.ignore);
+    }
+  });
+
 /** Copy one public skill's files, writing only the bytes that differ. */
 const syncSkill = (
   fs: FileSystem.FileSystem,
@@ -733,7 +748,7 @@ const syncSkill = (
     let drift: SkillDrift = 'unmanaged';
     let differingFiles: ReadonlyArray<string> | undefined;
     if (manifest !== undefined) {
-      if (entry === undefined) {
+      if (entry === undefined || !targetPresent) {
         drift = 'stale';
       } else {
         const targetBytes = targetPresent ? yield* skillBytes(fs, path, target) : undefined;
@@ -765,6 +780,9 @@ const syncSkill = (
     const pending = plan.filter((file) => file.outcome !== 'unchanged');
     if (!check && !refused && pending.length > 0) {
       yield* writeStaged(fs, path, pending, yield* Clock.currentTimeMillis);
+    }
+    if (!check && !refused && manifest !== undefined && targetPresent) {
+      yield* pruneExtraFiles(fs, path, target, new Set(files));
     }
 
     const statuses = plan.map(({ file, outcome }) => ({ file, outcome }));
@@ -887,7 +905,7 @@ const buildManifest = (
     }
     const current = new Set(names);
     const removed = (previous?.skills ?? [])
-      .filter((skill) => !current.has(skill.name) && skill.removed !== true)
+      .filter((skill) => !current.has(skill.name))
       .map((skill) => ({
         name: skill.name,
         version: skill.version,
@@ -946,6 +964,15 @@ export const runSync = (options: SyncOptions = {}) =>
     const names = yield* directoryNames(fs, path, source);
     const store = yield* storeRootOf(fs, path, target);
     const previousState = yield* Store.read(targetRoot);
+    if (
+      previousState.status === 'corrupt' ||
+      previousState.status === 'unreadable' ||
+      previousState.status === 'unsupported'
+    ) {
+      return yield* Effect.fail(
+        `sync: the manifest at '${Store.file(path, targetRoot)}' is ${previousState.status} — repair or remove it before syncing, so local edits are not overwritten`,
+      );
+    }
     const previous = previousState.status === 'managed' ? previousState.manifest : undefined;
     const facts = yield* BuildInfo.checkoutFacts(sourceRoot);
     const skills: Array<SyncSkillStatus> = [];
@@ -981,7 +1008,8 @@ export const runSync = (options: SyncOptions = {}) =>
       .filter((skill) => skill.outcome === 'added' || skill.outcome === 'updated')
       .map((skill) => skill.name);
 
-    if (!check) {
+    const refusedSkills = skills.filter((skill) => skill.outcome === 'refused');
+    if (!check && refusedSkills.length === 0) {
       const publicNames = skills
         .filter((skill) => skill.outcome !== 'skipped')
         .map((skill) => skill.name);

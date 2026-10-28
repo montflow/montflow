@@ -165,8 +165,16 @@ export const syncRefusal = (result: Sync.SyncResult): string =>
   `Re-run without --check to apply: ${result.invocation}`;
 
 /** The fix after a normal sync refused to overwrite diverged skills. */
-export const forceRefusal = (result: Sync.SyncResult): string =>
-  `Refusing to overwrite diverged skill(s): ${result.refused.join(', ')}. Re-run with ${result.invocation} --force to replace them.`;
+export const forceRefusal = (result: Sync.SyncResult): string => {
+  const detail = result.skills
+    .filter((skill) => skill.outcome === 'refused')
+    .map(
+      (skill) =>
+        `${skill.name} (${(skill.differingFiles ?? []).join(', ')} @${(skill.manifestCommit ?? 'unknown').slice(0, 7)})`,
+    )
+    .join('; ');
+  return `Refusing to overwrite diverged skill(s): ${detail}. Re-run with ${result.invocation} --force to replace them.`;
+};
 
 /** Confirmation after a create. */
 export const created = (skill: Skill.Skill): string =>

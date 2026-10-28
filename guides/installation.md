@@ -123,7 +123,8 @@ bun run --cwd "$M/packages/skills" cli verify --dir "$PWD"
 
 It is working when `--check` exits `0` and prints `✓ current.`, and `verify`
 exits `0` with `0 issues`. `--check` writes nothing and exits `1` when the
-workspace is behind — re-run the install. Add `--verbose` to either sync command
+workspace is behind — re-run the install. If a skill reports `diverged`, it was
+edited locally: review the named files and re-run with `--force` to replace it. Add `--verbose` to either sync command
 for per-file detail. Internal skills (`metadata.internal: true`, e.g.
 `syncing-skills`) are skipped, reported, and never copied.
 

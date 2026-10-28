@@ -15,11 +15,14 @@ and a version plus content hash per skill.
   - `unsupported` — `schemaVersion` differs from `SCHEMA_VERSION`, checked
     before the full shape so a future schema is not mislabelled corrupt.
   - `managed` — a decoded v1 manifest.
-- Path helpers for `<workspace>/.agents/skills` and its manifest file.
+- SHA-256 hashing of a skill's files (sorted, deterministic) and stable
+  serialization that ignores `syncedAt` for equality.
+- Writing a manifest under `<workspace>/.agents/skills`.
+- Path helpers for the store and its manifest file.
 
 ## Does not belong here
 
-- Writing or refreshing a manifest (owned by `mf-skills sync`).
+- Deciding when to write or refresh a manifest (owned by `mf-skills sync`).
 - Deciding drift (`current`/`stale`/`diverged`); that compares a manifest to a
   checkout and belongs with the sync engine.
 - Rendering; the CLI module owns the human and JSON forms.

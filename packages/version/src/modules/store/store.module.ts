@@ -158,6 +158,10 @@ export const read = Effect.fn('Store.read')(function* (root: string) {
     : ({ status: 'managed', manifest } as const);
 });
 
+/** Locale-independent string order, so manifests hash and sort identically everywhere. */
+const byCodePoint = (left: string, right: string): number =>
+  left < right ? -1 : left > right ? 1 : 0;
+
 const hex = (bytes: Uint8Array): string =>
   Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 
@@ -218,7 +222,7 @@ export const serialize = (manifest: SyncManifest): string => {
       };
       if (skill.files !== undefined) {
         entry.files = Object.fromEntries(
-          Object.entries(skill.files).toSorted(([a], [b]) => a.localeCompare(b)),
+          Object.entries(skill.files).toSorted(([a], [b]) => byCodePoint(a, b)),
         );
       }
       if (skill.removed === true) entry.removed = true;

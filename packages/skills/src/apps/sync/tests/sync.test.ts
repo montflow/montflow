@@ -1099,3 +1099,74 @@ Vitest.describe('sync drift outcomes runtime', () => {
     ),
   );
 });
+
+Vitest.describe('sync manifest recovery runtime', () => {
+  Vitest.it.effect('refuses to sync over a corrupt manifest', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        yield* Effect.promise(() =>
+          writeFile(join(store(sandbox.workspace), '.montflow-sync.json'), '{ broken'),
+        );
+        const target = join(store(sandbox.workspace), 'alpha', 'SKILL.md');
+        yield* Effect.promise(() => writeFile(target, 'hand edited\n'));
+
+        const failure = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+        }).pipe(Effect.flip);
+
+        Vitest.expect(failure).toContain('corrupt');
+        Vitest.expect(yield* Effect.promise(() => readFile(target, 'utf8'))).toBe('hand edited\n');
+      }),
+    ),
+  );
+
+  Vitest.it.effect('prunes a file the source deleted and returns to current', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          writeSkill(sandbox.checkout, 'alpha', { files: { 'old.md': '# old\n' } }),
+        );
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        yield* Effect.promise(() =>
+          rm(join(sandbox.checkout, '.agents', 'skills', 'alpha', 'old.md')),
+        );
+
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        const check = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+
+        Vitest.expect(check.skills[0]?.drift).toBe('current');
+        Vitest.expect(
+          yield* Effect.promise(() =>
+            pathExists(join(store(sandbox.workspace), 'alpha', 'old.md')),
+          ),
+        ).toBe(false);
+      }),
+    ),
+  );
+
+  Vitest.it.effect('reports a deleted target skill as stale, not current', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        yield* Effect.promise(() =>
+          rm(join(store(sandbox.workspace), 'alpha'), { recursive: true }),
+        );
+
+        const check = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+        Vitest.expect(check.skills[0]?.drift).toBe('stale');
+      }),
+    ),
+  );
+});

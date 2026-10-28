@@ -312,7 +312,7 @@ export const announce = Effect.fn('Cli.announce')(function* (options: AnnounceOp
     env: environment(),
     args: options.args,
   });
-  if (result.verdict.state !== 'behind') return;
+  if (result.verdict.state !== 'behind' && result.verdict.state !== 'diverged') return;
 
   const claimed = yield* claimNotice({
     packageName: identity.name,

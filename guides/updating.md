@@ -13,9 +13,9 @@ export M="${M:-$HOME/src/montflow}"
 M="$(cd "$M" && pwd)"
 ```
 
-Every step below works offline against a local checkout. Only
-`version --check` and the automatic notice talk to the network, and both are
-opt-outable.
+Every step after the checkout is present works offline. `git pull` and
+`bun install` need the network; `version --check` and the automatic notice do
+too, and both are opt-outable.
 
 ## Reading the warning
 
@@ -115,7 +115,8 @@ Report the store from any checkout:
 bun run --cwd "$M/packages/skills" cli version --dir "$PWD"
 ```
 
-`store` lines mean the workspace is managed; no line means no store.
+A managed store prints `store <version> @<commit>`; a store without a manifest
+prints `store unmanaged`; no store line means no store.
 
 Re-sync and inspect drift before writing:
 
@@ -123,8 +124,9 @@ Re-sync and inspect drift before writing:
 bun run --cwd "$M/packages/skills" cli sync --source "$M" --target "$PWD" --check
 ```
 
-Each skill reports `current`, `stale`, `diverged`, or `unmanaged`. `--check`
-writes nothing and exits `1` for `stale` or `diverged`, `0` for `current`. An
+Each skill reports `current`, `stale`, `diverged`, or `unmanaged` (internal
+skills report `skipped`). `--check` writes nothing and exits `1` for `stale`,
+`diverged`, or an `unmanaged` store whose bytes differ; it exits `0` otherwise. An
 `unmanaged` store keeps the older byte comparison.
 
 Apply an update:

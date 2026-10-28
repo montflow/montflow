@@ -76,9 +76,10 @@ export interface DoctorResult {
   /** Manifest facts, present only when the workspace has a managed store. */
   readonly store?:
     | {
+        readonly state: 'managed' | 'corrupt' | 'unreadable' | 'unsupported';
         readonly version?: string | undefined;
         readonly commit?: string | undefined;
-        readonly syncedAt: string;
+        readonly syncedAt?: string | undefined;
       }
     | undefined;
 }
@@ -284,11 +285,16 @@ export const runDoctor = (
     const store =
       storeState.status === 'managed'
         ? {
+            state: 'managed' as const,
             version: storeState.manifest.source.version,
             commit: storeState.manifest.source.commit,
             syncedAt: storeState.manifest.syncedAt,
           }
-        : undefined;
+        : storeState.status === 'corrupt' ||
+            storeState.status === 'unreadable' ||
+            storeState.status === 'unsupported'
+          ? { state: storeState.status }
+          : undefined;
     const unhealthy = skills.filter((skill) => !usable(skill.status));
     const changed = skills.some((skill) => skill.status !== 'ok' && usable(skill.status));
     const status: DoctorResult['status'] =
@@ -331,7 +337,9 @@ const doctorMessageFor = (
   });
   if (result.store !== undefined) {
     lines.push(
-      `store     ${result.store.version ?? 'unknown'}${result.store.commit === undefined ? '' : ` @ ${result.store.commit}`}`,
+      result.store.state === 'managed'
+        ? `store     ${result.store.version ?? 'unknown'}${result.store.commit === undefined ? '' : ` @ ${result.store.commit}`}`
+        : `store     ${result.store.state} manifest`,
     );
   }
   if (result.status === 'ok') {

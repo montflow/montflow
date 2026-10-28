@@ -72,7 +72,7 @@ interface FlagGrammar {
 
 /** `doctor`: `--check`/`--verbose` switches, `--dir` value, no positional. */
 const DOCTOR_GRAMMAR: FlagGrammar = {
-  booleans: new Set(['check', 'verbose', 'force']),
+  booleans: new Set(['check', 'verbose']),
   values: new Set(['dir']),
   positionals: NO_POSITIONALS,
 };
@@ -114,7 +114,7 @@ const DELETE_GRAMMAR: FlagGrammar = {
 
 /** `sync`: `--check`/`--verbose` switches, `--source`/`--target` and aliases, no positional. */
 const SYNC_GRAMMAR: FlagGrammar = {
-  booleans: new Set(['check', 'verbose']),
+  booleans: new Set(['check', 'verbose', 'force']),
   values: new Set(['source', 'target', 'from', 'dir']),
   positionals: NO_POSITIONALS,
 };
