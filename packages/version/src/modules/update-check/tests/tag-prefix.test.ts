@@ -29,7 +29,7 @@ const git = (cwd: string, args: ReadonlyArray<string>): string => {
 };
 
 Vitest.describe('UpdateCheck tag prefix runtime', () => {
-  Vitest.it('parses the tag changesets produces for a package version', () =>
+  Vitest.it.effect('parses the tag changesets produces for a package version', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(() => mkdtemp(join(tmpdir(), 'mf-tag-prefix-')));
       try {
@@ -38,7 +38,12 @@ Vitest.describe('UpdateCheck tag prefix runtime', () => {
           await mkdir(join(root, 'packages', 'skills'), { recursive: true });
           await writeFile(
             join(root, 'package.json'),
-            JSON.stringify({ name: 'fixture', private: true, version: '0.0.0' }),
+            JSON.stringify({
+              name: 'fixture',
+              private: true,
+              version: '0.0.0',
+              workspaces: ['packages/*'],
+            }),
           );
           await writeFile(
             join(root, 'packages', 'skills', 'package.json'),

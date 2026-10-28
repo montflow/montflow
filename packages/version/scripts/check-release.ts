@@ -10,16 +10,7 @@ import { join, resolve } from 'node:path';
  * with one line per drift so the failure names the file to fix.
  */
 
-const CLIS = [
-  '@montflow/skills',
-  '@montflow/specs',
-  '@montflow/prompts',
-  '@montflow/profiles',
-  '@montflow/reviews',
-] as const;
-
-const CHANGELOG_MARKER =
-  'Releases: this package is versioned and tagged by changesets but never published to npm';
+import { CHANGELOG_MARKER, CLIS } from '../src/modules/release-guard/index.js';
 
 const rootFlag = process.argv.indexOf('--root');
 const root = resolve(
@@ -47,6 +38,9 @@ for (const name of CLIS) {
   if (typeof version !== 'string') {
     failures.push(`${name}: package.json has no version string`);
     continue;
+  }
+  if (manifest.private !== true) {
+    failures.push(`${name}: package.json must keep "private": true (never publish to npm)`);
   }
   versions.set(name, version);
 }
