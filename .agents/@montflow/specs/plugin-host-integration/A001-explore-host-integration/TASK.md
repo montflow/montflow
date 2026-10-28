@@ -44,6 +44,10 @@ that decide the strategy for every plugin.
   reviews (series plus round).
 - List every place the current prompts stopgap duplicates package logic, so
   Phase C can delete it rather than keep both.
+- Inventory the Pi-era naming still reachable by a user: the store path, packaged
+  skill names, command names, CLI help and refusals, toasts, and docs. The
+  picker telling a user about `pi-prompts` is the observed symptom; Phase C needs
+  the complete list to retire it.
 - No file outside `.agents/@montflow/specs/` is modified.
 
 ## Completion

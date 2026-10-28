@@ -1,6 +1,6 @@
 /**
- * Local dev TUI part for the prompts plugin: `/prompts` opens a select dialog
- * and pastes the chosen template into the composer.
+ * Local dev TUI part for the prompts plugin: `/mf-prompts-tui` opens a select
+ * dialog and pastes the chosen template into the composer.
  *
  * The plugin API has no supported way to write the prompt input, so this uses
  * the renderer's focused editor (`insertText`) after the dialog restores focus.
@@ -115,7 +115,7 @@ const insert = (context: Context, text: string, attempt = 0): void => {
         return;
       }
       context.ui.toast.show({
-        message: 'Could not reach the composer — focus the prompt and run /prompts again.',
+        message: 'Could not reach the composer — focus the prompt and run /mf-prompts-tui again.',
         variant: 'warning',
       });
     },
@@ -123,7 +123,7 @@ const insert = (context: Context, text: string, attempt = 0): void => {
   );
 };
 
-/** Register `/prompts`: pick a stored prompt, paste its template. */
+/** Register `/mf-prompts-tui`: pick a stored prompt, paste its template. */
 export default {
   id: 'prompts',
   setup(context: Context) {
@@ -133,16 +133,16 @@ export default {
         {
           id: 'prompts.pick',
           title: 'Pick a stored prompt',
-          description: 'List .agents/@montflow/pi-prompts and paste the chosen template into the composer',
+          description: 'List the prompt store and paste the chosen template into the composer',
           group: 'Prompts',
           palette: true,
-          slash: { name: 'prompts' },
+          slash: { name: 'mf-prompts-tui' },
           async run() {
             const directory = context.location?.directory ?? process.cwd();
             const prompts = await loadPrompts(directory);
             if (prompts.length === 0) {
               context.ui.toast.show({
-                message: `No prompts in ${path.join(directory, ...PROMPTS_DIR)}`,
+                message: 'No prompts yet. Create one with: mf-prompts create <name> --template "…"',
                 variant: 'warning',
               });
               return;

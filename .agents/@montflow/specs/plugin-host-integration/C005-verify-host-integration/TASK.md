@@ -1,14 +1,14 @@
 ---
-id: C004
+id: C005
 name: verify-host-integration
 type: execution
 originator: user
-depends-on: C003
-related-tasks: C001, C002, C003
+depends-on: C004
+related-tasks: C001, C002, C003, C004
 status: pending
 ---
 
-# Task C004: verify-host-integration
+# Task C005: verify-host-integration
 
 ## Type: execution
 

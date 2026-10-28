@@ -28,9 +28,10 @@ packages, and duplicates store reads.
 This spec turns the stopgap into the real thing. Phase A establishes exactly why
 plugins fail to load and what the host TUI API does and does not allow. Phase B
 decides the compatibility strategy and the shared picker contract. Phase C fixes
-the loader path, adds the shared TUI picker to `@montflow/opencode`, and wires it
-into every plugin — prompts, skills, specs, profiles, reviews — with verification
-that loads each plugin through the real host loader.
+the loader path, adds the shared TUI picker to `@montflow/opencode`, wires it
+into every plugin — prompts, skills, specs, profiles, reviews — retires the
+remaining Pi-era naming, and verifies that every plugin loads through the real
+host loader.
 
 ## Requirements
 
@@ -51,6 +52,12 @@ that loads each plugin through the real host loader.
 - Every montflow plugin (`prompts`, `skills`, `specs`, `profiles`, `reviews`)
   exposes a picker through that contract, and `/mf-prompts list` and friends work
   in a real OpenCode host session.
+- The migration to OpenCode is complete in the names users type and read: no
+  user-facing surface says Pi. Commands are namespaced (`/mf-prompts` for the
+  headless surface, `/mf-prompts-tui` for the picker — never a bare `/prompts`),
+  and the prompts store, packaged skills, CLI help, refusals, toasts, and docs
+  carry no `pi-` prefix. Legacy store directories are migrated rather than
+  broken.
 - Plugin loading is verified mechanically: a check loads each plugin package
   through the host's loader path and fails when an entry cannot be imported.
 - The prompts stopgap is deleted, not left duplicated beside the packaged
@@ -69,5 +76,6 @@ that loads each plugin through the real host loader.
 | C001 | fix-plugin-host-loading | execution | pending | Yes |
 | C002 | add-shared-tui-picker | execution | pending | Yes |
 | C003 | wire-plugin-pickers | execution | pending | Yes |
-| C004 | verify-host-integration | execution | pending | Yes |
+| C004 | retire-pi-naming | execution | pending | Yes |
+| C005 | verify-host-integration | execution | pending | Yes |
 | C099 | review-phase | review | pending | No |

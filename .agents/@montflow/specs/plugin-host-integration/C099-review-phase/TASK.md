@@ -3,8 +3,8 @@ id: C099
 name: review-phase
 type: review
 originator: user
-depends-on: C004
-related-tasks: C001, C002, C003, C004
+depends-on: C005
+related-tasks: C001, C002, C003, C004, C005
 reviewer-profiles: effect-reviewer
 status: pending
 ---
