@@ -46,6 +46,13 @@ explicit request. The migration is data-preserving: all 14 current registry
 rows become store entries, and the pinned `opencode` clone the specs cite keeps
 resolving.
 
+A release phase then reconciles the branch with `origin/main` before review and
+turns it into a PR with evidence CI has seen the exact head commit. A final
+surface phase gives the store a face in the workspace TUI: the same row-per-
+entry list the prompts panel uses, with each reference shown as synced, missing,
+dirty, foreign, ref-mismatch, or invalid, read through a pure seam that never
+fetches.
+
 ## Requirements
 
 - A new private package `packages/references` (`@montflow/references`) exports `.`, `./server`, and `./tui`, ships `bin.mf-references`, and follows the existing utility-plugin anatomy: `src/apps/cli` (engines, renderers, binary, slash, main), `src/modules` (reference entity, verifier, git lifecycle), `src/services/reference-store` (the Effect store), `src/apps/doctor`, `skills/`, and a payload generator.
@@ -71,6 +78,10 @@ resolving.
 - A scoped-verification phase audits every CLI, fixes every broken or unscoped example, adds the scoped command to each CLI's docs, and lands a mechanical guard that fails when a documented local invocation is unscoped — or records why the guard is not worth its cost.
 - The docs that name the reference surface are updated: root README package list and skill-sync matrix, INSTALL plugin list, AGENTS verification scopes, `.agents/documentation/author-mf-utility-cli.md` CLI surface table, and the `authoring-skills` groups table.
 - The new package, its two skills, and every touched doc ship changelog entries; `bun run mf:check` passes for every scope, and the spec's own `mf-specs check` reports zero issues.
+- A release phase merges `origin/main` into the feature branch, resolves every conflict by intent (a retired skill stays retired), re-runs the full gate on the merged tree, and records each resolution.
+- The same phase opens the PR from a branch with zero commits behind `main`, a Conventional Commit title, the migration note, verification evidence, and a green CI run on the exact head commit; it never merges.
+- A TUI phase adds a `references` panel to the workspace grid, discovered and shaped like the prompts panel: one row per entry showing slug, purpose, pin, clone path, and a state of `synced`, `missing`, `dirty`, `foreign`, `ref-mismatch`, or `invalid`.
+- The panel reads through a pure, tested `@montflow/references` summary seam with no network access and no implicit fetch; `/references` (or the extended `/workspace`) focuses it, and missing/empty stores render guidance instead of an empty frame.
 
 ## Tasks
 
@@ -99,3 +110,9 @@ resolving.
 | E002 | fix-agents-rule-and-spec-scoping | execution  | pending | Yes   |
 | E003 | document-scoping-per-cli        | execution   | pending | Yes   |
 | E099 | review-phase                    | review      | pending | No    |
+| F001 | pull-and-reconcile               | execution   | pending | Yes   |
+| F002 | prepare-pull-request             | execution   | pending | Yes   |
+| F099 | review-phase                     | review      | pending | No    |
+| G001 | add-references-panel             | execution   | pending | Yes   |
+| G002 | wire-tui-seams                   | execution   | pending | Yes   |
+| G099 | review-phase                     | review      | pending | No    |
