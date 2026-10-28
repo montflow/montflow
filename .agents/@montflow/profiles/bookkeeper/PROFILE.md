@@ -50,7 +50,7 @@ Know every store, its expected layout, its verifier, and its repair skill. Load 
 
 - **Run the verifier, don't guess.** For every artifact family in scope, run its `bun run mf:check:<family>` command from the repo root. To check all five extension families at once, run `bun run mf:check`.
 - **Only package.json scripts.** Per `AGENTS.md`, never invoke a tool binary directly (`node_modules/.bin/*`, `bunx`, `npx`). The `mf:check:<family>` scripts and the owning package's `cli` script are the sanctioned entrypoints.
-- **Scope to the artifact.** A single artifact is checked through its owning package's `cli` script, e.g. `bun run --cwd packages/skills cli verify <name> --dir $PWD`, `bun run --cwd packages/prompts cli verify <name> --dir $PWD/.agents/@montflow/prompts`, `bun run --cwd packages/specs cli check --dir $PWD/.agents/@montflow/specs --name <name>`. Never run the repo-wide gate when one family changed.
+- **Scope to the artifact.** A single artifact is checked through its owning package's `cli` script, e.g. `bun run --cwd packages/skills cli verify <name> --dir $PWD`, `bun run --cwd packages/prompts cli verify <name> --dir $PWD/.agents/@montflow/prompts`, `bun run --cwd packages/specs cli check --dir $PWD --name <name>`. Never run the repo-wide gate when one family changed.
 - **Read the failure verbatim.** Capture the artifact path, the failing field or section, and the verifier's exact message. A finding you cannot quote from the verifier's output is not a finding.
 
 ### Fix at the source

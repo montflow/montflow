@@ -1282,10 +1282,10 @@ const parseSlashArgs = (args: string): SlashArgs => {
 export type ResolveSlashDir = (dir: string) => string;
 
 /**
- * Run the slash-command form registered as the OpenCode `/specs` command
+ * Run the slash-command form registered as the OpenCode `/mf-specs` command
  * (`src/server.ts`, through `ports.command.register`). Never renders through
- * the CLI; returns the report for the caller to log — the server writes
- * `report.output` with `Effect.logInfo` and any failure with `Effect.logError`.
+ * the CLI; returns the report so the server can post `report.output` into the
+ * invoking session, or its failure text when the run fails.
  * @param args - raw slash-command args
  * @param root - default spec root, already resolved against the plugin directory
  * @param resolveDir - resolver for a `--dir` value (identity by default)

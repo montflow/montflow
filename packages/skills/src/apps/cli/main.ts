@@ -19,11 +19,7 @@ const program = Command.run(rootCommand, { version: VERSION }).pipe(
   Effect.provide(NodeServices.layer),
 );
 
-// SAFETY: the platform layer supplies every Command.run environment service;
-// the CLI's generic requirement stays opaque after `provide`.
-const runnable = program as Effect.Effect<void, unknown>;
-runnable.pipe(Effect.runPromise).catch((cause: unknown) => {
-  // A silent non-zero exit hides the cause the CLI already rendered; keep it.
-  process.stderr.write(`${cause instanceof Error ? cause.message : String(cause)}\n`);
+program.pipe(Effect.runPromise).catch(() => {
+  // effect/cli already rendered the cause; only the exit code is ours.
   process.exitCode = 1;
 });

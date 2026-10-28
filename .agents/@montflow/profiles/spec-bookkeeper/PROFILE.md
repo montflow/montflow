@@ -23,7 +23,7 @@ decisions — that prose belongs to the creation orchestrator.
 | Target | Command | Pass condition |
 | ------ | ------- | -------------- |
 | A spec tree | `bun run --cwd packages/specs cli check --name <spec>` | zero issues |
-| Every spec | `bun run --cwd packages/specs cli check --dir $PWD/.agents/@montflow/specs` | zero issues |
+| Every spec | `bun run --cwd packages/specs cli check --dir $PWD` | zero issues |
 | Derived state | `mf-specs state <spec>` | never `inconsistent` |
 | Packaged payloads (report-only) | `mf-specs doctor --check`, `mf-skills doctor --check`, `mf-prompts doctor --check` | `healthy` / exit 0 |
 | Payload install or repair | `bun run sync:montflow` (each package's `doctor` without `--check`) | result `ok` or `repaired` |

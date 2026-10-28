@@ -50,7 +50,7 @@ bun run --cwd packages/specs cli create --name <kebab-name> \
 - `--reviewer-profiles` seeds the review task's `reviewer-profiles` list
   (comma-separated, ordered).
 - Inside the OpenCode host the same engine is
-  `/specs create --name <kebab-name> …`.
+  `/mf-specs create --name <kebab-name> …`.
 
 Then edit the rendered `SPEC.md` and `TASK.md` files so they carry the real
 requirements. `create` scaffolds phase `A` only; add later phases by repeating
@@ -126,6 +126,6 @@ hand; a fresh `create` output already verifies.
 # Reference
 
 - **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus one directory per phase, each holding one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`).
-- **Scaffold CLI**: `mf-specs create` (or `/specs create` in the OpenCode host) — flags `--name`, `--description`, `--author`, `--workspace-type`, `--tasks`, `--reviewer-profiles`.
+- **Scaffold CLI**: `mf-specs create` (or `/mf-specs create` in the OpenCode host) — flags `--name`, `--description`, `--author`, `--workspace-type`, `--tasks`, `--reviewer-profiles`.
 - **Migrate CLI**: `mf-specs migrate --name <spec>` / `--all` — moves flat task directories under their phases without editing a file; `--dry-run` prints the plan.
 - **Contract source**: `packages/specs/src/skills/authoring-spec.ts`, `modules/scaffold`, `modules/lifecycle`, `modules/structure`.

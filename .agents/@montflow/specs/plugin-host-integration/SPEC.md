@@ -68,6 +68,14 @@ host loader.
   implementation.
 - `bun run mf:gate` stays green, with the prompts package scoped verification
   green at every cut.
+- The branch stays mergeable with `origin/main`: upstream's phase-directory spec
+  layout is adopted without dropping any branch work.
+
+Phase D reconciles the branch with `origin/main` after upstream moved every
+spec task under a phase directory. It merges the upstream commit, resolves the
+conflicts so both the Pi-naming retirement and the new layout survive, migrates
+this spec's own task directories into the phase layout, and reviews the result
+so the branch can be offered as a pull request.
 
 ## Tasks
 
@@ -83,3 +91,6 @@ host loader.
 | C004 | retire-pi-naming | execution | complete | Yes |
 | C005 | verify-host-integration | execution | in-progress | Yes |
 | C099 | review-phase | review | in-progress | No |
+| D001 | merge-upstream | execution | complete | Yes |
+| D002 | migrate-task-layout | execution | complete | Yes |
+| D099 | review-phase | review | complete | No |

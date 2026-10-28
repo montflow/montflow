@@ -269,7 +269,7 @@ const listCommand = Command.make(
  * @param result - doctor outcome
  * @returns human-readable report
  */
-export const renderDoctor = (result: DoctorResult): string => {
+const renderDoctor = (result: DoctorResult): string => {
   const names = result.skills.map((skill) => skill.name).join(', ');
   const head =
     result.status === 'installed'
@@ -330,4 +330,3 @@ export const rootCommand = Command.make('mf-specs').pipe(
     doctorCommand,
   ]),
 );
-
