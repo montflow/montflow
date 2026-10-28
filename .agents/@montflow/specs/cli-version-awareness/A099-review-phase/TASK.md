@@ -6,7 +6,7 @@ originator: user
 depends-on: A002
 related-tasks: A001, A002
 reviewer-profiles: effect-reviewer
-status: in-progress
+status: complete
 ---
 
 # Task A099: Review phase
@@ -23,4 +23,4 @@ Run an independent adversarial review over phase A.
 
 ## Completion
 
-- [ ] Findings written and reviewed.
+- [x] Findings written and reviewed.

@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeServices } from '@effect/platform-node';
@@ -165,18 +165,9 @@ Vitest.it.effect('reports an unreadable manifest as unreadable, not unmanaged', 
       const store = join(root, '.agents', 'skills');
       yield* Effect.promise(() => mkdir(store, { recursive: true }));
       const manifest = join(store, '.montflow-sync.json');
-      yield* Effect.promise(() =>
-        writeFile(
-          manifest,
-          JSON.stringify({
-            schemaVersion: 1,
-            source: { path: '/checkout' },
-            syncedAt: '2026-10-28T00:00:00.000Z',
-            skills: [],
-          }),
-        ),
-      );
-      yield* Effect.promise(() => chmod(manifest, 0o000));
+      // A directory where the manifest belongs fails with EISDIR for every
+      // user, including root, so the fixture does not depend on chmod.
+      yield* Effect.promise(() => mkdir(manifest, { recursive: true }));
 
       const value = Cli.report(identity, yield* readStore(root));
 
@@ -312,6 +303,41 @@ Vitest.describe('Cli.versionReport runtime', () => {
           dir: root,
         }).pipe(Effect.provide(NodeServices.layer), Effect.flip);
         Vitest.expect(error.message).toContain('cannot read a package.json');
+      }),
+    ),
+  );
+});
+
+Vitest.describe('Store.read edge cases runtime', () => {
+  Vitest.it.effect('reports an unreadable store directory as unreadable', () =>
+    withWorkspace((root) =>
+      Effect.gen(function* () {
+        // A file where `.agents` belongs makes the store path ENOTDIR, which is
+        // not the same as a missing store.
+        yield* Effect.promise(() => writeFile(join(root, '.agents'), 'not a directory\n'));
+
+        const value = Cli.report(identity, yield* readStore(root));
+
+        Vitest.expect(value.store).toStrictEqual({ status: 'unreadable' });
+      }),
+    ),
+  );
+
+  Vitest.it.effect('rejects a non-finite schema version instead of emitting null', () =>
+    withWorkspace((root) =>
+      Effect.gen(function* () {
+        const store = join(root, '.agents', 'skills');
+        yield* Effect.promise(() => mkdir(store, { recursive: true }));
+        yield* Effect.promise(() =>
+          writeFile(
+            join(store, '.montflow-sync.json'),
+            '{"schemaVersion":1e999,"source":{"path":"/x"},"syncedAt":"2026-10-28T00:00:00.000Z","skills":[]}',
+          ),
+        );
+
+        const value = Cli.report(identity, yield* readStore(root));
+
+        Vitest.expect(value.store).toStrictEqual({ status: 'corrupt' });
       }),
     ),
   );

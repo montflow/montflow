@@ -74,6 +74,8 @@ const GIT_LOCATION_KEYS = [
   'GIT_OBJECT_DIRECTORY',
   'GIT_COMMON_DIR',
   'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_CEILING_DIRECTORIES',
+  'GIT_DISCOVERY_ACROSS_FILESYSTEM',
 ] as const;
 
 /** Apply the caller's explicit test env, then wipe repo-location overrides. */

@@ -191,6 +191,23 @@ Vitest.describe('BuildInfo.describe runtime', () => {
     ),
   );
 
+  Vitest.it.effect('ignores GIT_CEILING_DIRECTORIES from the caller', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeManifest(sandbox.root, '@montflow/skills', '1.2.3'));
+        yield* Effect.promise(() => initRepo(sandbox.root, 'SKILL.md', '# skill\n'));
+        const expected = git(sandbox.root, ['rev-parse', 'HEAD']);
+
+        const found = yield* identity(sandbox.root, {
+          GIT_CEILING_DIRECTORIES: sandbox.root,
+        });
+
+        Vitest.expect(found.commit).toBe(expected);
+        Vitest.expect(found.checkout).toBe(sandbox.root);
+      }),
+    ),
+  );
+
   Vitest.it.effect('ignores an absolute GIT_DIR pointing at another repository', () =>
     withSandbox((sandbox) =>
       Effect.gen(function* () {

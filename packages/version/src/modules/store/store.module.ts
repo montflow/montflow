@@ -70,7 +70,7 @@ const ManifestSourceSchema = Schema.Struct({
 });
 
 const SyncManifestSchema = Schema.Struct({
-  schemaVersion: Schema.Number,
+  schemaVersion: Schema.Int,
   source: ManifestSourceSchema,
   syncedAt: Schema.String,
   skills: Schema.Array(ManifestSkillSchema),
@@ -91,7 +91,7 @@ const schemaVersionOf = (text: string): number | undefined => {
   try {
     const parsed: unknown = JSON.parse(text);
     return Option.getOrUndefined(
-      Schema.decodeUnknownOption(Schema.Struct({ schemaVersion: Schema.Number }))(parsed),
+      Schema.decodeUnknownOption(Schema.Struct({ schemaVersion: Schema.Int }))(parsed),
     )?.schemaVersion;
   } catch {
     return undefined;
@@ -120,8 +120,19 @@ export const read = Effect.fn('Store.read')(function* (root: string) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const store = dir(path, root);
-  const exists = yield* fs.exists(store).pipe(Effect.orElseSucceed(() => false));
-  if (!exists) return { status: 'absent' } as const;
+  const presence = yield* fs.stat(store).pipe(
+    Effect.map(() => 'present' as const),
+    Effect.catch((error) =>
+      Effect.succeed(
+        Match.value(error.reason).pipe(
+          Match.when({ _tag: 'NotFound' }, () => 'absent' as const),
+          Match.orElse(() => 'unreadable' as const),
+        ),
+      ),
+    ),
+  );
+  if (presence === 'absent') return { status: 'absent' } as const;
+  if (presence === 'unreadable') return { status: 'unreadable' } as const;
   const readResult = yield* fs.readFileString(file(path, root)).pipe(
     Effect.map((text) => ({ status: 'text', text }) as const),
     Effect.catch((error) =>
