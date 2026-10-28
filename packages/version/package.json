@@ -29,7 +29,8 @@
     "lint:check": "oxlint --deny-warnings .",
     "lint:fix": "oxlint . --fix",
     "test": "vitest run --typecheck",
-    "ts:check": "tsc --noEmit"
+    "ts:check": "tsc --noEmit",
+    "check:release": "bun run scripts/check-release.ts"
   },
   "dependencies": {
     "@effect/platform-node": "4.0.0-rc.112"

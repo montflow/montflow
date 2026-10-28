@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: C001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task C002: add-release-guard
@@ -26,4 +26,4 @@ Add a mechanical guard so release metadata cannot drift from the code: the five 
 
 ## Completion
 
-- [ ] Done.
+- [x] Done.
