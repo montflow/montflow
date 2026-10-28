@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: D003
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task E001: reconcile-with-main
@@ -32,4 +32,4 @@ the new spec-completion CI gate, without rewriting published history.
 
 ## Completion
 
-- [ ] Done.
+- [x] Done.

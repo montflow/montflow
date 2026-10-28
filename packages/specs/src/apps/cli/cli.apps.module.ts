@@ -3,12 +3,7 @@ import { CliError, Command, Flag } from 'effect/unstable/cli';
 import { Cli } from '@montflow/version';
 import type { BuildInfo } from '@montflow/version';
 import manifest from '../../../package.json' with { type: 'json' };
-import {
-  PHASE_PATTERN,
-  type Spec,
-  isValidName,
-  parseSpecFile,
-} from '../../modules/spec/index.js';
+import { PHASE_PATTERN, type Spec, isValidName, parseSpecFile } from '../../modules/spec/index.js';
 import {
   type Analysis,
   type State,
