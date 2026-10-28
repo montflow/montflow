@@ -1,0 +1,73 @@
+---
+name: plugin-host-integration
+status: in-progress
+workspace-type: worktree
+author: Daniel Montilla
+created: 2026-10-28
+locked-phases:
+---
+
+# plugin-host-integration
+
+## Description
+
+Montflow migrated to OpenCode v2 plugins, but the plugins do not load in the
+host that is actually installed. `/mf-prompts list` never ran: the command was
+not registered, and once wired in, the server entry threw on import because
+`@montflow/opencode` builds `@opencode/schema` values that are pinned to
+`effect@4.0.0-rc.112` while the host provides `effect@4.0.1`, which dropped
+`Schema.isStartsWith`. A second loader restriction rejects the deep
+`effect/dist/...` imports that `apps/doctor` pulls in.
+
+A local stopgap works: `.opencode/plugins/prompts/` registers `/mf-prompts list`
+against the adapter-free half of the package, and a TUI part exposes `/prompts`,
+a select dialog that pastes the chosen template into the composer. That stopgap
+is the shape every plugin should have, but it is prompts-only, lives outside the
+packages, and duplicates store reads.
+
+This spec turns the stopgap into the real thing. Phase A establishes exactly why
+plugins fail to load and what the host TUI API does and does not allow. Phase B
+decides the compatibility strategy and the shared picker contract. Phase C fixes
+the loader path, adds the shared TUI picker to `@montflow/opencode`, and wires it
+into every plugin — prompts, skills, specs, profiles, reviews — with verification
+that loads each plugin through the real host loader.
+
+## Requirements
+
+- The failure is recorded with evidence, not inference: the installed host
+  version, the effect version it provides, the exact throw site in
+  `@montflow/opencode`, and every loader restriction observed while wiring the
+  prompts plugin.
+- Phase B chooses one compatibility strategy for the effect/schema skew —
+  aligning the repo to the host's dependency versions, isolating the adapter
+  from `@opencode/schema` runtime values, or a documented compatibility layer —
+  and states what breaks under each.
+- Phase B defines one picker contract in `@montflow/opencode`: register a TUI
+  command that opens a select dialog over a store, searchable, and that inserts
+  a per-plugin result into the composer. Plugins differ only in how they read
+  their store and what they insert.
+- Server command output is never silent: a command that produces text posts it
+  into the session, because the host offers no toast channel to a server plugin.
+- Every montflow plugin (`prompts`, `skills`, `specs`, `profiles`, `reviews`)
+  exposes a picker through that contract, and `/mf-prompts list` and friends work
+  in a real OpenCode host session.
+- Plugin loading is verified mechanically: a check loads each plugin package
+  through the host's loader path and fails when an entry cannot be imported.
+- The prompts stopgap is deleted, not left duplicated beside the packaged
+  implementation.
+- `bun run mf:gate` stays green, with the prompts package scoped verification
+  green at every cut.
+
+## Tasks
+
+| ID | Name | Type | Status | Gates |
+| --- | --- | --- | --- | --- |
+| A001 | explore-host-integration | exploratory | pending | No |
+| A099 | review-phase | review | pending | No |
+| B001 | decide-integration-strategy | planning | pending | No |
+| B099 | review-phase | review | pending | No |
+| C001 | fix-plugin-host-loading | execution | pending | Yes |
+| C002 | add-shared-tui-picker | execution | pending | Yes |
+| C003 | wire-plugin-pickers | execution | pending | Yes |
+| C004 | verify-host-integration | execution | pending | Yes |
+| C099 | review-phase | review | pending | No |
