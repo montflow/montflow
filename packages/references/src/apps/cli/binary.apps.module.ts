@@ -101,7 +101,8 @@ const doctorCommand = Command.make(
   },
   (config) =>
     Effect.gen(function* () {
-      const result = yield* Engines.doctor(Engines.rootOf(scope(config.dir)), {
+      const root = yield* Engines.rootOf(scope(config.dir));
+      const result = yield* Engines.doctor(root, {
         check: config.check,
         invocation: INVOCATION,
       });

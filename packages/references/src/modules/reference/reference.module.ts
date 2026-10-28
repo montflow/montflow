@@ -79,6 +79,75 @@ export interface ReferenceDocument {
   readonly body: string;
 }
 
+/** One field-level problem in an entry read back from the store. */
+export interface EntryProblem {
+  readonly field: string;
+  readonly reason: string;
+}
+
+/**
+ * The field rules `add` enforces, re-checked on entries read from the store.
+ *
+ * `verify` reports these; the mutation path uses them to refuse an entry before
+ * a git command runs, so a committed `REFERENCE.md` can never shape git's argv.
+ * @param reference - decoded entry
+ * @returns one problem per invalid field; empty when the entry is usable
+ */
+export const entryProblems = (reference: Reference): ReadonlyArray<EntryProblem> => {
+  const problems: Array<EntryProblem> = [];
+  const url = validateUrl(reference.url);
+  if (!url.valid) problems.push({ field: 'url', reason: url.reason ?? 'invalid url' });
+  if (!ISO_DATE_PATTERN.test(reference.added)) {
+    problems.push({ field: 'added', reason: 'must be YYYY-MM-DD' });
+  }
+  const purpose = reference.purpose;
+  if (purpose.trim() === '') problems.push({ field: 'purpose', reason: 'must not be empty' });
+  else if (purpose.includes('\n') || purpose.includes('\r')) {
+    problems.push({ field: 'purpose', reason: 'must be one line' });
+  } else if (purpose.length > 280) {
+    problems.push({ field: 'purpose', reason: 'must be 1-280 chars' });
+  } else if (purpose.includes('#') || purpose.includes(': ')) {
+    problems.push({ field: 'purpose', reason: "must not contain '#' or ': '" });
+  } else if (!purpose.endsWith('.')) {
+    problems.push({ field: 'purpose', reason: "must end with '.'" });
+  }
+  const ref = reference.ref?.trim() ?? '';
+  if (ref !== '' && !isValidRef(ref)) {
+    problems.push({ field: 'ref', reason: 'must be a branch, tag, or 7-40 char commit id' });
+  }
+  return problems;
+};
+
+/** A decoded entry, or the reason it is unusable. */
+export type ReferenceDecode =
+  | { readonly kind: 'valid'; readonly document: ReferenceDocument }
+  | { readonly kind: 'invalid'; readonly reason: string };
+
+/**
+ * Decode one entry and report *why* it is unusable, so the lifecycle verbs can
+ * name an invalid row instead of silently dropping it.
+ * @param markdown - `REFERENCE.md` contents
+ * @returns the decoded document, or a one-line reason
+ */
+export const decodeReferenceFileDetailed = (markdown: string): ReferenceDecode => {
+  const parsed = parseReferenceFile(markdown);
+  if (parsed === null) return { kind: 'invalid', reason: 'frontmatter is unreadable' };
+  let reference: Reference;
+  try {
+    reference = Schema.decodeUnknownSync(Reference)(referenceInput(parsed.fields));
+  } catch {
+    return { kind: 'invalid', reason: 'frontmatter does not match the entry schema' };
+  }
+  const problems = entryProblems(reference);
+  if (problems.length > 0) {
+    return {
+      kind: 'invalid',
+      reason: problems.map((one) => `${one.field}: ${one.reason}`).join('; '),
+    };
+  }
+  return { kind: 'valid', document: { reference, body: parsed.body } };
+};
+
 /**
  * True when `name` is a valid reference slug.
  * @param name - candidate slug
@@ -383,14 +452,8 @@ const referenceInput = (fields: Record<string, FieldValue>): ReferenceInput => {
  * @returns the document, or undefined when the frontmatter or a field is invalid
  */
 export const decodeReferenceFile = (markdown: string): ReferenceDocument | undefined => {
-  const parsed = parseReferenceFile(markdown);
-  if (parsed === null) return undefined;
-  try {
-    const reference = Schema.decodeUnknownSync(Reference)(referenceInput(parsed.fields));
-    return { reference, body: parsed.body };
-  } catch {
-    return undefined;
-  }
+  const decoded = decodeReferenceFileDetailed(markdown);
+  return decoded.kind === 'valid' ? decoded.document : undefined;
 };
 
 /**

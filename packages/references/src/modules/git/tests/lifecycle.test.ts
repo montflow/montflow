@@ -780,6 +780,50 @@ Vitest.describe('GitLifecycle sync', () => {
       yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
     }),
   );
+
+  Vitest.it.effect('refuses an entry whose url is not https before any clone runs', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      const calls = counters();
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'local', url: '/tmp/not-a-repo' }));
+        return yield* lifecycle.sync(root, { all: true });
+      }).pipe(Effect.provide(cloningLive(origin.dir, calls)));
+
+      if (!('entries' in outcome)) throw new Error('expected a sync report');
+      Vitest.expect(outcome.failed).toBe(true);
+      Vitest.expect(outcome.entries[0]).toMatchObject({ kind: 'failed', slug: 'local' });
+      Vitest.expect(outcome.entries[0]?.message).toContain('url:');
+      Vitest.expect(calls.clone).toEqual([]);
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
+  Vitest.it.effect('refuses every verb when the store root is missing', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const synced = yield* lifecycle.sync(root, { all: true });
+        const status = yield* lifecycle.status(root, {});
+        const updated = yield* lifecycle.update(root, 'absent');
+        return { synced, status, updated };
+      }).pipe(Effect.provide(cloningLive(origin.dir, counters())));
+
+      for (const result of [outcome.synced, outcome.status, outcome.updated]) {
+        Vitest.expect(result).toMatchObject({ kind: 'refused', code: 'store-missing' });
+      }
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
 });
 
 Vitest.describe('GitLifecycle status', () => {

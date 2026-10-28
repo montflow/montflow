@@ -25,8 +25,13 @@ export interface StoreScope {
   readonly dir?: string | undefined;
 }
 
-/** The workspace root one scope names. */
-export const rootOf = (scope: StoreScope): string => scope.dir ?? scope.cwd;
+/** The workspace root one scope names, with `--dir` resolved against the caller's cwd. */
+export const rootOf = (scope: StoreScope): Effect.Effect<string, never, Path.Path> =>
+  Path.Path.pipe(
+    Effect.map((path) =>
+      scope.dir === undefined ? scope.cwd : path.resolve(scope.cwd, scope.dir),
+    ),
+  );
 
 /** Every service an engine may need. */
 export type EngineDeps =
@@ -109,26 +114,37 @@ export const list = (
     }
     const store = yield* ReferenceStore.ReferenceStore;
     const fs = yield* FileSystem.FileSystem;
-    const snapshot = yield* store.scan(rootOf(scope)).pipe(Effect.mapError(storeError));
+    const root = yield* rootOf(scope);
+    const snapshot = yield* store.scan(root).pipe(Effect.mapError(storeError));
     if (!snapshot.present) return yield* Effect.fail(storeRootMissing(invocation));
 
     const rows: Array<ReferenceRow> = [];
     for (const entry of snapshot.entries) {
-      const document =
-        entry.raw === undefined ? undefined : Reference.decodeReferenceFile(entry.raw);
-      const installed = yield* installedAt(fs, Reference.clonePath(rootOf(scope), entry.slug));
+      const decoded =
+        entry.raw === undefined
+          ? ({ kind: 'missing' } as const)
+          : Reference.decodeReferenceFileDetailed(entry.raw);
+      const purpose =
+        decoded.kind === 'valid'
+          ? decoded.document.reference.purpose
+          : decoded.kind === 'invalid'
+            ? `(invalid entry: ${decoded.reason})`
+            : '(no REFERENCE.md)';
+      const installed = yield* installedAt(fs, Reference.clonePath(root, entry.slug));
       if (filter === 'installed' && !installed) continue;
       if (filter === 'missing' && installed) continue;
       const row: ReferenceRow = {
         slug: entry.slug,
-        purpose: document?.reference.purpose ?? '(no REFERENCE.md)',
-        url: document?.reference.url ?? '',
+        purpose,
+        url: decoded.kind === 'valid' ? decoded.document.reference.url : '',
         installed,
         entryPath: Reference.entryPath(entry.slug),
         path: relativeClone(entry.slug),
       };
       rows.push(
-        document?.reference.ref === undefined ? row : { ...row, ref: document.reference.ref },
+        decoded.kind === 'valid' && decoded.document.reference.ref !== undefined
+          ? { ...row, ref: decoded.document.reference.ref }
+          : row,
       );
     }
     return rows;
@@ -150,10 +166,11 @@ export const show = (
     const bad = invalidName(name);
     if (bad !== undefined) return yield* Effect.fail(bad);
     const store = yield* ReferenceStore.ReferenceStore;
-    const exists = yield* store.exists(rootOf(scope), name).pipe(Effect.mapError(storeError));
+    const root = yield* rootOf(scope);
+    const exists = yield* store.exists(root, name).pipe(Effect.mapError(storeError));
     if (!exists) return yield* Effect.fail(unknownReference(name, invocation));
     return yield* store
-      .readRaw(rootOf(scope), name)
+      .readRaw(root, name)
       .pipe(
         Effect.mapError(
           (error) => `failed: could not read ${Reference.entryPath(name)}: ${error.reason}`,
@@ -212,7 +229,7 @@ export const verify = (
       if (bad !== undefined) return yield* Effect.fail(bad);
     }
     const store = yield* ReferenceStore.ReferenceStore;
-    const root = rootOf(scope);
+    const root = yield* rootOf(scope);
     const snapshot = yield* store.scan(root).pipe(Effect.mapError(storeError));
 
     let selected = snapshot;
@@ -294,8 +311,9 @@ export const add = (
 ): Effect.Effect<Git.AddResult, string, EngineDeps> =>
   Effect.gen(function* () {
     const lifecycle = yield* Git.GitLifecycle;
+    const root = yield* rootOf(scope);
     return yield* lifecycle
-      .add(rootOf(scope), {
+      .add(root, {
         url,
         name: options.name,
         ref: options.ref,
@@ -325,8 +343,9 @@ export const update = (
 ): Effect.Effect<Git.UpdateResult, string, EngineDeps> =>
   Effect.gen(function* () {
     const lifecycle = yield* Git.GitLifecycle;
+    const root = yield* rootOf(scope);
     return yield* lifecycle
-      .update(rootOf(scope), target, { force: options.force, invocation: options.invocation })
+      .update(root, target, { force: options.force, invocation: options.invocation })
       .pipe(Effect.mapError(lifecycleError));
   });
 
@@ -356,11 +375,16 @@ export const updateAll = (
   Effect.gen(function* () {
     const store = yield* ReferenceStore.ReferenceStore;
     const lifecycle = yield* Git.GitLifecycle;
-    const slugs = yield* store.list(rootOf(scope)).pipe(Effect.mapError(storeError));
+    const root = yield* rootOf(scope);
+    const snapshot = yield* store.scan(root).pipe(Effect.mapError(storeError));
+    if (!snapshot.present) {
+      return yield* Effect.fail(storeRootMissing(options.invocation ?? DEFAULT_INVOCATION));
+    }
+    const slugs = snapshot.entries.map((entry) => entry.slug).toSorted();
     const entries: Array<UpdateAllEntry> = [];
     for (const slug of slugs) {
       const result = yield* lifecycle
-        .update(rootOf(scope), slug, {
+        .update(root, slug, {
           force: options.force,
           invocation: options.invocation,
         })
@@ -400,8 +424,9 @@ export const sync = (
 ): Effect.Effect<Git.SyncResult, string, EngineDeps> =>
   Effect.gen(function* () {
     const lifecycle = yield* Git.GitLifecycle;
+    const root = yield* rootOf(scope);
     return yield* lifecycle
-      .sync(rootOf(scope), {
+      .sync(root, {
         name: options.name,
         all: options.all,
         invocation: options.invocation,
@@ -428,8 +453,9 @@ export const status = (
 ): Effect.Effect<Git.StatusResult, string, EngineDeps> =>
   Effect.gen(function* () {
     const lifecycle = yield* Git.GitLifecycle;
+    const root = yield* rootOf(scope);
     return yield* lifecycle
-      .status(rootOf(scope), {
+      .status(root, {
         name: options.name,
         fetch: options.fetch,
         invocation: options.invocation,
@@ -468,7 +494,7 @@ export const remove = (
     const invocation = options.invocation ?? DEFAULT_INVOCATION;
     const bad = invalidName(name);
     if (bad !== undefined) return yield* Effect.fail(bad);
-    const root = rootOf(scope);
+    const root = yield* rootOf(scope);
     const store = yield* ReferenceStore.ReferenceStore;
     const probe = yield* CloneProbe.CloneProbe;
     const fs = yield* FileSystem.FileSystem;
@@ -481,6 +507,7 @@ export const remove = (
     const clone = Reference.clonePath(root, name);
     const relative = relativeClone(name);
     const keepClone = options.keepClone === true;
+    let removeClone = false;
 
     if (!keepClone) {
       const observation = yield* probe.probe(root, reference);
@@ -498,14 +525,12 @@ export const remove = (
             `refused: ${name} clone is dirty (${observation.dirtyPaths} changed paths); rerun with --keep-clone to unregister and keep it`,
           );
         }
-        yield* fs
-          .remove(clone, { recursive: true })
-          .pipe(
-            Effect.mapError((error) => `failed: could not remove ${relative}: ${error.message}`),
-          );
+        removeClone = true;
       }
     }
 
+    // Unregister first: the entry is the source of truth, and a clone left
+    // behind is recoverable while a deleted clone under a live entry is not.
     yield* store
       .remove(root, name)
       .pipe(
@@ -513,6 +538,15 @@ export const remove = (
           (error) => `failed: could not remove ${Reference.entryPath(name)}: ${error.reason}`,
         ),
       );
+
+    if (removeClone) {
+      const removed = yield* fs.remove(clone, { recursive: true }).pipe(Effect.option);
+      if (Option.isNone(removed)) {
+        return yield* Effect.fail(
+          `failed: ${name} entry removed, clone left at ${relative}; remove it by hand`,
+        );
+      }
+    }
 
     return {
       kind: 'removed',

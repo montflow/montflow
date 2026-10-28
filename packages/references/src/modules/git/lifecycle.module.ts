@@ -220,6 +220,33 @@ const failure = (kind: 'refused' | 'failed', code: string, message: string): Lif
   message,
 });
 
+/** One stored entry that cannot be decoded into a usable reference. */
+export interface InvalidEntry {
+  readonly slug: string;
+  readonly reason: string;
+}
+
+/** The one refusal for a missing store root, shared by every verb. */
+const storeMissingFailure = (invocation: string): LifecycleFailure =>
+  failure(
+    'refused',
+    'store-missing',
+    `refused: Store root ${Reference.STORE_DIR}/ is missing; run '${invocation} doctor'.`,
+  );
+
+/** One unusable entry, named with its decode reason. */
+const invalidEntryFailure = (
+  kind: 'refused' | 'failed',
+  entry: InvalidEntry,
+  invocation: string,
+): LifecycleFailure =>
+  failureWithSlug(
+    kind,
+    'invalid-entry',
+    entry.slug,
+    `${kind}: ${entry.slug} entry is unusable (${entry.reason}); run '${invocation} verify ${entry.slug}'`,
+  );
+
 const failureWithSlug = (
   kind: 'refused' | 'failed',
   code: string,
@@ -345,16 +372,25 @@ const make = Effect.gen(function* () {
   const store = yield* ReferenceStore;
   const probe = yield* CloneProbe;
 
-  /** Decode every valid entry in the store, sorted by slug. */
+  /** Decode every entry in the store, splitting valid from unusable. */
   const loadReferences = Effect.fn('GitLifecycle.loadReferences')(function* (root: string) {
     const snapshot = yield* store.scan(root);
     const entries: Array<ReferenceEntry> = [];
+    const invalid: Array<InvalidEntry> = [];
     for (const entry of snapshot.entries) {
-      if (entry.raw === undefined) continue;
-      const document = Reference.decodeReferenceFile(entry.raw);
-      if (document !== undefined) entries.push(document.reference);
+      if (entry.raw === undefined) {
+        invalid.push({ slug: entry.slug, reason: `${Reference.ENTRY_FILE} is missing` });
+        continue;
+      }
+      const decoded = Reference.decodeReferenceFileDetailed(entry.raw);
+      if (decoded.kind === 'valid') entries.push(decoded.document.reference);
+      else invalid.push({ slug: entry.slug, reason: decoded.reason });
     }
-    return entries.toSorted((left, right) => left.name.localeCompare(right.name));
+    return {
+      present: snapshot.present,
+      entries: entries.toSorted((left, right) => left.name.localeCompare(right.name)),
+      invalid: invalid.toSorted((left, right) => left.slug.localeCompare(right.slug)),
+    };
   });
 
   /** Check ownership of one concrete clone path. */
@@ -598,7 +634,9 @@ const make = Effect.gen(function* () {
     ) {
       return failure('refused', 'invalid-name', invalidNameMessage(classification.value));
     }
-    const entries = yield* loadReferences(root);
+    const loaded = yield* loadReferences(root);
+    if (!loaded.present) return storeMissingFailure(invocation);
+    const entries = loaded.entries;
     const reference =
       classification.kind === 'url'
         ? entries.find(
@@ -944,7 +982,8 @@ const make = Effect.gen(function* () {
     }
 
     const url = input.url.trim();
-    const entries = yield* loadReferences(root);
+    const loaded = yield* loadReferences(root);
+    const entries = loaded.entries;
     const storeNames = yield* store.names(root);
     const alreadyRegistered = entries.find(
       (entry) => Reference.normalizeUrl(entry.url) === Reference.normalizeUrl(url),
@@ -1066,7 +1105,9 @@ const make = Effect.gen(function* () {
     ) {
       return failure('refused', 'invalid-name', invalidNameMessage(options.name));
     }
-    const entries = yield* loadReferences(root);
+    const loaded = yield* loadReferences(root);
+    if (!loaded.present) return storeMissingFailure(invocation);
+    const entries = loaded.entries;
     if (options.name !== undefined && options.all === true) {
       return failure('refused', 'usage', 'usage: pass either <name> or --all, not both');
     }
@@ -1081,6 +1122,8 @@ const make = Effect.gen(function* () {
     if (options.name !== undefined) {
       const one = entries.find((entry) => entry.name === options.name);
       if (one === undefined) {
+        const unusable = loaded.invalid.find((entry) => entry.slug === options.name);
+        if (unusable !== undefined) return invalidEntryFailure('refused', unusable, invocation);
         return failure(
           'refused',
           'unknown-reference',
@@ -1266,6 +1309,13 @@ const make = Effect.gen(function* () {
         message: `updated ${reference.name} branch ${branch}`,
       });
     }
+    for (const entry of loaded.invalid) {
+      results.push({
+        kind: 'failed',
+        slug: entry.slug,
+        message: `failed ${entry.slug} entry is unusable (${entry.reason}); run '${invocation} verify ${entry.slug}'`,
+      });
+    }
     return {
       entries: results,
       failed: results.some((entry) => entry.kind === 'skipped' || entry.kind === 'failed'),
@@ -1283,11 +1333,15 @@ const make = Effect.gen(function* () {
     ) {
       return failure('refused', 'invalid-name', invalidNameMessage(options.name));
     }
-    const entries = yield* loadReferences(root);
+    const loaded = yield* loadReferences(root);
+    if (!loaded.present) return storeMissingFailure(invocation);
+    const entries = loaded.entries;
     let selected: ReadonlyArray<ReferenceEntry>;
     if (options.name !== undefined) {
       const one = entries.find((entry) => entry.name === options.name);
       if (one === undefined) {
+        const unusable = loaded.invalid.find((entry) => entry.slug === options.name);
+        if (unusable !== undefined) return invalidEntryFailure('refused', unusable, invocation);
         return failure(
           'refused',
           'unknown-reference',
@@ -1474,6 +1528,16 @@ const make = Effect.gen(function* () {
         }
       }
       rows.push(row);
+    }
+
+    for (const entry of loaded.invalid) {
+      rows.push({
+        slug: entry.slug,
+        state: 'foreign',
+        message: `invalid ${entry.slug} ${entry.reason}`,
+        refused: true,
+        failure: invalidEntryFailure('failed', entry, invocation),
+      });
     }
 
     const enriched: ReadonlyArray<StatusRow> = rows.map((row) => ({

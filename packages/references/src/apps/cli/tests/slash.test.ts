@@ -292,6 +292,25 @@ Vitest.describe('/mf-references run', () => {
     }),
   );
 
+  Vitest.it.effect('resolves a relative --dir against the project cwd, not the server cwd', () =>
+    Effect.gen(function* () {
+      const parent = yield* Effect.promise(freshRoot);
+      const root = join(parent, 'ws2');
+      yield* Effect.promise(() => seedStoreRoot(root));
+      yield* Effect.promise(() => seedEntry(root, { name: 'alpha' }));
+      const messages: Array<string> = [];
+
+      yield* Slash.run(`list --dir ws2`, recordingUi(messages), parent).pipe(
+        Effect.provide(realLive),
+      );
+      const output = messages.join('\n');
+      Vitest.expect(output).toContain('alpha');
+      Vitest.expect(output).toContain('summary total=1 installed=0 missing=1');
+
+      yield* cleanup(parent);
+    }),
+  );
+
   Vitest.it.effect('runs status with no name as an all-entry summary', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
