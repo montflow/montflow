@@ -566,6 +566,43 @@ const issueOfSizingError = (error: SizingError): Issue => {
   return found;
 };
 
+/** One loaded config file: where it came from, its config, and its findings. */
+interface LoadedLayer {
+  readonly file: string | undefined;
+  readonly config: SizingConfig | undefined;
+  readonly issues: ReadonlyArray<Issue>;
+}
+
+/**
+ * Read, verify, and parse the repo-level `sizing.json`. A missing file is no
+ * layer; an invalid one yields findings without a config, so callers can report
+ * every finding instead of stopping at the first.
+ * @param root - spec root directory
+ * @returns the repo layer, with `file` absent when the file is missing
+ */
+const loadRepoLayer = (
+  root: string,
+): Effect.Effect<LoadedLayer, SpecStore.StoreError, SpecStore.SpecStore> =>
+  Effect.gen(function* () {
+    const store = yield* SpecStore.SpecStore;
+    const text = yield* store.readRootFile(root, CONFIG_FILE);
+    if (text === undefined) return { file: undefined, config: undefined, issues: [] };
+    const found = verifySizingText({ path: CONFIG_FILE, kind: 'repo' }, text);
+    const issues = [...nestConfig(CONFIG_FILE, found.issues)];
+    if (!found.valid) return { file: CONFIG_FILE, config: undefined, issues };
+    const config = yield* parseSizing({ path: CONFIG_FILE, kind: 'repo' }, text).pipe(
+      Effect.matchEffect({
+        onFailure: (error) =>
+          Effect.sync(() => {
+            issues.push(issueOfSizingError(error));
+            return undefined;
+          }),
+        onSuccess: (parsed) => Effect.succeed(parsed),
+      }),
+    );
+    return { file: CONFIG_FILE, config, issues };
+  });
+
 /**
  * Load the repo-level and spec-level `sizing.json` for one spec. Both files
  * are verified in full; a file is parsed only when it verifies, so the CLI can
@@ -581,30 +618,10 @@ export const loadSizing = (
   snapshot: SpecSnapshot,
 ): Effect.Effect<SizingLoad, SpecStore.StoreError, SpecStore.SpecStore> =>
   Effect.gen(function* () {
-    const store = yield* SpecStore.SpecStore;
-    const issues: Array<Issue> = [];
-    const files: Array<string> = [];
-    let repo: SizingConfig | undefined;
+    const repoLayer = yield* loadRepoLayer(root);
+    const issues: Array<Issue> = [...repoLayer.issues];
+    const files: Array<string> = repoLayer.file === undefined ? [] : [repoLayer.file];
     let spec: SizingConfig | undefined;
-
-    const repoText = yield* store.readRootFile(root, CONFIG_FILE);
-    if (repoText !== undefined) {
-      files.push(CONFIG_FILE);
-      const found = verifySizingText({ path: CONFIG_FILE, kind: 'repo' }, repoText);
-      issues.push(...nestConfig(CONFIG_FILE, found.issues));
-      if (found.valid) {
-        repo = yield* parseSizing({ path: CONFIG_FILE, kind: 'repo' }, repoText).pipe(
-          Effect.matchEffect({
-            onFailure: (error) =>
-              Effect.sync(() => {
-                issues.push(issueOfSizingError(error));
-                return undefined;
-              }),
-            onSuccess: (config) => Effect.succeed(config),
-          }),
-        );
-      }
-    }
 
     const specFile = snapshot.files.find((file) => file.path === CONFIG_FILE);
     if (specFile !== undefined) {
@@ -620,13 +637,13 @@ export const loadSizing = (
                 issues.push(issueOfSizingError(error));
                 return undefined;
               }),
-            onSuccess: (config) => Effect.succeed(config),
+            onSuccess: (parsed) => Effect.succeed(parsed),
           }),
         );
       }
     }
 
-    return { files, repo, spec, issues };
+    return { files, repo: repoLayer.config, spec, issues };
   });
 
 // ─── Models ───────────────────────────────────────────────────────────
@@ -804,24 +821,9 @@ const loadRepoSizing = (
   root: string,
 ): Effect.Effect<SizingLoad, SpecStore.StoreError, SpecStore.SpecStore> =>
   Effect.gen(function* () {
-    const store = yield* SpecStore.SpecStore;
-    const text = yield* store.readRootFile(root, CONFIG_FILE);
-    if (text === undefined) return NO_SIZING;
-    const files = [CONFIG_FILE];
-    const found = verifySizingText({ path: CONFIG_FILE, kind: 'repo' }, text);
-    const issues = [...nestConfig(CONFIG_FILE, found.issues)];
-    if (!found.valid) return { files, repo: undefined, spec: undefined, issues };
-    const repo = yield* parseSizing({ path: CONFIG_FILE, kind: 'repo' }, text).pipe(
-      Effect.matchEffect({
-        onFailure: (error) =>
-          Effect.sync(() => {
-            issues.push(issueOfSizingError(error));
-            return undefined;
-          }),
-        onSuccess: (config) => Effect.succeed(config),
-      }),
-    );
-    return { files, repo, spec: undefined, issues };
+    const layer = yield* loadRepoLayer(root);
+    if (layer.file === undefined) return NO_SIZING;
+    return { files: [layer.file], repo: layer.config, spec: undefined, issues: layer.issues };
   });
 
 /** Every model entry a loaded config defines, with its file and field. */
@@ -906,7 +908,7 @@ export interface ModelsVerifyReport {
  */
 export const verifyModels = (
   root: string,
-  options: Pick<ModelsOptions, 'name' | 'catalog'>,
+  options: Pick<ModelsOptions, 'name' | 'catalog' | 'provider'>,
   source?: Catalogue.ModelSource,
 ): Effect.Effect<
   ModelsVerifyReport,
@@ -914,13 +916,32 @@ export const verifyModels = (
   SpecStore.SpecStore | FileSystem.FileSystem
 > =>
   Effect.gen(function* () {
-    const catalogue = yield* loadCatalogue({ catalog: options.catalog }, source);
+    const store = yield* SpecStore.SpecStore;
+    const catalogue = yield* loadCatalogue(
+      { catalog: options.catalog, provider: options.provider },
+      source,
+    );
+    if (!(yield* store.hasRoot(root))) {
+      return yield* Effect.fail(
+        new SpecStore.StoreError({
+          operation: 'SpecsModelsVerify',
+          reason: `Specs directory not found: ${root}`,
+        }),
+      );
+    }
     const name = options.name === undefined || options.name === '' ? undefined : options.name;
+    if (name !== undefined && !(yield* store.exists(root, name))) {
+      return yield* Effect.fail(
+        new SurfaceError({
+          operation: 'SpecsModelsVerify',
+          diagnostics: [unknownSpecDiagnostic(name)],
+        }),
+      );
+    }
     const load =
       name === undefined
         ? yield* loadRepoSizing(root)
         : yield* Effect.gen(function* () {
-            const store = yield* SpecStore.SpecStore;
             const snapshot = yield* store.snapshot(root, name);
             return yield* loadSizing(root, name, snapshot);
           });
@@ -935,7 +956,12 @@ export const verifyModels = (
         }),
       );
     }
-    const findings = Catalogue.verify(catalogue, configEntries(load, name));
+    const provider = options.provider?.trim();
+    const entries = configEntries(load, name).filter(
+      (entry) =>
+        provider === undefined || provider === '' || entry.model.startsWith(`${provider}/`),
+    );
+    const findings = Catalogue.verify(catalogue, entries);
     return {
       catalogue,
       findings,
@@ -943,6 +969,30 @@ export const verifyModels = (
       exitCode: 0,
     };
   });
+
+/** Diagnostic for `--json`, which only the listing path can produce. */
+const verifyJsonDiagnostic = (options: ModelsOptions): SizingDiagnostic => {
+  const flags = ['mf-specs models --verify'];
+  if (options.provider !== undefined && options.provider.trim() !== '') {
+    flags.push(`--provider ${options.provider.trim()}`);
+  }
+  if (options.catalog !== undefined && options.catalog !== '') {
+    flags.push(`--catalog ${options.catalog}`);
+  }
+  if (options.name !== undefined && options.name.trim() !== '') {
+    flags.push(`--name ${options.name.trim()}`);
+  }
+  return diagnostic({
+    code: SURFACE_CODES.invalidArgument,
+    path: 'models',
+    field: '--json',
+    problem: '--json has no meaning with --verify.',
+    rerun: flags.join(' '),
+    expected: '--json on the listing path, or --verify without it',
+    actual: '--json --verify',
+    fix: `Drop --json to verify: ${flags.join(' ')}.`,
+  });
+};
 
 /**
  * `mf-specs models`: list the catalogue or verify config entries. The binary
@@ -958,13 +1008,26 @@ export const models = (
   SurfaceError | SpecStore.StoreError,
   SpecStore.SpecStore | FileSystem.FileSystem
 > =>
-  options.verify === true
-    ? verifyModels(root, { name: options.name, catalog: options.catalog }, source).pipe(
-        Effect.map((report) => ({ output: report.output, exitCode: report.exitCode })),
-      )
-    : listModels(options, source).pipe(
-        Effect.map((report) => ({ output: report.output, exitCode: 0 })),
+  Effect.gen(function* () {
+    if (options.verify === true) {
+      if (options.json === true) {
+        return yield* Effect.fail(
+          new SurfaceError({
+            operation: 'SpecsModels',
+            diagnostics: [verifyJsonDiagnostic(options)],
+          }),
+        );
+      }
+      const report = yield* verifyModels(
+        root,
+        { name: options.name, catalog: options.catalog, provider: options.provider },
+        source,
       );
+      return { output: report.output, exitCode: report.exitCode };
+    }
+    const report = yield* listModels(options, source);
+    return { output: report.output, exitCode: 0 };
+  });
 
 /** One task's declared size and resolved dispatch target. */
 export interface TaskTarget {
@@ -2471,6 +2534,16 @@ export type SizingScopeResolution =
 const blankValue = (value: string | undefined): boolean =>
   value === undefined || value.trim() === '';
 
+/** The corrected command for a supplied but blank `--name`, per the chosen scope. */
+const blankNameRepair = (scope: SizingScope | undefined): string => {
+  if (scope === 'repo') return 'mf-specs sizing-config --scope repo';
+  if (scope === 'phase') {
+    return 'mf-specs sizing-config --scope phase --name <spec> --phase <id>';
+  }
+  if (scope === 'spec') return 'mf-specs sizing-config --scope spec --name <spec>';
+  return 'mf-specs sizing-config --name <spec>';
+};
+
 /** A {@link SizingScopeRequest} being filled in, so absent keys stay absent. */
 interface MutableSizingScopeRequest {
   scope?: SizingScope;
@@ -2523,8 +2596,9 @@ const suppliedFlags = (name: string | undefined, phase: string | undefined): str
  * prompt asks. `--name` alone implies spec, `--name` with `--phase` implies
  * phase, and an explicit `--scope` wins over that implication. Every
  * inconsistent combination is refused with the corrected command instead of
- * rendering a prompt that would size the wrong layer; a blank `--name` or
- * `--phase` is treated as absent, never as an empty identifier.
+ * rendering a prompt that would size the wrong layer; a supplied but blank
+ * `--name` is a usage error, while an omitted one leaves the scope open. A
+ * blank `--phase` is treated as absent, never as an empty identifier.
  * @param options - raw scope, name, and phase flags
  * @returns the derived scope, or the usage diagnostic naming the fix
  */
@@ -2544,14 +2618,42 @@ export const resolveSizingScope = (options: SizingConfigOptions): SizingScopeRes
     });
   }
 
-  if (phase !== undefined && name === undefined) {
+  if (options.name !== undefined && name === undefined) {
     return scopeRefusal({
-      field: '--phase',
-      problem: `--phase requires --name <spec>: '${phase}' belongs to no spec in this command.`,
-      expected: '--name <spec> alongside --phase',
-      actual: `--phase ${phase}`,
-      fix: `Pass --name with the spec holding phase '${phase}': mf-specs sizing-config --name <spec> --phase ${phase}.`,
-      next: `mf-specs sizing-config --name <spec> --phase ${phase}`,
+      field: '--name',
+      problem: '--name requires a spec name: a blank value selects no spec.',
+      expected: 'a non-empty --name <spec>',
+      actual: options.name === '' ? 'empty string' : `'${options.name}'`,
+      fix: 'Pass --name with a spec directory slug, or omit --name for the open scope.',
+      next: blankNameRepair(supplied),
+    });
+  }
+
+  if (supplied === 'repo' && (name !== undefined || phase !== undefined)) {
+    return scopeRefusal({
+      field: '--scope',
+      problem: `--scope repo sizes the repo config, but ${suppliedFlags(name, phase)} was supplied.`,
+      expected: 'no --name or --phase with --scope repo',
+      actual: `--scope repo ${suppliedFlags(name, phase)}`,
+      fix: 'Drop the spec and phase flags to size the repo config: mf-specs sizing-config --scope repo.',
+      next: 'mf-specs sizing-config --scope repo',
+    });
+  }
+
+  if (supplied === 'spec' && phase !== undefined) {
+    return scopeRefusal({
+      field: '--scope',
+      problem: `--scope spec sizes one spec config, but --phase ${phase} was supplied.`,
+      expected: 'no --phase with --scope spec',
+      actual: `--scope spec ${suppliedFlags(name, phase)}`,
+      fix:
+        name === undefined
+          ? `Drop --phase and pass the spec to size: mf-specs sizing-config --scope spec --name <spec>, or pass --scope phase to size one phase.`
+          : `Drop --phase to size the spec config, or pass --scope phase to size one phase: mf-specs sizing-config --scope spec --name ${name}.`,
+      next:
+        name === undefined
+          ? 'mf-specs sizing-config --scope spec --name <spec>'
+          : `mf-specs sizing-config --scope spec --name ${name}`,
     });
   }
 
@@ -2588,25 +2690,14 @@ export const resolveSizingScope = (options: SizingConfigOptions): SizingScopeRes
     });
   }
 
-  if (supplied === 'repo' && (name !== undefined || phase !== undefined)) {
+  if (supplied === undefined && phase !== undefined && name === undefined) {
     return scopeRefusal({
-      field: '--scope',
-      problem: `--scope repo sizes the repo config, but ${suppliedFlags(name, phase)} was supplied.`,
-      expected: 'no --name or --phase with --scope repo',
-      actual: `--scope repo ${suppliedFlags(name, phase)}`,
-      fix: 'Drop the spec and phase flags to size the repo config: mf-specs sizing-config --scope repo.',
-      next: 'mf-specs sizing-config --scope repo',
-    });
-  }
-
-  if (supplied === 'spec' && phase !== undefined && name !== undefined) {
-    return scopeRefusal({
-      field: '--scope',
-      problem: `--scope spec sizes one spec config, but --phase ${phase} was supplied.`,
-      expected: 'no --phase with --scope spec',
-      actual: `--scope spec --name ${name} --phase ${phase}`,
-      fix: `Drop --phase to size the spec config, or pass --scope phase to size one phase: mf-specs sizing-config --scope spec --name ${name}.`,
-      next: `mf-specs sizing-config --scope spec --name ${name}`,
+      field: '--phase',
+      problem: `--phase requires --name <spec>: '${phase}' belongs to no spec in this command.`,
+      expected: '--name <spec> alongside --phase',
+      actual: `--phase ${phase}`,
+      fix: `Pass --name with the spec holding phase '${phase}': mf-specs sizing-config --name <spec> --phase ${phase}.`,
+      next: `mf-specs sizing-config --name <spec> --phase ${phase}`,
     });
   }
 
@@ -3382,7 +3473,9 @@ const modelsCommand = Command.make(
       }),
       () => ({
         path: storeDirOf(config.dir),
-        rerun: 'mf-specs models',
+        rerun: config.verify
+          ? 'mf-specs models --verify --dir <repo root>'
+          : 'mf-specs models --dir <repo root>',
         verbose: config.verbose,
       }),
     ),
@@ -4010,10 +4103,301 @@ const parseSlashArgs = (args: string): SlashArgs => {
 export type ResolveSlashDir = (dir: string) => string;
 
 /**
+ * Everything one slash arm reads: parsed flags, resolved roots, and the host
+ * model source.
+ */
+interface SlashContext {
+  readonly parsed: SlashArgs;
+  readonly dir: string;
+  readonly workspace: string;
+  readonly catalog: string | undefined;
+  readonly source: Catalogue.ModelSource | undefined;
+}
+
+/** What every slash arm returns: a rendered report or a coded failure. */
+type SlashEffect = Effect.Effect<
+  SlashReport,
+  SpecStore.StoreError | SurfaceError,
+  SpecStore.SpecStore | FileSystem.FileSystem | PromptStore.PromptStore
+>;
+
+/**
+ * Render one arm outcome. Any failure becomes a coded report, so an arm states
+ * its outcome and its failure context once instead of repeating the catch.
+ */
+const slashOutcome = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+  render: (value: A) => SlashReport,
+  context: DiagnoseOptions,
+): Effect.Effect<SlashReport, never, R> =>
+  effect.pipe(
+    Effect.map(render),
+    Effect.catchCause((cause) => Effect.succeed(slashFailure(cause, context))),
+  );
+
+/** `/specs author --request <text>`. */
+const slashAuthor = (context: SlashContext): SlashEffect => {
+  const { parsed, workspace } = context;
+  if (parsed.request === undefined || parsed.request.trim() === '') {
+    return Effect.fail(
+      new SurfaceError({
+        operation: 'SpecAuthor',
+        diagnostics: [
+          diagnostic({
+            code: SURFACE_CODES.invalidArgument,
+            path: workspace,
+            field: '--request',
+            problem: 'author requires --request <text>.',
+            rerun: 'mf-specs author --request <text>',
+            expected: 'a non-empty --request value',
+            actual: 'missing',
+            fix: 'Pass --request with the text the spec should accomplish.',
+          }),
+        ],
+      }),
+    );
+  }
+  const request = parsed.request;
+  return slashOutcome(
+    author(workspace, { request, notes: parsed.notes }),
+    (loaded): SlashReport => ({ output: loaded.text, ok: true }),
+    { path: workspace, rerun: 'mf-specs author', verbose: parsed.verbose },
+  );
+};
+
+/** `/specs execute`, optionally named, phased, focused, or autonomous. */
+const slashExecute = (context: SlashContext): SlashEffect => {
+  const { parsed, dir, workspace } = context;
+  return slashOutcome(
+    execute(dir, {
+      name: parsed.name,
+      phase: parsed.phase,
+      focus: parsed.focus,
+      mode: parsed.mode,
+      workspace,
+    }),
+    (report): SlashReport => ({ output: report.prompt.text, ok: true }),
+    { path: dir, rerun: 'mf-specs execute', verbose: parsed.verbose },
+  );
+};
+
+/** `/specs sizing-config`, the sizing prompt for one scope. */
+const slashSizingConfig = (context: SlashContext): SlashEffect => {
+  const { parsed, workspace } = context;
+  return slashOutcome(
+    sizingConfig(workspace, {
+      scope: parsed.scope,
+      name: parsed.name,
+      phase: parsed.phase,
+      focus: parsed.focus,
+      mode: parsed.mode,
+    }),
+    (report): SlashReport => ({ output: report.prompt.text, ok: true }),
+    { path: workspace, rerun: 'mf-specs sizing-config', verbose: parsed.verbose },
+  );
+};
+
+/** `/specs which`, resolving the spec from the branch. */
+const slashWhich = (context: SlashContext): SlashEffect => {
+  const { parsed, dir, workspace } = context;
+  return slashOutcome(
+    which(dir, { branch: parsed.branch, workspace }),
+    (report): SlashReport => ({ output: renderWhich(report), ok: true }),
+    { path: dir, rerun: 'mf-specs which', verbose: parsed.verbose },
+  );
+};
+
+/** `/specs create --name <spec>`, scaffolding a new spec directory. */
+const slashCreate = (context: SlashContext): SlashEffect => {
+  const { parsed, dir } = context;
+  if (parsed.name === undefined || parsed.name === '') {
+    return Effect.fail(
+      new SpecStore.StoreError({
+        operation: 'SpecCreate',
+        reason: 'create requires --name <spec>.',
+      }),
+    );
+  }
+  return slashOutcome(
+    scaffold(dir, {
+      name: parsed.name,
+      author: parsed.author,
+      description: parsed.description,
+      workspaceType: parsed.workspaceType,
+      taskSpecs: parsed.tasks,
+      reviewerProfiles: parsed.reviewerProfiles,
+    }),
+    (report): SlashReport => ({ output: renderScaffold(report), ok: true }),
+    {
+      path: parsed.name,
+      rerun: `mf-specs create --name ${parsed.name}`,
+      verbose: parsed.verbose,
+    },
+  );
+};
+
+/** `/specs status --name <spec>`. */
+const slashStatus = (context: SlashContext): SlashEffect => {
+  const { parsed, dir } = context;
+  if (parsed.name === undefined || parsed.name === '') {
+    return Effect.fail(
+      new SpecStore.StoreError({
+        operation: 'SpecStatus',
+        reason: 'status requires --name <spec>.',
+      }),
+    );
+  }
+  const name = parsed.name;
+  return slashOutcome(
+    status(dir, name),
+    (report): SlashReport => {
+      const blockers = dispatchErrorText(report.sizing, report.verify, name);
+      const output =
+        blockers === '' ? renderStatus(report) : `${renderStatus(report)}\n\n${blockers}`;
+      return {
+        output,
+        ok: report.verify.valid && dispatchExitCode(report.sizing, report.verify) === 0,
+      };
+    },
+    { path: name, rerun: `mf-specs check --name ${name}`, verbose: parsed.verbose },
+  );
+};
+
+/** `/specs state --name <spec>`. */
+const slashState = (context: SlashContext): SlashEffect => {
+  const { parsed, dir } = context;
+  if (parsed.name === undefined || parsed.name === '') {
+    return Effect.fail(
+      new SpecStore.StoreError({
+        operation: 'SpecState',
+        reason: 'state requires --name <spec>.',
+      }),
+    );
+  }
+  const name = parsed.name;
+  return slashOutcome(
+    state(dir, name),
+    (report): SlashReport => ({
+      output: renderState(report),
+      ok: report.state !== 'inconsistent',
+    }),
+    { path: name, rerun: `mf-specs state --name ${name}`, verbose: parsed.verbose },
+  );
+};
+
+/** `/specs next --name <spec>`. */
+const slashNext = (context: SlashContext): SlashEffect => {
+  const { parsed, dir } = context;
+  if (parsed.name === undefined || parsed.name === '') {
+    return Effect.fail(
+      new SpecStore.StoreError({
+        operation: 'SpecNext',
+        reason: 'next requires --name <spec>.',
+      }),
+    );
+  }
+  const name = parsed.name;
+  return slashOutcome(
+    next(dir, name),
+    (report): SlashReport => {
+      const blockers = dispatchErrorText(report.sizing, report.verify, name);
+      const output = blockers === '' ? renderNext(report) : `${renderNext(report)}\n\n${blockers}`;
+      return {
+        output,
+        ok: report.state !== 'inconsistent' && dispatchExitCode(report.sizing, report.verify) === 0,
+      };
+    },
+    { path: name, rerun: `mf-specs check --name ${name}`, verbose: parsed.verbose },
+  );
+};
+
+/** `/specs resolve` and `/specs sizing`, the two views of one task resolution. */
+const slashResolveOrSizing = (context: SlashContext): SlashEffect => {
+  const { parsed, dir } = context;
+  const name = parsed.name;
+  const taskId = parsed.task;
+  if (name === undefined || name === '' || taskId === undefined || taskId === '') {
+    return Effect.fail(
+      new SpecStore.StoreError({
+        operation: parsed.command === 'resolve' ? 'SpecResolve' : 'SpecSizing',
+        reason: `${parsed.command} requires --name <spec> and --task <id>.`,
+      }),
+    );
+  }
+  return slashOutcome(
+    sizingOf(dir, name, taskId),
+    (report): SlashReport => ({
+      output:
+        parsed.command === 'resolve'
+          ? report.target.target
+          : renderSizingMode(report, parsed.verbose || parsed.human),
+      ok: true,
+    }),
+    { path: name, rerun: `mf-specs check --name ${name}`, verbose: parsed.verbose },
+  );
+};
+
+/** `/specs list`, optionally filtered by status or pending state. */
+const slashList = (context: SlashContext): SlashEffect => {
+  const { parsed, dir } = context;
+  const filter = resolveListOptions(parsed.statusFilter, parsed.pending);
+  if ('error' in filter) {
+    return Effect.fail(new SpecStore.StoreError({ operation: 'SpecList', reason: filter.error }));
+  }
+  return slashOutcome(
+    list(dir, filter.options),
+    (report): SlashReport => ({
+      output: renderList(report, parsed.verbose),
+      ok: true,
+    }),
+    { path: dir, rerun: 'mf-specs list', verbose: parsed.verbose },
+  );
+};
+
+/** `/specs models`, the catalogue table, the JSON document, or the verify pass. */
+const slashModels = (context: SlashContext): SlashEffect => {
+  const { parsed, dir, catalog, source } = context;
+  return slashOutcome(
+    models(
+      dir,
+      {
+        provider: parsed.provider,
+        json: parsed.json,
+        catalog,
+        verify: parsed.verify,
+        name: parsed.name,
+      },
+      source,
+    ),
+    (report): SlashReport => ({ output: report.output, ok: report.exitCode === 0 }),
+    { path: dir, rerun: 'mf-specs models', verbose: parsed.verbose },
+  );
+};
+
+/** `/specs check`, the fall-through command. */
+const slashCheck = (context: SlashContext): SlashEffect => {
+  const { parsed, dir } = context;
+  const options: CheckOptions =
+    parsed.name === undefined
+      ? { concurrency: DEFAULT_CONCURRENCY, strict: parsed.strict }
+      : { name: parsed.name, concurrency: DEFAULT_CONCURRENCY, strict: parsed.strict };
+  return slashOutcome(
+    check(dir, options),
+    (report): SlashReport => ({
+      output: renderCheck(report, parsed.verbose),
+      ok: checkExitCode(report) === 0,
+    }),
+    { path: dir, rerun: 'mf-specs check', verbose: parsed.verbose },
+  );
+};
+
+/**
  * Run the slash-command form registered as the OpenCode `/specs` command
  * (`src/server.ts`, through `ports.command.register`). Never renders through
  * the CLI; returns the report for the caller to log — the server writes
  * `report.output` with `Effect.logInfo` and any failure with `Effect.logError`.
+ * Dispatch is exhaustive over {@link SLASH_COMMANDS}: a new command fails to
+ * typecheck until it gets an arm, so it cannot silently fall through to `check`.
  * @param args - raw slash-command args
  * @param root - default spec root, already resolved against the plugin directory
  * @param resolveDir - resolver for a `--dir` value (identity by default)
@@ -4034,322 +4418,26 @@ export const runSlash = (
     const parsed = parseSlashArgs(args);
     const workspace = parsed.dir === undefined ? workspaceOf(root) : resolveDir(parsed.dir);
     const dir = parsed.dir === undefined ? root : storeDirOf(workspace);
-    if (parsed.command === 'author') {
-      if (parsed.request === undefined || parsed.request.trim() === '') {
-        return yield* Effect.fail(
-          new SurfaceError({
-            operation: 'SpecAuthor',
-            diagnostics: [
-              diagnostic({
-                code: SURFACE_CODES.invalidArgument,
-                path: workspace,
-                field: '--request',
-                problem: 'author requires --request <text>.',
-                rerun: 'mf-specs author --request <text>',
-                expected: 'a non-empty --request value',
-                actual: 'missing',
-                fix: 'Pass --request with the text the spec should accomplish.',
-              }),
-            ],
-          }),
-        );
-      }
-      const request = parsed.request;
-      const outcome = author(workspace, { request, notes: parsed.notes }).pipe(
-        Effect.map((loaded): SlashReport => ({ output: loaded.text, ok: true })),
-        Effect.catchCause((cause) =>
-          Effect.succeed(
-            slashFailure(cause, {
-              path: workspace,
-              rerun: 'mf-specs author',
-              verbose: parsed.verbose,
-            }),
-          ),
-        ),
-      );
-      return yield* outcome;
-    }
-    if (parsed.command === 'execute') {
-      const outcome = execute(dir, {
-        name: parsed.name,
-        phase: parsed.phase,
-        focus: parsed.focus,
-        mode: parsed.mode,
-        workspace,
-      }).pipe(
-        Effect.map((report): SlashReport => ({ output: report.prompt.text, ok: true })),
-        Effect.catchCause((cause) =>
-          Effect.succeed(
-            slashFailure(cause, {
-              path: dir,
-              rerun: 'mf-specs execute',
-              verbose: parsed.verbose,
-            }),
-          ),
-        ),
-      );
-      return yield* outcome;
-    }
-    if (parsed.command === 'sizing-config') {
-      const outcome = sizingConfig(workspace, {
-        scope: parsed.scope,
-        name: parsed.name,
-        phase: parsed.phase,
-        focus: parsed.focus,
-        mode: parsed.mode,
-      }).pipe(
-        Effect.map((report): SlashReport => ({ output: report.prompt.text, ok: true })),
-        Effect.catchCause((cause) =>
-          Effect.succeed(
-            slashFailure(cause, {
-              path: workspace,
-              rerun: 'mf-specs sizing-config',
-              verbose: parsed.verbose,
-            }),
-          ),
-        ),
-      );
-      return yield* outcome;
-    }
-    if (parsed.command === 'which') {
-      const outcome = which(dir, { branch: parsed.branch, workspace }).pipe(
-        Effect.map((report): SlashReport => ({ output: renderWhich(report), ok: true })),
-        Effect.catchCause((cause) =>
-          Effect.succeed(
-            slashFailure(cause, {
-              path: dir,
-              rerun: 'mf-specs which',
-              verbose: parsed.verbose,
-            }),
-          ),
-        ),
-      );
-      return yield* outcome;
-    }
-    if (parsed.command === 'create') {
-      if (parsed.name === undefined || parsed.name === '') {
-        return yield* Effect.fail(
-          new SpecStore.StoreError({
-            operation: 'SpecCreate',
-            reason: 'create requires --name <spec>.',
-          }),
-        );
-      }
-      const outcome = scaffold(dir, {
-        name: parsed.name,
-        author: parsed.author,
-        description: parsed.description,
-        workspaceType: parsed.workspaceType,
-        taskSpecs: parsed.tasks,
-        reviewerProfiles: parsed.reviewerProfiles,
-      }).pipe(
-        Effect.map((report): SlashReport => ({ output: renderScaffold(report), ok: true })),
-        Effect.catchCause((cause) =>
-          Effect.succeed(
-            slashFailure(cause, {
-              path: parsed.name ?? dir,
-              rerun: `mf-specs create --name ${parsed.name ?? '<spec>'}`,
-              verbose: parsed.verbose,
-            }),
-          ),
-        ),
-      );
-      return yield* outcome;
-    }
-    if (parsed.command === 'status') {
-      if (parsed.name === undefined || parsed.name === '') {
-        return yield* Effect.fail(
-          new SpecStore.StoreError({
-            operation: 'SpecStatus',
-            reason: 'status requires --name <spec>.',
-          }),
-        );
-      }
-      const name = parsed.name;
-      const outcome = status(dir, name).pipe(
-        Effect.map((report): SlashReport => {
-          const blockers = dispatchErrorText(report.sizing, report.verify, name);
-          const output =
-            blockers === '' ? renderStatus(report) : `${renderStatus(report)}\n\n${blockers}`;
-          return {
-            output,
-            ok: report.verify.valid && dispatchExitCode(report.sizing, report.verify) === 0,
-          };
-        }),
-        Effect.catchCause((cause) =>
-          Effect.succeed(
-            slashFailure(cause, {
-              path: name,
-              rerun: `mf-specs check --name ${name}`,
-              verbose: parsed.verbose,
-            }),
-          ),
-        ),
-      );
-      return yield* outcome;
-    }
-    if (parsed.command === 'state') {
-      if (parsed.name === undefined || parsed.name === '') {
-        return yield* Effect.fail(
-          new SpecStore.StoreError({
-            operation: 'SpecState',
-            reason: 'state requires --name <spec>.',
-          }),
-        );
-      }
-      const name = parsed.name;
-      const outcome = state(dir, name).pipe(
-        Effect.map((report): SlashReport => ({
-          output: renderState(report),
-          ok: report.state !== 'inconsistent',
-        })),
-        Effect.catchCause((cause) =>
-          Effect.succeed(
-            slashFailure(cause, {
-              path: name,
-              rerun: `mf-specs state --name ${name}`,
-              verbose: parsed.verbose,
-            }),
-          ),
-        ),
-      );
-      return yield* outcome;
-    }
-    if (parsed.command === 'next') {
-      if (parsed.name === undefined || parsed.name === '') {
-        return yield* Effect.fail(
-          new SpecStore.StoreError({
-            operation: 'SpecNext',
-            reason: 'next requires --name <spec>.',
-          }),
-        );
-      }
-      const name = parsed.name;
-      const outcome = next(dir, name).pipe(
-        Effect.map((report): SlashReport => {
-          const blockers = dispatchErrorText(report.sizing, report.verify, name);
-          const output =
-            blockers === '' ? renderNext(report) : `${renderNext(report)}\n\n${blockers}`;
-          return {
-            output,
-            ok:
-              report.state !== 'inconsistent' &&
-              dispatchExitCode(report.sizing, report.verify) === 0,
-          };
-        }),
-        Effect.catchCause((cause) =>
-          Effect.succeed(
-            slashFailure(cause, {
-              path: name,
-              rerun: `mf-specs check --name ${name}`,
-              verbose: parsed.verbose,
-            }),
-          ),
-        ),
-      );
-      return yield* outcome;
-    }
-    if (parsed.command === 'resolve' || parsed.command === 'sizing') {
-      const name = parsed.name;
-      const taskId = parsed.task;
-      if (name === undefined || name === '' || taskId === undefined || taskId === '') {
-        return yield* Effect.fail(
-          new SpecStore.StoreError({
-            operation: parsed.command === 'resolve' ? 'SpecResolve' : 'SpecSizing',
-            reason: `${parsed.command} requires --name <spec> and --task <id>.`,
-          }),
-        );
-      }
-      const outcome = yield* sizingOf(dir, name, taskId).pipe(
-        Effect.map((report): SlashReport => ({
-          output:
-            parsed.command === 'resolve'
-              ? report.target.target
-              : renderSizingMode(report, parsed.verbose || parsed.human),
-          ok: true,
-        })),
-        Effect.catchCause((cause) =>
-          Effect.succeed(
-            slashFailure(cause, {
-              path: name,
-              rerun: `mf-specs check --name ${name}`,
-              verbose: parsed.verbose,
-            }),
-          ),
-        ),
-      );
-      return outcome;
-    }
-    if (parsed.command === 'list') {
-      const filter = resolveListOptions(parsed.statusFilter, parsed.pending);
-      if ('error' in filter) {
-        return yield* Effect.fail(
-          new SpecStore.StoreError({ operation: 'SpecList', reason: filter.error }),
-        );
-      }
-      const outcome = list(dir, filter.options).pipe(
-        Effect.map((report): SlashReport => ({
-          output: renderList(report, parsed.verbose),
-          ok: true,
-        })),
-        Effect.catchCause((cause) =>
-          Effect.succeed(
-            slashFailure(cause, {
-              path: dir,
-              rerun: 'mf-specs list',
-              verbose: parsed.verbose,
-            }),
-          ),
-        ),
-      );
-      return yield* outcome;
-    }
-    if (parsed.command === 'models') {
-      const outcome = models(
-        dir,
-        {
-          provider: parsed.provider,
-          json: parsed.json,
-          catalog: parsed.catalog === undefined ? undefined : resolveDir(parsed.catalog),
-          verify: parsed.verify,
-          name: parsed.name,
-        },
-        source,
-      ).pipe(
-        Effect.map((report): SlashReport => ({
-          output: report.output,
-          ok: report.exitCode === 0,
-        })),
-        Effect.catchCause((cause) =>
-          Effect.succeed(
-            slashFailure(cause, {
-              path: dir,
-              rerun: 'mf-specs models',
-              verbose: parsed.verbose,
-            }),
-          ),
-        ),
-      );
-      return yield* outcome;
-    }
-    const options: CheckOptions =
-      parsed.name === undefined
-        ? { concurrency: DEFAULT_CONCURRENCY, strict: parsed.strict }
-        : { name: parsed.name, concurrency: DEFAULT_CONCURRENCY, strict: parsed.strict };
-    const outcome = check(dir, options).pipe(
-      Effect.map((report): SlashReport => ({
-        output: renderCheck(report, parsed.verbose),
-        ok: checkExitCode(report) === 0,
-      })),
-      Effect.catchCause((cause) =>
-        Effect.succeed(
-          slashFailure(cause, {
-            path: dir,
-            rerun: 'mf-specs check',
-            verbose: parsed.verbose,
-          }),
-        ),
-      ),
+    const context: SlashContext = {
+      parsed,
+      dir,
+      workspace,
+      catalog: parsed.catalog === undefined ? undefined : resolveDir(parsed.catalog),
+      source,
+    };
+    return yield* Match.value(parsed.command).pipe(
+      Match.when('author', () => slashAuthor(context)),
+      Match.when('execute', () => slashExecute(context)),
+      Match.when('sizing-config', () => slashSizingConfig(context)),
+      Match.when('which', () => slashWhich(context)),
+      Match.when('create', () => slashCreate(context)),
+      Match.when('status', () => slashStatus(context)),
+      Match.when('state', () => slashState(context)),
+      Match.when('next', () => slashNext(context)),
+      Match.whenOr('resolve', 'sizing', () => slashResolveOrSizing(context)),
+      Match.when('list', () => slashList(context)),
+      Match.when('models', () => slashModels(context)),
+      Match.when('check', () => slashCheck(context)),
+      Match.exhaustive,
     );
-    return yield* outcome;
   });

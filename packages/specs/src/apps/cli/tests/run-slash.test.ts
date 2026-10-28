@@ -312,22 +312,25 @@ Vitest.describe('Cli.runSlash sizing-config runtime', () => {
     }).pipe(Effect.provide(stubLayer(specs))),
   );
 
-  Vitest.it.effect('treats a blank --name as absent', () =>
+  Vitest.it.effect('refuses a supplied but blank --name', () =>
     Effect.gen(function* () {
       const work = yield* workspace;
 
-      // `--name=` reaches the engine as an empty value, which is "absent".
+      // `--name=` is supplied and blank: a usage error, not the open scope.
       const open = yield* runSlash('sizing-config --name=', work.root).pipe(
         Effect.provide(stubLayer(specs)),
       );
-      Vitest.expect(open.ok).toBe(true);
-      Vitest.expect(open.output).toContain('Scope is open: no layer is selected.');
+      Vitest.expect(open.ok).toBe(false);
+      Vitest.expect(open.output).toContain('code     cli.invalid-argument');
+      Vitest.expect(open.output).toContain('field    --name');
+      Vitest.expect(open.output).toContain('--name requires a spec name');
 
       const missing = yield* runSlash('sizing-config --scope spec --name=', work.root).pipe(
         Effect.provide(stubLayer(specs)),
       );
       Vitest.expect(missing.ok).toBe(false);
-      Vitest.expect(missing.output).toContain('--scope spec requires --name');
+      Vitest.expect(missing.output).toContain('field    --name');
+      Vitest.expect(missing.output).toContain('mf-specs sizing-config --scope spec --name <spec>');
     }).pipe(Effect.provide(stubLayer(specs))),
   );
 

@@ -107,9 +107,9 @@ const refused = (resolution: SizingScopeResolution) => {
 };
 
 Vitest.describe('Cli.resolveSizingScope', () => {
-  Vitest.it.effect('leaves the scope open with no flags or only blank values', () =>
+  Vitest.it.effect('leaves the scope open with no flags or only blank scope and phase', () =>
     Effect.sync(() => {
-      for (const options of [{}, { name: '', phase: '  ', scope: '' }] as const) {
+      for (const options of [{}, { phase: '  ', scope: '' }] as const) {
         const request = accepted(resolveSizingScope(options));
         Vitest.expect(request).toStrictEqual({});
       }
@@ -142,19 +142,26 @@ Vitest.describe('Cli.resolveSizingScope', () => {
     }),
   );
 
-  Vitest.it.effect('trims identifiers and treats a blank --name as absent', () =>
+  Vitest.it.effect('trims identifiers and refuses a supplied but blank --name', () =>
     Effect.sync(() => {
       Vitest.expect(accepted(resolveSizingScope({ name: '  ship-login  ' }))).toStrictEqual({
         scope: 'spec',
         name: 'ship-login',
       });
-      // Blank alone is the open scope, not a spec called ''.
-      Vitest.expect(accepted(resolveSizingScope({ name: '   ' }))).toStrictEqual({});
+      // Supplied but blank is a typo, not the open scope; omitting it is open.
+      for (const options of [{ name: '' }, { name: '   ' }, { name: ' ', phase: 'A' }] as const) {
+        const blank = refused(resolveSizingScope(options));
+        Vitest.expect(blank.code).toBe('cli.invalid-argument');
+        Vitest.expect(blank.field).toBe('--name');
+        Vitest.expect(blank.problem).toContain('--name requires a spec name');
+        Vitest.expect(blank.next).toContain('--name <spec>');
+      }
       const missing = refused(resolveSizingScope({ scope: 'spec', name: '' }));
       Vitest.expect(missing.code).toBe('cli.invalid-argument');
-      Vitest.expect(missing.problem).toContain('--scope spec requires --name');
+      Vitest.expect(missing.field).toBe('--name');
+      Vitest.expect(missing.next).toBe('mf-specs sizing-config --scope spec --name <spec>');
       const phase = refused(resolveSizingScope({ name: ' ', phase: 'A' }));
-      Vitest.expect(phase.problem).toContain('--phase requires --name');
+      Vitest.expect(phase.field).toBe('--name');
     }),
   );
 
@@ -207,6 +214,17 @@ Vitest.describe('Cli.resolveSizingScope', () => {
       );
       Vitest.expect(repoPhase.actual).toContain('--phase A');
       Vitest.expect(repoPhase.next).toBe('mf-specs sizing-config --scope repo');
+
+      // No --name: the explicit scope still wins, so the corrected command
+      // sizes the layer the caller asked for, not the inferred phase layer.
+      const repoPhaseOnly = refused(resolveSizingScope({ scope: 'repo', phase: 'A' }));
+      Vitest.expect(repoPhaseOnly.problem).toContain('--phase A was supplied');
+      Vitest.expect(repoPhaseOnly.next).toBe('mf-specs sizing-config --scope repo');
+
+      const specPhaseOnly = refused(resolveSizingScope({ scope: 'spec', phase: 'A' }));
+      Vitest.expect(specPhaseOnly.problem).toContain('--phase A was supplied');
+      Vitest.expect(specPhaseOnly.next).toContain('--scope spec');
+      Vitest.expect(specPhaseOnly.next).not.toContain('--phase A');
 
       const specPhase = refused(
         resolveSizingScope({ scope: 'spec', name: 'ship-login', phase: 'A' }),
@@ -262,8 +280,11 @@ Vitest.describe('Cli.sizingConfig runtime', () => {
       Vitest.expect(report.prompt.text).toContain(
         'Scope: repo (fixed for this run; do not ask which layer).',
       );
-      Vitest.expect(report.prompt.text).toContain('`repo` -> `<specs-root>/sizing.json`');
+      Vitest.expect(report.prompt.text).toContain('`<specs-root>/sizing.json`');
       Vitest.expect(report.prompt.text).toContain('never a `phases` key');
+      Vitest.expect(report.prompt.text).not.toContain('`repo` ->');
+      Vitest.expect(report.prompt.text).not.toContain('`spec` ->');
+      Vitest.expect(report.prompt.text).not.toContain('`phase` ->');
       Vitest.expect(report.prompt.text).not.toContain('Scope is open');
     }).pipe(Effect.provide(StoreLive)),
   );

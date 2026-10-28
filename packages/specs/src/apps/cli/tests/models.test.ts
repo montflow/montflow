@@ -6,7 +6,7 @@ import * as Catalogue from '../../../modules/catalogue/index.js';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import { SpecStore } from '../../../services/index.js';
-import { SurfaceError, listModels, verifyModels } from '../index.js';
+import { SurfaceError, check, listModels, models, verifyModels } from '../index.js';
 import { entry, memory, stubLayer } from './helpers.js';
 
 const root = '.agents/@montflow/specs';
@@ -15,10 +15,10 @@ const Platform = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 
 /** A host model source with the fixture catalogue's known/unknown variants. */
 const modelSource = (
-  models: ReadonlyArray<Catalogue.SourceModel>,
+  listed: ReadonlyArray<Catalogue.SourceModel>,
   defaultModel: Catalogue.SourceDefault | undefined,
 ): Catalogue.ModelSource => ({
-  list: () => Effect.succeed(models),
+  list: () => Effect.succeed(listed),
   default: () => Effect.succeed(defaultModel),
 });
 
@@ -69,8 +69,8 @@ type TestLayer = Layer.Layer<
   SpecStore.SpecStore | FileSystem.FileSystem | PromptStore.PromptStore | Path.Path
 >;
 
-const runList = (options: Parameters<typeof listModels>[0], models = source) =>
-  listModels(options, models).pipe(Effect.provide(Platform));
+const runList = (options: Parameters<typeof listModels>[0], modelList = source) =>
+  listModels(options, modelList).pipe(Effect.provide(Platform));
 
 const runVerify = (name: string | undefined, layer: TestLayer) =>
   verifyModels(root, name === undefined ? {} : { name }, source).pipe(Effect.provide(layer));
@@ -156,6 +156,46 @@ Vitest.describe('Cli.models listing', () => {
       Vitest.expect(error).toBeInstanceOf(SurfaceError);
       Vitest.expect(error.diagnostics[0]?.code).toBe(Catalogue.CODES.malformedCatalog);
       Vitest.expect(error.diagnostics[0]?.path).toBe(file);
+      Vitest.expect(error.diagnostics[0]?.cause).toBeInstanceOf(SyntaxError);
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('refuses a --catalog id the sizing grammar cannot store', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-specs-catalog-odd-' });
+      const file = path.join(dir, 'catalog.json');
+      yield* fs.writeFileString(
+        file,
+        JSON.stringify({
+          default: null,
+          models: [{ providerID: 'acme', modelID: 'weird id#tag', variants: ['High'] }],
+        }),
+      );
+      const error = yield* runList({ catalog: file }).pipe(Effect.flip);
+      Vitest.expect(error).toBeInstanceOf(SurfaceError);
+      Vitest.expect(error.diagnostics[0]?.code).toBe(Catalogue.CODES.malformedCatalog);
+      Vitest.expect(error.diagnostics[0]?.field).toBe('models.0');
+      Vitest.expect(error.diagnostics[0]?.actual).toBe('acme/weird id#tag');
+      Vitest.expect(error.diagnostics[0]?.fix).toContain('models.0.providerID');
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('drops a host id or variant the sizing grammar cannot store', () =>
+    Effect.gen(function* () {
+      const hostile = modelSource(
+        [
+          { providerID: 'acme', modelID: 'weird id#tag', variants: ['high'] },
+          { providerID: 'acme', modelID: 'ok', variants: ['hi there', 'High', ''] },
+        ],
+        { providerID: 'acme', modelID: 'weird id#tag' },
+      );
+      const report = yield* runList({ json: true }, hostile);
+      const document = jsonOf(report.output);
+      Vitest.expect(document.models.map((model) => model.label)).toStrictEqual(['acme/ok']);
+      Vitest.expect(document.models[0]?.variants).toStrictEqual(['High']);
+      Vitest.expect(document.default).toBeNull();
     }).pipe(Effect.provide(Platform)),
   );
 
@@ -221,6 +261,57 @@ Vitest.describe('Cli.models verification', () => {
     }),
   );
 
+  Vitest.it.effect(
+    'round-trips a host-shaped id and a mixed-case variant through list, verify, and check',
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-specs-catalog-host-' });
+        const file = path.join(dir, 'catalog.json');
+        yield* fs.writeFileString(
+          file,
+          JSON.stringify({
+            default: null,
+            models: [
+              {
+                providerID: 'openrouter',
+                modelID: 'meta-llama/llama-3.3-70b',
+                variants: ['High', 'low'],
+              },
+              { providerID: 'ollama', modelID: 'qwen2.5-coder:7b', variants: ['max'] },
+            ],
+          }),
+        );
+
+        const listed = yield* runList({ catalog: file });
+        Vitest.expect(listed.output).toContain(
+          'openrouter/meta-llama/llama-3.3-70b  variants High,low',
+        );
+        Vitest.expect(listed.output).toContain('ollama/qwen2.5-coder:7b  variants max');
+
+        const sizing = JSON.stringify({
+          sizes: {
+            tiny: { model: 'openrouter/meta-llama/llama-3.3-70b', effort: 'High' },
+            small: { model: 'ollama/qwen2.5-coder:7b', effort: 'max' },
+          },
+        });
+        const layer = stubLayer(new Map(), new Map([['sizing.json', sizing]]));
+        const verified = yield* verifyModels(root, { catalog: file }, source).pipe(
+          Effect.provide(layer),
+        );
+        Vitest.expect(verified.findings).toStrictEqual([]);
+        Vitest.expect(verified.output).toBe('\u2713 no model or effort findings');
+
+        const checked = yield* check(root).pipe(
+          Effect.provide(stubLayer(new Map(), new Map([['sizing.json', sizing]]))),
+        );
+        Vitest.expect(checked.rootIssues).toStrictEqual([]);
+        Vitest.expect(checked.issueCount).toBe(0);
+        Vitest.expect(checked.failed).toBe(0);
+      }).pipe(Effect.provide(Platform)),
+  );
+
   Vitest.it.effect('fails an invalid config before checking the catalogue', () =>
     Effect.gen(function* () {
       const error = yield* runVerify(
@@ -230,6 +321,78 @@ Vitest.describe('Cli.models verification', () => {
       Vitest.expect(error).toBeInstanceOf(SurfaceError);
       if (!(error instanceof SurfaceError)) return;
       Vitest.expect(error.diagnostics[0]?.code).toBe('sizing.malformed-json');
+    }),
+  );
+
+  Vitest.it.effect('fails a missing specs root instead of reporting a clean verification', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-specs-models-root-' });
+      const store = Layer.provide(SpecStore.Default, Platform);
+      const error = yield* verifyModels(path.join(dir, 'absent'), {}, source).pipe(
+        Effect.provide(store),
+        Effect.flip,
+      );
+      Vitest.expect(error).toBeInstanceOf(SpecStore.StoreError);
+      if (!(error instanceof SpecStore.StoreError)) return;
+      Vitest.expect(error.reason).toContain('Specs directory not found');
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('fails an unknown --name as spec.not-found, not a raw store error', () =>
+    Effect.gen(function* () {
+      const error = yield* runVerify('nope', stubLayer(specs)).pipe(Effect.flip);
+      Vitest.expect(error).toBeInstanceOf(SurfaceError);
+      if (!(error instanceof SurfaceError)) return;
+      Vitest.expect(error.diagnostics[0]?.code).toBe('spec.not-found');
+      Vitest.expect(error.diagnostics[0]?.next).toBe('mf-specs list');
+    }),
+  );
+
+  Vitest.it.effect('scopes a verification to one provider', () =>
+    Effect.gen(function* () {
+      const layer = stubLayer(specs, new Map([['sizing.json', repoConfig]]));
+      const scoped = yield* verifyModels(root, { catalog, provider: 'alpha' }, source).pipe(
+        Effect.provide(layer),
+      );
+      Vitest.expect(scoped.findings).toStrictEqual([]);
+      Vitest.expect(scoped.output).toBe('\u2713 no model or effort findings');
+
+      const kept = yield* verifyModels(root, { catalog, provider: 'fixture' }, source).pipe(
+        Effect.provide(layer),
+      );
+      Vitest.expect(kept.findings.map((found) => found.code)).toStrictEqual([
+        Catalogue.CODES.unknownModel,
+        Catalogue.CODES.unknownModel,
+      ]);
+      Vitest.expect(kept.output).toContain('fixture/ghost');
+
+      const miss = yield* verifyModels(root, { catalog, provider: 'nope' }, source).pipe(
+        Effect.provide(layer),
+        Effect.flip,
+      );
+      Vitest.expect(miss).toBeInstanceOf(SurfaceError);
+      if (!(miss instanceof SurfaceError)) return;
+      Vitest.expect(miss.diagnostics[0]?.code).toBe(Catalogue.CODES.unknownProvider);
+    }),
+  );
+
+  Vitest.it.effect('refuses --json with --verify and names the corrected command', () =>
+    Effect.gen(function* () {
+      const error = yield* models(
+        root,
+        { verify: true, json: true, catalog, provider: 'fixture' },
+        source,
+      ).pipe(Effect.provide(stubLayer(specs)), Effect.flip);
+      Vitest.expect(error).toBeInstanceOf(SurfaceError);
+      if (!(error instanceof SurfaceError)) return;
+      const found = error.diagnostics[0];
+      Vitest.expect(found?.code).toBe('cli.invalid-argument');
+      Vitest.expect(found?.field).toBe('--json');
+      Vitest.expect(found?.next).toBe(
+        `mf-specs models --verify --provider fixture --catalog ${catalog}`,
+      );
     }),
   );
 });

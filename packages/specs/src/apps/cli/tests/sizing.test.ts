@@ -1,6 +1,6 @@
 import * as Vitest from '@effect/vitest';
 import { Cause, Data, Effect } from 'effect';
-import { SizingError } from '../../../modules/sizing/index.js';
+import * as Sizing from '../../../modules/sizing/index.js';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import type { SpecFileEntry } from '../../../modules/structure/index.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
@@ -263,7 +263,7 @@ Vitest.describe('Cli.diagnoseCause runtime', () => {
 
       const caused = diagnoseCause(
         Cause.fail(
-          new SizingError({
+          new Sizing.SizingError({
             operation: 'Sizing.parse',
             path: 'sizing.json',
             field: 'root',

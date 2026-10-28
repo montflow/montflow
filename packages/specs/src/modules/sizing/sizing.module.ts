@@ -112,17 +112,37 @@ export type Code = (typeof CODES)[keyof typeof CODES];
 /** File name of both the repo-level and the spec-level config. */
 export const CONFIG_FILE = 'sizing.json';
 
-/** Model id shape: exactly `provider/model`. */
-export const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
+/**
+ * Model id shape: the first `/` separates the provider from the model, and the
+ * model part may carry further `/` or `:` because hosts use them (OpenRouter
+ * namespaces, Ollama tags). No whitespace and no `#`, which separates effort in
+ * a resolved target.
+ */
+export const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._:/-]*$/;
 
-/** Effort shape: a non-empty variant token such as `low`, `high`, or `xhigh`. */
-export const EFFORT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/**
+ * Effort shape: a non-empty variant token as a host catalogue reports it.
+ * Case-insensitive and `:`/`.` tolerant so every storable catalogue token
+ * passes; the catalogue's variant list stays the authority on which tokens a
+ * model accepts. No whitespace and no `#` (the resolved-target separator).
+ */
+export const EFFORT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 
-/** What a model id must look like, for diagnostics. */
+/**
+ * A literal model id, for repair text that quotes one. It is itself a valid id,
+ * so an agent can follow a `fix` line that embeds it verbatim.
+ */
 export const MODEL_HINT = 'provider/model';
 
+/**
+ * The model id grammar, for the `expected` field and prose. Not a literal: it
+ * must never be quoted as a value, only described.
+ */
+export const MODEL_RULE =
+  'provider/model: the first / separates the provider from the model, which may contain further / or :, with no whitespace and no #';
+
 /** What an effort token must look like, for diagnostics. */
-export const EFFORT_HINT = 'a variant token such as low, high, xhigh, or max';
+export const EFFORT_HINT = 'a catalogue variant token such as low, high, xhigh, or max';
 
 /** One size's dispatch target: a model id plus an optional effort. */
 export interface SizeEntry {
@@ -323,7 +343,7 @@ const verifyEntry = (issues: Array<Issue>, field: string, entry: Json): void => 
         code: CODES.missingModel,
         field: `${field}.model`,
         message: 'A size entry requires a model.',
-        expected: MODEL_HINT,
+        expected: MODEL_RULE,
         actual: model === undefined ? 'missing' : displayValue(model),
         fix: `Add "model": "${MODEL_HINT}" to ${field}.`,
       }),
@@ -333,8 +353,8 @@ const verifyEntry = (issues: Array<Issue>, field: string, entry: Json): void => 
       finding({
         code: CODES.malformedModel,
         field: `${field}.model`,
-        message: 'Model must be a `provider/model` id.',
-        expected: MODEL_HINT,
+        message: 'Model must be an id whose first segment is the provider.',
+        expected: MODEL_RULE,
         actual: displayValue(model),
         fix: `Set ${field}.model to a "${MODEL_HINT}" id.`,
       }),
@@ -348,7 +368,7 @@ const verifyEntry = (issues: Array<Issue>, field: string, entry: Json): void => 
       finding({
         code: CODES.malformedEffort,
         field: `${field}.effort`,
-        message: 'Effort must be a non-empty variant token.',
+        message: 'Effort must be a non-empty catalogue variant token.',
         expected: EFFORT_HINT,
         actual: displayValue(effort),
         fix: `Set ${field}.effort to a token such as "low", "high", or "max".`,

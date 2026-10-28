@@ -27,6 +27,17 @@ Vitest.describe('Sizing.verify runtime', () => {
     Vitest.expect(result.valid).toBe(true);
   });
 
+  Vitest.it('accepts a host-shaped id and a mixed-case effort token', () => {
+    const result = Sizing.verify(repo, {
+      sizes: {
+        tiny: { model: 'openrouter/meta-llama/llama-3.3-70b', effort: 'High' },
+        small: { model: 'ollama/qwen2.5-coder:7b', effort: 'max' },
+      },
+    });
+    Vitest.expect(result.issues).toStrictEqual([]);
+    Vitest.expect(result.valid).toBe(true);
+  });
+
   Vitest.it('codes malformed JSON with a concrete fix and the decode cause', () => {
     const issue = Sizing.verifyText(repo, '{ nope').issues[0];
     Vitest.expect(issue).toMatchObject({
@@ -59,7 +70,7 @@ Vitest.describe('Sizing.verify runtime', () => {
         code: Sizing.CODES.missingModel,
         field: 'sizes.tiny.model',
         message: 'A size entry requires a model.',
-        expected: 'provider/model',
+        expected: Sizing.MODEL_RULE,
         actual: 'missing',
         fix: 'Add "model": "provider/model" to sizes.tiny.',
       },
@@ -73,12 +84,31 @@ Vitest.describe('Sizing.verify runtime', () => {
       {
         code: Sizing.CODES.malformedModel,
         field: 'sizes.tiny.model',
-        message: 'Model must be a `provider/model` id.',
-        expected: 'provider/model',
+        message: 'Model must be an id whose first segment is the provider.',
+        expected: Sizing.MODEL_RULE,
         actual: 'not-a-model',
         fix: 'Set sizes.tiny.model to a "provider/model" id.',
       },
     ]);
+  });
+
+  Vitest.it('quotes a writable model id in every fix, never the grammar sentence', () => {
+    // An agent follows a `fix` verbatim, so the value it quotes must be a model
+    // id the same grammar accepts. The prose belongs in `expected` only.
+    Vitest.expect(Sizing.MODEL_PATTERN.test(Sizing.MODEL_HINT)).toBe(true);
+    Vitest.expect(Sizing.MODEL_HINT).toBe('provider/model');
+    Vitest.expect(Sizing.MODEL_HINT).not.toContain(' ');
+
+    const fixes = [
+      Sizing.verify(repo, { sizes: { tiny: {} } }).issues[0]?.fix ?? '',
+      Sizing.verify(repo, { sizes: { tiny: { model: 'not-a-model' } } }).issues[0]?.fix ?? '',
+      Sizing.verify(repo, { sizes: { tiny: 'a/b' } }).issues[0]?.fix ?? '',
+    ];
+    for (const fix of fixes) {
+      Vitest.expect(fix).toContain('"provider/model"');
+      Vitest.expect(fix).not.toContain(Sizing.MODEL_RULE);
+      Vitest.expect(fix).not.toContain('separates the provider');
+    }
   });
 
   Vitest.it('codes effort without a model, and the missing model it implies', () => {
@@ -104,7 +134,7 @@ Vitest.describe('Sizing.verify runtime', () => {
       {
         code: Sizing.CODES.malformedEffort,
         field: 'sizes.tiny.effort',
-        message: 'Effort must be a non-empty variant token.',
+        message: 'Effort must be a non-empty catalogue variant token.',
         expected: Sizing.EFFORT_HINT,
         actual: 'HIGH!',
         fix: 'Set sizes.tiny.effort to a token such as "low", "high", or "max".',

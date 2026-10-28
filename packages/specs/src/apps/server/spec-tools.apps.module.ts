@@ -223,7 +223,7 @@ export interface ModelsToolOptions {
 export const specModelsTool = (options: ModelsToolOptions): ToolDefinition<SpecModelsInput> => ({
   name: 'spec_models',
   description:
-    'Read the harness model catalogue. `list` returns the stable catalogue JSON (provider/model ids, effort variants, and the default marker); `verify` cross-checks the repo config and, when `name` is supplied, that spec config including every phase override, returning the same warnings as `mf-specs models --verify`. Unknown variants never produce an effort finding.',
+    "Read the harness model catalogue. `list` returns the stable catalogue JSON (provider/model ids, effort variants, and the default marker); `verify` cross-checks the repo config and, when `name` is supplied, that spec config including every phase override, returning the same warnings as `mf-specs models --verify`. `provider` keeps one provider on either action; a miss is a diagnostic, and on `verify` only that provider's config entries are checked. Unknown variants never produce an effort finding.",
   input: SpecModelsInput,
   execute: (input) =>
     Effect.gen(function* () {
@@ -238,7 +238,11 @@ export const specModelsTool = (options: ModelsToolOptions): ToolDefinition<SpecM
         );
         return report.output;
       }
-      const report = yield* verifyModels(root, { name: input.name }, options.model).pipe(
+      const report = yield* verifyModels(
+        root,
+        { name: input.name, provider: input.provider },
+        options.model,
+      ).pipe(
         Effect.provide(Live),
         Effect.catchCause((cause) =>
           Effect.fail(failureText(cause, root, 'mf-specs models --verify')),

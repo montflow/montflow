@@ -59,11 +59,15 @@ bun run --cwd packages/specs cli check
   (`variants unknown` vs `variants none`) and a `*` on the default. `--json`
   prints the stable, date-free document that is also valid `--catalog` input.
   Without a host catalogue, pass `--catalog`; a bare run fails
-  `models.unavailable` and names that flag. `--verify` cross-checks the repo
-  config, or the named spec's config including every phase override, and
-  reports `models.unknown-model` / `models.unknown-effort` as warnings because
-  a host catalogue can be partial; an unknown variant list never produces an
-  effort finding.
+  `models.unavailable` and names that flag. `--provider` keeps one provider on
+  either action, and a miss is `models.unknown-provider` rather than an empty
+  table. `--verify` cross-checks the repo config, or the named spec's config
+  including every phase override, and reports `models.unknown-model` /
+  `models.unknown-effort` as warnings because a host catalogue can be partial;
+  an unknown variant list never produces an effort finding. With `--verify`,
+  `--provider` scopes the checked entries to that provider and an unknown spec
+  is `spec.not-found`; `--json` is refused with `cli.invalid-argument` because
+  verification has no JSON document.
 - `sizing-config [--scope repo|spec|phase] [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous]`
   — renders the `spec-sizing` wizard for one config layer and prints it. It
   writes no file and dispatches nothing; the wizard confirms before writing.
@@ -266,10 +270,13 @@ override:
 }
 ```
 
-`model` is required in every size entry and must be a `provider/model` id.
-`effort` is an optional model variant (`low`, `medium`, `high`, `xhigh`, `max`)
-and is invalid without `model`. Unknown keys, unknown sizes, malformed model
-ids, malformed effort tokens, non-object entries, and malformed phase keys are
+`model` is required in every size entry. Its first `/` separates the provider
+from the model id; the model part may contain further `/` or `:` (OpenRouter
+namespaces, Ollama tags), and no whitespace or `#` is allowed.
+`effort` is an optional model variant as the catalogue reports it (`low`,
+`medium`, `high`, `xhigh`, `max`, and any host token such as `High`) and is
+invalid without `model`. Unknown keys, unknown sizes, malformed model ids,
+malformed effort tokens, non-object entries, and malformed phase keys are
 errors. A well-formed phase key that matches no phase in the spec is a warning:
 the override is unused, not invalid.
 
@@ -299,8 +306,10 @@ fixed:
 2. **Resolve the scope.** With no fixed scope it asks for repo-wide, one spec,
    or one phase, using the existing config as the context for the choice, and
    shows the chosen spec's mapping before proposing.
-3. **Inventory the catalogue.** It reads `mf-specs models` (or the
-   `spec_models` `list` action in the host) and uses only what that reports.
+3. **Inventory the catalogue.** It reads `mf-specs models --catalog <path>`
+   outside the host (or the `spec_models` `list` action in the host) and uses
+   only what that reports. A bare `mf-specs models` needs a host model source;
+   without one it fails `models.unavailable`, so pass `--catalog <path>`.
 4. **Propose all four sizes.** `tiny`, `small`, `medium`, and `large`, each an
    explicit `provider/model[#effort]` target or an explicit `inherit`, each with
    one line of reasoning and its cost/quality tradeoff.
@@ -317,7 +326,13 @@ fixed:
 The config is generated from the live catalogue rather than remembered because
 the catalogue is the only authority on what this harness can dispatch. A model
 id is valid only if `mf-specs models` prints it, and `--json` is stable enough
-to round-trip as `--catalog` input. `mf-specs models --verify [--name <spec>]`
+to round-trip as `--catalog` input. The catalogue only advertises targets a
+config can hold: a host id, variant, or default label the sizing grammar
+rejects is dropped at the boundary (a known variant list filtered to nothing
+stays `variants none`, never `variants unknown`), while a hand-written
+`--catalog` file that carries one fails `models.malformed-catalog` instead of
+being silently trimmed.
+`mf-specs models --verify [--name <spec>]`
 cross-checks every config entry against it and reports `models.unknown-model` /
 `models.unknown-effort` as warnings, aggregated in one pass. Outside the host,
 pass `--catalog <path>`; the binary resolves it against the process directory

@@ -69,12 +69,20 @@ agents and humans:
   — the host model catalogue. The table prints one line per model with its
   effort variants (`variants unknown` vs `variants none`) and a `*` on the
   default; `--json` prints the stable, date-free document that is also valid
-  `--catalog` input. Outside the host a bare run exits non-zero with
+  `--catalog` input. The document carries only ids, variant tokens, and a default
+  label the sizing grammar can store: a host descriptor it cannot store is
+  dropped, while a `--catalog` file carrying one is refused as
+  `models.malformed-catalog`. Outside
+  the host a bare run exits non-zero with
   `models.unavailable` and names `--catalog` as the fix; a malformed file is
   `models.malformed-catalog`. `--verify` cross-checks the repo config, and with
   `--name` that spec's config including every phase override, reporting
   `models.unknown-model` / `models.unknown-effort` warnings in one pass. Unknown
-  variants never produce an effort finding.
+  variants never produce an effort finding. `--provider` scopes either action (a
+  miss is `models.unknown-provider`); under `--verify` it checks only that
+  provider's entries and an unknown `--name` is `spec.not-found`; `--json` is
+  refused with `--verify`. A missing specs root fails the store diagnostic
+  instead of reporting a clean verification.
 - `sizing-config [--scope repo|spec|phase] [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous]`
   — loads `spec-sizing` through `modules/prompt` (gated on `mf-specs doctor`),
   renders it for one config layer, and prints it. Writes no file and dispatches
@@ -83,8 +91,9 @@ agents and humans:
   implies spec, `--name --phase` implies phase, and `--scope` wins over that
   implication. `--phase` without `--name`, `--scope spec|phase` without
   `--name`, `--scope phase` without `--phase`, a contradictory `--scope`, a
-  blank `--name`, and an unknown `--scope` all fail `cli.invalid-argument` with
-  the corrected command. `--mode` reuses `parseMode` (guided default).
+  supplied-but-blank `--name`, and an unknown `--scope` all fail
+  `cli.invalid-argument` with the corrected command; omitting `--name` keeps
+  the scope open. `--mode` reuses `parseMode` (guided default).
 - `doctor` — install or verify the packaged spec skills and prompts in
   `<repo>/.agents/`. Idempotent; the repo root is resolved from the working
   directory unless `--dir` names it (`apps/doctor`). Repair mode reports
