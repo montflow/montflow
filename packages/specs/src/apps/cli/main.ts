@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Cli } from '@montflow/version';
-import { PACKAGE_IDENTITY, rootCommand } from './cli.apps.module.js';
+import { PACKAGE_IDENTITY, PACKAGE_ROOT, rootCommand } from './cli.apps.module.js';
 
 /**
  * `mf-specs` binary entry.
@@ -9,4 +9,4 @@ import { PACKAGE_IDENTITY, rootCommand } from './cli.apps.module.js';
  * tree owns its `version` subcommand; everything else — argv, help, platform
  * layers, exit codes — lives in `@montflow/version`.
  */
-Cli.run({ version: PACKAGE_IDENTITY.version, command: rootCommand });
+Cli.run({ identity: PACKAGE_IDENTITY, packageRoot: PACKAGE_ROOT, command: rootCommand });

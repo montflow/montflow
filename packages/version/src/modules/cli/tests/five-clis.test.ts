@@ -135,13 +135,15 @@ Vitest.describe('compiled binary runtime', () => {
         );
         Vitest.expect(build.status, build.stderr).toBe(0);
 
-        const flag = spawnSync(artifact, ['--version'], { encoding: 'utf8' });
+        const offline = {
+          encoding: 'utf8' as const,
+          env: { PATH: '/usr/bin:/bin', HOME: '/tmp/opencode', CI: 'true' },
+        };
+        const flag = spawnSync(artifact, ['--version'], offline);
         Vitest.expect(flag.status).toBe(0);
         Vitest.expect(flag.stdout.trim().endsWith(`v${manifest.version}`)).toBe(true);
 
-        const json = spawnSync(artifact, ['version', '--json', '--dir', root], {
-          encoding: 'utf8',
-        });
+        const json = spawnSync(artifact, ['version', '--json', '--dir', root], offline);
         Vitest.expect(json.status, json.stderr).toBe(0);
         const identity: unknown = JSON.parse(json.stdout.trim());
         Vitest.expect(identity).toMatchObject({
@@ -151,7 +153,7 @@ Vitest.describe('compiled binary runtime', () => {
         });
         Vitest.expect(identity).not.toHaveProperty('checkout');
 
-        const list = spawnSync(artifact, ['list', '--dir', root], { encoding: 'utf8' });
+        const list = spawnSync(artifact, ['list', '--dir', root], offline);
         Vitest.expect(list.status, list.stderr).toBe(0);
       } finally {
         await rm(root, { recursive: true, force: true });
@@ -177,12 +179,17 @@ Vitest.describe('Cli.run failure contract runtime', () => {
             "import { Command } from 'effect/unstable/cli';",
             `import { Cli } from '${entry}';`,
             "const command = Command.make('failing', {}, () => Effect.fail(new Error('boom')));",
-            "Cli.run({ command, version: '1.2.3' });",
+            "Cli.run({ command, identity: { name: '@montflow/test', version: '1.2.3' }, packageRoot: process.cwd() });",
             '',
           ].join('\n'),
         );
 
-        const result = spawnSync('bun', ['run', script], { cwd: REPO_ROOT, encoding: 'utf8' });
+        const result = spawnSync('bun', ['run', script], {
+          cwd: REPO_ROOT,
+          encoding: 'utf8',
+          // oxlint-disable-next-line montflow/no-process-env -- the spawned script needs the runner's PATH; only the opt-out is overridden.
+          env: { ...process.env, MONTFLOW_NO_UPDATE_CHECK: '1' },
+        });
 
         Vitest.expect(result.status).toBe(1);
         Vitest.expect(result.stdout).toBe('');

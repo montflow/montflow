@@ -386,3 +386,59 @@ export const check = Effect.fn('UpdateCheck.check')(function* (options: CheckOpt
   }
   return { verdict, cached: false } satisfies CheckResult;
 });
+
+/** Args that never get an update notice: identity/help/completion output. */
+export const shouldAnnounce = (args: ReadonlyArray<string>): boolean => {
+  if (args.includes('--no-update-check')) return false;
+  if (
+    args.includes('--version') ||
+    args.includes('-v') ||
+    args.includes('--help') ||
+    args.includes('-h') ||
+    args.some((arg) => arg.startsWith('--completions'))
+  ) {
+    return false;
+  }
+  return args.find((arg) => !arg.startsWith('-')) !== 'version';
+};
+
+/**
+ * Claim the once-per-24-hours notice slot for one checkout.
+ *
+ * Reads the same cache file as {@link check}; a fresh `notifiedAt` suppresses
+ * the line, otherwise the slot is stamped and the caller prints. A missing
+ * cache file (no HOME, or a first run) permits the notice.
+ * @param options - package, checkout, environment, and optional cache override
+ * @returns true when the caller should print the notice
+ */
+export const claimNotice = Effect.fn('UpdateCheck.claimNotice')(function* (options: {
+  readonly packageName: string;
+  readonly checkout: string;
+  readonly env?: Readonly<Record<string, string | undefined>> | undefined;
+  readonly cacheFile?: string | undefined;
+}) {
+  const path = yield* Path.Path;
+  const now = yield* Clock.currentTimeMillis;
+  const file = options.cacheFile ?? cacheFileFor(path, options.env);
+  if (file === undefined) return true;
+
+  const cache = yield* readCache(path, file);
+  const key = cacheKey(options.packageName, options.checkout);
+  const entry = cache.entries[key];
+  if (entry?.notifiedAt !== undefined && now - entry.notifiedAt < SUCCESS_TTL_MS) {
+    return false;
+  }
+  yield* writeCache(path, file, {
+    schemaVersion: 1,
+    entries: {
+      ...cache.entries,
+      [key]: {
+        checkedAt: entry?.checkedAt ?? now,
+        expiresAt: entry?.expiresAt ?? now + SUCCESS_TTL_MS,
+        verdict: entry?.verdict ?? { state: 'unknown', reason: 'no verdict' },
+        notifiedAt: now,
+      },
+    },
+  });
+  return true;
+});

@@ -1,5 +1,5 @@
 import { NodeServices } from '@effect/platform-node';
-import { Console, Effect, Match, Option } from 'effect';
+import { Console, Effect, Match, Option, Stdio } from 'effect';
 import { CliError } from 'effect/unstable/cli';
 import { Command, Flag } from 'effect/unstable/cli';
 import {
@@ -9,6 +9,12 @@ import {
   type Identity,
 } from '../build-info/index.js';
 import { read as readStore, type StoreState } from '../store/index.js';
+import {
+  check as runUpdateCheck,
+  claimNotice,
+  shouldAnnounce,
+  type Verdict,
+} from '../update-check/index.js';
 
 /**
  * The shared CLI surface for build identity.
@@ -108,6 +114,38 @@ export const json = (value: VersionReport): string =>
     store: value.store,
   });
 
+/** `mf-skills` from `@montflow/skills`; also the guide anchor. */
+export const cliName = (packageName: string): string =>
+  `mf-${packageName.split('/').at(-1) ?? packageName}`;
+
+/** The one-line stale notice, naming every fact the reader needs. */
+export const noticeLine = (
+  cli: string,
+  installed: string,
+  available: string,
+  checkout: string,
+): string =>
+  `${cli} ${installed} is behind ${available} in ${checkout} — update: guides/updating.md#${cli}`;
+
+/** Plain-language result for `version --check`. */
+export const checkLine = (verdict: Verdict): string =>
+  Match.value(verdict).pipe(
+    Match.when({ state: 'behind' }, (behind) => `behind ${behind.available}`),
+    Match.when({ state: 'current' }, () => 'current'),
+    Match.when({ state: 'ahead' }, (ahead) => `ahead of ${ahead.available}`),
+    Match.when({ state: 'unknown' }, (unknown) => `unknown: ${unknown.reason}`),
+    Match.when({ state: 'skipped' }, (skipped) => `skipped: ${skipped.reason}`),
+    Match.exhaustive,
+  );
+
+/** Exit code for a forced check: 1 only when an update is available. */
+export const checkExit = (verdict: Verdict): 0 | 1 => (verdict.state === 'behind' ? 1 : 0);
+
+/** The process environment, read once at the binary composition root. */
+const environment = (): Readonly<Record<string, string | undefined>> =>
+  // oxlint-disable-next-line montflow/no-process-env -- the shared binary runner is the composition root for all five CLIs; this is the environment they run under.
+  process.env;
+
 /** `version` flag set, shared by the binary and its help text. */
 const jsonFlag = Flag.boolean('json').pipe(
   Flag.withDescription('Print only the JSON identity on stdout.'),
@@ -120,6 +158,12 @@ const dirFlag = Flag.string('dir').pipe(
     'Workspace root containing .agents/skills. Defaults to the working directory.',
   ),
   Flag.optional,
+);
+
+/** Force an update check and report the verdict; exits 1 only when behind. */
+const checkFlag = Flag.boolean('check').pipe(
+  Flag.withDescription('Check upstream now (bypasses the cache) and exit 1 when behind.'),
+  Flag.withDefault(false),
 );
 
 /** Options for resolving the full version report. */
@@ -172,8 +216,33 @@ export interface VersionCommandOptions {
  * @returns the command to register alongside the CLI's other subcommands
  */
 export const versionCommand = (options: VersionCommandOptions) =>
-  Command.make('version', { json: jsonFlag, dir: dirFlag }, (config) =>
+  Command.make('version', { json: jsonFlag, dir: dirFlag, check: checkFlag }, (config) =>
     Effect.gen(function* () {
+      if (config.check) {
+        const identity = yield* describe({
+          packageRoot: options.packageRoot,
+          generated: options.generated,
+        });
+        const result = yield* runUpdateCheck({
+          packageName: identity.name,
+          currentVersion: identity.version,
+          checkout: identity.checkout ?? options.packageRoot,
+          currentCommit: identity.commit,
+          env: environment(),
+          args: process.argv.slice(2),
+          force: true,
+        });
+        yield* Console.log(
+          config.json ? JSON.stringify(result.verdict) : checkLine(result.verdict),
+        );
+        if (checkExit(result.verdict) === 1) {
+          yield* Effect.sync(() => {
+            process.exitCode = 1;
+          });
+        }
+        return;
+      }
+
       const value = yield* versionReport({
         packageRoot: options.packageRoot,
         generated: options.generated,
@@ -187,9 +256,58 @@ export const versionCommand = (options: VersionCommandOptions) =>
 export interface RunOptions<Name extends string, Input, ContextInput, E> {
   /** The CLI's root command, including its own `version` subcommand. */
   readonly command: Command.Command<Name, Input, ContextInput, E, NodeServices.NodeServices>;
-  /** Version the package manifest declares, used by `--version`. */
-  readonly version: string;
+  /** Identity embedded from the package manifest, used by `--version` and the notice. */
+  readonly identity: GeneratedIdentity;
+  /** Directory holding the CLI's own `package.json`. */
+  readonly packageRoot: string;
 }
+
+/** Options for the notice probe. */
+export interface AnnounceOptions {
+  readonly packageRoot: string;
+  readonly identity: GeneratedIdentity;
+  readonly args: ReadonlyArray<string>;
+}
+
+/**
+ * Print the stale notice when the cached verdict says this checkout is behind.
+ *
+ * Never fails and never changes an exit code: a missing identity, a probe
+ * failure, a current checkout, or an already-notified checkout all return
+ * silently.
+ * @param options - package directory, embedded identity, and argv
+ */
+export const announce = Effect.fn('Cli.announce')(function* (options: AnnounceOptions) {
+  if (!shouldAnnounce(options.args)) return;
+
+  const identity = yield* describe({
+    packageRoot: options.packageRoot,
+    generated: options.identity,
+  }).pipe(Effect.orElseSucceed(() => undefined));
+  if (identity === undefined) return;
+
+  const checkout = identity.checkout ?? options.packageRoot;
+  const result = yield* runUpdateCheck({
+    packageName: identity.name,
+    currentVersion: identity.version,
+    checkout,
+    currentCommit: identity.commit,
+    env: environment(),
+    args: options.args,
+  });
+  if (result.verdict.state !== 'behind') return;
+
+  const claimed = yield* claimNotice({
+    packageName: identity.name,
+    checkout,
+    env: environment(),
+  });
+  if (!claimed) return;
+
+  yield* Console.error(
+    noticeLine(cliName(identity.name), identity.version, result.verdict.available, checkout),
+  );
+});
 
 /**
  * Run one `mf-*` binary.
@@ -197,8 +315,9 @@ export interface RunOptions<Name extends string, Input, ContextInput, E> {
  * Delegates argv, help, `--version`, completion, and error rendering to
  * `effect/cli`, providing the Node platform layer. The version is passed in
  * from the package's own manifest, so no identity probe runs on commands that
- * do not ask for one.
- * @param options - root command and manifest version
+ * do not ask for one; the stale notice runs before the command and cannot
+ * change its exit code.
+ * @param options - root command, embedded identity, and package directory
  * @returns the program effect, for tests that drive it with a fake Stdio
  */
 export const execute = <Name extends string, Input, ContextInput, E>(
@@ -207,11 +326,26 @@ export const execute = <Name extends string, Input, ContextInput, E>(
   void,
   E | import('effect/unstable/cli/CliError').CliError,
   NodeServices.NodeServices
-> => Command.run(options.command, { version: options.version });
+> =>
+  Effect.gen(function* () {
+    yield* announce({
+      packageRoot: options.packageRoot,
+      identity: options.identity,
+      args: process.argv.slice(2),
+    });
+    // Strip the shared opt-out before `effect/cli` parses argv; it is a runner
+    // flag, not one each package's command table has to declare.
+    const stdio = yield* Stdio.Stdio;
+    const args = yield* stdio.args;
+    const filtered = args.filter((arg) => arg !== '--no-update-check');
+    yield* Command.run(options.command, { version: options.identity.version }).pipe(
+      Effect.provideService(Stdio.Stdio, { ...stdio, args: Effect.succeed(filtered) }),
+    );
+  });
 
 /**
  * Run one `mf-*` binary and translate a failure into a non-zero exit.
- * @param options - root command and manifest version
+ * @param options - root command, embedded identity, and package directory
  */
 export const run = <Name extends string, Input, ContextInput, E>(
   options: RunOptions<Name, Input, ContextInput, E>,

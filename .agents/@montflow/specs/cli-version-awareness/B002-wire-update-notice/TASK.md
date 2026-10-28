@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: B001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task B002: wire-update-notice
