@@ -6,7 +6,7 @@ originator: user
 depends-on: C005
 related-tasks: C001, C002, C003, C004, C005
 reviewer-profiles: effect-reviewer
-status: in-progress
+status: complete
 ---
 
 # Task C099: Review phase C
@@ -34,4 +34,4 @@ behaviour, with no plugin keeping its own dialog or store-duplication copy.
 
 ## Completion
 
-- [ ] Findings written and reviewed.
+- [x] Findings written and reviewed (rounds 001-003, both series).

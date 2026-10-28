@@ -39,6 +39,20 @@ Real-host verification on OpenCode 2.1.4 (`/home/daniel/.opencode/bin/opencode`)
 - `effect/cli` replaced `effect/unstable/cli` in 4.0.1, and the specs server graph
   must import `slash.apps.module.js` so it never reaches the CLI binary.
 
-Still unverified: the TUI picker interception in a live TUI. The available
-harness hands local plugin `setup` a server-shaped context (no `ui`), so the
-picker cannot be exercised there; a real interactive session is needed.
+Picker verification succeeded with the plugin installed as a path specifier.
+In an isolated `HOME` whose config lists `"plugins": ["file:/<repo>/packages/prompts"]`,
+OpenCode 2.1.4 loads the package's `./server` and `./tui` entries and:
+
+- `/mf-prompts` appears in slash completion with the picker's own description
+  ("Pick a stored prompt"), then opens a select dialog listing
+  `demo — Demo prompt` from `.agents/@montflow/prompts/demo.json`.
+- Choosing the row inserts the template ("Run the demo task.") into the
+  composer.
+- `list` opens the picker by design; other verbs run the server command, whose
+  output posts through the session reply channel (verified earlier in the same
+  host when a session was open).
+
+So the dev override has two working forms: one `.opencode/plugins/<name>.ts` file
+exporting a single definition with both `effect` and `setup`, or a
+`"plugins": ["file:<abs path>"]` entry that exercises the real package
+`./server` + `./tui` split. The npm-name form requires a registry install.

@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: C004
 related-tasks: C001, C002, C003, C004
-status: in-progress
+status: complete
 ---
 
 # Task C005: verify-host-integration
@@ -34,6 +34,6 @@ verification has to exercise the real loader and a real session.
 
 ## Completion
 
-- [ ] Loader check added and wired into the gate.
-- [ ] `mf:gate` green.
-- [ ] Manual pass recorded with host version.
+- [x] Loader check added and wired into the gate (`packages/opencode/smoke`).
+- [x] `mf:gate` green (9 specs, all suites, smoke, TUI suite).
+- [x] Manual pass recorded with host version (OpenCode 2.1.4).

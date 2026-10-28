@@ -1,10 +1,10 @@
 ---
 name: plugin-host-integration
-status: in-progress
+status: complete
 workspace-type: worktree
 author: Daniel Montilla
 created: 2026-10-28
-locked-phases:
+locked-phases: A, B, C, D
 ---
 
 # plugin-host-integration
@@ -89,8 +89,8 @@ so the branch can be offered as a pull request.
 | C002 | add-shared-tui-picker | execution | complete | Yes |
 | C003 | wire-plugin-pickers | execution | complete | Yes |
 | C004 | retire-pi-naming | execution | complete | Yes |
-| C005 | verify-host-integration | execution | in-progress | Yes |
-| C099 | review-phase | review | in-progress | No |
+| C005 | verify-host-integration | execution | complete | Yes |
+| C099 | review-phase | review | complete | No |
 | D001 | merge-upstream | execution | complete | Yes |
 | D002 | migrate-task-layout | execution | complete | Yes |
 | D099 | review-phase | review | complete | No |
