@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.0] - 2026-10-28
+
+### Changed
+
+- Spec layout is `SPEC.md` plus one directory per phase, each holding its task directories
+
 ## [1.3.0] - 2026-10-25
 
 ### Changed

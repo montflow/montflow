@@ -19,20 +19,23 @@ agents and humans:
   task counts, filtered by `--pending` (unfinished) or by `--status`
   with an exact state list (`completed` is an alias for `complete`).
 - `create --name <spec>` — deterministic, model-free scaffold: renders a
-  fresh spec tree via `modules/scaffold` and writes it through
-  `SpecStore.write`. Refuses to overwrite an existing spec.
+  fresh spec tree (`<PHASE>/<PHASE><NNN>-<name>/`) via `modules/scaffold` and
+  writes it through `SpecStore.write`. Refuses to overwrite an existing spec.
+- `migrate --name <spec> | --all [--dry-run]` — plans one move per flat task
+  directory, applies them through `SpecStore.move`, and verifies the result.
+  Refuses a mixed tree; a no-op on an already-migrated spec.
 - `doctor` — install the packaged spec skills into
   `<repo>/.agents/skills/`. Idempotent; the repo root is resolved from
   the working directory (`apps/doctor`).
 
 ## Belongs here
 
-- Pure engines (`check`, `status`, `list`, `scaffold`) over the
+- Pure engines (`check`, `status`, `list`, `scaffold`, `migrate`) over the
   `SpecStore` service
 - Pure renderers (`renderCheck`, `renderStatus`, `renderList`,
-  `renderScaffold`) — the token-efficiency contract lives here
+  `renderScaffold`, `renderMigrate`) — the token-efficiency contract lives here
 - `Command`/`Flag` wiring (`checkCommand`, `statusCommand`, `listCommand`,
-  `createCommand`, `doctorCommand`, `rootCommand`)
+  `createCommand`, `migrateCommand`, `doctorCommand`, `rootCommand`)
 - The slash-command form (`runSlash`, `SlashReport`) reused by `server.ts`
 - The `main.ts` binary entry
 
@@ -68,7 +71,8 @@ In OpenCode, the same engines are exposed as `/specs` by
 `status --name <spec>` / `state --name <spec>` / `next --name <spec>` /
 `list [--pending | --status <states>] [--verbose]` /
 `create --name <spec> [--description <text>] [--author <name>]
-[--workspace-type <in-place|worktree>] [--tasks <name[:type[:gates]],…>]`).
+[--workspace-type <in-place|worktree>] [--tasks <name[:type[:gates]],…>]` /
+`migrate [--name <spec> | --all] [--dry-run]`).
 
 ## Building & distributing
 

@@ -174,8 +174,8 @@ export const phaseRank = (phase: string): number => {
 };
 
 /**
- * Parse a task directory name of the form `<PHASE_LETTERS><NNN>-<name>`.
- * @param dir - directory name relative to the spec root
+ * Parse a leaf task directory name of the form `<PHASE_LETTERS><NNN>-<name>`.
+ * @param dir - task directory name (the leaf, not a path)
  * @returns the parsed parts, or undefined when malformed
  */
 export const parseTaskDirName = (dir: string): TaskDirName | undefined => {

@@ -38,19 +38,19 @@ const tree = (options: TreeOptions): ReadonlyArray<SpecFileEntry> => [
       ],
     }),
   ),
-  entry('A001-build/TASK.md', taskMarkdown({ id: 'A001', name: 'build', status: options.a001 })),
-  entry('A001-build/MEMORY.md', memory),
-  ...(options.gatesA001 === true ? [entry('A001-build/GATES.md', GATES)] : []),
+  entry('A/A001-build/TASK.md', taskMarkdown({ id: 'A001', name: 'build', status: options.a001 })),
+  entry('A/A001-build/MEMORY.md', memory),
+  ...(options.gatesA001 === true ? [entry('A/A001-build/GATES.md', GATES)] : []),
   entry(
-    'A002-wire/TASK.md',
+    'A/A002-wire/TASK.md',
     taskMarkdown({ id: 'A002', name: 'wire', dependsOn: 'A001', status: options.a002 }),
   ),
-  entry('A002-wire/MEMORY.md', memory),
+  entry('A/A002-wire/MEMORY.md', memory),
   entry(
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: options.a099 }),
   ),
-  entry('A099-review-phase/MEMORY.md', memory),
+  entry('A/A099-review-phase/MEMORY.md', memory),
 ];
 
 const layer = (files: ReadonlyArray<SpecFileEntry>) => stubLayer(new Map([['ship-spec', files]]));
