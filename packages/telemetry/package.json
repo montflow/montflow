@@ -32,6 +32,7 @@
     "lint:check": "oxlint --deny-warnings .",
     "lint:fix": "oxlint . --fix",
     "test": "vitest run --typecheck && bun test src/modules/viewer/tests",
+    "viewer:acceptance": "bun run scripts/viewer-acceptance.ts",
     "ts:check": "tsc --noEmit"
   },
   "dependencies": {

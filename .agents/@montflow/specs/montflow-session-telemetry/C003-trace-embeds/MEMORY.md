@@ -22,8 +22,8 @@ bytes }` by default.
     and the stored span JSON; copy is wired.
   - Asset budget: 13 marks, all inline vector, total `svg` bytes under 24KB;
     no network origin and no third-party logo files.
-- 20k run after C003: first paint 597.7ms, pan p95 17.5ms / max 33.7ms, live
-  append 254ms, heap 16.3MB, no page errors.
+- 20k run after C003: first paint 599.3ms, pan p95 18.6ms / max 23.1ms, live
+  append 213ms, heap 14.3MB, no page errors.
 - Tests: 164 total (148 vitest + 16 bun); mapping/fallback/local-asset budget
   covered in `modules/icons/tests/icons.test.ts`; page assertions cover the
   icon layer and inspector.

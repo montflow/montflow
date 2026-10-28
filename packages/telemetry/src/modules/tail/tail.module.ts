@@ -33,7 +33,8 @@ export const fingerprint = (path: string): string => {
     const fd = Fs.openSync(path, 'r');
     try {
       const size = Fs.fstatSync(fd).size;
-      const length = Math.min(size, 256);
+      if (size < 64) return '';
+      const length = 64;
       const buffer = Buffer.alloc(length);
       if (length > 0) Fs.readSync(fd, buffer, 0, length, 0);
       return createHash('sha256').update(buffer).digest('hex');

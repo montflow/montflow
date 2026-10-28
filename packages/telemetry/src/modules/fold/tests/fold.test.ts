@@ -121,6 +121,31 @@ Vitest.describe('Fold.run runtime', () => {
     });
   });
 
+  Vitest.it('detects a same-size or larger rewrite via the file fingerprint', async () => {
+    await withStore(async (directory) => {
+      const path = seed(directory);
+      const database = join(directory, 'telemetry.db');
+      await Fold.run({ directory, database });
+      const rewritten = Array.from({ length: 12 }, (_, index) =>
+        JSON.stringify({
+          v: 1,
+          ts: 10_000 + index,
+          type: 'session.idle',
+          sessionID: 'ses_fixture',
+          payload: {},
+        }),
+      );
+      writeFileSync(
+        path,
+        `${rewritten.join('\n')}
+`,
+      );
+      await Fold.run({ directory, database });
+      Vitest.expect(await Fold.spans(database, 'ses_fixture')).toHaveLength(12);
+      Vitest.expect((await Fold.sessions(database))[0]?.spanCount).toBe(12);
+    });
+  });
+
   Vitest.it('folds every line after an empty truncate and rewrite', async () => {
     await withStore(async (directory) => {
       const path = seed(directory);
@@ -128,6 +153,7 @@ Vitest.describe('Fold.run runtime', () => {
       await Fold.run({ directory, database });
       writeFileSync(path, '');
       await Fold.run({ directory, database });
+      Vitest.expect((await Fold.sessions(database))[0]?.title).toBe('telemetry');
       const rewritten = Array.from({ length: 40 }, (_, index) =>
         JSON.stringify({
           v: 1,

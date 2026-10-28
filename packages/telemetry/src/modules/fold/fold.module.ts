@@ -41,7 +41,7 @@ export interface FoldResult {
 const SCHEMA_VERSION = 1;
 
 const SCHEMA = [
-  'CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, offset INTEGER NOT NULL);',
+  `CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, offset INTEGER NOT NULL, fingerprint TEXT NOT NULL DEFAULT '');`,
   'CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, title TEXT, agent TEXT, model TEXT, started_at INTEGER, ended_at INTEGER, span_count INTEGER NOT NULL DEFAULT 0, cost_usd REAL NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0);',
   "CREATE TABLE IF NOT EXISTS spans (id INTEGER PRIMARY KEY AUTOINCREMENT, file TEXT NOT NULL DEFAULT '', session_id TEXT NOT NULL, ts INTEGER NOT NULL, type TEXT NOT NULL, agent TEXT, model TEXT, cost REAL, input_tokens INTEGER, output_tokens INTEGER, payload TEXT NOT NULL);",
   'CREATE INDEX IF NOT EXISTS spans_session ON spans(session_id, ts, id);',
@@ -149,6 +149,10 @@ const rebuildSession = (db: Sqlite.Database, sessionID: string): void => {
   );
   if (title !== null) {
     db.run('UPDATE sessions SET title = ? WHERE session_id = ?', [title, sessionID]);
+    const present = db.all('SELECT session_id FROM sessions WHERE session_id = ?', [sessionID])[0];
+    if (present === undefined) {
+      db.run('INSERT INTO sessions (session_id, title) VALUES (?, ?)', [sessionID, title]);
+    }
   }
 };
 
@@ -168,6 +172,9 @@ const ensureSchema = (db: Sqlite.Database): void => {
   const columns = db.all('PRAGMA table_info(spans)').map((row) => text(row['name']));
   if (!columns.includes('file'))
     db.exec("ALTER TABLE spans ADD COLUMN file TEXT NOT NULL DEFAULT '';");
+  const fileColumns = db.all('PRAGMA table_info(files)').map((row) => text(row['name']));
+  if (!fileColumns.includes('fingerprint'))
+    db.exec("ALTER TABLE files ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';");
   const version = num(db.all('PRAGMA user_version')[0]?.['user_version']);
   if (version > SCHEMA_VERSION) {
     throw new Error(`telemetry.db schema ${version} is newer than ${SCHEMA_VERSION}`);
@@ -207,7 +214,12 @@ export const run = async (options: {
       try {
         const previous = db.all('SELECT offset FROM files WHERE path = ?', [name])[0];
         let offset = previous === undefined ? 0 : num(previous['offset']);
-        if (size < offset) {
+        const current = Tail.fingerprint(path);
+        const previousPrint = previous === undefined ? '' : (text(previous['fingerprint']) ?? '');
+        if (
+          size < offset ||
+          (current !== '' && previousPrint !== '' && current !== previousPrint)
+        ) {
           resetFile(db, name);
           offset = 0;
         }
@@ -225,8 +237,8 @@ export const run = async (options: {
           spans += 1;
         }
         db.run(
-          'INSERT INTO files (path, offset) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET offset = excluded.offset',
-          [name, tail.nextOffset],
+          'INSERT INTO files (path, offset, fingerprint) VALUES (?, ?, ?) ON CONFLICT(path) DO UPDATE SET offset = excluded.offset, fingerprint = excluded.fingerprint',
+          [name, tail.nextOffset, current],
         );
         db.exec('COMMIT');
         files += 1;
@@ -254,16 +266,27 @@ const sessionOf = (row: Sqlite.Row): SessionRow => ({
   outputTokens: num(row['output_tokens']),
 });
 
-const spanOf = (row: Sqlite.Row): SpanRow => ({
-  id: num(row['id']),
-  sessionID: text(row['session_id']) ?? '',
-  ts: num(row['ts']),
-  type: text(row['type']) ?? '',
-  agent: text(row['agent']),
-  model: text(row['model']),
-  cost: optionalNumber(row['cost']),
-  payload: Option.getOrElse(decodeJsonObject(JSON.parse(text(row['payload']) ?? '{}')), () => ({})),
-});
+const spanOf = (row: Sqlite.Row): SpanRow => {
+  let payload: JsonObject = {};
+  try {
+    payload = Option.getOrElse(
+      decodeJsonObject(JSON.parse(text(row['payload']) ?? '{}')),
+      () => ({}),
+    );
+  } catch {
+    // A corrupt derived row must not hide the rest of the session.
+  }
+  return {
+    id: num(row['id']),
+    sessionID: text(row['session_id']) ?? '',
+    ts: num(row['ts']),
+    type: text(row['type']) ?? '',
+    agent: text(row['agent']),
+    model: text(row['model']),
+    cost: optionalNumber(row['cost']),
+    payload,
+  };
+};
 
 const readOnly = async (database: string): Promise<Sqlite.Database | undefined> => {
   if (!Fs.existsSync(database)) return undefined;

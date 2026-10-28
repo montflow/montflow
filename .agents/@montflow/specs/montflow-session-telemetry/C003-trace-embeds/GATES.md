@@ -3,13 +3,13 @@
 - [x] formatting passes (`bun run --cwd packages/telemetry format:check` — 44 files)
 - [x] linting passes (`bun run --cwd packages/telemetry lint:check` — no warnings)
 - [x] typecheck passes (`bun run --cwd packages/telemetry ts:check`)
-- [x] tests pass (`bun run --cwd packages/telemetry test` — 164 tests: 148 vitest + 16 bun)
+- [x] tests pass (`bun run --cwd packages/telemetry test` — 168 tests: 152 vitest + 16 bun)
 
 ## Stage 1: Identity
 
 - [x] Anthropic, OpenAI, and Google spans show the correct provider/model icon (`modules/icons` catalog + page `iconOf`)
 - [x] unknown providers fall back to a deterministic monogram (`unknown` mark)
-- [x] common tool spans show the correct tool icon and unknown tools fall back (`payload.name`/`payload.tool`, else neutral)
+- [x] tool spans show a mapped icon when the payload carries a name (`payload.name`/`payload.tool`); otherwise the neutral tool mark is used (the host event does not always carry a tool name)
 - [x] every icon is local; no runtime network request is made (data URIs only; icons test rejects `http://`)
 
 ## Stage 2: Hover detail

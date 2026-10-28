@@ -64,17 +64,21 @@ const live = (
 ) => {
   const next: Record<string, number> = {};
   const lines: Line[] = [];
+  let reset = false;
   for (const name of dayFiles(directory)) {
     const path = file(directory, name);
     const current = Tail.fingerprint(path);
-    const rewritten = fingerprints.has(name) && fingerprints.get(name) !== current;
+    const rewritten =
+      current !== '' && fingerprints.has(name) && fingerprints.get(name) !== current;
     fingerprints.set(name, current);
-    const cursor = rewritten ? 0 : (cursors[name] ?? 0);
-    const result = Tail.read(path, Tail.fileSize(path) < cursor ? 0 : cursor);
+    const cursor = rewritten ? 0 : Math.max(0, cursors[name] ?? 0);
+    const shrunk = Tail.fileSize(path) < cursor;
+    if (rewritten || shrunk) reset = true;
+    const result = Tail.read(path, shrunk ? 0 : cursor);
     next[name] = result.nextOffset;
     lines.push(...result.lines);
   }
-  return { lines, cursors: next };
+  return { lines, cursors: next, reset };
 };
 
 /** JSON safe to embed inside a `<script>` element. */
@@ -115,7 +119,7 @@ export const page = (sessionID: string | undefined): string => `<!doctype html>
   </main>
 </div>
 <script type="module">
-const SESSION = ${scriptJson(sessionID ?? null)};
+const SESSION = new URLSearchParams(location.search).get('session') ?? ${scriptJson(sessionID ?? null)};
 const ICONS = ${JSON.stringify(catalog()).replaceAll('<', '\\u003c')};
 const CLIENT_ID = crypto.randomUUID();
 const trace = document.getElementById('trace');
@@ -146,6 +150,7 @@ let baseScale = 0.05;
 let zoom = 1;
 let viewStart = 0;
 let follow = true;
+let foldError = null;
 let selected = -1;
 let seeded = false;
 let polling = false;
@@ -197,7 +202,11 @@ const timeOf = (x) => viewStart + (x - GUTTER) / (baseScale * zoom);
 const xOf = (ts) => GUTTER + (ts - viewStart) * baseScale * zoom;
 const tailStart = (ts) => Math.max(minTs, ts - viewWidth() * 0.9);
 const colorOf = (line) => COLORS[laneOf(line.type)] ?? 0x6ea8fe;
-const providerOf = (line) => line.model && typeof line.model === 'object' ? line.model.providerID : undefined;
+const providerOf = (line) => {
+  if (line.model && typeof line.model === 'object') return line.model.providerID;
+  if (typeof line.model === 'string') return line.model.split('/')[0];
+  return undefined;
+};
 const toolNameOf = (line) => {
   const payload = payloadOf(line);
   return typeof payload.name === 'string' ? payload.name : typeof payload.tool === 'string' ? payload.tool : undefined;
@@ -207,8 +216,11 @@ const iconOf = (line) => {
     const key = (toolNameOf(line) || 'unknown').toLowerCase();
     return ICONS.tools[key] ?? ICONS.tools.unknown;
   }
-  const key = (providerOf(line) || 'unknown').toLowerCase();
-  return ICONS.providers[key] ?? ICONS.providers.unknown;
+  const provider = providerOf(line);
+  const key = (provider || 'unknown').toLowerCase();
+  if (ICONS.providers[key] !== undefined) return ICONS.providers[key];
+  const glyph = provider === undefined || provider.length === 0 ? '•' : provider.charAt(0).toUpperCase();
+  return { ...ICONS.providers.unknown, glyph, label: provider || 'Provider' };
 };
 const startedAt = new Map();
 const durationOf = (line) => {
@@ -230,7 +242,7 @@ const lowerBound = (ts) => {
   return low;
 };
 
-const makeView = (line) => ({ line, lane: laneOf(line.type), color: colorOf(line), duration: durationOf(line), particle: null });
+const makeView = (line) => ({ line, lane: laneOf(line.type), color: colorOf(line), duration: durationOf(line), hidden: false, particle: null });
 const addParticle = (view) => {
   view.particle = new PIXI.Particle({
     texture: PIXI.Texture.WHITE,
@@ -268,6 +280,7 @@ const applyView = () => {
     const first = lowerBound(viewStart);
     for (let index = first; index < spans.length && slot < iconPool.length; index += 1) {
       const view = spans[index];
+      if (view.hidden) continue;
       const x = xOf(view.line.ts || 0);
       if (x < GUTTER - 2) continue;
       if (x > width() - 16) break;
@@ -291,17 +304,20 @@ const refreshTotals = () => {
   let cost = 0;
   let input = 0;
   let output = 0;
+  let visibleCount = 0;
   for (const view of spans) {
+    if (view.hidden) continue;
+    visibleCount += 1;
     if (view.line.type !== 'session.step.ended') continue;
     cost += costOf(view.line);
     const tokens = tokensOf(view.line);
     if (tokens) { input += tokens.input || 0; output += tokens.output || 0; }
   }
-  totalsEl.textContent = spans.length + ' spans · $' + cost.toFixed(4) + ' · ' + input + ' in / ' + output + ' out';
+  totalsEl.textContent = visibleCount + ' spans · $' + cost.toFixed(4) + ' · ' + input + ' in / ' + output + ' out';
   emptyEl.hidden = spans.length !== 0;
 };
 const fit = () => {
-  const span = Math.max(1, maxTs - minTs);
+  const span = Math.max(1000, maxTs - minTs);
   baseScale = Math.max(0.000001, (width() - GUTTER - 20) / span);
   zoom = 1;
   viewStart = minTs === Infinity ? 0 : minTs;
@@ -314,8 +330,12 @@ const addLine = (line) => {
   maxTs = Math.max(maxTs, line.ts);
   if (spans.length === 0) fit();
   const view = makeView(line);
+  const query = filterEl.value.trim().toLowerCase();
+  const hay = (line.type + ' ' + (line.agent || '') + ' ' + modelOf(line)).toLowerCase();
+  view.hidden = query !== '' && !hay.includes(query);
   spans.push(view);
   addParticle(view);
+  if (view.hidden && view.particle) view.particle.y = -100;
   if (follow) viewStart = tailStart(line.ts);
   applyView();
   refreshTotals();
@@ -346,18 +366,16 @@ const applyFilter = () => {
   const query = filterEl.value.trim().toLowerCase();
   for (const view of spans) {
     const hay = (view.line.type + ' ' + (view.line.agent || '') + ' ' + modelOf(view.line)).toLowerCase();
-    if (view.particle) view.particle.y = query === '' || hay.includes(query) ? LANE_Y[view.lane] : -100;
+    view.hidden = query !== '' && !hay.includes(query);
+    if (view.particle) view.particle.y = view.hidden ? -100 : LANE_Y[view.lane];
   }
+  refreshTotals();
+  applyView();
 };
 
-const sessionIds = () => {
-  const ids = new Set((history.get('__list__') ?? []).map((session) => session.sessionID));
-  for (const id of liveBySession.keys()) ids.add(id);
-  if (active !== null) ids.add(active);
-  return [...ids];
-};
 let sessionList = [];
 const renderSessions = () => {
+  const scroll = sessionsEl.scrollTop;
   sessionsEl.replaceChildren();
   const ids = new Set(sessionList.map((session) => session.sessionID));
   for (const id of liveBySession.keys()) {
@@ -372,6 +390,7 @@ const renderSessions = () => {
     link.onclick = (event) => { event.preventDefault(); void openSession(session.sessionID); };
     sessionsEl.appendChild(link);
   }
+  sessionsEl.scrollTop = scroll;
 };
 const loadSessions = async () => {
   try { sessionList = await (await fetch('/api/sessions')).json(); } catch { sessionList = []; }
@@ -379,12 +398,18 @@ const loadSessions = async () => {
 };
 const openSession = async (sessionID) => {
   active = sessionID;
-  titleEl.textContent = sessionID;
+  titleEl.textContent = sessionID + (foldError ? ' · history unavailable' : '');
+  detail.hidden = true;
+  selected = -1;
   if (!history.has(sessionID)) {
     try {
       const rows = await (await fetch('/api/spans?session=' + encodeURIComponent(sessionID))).json();
       history.set(sessionID, rows.map((row) => ({ ...row, type: row.type, ts: row.ts, payload: row.payload || {}, model: row.model })));
-    } catch { history.set(sessionID, []); }
+    } catch {
+      history.delete(sessionID);
+      foldError = 'history request failed';
+      titleEl.textContent = sessionID + ' · history unavailable';
+    }
   }
   rebuild();
   renderSessions();
@@ -397,7 +422,8 @@ const showTip = (view, x, y) => {
     '\\n' + new Date(line.ts).toISOString() +
     (costOf(line) ? '\\ncost $' + costOf(line).toFixed(4) : '') +
     (tokens ? '\\ntokens ' + (tokens.input || 0) + ' in / ' + (tokens.output || 0) + ' out' : '') +
-    (view.duration === null ? '' : '\\nduration ' + Math.round(view.duration) + 'ms');
+    (view.duration === null ? '' : '\\nduration ' + Math.round(view.duration) + 'ms') +
+    '\\npayload ' + JSON.stringify(payloadOf(line)).slice(0, 120);
   tip.replaceChildren();
   const image = document.createElement('img');
   image.src = icon.svg;
@@ -423,13 +449,15 @@ const showDetail = (view) => {
   detailBody.textContent = JSON.stringify({ ...view.line, duration: view.duration }, null, 2);
 };
 const pick = (x, y) => {
-  const ts = timeOf(x);
   let best = null;
   for (const view of spans) {
+    if (view.hidden) continue;
     const laneY = LANE_Y[view.lane];
     if (Math.abs(y - (laneY + 7)) > 12) continue;
-    if (Math.abs((view.line.ts || 0) - ts) > Math.max(5, viewWidth() * 0.002)) continue;
-    if (best === null || Math.abs((view.line.ts || 0) - ts) < Math.abs((best.line.ts || 0) - ts)) best = view;
+    const barX = xOf(view.line.ts || 0);
+    const half = Math.max(4, 4 * zoom);
+    if (x < barX - half || x > barX + half) continue;
+    if (best === null || Math.abs(x - barX) < Math.abs(x - xOf(best.line.ts || 0))) best = view;
   }
   return best;
 };
@@ -450,6 +478,11 @@ const poll = async () => {
     if (!response.ok) return;
     const body = await response.json();
     Object.assign(cursors, body.cursors);
+    if (body.reset === true) {
+      liveBySession.clear();
+      if (active !== null) history.set(active, []);
+      rebuild();
+    }
     for (const line of body.lines) {
       const buffer = liveBySession.get(line.sessionID) ?? [];
       buffer.push(line);
@@ -466,7 +499,8 @@ const poll = async () => {
 const bootstrap = async () => {
   let status = {};
   try { status = await (await fetch('/api/status')).json(); } catch {}
-  if (status.foldError) titleEl.textContent = 'history unavailable: ' + status.foldError;
+  foldError = status.foldError || null;
+  if (foldError) titleEl.textContent = 'history unavailable: ' + foldError;
   await loadSessions();
   if (active === null && sessionList.length > 0) active = sessionList[0].sessionID;
   if (active !== null) await openSession(active);
@@ -488,6 +522,7 @@ trace.addEventListener('wheel', (event) => {
   applyView();
 }, { passive: false });
 trace.addEventListener('pointerdown', (event) => {
+  trace.focus();
   drag = { x: event.clientX, start: viewStart };
   trace.setPointerCapture(event.pointerId);
 });
@@ -513,12 +548,18 @@ trace.addEventListener('click', (event) => {
   if (view !== null) showDetail(view);
 });
 trace.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') { tip.hidden = true; detail.hidden = true; return; }
   if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
   event.preventDefault();
   if (spans.length === 0) return;
   selected = Math.max(0, Math.min(spans.length - 1, selected + (event.key === 'ArrowRight' ? 1 : -1)));
   const view = spans[selected];
-  if (view) { showDetail(view); viewStart = Math.max(minTs, (view.line.ts || 0) - viewWidth() / 2); applyView(); }
+  if (view) {
+    showDetail(view);
+    showTip(view, xOf(view.line.ts || 0), LANE_Y[view.lane] + 7);
+    viewStart = Math.max(minTs, (view.line.ts || 0) - viewWidth() / 2);
+    applyView();
+  }
 });
 followEl.onclick = () => { follow = true; followEl.textContent = 'following'; viewStart = tailStart(maxTs === -Infinity ? 0 : maxTs); applyView(); };
 document.getElementById('close-detail').onclick = () => { detail.hidden = true; };
@@ -574,6 +615,11 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
 
       const url = new URL(request.url);
       if (url.pathname === '/') {
+        if (pixi === undefined) {
+          return new Response('viewer assets unavailable: pixi.js is not installed', {
+            status: 500,
+          });
+        }
         return new Response(page(options.sessionID), {
           headers: { 'content-type': 'text/html; charset=utf-8' },
         });
@@ -631,11 +677,19 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
           for (const name of dayFiles(directory)) {
             fingerprints.set(name, Tail.fingerprint(file(directory, name)));
           }
-          return Response.json({ lines: [], cursors: await Fold.offsets(database) });
+          try {
+            return Response.json({ lines: [], cursors: await Fold.offsets(database) });
+          } catch {
+            return Response.json({ lines: [], cursors: {} });
+          }
         }
-        const result = live(directory, decoded.cursors ?? {}, fingerprints);
-        for (const line of result.lines) liveSessions.add(line.sessionID);
-        return Response.json(result);
+        try {
+          const result = live(directory, decoded.cursors ?? {}, fingerprints);
+          for (const line of result.lines) liveSessions.add(line.sessionID);
+          return Response.json(result);
+        } catch (cause) {
+          return Response.json({ error: String(cause) }, { status: 500 });
+        }
       }
       if (url.pathname === '/heartbeat' || url.pathname === '/close') {
         let id = 'default';

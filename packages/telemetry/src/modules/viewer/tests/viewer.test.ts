@@ -278,7 +278,7 @@ describe('Viewer.start runtime', () => {
     });
   });
 
-  it('returns a JSON error when a span payload is corrupt', async () => {
+  it('keeps a session readable when one payload is corrupt', async () => {
     await withStore(async (directory) => {
       seed(directory);
       const viewer = await Viewer.start({ directory, sessionID: 'ses_fixture', idleMs: 60_000 });
@@ -289,8 +289,8 @@ describe('Viewer.start runtime', () => {
       db.close();
       try {
         const response = await get(viewer, '/api/spans?session=ses_fixture');
-        expect(response.status).toBe(500);
-        expect(await response.text()).not.toContain('at ');
+        expect(response.status).toBe(200);
+        expect(await response.json()).toHaveLength(13);
       } finally {
         await viewer.stop();
       }

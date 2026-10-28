@@ -85,4 +85,22 @@ Vitest.describe('Event isolation runtime', () => {
       .map((source) => source.file);
     Vitest.expect(offenders).toStrictEqual(['modules/store/store.module.ts']);
   });
+
+  Vitest.it('never writes files from the viewer or data layer', () => {
+    const offenders = sources
+      .filter((source) =>
+        [
+          'modules/viewer/',
+          'modules/fold/',
+          'modules/tail/',
+          'modules/sqlite/',
+          'modules/icons/',
+        ].some((prefix) => source.file.startsWith(prefix)),
+      )
+      .filter((source) =>
+        /writeFileSync|appendFileSync|Bun\.write|createWriteStream/u.test(source.text),
+      )
+      .map((source) => source.file);
+    Vitest.expect(offenders).toStrictEqual([]);
+  });
 });
