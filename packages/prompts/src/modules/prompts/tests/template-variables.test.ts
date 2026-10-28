@@ -136,7 +136,8 @@ interface VariableFileValue {
   readonly name: string;
   readonly label?: string;
   readonly description?: string;
-  readonly type?: 'text' | 'textarea';
+  readonly type?: 'text' | 'textarea' | 'select';
+  readonly options?: readonly string[];
   readonly required?: boolean;
   readonly default?: string;
 }

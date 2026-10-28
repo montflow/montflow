@@ -15,8 +15,10 @@ export class Variable extends Schema.Class<Variable>('PromptVariable')({
   label: Schema.String,
   /** Help text under the field in the run dialog. Empty when unstated. */
   description: Schema.String,
-  /** `text` (single line) or `textarea` (multi-line). Defaults to `text`. */
-  type: Schema.Literals(['text', 'textarea']),
+  /** `text` (single line), `textarea` (multi-line), or a `select` list. */
+  type: Schema.Literals(['text', 'textarea', 'select']),
+  /** Allowed values for a `select`; empty for every other type. */
+  options: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)),
   /**
    * True when the run dialog must collect a value before the prompt can
    * dispatch. Defaults to true, which preserves the pre-schema behaviour
@@ -36,7 +38,8 @@ const VariableFile = Schema.Struct({
   name: Schema.NonEmptyString,
   label: Schema.optionalKey(Schema.String),
   description: Schema.optionalKey(Schema.String),
-  type: Schema.optionalKey(Schema.Literals(['text', 'textarea'])),
+  type: Schema.optionalKey(Schema.Literals(['text', 'textarea', 'select'])),
+  options: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)),
   required: Schema.optionalKey(Schema.Boolean),
   default: Schema.optionalKey(Schema.String),
 });
@@ -46,7 +49,8 @@ interface VariableFileValue {
   readonly name: string;
   readonly label?: string;
   readonly description?: string;
-  readonly type?: 'text' | 'textarea';
+  readonly type?: 'text' | 'textarea' | 'select';
+  readonly options?: readonly string[];
   readonly required?: boolean;
   readonly default?: string;
 }
@@ -59,7 +63,8 @@ interface MutableVariableFile {
   name: string;
   label?: string;
   description?: string;
-  type?: 'text' | 'textarea';
+  type?: 'text' | 'textarea' | 'select';
+  options?: Array<string>;
   required?: boolean;
   default?: string;
 }
@@ -78,6 +83,9 @@ const toFile = (variable: Variable): VariableFileValue => {
   if (variable.label !== variable.name) file.label = variable.label;
   if (variable.description !== '') file.description = variable.description;
   if (variable.type !== 'text') file.type = variable.type;
+  if (variable.options !== undefined && variable.options.length > 0) {
+    file.options = [...variable.options];
+  }
   if (!variable.required) file.required = false;
   if (variable.default !== '') file.default = variable.default;
   return file;
@@ -88,7 +96,8 @@ interface ResolvedVariableFile {
   readonly name: string;
   readonly label: string;
   readonly description: string;
-  readonly type: 'text' | 'textarea';
+  readonly type: 'text' | 'textarea' | 'select';
+  readonly options: ReadonlyArray<string>;
   readonly required: boolean;
   readonly default: string;
 }
@@ -96,12 +105,21 @@ interface ResolvedVariableFile {
 /** Fill in every default a `variables` entry left out. */
 const resolveFile = (entry: string | VariableFileValue): ResolvedVariableFile =>
   isBareName(entry)
-    ? { name: entry, label: entry, description: '', type: 'text', required: true, default: '' }
+    ? {
+        name: entry,
+        label: entry,
+        description: '',
+        type: 'text',
+        options: [],
+        required: true,
+        default: '',
+      }
     : {
         name: entry.name,
         label: entry.label ?? entry.name,
         description: entry.description ?? '',
         type: entry.type ?? 'text',
+        options: entry.options ?? [],
         required: entry.required ?? true,
         default: entry.default ?? '',
       };
@@ -154,6 +172,7 @@ export const requiredVariable = (name: string): Variable =>
     label: name,
     description: '',
     type: 'text',
+    options: [],
     required: true,
     default: '',
   });
@@ -573,6 +592,47 @@ export const verifyPrompt = (prompt: Prompt, options: VerifyOptions = {}): Verif
           'variables',
           `'${variable.name}' is required but also has a default, so it can never be blank.`,
           `Either drop "default" (the user must supply it) or set "required": false.`,
+        ),
+      );
+    }
+    const selectOptions = variable.options ?? [];
+    if (variable.type === 'select' && selectOptions.length === 0) {
+      issues.push(
+        verifyIssue(
+          'variables',
+          `'${variable.name}' is a select but declares no options.`,
+          `Add "options" with at least one value.`,
+        ),
+      );
+    }
+    if (variable.type !== 'select' && selectOptions.length > 0) {
+      issues.push(
+        verifyIssue(
+          'variables',
+          `'${variable.name}' declares options but is not a select.`,
+          `Set "type": "select", or remove "options".`,
+        ),
+      );
+    }
+    if (new Set(selectOptions).size !== selectOptions.length) {
+      issues.push(
+        verifyIssue(
+          'variables',
+          `'${variable.name}' lists an option more than once.`,
+          `Keep each option once.`,
+        ),
+      );
+    }
+    if (
+      variable.default !== '' &&
+      selectOptions.length > 0 &&
+      !selectOptions.includes(variable.default)
+    ) {
+      issues.push(
+        verifyIssue(
+          'variables',
+          `'${variable.name}' has a default that is not one of its options.`,
+          `Use one of ${selectOptions.join(', ')}, or remove the default.`,
         ),
       );
     }

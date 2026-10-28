@@ -90,6 +90,7 @@ export interface PickerContext {
       select<Value>(options: {
         readonly title: string;
         readonly placeholder?: string;
+        readonly current?: Value;
         readonly options: ReadonlyArray<{
           readonly title: string;
           readonly value: Value;

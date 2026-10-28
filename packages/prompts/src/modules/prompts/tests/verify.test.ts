@@ -17,7 +17,8 @@ const modelRaw = readFileSync(
 interface VariableOverride {
   readonly label?: string;
   readonly description?: string;
-  readonly type?: 'text' | 'textarea';
+  readonly type?: 'text' | 'textarea' | 'select';
+  readonly options?: readonly string[];
   readonly required?: boolean;
   readonly default?: string;
 }

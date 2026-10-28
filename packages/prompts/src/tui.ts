@@ -3,7 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 // oxlint-disable-next-line montflow/no-node-platform-imports -- the TUI entry resolves its store path during host setup.
 import path from 'node:path';
 import type { TuiPlugin } from '@montflow/opencode';
-import { registerPicker } from '@montflow/opencode/tui';
+import { type PickerContext, registerPicker } from '@montflow/opencode/tui';
 import { Effect, Schema } from 'effect';
 import * as Prompts from './modules/prompts/index.js';
 import { ID, COMMAND_NAME } from './server.js';
@@ -40,6 +40,26 @@ const loadPrompts = async (directory: string): Promise<ReadonlyArray<Prompts.Pro
   return (await readPrompts(path.join(directory, ...LEGACY_PROMPTS_DIR))) ?? [];
 };
 
+/** Ask for a text variable, re-asking when a required answer is blank. */
+const askText = async (
+  variable: Prompts.Variable,
+  context: PickerContext,
+): Promise<string | undefined> => {
+  const entered = await context.ui.dialog.prompt({
+    title: variable.label,
+    description: variable.description,
+    placeholder: variable.required ? 'Required' : 'Optional — leave blank to skip',
+    value: '',
+  });
+  if (entered === undefined) return undefined;
+  if (entered !== '' || !variable.required) return entered;
+  context.ui.toast.show({
+    message: `${variable.label} is required.`,
+    variant: 'warning',
+  });
+  return askText(variable, context);
+};
+
 export default {
   id: ID,
   setup: (context: any) => {
@@ -62,21 +82,29 @@ export default {
             values[variable.name] = variable.default;
             continue;
           }
-          // oxlint-disable-next-line no-await-in-loop -- dialogs must be answered in declaration order.
-          const entered = await pickerContext.ui.dialog.prompt({
-            title: variable.label,
-            description: variable.description,
-            placeholder: variable.required ? 'Required' : 'Optional — leave blank to skip',
-            value: '',
-          });
-          if (entered === undefined) return undefined;
-          if (entered === '' && variable.required) {
-            pickerContext.ui.toast.show({
-              message: `${variable.label} is required.`,
-              variant: 'warning',
-            });
-            return undefined;
+          if (variable.type === 'select') {
+            const options = variable.options ?? [];
+            const choices = options.map((option) => ({ title: option, value: option }));
+            if (!variable.required) choices.push({ title: 'Skip', value: '' });
+            const selectOptions = {
+              title: variable.label,
+              description: variable.description,
+              placeholder: 'Choose a value',
+              options: choices,
+            };
+            // oxlint-disable-next-line no-await-in-loop -- dialogs must be answered in declaration order.
+            const chosen = await pickerContext.ui.dialog.select(
+              variable.default === ''
+                ? selectOptions
+                : { ...selectOptions, current: variable.default },
+            );
+            if (chosen === undefined) return undefined;
+            values[variable.name] = chosen;
+            continue;
           }
+          // oxlint-disable-next-line no-await-in-loop -- dialogs must be answered in declaration order.
+          const entered = await askText(variable, pickerContext);
+          if (entered === undefined) return undefined;
           values[variable.name] = entered;
         }
         return Prompts.renderPrompt(prompt, values)

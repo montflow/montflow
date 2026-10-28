@@ -7,6 +7,8 @@
       "name": "scope",
       "label": "Sizing scope",
       "description": "Fixed layer for this run: repo, spec, or phase. Leave blank to be asked.",
+      "type": "select",
+      "options": ["repo", "spec", "phase"],
       "required": false
     },
     {

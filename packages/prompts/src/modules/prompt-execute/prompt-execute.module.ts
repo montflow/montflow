@@ -20,7 +20,8 @@ export interface VariableSummary {
   /** Label shown in the run dialog; equals `name` when unset. */
   readonly label: string;
   /** `text` or `textarea`. */
-  readonly type: 'text' | 'textarea';
+  readonly type: 'text' | 'textarea' | 'select';
+  readonly options?: readonly string[];
   /** True when the run cannot dispatch without a value. */
   readonly required: boolean;
   /** Value used when the user leaves the field blank. Empty when none. */
