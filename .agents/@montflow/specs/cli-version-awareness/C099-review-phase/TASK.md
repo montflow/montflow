@@ -6,7 +6,7 @@ originator: user
 depends-on: C002
 related-tasks: C001, C002
 reviewer-profiles: effect-reviewer
-status: in-progress
+status: complete
 ---
 
 # Task C099: Review phase
@@ -23,4 +23,4 @@ Run an independent adversarial review over phase C.
 
 ## Completion
 
-- [ ] Findings written and reviewed.
+- [x] Findings written and reviewed.

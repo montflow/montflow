@@ -208,3 +208,28 @@ Vitest.describe('release guard drift branches runtime', () => {
     }
   });
 });
+
+Vitest.describe('release guard fixed-group shape runtime', () => {
+  Vitest.it('fails when the five CLIs are split across five groups', async () => {
+    const root = await fixture();
+    try {
+      await editConfig(root, (config) => {
+        config.fixed = CLIS.map((name) => [name]);
+      });
+      const result = runGuard(root);
+      Vitest.expect(result.status).toBe(1);
+      Vitest.expect(result.stderr).toContain('exactly one fixed group');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  Vitest.it('fails on a bare or empty --root instead of checking cwd', () => {
+    const bare = spawnSync('bun', ['run', SCRIPT, '--root'], { encoding: 'utf8' });
+    const empty = spawnSync('bun', ['run', SCRIPT, '--root='], { encoding: 'utf8' });
+    Vitest.expect(bare.status).toBe(1);
+    Vitest.expect(bare.stderr).toContain('--root needs a directory');
+    Vitest.expect(empty.status).toBe(1);
+    Vitest.expect(empty.stderr).toContain('--root= needs a directory');
+  });
+});

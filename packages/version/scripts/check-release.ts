@@ -13,12 +13,22 @@ import { join, resolve } from 'node:path';
 import { CHANGELOG_MARKER, CLIS } from '../src/modules/release-guard/index.js';
 
 const rootArg = process.argv.find((arg) => arg === '--root' || arg.startsWith('--root='));
-const rootValue =
-  rootArg === undefined
-    ? process.cwd()
-    : rootArg.startsWith('--root=')
-      ? rootArg.slice('--root='.length)
-      : (process.argv[process.argv.indexOf('--root') + 1] ?? process.cwd());
+const fail = (message: string): never => {
+  console.error(message);
+  process.exit(1);
+};
+const rootValue = (() => {
+  if (rootArg === undefined) return process.cwd();
+  if (rootArg.startsWith('--root=')) {
+    const value = rootArg.slice('--root='.length);
+    return value === '' ? fail('--root= needs a directory') : value;
+  }
+  const value = process.argv[process.argv.indexOf('--root') + 1];
+  if (value === undefined || value.startsWith('-')) {
+    return fail('--root needs a directory');
+  }
+  return value;
+})();
 const root = resolve(rootValue);
 
 const failures: string[] = [];
