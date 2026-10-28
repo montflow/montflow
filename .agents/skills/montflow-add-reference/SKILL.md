@@ -87,10 +87,10 @@ Do not write a markdown table of references, and do not edit `REFERENCE.md` beyo
   - `add` — register and clone one https URL; a registered URL routes to `update`
   - `update` — refresh one entry or `--all`, by name or URL (`--force`)
   - `sync` — materialize missing clones or repair checkouts (`<name>` or `--all`)
-  - `status` — clone state per entry; `--fetch` adds behind/ahead. It never writes, but a missing store root, unknown name, unreadable clone, failed fetch, foreign clone, or invalid entry exits 1
+  - `status` — clone state per entry; `--fetch` adds behind/ahead. It never changes the store, but a missing store root, invalid or unknown name, unreadable clone, failed fetch or ls-remote, foreign clone, or invalid entry exits 1
   - `remove` — unregister one entry; `--keep-clone` keeps the clone
 
-  Every verb takes `--dir <root>` (defaults to the working directory). The default output is agent-first; `--human` renders readable tables and prose, `--verbose` adds detail, and the two compose. `add` also takes `--name`, `--ref`, and `--purpose`; `verify` takes `--all` and `--clones`.
+  Every verb takes `--dir <root>` (defaults to the working directory). The default output is agent-first; `--human` renders readable tables and prose, `--verbose` adds detail, and the two compose on every verb that renders rows or a result; `show` prints bytes and takes `--dir` only. `add` also takes `--name`, `--ref`, and `--purpose`; `verify` takes `--all` and `--clones`.
 
 - **Binary / slash command**: `mf-references add …` and `/mf-references add …` — the same engine, the same output.
 - **Store contract**: `.agents/@montflow/references/<slug>/REFERENCE.md` (`packages/references/src/modules/reference/reference.module.ts`).

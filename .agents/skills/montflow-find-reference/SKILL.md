@@ -89,10 +89,10 @@ Never claim git state you did not read:
   - `add` — register and clone one https URL; a registered URL routes to `update`
   - `update` — refresh one entry or `--all`, by name or URL (`--force`)
   - `sync` — materialize missing clones or repair checkouts (`<name>` or `--all`)
-  - `status` — clone state per entry; `--fetch` adds behind/ahead. It never writes, but a missing store root, unknown name, unreadable clone, failed fetch, foreign clone, or invalid entry exits 1
+  - `status` — clone state per entry; `--fetch` adds behind/ahead. It never changes the store, but a missing store root, invalid or unknown name, unreadable clone, failed fetch or ls-remote, foreign clone, or invalid entry exits 1
   - `remove` — unregister one entry; `--keep-clone` keeps the clone
 
-  Every verb takes `--dir <root>` (defaults to the working directory). The default output is agent-first; `--human` renders readable tables and prose, `--verbose` adds detail, and the two compose.
+  Every verb takes `--dir <root>` (defaults to the working directory). The default output is agent-first; `--human` renders readable tables and prose, `--verbose` adds detail, and the two compose on every verb that renders rows or a result; `show` prints bytes and takes `--dir` only.
 
 - **Binary / slash command**: `mf-references` and `/mf-references`; `list`, `show`, `sync`, and `status` are the verbs this pipeline uses. In the montflow monorepo, `bun run --cwd packages/references cli <verb>` is the same engine.
 - **Store contract**: `.agents/@montflow/references/<slug>/REFERENCE.md` is the registry; clones live at `.agents/references/<slug>` and are gitignored.

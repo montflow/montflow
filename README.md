@@ -39,9 +39,10 @@ Install, flags, verification, and the `mf-*` CLIs:
 
 | Source | Skills | How they arrive |
 | --- | --- | --- |
-| `packages/skills` | every workspace skill (authoring, review, TypeScript, specs, …) | `mf-skills sync --source <checkout> --target <workspace>` |
+| `.agents/skills` (workspace store) | every workspace skill (authoring, review, TypeScript, specs, …) | `mf-skills sync --source <checkout> --target <workspace>` |
 | `packages/references` | `montflow-add-reference`, `montflow-find-reference` | `mf-references doctor` installs and freshness-checks them |
-| `packages/specs` / `reviews` / `prompts` / `profiles` | their packaged skills | each package's `doctor` |
+| `packages/specs` / `reviews` / `prompts` | their packaged skills | each package's `doctor` |
+| `packages/profiles` | no skills | none; profiles has no setup command |
 
 Workspace skills live in `.agents/skills/`; packaged skills live in
 `packages/*/skills/` and are installed by their owning CLI's `doctor`.
