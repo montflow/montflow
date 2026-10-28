@@ -774,6 +774,37 @@ Vitest.describe('GitLifecycle update', () => {
 });
 
 Vitest.describe('GitLifecycle sync', () => {
+  Vitest.it.effect('repairs a stale origin/HEAD when sync is the first verb', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      yield* Effect.promise(() => git(origin.dir, ['branch', '-m', 'main', 'trunk']));
+
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'fixture' }));
+        return yield* lifecycle.sync(root, { name: 'fixture' });
+      }).pipe(Effect.provide(realLive));
+
+      if (!('entries' in outcome)) throw new Error('expected a sync report');
+      Vitest.expect(outcome.failed).toBe(false);
+      Vitest.expect(
+        yield* Effect.promise(() =>
+          git(Reference.clonePath(root, 'fixture'), [
+            'symbolic-ref',
+            '--short',
+            'refs/remotes/origin/HEAD',
+          ]),
+        ),
+      ).toBe('origin/trunk');
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
   Vitest.it.effect('repairs a stale origin/HEAD after an upstream default-branch rename', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
@@ -789,6 +820,7 @@ Vitest.describe('GitLifecycle sync', () => {
       }).pipe(Effect.provide(realLive));
       if (!('rows' in before)) throw new Error('expected a status report');
       Vitest.expect(before.rows[0]?.state).toBe('ref-mismatch');
+      Vitest.expect(before.rows[0]?.upstream).toBeUndefined();
 
       const outcome = yield* Effect.gen(function* () {
         const lifecycle = yield* Git.GitLifecycle;

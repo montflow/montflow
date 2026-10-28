@@ -1535,6 +1535,7 @@ const make = Effect.gen(function* () {
         } else if (ref === '') {
           const branch = yield* git.defaultBranch(observed.path);
           if (branch === undefined) {
+            details.set(slug, { ...details.get(slug), upstream: undefined });
             row = {
               slug,
               state: 'ref-mismatch',
