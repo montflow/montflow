@@ -36,9 +36,6 @@ export const decodeUnknown = Schema.decodeUnknownEffect(Profile);
  */
 export const encode = Schema.encodeSync(Profile);
 
-/** Minimal descriptor of an agent profile (legacy alias of {@link Profile}). */
-export type PiProfile = Profile;
-
 /** Slug pattern: lowercase alphanumeric groups joined by single hyphens. */
 export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 

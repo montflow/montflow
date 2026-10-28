@@ -1,4 +1,4 @@
-# PiProfiles module
+# Profiles module
 
 Effect-first agent profile primitives for OpenCode plugins (profile
 descriptors, slug names).
@@ -10,7 +10,7 @@ descriptors, slug names).
 
 ## Does not belong here
 
-- Pi business logic (commands, tools, event handlers) — that lives in the
+- Host-side business logic (commands, tools, event handlers) — that lives in the
   consuming extension
 - Host UI primitives (`notify`, `confirm`, `select`, `input`) — those reach
   the plugin through `@montflow/opencode`'s `InteractionPort`

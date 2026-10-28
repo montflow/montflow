@@ -20,7 +20,7 @@ so authors follow the profile standards.
 
 ## Does not belong here
 
-- Profile shapes and `PROFILE.md` parsing — `modules/pi-profiles`
+- Profile shapes and `PROFILE.md` parsing — `modules/profile`
 - File persistence — injected `ProfileStore` port (wired in `extension.ts`)
 - Child-agent sessions — injected `ProfileGenerator` / `ProfileModifier` ports
 - Skill installation — injected `SkillInstaller` port

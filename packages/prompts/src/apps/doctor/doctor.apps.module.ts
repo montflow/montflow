@@ -3,6 +3,7 @@
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
 import { Effect, FileSystem, Layer, Path } from 'effect';
+import * as Prompts from '../../modules/prompts/index.js';
 import { EMBEDDED_SKILL_PAYLOAD } from './embedded-payload.generated.js';
 
 /**
@@ -34,13 +35,13 @@ export const installedSkillDir = (path: Path.Path, root: string, name: string): 
   path.join(root, '.agents', 'skills', name);
 
 /** Current prompt-store segments under a workspace root. */
-const PROMPTS_DIR = ['.agents', '@montflow', 'prompts'] as const;
+const PROMPTS_DIR = Prompts.STORE_SEGMENTS;
 
 /** Retired prompt-store segments under a workspace root. */
-const LEGACY_PROMPTS_DIR = ['.agents', '@montflow', 'pi-prompts'] as const;
+const LEGACY_PROMPTS_DIR = Prompts.LEGACY_STORE_SEGMENTS;
 
 /**
- * Move the retired `pi-prompts` store into the current `prompts` directory
+ * Move the retired prompt store into the current `prompts` directory
  * when the current one is absent. Never merges: if both exist, the current
  * directory wins and the legacy one is reported untouched, because silently
  * combining two stores can resurrect prompts the user already moved.
@@ -129,13 +130,13 @@ export interface DoctorResult {
   /** True when nothing is wrong, whether or not doctor had to fix it. */
   readonly healthy: boolean;
   readonly skills: ReadonlyArray<SkillStatus>;
-  /** Prompt-store layout outcome for the retired `pi-prompts` directory. */
+  /** Prompt-store layout outcome for the retired prompt directory. */
   readonly store?: StoreStatus;
   /** One-line summary, and the whole explanation when unhealthy. */
   readonly message: string;
 }
 
-/** Outcome for the retired prompt store (`pi-prompts` → `prompts`). */
+/** Outcome for the retired prompt store. */
 export interface StoreStatus {
   /**
    * `ok` — nothing to move.

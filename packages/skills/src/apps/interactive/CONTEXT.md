@@ -45,7 +45,7 @@ and the `mf-skills` binary, both in [../cli](../cli/CONTEXT.md).
   current pinned first, `ctrl+g` keeps it), else the `pickModel` menu with
   a bottom `Pick another model…` entry driving the live search dialog when
   provided (`searchSelect` port), else input-then-select
-- Command registration (`register`, `COMMAND_NAME`) on a structural Pi API.
+- Command registration (`register`, `COMMAND_NAME`) on a structural host API.
   The agentic port factories take the command context's `notify` channel so
   the session dispatcher can report dispatch and outcome to that session
 

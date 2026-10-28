@@ -6,12 +6,12 @@ store, the `mf-profiles` CLI, native agent registration, and the
 `profile_execute` tool.
 
 ```typescript
-import { PiProfiles } from '@montflow/profiles';
+import { Profiles } from '@montflow/profiles';
 import { Effect } from 'effect';
 
 const program = Effect.gen(function* () {
-  const profile = PiProfiles.make('code-reviewer', 'Reviews code for bugs');
-  return yield* PiProfiles.rename(profile, 'security-auditor');
+  const profile = Profiles.make('code-reviewer', 'Reviews code for bugs');
+  return yield* Profiles.rename(profile, 'security-auditor');
 });
 ```
 

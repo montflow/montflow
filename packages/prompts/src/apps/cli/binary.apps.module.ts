@@ -198,7 +198,7 @@ const executeCommand = Command.make(
       // ModelRuntime, which lives in the OpenCode plugin. So this validates and
       // renders end to end, then prints what would be sent — which is what
       // makes it useful outside a OpenCode session. To actually execute, use
-      // `/mf-prompts execute` or the `prompt_execute` Pi tool.
+      // `/mf-prompts execute` or the `prompt_execute` agent tool.
       yield* Console.log(`Rendered for ${resolved.model}:\n\n${resolved.text}`);
       return yield* Effect.void;
     }).pipe(Effect.catch((message) => Console.log(message).pipe(Effect.andThen(exitFailed)))),

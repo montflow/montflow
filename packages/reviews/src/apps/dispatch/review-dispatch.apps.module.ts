@@ -1,5 +1,5 @@
 import { ProfileStore } from '@montflow/profiles/services';
-import { PiProfiles } from '@montflow/profiles/modules';
+import { Profiles } from '@montflow/profiles/modules';
 import type { ModelPort, SessionDispatchPort } from '@montflow/opencode';
 import { Clock, Effect } from 'effect';
 import * as Review from '../../modules/review/index.js';
@@ -83,7 +83,7 @@ export const reviewerPrompt = (
 /** True when a profile's model pin applies (a non-blank `model:`). */
 const modelFor = (
   input: ReviewDispatchInput,
-  profile: PiProfiles.Profile | undefined,
+  profile: Profiles.Profile | undefined,
 ): string | undefined =>
   profile !== undefined && profile.model.trim() !== '' ? profile.model : input.model;
 
@@ -162,7 +162,7 @@ const ensureSeries = (
 const resolveProfile = (
   input: ReviewDispatchInput,
   profile: string,
-): Effect.Effect<PiProfiles.Profile, string, ProfileStore.ProfileStore> =>
+): Effect.Effect<Profiles.Profile, string, ProfileStore.ProfileStore> =>
   Effect.gen(function* () {
     const store = yield* ProfileStore.ProfileStore;
     const record = yield* store
@@ -210,7 +210,7 @@ export const startReview = (
   ReviewStore.ReviewStore | ProfileStore.ProfileStore
 > =>
   Effect.gen(function* () {
-    let record: PiProfiles.Profile | undefined;
+    let record: Profiles.Profile | undefined;
     if (input.profile !== undefined) {
       record = yield* resolveProfile(input, input.profile);
     }

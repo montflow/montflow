@@ -45,7 +45,7 @@ Vitest.describe('SpecStore runtime', () => {
   Vitest.it.effect('reports a missing root as absent', () =>
     Effect.gen(function* () {
       const store = yield* SpecStore.SpecStore;
-      Vitest.expect(yield* store.hasRoot('/tmp/pi-specs-definitely-missing')).toBe(false);
+      Vitest.expect(yield* store.hasRoot('/tmp/mf-specs-definitely-missing')).toBe(false);
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
   );
 

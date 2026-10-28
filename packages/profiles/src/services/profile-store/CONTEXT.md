@@ -16,7 +16,7 @@ extension like `packages/prompts`).
 ## Does not belong here
 
 - Profile shapes and `PROFILE.md` parsing — those live in
-  `modules/pi-profiles`
+  `modules/profile`
 - Interactive flows (menus, dialogs, agentic sessions) — those live in
   `apps/interactive`
 - OpenCode plugin wiring (preprompts, model runtime) — that lives in

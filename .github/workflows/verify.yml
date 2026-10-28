@@ -214,6 +214,8 @@ jobs:
             script: mf:check:profiles
           - target: reviews
             script: mf:check:reviews
+          - target: naming
+            script: mf:check:naming
     steps:
       - uses: actions/checkout@v4
 

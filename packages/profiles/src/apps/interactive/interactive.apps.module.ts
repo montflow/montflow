@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import * as PiProfiles from '../../modules/pi-profiles/index.js';
+import * as Profiles from '../../modules/profile/index.js';
 import * as SkillCheck from '../../modules/skill-check/index.js';
 
 /** Slash-command name for the interactive menu (invoke as `/mf-profiles`). */
@@ -17,7 +17,7 @@ export const USAGE =
 export const CANCELLED = 'Cancelled.';
 
 /**
- * Minimal UI surface the flows need. Mirrors Pi's own narrowing for dialogs,
+ * Minimal UI surface the flows need. Mirrors the host's own narrowing for dialogs,
  * so any real `ctx.ui` is assignable and fakes stay tiny.
  */
 export interface InteractiveUi {
@@ -31,8 +31,8 @@ export interface InteractiveUi {
 
 /** Persistence port the consuming extension injects (file store, memory, router). */
 export interface ProfileStore {
-  readonly list: () => Effect.Effect<readonly PiProfiles.Profile[], string>;
-  readonly save: (profile: PiProfiles.Profile) => Effect.Effect<void, string>;
+  readonly list: () => Effect.Effect<readonly Profiles.Profile[], string>;
+  readonly save: (profile: Profiles.Profile) => Effect.Effect<void, string>;
   readonly delete: (name: string) => Effect.Effect<void, string>;
   /** Raw `PROFILE.md` contents for mechanical verification. Fails on unknown names. */
   readonly readRaw?: (name: string) => Effect.Effect<string, string>;
@@ -78,17 +78,17 @@ export interface GenerateInput {
   readonly inject: ReadonlyArray<InstalledSkill>;
 }
 
-export type ProfileGenerator = (input: GenerateInput) => Effect.Effect<PiProfiles.Profile, string>;
+export type ProfileGenerator = (input: GenerateInput) => Effect.Effect<Profiles.Profile, string>;
 
 /** Agentic profile modification port the consuming extension injects (child agent session). */
 export interface ModifyInput {
-  readonly profile: PiProfiles.Profile;
+  readonly profile: Profiles.Profile;
   readonly instruction: string;
   readonly modelLabel: string | undefined;
   readonly inject: ReadonlyArray<InstalledSkill>;
 }
 
-export type ProfileModifier = (input: ModifyInput) => Effect.Effect<PiProfiles.Profile, string>;
+export type ProfileModifier = (input: ModifyInput) => Effect.Effect<Profiles.Profile, string>;
 
 /** Minimal model reference carried from the host context (provider + id only). */
 export interface ModelRef {
@@ -209,7 +209,7 @@ export const parseAction = (args: string): Action => {
  */
 export const listProfiles = (
   ui: InteractiveUi,
-  profiles: readonly PiProfiles.Profile[],
+  profiles: readonly Profiles.Profile[],
 ): Effect.Effect<void> =>
   Effect.sync(() => {
     if (profiles.length === 0) {
@@ -231,7 +231,7 @@ export const listProfiles = (
  */
 export const showProfile = (
   ui: InteractiveUi,
-  profiles: readonly PiProfiles.Profile[],
+  profiles: readonly Profiles.Profile[],
   name: string,
 ): Effect.Effect<void, string> => {
   const profile = profiles.find((candidate) => candidate.name === name);
@@ -265,7 +265,7 @@ export const showProfile = (
 export const createManual = (
   ui: InteractiveUi,
   name: string | undefined,
-): Effect.Effect<PiProfiles.Profile, string> =>
+): Effect.Effect<Profiles.Profile, string> =>
   Effect.gen(function* () {
     let resolved = (name ?? '').trim();
     if (resolved === '') {
@@ -274,14 +274,14 @@ export const createManual = (
       resolved = entered.trim();
     }
     if (resolved === '') return yield* Effect.fail('Profile name must not be empty.');
-    const slug = PiProfiles.slugify(resolved);
-    if (!PiProfiles.isValidName(slug)) {
+    const slug = Profiles.slugify(resolved);
+    if (!Profiles.isValidName(slug)) {
       return yield* Effect.fail(`Invalid profile name '${resolved}'.`);
     }
     const description = yield* Effect.promise(() => ui.input('Description'));
     if (description === undefined) return yield* Effect.fail(CANCELLED);
     if (description.trim() === '') return yield* Effect.fail('Description must not be empty.');
-    return yield* PiProfiles.decodeUnknown({
+    return yield* Profiles.decodeUnknown({
       name: slug,
       description,
       model: '',
@@ -301,9 +301,9 @@ export const createManual = (
  */
 export const resolveModifyTarget = (
   ui: InteractiveUi,
-  profiles: readonly PiProfiles.Profile[],
+  profiles: readonly Profiles.Profile[],
   name: string | undefined,
-): Effect.Effect<PiProfiles.Profile, string> =>
+): Effect.Effect<Profiles.Profile, string> =>
   Effect.gen(function* () {
     let resolved = name;
     if (resolved === undefined) {
@@ -385,7 +385,7 @@ export const MENU_INSTALL = 'Install required skills';
 
 /**
  * TUI main-menu port the consuming extension injects (heading, info
- * panel, then options). Absent outside the TUI (falls back to Pi-native
+ * panel, then options). Absent outside the TUI (falls back to host-native
  * `select`).
  */
 export type MenuFn = (
@@ -400,7 +400,7 @@ export type MenuFn = (
  * info-panel line and the install entry.
  */
 export const MENU_REQUIREMENTS: ReadonlyArray<string> = [
-  ...new Set([...PiProfiles.GENERATION_REQUIREMENTS, ...PiProfiles.MODIFICATION_REQUIREMENTS]),
+  ...new Set([...Profiles.GENERATION_REQUIREMENTS, ...Profiles.MODIFICATION_REQUIREMENTS]),
 ];
 
 /**
@@ -488,7 +488,7 @@ export const requirementRow = (status: RequirementStatus, selected: boolean): st
  * @param ui - host dialogs
  * @param store - injected skill inventory port
  * @param installer - injected skill installer port
- * @param required - required skill names (from `PiProfiles.*_REQUIREMENTS`)
+ * @param required - required skill names (from `Profiles.*_REQUIREMENTS`)
  * @param purpose - flow name for the dialog title
  * @param selected - checked names, defaulting to every installed one
  * @returns Effect resolving to the skills to inject, failing on cancel
@@ -552,9 +552,9 @@ export const ensureRequirements = (
  */
 export const modifyManual = (
   ui: InteractiveUi,
-  profiles: readonly PiProfiles.Profile[],
+  profiles: readonly Profiles.Profile[],
   name: string | undefined,
-): Effect.Effect<PiProfiles.Profile, string> =>
+): Effect.Effect<Profiles.Profile, string> =>
   Effect.gen(function* () {
     const profile = yield* resolveModifyTarget(ui, profiles, name);
     const description = yield* Effect.promise(() =>
@@ -562,7 +562,7 @@ export const modifyManual = (
     );
     if (description === undefined) return yield* Effect.fail(CANCELLED);
     if (description.trim() === '') return yield* Effect.fail('Description must not be empty.');
-    return yield* PiProfiles.decodeUnknown({ ...PiProfiles.encode(profile), description }).pipe(
+    return yield* Profiles.decodeUnknown({ ...Profiles.encode(profile), description }).pipe(
       Effect.mapError(() => `Invalid description for profile '${profile.name}'.`),
     );
   });
@@ -585,7 +585,7 @@ export const modifyManual = (
  */
 export const modifyAgentic = (
   ui: InteractiveUi,
-  profiles: readonly PiProfiles.Profile[],
+  profiles: readonly Profiles.Profile[],
   name: string | undefined,
   models: ReadonlyArray<ModelOption>,
   modify: ProfileModifier,
@@ -593,14 +593,14 @@ export const modifyAgentic = (
   installer: SkillInstaller,
   modelPicker?: ModelPickerFn | undefined,
   loading?: LoadingFn | undefined,
-): Effect.Effect<PiProfiles.Profile, string> =>
+): Effect.Effect<Profiles.Profile, string> =>
   Effect.gen(function* () {
     const profile = yield* resolveModifyTarget(ui, profiles, name);
     const inject = yield* ensureRequirements(
       ui,
       store,
       installer,
-      PiProfiles.MODIFICATION_REQUIREMENTS,
+      Profiles.MODIFICATION_REQUIREMENTS,
       'agentic profile modification',
     );
     const entered = yield* Effect.promise(() =>
@@ -634,7 +634,7 @@ export const modifyAgentic = (
  */
 export const modifyProfile = (
   ui: InteractiveUi,
-  profiles: readonly PiProfiles.Profile[],
+  profiles: readonly Profiles.Profile[],
   name: string | undefined,
   models: ReadonlyArray<ModelOption>,
   modify: ProfileModifier,
@@ -642,7 +642,7 @@ export const modifyProfile = (
   installer: SkillInstaller,
   modelPicker?: ModelPickerFn | undefined,
   loading?: LoadingFn | undefined,
-): Effect.Effect<PiProfiles.Profile, string> =>
+): Effect.Effect<Profiles.Profile, string> =>
   Effect.gen(function* () {
     const mode = yield* Effect.promise(() =>
       ui.select('Modify profile', ['Modify with agent', 'Modify manually']),
@@ -804,13 +804,13 @@ export const createAgentic = (
   installer: SkillInstaller,
   modelPicker?: ModelPickerFn | undefined,
   loading?: LoadingFn | undefined,
-): Effect.Effect<PiProfiles.Profile, string> =>
+): Effect.Effect<Profiles.Profile, string> =>
   Effect.gen(function* () {
     const inject = yield* ensureRequirements(
       ui,
       store,
       installer,
-      PiProfiles.GENERATION_REQUIREMENTS,
+      Profiles.GENERATION_REQUIREMENTS,
       'agentic profile creation',
     );
     const entered = yield* Effect.promise(() => ui.input('Describe the profile'));
@@ -844,7 +844,7 @@ export const createProfile = (
   name: string | undefined,
   modelPicker?: ModelPickerFn | undefined,
   loading?: LoadingFn | undefined,
-): Effect.Effect<PiProfiles.Profile, string> =>
+): Effect.Effect<Profiles.Profile, string> =>
   Effect.gen(function* () {
     const mode = yield* Effect.promise(() =>
       ui.select('Create profile', ['Create with agent', 'Create manually']),
@@ -872,7 +872,7 @@ export const createProfile = (
 export const completeCreate = (
   ui: InteractiveUi,
   store: ProfileStore,
-  profile: PiProfiles.Profile,
+  profile: Profiles.Profile,
   models: ReadonlyArray<ModelOption>,
   modify: ProfileModifier,
   skills: SkillStore,
@@ -881,7 +881,7 @@ export const completeCreate = (
   loading: LoadingFn | undefined,
   menu?: MenuFn | undefined,
   fix?: ProfileModifier | undefined,
-  skillResolution?: PiProfiles.SkillResolution | undefined,
+  skillResolution?: Profiles.SkillResolution | undefined,
 ): Effect.Effect<void, string> =>
   Effect.gen(function* () {
     yield* Effect.sync(() =>
@@ -917,7 +917,7 @@ export const completeCreate = (
  */
 export const deleteProfile = (
   ui: InteractiveUi,
-  profiles: readonly PiProfiles.Profile[],
+  profiles: readonly Profiles.Profile[],
   store: ProfileStore,
   name: string | undefined,
 ): Effect.Effect<string, string> =>
@@ -972,7 +972,7 @@ export const browse = (
   loading?: LoadingFn | undefined,
   menu?: MenuFn | undefined,
   fix?: ProfileModifier | undefined,
-  skillResolution?: PiProfiles.SkillResolution | undefined,
+  skillResolution?: Profiles.SkillResolution | undefined,
 ): Effect.Effect<void, string> =>
   browseFrom(
     ui,
@@ -1012,10 +1012,10 @@ export const DETAIL_FIX = 'Fix to standard';
 /**
  * Detail-menu options for a verify result: the fix entry appears
  * near the bottom only while the profile is unverified.
- * @param result - result from {@link PiProfiles.verifyProfileFile}
+ * @param result - result from {@link Profiles.verifyProfileFile}
  * @returns menu choices in display order
  */
-export const detailOptions = (result: PiProfiles.VerifyResult): ReadonlyArray<string> =>
+export const detailOptions = (result: Profiles.VerifyResult): ReadonlyArray<string> =>
   result.valid
     ? ['Show', 'Modify', DETAIL_REVERIFY, 'Delete', 'Back']
     : ['Show', 'Modify', DETAIL_REVERIFY, 'Delete', DETAIL_FIX, 'Back'];
@@ -1032,19 +1032,19 @@ export const detailOptions = (result: PiProfiles.VerifyResult): ReadonlyArray<st
 export const verifyProfile = (
   store: ProfileStore,
   name: string,
-  skills: PiProfiles.SkillResolution | undefined,
-): Effect.Effect<PiProfiles.VerifyResult, string> => {
+  skills: Profiles.SkillResolution | undefined,
+): Effect.Effect<Profiles.VerifyResult, string> => {
   if (store.readRaw !== undefined) {
     return store
       .readRaw(name)
-      .pipe(Effect.map((raw) => PiProfiles.verifyProfileFile(name, raw, { skills })));
+      .pipe(Effect.map((raw) => Profiles.verifyProfileFile(name, raw, { skills })));
   }
   return store.list().pipe(
     Effect.flatMap((profiles) => {
       const found = profiles.find((profile) => profile.name === name);
       if (found === undefined) return Effect.fail(`Unknown profile '${name}'.`);
       return Effect.succeed(
-        PiProfiles.verifyProfileFile(name, PiProfiles.encodeProfileFile(found), { skills }),
+        Profiles.verifyProfileFile(name, Profiles.encodeProfileFile(found), { skills }),
       );
     }),
   );
@@ -1053,7 +1053,7 @@ export const verifyProfile = (
 /**
  * Notify a verify outcome: one clean line, then the findings when failing.
  * Errors are counted apart from warnings so an advisory finding is never
- * reported as an issue, mirroring {@link PiProfiles.verifyInfoLine}.
+ * reported as an issue, mirroring {@link Profiles.verifyInfoLine}.
  * @param ui - host dialogs
  * @param name - verified profile name
  * @param result - result from {@link verifyProfile}
@@ -1062,11 +1062,11 @@ export const verifyProfile = (
 export const notifyVerifyResult = (
   ui: InteractiveUi,
   name: string,
-  result: PiProfiles.VerifyResult,
+  result: Profiles.VerifyResult,
 ): Effect.Effect<void> =>
   Effect.sync(() => {
-    const errors = PiProfiles.errorCount(result.issues);
-    const warnings = PiProfiles.warningCount(result.issues);
+    const errors = Profiles.errorCount(result.issues);
+    const warnings = Profiles.warningCount(result.issues);
     if (errors === 0) {
       const warningClause =
         warnings === 0 ? '' : ` — ${warnings} warning${warnings === 1 ? '' : 's'}`;
@@ -1099,20 +1099,20 @@ export const FIX_INSTRUCTION =
  */
 export const fixAgentic = (
   ui: InteractiveUi,
-  profile: PiProfiles.Profile,
+  profile: Profiles.Profile,
   models: ReadonlyArray<ModelOption>,
   fix: ProfileModifier,
   store: SkillStore,
   installer: SkillInstaller,
   modelPicker?: ModelPickerFn | undefined,
   loading?: LoadingFn | undefined,
-): Effect.Effect<PiProfiles.Profile, string> =>
+): Effect.Effect<Profiles.Profile, string> =>
   Effect.gen(function* () {
     const inject = yield* ensureRequirements(
       ui,
       store,
       installer,
-      PiProfiles.TRANSFORM_REQUIREMENTS,
+      Profiles.TRANSFORM_REQUIREMENTS,
       'profile format fix',
     );
     const extra = yield* Effect.promise(() =>
@@ -1147,7 +1147,7 @@ const detailFrom = (
   modelPicker: ModelPickerFn | undefined,
   loading: LoadingFn | undefined,
   menu: MenuFn | undefined,
-  skillResolution: PiProfiles.SkillResolution | undefined,
+  skillResolution: Profiles.SkillResolution | undefined,
 ): Effect.Effect<void, string> =>
   Effect.gen(function* () {
     const result = yield* verifyProfile(store, name, skillResolution).pipe(
@@ -1155,7 +1155,7 @@ const detailFrom = (
     );
     if (result === undefined) return;
     const title = `Profile '${name}'`;
-    const info = [PiProfiles.verifyInfoLine(result)];
+    const info = [Profiles.verifyInfoLine(result)];
     const options = detailOptions(result);
     let detail: string | undefined;
     if (menu !== undefined) {
@@ -1247,7 +1247,7 @@ const browseFrom = (
   modelPicker: ModelPickerFn | undefined,
   loading: LoadingFn | undefined,
   menu: MenuFn | undefined,
-  skillResolution: PiProfiles.SkillResolution | undefined,
+  skillResolution: Profiles.SkillResolution | undefined,
 ): Effect.Effect<void, string> =>
   Effect.gen(function* () {
     const profiles = yield* store.list();

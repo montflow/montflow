@@ -8,8 +8,8 @@ import * as Prompts from '../../../modules/prompts/index.js';
 const PlatformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 const StoreLive = Layer.provideMerge(PromptStore.Default, PlatformLayer);
 
-const CURRENT = ['.agents', '@montflow', 'prompts'] as const;
-const LEGACY = ['.agents', '@montflow', 'pi-prompts'] as const;
+const CURRENT = Prompts.STORE_SEGMENTS;
+const LEGACY = Prompts.LEGACY_STORE_SEGMENTS;
 
 /** Minimal valid prompt JSON in the documented wire form. */
 const promptJson = (name: string): string =>

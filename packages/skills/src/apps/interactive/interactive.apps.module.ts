@@ -93,7 +93,7 @@ export const TRANSFORM_POSTPROMPT =
   'When done, reply with one short line: the skill name and what was fixed.';
 
 /**
- * Minimal UI surface the flows need. Mirrors Pi's own narrowing for dialogs,
+ * Minimal UI surface the flows need. Mirrors the host's own narrowing for dialogs,
  * so any real `ctx.ui` is assignable and fakes stay tiny.
  */
 export interface InteractiveUi {
@@ -426,7 +426,7 @@ export const MENU_INSTALL = 'Install required skills';
 
 /**
  * TUI main-menu port the consuming extension injects (heading, info
- * panel, then options). Absent outside the TUI (falls back to Pi-native
+ * panel, then options). Absent outside the TUI (falls back to host-native
  * `select`).
  */
 export type MenuFn = (

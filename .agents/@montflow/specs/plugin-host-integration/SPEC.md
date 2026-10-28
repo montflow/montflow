@@ -4,7 +4,7 @@ status: complete
 workspace-type: worktree
 author: Daniel Montilla
 created: 2026-10-28
-locked-phases: A, B, C, D
+locked-phases: A, B, C, D, E
 ---
 
 # plugin-host-integration
@@ -77,6 +77,12 @@ conflicts so both the Pi-naming retirement and the new layout survive, migrates
 this spec's own task directories into the phase layout, and reviews the result
 so the branch can be offered as a pull request.
 
+Phase E completes the naming retirement. Phase C removed Pi-era names from
+everything a user types or reads; phase E removes the remaining internal
+identifiers — the `pi-profiles` module and the `Pi*` host aliases — reduces the
+retired prompts-store name to one documented constant that migration still
+needs, and adds a checked guard so no fresh `pi-` name can land again.
+
 ## Tasks
 
 | ID | Name | Type | Status | Gates |
@@ -94,3 +100,8 @@ so the branch can be offered as a pull request.
 | D001 | merge-upstream | execution | complete | Yes |
 | D002 | migrate-task-layout | execution | complete | Yes |
 | D099 | review-phase | review | complete | No |
+| E001 | rename-profile-module | execution | complete | Yes |
+| E002 | rename-host-lib-aliases | execution | complete | Yes |
+| E003 | consolidate-legacy-store-name | execution | complete | Yes |
+| E004 | add-pi-free-guard | execution | complete | Yes |
+| E099 | review-phase | review | complete | No |

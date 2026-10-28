@@ -5,7 +5,7 @@ import * as Interactive from '../../interactive/index.js';
 /**
  * The CLI and the interactive menu are two commands that must never collide.
  *
- * `mf-prompts` is the CLI — as a binary, and inside Pi as the slash command of
+ * `mf-prompts` is the CLI — as a binary, and inside the host as the slash command of
  * the same name, so one word means one thing in both runtimes. The menu took
  * the plain name first and the CLI got the `-cli` suffix, which put a suffix on
  * the thing people and agents actually reach for. This test exists so that
@@ -13,7 +13,7 @@ import * as Interactive from '../../interactive/index.js';
  * would make one of the two commands unreachable.
  */
 Vitest.describe('slash command names', () => {
-  Vitest.it('gives the CLI the plain name, in Pi and as a binary', () => {
+  Vitest.it('gives the CLI the plain name, in the host and as a binary', () => {
     Vitest.expect(Cli.COMMAND_NAME).toBe('mf-prompts');
   });
 

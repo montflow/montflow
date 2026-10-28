@@ -5,17 +5,17 @@ import * as Profiles from '../index.js';
 Vitest.describe('Profiles extension loader', () => {
   Vitest.it.effect('loads the runtime lazily and caches it', () =>
     Effect.gen(function* () {
-      const first = yield* Profiles.loadPiProfiles();
-      const second = yield* Profiles.loadPiProfiles();
+      const first = yield* Profiles.loadProfiles();
+      const second = yield* Profiles.loadProfiles();
       Vitest.expect(second).toBe(first);
       Vitest.expect(first.Interactive.CANCELLED).toBe('Cancelled.');
-      Vitest.expect(first.PiProfiles.GENERATION_REQUIREMENTS).toContain('montflow-create-profiles');
+      Vitest.expect(first.Profiles.GENERATION_REQUIREMENTS).toContain('montflow-create-profiles');
     }),
   );
 
   Vitest.it.effect('exposes the shared matcher once loaded', () =>
     Effect.gen(function* () {
-      yield* Profiles.loadPiProfiles();
+      yield* Profiles.loadProfiles();
       const matcher = Profiles.loadedMatcher();
       Vitest.expect(matcher?.('anthropic/claude-sonnet-4-5', 'sonnet')).toBe(true);
       Vitest.expect(matcher?.('anthropic/claude-sonnet-4-5', 'zzz')).toBe(false);
@@ -41,10 +41,10 @@ Vitest.describe('Profiles extension loader', () => {
 
   Vitest.it.effect('reset drops the cache so the next load re-imports', () =>
     Effect.gen(function* () {
-      yield* Profiles.loadPiProfiles();
+      yield* Profiles.loadProfiles();
       Profiles.resetExtensionCache();
-      Vitest.expect(Profiles.loadedPiProfiles()).toBe(undefined);
-      const reloaded = yield* Profiles.loadPiProfiles();
+      Vitest.expect(Profiles.loadedProfiles()).toBe(undefined);
+      const reloaded = yield* Profiles.loadProfiles();
       Vitest.expect(reloaded.Interactive.CANCELLED).toBe('Cancelled.');
     }),
   );

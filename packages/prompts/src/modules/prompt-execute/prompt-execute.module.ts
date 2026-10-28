@@ -354,7 +354,7 @@ export interface ExecutionRequest {
 
 /**
  * Port that actually runs an agent on a resolved execution. Injected by the
- * consuming extension (Pi's child-agent runtime) so this module stays free of
+ * consuming extension (the retired child-agent runtime) so this module stays free of
  * any model dependency, and so tests need no runtime.
  * @param request - the resolved execution
  * @returns Effect resolving to the agent's reply text

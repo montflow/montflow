@@ -79,7 +79,7 @@ Create `.agents/@montflow/profiles/<name>/PROFILE.md` with the format above. If 
 
 - **Store**: `.agents/@montflow/profiles/<name>/PROFILE.md` — the frontmatter and sections above are the whole contract; author the file directly.
 - **Modifying an existing profile**: skill [montflow-modify-profiles](../montflow-modify-profiles/SKILL.md)
-- **Format source**: `packages/profiles/src/modules/pi-profiles/` (internal module name) (`parseProfileFile`, `verifyProfileFile`)
+- **Format source**: `packages/profiles/src/modules/profile/` (internal module name) (`parseProfileFile`, `verifyProfileFile`)
 
 # What a Profile Never Does
 

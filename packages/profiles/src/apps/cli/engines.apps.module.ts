@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import * as PiProfiles from '../../modules/pi-profiles/index.js';
+import * as Profiles from '../../modules/profile/index.js';
 import * as SkillCheck from '../../modules/skill-check/index.js';
 import { ProfileStore } from '../../services/index.js';
 
@@ -21,7 +21,7 @@ import { ProfileStore } from '../../services/index.js';
 /** One profile's verification result, paired with its name. */
 export interface ProfileVerifyEntry {
   readonly name: string;
-  readonly result: PiProfiles.VerifyResult;
+  readonly result: Profiles.VerifyResult;
 }
 
 /** A verification report: the whole store, or the named profiles. */
@@ -53,7 +53,7 @@ export interface VerifyOptions {
  * @returns the warning, or undefined when no check was actually skipped
  */
 export const skillsEngineWarning = (
-  resolution: PiProfiles.SkillResolution | undefined,
+  resolution: Profiles.SkillResolution | undefined,
   declaredCount: number,
   engineAvailable: boolean,
 ): string | undefined =>
@@ -62,7 +62,7 @@ export const skillsEngineWarning = (
     : undefined;
 
 /** A requested-but-absent profile, reported rather than dropped. */
-const profileNotFound: PiProfiles.VerifyResult = {
+const profileNotFound: Profiles.VerifyResult = {
   valid: false,
   issues: [{ field: 'profile', message: 'Profile not found.' }],
 };
@@ -103,7 +103,7 @@ export const verifyAll = (
     );
     const resolution = yield* SkillCheck.resolveSkills(cwd);
     const installed = resolution?.names ?? new Set<string>();
-    const declared = present.flatMap((profile) => PiProfiles.declaredSkills(profile.raw));
+    const declared = present.flatMap((profile) => Profiles.declaredSkills(profile.raw));
     // Only skills that exist reach the standard check: an unresolved name is
     // the pure verifier's warning, and would be a duplicate error here.
     const check = yield* SkillCheck.checkSkills(
@@ -119,20 +119,20 @@ export const verifyAll = (
       declared.length,
       yield* SkillCheck.engineAvailable(),
     );
-    const issueByName = new Map<string, PiProfiles.VerifyIssue>();
+    const issueByName = new Map<string, Profiles.VerifyIssue>();
     for (const verdict of check.verdicts) {
       if (verdict.issue !== undefined) issueByName.set(verdict.name, verdict.issue);
     }
     const entries = selected.map(({ name, raw }): ProfileVerifyEntry => {
       if (raw === undefined) return { name, result: profileNotFound };
-      const base = PiProfiles.verifyProfileFile(name, raw, {
+      const base = Profiles.verifyProfileFile(name, raw, {
         skills: resolution,
         strict: options.strict,
       });
-      const skillIssues = PiProfiles.declaredSkills(raw)
+      const skillIssues = Profiles.declaredSkills(raw)
         .map((skill) => issueByName.get(skill))
-        .filter((issue): issue is PiProfiles.VerifyIssue => issue !== undefined);
-      return { name, result: PiProfiles.withIssues(base, skillIssues) };
+        .filter((issue): issue is Profiles.VerifyIssue => issue !== undefined);
+      return { name, result: Profiles.withIssues(base, skillIssues) };
     });
     const allIssues = entries.flatMap((entry) => entry.result.issues);
     const issueCount = allIssues.filter((issue) => (issue.severity ?? 'error') === 'error').length;
@@ -157,7 +157,7 @@ export type ListStatus = (typeof LIST_STATUSES)[number];
  * a warning-bearing profile would be indistinguishable from a clean one.
  */
 export interface ProfileListEntry {
-  readonly profile: PiProfiles.Profile;
+  readonly profile: Profiles.Profile;
   /** Warning-severity findings for this profile; zero when it has none. */
   readonly warningCount: number;
 }
@@ -191,9 +191,9 @@ export interface ProfileFields {
 
 /** Find a profile by name, or fail with a displayable message. */
 const findOrFail = (
-  profiles: ReadonlyArray<PiProfiles.Profile>,
+  profiles: ReadonlyArray<Profiles.Profile>,
   name: string,
-): Effect.Effect<PiProfiles.Profile, string> => {
+): Effect.Effect<Profiles.Profile, string> => {
   const profile = profiles.find((candidate) => candidate.name === name);
   return profile === undefined
     ? Effect.fail(`Unknown profile '${name}'.`)
@@ -203,7 +203,7 @@ const findOrFail = (
 /** List every profile in the store. */
 export const list = (
   cwd: string,
-): Effect.Effect<ReadonlyArray<PiProfiles.Profile>, never, ProfileStore.ProfileStore> =>
+): Effect.Effect<ReadonlyArray<Profiles.Profile>, never, ProfileStore.ProfileStore> =>
   Effect.gen(function* () {
     const store = yield* ProfileStore.ProfileStore;
     return yield* store.list(cwd);
@@ -218,7 +218,7 @@ export const list = (
 export const show = (
   cwd: string,
   name: string,
-): Effect.Effect<PiProfiles.Profile, string, ProfileStore.ProfileStore> =>
+): Effect.Effect<Profiles.Profile, string, ProfileStore.ProfileStore> =>
   list(cwd).pipe(Effect.flatMap((profiles) => findOrFail(profiles, name)));
 
 /**
@@ -232,18 +232,18 @@ export const create = (
   cwd: string,
   name: string,
   fields: ProfileFields,
-): Effect.Effect<PiProfiles.Profile, string, ProfileStore.ProfileStore> =>
+): Effect.Effect<Profiles.Profile, string, ProfileStore.ProfileStore> =>
   Effect.gen(function* () {
     const store = yield* ProfileStore.ProfileStore;
     if (fields.description === undefined) {
       return yield* Effect.fail('create requires --description "text".');
     }
-    if (!PiProfiles.isValidName(name)) {
+    if (!Profiles.isValidName(name)) {
       return yield* Effect.fail(
         `Invalid profile name '${name}' — use kebab-case (lowercase, hyphen-separated).`,
       );
     }
-    const profile = yield* PiProfiles.decodeUnknown({
+    const profile = yield* Profiles.decodeUnknown({
       name,
       description: fields.description,
       model: fields.model ?? '',
@@ -266,13 +266,13 @@ export const modify = (
   cwd: string,
   name: string,
   fields: ProfileFields,
-): Effect.Effect<PiProfiles.Profile, string, ProfileStore.ProfileStore> =>
+): Effect.Effect<Profiles.Profile, string, ProfileStore.ProfileStore> =>
   Effect.gen(function* () {
     const store = yield* ProfileStore.ProfileStore;
     const profiles = yield* store.list(cwd);
     const profile = yield* findOrFail(profiles, name);
-    const encoded = PiProfiles.encode(profile);
-    const updated = yield* PiProfiles.decodeUnknown({
+    const encoded = Profiles.encode(profile);
+    const updated = yield* Profiles.decodeUnknown({
       ...encoded,
       description: fields.description ?? encoded.description,
       model: fields.model ?? encoded.model,
@@ -293,7 +293,7 @@ export const modify = (
 export const remove = (
   cwd: string,
   name: string,
-): Effect.Effect<PiProfiles.Profile, string, ProfileStore.ProfileStore> =>
+): Effect.Effect<Profiles.Profile, string, ProfileStore.ProfileStore> =>
   Effect.gen(function* () {
     const store = yield* ProfileStore.ProfileStore;
     const profiles = yield* store.list(cwd);
@@ -315,7 +315,7 @@ export const remove = (
  */
 export const filterByStatus = (
   cwd: string,
-  profiles: ReadonlyArray<PiProfiles.Profile>,
+  profiles: ReadonlyArray<Profiles.Profile>,
   status: ListStatus,
 ): Effect.Effect<ReadonlyArray<ProfileListEntry>, never, ProfileStore.ProfileStore> =>
   Effect.gen(function* () {
@@ -325,11 +325,11 @@ export const filterByStatus = (
     const verdicts = yield* Effect.forEach(profiles, (profile) =>
       store.readRaw(cwd, profile.name).pipe(
         Effect.map((raw) => {
-          const result = PiProfiles.verifyProfileFile(profile.name, raw, { skills: resolution });
+          const result = Profiles.verifyProfileFile(profile.name, raw, { skills: resolution });
           return {
             profile,
             valid: result.valid,
-            warningCount: PiProfiles.warningCount(result.issues),
+            warningCount: Profiles.warningCount(result.issues),
           };
         }),
         Effect.orElseSucceed(() => ({ profile, valid: false, warningCount: 0 })),

@@ -1,6 +1,6 @@
 # Prompts service
 
-Reads workspace prompts (`.agents/@montflow/pi-prompts/*.json`) for the
+Reads workspace prompts (`.agents/@montflow/prompts/*.json`) for the
 dashboard's Prompts panel: rows decoded through the lazily loaded
 `@montflow/prompts` runtime into `PromptSummary` rows, plus the CRUD surface the
 grid page and workspace report use.
@@ -8,7 +8,7 @@ grid page and workspace report use.
 ## Lazy extension loading
 
 Static imports from `@montflow/prompts` are type-only (erased at build). The
-runtime resolves through `loadPiPrompts()` — a cached dynamic `import()`, first
+runtime resolves through `loadPrompts()` — a cached dynamic `import()`, first
 called inside `fetchPrompts` / `savePrompt`, never at dashboard boot. A broken
 or missing extension cannot crash the TUI: the failing load carries a
 displayable message and a retry re-imports (load failures clear the cache;

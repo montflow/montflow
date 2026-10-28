@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import * as Vitest from '@effect/vitest';
 import * as Interactive from '../index.js';
-import * as PiProfiles from '../../../modules/pi-profiles/index.js';
+import * as Profiles from '../../../modules/profile/index.js';
 
 const scriptedUi = (answers: {
   readonly selects?: ReadonlyArray<string | undefined>;
@@ -39,7 +39,7 @@ const noSkills: Interactive.SkillStore = {
   list: () => Effect.succeed([]),
 };
 
-const testProfileEffect = PiProfiles.decodeUnknown({
+const testProfileEffect = Profiles.decodeUnknown({
   name: 'code-reviewer',
   description: 'Reviews code',
   model: '',
@@ -163,7 +163,7 @@ Vitest.describe('Interactive.ensureRequirements install', () => {
             installedNames.push(names);
             installed.push(authoringProfiles);
           }),
-        PiProfiles.GENERATION_REQUIREMENTS,
+        Profiles.GENERATION_REQUIREMENTS,
         'agentic profile creation',
       );
       Vitest.expect(installedNames).toStrictEqual([['montflow-create-profiles']]);
@@ -339,7 +339,7 @@ Vitest.describe('Interactive.browse empty list', () => {
 
   Vitest.it.effect('creates inline then returns to the now-populated browse', () =>
     Effect.gen(function* () {
-      const saved: Array<PiProfiles.Profile> = [];
+      const saved: Array<Profiles.Profile> = [];
       const notifies: Array<string> = [];
       const ui = scriptedUi({
         selects: ['Create profile', 'Create manually', 'Back'],

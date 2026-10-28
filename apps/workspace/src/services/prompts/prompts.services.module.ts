@@ -1,5 +1,5 @@
 // eslint-disable-next-line montflow/no-node-platform-imports -- platform adapter at the TUI composition-root boundary: reads .agents/@montflow/prompts; migrate to FileSystem when the app moves onto the platform layer graph.
-import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for prompt files; both go away with the FileSystem migration.
 import { join } from 'node:path';
 import type { Prompts } from '@montflow/prompts';
@@ -12,7 +12,7 @@ import { Data, Effect } from 'effect';
  * or missing extension therefore cannot crash the TUI; the failing
  * flow surfaces the load error as a toast instead.
  */
-type PiPromptsLib = typeof import('@montflow/prompts');
+type PromptsLib = typeof import('@montflow/prompts');
 
 /** Failure loading the prompts extension runtime. `cause` classifies the import rejection. */
 export class ExtensionLoadError extends Data.TaggedError('@montflow/PromptsExtensionLoadError')<{
@@ -72,13 +72,13 @@ export const classifyLoadError = (cause: unknown): ExtensionLoadError => {
 };
 
 /** Cached extension module promise. Cleared on failure so retrying reloads it. */
-let cachedLib: Promise<PiPromptsLib> | undefined;
+let cachedLib: Promise<PromptsLib> | undefined;
 
 /** The resolved extension runtime, once a flow has loaded it. Backs the synchronous picker matcher below. */
-let liveLib: PiPromptsLib | undefined;
+let liveLib: PromptsLib | undefined;
 
 /** Single import attempt: resolves the runtime, or rejects with a classified load error. */
-const importOnce = (): Promise<PiPromptsLib> => {
+const importOnce = (): Promise<PromptsLib> => {
   cachedLib ??= import('@montflow/prompts').then(
     (libs) => {
       liveLib = libs;
@@ -106,7 +106,7 @@ export const resetExtensionCache = (): void => {
  * re-imports.
  * @returns Effect resolving to the extension module namespace
  */
-export const loadPiPrompts = (): Effect.Effect<PiPromptsLib, ExtensionLoadError> =>
+export const loadPrompts = (): Effect.Effect<PromptsLib, ExtensionLoadError> =>
   Effect.tryPromise({
     try: () => importOnce(),
     catch: (cause) => (cause instanceof ExtensionLoadError ? cause : classifyLoadError(cause)),
@@ -116,7 +116,7 @@ export const loadPiPrompts = (): Effect.Effect<PiPromptsLib, ExtensionLoadError>
  * The loaded extension runtime, if any flow has loaded it yet.
  * @returns the extension module namespace, or undefined before first load
  */
-export const loadedPiPrompts = (): PiPromptsLib | undefined => liveLib;
+export const loadedPrompts = (): PromptsLib | undefined => liveLib;
 
 /**
  * The shared subsequence matcher for the TUI filter picker, once a flow
@@ -132,8 +132,8 @@ export const loadedMatcher = (): ((label: string, query: string) => boolean) | u
  * string errors the TUI toasts (install, then retry).
  * @returns Effect resolving to the extension module namespace
  */
-const loadLibs = (): Effect.Effect<PiPromptsLib, string> =>
-  loadPiPrompts().pipe(Effect.mapError((error) => error.message));
+const loadLibs = (): Effect.Effect<PromptsLib, string> =>
+  loadPrompts().pipe(Effect.mapError((error) => error.message));
 
 /**
  * One prompt row for the dashboard list and detail views. Mirrors
@@ -177,7 +177,7 @@ export const fromPrompt = (prompt: Prompts.Prompt): PromptSummary => ({
  * @returns Effect resolving to the Prompt, failing on invalid rows
  */
 export const toPrompt = (
-  libs: PiPromptsLib,
+  libs: PromptsLib,
   row: PromptSummary,
 ): Effect.Effect<Prompts.Prompt, string> =>
   libs.Prompts.decodeUnknown({
@@ -233,7 +233,7 @@ export class DeleteError extends Data.TaggedError('@montflow/PromptsDeleteError'
 
 /**
  * Delete a workspace prompt by removing its file under the store the panel
- * reads (`prompts/`, or the retired `pi-prompts/` until migration). Refuses
+ * reads (`prompts/`, or the retired store directory until migration). Refuses
  * blank or traversing ids so a bad keybind target can never escape the store.
  * @param root - workspace root (prompt store owner)
  * @param id - prompt file slug (without `.json`)
@@ -277,12 +277,15 @@ export const savePrompt = (root: string, row: PromptSummary): Effect.Effect<void
       Effect.mapError((message) => new SaveError({ message })),
     );
     const encoded = libs.Prompts.encode(prompt);
+    const storeRoot = yield* readPromptsRoot(root);
+    const target = join(root, ...PROMPTS_DIR);
     yield* Effect.tryPromise({
       try: () =>
-        mkdir(join(root, ...PROMPTS_DIR), { recursive: true })
+        (storeRoot === target ? Promise.resolve() : rename(storeRoot, target))
+          .then(() => mkdir(target, { recursive: true }))
           .then(() =>
             writeFile(
-              join(root, ...PROMPTS_DIR, `${row.id}.json`),
+              join(target, `${row.id}.json`),
               `${JSON.stringify(encoded, null, 2)}\n`,
               'utf8',
             ),
@@ -334,7 +337,7 @@ const readEntries = (root: string): Effect.Effect<DirEntries> =>
  * @returns Effect resolving to the row, or undefined when undecodable
  */
 const decodeRow = (
-  libs: PiPromptsLib,
+  libs: PromptsLib,
   file: string,
   raw: string,
 ): Effect.Effect<PromptSummary | undefined> =>

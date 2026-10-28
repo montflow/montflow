@@ -7,13 +7,13 @@ export class StoreError extends Schema.TaggedError<StoreError>()('PromptStore.St
 }) {}
 
 /** Store directory segments under a working directory. */
-const PROMPTS_DIR = ['.agents', '@montflow', 'prompts'] as const;
-const LEGACY_PROMPTS_DIR = ['.agents', '@montflow', 'pi-prompts'] as const;
+const PROMPTS_DIR = Prompts.STORE_SEGMENTS;
+const LEGACY_PROMPTS_DIR = Prompts.LEGACY_STORE_SEGMENTS;
 
 /** Prompts root for a working directory: `<cwd>/.agents/@montflow/prompts`. */
 const promptsDir = (path: Path.Path, cwd: string): string => path.join(cwd, ...PROMPTS_DIR);
 
-/** Retired prompts root for a working directory: `<cwd>/.agents/@montflow/pi-prompts`. */
+/** Retired prompts root for a working directory. */
 export const legacyPromptsDir = (path: Path.Path, cwd: string): string =>
   path.join(cwd, ...LEGACY_PROMPTS_DIR);
 

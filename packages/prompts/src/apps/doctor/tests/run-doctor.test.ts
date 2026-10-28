@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Effect } from 'effect';
 import * as Vitest from '@effect/vitest';
+import * as Prompts from '../../../modules/prompts/index.js';
 import * as Doctor from '../index.js';
 
 /** A throwaway repo root. */
@@ -213,7 +214,7 @@ Vitest.describe('Doctor.doctorGateMessage', () => {
 
 /** Write one JSON file into the retired store. */
 const seedLegacy = async (root: string, name: string): Promise<void> => {
-  const dir = join(root, '.agents', '@montflow', 'pi-prompts');
+  const dir = join(root, ...Prompts.LEGACY_STORE_SEGMENTS);
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, `${name}.json`), '{"name":"legacy"}\n', 'utf8');
 };
@@ -240,7 +241,7 @@ Vitest.describe('Doctor.runDoctor store migration', () => {
       Vitest.expect(result.message).toContain('prompts store');
       Vitest.expect(yield* Effect.promise(() => readMaybe(current))).toBeDefined();
       Vitest.expect(
-        yield* Effect.promise(() => readMaybe(join(root, '.agents', '@montflow', 'pi-prompts'))),
+        yield* Effect.promise(() => readMaybe(join(root, ...Prompts.LEGACY_STORE_SEGMENTS))),
       ).toBeUndefined();
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }),
@@ -257,7 +258,7 @@ Vitest.describe('Doctor.runDoctor store migration', () => {
       Vitest.expect(result.status).toBe('drifted');
       Vitest.expect(
         yield* Effect.promise(() =>
-          readMaybe(join(root, '.agents', '@montflow', 'pi-prompts', 'legacy.json')),
+          readMaybe(join(root, ...Prompts.LEGACY_STORE_SEGMENTS, 'legacy.json')),
         ),
       ).toBeDefined();
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
@@ -277,7 +278,7 @@ Vitest.describe('Doctor.runDoctor store migration', () => {
       Vitest.expect(result.store?.status).toBe('ok');
       Vitest.expect(
         yield* Effect.promise(() =>
-          readMaybe(join(root, '.agents', '@montflow', 'pi-prompts', 'legacy.json')),
+          readMaybe(join(root, ...Prompts.LEGACY_STORE_SEGMENTS, 'legacy.json')),
         ),
       ).toBeDefined();
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
