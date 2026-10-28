@@ -38,5 +38,5 @@ The rendering surface is not assumed. A TUI panel may not survive a session with
 | A001 | ingest | execution | complete | Yes |
 | A099 | review-phase | review | pending | No |
 | B001 | render-surface | exploratory | complete | No |
-| B002 | dashboard | execution | pending | Yes |
+| B002 | dashboard | execution | complete | Yes |
 | B099 | review-phase | review | pending | No |

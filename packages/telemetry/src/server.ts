@@ -10,12 +10,32 @@ import { make, once, prune } from './modules/store/index.js';
 /** Cleanup returned to the host; idempotent. */
 export type Cleanup = () => Promise<void> | void;
 
-/** The host slice collection reads: plugin options plus the event stream. */
+/** The command invocation fields the viewer launcher reads. */
+export interface CommandInvocation {
+  readonly sessionID: string;
+}
+
+/** The command the plugin registers with the host. */
+export interface CommandDefinition {
+  readonly name: string;
+  readonly description?: string;
+  readonly execute: (input: CommandInvocation) => Promise<void>;
+}
+
+/** Host command registration seam; optional so collection can be tested alone. */
+export interface CommandHost {
+  transform(
+    callback: (editor: { add(definition: CommandDefinition): void }) => void,
+  ): Promise<{ dispose(): Promise<void> }>;
+}
+
+/** The host slice the plugin reads: options, events, and the command editor. */
 export interface HostSlice {
   readonly options: RawOptions;
   readonly event: {
     subscribe(options?: { readonly signal?: AbortSignal }): AsyncIterable<IncomingInput>;
   };
+  readonly command?: CommandHost;
 }
 
 /** Epoch milliseconds without a Clock service; `created` wins when present. */
@@ -30,11 +50,11 @@ const readEnvironment = (): Environment => {
 /* oxlint-enable montflow/no-process-env */
 
 /**
- * Start collection: one in-process subscription appending NDJSON. Starts
- * nothing, listens on nothing; every failure is swallowed so telemetry can
- * never fail the session it observes.
+ * Start collection and register `/telemetry`. Collection is one in-process
+ * subscription appending NDJSON; the viewer is spawned only when the command
+ * runs. Nothing listens and nothing is spawned at setup.
  */
-export const start = (context: HostSlice): Cleanup => {
+export const setup = async (context: HostSlice): Promise<Cleanup> => {
   try {
     const settings = resolve(context.options, readEnvironment());
     const notify = once((message) => {
@@ -54,10 +74,29 @@ export const start = (context: HostSlice): Cleanup => {
       settings,
       clock,
     );
+    let dispose: (() => Promise<void>) | undefined;
+    if (context.command !== undefined) {
+      try {
+        const registration = await context.command.transform((editor) => {
+          editor.add({
+            name: 'telemetry',
+            description: 'Open /telemetry: the live trace and history viewer for this session.',
+            execute: async (input) => {
+              const { launch } = await import('./apps/viewer/launch.js');
+              await launch({ directory: settings.directory, sessionID: input.sessionID });
+            },
+          });
+        });
+        dispose = registration.dispose;
+      } catch {
+        // A host without command support still collects.
+      }
+    }
     return async () => {
       controller.abort();
       await done;
       writer.close();
+      await dispose?.();
     };
   } catch {
     return () => {};
@@ -67,5 +106,5 @@ export const start = (context: HostSlice): Cleanup => {
 /** OpenCode server plugin entry. */
 export default Plugin.define({
   id: ID,
-  setup: (context) => start(context),
+  setup: (context) => setup(context),
 });

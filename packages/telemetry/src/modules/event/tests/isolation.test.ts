@@ -24,8 +24,18 @@ const sources = walk(sourceRoot).map((file) => ({
   text: readFileSync(file, 'utf8'),
 }));
 
+const INGEST = [
+  'server.ts',
+  'modules/config/',
+  'modules/event/',
+  'modules/plugin/',
+  'modules/store/',
+];
+
+const ingest = sources.filter((source) => INGEST.some((prefix) => source.file.startsWith(prefix)));
+
 const FORBIDDEN = [
-  { label: 'SQLite driver', pattern: /(?:bun|node):sqlite/u },
+  { label: 'SQLite driver', pattern: /(?:bun|node):sqlite|new Database|DatabaseSync/u },
   { label: 'network module', pattern: /node:(?:http|https|net|tls|dgram|dns)/u },
   { label: 'network call', pattern: /\bfetch\s*\(|new WebSocket|XMLHttpRequest|Bun\.serve/u },
   { label: 'listener', pattern: /\.listen\s*\(|createServer\s*\(/u },
@@ -33,16 +43,43 @@ const FORBIDDEN = [
 ];
 
 Vitest.describe('Event isolation runtime', () => {
-  Vitest.it('finds the production source tree', () => {
-    Vitest.expect(sources.length).toBeGreaterThan(5);
+  Vitest.it('finds both the ingest path and the viewer sources', () => {
+    Vitest.expect(ingest.length).toBeGreaterThan(5);
+    Vitest.expect(sources.some((source) => source.file.startsWith('modules/viewer/'))).toBe(true);
   });
 
   for (const forbidden of FORBIDDEN) {
     Vitest.it(`the ingest path imports no ${forbidden.label}`, () => {
-      const offenders = sources
+      const offenders = ingest
         .filter((source) => forbidden.pattern.test(source.text))
         .map((source) => source.file);
       Vitest.expect(offenders).toStrictEqual([]);
     });
   }
+
+  Vitest.it('confines every SQLite driver reference to the adapter module', () => {
+    const offenders = sources
+      .filter((source) => /(?:bun|node):sqlite/u.test(source.text))
+      .map((source) => source.file);
+    Vitest.expect(offenders).toStrictEqual(['modules/sqlite/sqlite.module.ts']);
+  });
+
+  Vitest.it('keeps the data layer free of surface imports', () => {
+    const offenders = sources
+      .filter((source) =>
+        ['modules/tail/', 'modules/fold/', 'modules/sqlite/'].some((prefix) =>
+          source.file.startsWith(prefix),
+        ),
+      )
+      .filter((source) => /modules\/viewer|apps\/viewer/u.test(source.text))
+      .map((source) => source.file);
+    Vitest.expect(offenders).toStrictEqual([]);
+  });
+
+  Vitest.it('never appends NDJSON outside the collector writer', () => {
+    const offenders = sources
+      .filter((source) => /appendFileSync|openSync\([\s\S]{0,200}?['"]a\+?['"]/u.test(source.text))
+      .map((source) => source.file);
+    Vitest.expect(offenders).toStrictEqual(['modules/store/store.module.ts']);
+  });
 });

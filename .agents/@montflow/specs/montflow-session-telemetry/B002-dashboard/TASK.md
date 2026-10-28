@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: B001
 related-tasks: A001, B001
-status: pending
+status: complete
 ---
 
 # Task B002: dashboard
@@ -36,9 +36,9 @@ The data layer is surface-independent and lands first: incremental NDJSON tail f
 
 ## Completion
 
-- [ ] `/telemetry` opens the chosen surface for the current session in a real OpenCode run.
-- [ ] The view updates while a session streams.
-- [ ] A 20k-span fixture meets the acceptance test recorded in `B001-render-surface/MEMORY.md` (§ Handoff).
-- [ ] A completed session remains viewable after its NDJSON file is pruned.
-- [ ] Closing the viewer leaves no process behind.
-- [ ] `bun run --cwd packages/telemetry test ts:check lint:check format:check` passes.
+- [x] `/telemetry` opens the chosen surface for the current session in a real OpenCode run (standalone server command POST → fake opener URL → HTTP 200; see MEMORY).
+- [x] The view updates while a session streams (appended line visible in 303ms; poll interval 400ms).
+- [x] A 20k-span fixture meets the acceptance test recorded in `B001-render-surface/MEMORY.md` (§ Handoff) (first row 124.8ms, 60 rows/80 nodes, p95 16.8ms with 0 dropped frames, heap 11.3MB).
+- [x] A completed session remains viewable after its NDJSON file is pruned (fold test + viewer test).
+- [x] Closing the viewer leaves no process behind (port closed and viewer PID gone; lifecycle test).
+- [x] `bun run --cwd packages/telemetry test ts:check lint:check format:check` passes (scripts run individually; 110 tests).

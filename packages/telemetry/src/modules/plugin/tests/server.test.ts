@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { IncomingInput } from '../../event/index.js';
-import Server, { start, type HostSlice } from '../../../server.js';
+import Server, { setup, type CommandDefinition, type HostSlice } from '../../../server.js';
 
 const fixtureUrl = new URL('../../event/tests/fixtures/session.ndjson', import.meta.url);
 
@@ -36,7 +36,7 @@ const withTemp = async (run: (directory: string) => Promise<void>): Promise<void
 Vitest.describe('Server.setup runtime', () => {
   Vitest.it('exposes the montflow.telemetry plugin id and setup', () => {
     Vitest.expect(Server.id).toBe('montflow.telemetry');
-    Vitest.expect(start).toBeTypeOf('function');
+    Vitest.expect(setup).toBeTypeOf('function');
   });
 
   Vitest.it('exposes the ./server entry the host loader resolves', async () => {
@@ -51,7 +51,7 @@ Vitest.describe('Server.setup runtime', () => {
 
   Vitest.it('writes a recorded session with no external service running', async () => {
     await withTemp(async (directory) => {
-      const cleanup = await start(contextOf(directory, recorded()));
+      const cleanup = await setup(contextOf(directory, recorded()));
       if (cleanup !== undefined) await cleanup();
       const rows = readFileSync(join(directory, '2026-10-28.ndjson'), 'utf8')
         .split('\n')
@@ -63,7 +63,7 @@ Vitest.describe('Server.setup runtime', () => {
 
   Vitest.it('leaves no file when a session emits nothing', async () => {
     await withTemp(async (directory) => {
-      const cleanup = await start(contextOf(directory, []));
+      const cleanup = await setup(contextOf(directory, []));
       if (cleanup !== undefined) await cleanup();
       Vitest.expect(() => readFileSync(join(directory, '2026-10-28.ndjson'))).toThrow();
     });
@@ -79,9 +79,34 @@ Vitest.describe('Server.setup runtime', () => {
           },
         },
       };
-      const cleanup = await start(broken);
+      const cleanup = await setup(broken);
       Vitest.expect(cleanup).toBeTypeOf('function');
       if (cleanup !== undefined) await cleanup();
+    });
+  });
+
+  Vitest.it('registers /telemetry and disposes it on cleanup', async () => {
+    await withTemp(async (directory) => {
+      const registered: CommandDefinition[] = [];
+      let disposed = false;
+      const context: HostSlice = {
+        ...contextOf(directory, []),
+        command: {
+          transform: async (callback) => {
+            callback({ add: (definition) => registered.push(definition) });
+            return {
+              dispose: async () => {
+                disposed = true;
+              },
+            };
+          },
+        },
+      };
+      const cleanup = await setup(context);
+      Vitest.expect(registered.map((definition) => definition.name)).toStrictEqual(['telemetry']);
+      Vitest.expect(registered[0]?.execute).toBeTypeOf('function');
+      if (cleanup !== undefined) await cleanup();
+      Vitest.expect(disposed).toBe(true);
     });
   });
 });

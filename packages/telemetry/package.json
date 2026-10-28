@@ -31,7 +31,7 @@
     "format:fix": "oxfmt .",
     "lint:check": "oxlint --deny-warnings .",
     "lint:fix": "oxlint . --fix",
-    "test": "vitest run --typecheck",
+    "test": "vitest run --typecheck && bun test src/modules/viewer/tests",
     "ts:check": "tsc --noEmit"
   },
   "dependencies": {

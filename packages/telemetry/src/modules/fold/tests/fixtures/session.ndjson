@@ -1,0 +1,12 @@
+{"v":1,"ts":1793178000000,"type":"session.created","sessionID":"ses_fixture","agent":"build","model":{"providerID":"anthropic","id":"claude-sonnet-4"},"payload":{"sessionID":"ses_fixture","title":"Telemetry","agent":"build","model":{"providerID":"anthropic","id":"claude-sonnet-4"}}}
+{"v":1,"ts":1793178001000,"type":"session.execution.started","sessionID":"ses_fixture","payload":{"sessionID":"ses_fixture"}}
+{"v":1,"ts":1793178002000,"type":"session.step.started","sessionID":"ses_fixture","agent":"build","model":{"providerID":"anthropic","id":"claude-sonnet-4"},"payload":{"sessionID":"ses_fixture","assistantMessageID":"msg_1","agent":"build","model":{"providerID":"anthropic","id":"claude-sonnet-4"}}}
+{"v":1,"ts":1793178003000,"type":"session.text.delta","sessionID":"ses_fixture","payload":{"sessionID":"ses_fixture","assistantMessageID":"msg_1","delta":"I will read the file."}}
+{"v":1,"ts":1793178004000,"type":"session.tool.called","sessionID":"ses_fixture","payload":{"sessionID":"ses_fixture","assistantMessageID":"msg_1","id":"call_1"}}
+{"v":1,"ts":1793178005000,"type":"session.tool.success","sessionID":"ses_fixture","payload":{"sessionID":"ses_fixture","assistantMessageID":"msg_1","id":"call_1"}}
+{"v":1,"ts":1793178006000,"type":"session.step.ended","sessionID":"ses_fixture","payload":{"sessionID":"ses_fixture","assistantMessageID":"msg_1","finish":"tool-calls","cost":0.0012,"tokens":{"input":120,"output":30,"reasoning":0,"cache":{"read":0,"write":0}}}}
+{"v":1,"ts":1793178007000,"type":"session.usage.updated","sessionID":"ses_fixture","payload":{"sessionID":"ses_fixture","cost":0.0012,"tokens":{"input":120,"output":30,"reasoning":0,"cache":{"read":0,"write":0}}}}
+{"v":1,"ts":1793178008000,"type":"permission.asked","sessionID":"ses_fixture","payload":{"id":"perm_1","sessionID":"ses_fixture","action":"write","resources":["/tmp/x"]}}
+{"v":1,"ts":1793178009000,"type":"permission.replied","sessionID":"ses_fixture","payload":{"sessionID":"ses_fixture","requestID":"perm_1","reply":"once"}}
+{"v":1,"ts":1793178010000,"type":"session.execution.succeeded","sessionID":"ses_fixture","payload":{"sessionID":"ses_fixture"}}
+{"v":1,"ts":1793178011000,"type":"session.idle","sessionID":"ses_fixture","payload":{"sessionID":"ses_fixture"}}
