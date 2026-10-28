@@ -2,6 +2,10 @@
 
 ## Context
 
+> **Superseded by C001.** The user later rejected the DOM surface's look and
+> chose an owned realtime canvas timeline. The measurements and discipline here
+> carry forward; the DOM row list does not. C001 is the current decision.
+
 User doubts the TUI can render large session traces. Phase A assumed `session.panel`; this task reopens the surface decision and must settle it with measurements.
 
 Candidates: OpenTUI panel, static HTML export, `Bun.serve` browser UI, native webview (`webview-bun` / Electrobun), third-party UI.

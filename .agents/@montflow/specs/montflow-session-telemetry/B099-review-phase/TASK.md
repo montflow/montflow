@@ -6,7 +6,7 @@ originator: user
 depends-on: B001, B002
 related-tasks: B001, B002
 reviewer-profiles: effect-reviewer
-status: pending
+status: complete
 ---
 
 # Task B099: Review phase
@@ -28,4 +28,4 @@ Phase B contains a decision task, so the review must judge the decision as well 
 
 ## Completion
 
-- [ ] Findings written and reviewed.
+- [x] Findings written and reviewed (closed by the phase C surface supersession; open data and surface findings transferred to C002/C003/C099).

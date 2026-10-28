@@ -1,5 +1,9 @@
 # Memory
 
+> **Superseded by C002.** The DOM renderer is replaced by the realtime canvas
+> timeline; the data layer, `/telemetry` lifecycle, and isolation remain in
+> force. See `C002-realtime-canvas`.
+
 ## Context
 
 Implement the surface chosen in `B001-render-surface/MEMORY.md` (§ Handoff): an
