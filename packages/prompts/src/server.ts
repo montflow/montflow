@@ -1,7 +1,14 @@
-import { NodeFileSystem, NodePath } from '@effect/platform-node';
+// Subpath imports, not the package root: the root re-exports `NodeClusterHttp`,
+// which deep-imports `effect/dist/...`, and the OpenCode plugin loader refuses
+// those specifiers. Subpaths pull only `effect/*` and node builtins.
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import * as NodePath from '@effect/platform-node/NodePath';
 import { defineTool, entry, type ServerPorts } from '@montflow/opencode';
 import { Effect, Layer, Schema } from 'effect';
-import * as Cli from './apps/cli/index.js';
+// The slash module, not the `apps/cli` barrel: the barrel also exports the
+// binary, whose `effect/unstable/cli` import reaches `effect/dist/...`, which
+// the OpenCode plugin loader refuses.
+import * as Cli from './apps/cli/slash.apps.module.js';
 // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- native child-run factory, not an Effect service; B002 §6 keeps dispatch out of a Layer.
 import { makePromptExecutor } from './apps/server/index.js';
 import * as PromptExecute from './modules/prompt-execute/index.js';
