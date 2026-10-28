@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Option, Path, Schema } from 'effect';
+import { Effect, FileSystem, Match, Option, Path, Schema } from 'effect';
 
 /**
  * The sync manifest written by `mf-skills sync` and read by every command that
@@ -49,6 +49,7 @@ export type StoreState =
   | { readonly status: 'absent' }
   | { readonly status: 'unmanaged' }
   | { readonly status: 'corrupt' }
+  | { readonly status: 'unreadable' }
   | { readonly status: 'unsupported'; readonly schemaVersion: number }
   | { readonly status: 'managed'; readonly manifest: SyncManifest };
 
@@ -85,6 +86,18 @@ export const decode = (text: string): SyncManifest | undefined => {
   }
 };
 
+/** Read just the schema version, so a future shape is not mistaken for corruption. */
+const schemaVersionOf = (text: string): number | undefined => {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return Option.getOrUndefined(
+      Schema.decodeUnknownOption(Schema.Struct({ schemaVersion: Schema.Number }))(parsed),
+    )?.schemaVersion;
+  } catch {
+    return undefined;
+  }
+};
+
 /** `<workspace>/.agents/skills`. */
 export const dir = (path: Path.Path, root: string): string => path.join(root, '.agents', 'skills');
 
@@ -109,14 +122,27 @@ export const read = Effect.fn('Store.read')(function* (root: string) {
   const store = dir(path, root);
   const exists = yield* fs.exists(store).pipe(Effect.orElseSucceed(() => false));
   if (!exists) return { status: 'absent' } as const;
-  const text = yield* fs
-    .readFileString(file(path, root))
-    .pipe(Effect.orElseSucceed(() => undefined));
-  if (text === undefined) return { status: 'unmanaged' } as const;
-  const manifest = decode(text);
-  if (manifest === undefined) return { status: 'corrupt' } as const;
-  if (manifest.schemaVersion !== SCHEMA_VERSION) {
-    return { status: 'unsupported', schemaVersion: manifest.schemaVersion } as const;
+  const readResult = yield* fs.readFileString(file(path, root)).pipe(
+    Effect.map((text) => ({ status: 'text', text }) as const),
+    Effect.catch((error) =>
+      Effect.succeed(
+        Match.value(error.reason).pipe(
+          Match.when({ _tag: 'NotFound' }, () => ({ status: 'absent' }) as const),
+          Match.orElse(() => ({ status: 'unreadable' }) as const),
+        ),
+      ),
+    ),
+  );
+  if (readResult.status === 'absent') return { status: 'unmanaged' } as const;
+  if (readResult.status === 'unreadable') return { status: 'unreadable' } as const;
+
+  const version = schemaVersionOf(readResult.text);
+  if (version === undefined) return { status: 'corrupt' } as const;
+  if (version !== SCHEMA_VERSION) {
+    return { status: 'unsupported', schemaVersion: version } as const;
   }
-  return { status: 'managed', manifest } as const;
+  const manifest = decode(readResult.text);
+  return manifest === undefined
+    ? ({ status: 'corrupt' } as const)
+    : ({ status: 'managed', manifest } as const);
 });

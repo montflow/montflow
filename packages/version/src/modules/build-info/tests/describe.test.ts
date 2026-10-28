@@ -169,9 +169,47 @@ Vitest.describe('BuildInfo.describe runtime', () => {
         Vitest.expect(found).toStrictEqual({
           name: '@montflow/reviews',
           version: '3.1.0',
-          checkout: packageRoot,
           source: 'generated',
         });
+      }),
+    ),
+  );
+
+  Vitest.it.effect('ignores ambient GIT_DIR exported by the caller', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeManifest(sandbox.root, '@montflow/skills', '1.2.3'));
+        yield* Effect.promise(() => initRepo(sandbox.root, 'SKILL.md', '# skill\n'));
+        const expected = git(sandbox.root, ['rev-parse', 'HEAD']);
+
+        const found = yield* identity(sandbox.root, { GIT_DIR: '.git' });
+
+        Vitest.expect(found.commit).toBe(expected);
+        Vitest.expect(found.checkout).toBe(sandbox.root);
+        Vitest.expect(found.ref).toBe('main');
+      }),
+    ),
+  );
+
+  Vitest.it.effect('ignores an absolute GIT_DIR pointing at another repository', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        const other = join(sandbox.root, 'other');
+        const packageRoot = join(sandbox.root, 'package');
+        yield* Effect.promise(() => mkdir(packageRoot, { recursive: true }));
+        yield* Effect.promise(() => writeManifest(packageRoot, '@montflow/profiles', '1.0.0'));
+        yield* Effect.promise(() => initRepo(packageRoot, 'profile.md', '# profile\n'));
+        yield* Effect.promise(() => mkdir(other, { recursive: true }));
+        yield* Effect.promise(() => initRepo(other, 'other.md', '# other\n'));
+        const expected = git(packageRoot, ['rev-parse', 'HEAD']);
+
+        const found = yield* identity(packageRoot, {
+          GIT_DIR: join(other, '.git'),
+          GIT_WORK_TREE: other,
+        });
+
+        Vitest.expect(found.commit).toBe(expected);
+        Vitest.expect(found.checkout).toBe(packageRoot);
       }),
     ),
   );

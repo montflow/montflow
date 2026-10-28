@@ -1,11 +1,12 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeServices } from '@effect/platform-node';
 import { Effect } from 'effect';
 import * as Vitest from '@effect/vitest';
-import { Cli, Store } from '../../../index.js';
-import type { Identity } from '../../build-info/index.js';
+import * as BuildInfo from '../../build-info/index.js';
+import * as Store from '../../store/index.js';
+import * as Cli from '../index.js';
 
 /**
  * Rendering is the contract an agent parses: the human form must name every
@@ -16,7 +17,7 @@ import type { Identity } from '../../build-info/index.js';
  * paths the binary does.
  */
 
-const identity: Identity = {
+const identity: BuildInfo.Identity = {
   name: '@montflow/skills',
   version: '1.4.2',
   commit: 'a'.repeat(40),
@@ -157,6 +158,73 @@ Vitest.describe('Cli.human runtime', () => {
     ),
   );
 });
+
+Vitest.it.effect('reports an unreadable manifest as unreadable, not unmanaged', () =>
+  withWorkspace((root) =>
+    Effect.gen(function* () {
+      const store = join(root, '.agents', 'skills');
+      yield* Effect.promise(() => mkdir(store, { recursive: true }));
+      const manifest = join(store, '.montflow-sync.json');
+      yield* Effect.promise(() =>
+        writeFile(
+          manifest,
+          JSON.stringify({
+            schemaVersion: 1,
+            source: { path: '/checkout' },
+            syncedAt: '2026-10-28T00:00:00.000Z',
+            skills: [],
+          }),
+        ),
+      );
+      yield* Effect.promise(() => chmod(manifest, 0o000));
+
+      const value = Cli.report(identity, yield* readStore(root));
+
+      Vitest.expect(value.store).toStrictEqual({ status: 'unreadable' });
+      Vitest.expect(Cli.human(value).split('\n').at(-1)).toBe('store     unreadable manifest');
+    }),
+  ),
+);
+
+Vitest.it.effect('reports a shape-changed future manifest as unsupported', () =>
+  withWorkspace((root) =>
+    Effect.gen(function* () {
+      const store = join(root, '.agents', 'skills');
+      yield* Effect.promise(() => mkdir(store, { recursive: true }));
+      yield* Effect.promise(() =>
+        writeFile(
+          join(store, '.montflow-sync.json'),
+          JSON.stringify({
+            schemaVersion: 2,
+            origin: { path: '/checkout' },
+            syncedAt: '2026-10-28T00:00:00.000Z',
+            entries: [],
+          }),
+        ),
+      );
+
+      const value = Cli.report(identity, yield* readStore(root));
+
+      Vitest.expect(value.store).toStrictEqual({ status: 'unsupported', schemaVersion: 2 });
+    }),
+  ),
+);
+
+Vitest.it.effect('reports an older schema as unsupported', () =>
+  withWorkspace((root) =>
+    Effect.gen(function* () {
+      const store = join(root, '.agents', 'skills');
+      yield* Effect.promise(() => mkdir(store, { recursive: true }));
+      yield* Effect.promise(() =>
+        writeFile(join(store, '.montflow-sync.json'), JSON.stringify({ schemaVersion: 0 })),
+      );
+
+      const value = Cli.report(identity, yield* readStore(root));
+
+      Vitest.expect(value.store).toStrictEqual({ status: 'unsupported', schemaVersion: 0 });
+    }),
+  ),
+);
 
 Vitest.describe('Cli.json runtime', () => {
   Vitest.it.effect('emits one JSON object with the identity and the store', () =>

@@ -149,6 +149,7 @@ Vitest.describe('compiled binary runtime', () => {
           version: manifest.version,
           source: 'generated',
         });
+        Vitest.expect(identity).not.toHaveProperty('checkout');
 
         const list = spawnSync(artifact, ['list', '--dir', root], { encoding: 'utf8' });
         Vitest.expect(list.status, list.stderr).toBe(0);
@@ -157,5 +158,39 @@ Vitest.describe('compiled binary runtime', () => {
       }
     },
     120_000,
+  );
+});
+
+Vitest.describe('Cli.run failure contract runtime', () => {
+  Vitest.it(
+    'prints a handler failure to stderr, keeps stdout empty, and exits 1',
+    async () => {
+      await mkdir(join(REPO_ROOT, 'packages/version/.tmp'), { recursive: true });
+      const root = await mkdtemp(join(REPO_ROOT, 'packages/version/.tmp/failure-'));
+      try {
+        const script = join(root, 'failing.ts');
+        const entry = join(REPO_ROOT, 'packages/version/src/index.ts');
+        await writeFile(
+          script,
+          [
+            "import { Effect } from 'effect';",
+            "import { Command } from 'effect/unstable/cli';",
+            `import { Cli } from '${entry}';`,
+            "const command = Command.make('failing', {}, () => Effect.fail(new Error('boom')));",
+            "Cli.run({ command, version: '1.2.3' });",
+            '',
+          ].join('\n'),
+        );
+
+        const result = spawnSync('bun', ['run', script], { cwd: REPO_ROOT, encoding: 'utf8' });
+
+        Vitest.expect(result.status).toBe(1);
+        Vitest.expect(result.stdout).toBe('');
+        Vitest.expect(result.stderr).toContain('boom');
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    60_000,
   );
 });

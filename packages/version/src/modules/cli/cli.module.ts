@@ -1,5 +1,6 @@
 import { NodeServices } from '@effect/platform-node';
-import { Console, Effect, Option } from 'effect';
+import { Console, Effect, Match, Option } from 'effect';
+import { CliError } from 'effect/unstable/cli';
 import { Command, Flag } from 'effect/unstable/cli';
 import {
   type BuildInfoError,
@@ -21,7 +22,7 @@ import { read as readStore, type StoreState } from '../store/index.js';
 
 /** The installed skill store, when the workspace has one. */
 export interface StoreReport {
-  readonly status: 'managed' | 'unmanaged' | 'corrupt' | 'unsupported';
+  readonly status: 'managed' | 'unmanaged' | 'corrupt' | 'unreadable' | 'unsupported';
   readonly version?: string | undefined;
   readonly commit?: string | undefined;
   readonly syncedAt?: string | undefined;
@@ -34,20 +35,24 @@ export interface VersionReport extends Identity {
 }
 
 /** Shrink a store state to the fields a version report prints. */
-export const storeReport = (state: StoreState): StoreReport | undefined => {
-  if (state.status === 'absent') return undefined;
-  if (state.status === 'unmanaged') return { status: 'unmanaged' };
-  if (state.status === 'corrupt') return { status: 'corrupt' };
-  if (state.status === 'unsupported') {
-    return { status: 'unsupported', schemaVersion: state.schemaVersion };
-  }
-  return {
-    status: 'managed',
-    version: state.manifest.source.version,
-    commit: state.manifest.source.commit,
-    syncedAt: state.manifest.syncedAt,
-  };
-};
+export const storeReport = (state: StoreState): StoreReport | undefined =>
+  Match.value(state).pipe(
+    Match.when({ status: 'absent' }, () => undefined),
+    Match.when({ status: 'unmanaged' }, () => ({ status: 'unmanaged' }) satisfies StoreReport),
+    Match.when({ status: 'corrupt' }, () => ({ status: 'corrupt' }) satisfies StoreReport),
+    Match.when({ status: 'unreadable' }, () => ({ status: 'unreadable' }) satisfies StoreReport),
+    Match.when({ status: 'unsupported' }, (unsupported): StoreReport => ({
+      status: 'unsupported',
+      schemaVersion: unsupported.schemaVersion,
+    })),
+    Match.when({ status: 'managed' }, (managed): StoreReport => ({
+      status: 'managed',
+      version: managed.manifest.source.version,
+      commit: managed.manifest.source.commit,
+      syncedAt: managed.manifest.syncedAt,
+    })),
+    Match.exhaustive,
+  );
 
 /** Attach the store's version to an identity. */
 export const report = (identity: Identity, store: StoreState): VersionReport => ({
@@ -60,13 +65,21 @@ const orUnknownBoolean = (value: boolean | undefined): string =>
   value === undefined ? 'unknown' : value ? 'yes' : 'no';
 
 /** One store line: a state, or `<version> (<commit>)` for a managed store. */
-const storeLine = (store: StoreReport): string => {
-  if (store.status === 'unmanaged') return 'unmanaged';
-  if (store.status === 'corrupt') return 'corrupt manifest';
-  if (store.status === 'unsupported') return `unsupported manifest (schema ${store.schemaVersion})`;
-  const version = orUnknown(store.version);
-  return store.commit === undefined ? version : `${version} (${store.commit})`;
-};
+const storeLine = (store: StoreReport): string =>
+  Match.value(store).pipe(
+    Match.when({ status: 'unmanaged' }, () => 'unmanaged'),
+    Match.when({ status: 'corrupt' }, () => 'corrupt manifest'),
+    Match.when({ status: 'unreadable' }, () => 'unreadable manifest'),
+    Match.when(
+      { status: 'unsupported' },
+      (unsupported) => `unsupported manifest (schema ${unsupported.schemaVersion})`,
+    ),
+    Match.when({ status: 'managed' }, (managed) => {
+      const version = orUnknown(managed.version);
+      return managed.commit === undefined ? version : `${version} (${managed.commit})`;
+    }),
+    Match.exhaustive,
+  );
 
 /** Human form: one labelled field per line, stable order, no colour. */
 export const human = (value: VersionReport): string => {
@@ -76,7 +89,7 @@ export const human = (value: VersionReport): string => {
     `commit    ${orUnknown(value.commit)}`,
     `dirty     ${orUnknownBoolean(value.dirty)}`,
     `ref       ${orUnknown(value.ref)}`,
-    `checkout  ${value.checkout}`,
+    `checkout  ${orUnknown(value.checkout)}`,
   ];
   if (value.store !== undefined) lines.push(`store     ${storeLine(value.store)}`);
   return lines.join('\n');
@@ -205,7 +218,12 @@ export const run = <Name extends string, Input, ContextInput, E>(
 ): void => {
   execute(options)
     .pipe(Effect.provide(NodeServices.layer), Effect.runPromise)
-    .catch(() => {
+    .catch((cause: unknown) => {
+      // `Command.run` renders its own CliError; a handler failure or defect was
+      // not rendered, so a silent exit-1 would hide the only diagnostic.
+      if (!CliError.isCliError(cause)) {
+        process.stderr.write(`${cause instanceof Error ? cause.message : String(cause)}\n`);
+      }
       process.exitCode = 1;
     });
 };

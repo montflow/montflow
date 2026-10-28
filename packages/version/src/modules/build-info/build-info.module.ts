@@ -1,6 +1,5 @@
 import { Effect, FileSystem, Option, Path, Schema, Stream } from 'effect';
 import { ChildProcess } from 'effect/unstable/process';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /**
  * Identity for one `mf-*` CLI: the package it belongs to, the version its
@@ -27,8 +26,8 @@ export interface Identity {
   readonly dirty?: boolean | undefined;
   /** Branch name, or `HEAD` when detached; absent outside a git checkout. */
   readonly ref?: string | undefined;
-  /** Root of the checkout that contains the package. */
-  readonly checkout: string;
+  /** Root of the checkout that contains the package; absent for a generated identity. */
+  readonly checkout?: string | undefined;
   /** Which source supplied {@link version}. */
   readonly source: IdentitySource;
 }
@@ -67,6 +66,44 @@ interface GitAnswer {
   readonly stdout: string | undefined;
 }
 
+/** Repo-location variables a caller may export; probes must not inherit them. */
+const GIT_LOCATION_KEYS = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_COMMON_DIR',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+] as const;
+
+/** Apply the caller's explicit test env, then wipe repo-location overrides. */
+const probeEnv = (env: Readonly<Record<string, string | undefined>> | undefined) => {
+  const overrides = { ...env };
+  for (const key of GIT_LOCATION_KEYS) overrides[key] = undefined;
+  return overrides;
+};
+
+/** Run one git command and collect stdout, or an absent answer on any failure. */
+const runGit = (
+  cwd: string,
+  args: ReadonlyArray<string>,
+  env: Readonly<Record<string, string | undefined>> | undefined,
+) =>
+  Effect.gen(function* () {
+    const handle = yield* ChildProcess.make('git', args, {
+      cwd,
+      stderr: 'ignore',
+      env: probeEnv(env),
+      extendEnv: true,
+    });
+    const stdout = yield* handle.stdout.pipe(Stream.decodeText(), Stream.mkString);
+    const code = yield* handle.exitCode;
+    return { stdout: code === 0 ? stdout.trim() : undefined } satisfies GitAnswer;
+  }).pipe(
+    Effect.scoped,
+    Effect.orElseSucceed((): GitAnswer => ({ stdout: undefined })),
+  );
+
 /**
  * Run one read-only git command in `cwd`.
  *
@@ -74,23 +111,13 @@ interface GitAnswer {
  * command failure: the caller decides whether missing git means "no facts"
  * (always, for identity) or a reason to report.
  */
-const git = (
+const git = Effect.fnUntraced(function* (
   cwd: string,
   args: ReadonlyArray<string>,
   env: Readonly<Record<string, string | undefined>> | undefined,
-): Effect.Effect<GitAnswer, never, ChildProcessSpawner> =>
-  Effect.gen(function* () {
-    const handle =
-      env === undefined
-        ? yield* ChildProcess.make('git', args, { cwd, stderr: 'ignore' })
-        : yield* ChildProcess.make('git', args, { cwd, stderr: 'ignore', env, extendEnv: true });
-    const stdout = yield* handle.stdout.pipe(Stream.decodeText(), Stream.mkString);
-    const code = yield* handle.exitCode;
-    return { stdout: code === 0 ? stdout.trim() : undefined };
-  }).pipe(
-    Effect.scoped,
-    Effect.orElseSucceed((): GitAnswer => ({ stdout: undefined })),
-  );
+) {
+  return yield* runGit(cwd, args, env);
+});
 
 /** Git facts about the checkout rooted at (or above) `cwd`. */
 interface GitFacts {
@@ -101,40 +128,44 @@ interface GitFacts {
 }
 
 /** Ask git for the checkout root, `HEAD`, its branch, and tree cleanliness. */
-const gitFacts = (
+const gitFacts = Effect.fnUntraced(function* (
   cwd: string,
   env: Readonly<Record<string, string | undefined>> | undefined,
-): Effect.Effect<GitFacts, never, ChildProcessSpawner> =>
-  Effect.gen(function* () {
-    const root = yield* git(cwd, ['rev-parse', '--show-toplevel'], env);
-    if (root.stdout === undefined) {
-      return { checkout: undefined, commit: undefined, dirty: undefined, ref: undefined };
-    }
-    const commit = yield* git(cwd, ['rev-parse', 'HEAD'], env);
-    const ref = yield* git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD'], env);
-    // `--no-optional-locks` keeps this status read from refreshing the index.
-    // `--untracked-files=normal` overrides `status.showUntrackedFiles=no`: a
-    // checkout with unshipped files is not the commit it claims to be, whatever
-    // the user's git config says. `--ignore-submodules=none` does the same for
-    // submodule dirtiness.
-    const status = yield* git(
-      cwd,
-      [
-        '--no-optional-locks',
-        'status',
-        '--porcelain',
-        '--untracked-files=normal',
-        '--ignore-submodules=none',
-      ],
-      env,
-    );
+) {
+  const root = yield* git(cwd, ['rev-parse', '--show-toplevel'], env);
+  if (root.stdout === undefined) {
     return {
-      checkout: root.stdout,
-      commit: commit.stdout,
-      dirty: status.stdout !== undefined ? status.stdout !== '' : undefined,
-      ref: ref.stdout,
-    };
-  });
+      checkout: undefined,
+      commit: undefined,
+      dirty: undefined,
+      ref: undefined,
+    } satisfies GitFacts;
+  }
+  const commit = yield* git(cwd, ['rev-parse', 'HEAD'], env);
+  const ref = yield* git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD'], env);
+  // `--no-optional-locks` keeps this status read from refreshing the index.
+  // `--untracked-files=normal` overrides `status.showUntrackedFiles=no`: a
+  // checkout with unshipped files is not the commit it claims to be, whatever
+  // the user's git config says. `--ignore-submodules=none` does the same for
+  // submodule dirtiness.
+  const status = yield* git(
+    cwd,
+    [
+      '--no-optional-locks',
+      'status',
+      '--porcelain',
+      '--untracked-files=normal',
+      '--ignore-submodules=none',
+    ],
+    env,
+  );
+  return {
+    checkout: root.stdout,
+    commit: commit.stdout,
+    dirty: status.stdout !== undefined ? status.stdout !== '' : undefined,
+    ref: ref.stdout,
+  } satisfies GitFacts;
+});
 
 /** Decode one `package.json` text, or `undefined` when it is not a manifest. */
 const parseManifest = (text: string): { name: string; version: string } | undefined => {
@@ -147,21 +178,14 @@ const parseManifest = (text: string): { name: string; version: string } | undefi
 };
 
 /** Read the owning package's manifest, or `undefined` when it cannot be read. */
-const readManifest = (
-  packageRoot: string,
-): Effect.Effect<
-  { name: string; version: string } | undefined,
-  never,
-  FileSystem.FileSystem | Path.Path
-> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const text = yield* fs
-      .readFileString(path.join(packageRoot, 'package.json'))
-      .pipe(Effect.orElseSucceed(() => undefined));
-    return text === undefined ? undefined : parseManifest(text);
-  });
+const readManifest = Effect.fnUntraced(function* (packageRoot: string) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const text = yield* fs
+    .readFileString(path.join(packageRoot, 'package.json'))
+    .pipe(Effect.orElseSucceed(() => undefined));
+  return text === undefined ? undefined : parseManifest(text);
+});
 
 /**
  * Describe the build behind one CLI.
@@ -193,7 +217,6 @@ export const describe = Effect.fn('BuildInfo.describe')(function* (options: Desc
     return {
       name: options.generated.name,
       version: options.generated.version,
-      checkout: packageRoot,
       source: 'generated' as const,
     };
   }
