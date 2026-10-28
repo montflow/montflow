@@ -1,21 +1,3 @@
-# Memory
+# C003: wire-plugin-pickers - Memory
 
-## Context
-
-None yet.
-
-## Progress
-
-- pending
-
-## Open Questions
-
-- None.
-
-## Handoff
-
-- See TASK.md.
-
-## Deviations
-
-- None.
+Wiring all five plugins to use shared picker from @montflow/opencode/tui.
