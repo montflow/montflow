@@ -167,7 +167,7 @@ export const compareUnpinned = (
  * @returns true for a candidate spelling
  */
 export const isTagCandidate = (ref: string): boolean =>
-  !COMMIT_PATTERN.test(ref) && (!ref.includes('/') || ref.startsWith('refs/tags/'));
+  !COMMIT_PATTERN.test(ref) && !ref.startsWith('refs/heads/');
 
 /**
  * Resolve the commit a tag-shaped ref names from `ls-remote` rows.
@@ -463,7 +463,16 @@ const make = Effect.sync(() => {
       'refs/remotes/origin/HEAD',
     ]);
     if (symbolic.ok && symbolic.stdout.startsWith('origin/')) {
-      return symbolic.stdout.slice('origin/'.length);
+      const branch = symbolic.stdout.slice('origin/'.length);
+      const target = yield* runGit([
+        '-C',
+        path,
+        'rev-parse',
+        '--verify',
+        '--quiet',
+        `refs/remotes/origin/${branch}`,
+      ]);
+      if (target.ok) return branch;
     }
     const current = yield* currentBranch(path);
     if (current === undefined) return undefined;

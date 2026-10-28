@@ -1286,7 +1286,14 @@ const make = Effect.gen(function* () {
         continue;
       }
 
-      const branch = yield* git.defaultBranch(clone);
+      let branch = yield* git.defaultBranch(clone);
+      if (branch === undefined) {
+        // A stale `origin/HEAD` (upstream renamed its default branch) is the one
+        // repairable cause; sync is a repair verb, so refresh and retry once.
+        const fetched = yield* git.fetch(clone);
+        if (fetched.ok) yield* git.setHeadAuto(clone);
+        branch = yield* git.defaultBranch(clone);
+      }
       if (branch === undefined) {
         results.push({
           kind: 'skipped',
