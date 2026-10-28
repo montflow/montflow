@@ -13,6 +13,7 @@ import {
   check as runUpdateCheck,
   claimNotice,
   shouldAnnounce,
+  skipReason,
   type Verdict,
 } from '../update-check/index.js';
 
@@ -115,20 +116,15 @@ export const json = (value: VersionReport): string =>
   });
 
 /** `mf-skills` from `@montflow/skills`; also the guide anchor. */
-export const cliName = (packageName: string): string =>
+export const cliName = (packageName: string) =>
   `mf-${packageName.split('/').at(-1) ?? packageName}`;
 
 /** The one-line stale notice, naming every fact the reader needs. */
-export const noticeLine = (
-  cli: string,
-  installed: string,
-  available: string,
-  checkout: string,
-): string =>
+export const noticeLine = (cli: string, installed: string, available: string, checkout: string) =>
   `${cli} ${installed} is behind ${available} in ${checkout} — update: guides/updating.md#${cli}`;
 
 /** Plain-language result for `version --check`. */
-export const checkLine = (verdict: Verdict): string =>
+export const checkLine = (verdict: Verdict) =>
   Match.value(verdict).pipe(
     Match.when({ state: 'behind' }, (behind) => `behind ${behind.available}`),
     Match.when({ state: 'current' }, () => 'current'),
@@ -278,6 +274,7 @@ export interface AnnounceOptions {
  * @param options - package directory, embedded identity, and argv
  */
 export const announce = Effect.fn('Cli.announce')(function* (options: AnnounceOptions) {
+  if (skipReason(environment(), options.args) !== undefined) return;
   if (!shouldAnnounce(options.args)) return;
 
   const identity = yield* describe({
@@ -299,6 +296,7 @@ export const announce = Effect.fn('Cli.announce')(function* (options: AnnounceOp
 
   const claimed = yield* claimNotice({
     packageName: identity.name,
+    currentVersion: identity.version,
     checkout,
     env: environment(),
   });

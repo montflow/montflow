@@ -1,4 +1,4 @@
-import { Clock, Effect, FileSystem, Option, Path, Schema, Stream } from 'effect';
+import { Clock, Effect, FileSystem, Match, Option, Path, Schema, Stream } from 'effect';
 import { ChildProcess } from 'effect/unstable/process';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import { probeEnv } from '../build-info/index.js';
@@ -151,7 +151,7 @@ export const parseSemVer = (value: string): SemVer | undefined => {
   };
 };
 
-const compareIdentifier = (a: string, b: string): number => {
+const compareIdentifier = (a: string, b: string) => {
   const an = /^\d+$/u.test(a);
   const bn = /^\d+$/u.test(b);
   if (an && bn) return Number(a) - Number(b);
@@ -186,12 +186,13 @@ export const compareSemVer = (a: string, b: string): number => {
 };
 
 /** The version in `@montflow/skills@1.2.3`, or `undefined` for another ref. */
-export const versionOfTag = (packageName: string, ref: string): string | undefined => {
+export const versionOfTag = (packageName: string, ref: string) => {
   const prefix = `refs/tags/${packageName}@`;
   return ref.startsWith(prefix) ? ref.slice(prefix.length) : undefined;
 };
 
-const parseRefs = (stdout: string): ReadonlyArray<RemoteRef> =>
+/** Parse one `git ls-remote` line: `<sha>\t<ref>`. */
+export const parseRefs = (stdout: string) =>
   stdout
     .split('\n')
     .map((line) => line.trim())
@@ -202,8 +203,8 @@ const parseRefs = (stdout: string): ReadonlyArray<RemoteRef> =>
     })
     .filter((ref) => ref.commit !== '' && ref.name !== '');
 
-/** The real probe: one `git ls-remote` request, no API and no token. */
-const readRefs = (request: ProbeRequest) =>
+/** Run one `git ls-remote` request; a non-zero exit is a typed failure. */
+export const readRefs = (request: ProbeRequest) =>
   Effect.gen(function* () {
     const handle = yield* ChildProcess.make(
       'git',
@@ -212,15 +213,17 @@ const readRefs = (request: ProbeRequest) =>
     );
     const stdout = yield* handle.stdout.pipe(Stream.decodeText(), Stream.mkString);
     const code = yield* handle.exitCode;
-    if (code !== 0) return yield* Effect.fail('git ls-remote failed');
+    if (code !== 0) {
+      return yield* Effect.fail(`git ls-remote exited ${code} for ${request.remote}`);
+    }
     return parseRefs(stdout);
   }).pipe(
     Effect.scoped,
-    Effect.orElseSucceed((): ReadonlyArray<RemoteRef> => []),
+    Effect.catch((reason) => Effect.fail(`git ls-remote failed: ${String(reason)}`)),
   );
 
 /** The real probe: one `git ls-remote` request, no API and no token. */
-const gitProbe: Probe = {
+export const defaultProbe: Probe = {
   refs: Effect.fnUntraced(function* (request: ProbeRequest) {
     return yield* readRefs(request);
   }),
@@ -249,10 +252,7 @@ export const cacheFileFor = (
 
 const emptyCache = (): CacheFile => ({ schemaVersion: 1, entries: {} });
 
-const readCache = (
-  path: Path.Path,
-  file: string,
-): Effect.Effect<CacheFile, never, FileSystem.FileSystem> =>
+const readCache = (file: string): Effect.Effect<CacheFile, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const text = yield* fs.readFileString(file).pipe(Effect.orElseSucceed(() => undefined));
@@ -267,29 +267,49 @@ const readCache = (
     }
   });
 
+/** Drop expired entries and keep the surviving ones. */
+const liveEntries = (cache: CacheFile, now: number): Readonly<Record<string, CacheEntry>> =>
+  Object.fromEntries(Object.entries(cache.entries).filter(([, entry]) => entry.expiresAt > now));
+
 const writeCache = (
   path: Path.Path,
   file: string,
   cache: CacheFile,
+  now: number,
 ): Effect.Effect<void, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     yield* fs.makeDirectory(path.dirname(file), { recursive: true }).pipe(Effect.ignore);
-    yield* fs.writeFileString(file, `${JSON.stringify(cache)}\n`).pipe(Effect.ignore);
+    const temporary = `${file}.${process.pid}.tmp`;
+    yield* fs
+      .writeFileString(
+        temporary,
+        `${JSON.stringify({ ...cache, entries: liveEntries(cache, now) })}\n`,
+      )
+      .pipe(Effect.ignore);
+    // Rename keeps concurrent writers from observing a half-written file.
+    yield* fs.rename(temporary, file).pipe(Effect.ignore);
   });
 
-/** Cache key: a package in a checkout, never a package alone. */
-export const cacheKey = (packageName: string, checkout: string): string =>
-  `${packageName}\u0000${checkout}`;
+/** Cache key: a package version in a checkout, never a package alone. */
+export const cacheKey = (packageName: string, checkout: string, version: string) =>
+  `${packageName}\u0000${checkout}\u0000${version}`;
 
 /** Decide from the ref list, or `unknown` when there is nothing to compare. */
 export const decide = (
   options: Pick<CheckOptions, 'packageName' | 'currentVersion' | 'currentCommit'>,
   refs: ReadonlyArray<RemoteRef>,
 ): Verdict => {
+  if (parseSemVer(options.currentVersion) === undefined) {
+    return {
+      state: 'unknown',
+      reason: `running version '${options.currentVersion}' is not SemVer`,
+    };
+  }
   const tags = refs
     .map((ref) => versionOfTag(options.packageName, ref.name))
     .filter((version): version is string => version !== undefined)
+    .filter((version) => parseSemVer(version) !== undefined)
     .toSorted(compareSemVer);
   const newest = tags.at(-1);
   if (newest !== undefined) {
@@ -315,10 +335,57 @@ export const decide = (
   };
 };
 
+/** True when `current` is an ancestor of `main` (both local objects). */
+export const isAncestor = (
+  checkout: string,
+  current: string,
+  main: string,
+  env: Readonly<Record<string, string | undefined>> | undefined,
+): Effect.Effect<boolean | undefined, never, ChildProcessSpawner> =>
+  Effect.gen(function* () {
+    const handle = yield* ChildProcess.make(
+      'git',
+      ['--no-optional-locks', 'merge-base', '--is-ancestor', current, main],
+      { cwd: checkout, stderr: 'ignore', env: probeEnv(env), extendEnv: true },
+    );
+    yield* handle.stdout.pipe(Stream.decodeText(), Stream.runDrain);
+    const code = yield* handle.exitCode;
+    if (code === 0) return true;
+    if (code === 1) return false;
+    return undefined;
+  }).pipe(
+    Effect.scoped,
+    Effect.orElseSucceed(() => undefined),
+  );
+
+/** Classify a commit-basis verdict instead of assuming every difference is behind. */
+const classifyCommit = (
+  options: CheckOptions,
+  verdict: Verdict,
+): Effect.Effect<Verdict, never, ChildProcessSpawner> =>
+  Effect.gen(function* () {
+    if (verdict.state !== 'behind' || verdict.basis !== 'commit') return verdict;
+    if (options.currentCommit === undefined || verdict.commit === undefined) return verdict;
+    const ancestor = yield* isAncestor(
+      options.checkout,
+      options.currentCommit,
+      verdict.commit,
+      options.env,
+    );
+    if (ancestor === true) return verdict;
+    if (ancestor === false) {
+      return { state: 'ahead', available: verdict.commit.slice(0, 7) };
+    }
+    return {
+      state: 'unknown',
+      reason: 'cannot compare the local commit with refs/heads/main',
+    };
+  });
+
 /** Query the remote under the two-second cap. */
 const probeVerdict = (options: CheckOptions): Effect.Effect<Verdict, never, ChildProcessSpawner> =>
   Effect.gen(function* () {
-    const probe = options.probe ?? gitProbe;
+    const probe = options.probe ?? defaultProbe;
     const result = yield* probe
       .refs({
         remote: options.remote ?? DEFAULT_REMOTE,
@@ -335,21 +402,28 @@ const probeVerdict = (options: CheckOptions): Effect.Effect<Verdict, never, Chil
               : { kind: 'refs' as const, refs: refs.value },
         }),
       );
-    if (result.kind === 'timeout') {
-      return { state: 'unknown', reason: `probe timed out after ${PROBE_TIMEOUT_MS}ms` };
-    }
-    if (result.kind === 'failed') {
-      return { state: 'unknown', reason: result.reason };
-    }
-    return decide(options, result.refs);
+    const verdict: Verdict = Match.value(result).pipe(
+      Match.when({ kind: 'timeout' }, () => ({
+        state: 'unknown' as const,
+        reason: `probe timed out after ${PROBE_TIMEOUT_MS}ms`,
+      })),
+      Match.when({ kind: 'failed' }, (failed) => ({
+        state: 'unknown' as const,
+        reason: failed.reason,
+      })),
+      Match.when({ kind: 'refs' }, (probed) => decide(options, probed.refs)),
+      Match.exhaustive,
+    );
+    return yield* classifyCommit(options, verdict);
   });
 
 /**
  * Decide whether this CLI is behind upstream, using the cache unless forced.
  *
  * Opt-outs skip cache and network entirely. A forced check always probes and
- * refreshes the cache. Probe failures, timeouts, a non-git install, and a
- * remote with no matching refs all yield `unknown` rather than an error.
+ * refreshes the cache while preserving the notice stamp. Probe failures,
+ * timeouts, a non-git install, and a remote with no matching refs all yield
+ * `unknown` rather than an error.
  * @param options - package, versions, checkout, environment, and probe
  * @returns the verdict and whether it came from cache
  */
@@ -357,15 +431,19 @@ export const check = Effect.fn('UpdateCheck.check')(function* (options: CheckOpt
   const path = yield* Path.Path;
   const skipped = skipReason(options.env, options.args);
   if (skipped !== undefined) {
-    return { verdict: { state: 'skipped', reason: skipped }, cached: false } satisfies CheckResult;
+    return {
+      verdict: { state: 'skipped', reason: skipped },
+      cached: false,
+    } satisfies CheckResult;
   }
 
   const now = yield* Clock.currentTimeMillis;
   const file = options.cacheFile ?? cacheFileFor(path, options.env);
-  const key = cacheKey(options.packageName, options.checkout);
+  const checkout = path.resolve(options.checkout);
+  const key = cacheKey(options.packageName, checkout, options.currentVersion);
 
   if (!options.force && file !== undefined) {
-    const cache = yield* readCache(path, file);
+    const cache = yield* readCache(file);
     const entry = cache.entries[key];
     if (entry !== undefined && now < entry.expiresAt) {
       return { verdict: entry.verdict, cached: true } satisfies CheckResult;
@@ -374,15 +452,19 @@ export const check = Effect.fn('UpdateCheck.check')(function* (options: CheckOpt
 
   const verdict = yield* probeVerdict(options);
   if (file !== undefined) {
-    const cache = yield* readCache(path, file);
+    const cache = yield* readCache(file);
     const ttl = verdict.state === 'unknown' ? FAILURE_TTL_MS : SUCCESS_TTL_MS;
-    yield* writeCache(path, file, {
-      schemaVersion: 1,
-      entries: {
-        ...cache.entries,
-        [key]: { checkedAt: now, expiresAt: now + ttl, verdict },
-      },
-    });
+    const previous = cache.entries[key];
+    const base = { checkedAt: now, expiresAt: now + ttl, verdict };
+    // A refresh must not reopen the once-per-day notice window.
+    const entry =
+      previous?.notifiedAt === undefined ? base : { ...base, notifiedAt: previous.notifiedAt };
+    yield* writeCache(
+      path,
+      file,
+      { schemaVersion: 1, entries: { ...cache.entries, [key]: entry } },
+      now,
+    );
   }
   return { verdict, cached: false } satisfies CheckResult;
 });
@@ -399,7 +481,18 @@ export const shouldAnnounce = (args: ReadonlyArray<string>): boolean => {
   ) {
     return false;
   }
-  return args.find((arg) => !arg.startsWith('-')) !== 'version';
+  // Global flags may take a separate value (`--log-level debug`); skip it so
+  // the first real token is the subcommand.
+  const valueFlags = new Set(['--log-level']);
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index] ?? '';
+    if (arg.startsWith('-')) {
+      if (valueFlags.has(arg)) index += 1;
+      continue;
+    }
+    return arg !== 'version';
+  }
+  return true;
 };
 
 /**
@@ -408,11 +501,12 @@ export const shouldAnnounce = (args: ReadonlyArray<string>): boolean => {
  * Reads the same cache file as {@link check}; a fresh `notifiedAt` suppresses
  * the line, otherwise the slot is stamped and the caller prints. A missing
  * cache file (no HOME, or a first run) permits the notice.
- * @param options - package, checkout, environment, and optional cache override
+ * @param options - package, version, checkout, environment, and cache override
  * @returns true when the caller should print the notice
  */
 export const claimNotice = Effect.fn('UpdateCheck.claimNotice')(function* (options: {
   readonly packageName: string;
+  readonly currentVersion: string;
   readonly checkout: string;
   readonly env?: Readonly<Record<string, string | undefined>> | undefined;
   readonly cacheFile?: string | undefined;
@@ -422,23 +516,28 @@ export const claimNotice = Effect.fn('UpdateCheck.claimNotice')(function* (optio
   const file = options.cacheFile ?? cacheFileFor(path, options.env);
   if (file === undefined) return true;
 
-  const cache = yield* readCache(path, file);
-  const key = cacheKey(options.packageName, options.checkout);
+  const cache = yield* readCache(file);
+  const key = cacheKey(options.packageName, path.resolve(options.checkout), options.currentVersion);
   const entry = cache.entries[key];
   if (entry?.notifiedAt !== undefined && now - entry.notifiedAt < SUCCESS_TTL_MS) {
     return false;
   }
-  yield* writeCache(path, file, {
-    schemaVersion: 1,
-    entries: {
-      ...cache.entries,
-      [key]: {
-        checkedAt: entry?.checkedAt ?? now,
-        expiresAt: entry?.expiresAt ?? now + SUCCESS_TTL_MS,
-        verdict: entry?.verdict ?? { state: 'unknown', reason: 'no verdict' },
-        notifiedAt: now,
+  yield* writeCache(
+    path,
+    file,
+    {
+      schemaVersion: 1,
+      entries: {
+        ...cache.entries,
+        [key]: {
+          checkedAt: entry?.checkedAt ?? now,
+          expiresAt: entry?.expiresAt ?? now + SUCCESS_TTL_MS,
+          verdict: entry?.verdict ?? { state: 'unknown', reason: 'no verdict' },
+          notifiedAt: now,
+        },
       },
     },
-  });
+    now,
+  );
   return true;
 });

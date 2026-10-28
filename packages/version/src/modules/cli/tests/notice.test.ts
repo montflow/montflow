@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { Effect } from 'effect';
@@ -17,7 +17,11 @@ import * as Cli from '../index.js';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../../../../..');
 const MAIN = join(REPO_ROOT, 'packages/skills/src/apps/cli/main.ts');
-const KEY = UpdateCheck.cacheKey('@montflow/skills', REPO_ROOT);
+const TOPLEVEL = spawnSync('git', ['rev-parse', '--show-toplevel'], {
+  cwd: REPO_ROOT,
+  encoding: 'utf8',
+}).stdout.trim();
+const KEY = UpdateCheck.cacheKey('@montflow/skills', TOPLEVEL, '0.0.1');
 const FAR_FUTURE = 4_102_444_800_000;
 
 interface VerdictSeed {
@@ -49,13 +53,16 @@ const seedCache = async (home: string, seed: VerdictSeed): Promise<void> => {
 };
 
 /** Run `mf-skills list` with the given cache home. */
-const runList = (home: string, workspace: string, extra: ReadonlyArray<string> = []) =>
-  spawnSync('bun', ['run', MAIN, 'list', '--dir', workspace, ...extra], {
+const runCli = (home: string, args: ReadonlyArray<string>) =>
+  spawnSync('bun', ['run', MAIN, ...args], {
     cwd: REPO_ROOT,
     encoding: 'utf8',
     // oxlint-disable-next-line montflow/no-process-env -- the spawned binary needs the runner's PATH; only the cache home is overridden.
     env: { ...process.env, XDG_CACHE_HOME: home },
   });
+
+const runList = (home: string, workspace: string, extra: ReadonlyArray<string> = []) =>
+  runCli(home, ['list', '--dir', workspace, ...extra]);
 
 /** One throwaway cache home + workspace. */
 const withSandbox = async <A>(
@@ -131,16 +138,36 @@ Vitest.describe('cli update notice runtime', () => {
     }),
   );
 
-  Vitest.it('stays silent once the checkout has been notified', () =>
+  Vitest.it('stamps the cache and stays silent on the next run', () =>
     withSandbox(async ({ home, workspace }) => {
       await seedCache(home, {
         verdict: { state: 'behind', available: '9.9.9', basis: 'tag' },
-        notifiedAt: FAR_FUTURE - 1,
       });
 
-      const result = runList(home, workspace);
+      const first = runList(home, workspace);
+      const second = runList(home, workspace);
 
-      Vitest.expect(result.stderr).toBe('');
+      Vitest.expect(first.stderr).toContain('is behind 9.9.9');
+      Vitest.expect(second.stderr).toBe('');
+      const parsed: unknown = JSON.parse(
+        await readFile(join(home, 'montflow', 'version-check.json'), 'utf8'),
+      );
+      // SAFETY: the CLI wrote this file; the assertion below reads one field.
+      const cache = parsed as { entries: Record<string, { notifiedAt?: number }> };
+      Vitest.expect(cache.entries[KEY]?.notifiedAt).toBeTypeOf('number');
+    }),
+  );
+
+  Vitest.it("keeps a failing command's exit code and still prints the notice", () =>
+    withSandbox(async ({ home, workspace }) => {
+      await seedCache(home, {
+        verdict: { state: 'behind', available: '9.9.9', basis: 'tag' },
+      });
+
+      const result = runCli(home, ['show', 'missing', '--dir', workspace]);
+
+      Vitest.expect(result.status).not.toBe(0);
+      Vitest.expect(result.stderr).toContain('mf-skills 0.0.1 is behind 9.9.9');
     }),
   );
 });
@@ -154,6 +181,9 @@ Vitest.describe('UpdateCheck.shouldAnnounce runtime', () => {
     Vitest.expect(UpdateCheck.shouldAnnounce(['--help'])).toBe(false);
     Vitest.expect(UpdateCheck.shouldAnnounce(['--completions=bash'])).toBe(false);
     Vitest.expect(UpdateCheck.shouldAnnounce(['list', '--no-update-check'])).toBe(false);
+    Vitest.expect(UpdateCheck.shouldAnnounce(['--log-level', 'debug', 'version', '--json'])).toBe(
+      false,
+    );
   });
 });
 
@@ -172,6 +202,19 @@ Vitest.describe('Cli.checkLine runtime', () => {
       Vitest.expect(Cli.checkExit({ state: 'behind', available: '0.0.2', basis: 'tag' })).toBe(1);
       Vitest.expect(Cli.checkExit({ state: 'current' })).toBe(0);
       Vitest.expect(Cli.checkExit({ state: 'unknown', reason: 'offline' })).toBe(0);
+    }),
+  );
+});
+
+Vitest.describe('notice anchors runtime', () => {
+  Vitest.it('every CLI anchor exists in guides/updating.md', () =>
+    Effect.gen(function* () {
+      const guide = yield* Effect.promise(() =>
+        readFile(join(REPO_ROOT, 'guides/updating.md'), 'utf8'),
+      );
+      for (const cli of ['mf-skills', 'mf-specs', 'mf-prompts', 'mf-profiles', 'mf-reviews']) {
+        Vitest.expect(guide, cli).toContain(`## ${cli}`);
+      }
     }),
   );
 });

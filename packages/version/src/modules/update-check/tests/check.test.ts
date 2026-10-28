@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -65,7 +66,8 @@ const ttlOf = (file: string): Effect.Effect<number | undefined> =>
     const cache = parsed as {
       entries: Record<string, { checkedAt: number; expiresAt: number }>;
     };
-    const entry = cache.entries[UpdateCheck.cacheKey(MANIFEST.packageName, MANIFEST.checkout)];
+    const entry =
+      cache.entries[UpdateCheck.cacheKey(MANIFEST.packageName, MANIFEST.checkout, '0.0.1')];
     return entry === undefined ? undefined : entry.expiresAt - entry.checkedAt;
   });
 
@@ -150,30 +152,36 @@ Vitest.describe('UpdateCheck.check runtime', () => {
 
   Vitest.it.effect('falls back to the main commit when no tag matches', () =>
     withCache((dir) =>
-      Effect.gen(function* () {
-        const different = fakeProbe(Effect.succeed([mainRef('c'.repeat(40))]));
-        const changed = yield* run({
-          ...MANIFEST,
-          currentVersion: '0.0.1',
-          cacheFile: cacheFile(dir),
-          probe: different.probe,
-        });
-        Vitest.expect(changed.verdict).toStrictEqual({
-          state: 'behind',
-          available: 'c'.repeat(7),
-          basis: 'commit',
-          commit: 'c'.repeat(40),
-        });
+      withRepo((repo) =>
+        Effect.gen(function* () {
+          const different = fakeProbe(Effect.succeed([mainRef(repo.second)]));
+          const changed = yield* run({
+            packageName: MANIFEST.packageName,
+            checkout: repo.root,
+            currentCommit: repo.first,
+            currentVersion: '0.0.1',
+            cacheFile: cacheFile(dir),
+            probe: different.probe,
+          });
+          Vitest.expect(changed.verdict).toStrictEqual({
+            state: 'behind',
+            available: repo.second.slice(0, 7),
+            basis: 'commit',
+            commit: repo.second,
+          });
 
-        const same = fakeProbe(Effect.succeed([mainRef(MANIFEST.currentCommit)]));
-        const current = yield* run({
-          ...MANIFEST,
-          currentVersion: '0.0.1',
-          cacheFile: join(dir, 'second.json'),
-          probe: same.probe,
-        });
-        Vitest.expect(current.verdict).toStrictEqual({ state: 'current' });
-      }),
+          const same = fakeProbe(Effect.succeed([mainRef(repo.second)]));
+          const current = yield* run({
+            packageName: MANIFEST.packageName,
+            checkout: repo.root,
+            currentCommit: repo.second,
+            currentVersion: '0.0.1',
+            cacheFile: join(dir, 'second.json'),
+            probe: same.probe,
+          });
+          Vitest.expect(current.verdict).toStrictEqual({ state: 'current' });
+        }),
+      ),
     ),
   );
 
@@ -247,7 +255,7 @@ Vitest.describe('UpdateCheck.check runtime', () => {
           schemaVersion: number;
           entries: Record<string, { checkedAt: number; expiresAt: number }>;
         };
-        const key = UpdateCheck.cacheKey(MANIFEST.packageName, MANIFEST.checkout);
+        const key = UpdateCheck.cacheKey(MANIFEST.packageName, MANIFEST.checkout, '0.0.1');
         const entry = cache.entries[key] ?? { checkedAt: 0, expiresAt: 0 };
         yield* Effect.promise(() =>
           writeFile(
@@ -352,6 +360,191 @@ Vitest.describe('UpdateCheck.check runtime', () => {
           reason: `probe timed out after ${UpdateCheck.PROBE_TIMEOUT_MS}ms`,
         });
         Vitest.expect(yield* ttlOf(cacheFile(dir))).toBe(UpdateCheck.FAILURE_TTL_MS);
+      }),
+    ),
+  );
+});
+
+/** Run git for a fixture and fail loudly when the fixture cannot be built. */
+const git = (cwd: string, args: ReadonlyArray<string>): string => {
+  const result = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  if (result.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${result.stderr}`);
+  return result.stdout.trim();
+};
+
+/** A real repository with two commits; both SHAs are exposed to the test. */
+const withRepo = <A, E>(
+  use: (repo: { root: string; first: string; second: string }) => Effect.Effect<A, E>,
+): Effect.Effect<A, E> =>
+  Effect.acquireUseRelease(
+    Effect.promise(async () => {
+      const root = await mkdtemp(join(tmpdir(), 'mf-update-repo-'));
+      await writeFile(join(root, 'file.txt'), 'one\n');
+      git(root, ['init', '-b', 'main']);
+      git(root, ['add', '.']);
+      git(root, ['-c', 'user.name=T', '-c', 'user.email=t@example.com', 'commit', '-m', 'one']);
+      const first = git(root, ['rev-parse', 'HEAD']);
+      await writeFile(join(root, 'file.txt'), 'two\n');
+      git(root, ['add', '.']);
+      git(root, ['-c', 'user.name=T', '-c', 'user.email=t@example.com', 'commit', '-m', 'two']);
+      const second = git(root, ['rev-parse', 'HEAD']);
+      return { root, first, second };
+    }),
+    use,
+    (repo) => Effect.promise(() => rm(repo.root, { recursive: true, force: true })),
+  );
+
+Vitest.describe('UpdateCheck.defaultProbe runtime', () => {
+  Vitest.it('reads tags and main from a local repository in one request', () =>
+    Effect.gen(function* () {
+      const repo = yield* Effect.promise(() =>
+        mkdtemp(join(tmpdir(), 'mf-update-probe-')).then(async (root) => {
+          await writeFile(join(root, 'file.txt'), 'one\n');
+          git(root, ['init', '-b', 'main']);
+          git(root, ['add', '.']);
+          git(root, ['-c', 'user.name=T', '-c', 'user.email=t@example.com', 'commit', '-m', 'one']);
+          git(root, ['tag', '@montflow/skills@0.0.2']);
+          return root;
+        }),
+      );
+      try {
+        const refs = yield* UpdateCheck.defaultProbe
+          .refs({ remote: repo, packageName: '@montflow/skills' })
+          .pipe(Effect.provide(NodeServices.layer));
+
+        Vitest.expect(refs.map((ref) => ref.name)).toContain('refs/tags/@montflow/skills@0.0.2');
+        Vitest.expect(refs.map((ref) => ref.name)).toContain('refs/heads/main');
+      } finally {
+        yield* Effect.promise(() => rm(repo, { recursive: true, force: true }));
+      }
+    }),
+  );
+
+  Vitest.it('reports a non-zero git exit instead of an empty ref list', () =>
+    Effect.gen(function* () {
+      const reason = yield* UpdateCheck.defaultProbe
+        .refs({
+          remote: join(tmpdir(), 'does-not-exist-montflow'),
+          packageName: '@montflow/skills',
+        })
+        .pipe(Effect.provide(NodeServices.layer), Effect.flip);
+
+      Vitest.expect(reason).toContain('git ls-remote exited');
+    }),
+  );
+});
+
+Vitest.describe('UpdateCheck commit fallback runtime', () => {
+  Vitest.it.effect('reports ahead when the local commit is not an ancestor of main', () =>
+    withCache((dir) =>
+      withRepo((repo) =>
+        Effect.gen(function* () {
+          const fake = fakeProbe(Effect.succeed([mainRef(repo.first)]));
+          const result = yield* run({
+            packageName: MANIFEST.packageName,
+            checkout: repo.root,
+            currentCommit: repo.second,
+            currentVersion: '0.0.1',
+            cacheFile: cacheFile(dir),
+            probe: fake.probe,
+          });
+
+          Vitest.expect(result.verdict).toStrictEqual({
+            state: 'ahead',
+            available: repo.first.slice(0, 7),
+          });
+        }),
+      ),
+    ),
+  );
+
+  Vitest.it.effect('reports behind when the local commit is an ancestor of main', () =>
+    withCache((dir) =>
+      withRepo((repo) =>
+        Effect.gen(function* () {
+          const fake = fakeProbe(Effect.succeed([mainRef(repo.second)]));
+          const result = yield* run({
+            packageName: MANIFEST.packageName,
+            checkout: repo.root,
+            currentCommit: repo.first,
+            currentVersion: '0.0.1',
+            cacheFile: cacheFile(dir),
+            probe: fake.probe,
+          });
+
+          Vitest.expect(result.verdict).toStrictEqual({
+            state: 'behind',
+            available: repo.second.slice(0, 7),
+            basis: 'commit',
+            commit: repo.second,
+          });
+        }),
+      ),
+    ),
+  );
+});
+
+Vitest.describe('UpdateCheck cache hygiene runtime', () => {
+  Vitest.it.effect('drops expired entries on write', () =>
+    withCache((dir) =>
+      Effect.gen(function* () {
+        const file = cacheFile(dir);
+        const key = UpdateCheck.cacheKey(MANIFEST.packageName, MANIFEST.checkout, '0.0.1');
+        yield* Effect.promise(() =>
+          writeFile(
+            file,
+            JSON.stringify({
+              schemaVersion: 1,
+              entries: {
+                stale: { checkedAt: 0, expiresAt: 0, verdict: { state: 'current' } },
+                [key]: { checkedAt: 0, expiresAt: 0, verdict: { state: 'current' } },
+              },
+            }),
+          ),
+        );
+        const fake = fakeProbe(Effect.succeed([tag('0.0.2')]));
+        yield* run({
+          ...MANIFEST,
+          currentVersion: '0.0.1',
+          cacheFile: file,
+          probe: fake.probe,
+        });
+
+        const parsed: unknown = JSON.parse(yield* Effect.promise(() => readFile(file, 'utf8')));
+        // SAFETY: written by `check`; the assertion below checks the key set.
+        const cache = parsed as { entries: Record<string, { checkedAt: number }> };
+        Vitest.expect(Object.keys(cache.entries)).toStrictEqual([key]);
+      }),
+    ),
+  );
+
+  Vitest.it.effect('keeps the notice stamp across a forced refresh', () =>
+    withCache((dir) =>
+      Effect.gen(function* () {
+        const fake = fakeProbe(Effect.succeed([tag('0.0.2')]));
+        const options: UpdateCheck.CheckOptions = {
+          ...MANIFEST,
+          currentVersion: '0.0.1',
+          cacheFile: cacheFile(dir),
+          probe: fake.probe,
+        };
+        yield* run(options);
+        const first = yield* UpdateCheck.claimNotice({
+          packageName: MANIFEST.packageName,
+          currentVersion: '0.0.1',
+          checkout: MANIFEST.checkout,
+          cacheFile: cacheFile(dir),
+        }).pipe(Effect.provide(NodeServices.layer));
+        yield* run({ ...options, force: true });
+        const second = yield* UpdateCheck.claimNotice({
+          packageName: MANIFEST.packageName,
+          currentVersion: '0.0.1',
+          checkout: MANIFEST.checkout,
+          cacheFile: cacheFile(dir),
+        }).pipe(Effect.provide(NodeServices.layer));
+
+        Vitest.expect(first).toBe(true);
+        Vitest.expect(second).toBe(false);
       }),
     ),
   );
