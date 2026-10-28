@@ -138,8 +138,11 @@ const make = Effect.gen(function* () {
   return { list, remove, readRaw, readAllRaw, write, save } as const;
 });
 
-export interface PromptStore extends Effect.Success<typeof make> {}
-export class PromptStore extends Context.Service<PromptStore, Effect.Success<typeof make>>()(
-  'PromptStore',
-) {}
+export const Id = '@montflow/prompts/PromptStore';
+export type Id = typeof Id;
+
+export type Service = Effect.Success<typeof make>;
+
+export class PromptStore extends Context.Service<PromptStore, Service>()(Id) {}
+
 export const Default = Layer.effect(PromptStore, make);

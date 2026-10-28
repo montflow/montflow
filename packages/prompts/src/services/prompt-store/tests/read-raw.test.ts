@@ -1,7 +1,7 @@
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Effect, FileSystem, Layer, Path } from 'effect';
 import * as Vitest from '@effect/vitest';
-import { PromptStore } from '../index.js';
+import * as PromptStore from '../prompt-store.services.module.js';
 
 /** Node platform layers, then the real file-backed store built on top. */
 const PlatformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);

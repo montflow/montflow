@@ -13,23 +13,23 @@ const loadReviews = async (directory: string): Promise<ReadonlyArray<string>> =>
   const root = path.join(directory, ...REVIEWS_DIR);
   const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
   const reviews: string[] = [];
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      // Look for review series/rounds
-      try {
-        const subentries = await readdir(path.join(root, entry.name), { withFileTypes: true });
-        for (const sub of subentries) {
-          if (sub.isDirectory()) {
-            reviews.push(`${entry.name}/${sub.name}`);
-            continue;
+  await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map(async (entry) => {
+        try {
+          const subentries = await readdir(path.join(root, entry.name), { withFileTypes: true });
+          for (const sub of subentries) {
+            if (sub.isDirectory()) {
+              reviews.push(`${entry.name}/${sub.name}`);
+            }
           }
+          reviews.push(entry.name);
+        } catch {
+          reviews.push(entry.name);
         }
-        reviews.push(entry.name);
-      } catch {
-        reviews.push(entry.name);
-      }
-    }
-  }
+      }),
+  );
   return [...new Set(reviews)].toSorted();
 };
 

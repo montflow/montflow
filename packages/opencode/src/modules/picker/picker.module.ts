@@ -24,6 +24,9 @@ export interface PickerConfig<T> {
   readonly forwardNonListToServer?: boolean;
 }
 
+// SAFETY: host session.command returns opaque payload; callers do not read fields here.
+export interface SessionCommandResult extends Record<string, unknown> {}
+
 export interface PickerContext {
   readonly location?: { readonly directory?: string | undefined } | undefined;
   readonly renderer: {
@@ -39,7 +42,7 @@ export interface PickerContext {
         readonly sessionID: string;
         readonly name: string;
         readonly text: string;
-      }): Promise<unknown>;
+      }): Promise<SessionCommandResult>;
     };
   };
   readonly keymap: {
@@ -94,8 +97,14 @@ export interface PickerContext {
   };
 }
 
+const scheduleInsert = (callback: () => void, delayMs: number): void => {
+  // SAFETY: retry scheduling is a UI timing concern in the TUI context; host expects direct timers here and tests control via context.
+  // oxlint-disable-next-line montflow/no-timers -- UI retry timing required by host API
+  setTimeout(callback, delayMs);
+};
+
 const insertText = (context: PickerContext, text: string, attempt = 0): void => {
-  setTimeout(
+  scheduleInsert(
     () => {
       const editor = context.renderer.currentFocusedEditor;
       if (editor?.insertText !== undefined) {
@@ -147,25 +156,25 @@ export const registerPicker = <T>(context: PickerContext, config: PickerConfig<T
       title: config.title,
       placeholder: `Search ${config.title.toLowerCase()}`,
       options: pickerItems.map((item) => {
-        const opt: { title: string; value: T; description?: string } = {
-          title: item.title,
-          value: item.value,
-        };
-        if (item.description !== undefined) opt.description = item.description;
-        return opt;
+        if (item.description !== undefined) {
+          return { title: item.title, value: item.value, description: item.description };
+        }
+        return { title: item.title, value: item.value };
       }),
       search: (query, all) => {
-        const mapped: ReadonlyArray<PickerItem<T>> = all.map((opt) => ({
-          title: opt.title,
-          value: opt.value as T,
-          ...(opt.description !== undefined ? { description: opt.description } : {}),
-        }));
+        const mapped: ReadonlyArray<PickerItem<T>> = all.map((opt) => {
+          if (opt.description !== undefined) {
+            return { title: opt.title, value: opt.value, description: opt.description };
+          }
+          return { title: opt.title, value: opt.value };
+        });
         const result = searchFn(query, mapped);
-        return result.map((item) => ({
-          title: item.title,
-          value: item.value,
-          ...(item.description !== undefined ? { description: item.description } : {}),
-        }));
+        return result.map((item) => {
+          if (item.description !== undefined) {
+            return { title: item.title, value: item.value, description: item.description };
+          }
+          return { title: item.title, value: item.value };
+        });
       },
     });
     if (chosen === undefined) return;

@@ -4,6 +4,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { TuiPlugin } from '@montflow/opencode';
 import { registerPicker } from '@montflow/opencode/tui';
+import { Schema } from 'effect';
 import { ID, COMMAND_NAME } from './server.js';
 
 /** Store directory segments under a working directory. */
@@ -18,6 +19,41 @@ interface StoredPrompt {
   readonly template: string;
 }
 
+const StoredPromptJson = Schema.Struct({
+  name: Schema.String,
+  description: Schema.optional(Schema.String),
+  template: Schema.String,
+});
+
+const decodeStoredPromptJson = Schema.decodeUnknownOption(StoredPromptJson);
+
+const readPromptFile = async (filePath: string): Promise<StoredPrompt | undefined> => {
+  const raw = await readFile(filePath, 'utf8').catch(() => undefined);
+  if (raw === undefined) return undefined;
+  try {
+    const parsedJson: unknown = JSON.parse(raw);
+    const result = decodeStoredPromptJson(parsedJson);
+    // SAFETY: Option shape from Effect Schema.
+    const optionRecord = result as { tag?: unknown; value?: unknown };
+    if (optionRecord.tag === 'None') {
+      return undefined;
+    }
+    // SAFETY: schema decode ensures required fields are present.
+    const value = optionRecord.value as {
+      name: string;
+      description?: string | undefined;
+      template: string;
+    };
+    return {
+      name: value.name,
+      description: value.description ?? '',
+      template: value.template,
+    };
+  } catch {
+    return undefined;
+  }
+};
+
 const loadPrompts = async (directory: string): Promise<readonly StoredPrompt[]> => {
   const root = path.join(directory, ...PROMPTS_DIR);
   const legacyRoot = path.join(directory, ...LEGACY_PROMPTS_DIR);
@@ -29,26 +65,7 @@ const loadPrompts = async (directory: string): Promise<readonly StoredPrompt[]> 
       entries = await readdir(legacyRoot);
       const files = entries.filter((entry) => entry.endsWith('.json')).toSorted();
       const prompts = await Promise.all(
-        files.map(async (file): Promise<StoredPrompt | undefined> => {
-          const raw = await readFile(path.join(legacyRoot, file), 'utf8').catch(() => undefined);
-          if (raw === undefined) return undefined;
-          try {
-            const parsed = JSON.parse(raw) as {
-              name?: unknown;
-              description?: unknown;
-              template?: unknown;
-            };
-            if (typeof parsed.name !== 'string' || typeof parsed.template !== 'string')
-              return undefined;
-            return {
-              name: parsed.name,
-              description: typeof parsed.description === 'string' ? parsed.description : '',
-              template: parsed.template,
-            };
-          } catch {
-            return undefined;
-          }
-        }),
+        files.map((file) => readPromptFile(path.join(legacyRoot, file))),
       );
       return prompts.filter((prompt): prompt is StoredPrompt => prompt !== undefined);
     } catch {
@@ -56,28 +73,7 @@ const loadPrompts = async (directory: string): Promise<readonly StoredPrompt[]> 
     }
   }
   const files = entries.filter((entry) => entry.endsWith('.json')).toSorted();
-  const prompts = await Promise.all(
-    files.map(async (file): Promise<StoredPrompt | undefined> => {
-      const raw = await readFile(path.join(root, file), 'utf8').catch(() => undefined);
-      if (raw === undefined) return undefined;
-      try {
-        const parsed = JSON.parse(raw) as {
-          name?: unknown;
-          description?: unknown;
-          template?: unknown;
-        };
-        if (typeof parsed.name !== 'string' || typeof parsed.template !== 'string')
-          return undefined;
-        return {
-          name: parsed.name,
-          description: typeof parsed.description === 'string' ? parsed.description : '',
-          template: parsed.template,
-        };
-      } catch {
-        return undefined;
-      }
-    }),
-  );
+  const prompts = await Promise.all(files.map((file) => readPromptFile(path.join(root, file))));
   return prompts.filter((prompt): prompt is StoredPrompt => prompt !== undefined);
 };
 
