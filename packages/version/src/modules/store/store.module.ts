@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Match, Option, Path, Schema } from 'effect';
+import { Crypto, Effect, FileSystem, Match, Option, Path, Schema } from 'effect';
 
 /**
  * The sync manifest written by `mf-skills sync` and read by every command that
@@ -156,4 +156,109 @@ export const read = Effect.fn('Store.read')(function* (root: string) {
   return manifest === undefined
     ? ({ status: 'corrupt' } as const)
     : ({ status: 'managed', manifest } as const);
+});
+
+const hex = (bytes: Uint8Array): string =>
+  Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+
+/** SHA-256 of one byte array, as lowercase hex. */
+export const digest = (bytes: Uint8Array): Effect.Effect<string, string, Crypto.Crypto> =>
+  Effect.gen(function* () {
+    const crypto = yield* Crypto.Crypto;
+    const value = yield* crypto
+      .digest('SHA-256', bytes)
+      .pipe(Effect.mapError((cause) => `store: cannot hash skill bytes: ${String(cause)}`));
+    return hex(value);
+  });
+
+/**
+ * Hash one skill directory deterministically.
+ *
+ * Each file is hashed individually for D002's per-file report; the skill hash
+ * is the SHA-256 of the sorted `path:digest` lines, so directory order,
+ * timestamps, and filesystem metadata cannot change the result.
+ * @param files - bytes keyed by path relative to the skill directory
+ * @returns per-file digests and the combined skill digest
+ */
+export const hashSkill = (
+  files: Readonly<Record<string, Uint8Array>>,
+): Effect.Effect<
+  { readonly sha256: string; readonly files: Record<string, string> },
+  string,
+  Crypto.Crypto
+> =>
+  Effect.gen(function* () {
+    const names = Object.keys(files).toSorted();
+    const hashes: Record<string, string> = {};
+    for (const name of names) {
+      const bytes = files[name];
+      if (bytes === undefined) continue;
+      hashes[name] = yield* digest(bytes);
+    }
+    const canonical = names.map((name) => `${name}:${hashes[name] ?? ''}`).join('\n');
+    return { sha256: yield* digest(new TextEncoder().encode(canonical)), files: hashes };
+  });
+
+interface SerializedSkill {
+  readonly name: string;
+  readonly version: string;
+  readonly sha256: string;
+  files?: Record<string, string>;
+  removed?: boolean;
+}
+
+/** Stable serialization: sorted skills and file keys, two-space JSON. */
+export const serialize = (manifest: SyncManifest): string => {
+  const skills = manifest.skills
+    .map((skill) => {
+      const entry: SerializedSkill = {
+        name: skill.name,
+        version: skill.version,
+        sha256: skill.sha256,
+      };
+      if (skill.files !== undefined) {
+        entry.files = Object.fromEntries(
+          Object.entries(skill.files).toSorted(([a], [b]) => a.localeCompare(b)),
+        );
+      }
+      if (skill.removed === true) entry.removed = true;
+      return entry;
+    })
+    .toSorted((a, b) => a.name.localeCompare(b.name));
+  return `${JSON.stringify(
+    {
+      schemaVersion: manifest.schemaVersion,
+      source: {
+        path: manifest.source.path,
+        remote: manifest.source.remote,
+        commit: manifest.source.commit,
+        ref: manifest.source.ref,
+        version: manifest.source.version,
+      },
+      syncedAt: manifest.syncedAt,
+      skills,
+    },
+    null,
+    2,
+  )}\n`;
+};
+
+/** Same manifest apart from `syncedAt`, so an untouched sync writes nothing. */
+export const same = (left: SyncManifest, right: SyncManifest): boolean =>
+  serialize({ ...left, syncedAt: '' }) === serialize({ ...right, syncedAt: '' });
+
+/** Write a manifest under `<workspace>/.agents/skills`. */
+export const write = Effect.fn('Store.write')(function* (root: string, manifest: SyncManifest) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  yield* fs
+    .makeDirectory(dir(path, root), { recursive: true })
+    .pipe(
+      Effect.mapError((cause) => `store: cannot create '${dir(path, root)}': ${String(cause)}`),
+    );
+  yield* fs
+    .writeFileString(file(path, root), serialize(manifest))
+    .pipe(
+      Effect.mapError((cause) => `store: cannot write '${file(path, root)}': ${String(cause)}`),
+    );
 });

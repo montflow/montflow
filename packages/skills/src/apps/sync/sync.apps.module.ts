@@ -1,5 +1,7 @@
-import { NodeFileSystem, NodePath } from '@effect/platform-node';
-import { Clock, Effect, FileSystem, Layer, Path } from 'effect';
+import { NodeServices } from '@effect/platform-node';
+import { BuildInfo, Store } from '@montflow/version';
+import { Clock, Effect, FileSystem, Path } from 'effect';
+import { fieldString, parseSkillFile } from '../../modules/skill/index.js';
 
 /**
  * `mf-skills sync` — copy this checkout's public skills into a workspace
@@ -13,7 +15,7 @@ import { Clock, Effect, FileSystem, Layer, Path } from 'effect';
  * Internal skills are reported as `skipped` and never copied.
  */
 
-const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
+const NodeLive = NodeServices.layer;
 
 /** The default way a caller reaches `sync` when it does not say. */
 export const DEFAULT_SYNC_INVOCATION = '/mf-skills sync';
@@ -55,7 +57,7 @@ const given = (value: string | undefined): string | undefined =>
 export const resolveDefaultSource = (options: {
   readonly packageCheckout: string;
   readonly cwd?: string | undefined;
-}): Effect.Effect<string, string> =>
+}) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -736,6 +738,110 @@ const failureReport = (
     : `${message} — already applied: ${done}; failed: ${failed}`;
 };
 
+/** Version from a SKILL.md frontmatter, defaulting like the skill module. */
+const skillVersion = (markdown: string): string => {
+  const parsed = parseSkillFile(markdown);
+  if (parsed === null) return '1.0.0';
+  return fieldString(parsed.fields, 'version') ?? '1.0.0';
+};
+
+/** Bytes for every file under one skill, keyed by relative path. */
+const skillBytes = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  dir: string,
+): Effect.Effect<Record<string, Uint8Array>, string> =>
+  Effect.gen(function* () {
+    const files = yield* filesUnder(fs, path, dir);
+    const entries = yield* Effect.forEach(files, (file) =>
+      fs.readFile(path.join(dir, file)).pipe(
+        Effect.map((bytes) => [file, bytes] as const),
+        Effect.mapError(
+          (cause) => `sync: cannot read '${path.join(dir, file)}': ${reasonOf(cause)}`,
+        ),
+      ),
+    );
+    return Object.fromEntries(entries);
+  });
+
+/** Version declared by the source checkout's skills package, when present. */
+const sourceVersion = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  sourceRoot: string,
+): Effect.Effect<string | undefined> => {
+  const manifest = path.join(sourceRoot, 'packages', 'skills', 'package.json');
+  return fs.readFileString(manifest).pipe(
+    Effect.map((text) => {
+      try {
+        const parsed: { version?: string } = JSON.parse(text);
+        return parsed.version;
+      } catch {
+        return undefined;
+      }
+    }),
+    Effect.orElseSucceed(() => undefined),
+  );
+};
+
+/**
+ * Build the manifest for one completed sync.
+ *
+ * Names, bytes, and git facts all come from the source checkout, so the result
+ * depends only on what was synced; `syncedAt` is the one moving field.
+ */
+const buildManifest = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  sourceRoot: string,
+  names: ReadonlyArray<string>,
+  previous: Store.SyncManifest | undefined,
+): Effect.Effect<
+  Store.SyncManifest,
+  string,
+  | import('effect/unstable/process/ChildProcessSpawner').ChildProcessSpawner
+  | import('effect/Crypto').Crypto
+> =>
+  Effect.gen(function* () {
+    const facts = yield* BuildInfo.checkoutFacts(sourceRoot);
+    const version = yield* sourceVersion(fs, path, sourceRoot);
+    const skills: Array<Store.ManifestSkill> = [];
+    for (const name of names) {
+      const dir = path.join(skillsStoreDir(path, sourceRoot), name);
+      const markdown = (yield* readTextIfPresent(fs, path.join(dir, 'SKILL.md'))) ?? '';
+      const bytes = yield* skillBytes(fs, path, dir);
+      const hashed = yield* Store.hashSkill(bytes);
+      skills.push({
+        name,
+        version: skillVersion(markdown),
+        sha256: hashed.sha256,
+        files: hashed.files,
+      });
+    }
+    const current = new Set(names);
+    const removed = (previous?.skills ?? [])
+      .filter((skill) => !current.has(skill.name) && skill.removed !== true)
+      .map((skill) => ({
+        name: skill.name,
+        version: skill.version,
+        sha256: skill.sha256,
+        files: skill.files,
+        removed: true,
+      }));
+    return {
+      schemaVersion: Store.SCHEMA_VERSION,
+      source: {
+        path: sourceRoot,
+        remote: facts.remote,
+        commit: facts.commit,
+        ref: facts.ref,
+        version,
+      },
+      syncedAt: new Date(yield* Clock.currentTimeMillis).toISOString(),
+      skills: [...skills, ...removed],
+    };
+  });
+
 /**
  * Publish every public skill from a checkout into a workspace store.
  *
@@ -749,7 +855,7 @@ const failureReport = (
  * @param options - source checkout, target workspace, and mode
  * @returns per-skill outcomes plus the aggregate drift flag
  */
-export const runSync = (options: SyncOptions = {}): Effect.Effect<SyncResult, string> =>
+export const runSync = (options: SyncOptions = {}) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -795,6 +901,19 @@ export const runSync = (options: SyncOptions = {}): Effect.Effect<SyncResult, st
     const changed = skills
       .filter((skill) => skill.outcome === 'added' || skill.outcome === 'updated')
       .map((skill) => skill.name);
+
+    if (!check) {
+      const publicNames = skills
+        .filter((skill) => skill.outcome !== 'skipped')
+        .map((skill) => skill.name);
+      const previousState = yield* Store.read(targetRoot);
+      const previous = previousState.status === 'managed' ? previousState.manifest : undefined;
+      const manifest = yield* buildManifest(fs, path, sourceRoot, publicNames, previous);
+      if (previous === undefined || !Store.same(previous, manifest)) {
+        yield* Store.write(targetRoot, manifest);
+      }
+    }
+
     return {
       sourceRoot,
       targetRoot,

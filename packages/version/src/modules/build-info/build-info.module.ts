@@ -127,6 +127,7 @@ interface GitFacts {
   readonly commit: string | undefined;
   readonly dirty: boolean | undefined;
   readonly ref: string | undefined;
+  readonly remote: string | undefined;
 }
 
 /** Ask git for the checkout root, `HEAD`, its branch, and tree cleanliness. */
@@ -141,6 +142,7 @@ const gitFacts = Effect.fnUntraced(function* (
       commit: undefined,
       dirty: undefined,
       ref: undefined,
+      remote: undefined,
     } satisfies GitFacts;
   }
   const commit = yield* git(cwd, ['rev-parse', 'HEAD'], env);
@@ -161,12 +163,22 @@ const gitFacts = Effect.fnUntraced(function* (
     ],
     env,
   );
+  const remote = yield* git(cwd, ['remote', 'get-url', 'origin'], env);
   return {
     checkout: root.stdout,
     commit: commit.stdout,
     dirty: status.stdout !== undefined ? status.stdout !== '' : undefined,
     ref: ref.stdout,
+    remote: remote.stdout,
   } satisfies GitFacts;
+});
+
+/** Git facts for a checkout, including its `origin` remote. */
+export const checkoutFacts = Effect.fnUntraced(function* (
+  checkout: string,
+  env?: Readonly<Record<string, string | undefined>> | undefined,
+) {
+  return yield* gitFacts(checkout, env);
 });
 
 /** Decode one `package.json` text, or `undefined` when it is not a manifest. */

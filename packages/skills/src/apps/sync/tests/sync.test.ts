@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { Effect } from 'effect';
 import * as Vitest from '@effect/vitest';
+import { Store } from '@montflow/version';
 import * as Sync from '../index.js';
 
 /** One temp area: the checkout to read and the workspace to write. */
@@ -884,6 +885,109 @@ Vitest.describe('Sync.runSync', () => {
         }).pipe(Effect.flip);
         Vitest.expect(binaryRefusal).toContain('mf-skills sync --source <checkout>');
         Vitest.expect(binaryRefusal).not.toContain('/mf-skills sync');
+      }),
+    ),
+  );
+});
+
+/** Read the sync manifest for a workspace, or undefined when absent. */
+const readManifest = async (workspace: string) => {
+  try {
+    return Store.decode(await readFile(join(store(workspace), '.montflow-sync.json'), 'utf8'));
+  } catch {
+    return undefined;
+  }
+};
+
+Vitest.describe('sync manifest runtime', () => {
+  Vitest.it.effect('records source, version, and one hash per skill', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'beta'));
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        const manifest = yield* Effect.promise(() => readManifest(sandbox.workspace));
+        Vitest.expect(manifest?.schemaVersion).toBe(Store.SCHEMA_VERSION);
+        Vitest.expect(manifest?.source.path).toBe(sandbox.checkout);
+        Vitest.expect(manifest?.source.commit).toBeUndefined();
+        Vitest.expect(manifest?.source.remote).toBeUndefined();
+        Vitest.expect(manifest?.skills.map((skill) => skill.name)).toStrictEqual(['alpha', 'beta']);
+        for (const skill of manifest?.skills ?? []) {
+          Vitest.expect(skill.version).toBe('1.0.0');
+          Vitest.expect(skill.sha256).toMatch(/^[0-9a-f]{64}$/);
+          Vitest.expect(Object.keys(skill.files ?? {})).toContain('SKILL.md');
+        }
+      }),
+    ),
+  );
+
+  Vitest.it.effect('is byte-identical apart from syncedAt on a re-sync', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        const first = yield* Effect.promise(() => readManifest(sandbox.workspace));
+
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        const second = yield* Effect.promise(() => readManifest(sandbox.workspace));
+
+        Vitest.expect(first).toBeDefined();
+        Vitest.expect(second).toBeDefined();
+        if (first === undefined || second === undefined) return;
+        Vitest.expect({ ...second, syncedAt: '' }).toStrictEqual({ ...first, syncedAt: '' });
+      }),
+    ),
+  );
+
+  Vitest.it.effect('records a skill that left the source as removed', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        const first = yield* Effect.promise(() => readManifest(sandbox.workspace));
+        Vitest.expect(first).toBeDefined();
+        if (first === undefined) return;
+        yield* Effect.promise(() =>
+          writeFile(
+            join(store(sandbox.workspace), '.montflow-sync.json'),
+            JSON.stringify({
+              ...first,
+              skills: [
+                ...first.skills,
+                { name: 'ghost', version: '2.0.0', sha256: 'a'.repeat(64), files: {} },
+              ],
+            }),
+          ),
+        );
+
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        const manifest = yield* Effect.promise(() => readManifest(sandbox.workspace));
+        const ghost = manifest?.skills.find((skill) => skill.name === 'ghost');
+        Vitest.expect(ghost?.removed).toBe(true);
+        Vitest.expect(ghost?.sha256).toBe('a'.repeat(64));
+      }),
+    ),
+  );
+
+  Vitest.it.effect('--check writes no manifest and a normal sync recreates an absent one', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace, check: true });
+        Vitest.expect(yield* Effect.promise(() => readManifest(sandbox.workspace))).toBeUndefined();
+
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        Vitest.expect(yield* Effect.promise(() => readManifest(sandbox.workspace))).toBeDefined();
+
+        yield* Effect.promise(() =>
+          rm(join(store(sandbox.workspace), '.montflow-sync.json'), { force: true }),
+        );
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        Vitest.expect(yield* Effect.promise(() => readManifest(sandbox.workspace))).toBeDefined();
       }),
     ),
   );

@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: A002
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task D001: add-sync-manifest
@@ -27,4 +27,4 @@ Record what `mf-skills sync` installed, from which commit, and at which version,
 
 ## Completion
 
-- [ ] Done.
+- [x] Done.
