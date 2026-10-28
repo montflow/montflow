@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: A001, A002
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task B001: add-update-check-engine

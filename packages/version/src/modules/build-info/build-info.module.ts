@@ -79,7 +79,7 @@ const GIT_LOCATION_KEYS = [
 ] as const;
 
 /** Apply the caller's explicit test env, then wipe repo-location overrides. */
-const probeEnv = (env: Readonly<Record<string, string | undefined>> | undefined) => {
+export const probeEnv = (env: Readonly<Record<string, string | undefined>> | undefined) => {
   const overrides = { ...env };
   for (const key of GIT_LOCATION_KEYS) overrides[key] = undefined;
   return overrides;

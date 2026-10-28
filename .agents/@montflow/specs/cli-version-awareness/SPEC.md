@@ -66,7 +66,7 @@ own state. `guides/updating.md` becomes the destination every warning names.
 | A001 | add-version-package       | execution | complete | Yes   |
 | A002 | wire-version-command      | execution | complete | Yes   |
 | A099 | review-phase              | review    | complete | No    |
-| B001 | add-update-check-engine   | execution | pending | Yes   |
+| B001 | add-update-check-engine   | execution | complete | Yes   |
 | B002 | wire-update-notice        | execution | pending | Yes   |
 | B099 | review-phase              | review    | pending | No    |
 | C001 | configure-changesets      | execution | pending | Yes   |
