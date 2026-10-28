@@ -66,11 +66,13 @@ pair, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
   `pre-push` hook runs it; install once per clone with
   `bun run hooks:install`, bypass with `git push --no-verify` or `LEFTHOOK=0`.
 - Utility verifies, each runnable alone: `mf:check:release`,
-  `mf:check:skills`, `:prompts`, `:specs`, `:profiles`, `:reviews`. They verify
-  release metadata (CLI versions, fixed group, tags, changelogs) and this
-  repo's own artifacts (`.agents/skills`, `.agents/@montflow/pi-prompts`,
+  `mf:check:skills`, `:prompts`, `:specs`, `:profiles`, `:reviews`, `:naming`.
+  They verify release metadata (CLI versions, tags, changelogs) and this repo's
+  own artifacts (`.agents/skills`, `.agents/@montflow/prompts`,
   `.agents/@montflow/specs`, `.agents/@montflow/profiles`,
-  `.agents/@montflow/reviews`) plus packaged-skill freshness.
+  `.agents/@montflow/reviews`) plus packaged-skill freshness; `:naming` fails
+  when a live file carries a retired pre-OpenCode name (frozen history and the
+  migration constant excepted).
 - `release.yml` is separate: it gates publishing, not pushes, and keeps its own
   per-package conditions.
 

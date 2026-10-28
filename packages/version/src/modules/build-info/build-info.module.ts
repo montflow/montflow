@@ -1,5 +1,5 @@
 import { Effect, FileSystem, Option, Path, Schema, Stream } from 'effect';
-import { ChildProcess } from 'effect/unstable/process';
+import { ChildProcess } from 'effect/process';
 
 /**
  * Identity for one `mf-*` CLI: the package it belongs to, the version its

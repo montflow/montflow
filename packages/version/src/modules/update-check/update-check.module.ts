@@ -1,6 +1,6 @@
 import { Clock, Effect, FileSystem, Match, Option, Path, Schema, Stream } from 'effect';
-import { ChildProcess } from 'effect/unstable/process';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import { ChildProcess } from 'effect/process';
+import { ChildProcessSpawner } from 'effect/process';
 import { probeEnv } from '../build-info/index.js';
 
 /**
@@ -55,7 +55,7 @@ export interface ProbeRequest {
 export interface Probe {
   readonly refs: (
     request: ProbeRequest,
-  ) => Effect.Effect<ReadonlyArray<RemoteRef>, string, ChildProcessSpawner>;
+  ) => Effect.Effect<ReadonlyArray<RemoteRef>, string, ChildProcessSpawner.ChildProcessSpawner>;
 }
 
 /** How to check one package. */
@@ -353,7 +353,7 @@ export const isAncestor = (
   current: string,
   main: string,
   env: Readonly<Record<string, string | undefined>> | undefined,
-): Effect.Effect<boolean | undefined, never, ChildProcessSpawner> =>
+): Effect.Effect<boolean | undefined, never, ChildProcessSpawner.ChildProcessSpawner> =>
   Effect.gen(function* () {
     const handle = yield* ChildProcess.make(
       'git',
@@ -377,7 +377,7 @@ const revParse = (
   checkout: string,
   ref: string,
   env: Readonly<Record<string, string | undefined>> | undefined,
-): Effect.Effect<string | undefined, never, ChildProcessSpawner> =>
+): Effect.Effect<string | undefined, never, ChildProcessSpawner.ChildProcessSpawner> =>
   Effect.gen(function* () {
     const handle = yield* ChildProcess.make(
       'git',
@@ -405,7 +405,7 @@ const classifyAgainstKnownMain = (
   options: CheckOptions,
   verdict: Verdict & { state: 'behind' },
   current: string,
-): Effect.Effect<Verdict, never, ChildProcessSpawner> =>
+): Effect.Effect<Verdict, never, ChildProcessSpawner.ChildProcessSpawner> =>
   Effect.gen(function* () {
     const knownMain = yield* revParse(options.checkout, 'origin/main', options.env);
     if (knownMain === undefined) {
@@ -432,7 +432,7 @@ const classifyNonAncestor = (
   verdict: Verdict & { state: 'behind' },
   remote: string,
   current: string,
-): Effect.Effect<Verdict, never, ChildProcessSpawner> =>
+): Effect.Effect<Verdict, never, ChildProcessSpawner.ChildProcessSpawner> =>
   Effect.gen(function* () {
     const remoteIsAncestor = yield* isAncestor(options.checkout, remote, current, options.env);
     return yield* Match.value(remoteIsAncestor).pipe(
@@ -449,7 +449,7 @@ const classifyNonAncestor = (
 const classifyCommit = (
   options: CheckOptions,
   verdict: Verdict,
-): Effect.Effect<Verdict, never, ChildProcessSpawner> =>
+): Effect.Effect<Verdict, never, ChildProcessSpawner.ChildProcessSpawner> =>
   Effect.gen(function* () {
     if (verdict.state !== 'behind' || verdict.basis !== 'commit') return verdict;
     if (options.currentCommit === undefined || verdict.commit === undefined) return verdict;
@@ -471,7 +471,9 @@ const classifyCommit = (
   });
 
 /** Query the remote under the two-second cap. */
-const probeVerdict = (options: CheckOptions): Effect.Effect<Verdict, never, ChildProcessSpawner> =>
+const probeVerdict = (
+  options: CheckOptions,
+): Effect.Effect<Verdict, never, ChildProcessSpawner.ChildProcessSpawner> =>
   Effect.gen(function* () {
     const probe = options.probe ?? defaultProbe;
     const result = yield* probe

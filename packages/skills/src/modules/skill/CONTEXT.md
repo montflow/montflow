@@ -30,7 +30,7 @@ Effect `Schema.Class` identifier.
   `MODIFICATION_REQUIREMENTS`, `TRANSFORM_REQUIREMENTS`, `checkRequirements`,
   `missingRequirements`, `findInstalled`, `resolveInjection`,
   `formatInjectedSkills`) — pure, adapter-agnostic. They name the shipped
-  skills: `montflow-create-pi-skills` / `montflow-modify-pi-skills`.
+  skills: `montflow-create-skills` / `montflow-modify-skills`.
 
 ## Does not belong here
 

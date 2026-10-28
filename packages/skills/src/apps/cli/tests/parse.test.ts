@@ -2,7 +2,7 @@ import * as Vitest from '@effect/vitest';
 import * as Slash from '../slash.apps.module.js';
 
 /**
- * The slash parser is the one thing the binary shares no code with: a Pi slash
+ * The slash parser is the one thing the binary shares no code with: an OpenCode slash
  * command gets a single argument string, not argv. These tests pin the grammar
  * both surfaces promise — a typo here is a command an agent cannot reach.
  */

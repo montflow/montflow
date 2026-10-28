@@ -9,7 +9,7 @@ import * as Prompts from '../prompts/index.js';
  *
  * Both entry points are pure. `execute` resolves a plan rather than
  * dispatching a run, so the validation an agent has to satisfy is testable
- * without a model, and so the same plan can drive the CLI, the TUI, and a Pi
+ * without a model, and so the same plan can drive the CLI, the TUI, and an OpenCode
  * tool. Dispatching it is the caller's job, through {@link PromptExecutor}.
  */
 
@@ -215,7 +215,7 @@ export interface ExecuteRequest extends InspectRequest {
   /**
    * How *this* caller invokes `execute`, used verbatim in the fix-it advice of
    * every refusal — e.g. `mf-prompts execute` for the binary, or
-   * `/mf-prompts execute` for the Pi slash command. Passed in rather than
+   * `/mf-prompts execute` for the OpenCode slash command. Passed in rather than
    * hardcoded because the two front ends spell the same action differently, and
    * advice naming a form the reader cannot type is worse than no advice.
    */
@@ -237,7 +237,7 @@ const missingModel = (summary: PromptSummary, invocation: string): ExecuteBlocke
     `Prompt '${summary.name}' has no model, so there is nothing to run it on.`,
     'Do one of these:',
     `  1. pass one: ${invocation} '${summary.name}' --model provider/model-id`,
-    `  2. pin one in the prompt file: set "model" in .agents/@montflow/pi-prompts/${summary.name}.json`,
+    `  2. pin one in the prompt file: set "model" in .agents/@montflow/prompts/${summary.name}.json`,
   ].join('\n'),
   missing: [],
 });
@@ -256,7 +256,7 @@ const missingVariables = (summary: PromptSummary, invocation: string): ExecuteBl
       `  1. supply them: ${invocation} '${summary.name}' --model provider/model-id ${gaps
         .map((variable) => `${example(variable.name)}=<value>`)
         .join(' ')}`,
-      `  2. make them optional: set "required": false in .agents/@montflow/pi-prompts/${summary.name}.json, and give a "default" or a {{#if}} branch if the text depends on them`,
+      `  2. make them optional: set "required": false in .agents/@montflow/prompts/${summary.name}.json, and give a "default" or a {{#if}} branch if the text depends on them`,
     ].join('\n'),
     missing: gaps.map((variable) => variable.name),
   };
@@ -285,7 +285,7 @@ export const execute = (request: ExecuteRequest): ExecutePlan => {
     return {
       ok: false,
       problem: 'empty-template',
-      message: `Prompt '${prompt.name}' has an empty template, so there is nothing to run. Set "template" in .agents/@montflow/pi-prompts/${prompt.name}.json.`,
+      message: `Prompt '${prompt.name}' has an empty template, so there is nothing to run. Set "template" in .agents/@montflow/prompts/${prompt.name}.json.`,
       missing: [],
     };
   }
@@ -354,7 +354,7 @@ export interface ExecutionRequest {
 
 /**
  * Port that actually runs an agent on a resolved execution. Injected by the
- * consuming extension (Pi's child-agent runtime) so this module stays free of
+ * consuming extension (the retired child-agent runtime) so this module stays free of
  * any model dependency, and so tests need no runtime.
  * @param request - the resolved execution
  * @returns Effect resolving to the agent's reply text

@@ -1,17 +1,14 @@
-import { defineTool, entry, type ServerPorts } from '@montflow/opencode';
+import { COMMAND_NAME, ID } from './ids.js';
+
+export { ID, COMMAND_NAME };
+import { defineTool, entry, makeCommandReply, type ServerPorts } from '@montflow/opencode';
 import { Effect, Schema, type Scope } from 'effect';
-import { Interactive } from './apps/index.js';
-import * as Cli from './apps/cli/index.js';
+import * as Cli from './apps/cli/slash.apps.module.js';
 import { syncSkills } from './apps/server/index.js';
 // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- native dispatch factory, not an Effect service; B002 §6 keeps dispatch out of a Layer.
 import { makeSkillSessionPorts, storeFor } from './apps/sessions/index.js';
+import * as Interactive from './apps/interactive/index.js';
 import { Skill, SkillStore } from './modules/index.js';
-
-/** Plugin id shared by the server and TUI entries. */
-export const ID = 'skills';
-
-/** Slash command registered by the server plugin (invoke as `/mf-skills`). */
-export const COMMAND_NAME = Cli.COMMAND_NAME;
 
 /** Help text shown for the slash command. */
 export const COMMAND_DESCRIPTION = Cli.COMMAND_DESCRIPTION;
@@ -170,9 +167,13 @@ export default entry(ID, (ports) =>
       name: COMMAND_NAME,
       description: COMMAND_DESCRIPTION,
       execute: (invocation) =>
-        Cli.run(invocation.prompt.text, { notify }, ports.cwd).pipe(
-          Effect.catch((message) => Effect.sync(() => notify(message))),
-        ),
+        Effect.gen(function* () {
+          const reply = makeCommandReply(ports.session, invocation);
+          yield* Cli.run(invocation.prompt.text, { notify: reply.notify }, ports.cwd).pipe(
+            Effect.catch((message) => Effect.sync(() => reply.notify(message, 'error'))),
+          );
+          yield* reply.flush();
+        }),
     });
     yield* registerDispatchTools(ports);
   }),

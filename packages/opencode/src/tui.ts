@@ -42,3 +42,4 @@ export type {
   StorageHandle,
   StoragePort,
 } from './modules/ports/storage/index.js';
+export * from './modules/picker/index.js';

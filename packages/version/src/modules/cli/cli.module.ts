@@ -1,7 +1,7 @@
 import { NodeServices } from '@effect/platform-node';
 import { Console, Effect, Match, Option, Stdio } from 'effect';
-import { CliError } from 'effect/unstable/cli';
-import { Command, Flag } from 'effect/unstable/cli';
+import { CliError } from 'effect/cli';
+import { Command, Flag } from 'effect/cli';
 import {
   type BuildInfoError,
   describe,
@@ -151,13 +151,13 @@ const environment = (): Readonly<Record<string, string | undefined>> =>
   process.env;
 
 /** `version` flag set, shared by the binary and its help text. */
-const jsonFlag = Flag.boolean('json').pipe(
+const jsonFlag = Flag.Boolean('json').pipe(
   Flag.withDescription('Print only the JSON identity on stdout.'),
   Flag.withDefault(false),
 );
 
 /** Workspace root whose `.agents/skills` store is reported. */
-const dirFlag = Flag.string('dir').pipe(
+const dirFlag = Flag.String('dir').pipe(
   Flag.withDescription(
     'Workspace root containing .agents/skills. Defaults to the working directory.',
   ),
@@ -165,7 +165,7 @@ const dirFlag = Flag.string('dir').pipe(
 );
 
 /** Force an update check and report the verdict; exits 1 only when behind. */
-const checkFlag = Flag.boolean('check').pipe(
+const checkFlag = Flag.Boolean('check').pipe(
   Flag.withDescription(
     'Check upstream now (bypasses the cache) and exit 1 when behind or diverged.',
   ),
@@ -173,7 +173,7 @@ const checkFlag = Flag.boolean('check').pipe(
 );
 
 /** Override the remote for `--check`, mainly for a local mirror or tests. */
-const remoteFlag = Flag.string('remote').pipe(
+const remoteFlag = Flag.String('remote').pipe(
   Flag.withDescription('Remote repository for --check. Defaults to the montflow GitHub repo.'),
   Flag.optional,
 );
@@ -271,7 +271,7 @@ export const versionCommand = (options: VersionCommandOptions) =>
 /** Options for the shared binary runner. */
 export interface RunOptions<Name extends string, Input, ContextInput, E> {
   /** The CLI's root command, including its own `version` subcommand. */
-  readonly command: Command.Command<Name, Input, ContextInput, E, NodeServices.NodeServices>;
+  readonly command: Command.Command<Name, Input, ContextInput, E, unknown>;
   /** Identity embedded from the package manifest, used by `--version` and the notice. */
   readonly identity: GeneratedIdentity;
   /** Directory holding the CLI's own `package.json`. */
@@ -347,12 +347,17 @@ export const announce = Effect.fn('Cli.announce')(function* (options: AnnounceOp
  */
 export const execute = <Name extends string, Input, ContextInput, E>(
   options: RunOptions<Name, Input, ContextInput, E>,
-): Effect.Effect<
-  void,
-  E | import('effect/unstable/cli/CliError').CliError,
-  NodeServices.NodeServices
-> =>
+): Effect.Effect<void, E | CliError.CliError, NodeServices.NodeServices> =>
   Effect.gen(function* () {
+    // SAFETY: every montflow CLI's layers resolve to NodeServices; the generic
+    // command type erases that, so the runner names the environment it provides.
+    const command = options.command as Command.Command<
+      Name,
+      Input,
+      ContextInput,
+      E,
+      NodeServices.NodeServices
+    >;
     yield* announce({
       packageRoot: options.packageRoot,
       identity: options.identity,
@@ -363,7 +368,7 @@ export const execute = <Name extends string, Input, ContextInput, E>(
     const stdio = yield* Stdio.Stdio;
     const args = yield* stdio.args;
     const filtered = args.filter((arg) => arg !== '--no-update-check');
-    yield* Command.run(options.command, { version: options.identity.version }).pipe(
+    yield* Command.run(command, { version: options.identity.version }).pipe(
       Effect.provideService(Stdio.Stdio, { ...stdio, args: Effect.succeed(filtered) }),
     );
   });

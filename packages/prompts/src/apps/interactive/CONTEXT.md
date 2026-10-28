@@ -21,7 +21,7 @@ codecs, and the store service stay out (`modules/`, `services/`).
 - Verify notification for the mechanical result (`notifyVerifyResult`)
 - `doctor` install hook and execute gate via the shared `../doctor` module
 - Command registration as an Effect (`register`, `COMMAND_NAME`) via
-  `PiEffect.registerCommandEffect`; cancellation maps to info severity
+  the host effect API; cancellation maps to info severity
 - Store access through the `PromptStore` service (`../../services/`),
   provided as `live` at invocation — no injected port object
 - Manual vs agentic create/modify (`createAgentic`, `modifyAgentic`) over

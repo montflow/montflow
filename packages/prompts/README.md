@@ -110,8 +110,8 @@ coverage is wrong. `Prompts.verifyReport` renders it for an agent;
 Two skills ship with the package and `doctor` installs them into
 `.agents/skills/`, keeping them byte-identical to the package:
 
-- `montflow-create-pi-prompts` — authoring, modifying, and verifying a prompt
-- `montflow-execute-pi-prompts` — inspecting and executing a stored prompt
+- `montflow-create-prompts` — authoring, modifying, and verifying a prompt
+- `montflow-execute-prompts` — inspecting and executing a stored prompt
 
 ```bash
 /mf-prompts verify review

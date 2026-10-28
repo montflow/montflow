@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 // eslint-disable-next-line montflow/no-node-platform-imports -- the skills store is a platform boundary; the skills store owns its files, this only asks whether it exists.
 import { stat } from 'node:fs/promises';
-import * as PiProfiles from '../pi-profiles/index.js';
+import * as Profiles from '../profile/index.js';
 
 /**
  * Check the skills a profile declares by delegating to the skills
@@ -17,15 +17,15 @@ import * as PiProfiles from '../pi-profiles/index.js';
  */
 
 /** The skills extension runtime, resolved lazily. */
-type PiSkillsLib = typeof import('@montflow/skills');
+type SkillsLib = typeof import('@montflow/skills');
 
 /** Warning surfaced when the skills engine cannot be loaded. */
 export const SKILLS_ENGINE_WARNING = 'Skill verification skipped: could not load @montflow/skills.';
 
-let cached: Promise<PiSkillsLib> | undefined;
+let cached: Promise<SkillsLib> | undefined;
 
 /** Single lazy import: a failure clears the cache so the next check retries. */
-const importOnce = (): Promise<PiSkillsLib> => {
+const importOnce = (): Promise<SkillsLib> => {
   cached ??= import('@montflow/skills').catch((cause: unknown) => {
     cached = undefined;
     throw cause;
@@ -34,7 +34,7 @@ const importOnce = (): Promise<PiSkillsLib> => {
 };
 
 /** The skills runtime, or undefined when it is unavailable — never fails. */
-const load = (): Effect.Effect<PiSkillsLib | undefined> =>
+const load = (): Effect.Effect<SkillsLib | undefined> =>
   Effect.tryPromise(() => importOnce()).pipe(Effect.orElseSucceed(() => undefined));
 
 /**
@@ -63,7 +63,7 @@ const pathExists = (target: string): Promise<boolean> =>
  * @param cwd - workspace root owning `.agents/skills`
  * @returns the resolution, or undefined when it cannot be resolved
  */
-export const resolveSkills = (cwd: string): Effect.Effect<PiProfiles.SkillResolution | undefined> =>
+export const resolveSkills = (cwd: string): Effect.Effect<Profiles.SkillResolution | undefined> =>
   Effect.gen(function* () {
     const libs = yield* load();
     if (libs === undefined) return undefined;
@@ -75,7 +75,7 @@ export const resolveSkills = (cwd: string): Effect.Effect<PiProfiles.SkillResolu
 /** One declared skill's verify outcome. `issue` is undefined when it passes. */
 export interface SkillVerdict {
   readonly name: string;
-  readonly issue: PiProfiles.VerifyIssue | undefined;
+  readonly issue: Profiles.VerifyIssue | undefined;
 }
 
 /** Outcome of checking a profile's declared skills. */
@@ -97,7 +97,7 @@ const summarize = (
  * @param name - declared skill name
  * @returns Effect resolving to the verdict, never failing
  */
-const checkOne = (libs: PiSkillsLib, cwd: string, name: string): Effect.Effect<SkillVerdict> =>
+const checkOne = (libs: SkillsLib, cwd: string, name: string): Effect.Effect<SkillVerdict> =>
   libs.Cli.Engines.verify({ cwd }, name).pipe(
     Effect.map((report): SkillVerdict => {
       const entry = report.entries[0];
