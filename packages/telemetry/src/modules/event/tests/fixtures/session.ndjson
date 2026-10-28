@@ -1,0 +1,12 @@
+{"id":"evt_01","type":"session.created","created":1793178000000,"data":{"sessionID":"ses_fixture","projectID":"prj_1","location":{"directory":"/home/daniel/dev/montflow/telemetry"},"slug":"telemetry","title":"Telemetry","agent":"build","model":{"providerID":"anthropic","id":"claude-sonnet-4"},"version":"2.0.18"}}
+{"id":"evt_02","type":"session.execution.started","created":1793178001000,"data":{"sessionID":"ses_fixture"}}
+{"id":"evt_03","type":"session.step.started","created":1793178002000,"data":{"sessionID":"ses_fixture","assistantMessageID":"msg_1","agent":"build","model":{"providerID":"anthropic","id":"claude-sonnet-4"},"started":1793178002000}}
+{"id":"evt_04","type":"session.text.delta","created":1793178003000,"data":{"sessionID":"ses_fixture","assistantMessageID":"msg_1","ordinal":0,"delta":"I will read the file."}}
+{"id":"evt_05","type":"session.tool.called","created":1793178004000,"data":{"sessionID":"ses_fixture","assistantMessageID":"msg_1","id":"call_1","input":{"filePath":"/tmp/x"},"executed":true}}
+{"id":"evt_06","type":"session.tool.success","created":1793178005000,"data":{"sessionID":"ses_fixture","assistantMessageID":"msg_1","id":"call_1","content":[{"type":"text","text":"contents"}],"executed":true}}
+{"id":"evt_07","type":"session.step.ended","created":1793178006000,"data":{"sessionID":"ses_fixture","assistantMessageID":"msg_1","finish":"tool-calls","cost":0.0012,"tokens":{"input":120,"output":30,"reasoning":0,"cache":{"read":0,"write":0}}}}
+{"id":"evt_08","type":"session.usage.updated","created":1793178007000,"data":{"sessionID":"ses_fixture","cost":0.0012,"tokens":{"input":120,"output":30,"reasoning":0,"cache":{"read":0,"write":0}}}}
+{"id":"evt_09","type":"permission.asked","created":1793178008000,"data":{"id":"perm_1","sessionID":"ses_fixture","action":"write","resources":["/tmp/x"],"message":"Allow write?"}}
+{"id":"evt_10","type":"permission.replied","created":1793178009000,"data":{"sessionID":"ses_fixture","requestID":"perm_1","reply":"once"}}
+{"id":"evt_11","type":"session.execution.succeeded","created":1793178010000,"data":{"sessionID":"ses_fixture"}}
+{"id":"evt_12","type":"session.idle","created":1793178011000,"data":{"sessionID":"ses_fixture"}}
