@@ -8,8 +8,8 @@ preserving the rest of the file.
 - `locate` / `candidates` — host config resolution order, with a create path when
   none exists
 - `read` — the entry's decoded options, or an idle config when absent
-- `write` — insert or update the entry in place
-- `remove` — delete only this plugin's entry
+- `write` — insert or update the entry in place, keeping the spec it found
+  (a local absolute path survives an update; `remove` matches either form)
 
 ## Does not belong here
 

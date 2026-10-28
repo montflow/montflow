@@ -27,6 +27,23 @@ const Document = Schema.Struct({
 
 const isString = Schema.is(Schema.String);
 
+/**
+ * True when a plugin spec names this package. The host installs bare specs
+ * from npm, so a development checkout is registered by absolute path instead;
+ * the last path segment still identifies the package. A scoped npm name for
+ * another owner (`@someone/model-fallback`) never matches.
+ */
+const isPathSpec = (spec: string): boolean =>
+  spec.startsWith('/') || spec.startsWith('\\\\') || /^[A-Za-z]:[\\/]/u.test(spec);
+
+const isOurs = (spec: string): boolean =>
+  spec === packageName ||
+  (isPathSpec(spec) &&
+    spec
+      .replace(/[/\\]+$/, '')
+      .split(/[/\\]/)
+      .at(-1) === 'model-fallback');
+
 /** The plugin entry as it exists on disk, decoded. */
 export interface Current {
   readonly path: string;
@@ -78,9 +95,15 @@ const parseDocument = (text: string, file: string) => {
 
 /** Position of this plugin's entry in `plugins`, or `-1`. */
 const entryIndex = (plugins: ReadonlyArray<typeof PluginEntry.Type> | undefined): number =>
-  plugins?.findIndex((entry) =>
-    isString(entry) ? entry === packageName : entry.package === packageName,
-  ) ?? -1;
+  plugins?.findIndex((entry) => isOurs(isString(entry) ? entry : entry.package)) ?? -1;
+
+/** The spec already in the file, so a local path survives an update. */
+const entrySpec = (plugins: ReadonlyArray<typeof PluginEntry.Type> | undefined): string => {
+  const index = entryIndex(plugins);
+  const entry = index === -1 || plugins === undefined ? undefined : plugins[index];
+  if (entry === undefined) return packageName;
+  return isString(entry) ? entry : entry.package;
+};
 
 /** Decode this plugin's options for one `plugins` array. */
 const entryConfig = (
@@ -143,7 +166,7 @@ export const write = (
       catch: (cause) => new FileError({ reason: reasonOf(cause) }),
     });
     const entry = {
-      package: packageName,
+      package: entrySpec(document.plugins),
       options: {
         chain: config.chain.map((ref) => ModelChain.label(ref)),
         triggers: config.triggers,

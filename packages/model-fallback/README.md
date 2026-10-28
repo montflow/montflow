@@ -41,6 +41,26 @@ Three faces, all writing the same `opencode.jsonc` entry:
 
 No chain means the plugin stays loaded and idle, and logs why.
 
+## Local development install
+
+The host installs a bare spec from npm, so a checkout has to be registered by
+**absolute path** — relative paths are treated as npm specs too:
+
+```jsonc
+{
+  "plugins": [
+    {
+      "package": "/abs/path/to/montflow/packages/model-fallback",
+      "options": { "chain": ["deepseek/deepseek-chat", "opencode/glm-5.3-flash-free"] },
+    },
+  ],
+}
+```
+
+The CLI recognises that entry (last path segment `model-fallback`) and updates it
+in place, keeping the path. Restart the host after adding it; existing plugin
+lists are resolved at startup.
+
 ## Configure it
 
 Never hand-edit the entry; the CLI preserves the file's comments and other
