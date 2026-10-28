@@ -5,7 +5,7 @@ type: planning
 originator: user
 depends-on: A001
 related-tasks: A001
-status: pending
+status: in-progress
 ---
 
 # Task B001: decide-integration-strategy
