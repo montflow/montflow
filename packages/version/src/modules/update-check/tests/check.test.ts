@@ -366,6 +366,10 @@ Vitest.describe('UpdateCheck.check runtime', () => {
             probe,
           }),
         );
+        // Let the forked probe register its timeout before advancing the clock;
+        // a cold CI worker otherwise loses the race and hangs the test.
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust(Duration.millis(1));
         yield* TestClock.adjust(Duration.seconds(2));
         const result = yield* Fiber.join(fiber);
 
