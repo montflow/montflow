@@ -81,6 +81,22 @@ Never claim git state you did not read:
 
 # Reference
 
+- **CLI surface** — `mf-references` and `/mf-references` are one engine with the same flags:
+
+  | Verb     | Use                                                                   |
+  | -------- | --------------------------------------------------------------------- |
+  | `doctor` | Verify and repair scaffolding, installed skills, and the registry     |
+  | `list`   | Every entry with clone presence and purpose (`--status installed\|missing`) |
+  | `show`   | One entry's `REFERENCE.md` bytes                                      |
+  | `verify` | Committed bytes, plus clone state with `--clones`; non-zero on issues |
+  | `add`    | Register and clone one https URL; a registered URL routes to `update` |
+  | `update` | Refresh one entry or `--all`, by name or URL (`--force`)              |
+  | `sync`   | Materialize missing clones or repair checkouts (`<name>` or `--all`)  |
+  | `status` | Clone state per entry; `--fetch` adds behind/ahead, never gates        |
+  | `remove` | Unregister one entry; `--keep-clone` keeps the clone                  |
+
+  Every verb takes `--dir <root>` (defaults to the working directory). The default output is agent-first; `--human` renders readable tables and prose, `--verbose` adds detail, and the two compose.
+
 - **Binary / slash command**: `mf-references` and `/mf-references`; `list`, `show`, `sync`, and `status` are the verbs this pipeline uses. In the montflow monorepo, `bun run --cwd packages/references cli <verb>` is the same engine.
 - **Store contract**: `.agents/@montflow/references/<slug>/REFERENCE.md` is the registry; clones live at `.agents/references/<slug>` and are gitignored.
 - **In-host tool**: `reference_find` matches a query against slug, URL, purpose, and notes, and reports the clone path with a `sync` hint when it is missing.
