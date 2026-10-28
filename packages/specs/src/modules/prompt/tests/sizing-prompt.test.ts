@@ -116,7 +116,7 @@ Vitest.describe('spec-sizing prompt file', () => {
 });
 
 Vitest.describe('spec-sizing scope renders', () => {
-  Vitest.it.effect('open scope asks before any write', () =>
+  Vitest.it.effect('open scope asks before any write and lists the three layers', () =>
     Effect.gen(function* () {
       const loaded = yield* render({});
       Vitest.expect(loaded.text).toContain('Scope is open');
@@ -124,38 +124,53 @@ Vitest.describe('spec-sizing scope renders', () => {
       Vitest.expect(loaded.text).toContain(
         'Never write before the scope and the proposal are resolved.',
       );
+      Vitest.expect(loaded.text).toContain('The three possible layers:');
+      Vitest.expect(loaded.text).toContain('`repo` -> `<specs-root>/sizing.json`');
+      Vitest.expect(loaded.text).toContain('`spec` -> `<spec>/sizing.json`');
+      Vitest.expect(loaded.text).toContain('`phase` -> `phases.<ID>.sizes`');
       Vitest.expect(loaded.text).not.toContain('Scope: repo (fixed');
     }).pipe(Effect.provide(StoreLive)),
   );
 
-  Vitest.it.effect('repo scope names the repo file and forbids a phases key', () =>
+  Vitest.it.effect('repo scope names only the repo file and forbids a phases key', () =>
     Effect.gen(function* () {
       const loaded = yield* render({ scope: 'repo' });
       Vitest.expect(loaded.text).toContain('Scope: repo (fixed for this run');
-      Vitest.expect(loaded.text).toContain('`repo` -> `<specs-root>/sizing.json`');
+      Vitest.expect(loaded.text).toContain('`<specs-root>/sizing.json`');
       Vitest.expect(loaded.text).toContain('never a `phases` key');
+      Vitest.expect(loaded.text).not.toContain('`repo` ->');
+      Vitest.expect(loaded.text).not.toContain('`spec` ->');
+      Vitest.expect(loaded.text).not.toContain('`phase` ->');
       Vitest.expect(loaded.text).not.toContain('Scope is open');
     }).pipe(Effect.provide(StoreLive)),
   );
 
-  Vitest.it.effect('spec scope names the spec and its file', () =>
+  Vitest.it.effect('spec scope names the spec and only its file', () =>
     Effect.gen(function* () {
       const loaded = yield* render({ scope: 'spec', name: 'ship-login' });
       Vitest.expect(loaded.text).toContain(
         'Spec: ship-login. Its config is `ship-login/sizing.json`.',
       );
-      Vitest.expect(loaded.text).toContain('`spec` -> `<spec>/sizing.json`');
+      Vitest.expect(loaded.text).toContain('`ship-login/sizing.json`.');
+      Vitest.expect(loaded.text).not.toContain('`repo` ->');
+      Vitest.expect(loaded.text).not.toContain('`spec` ->');
+      Vitest.expect(loaded.text).not.toContain('`phase` ->');
       Vitest.expect(loaded.text).not.toContain('Scope is open');
     }).pipe(Effect.provide(StoreLive)),
   );
 
-  Vitest.it.effect('phase scope names the phase and the nested write target', () =>
+  Vitest.it.effect('phase scope names the phase and only the nested write target', () =>
     Effect.gen(function* () {
       const loaded = yield* render({ scope: 'phase', name: 'ship-login', phase: 'A' });
       Vitest.expect(loaded.text).toContain(
         'Phase: A. The write target is `phases.A.sizes` inside `ship-login/sizing.json`.',
       );
-      Vitest.expect(loaded.text).toContain('`phase` -> `phases.<ID>.sizes`');
+      Vitest.expect(loaded.text).toContain(
+        'The only path this run may write is:\n- `phases.A.sizes` inside `ship-login/sizing.json`.',
+      );
+      Vitest.expect(loaded.text).not.toContain('`repo` ->');
+      Vitest.expect(loaded.text).not.toContain('`spec` ->');
+      Vitest.expect(loaded.text).not.toContain('`phase` ->');
       Vitest.expect(loaded.text).not.toContain('Scope is open');
     }).pipe(Effect.provide(StoreLive)),
   );

@@ -47,8 +47,10 @@ effort token. The live catalogue is the only source of both.
 7. **Prove it.** Run the `spec_models` `verify` action (or
    `mf-specs models --verify --catalog <path>`), `mf-specs check` for the touched
    scope, then `mf-specs sizing --task <id> --human` for one task per explicit
-   target. A failing check blocks the report; the report carries the file, the
-   four-size mapping, the catalogue entries used, and every check result.
+   target. For repo scope, borrow a spec from `mf-specs list` that holds a task of
+   each size; when no sized task exists, report `check` alone and say the sizing
+   proof is unavailable. A failing check blocks the report; the report carries the
+   file, the four-size mapping, the catalogue entries used, and every check result.
 
 ### Proposal rule
 
