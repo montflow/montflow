@@ -8,6 +8,7 @@
   "updateInternalDependencies": "patch",
   "ignore": [
     "@montflow/linting",
+    "@montflow/model-fallback",
     "@montflow/opencode",
     "@montflow/profiles",
     "@montflow/prompts",

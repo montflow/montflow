@@ -1,0 +1,71 @@
+{
+  "name": "@montflow/model-fallback",
+  "version": "0.0.1",
+  "private": true,
+  "description": "OpenCode plugin: switch to the next model in a fallback chain and resume the session when the current model fails",
+  "keywords": [
+    "effect",
+    "fallback",
+    "model",
+    "opencode",
+    "plugin"
+  ],
+  "bugs": {
+    "url": "https://github.com/montflow/montflow/issues"
+  },
+  "license": "MIT",
+  "author": "Daniel Montilla",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/montflow/montflow.git",
+    "directory": "packages/model-fallback"
+  },
+  "bin": {
+    "mf-model-fallback": "./src/apps/cli/main.ts"
+  },
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts",
+    "./tui": "./src/tui.tsx"
+  },
+  "scripts": {
+    "build:cli": "bun run scripts/generate-embedded-prompts.ts && bun build src/apps/cli/main.ts --compile --outfile dist/mf-model-fallback",
+    "cli": "bun run src/apps/cli/main.ts",
+    "generate:payload": "bun run scripts/generate-embedded-prompts.ts",
+    "format:check": "oxfmt --check .",
+    "format:fix": "oxfmt .",
+    "lint:check": "oxlint --deny-warnings .",
+    "lint:fix": "oxlint . --fix",
+    "test": "vitest run --typecheck",
+    "ts:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@effect/platform-node": "4.0.0-rc.112",
+    "@montflow/opencode": "workspace:*",
+    "@montflow/prompts": "workspace:*",
+    "@opencode/client": "2.0.18",
+    "@opencode/plugin": "2.0.18",
+    "@opencode/schema": "2.0.18",
+    "jsonc-parser": "^3.3.1"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.0-rc.112",
+    "@opentui/core": "0.5.12",
+    "@opentui/solid": "0.5.12",
+    "@types/node": "^26.1.2",
+    "effect": "4.0.0-rc.112",
+    "oxfmt": "0.63.0",
+    "oxlint": "1.78.0",
+    "solid-js": "1.9.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  },
+  "peerDependencies": {
+    "@opentui/core": ">=0.5.12",
+    "@opentui/solid": ">=0.5.12",
+    "effect": "4.0.0-rc.112",
+    "solid-js": ">=1.9.0"
+  }
+}
