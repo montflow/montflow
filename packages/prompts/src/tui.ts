@@ -6,10 +6,7 @@ import type { TuiPlugin } from '@montflow/opencode';
 import { registerPicker } from '@montflow/opencode/tui';
 import { Effect, Schema } from 'effect';
 import * as Prompts from './modules/prompts/index.js';
-import { ID } from './server.js';
-
-/** The picker has its own name; `/mf-prompts` stays the headless server command. */
-const TUI_COMMAND_NAME = 'mf-prompts-tui';
+import { ID, COMMAND_NAME } from './server.js';
 
 /** Store directory segments under a working directory. */
 const PROMPTS_DIR = ['.agents', '@montflow', 'prompts'] as const;
@@ -47,8 +44,7 @@ export default {
   id: ID,
   setup: (context: any) => {
     registerPicker(context, {
-      commandName: TUI_COMMAND_NAME,
-      forwardCommandName: 'mf-prompts',
+      commandName: COMMAND_NAME,
       title: 'Prompts',
       description: 'Pick a stored prompt',
       group: 'Prompts',

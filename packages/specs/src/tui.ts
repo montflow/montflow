@@ -4,10 +4,7 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { TuiPlugin } from '@montflow/opencode';
 import { registerPicker } from '@montflow/opencode/tui';
-import { ID } from './server.js';
-
-/** The picker has its own name; `/specs` stays the server command. */
-const TUI_COMMAND_NAME = 'specs-tui';
+import { ID, COMMAND_NAME } from './server.js';
 
 /** Specs directory segments. */
 const SPECS_DIR = ['.agents', '@montflow', 'specs'] as const;
@@ -29,8 +26,7 @@ export default {
   id: ID,
   setup: (context: any) => {
     registerPicker(context, {
-      commandName: TUI_COMMAND_NAME,
-      forwardCommandName: 'specs',
+      commandName: COMMAND_NAME,
       title: 'Specs',
       description: 'Pick a spec',
       group: 'Specs',
