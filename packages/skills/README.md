@@ -50,9 +50,13 @@ mf-skills sync --source <checkout> --target <workspace-root> [--check] [--verbos
 - Each skill directory is copied whole — `SKILL.md`, plus `CHANGELOG.md`,
   `GATES.md`, and any other file when present — and unrelated skills at the
   target are left untouched.
-- Outcomes are grouped as `Created`, `Updated`, `Unchanged`, and `Skipped`,
-  with a count line; `--check` adds `✓ current.` or a `✗ drift` line.
+- Outcomes are grouped as `Created`, `Updated`, `Unchanged`, `Refused`, and
+  `Skipped`, with a count line; `--check` adds `✓ current.` or a `✗ drift` line
+  and one `— <drift>` note per skill (`current`/`stale`/`diverged`/`unmanaged`).
 - `--check` reports the same outcomes, writes nothing, and exits `1` on drift.
+- A diverged skill is refused (not overwritten) unless `--force` is passed.
+- Sync writes `.agents/skills/.montflow-sync.json`; `mf-skills version --dir`
+  reports it, and [guides/updating.md](../../guides/updating.md) is the update path.
 - `--verbose` adds one line per file under the skill it came from.
 
 ## Packaged skills

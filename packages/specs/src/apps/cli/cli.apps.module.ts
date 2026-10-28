@@ -1,5 +1,8 @@
 import { Clock, Console, Effect, Option } from 'effect';
 import { CliError, Command, Flag } from 'effect/unstable/cli';
+import { Cli } from '@montflow/version';
+import type { BuildInfo } from '@montflow/version';
+import manifest from '../../../package.json' with { type: 'json' };
 import { PHASE_PATTERN, type Spec, isValidName, parseSpecFile } from '../../modules/spec/index.js';
 import {
   type Analysis,
@@ -35,6 +38,15 @@ import {
 import { SpecStore } from '../../services/index.js';
 import { runDoctorAt } from '../doctor/index.js';
 import type { DoctorResult } from '../doctor/index.js';
+
+/** This package's root: three levels up from `src/apps/cli`. */
+export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
+
+/** Identity embedded from this package's manifest, so a compiled binary keeps it. */
+export const PACKAGE_IDENTITY = {
+  name: manifest.name,
+  version: manifest.version,
+} satisfies BuildInfo.GeneratedIdentity;
 
 /** Spec store directory, relative to the workspace root. */
 export const DEFAULT_ROOT = '.agents/@montflow/specs';
@@ -1431,6 +1443,7 @@ export const rootCommand = Command.make('mf-specs').pipe(
     createCommand,
     migrateCommand,
     doctorCommand,
+    Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
 );
 

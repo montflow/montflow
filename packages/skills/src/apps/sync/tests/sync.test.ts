@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { Effect } from 'effect';
 import * as Vitest from '@effect/vitest';
+import { Store } from '@montflow/version';
 import * as Sync from '../index.js';
 
 /** One temp area: the checkout to read and the workspace to write. */
@@ -456,6 +457,7 @@ Vitest.describe('Sync.runSync', () => {
         const refusal = yield* Sync.runSync({
           from: sandbox.checkout,
           dir: sandbox.workspace,
+          force: true,
         }).pipe(Effect.flip);
 
         Vitest.expect(refusal).toContain('refusing to write');
@@ -804,6 +806,7 @@ Vitest.describe('Sync.runSync', () => {
         const refusal = yield* Sync.runSync({
           from: sandbox.checkout,
           dir: sandbox.workspace,
+          force: true,
         }).pipe(Effect.flip);
 
         Vitest.expect(refusal).toContain('cannot write');
@@ -884,6 +887,342 @@ Vitest.describe('Sync.runSync', () => {
         }).pipe(Effect.flip);
         Vitest.expect(binaryRefusal).toContain('mf-skills sync --source <checkout>');
         Vitest.expect(binaryRefusal).not.toContain('/mf-skills sync');
+      }),
+    ),
+  );
+});
+
+/** Read the sync manifest for a workspace, or undefined when absent. */
+const readManifest = async (workspace: string) => {
+  try {
+    return Store.decode(await readFile(join(store(workspace), '.montflow-sync.json'), 'utf8'));
+  } catch {
+    return undefined;
+  }
+};
+
+Vitest.describe('sync manifest runtime', () => {
+  Vitest.it.effect('records source, version, and one hash per skill', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'beta'));
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        const manifest = yield* Effect.promise(() => readManifest(sandbox.workspace));
+        Vitest.expect(manifest?.schemaVersion).toBe(Store.SCHEMA_VERSION);
+        Vitest.expect(manifest?.source.path).toBe(sandbox.checkout);
+        Vitest.expect(manifest?.source.commit).toBeUndefined();
+        Vitest.expect(manifest?.source.remote).toBeUndefined();
+        Vitest.expect(manifest?.skills.map((skill) => skill.name)).toStrictEqual(['alpha', 'beta']);
+        for (const skill of manifest?.skills ?? []) {
+          Vitest.expect(skill.version).toBe('1.0.0');
+          Vitest.expect(skill.sha256).toMatch(/^[0-9a-f]{64}$/);
+          Vitest.expect(Object.keys(skill.files ?? {})).toContain('SKILL.md');
+        }
+      }),
+    ),
+  );
+
+  Vitest.it.effect('is byte-identical apart from syncedAt on a re-sync', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        const first = yield* Effect.promise(() => readManifest(sandbox.workspace));
+
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        const second = yield* Effect.promise(() => readManifest(sandbox.workspace));
+
+        Vitest.expect(first).toBeDefined();
+        Vitest.expect(second).toBeDefined();
+        if (first === undefined || second === undefined) return;
+        Vitest.expect({ ...second, syncedAt: '' }).toStrictEqual({ ...first, syncedAt: '' });
+      }),
+    ),
+  );
+
+  Vitest.it.effect('records a skill that left the source as removed', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        const first = yield* Effect.promise(() => readManifest(sandbox.workspace));
+        Vitest.expect(first).toBeDefined();
+        if (first === undefined) return;
+        yield* Effect.promise(() =>
+          writeFile(
+            join(store(sandbox.workspace), '.montflow-sync.json'),
+            JSON.stringify({
+              ...first,
+              skills: [
+                ...first.skills,
+                { name: 'ghost', version: '2.0.0', sha256: 'a'.repeat(64), files: {} },
+              ],
+            }),
+          ),
+        );
+
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        const manifest = yield* Effect.promise(() => readManifest(sandbox.workspace));
+        const ghost = manifest?.skills.find((skill) => skill.name === 'ghost');
+        Vitest.expect(ghost?.removed).toBe(true);
+        Vitest.expect(ghost?.sha256).toBe('a'.repeat(64));
+      }),
+    ),
+  );
+
+  Vitest.it.effect('--check writes no manifest and a normal sync recreates an absent one', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace, check: true });
+        Vitest.expect(yield* Effect.promise(() => readManifest(sandbox.workspace))).toBeUndefined();
+
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        Vitest.expect(yield* Effect.promise(() => readManifest(sandbox.workspace))).toBeDefined();
+
+        yield* Effect.promise(() =>
+          rm(join(store(sandbox.workspace), '.montflow-sync.json'), { force: true }),
+        );
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        Vitest.expect(yield* Effect.promise(() => readManifest(sandbox.workspace))).toBeDefined();
+      }),
+    ),
+  );
+});
+
+Vitest.describe('sync drift outcomes runtime', () => {
+  Vitest.it.effect('reports current, stale, diverged, and unmanaged', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        const current = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+        Vitest.expect(current.skills[0]?.drift).toBe('current');
+        Vitest.expect(current.drifted).toBe(false);
+
+        yield* Effect.promise(() =>
+          write(
+            sandbox.checkout,
+            '.agents/skills/alpha/SKILL.md',
+            skillFile('alpha', 'version: 2.0.0\n'),
+          ),
+        );
+        const stale = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+        Vitest.expect(stale.skills[0]?.drift).toBe('stale');
+        Vitest.expect(stale.drifted).toBe(true);
+
+        yield* Effect.promise(() =>
+          write(sandbox.workspace, '.agents/skills/alpha/SKILL.md', 'tampered\n'),
+        );
+        const diverged = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+        Vitest.expect(diverged.skills[0]?.drift).toBe('diverged');
+        Vitest.expect(diverged.skills[0]?.differingFiles).toStrictEqual(['SKILL.md']);
+        Vitest.expect(diverged.drifted).toBe(true);
+
+        const unmanaged = yield* withSandbox((other) =>
+          Effect.gen(function* () {
+            yield* Effect.promise(() => writeSkill(other.checkout, 'alpha'));
+            yield* Effect.promise(() => writeSkill(other.workspace, 'alpha'));
+            return yield* Sync.runSync({
+              from: other.checkout,
+              dir: other.workspace,
+              check: true,
+            });
+          }),
+        );
+        Vitest.expect(unmanaged.skills[0]?.drift).toBe('unmanaged');
+      }),
+    ),
+  );
+
+  Vitest.it.effect('refuses to overwrite a diverged skill unless forced', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        const target = join(store(sandbox.workspace), 'alpha', 'SKILL.md');
+        yield* Effect.promise(() => writeFile(target, 'hand edited\n'));
+
+        const refused = yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        Vitest.expect(refused.refused).toStrictEqual(['alpha']);
+        Vitest.expect(yield* Effect.promise(() => readFile(target, 'utf8'))).toBe('hand edited\n');
+
+        const forced = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          force: true,
+        });
+        Vitest.expect(forced.refused).toStrictEqual([]);
+        Vitest.expect(yield* Effect.promise(() => readFile(target, 'utf8'))).toBe(
+          skillFile('alpha'),
+        );
+      }),
+    ),
+  );
+
+  Vitest.it.effect('keeps byte-comparison behaviour for an unmanaged store', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Effect.promise(() =>
+          write(sandbox.workspace, '.agents/skills/alpha/SKILL.md', 'old\n'),
+        );
+
+        const result = yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        Vitest.expect(result.skills[0]?.drift).toBe('unmanaged');
+        Vitest.expect(result.skills[0]?.outcome).toBe('updated');
+        Vitest.expect(
+          yield* Effect.promise(() =>
+            readFile(join(store(sandbox.workspace), 'alpha', 'SKILL.md'), 'utf8'),
+          ),
+        ).toBe(skillFile('alpha'));
+      }),
+    ),
+  );
+});
+
+Vitest.describe('sync manifest recovery runtime', () => {
+  Vitest.it.effect('refuses to sync over a corrupt manifest', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        yield* Effect.promise(() =>
+          writeFile(join(store(sandbox.workspace), '.montflow-sync.json'), '{ broken'),
+        );
+        const target = join(store(sandbox.workspace), 'alpha', 'SKILL.md');
+        yield* Effect.promise(() => writeFile(target, 'hand edited\n'));
+
+        const failure = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+        }).pipe(Effect.flip);
+
+        Vitest.expect(failure).toContain('corrupt');
+        Vitest.expect(yield* Effect.promise(() => readFile(target, 'utf8'))).toBe('hand edited\n');
+      }),
+    ),
+  );
+
+  Vitest.it.effect('prunes a file the source deleted and returns to current', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          writeSkill(sandbox.checkout, 'alpha', { files: { 'old.md': '# old\n' } }),
+        );
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        yield* Effect.promise(() =>
+          rm(join(sandbox.checkout, '.agents', 'skills', 'alpha', 'old.md')),
+        );
+
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        const check = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+
+        Vitest.expect(check.skills[0]?.drift).toBe('current');
+        Vitest.expect(
+          yield* Effect.promise(() =>
+            pathExists(join(store(sandbox.workspace), 'alpha', 'old.md')),
+          ),
+        ).toBe(false);
+      }),
+    ),
+  );
+
+  Vitest.it.effect('reports a deleted target skill as stale, not current', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        yield* Effect.promise(() =>
+          rm(join(store(sandbox.workspace), 'alpha'), { recursive: true }),
+        );
+
+        const check = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+        Vitest.expect(check.skills[0]?.drift).toBe('stale');
+      }),
+    ),
+  );
+});
+
+Vitest.describe('sync partial refusal runtime', () => {
+  Vitest.it.effect('records applied skills while preserving a refused entry', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'beta'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        yield* Effect.promise(() =>
+          write(
+            sandbox.checkout,
+            '.agents/skills/alpha/SKILL.md',
+            skillFile('alpha', 'version: 2.0.0\n'),
+          ),
+        );
+        yield* Effect.promise(() =>
+          writeFile(join(store(sandbox.workspace), 'beta', 'SKILL.md'), 'hand edited\n'),
+        );
+
+        const mixed = yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        Vitest.expect(mixed.refused).toStrictEqual(['beta']);
+        Vitest.expect(mixed.skills.find((skill) => skill.name === 'alpha')?.outcome).toBe(
+          'updated',
+        );
+
+        const check = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+        Vitest.expect(check.skills.find((skill) => skill.name === 'alpha')?.drift).toBe('current');
+        Vitest.expect(check.skills.find((skill) => skill.name === 'beta')?.drift).toBe('diverged');
+      }),
+    ),
+  );
+
+  Vitest.it.effect('never prunes a directory the manifest does not own', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        yield* Effect.promise(() =>
+          write(sandbox.workspace, '.agents/skills/gamma/notes.md', '# my notes\n'),
+        );
+
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        Vitest.expect(
+          yield* Effect.promise(() =>
+            pathExists(join(store(sandbox.workspace), 'gamma', 'notes.md')),
+          ),
+        ).toBe(true);
       }),
     ),
   );

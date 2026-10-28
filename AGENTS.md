@@ -25,13 +25,15 @@ bun@1.3.13 — lockfile is source of truth
 - lint: `turbo lint:check` / `turbo lint:fix`
 - format: `turbo format:check` / `turbo format:fix`
 - verify all mf artifacts/invariants: `bun run mf:check`
+- verify release metadata (fixed version, tags, changelogs): `bun run mf:check:release`
 - pack plugins for Git install: `bun run pack:plugins`
 - gate (full): `bun run mf:gate`
 - gate (fast, no test suite): `bun run mf:gate:fast`
 - install pre-push hook: `bun run hooks:install`
 
 Script names follow `[tool]:[action]:[scope]`: `mf:check:<scope>` runs one
-scope, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
+scope, `mf:check:release-and-skills` is the CI alias for the release + skills
+pair, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
 
 ## Verification
 
@@ -68,8 +70,10 @@ scope, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
 - `mf:gate:fast` drops the test suite and the smoke. The Lefthook
   `pre-push` hook runs it; install once per clone with
   `bun run hooks:install`, bypass with `git push --no-verify` or `LEFTHOOK=0`.
-- Utility verifies, each runnable alone: `mf:check:skills`,
-  `:prompts`, `:specs`, `:profiles`, `:reviews`, `:references`. They verify this
+- Utility verifies, each runnable alone: `mf:check:release`,
+  `mf:check:skills`, `:prompts`, `:specs`, `:profiles`, `:reviews`,
+  `:references`. They verify release metadata (CLI versions, fixed group, tags,
+  changelogs) and this
   repo's own artifacts (`.agents/skills`, `.agents/@montflow/pi-prompts`,
   `.agents/@montflow/specs`, `.agents/@montflow/profiles`,
   `.agents/@montflow/reviews`, `.agents/@montflow/references`) plus
