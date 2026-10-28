@@ -30,7 +30,7 @@ const statusRow = (
 
 const statusReport = (rows: ReadonlyArray<Git.StatusRow>): Git.StatusReport => ({
   rows,
-  summary: 'summary total=2 missing=0 present=2 dirty=0 ref-mismatch=0 foreign=0',
+  summary: 'summary total=2 missing=0 present=2 dirty=0 ref-mismatch=0 foreign=0 invalid=0',
   refused: rows.some((entry) => entry.refused),
 });
 

@@ -144,7 +144,7 @@ export type SyncResult = SyncReport | LifecycleFailure;
 /** One `status` row. */
 export interface StatusRow {
   readonly slug: string;
-  readonly state: 'missing' | 'present' | 'dirty' | 'ref-mismatch' | 'foreign';
+  readonly state: 'missing' | 'present' | 'dirty' | 'ref-mismatch' | 'foreign' | 'invalid';
   readonly message: string;
   readonly refused: boolean;
   readonly behind?: number | undefined;
@@ -383,8 +383,16 @@ const make = Effect.gen(function* () {
         continue;
       }
       const decoded = Reference.decodeReferenceFileDetailed(entry.raw);
-      if (decoded.kind === 'valid') entries.push(decoded.document.reference);
-      else invalid.push({ slug: entry.slug, reason: decoded.reason });
+      if (decoded.kind === 'valid' && decoded.document.reference.name !== entry.slug) {
+        invalid.push({
+          slug: entry.slug,
+          reason: `name: '${decoded.document.reference.name}' does not match directory '${entry.slug}'`,
+        });
+      } else if (decoded.kind === 'valid') {
+        entries.push(decoded.document.reference);
+      } else {
+        invalid.push({ slug: entry.slug, reason: decoded.reason });
+      }
     }
     return {
       present: snapshot.present,
@@ -644,6 +652,11 @@ const make = Effect.gen(function* () {
           )
         : entries.find((entry) => entry.name === classification.value);
     if (reference === undefined) {
+      const unusable =
+        classification.kind === 'name'
+          ? loaded.invalid.find((entry) => entry.slug === classification.value)
+          : undefined;
+      if (unusable !== undefined) return invalidEntryFailure('refused', unusable, invocation);
       if (classification.kind === 'url') {
         return failure(
           'refused',
@@ -1309,12 +1322,14 @@ const make = Effect.gen(function* () {
         message: `updated ${reference.name} branch ${branch}`,
       });
     }
-    for (const entry of loaded.invalid) {
-      results.push({
-        kind: 'failed',
-        slug: entry.slug,
-        message: `failed ${entry.slug} entry is unusable (${entry.reason}); run '${invocation} verify ${entry.slug}'`,
-      });
+    if (options.name === undefined) {
+      for (const entry of loaded.invalid) {
+        results.push({
+          kind: 'failed',
+          slug: entry.slug,
+          message: `failed ${entry.slug} entry is unusable (${entry.reason}); run '${invocation} verify ${entry.slug}'`,
+        });
+      }
     }
     return {
       entries: results,
@@ -1530,14 +1545,16 @@ const make = Effect.gen(function* () {
       rows.push(row);
     }
 
-    for (const entry of loaded.invalid) {
-      rows.push({
-        slug: entry.slug,
-        state: 'foreign',
-        message: `invalid ${entry.slug} ${entry.reason}`,
-        refused: true,
-        failure: invalidEntryFailure('failed', entry, invocation),
-      });
+    if (options.name === undefined) {
+      for (const entry of loaded.invalid) {
+        rows.push({
+          slug: entry.slug,
+          state: 'invalid',
+          message: `invalid ${entry.slug} ${entry.reason}`,
+          refused: true,
+          failure: invalidEntryFailure('failed', entry, invocation),
+        });
+      }
     }
 
     const enriched: ReadonlyArray<StatusRow> = rows.map((row) => ({
@@ -1550,7 +1567,8 @@ const make = Effect.gen(function* () {
     const dirty = enriched.filter((row) => row.state === 'dirty').length;
     const mismatch = enriched.filter((row) => row.state === 'ref-mismatch').length;
     const foreign = enriched.filter((row) => row.state === 'foreign').length;
-    const summary = `summary total=${enriched.length} missing=${missing} present=${present} dirty=${dirty} ref-mismatch=${mismatch} foreign=${foreign}`;
+    const invalidRows = enriched.filter((row) => row.state === 'invalid').length;
+    const summary = `summary total=${enriched.length} missing=${missing} present=${present} dirty=${dirty} ref-mismatch=${mismatch} foreign=${foreign} invalid=${invalidRows}`;
     return {
       rows: enriched,
       summary,

@@ -479,7 +479,8 @@ export const run = (
         return yield* Effect.fail(action.message);
       }
       case 'Doctor': {
-        const result = yield* Engines.doctor(action.dir ?? cwd, {
+        const root = yield* Engines.rootOf({ cwd, dir: action.dir });
+        const result = yield* Engines.doctor(root, {
           check: action.check,
           invocation: INVOCATION,
         });

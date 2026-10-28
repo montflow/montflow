@@ -31,6 +31,15 @@ const DEFAULT_BRANCH_ENTRY = [
   '',
 ].join('\n');
 
+const make = (fields: Record<string, string>) =>
+  Reference.Reference.make({
+    name: 'alpha',
+    url: 'https://example.test/owner/alpha.git',
+    purpose: 'Valid purpose.',
+    added: '2026-10-26',
+    ...fields,
+  });
+
 Vitest.describe('Reference schema and codec', () => {
   Vitest.it('round-trips a pinned entry and preserves body notes', () => {
     const document = Reference.decodeReferenceFile(PINNED_ENTRY);
@@ -167,5 +176,27 @@ Vitest.describe('Reference schema and codec', () => {
     Vitest.expect(Reference.matches(fields, '')).toBe(false);
     Vitest.expect(Reference.matches(fields, '   ')).toBe(false);
     Vitest.expect(Reference.matches(fields, 'svelte')).toBe(false);
+  });
+
+  Vitest.it('flags every field rule add enforces on a decoded entry', () => {
+    Vitest.expect(Reference.entryProblems(make({}))).toStrictEqual([]);
+    Vitest.expect(Reference.entryProblems(make({ url: '/tmp/local' }))).toMatchObject([
+      { field: 'url' },
+    ]);
+    Vitest.expect(Reference.entryProblems(make({ added: '26-10-2026' }))).toMatchObject([
+      { field: 'added' },
+    ]);
+    Vitest.expect(Reference.entryProblems(make({ purpose: 'no terminal dot' }))).toMatchObject([
+      { field: 'purpose' },
+    ]);
+    Vitest.expect(Reference.entryProblems(make({ ref: '-bad' }))).toMatchObject([{ field: 'ref' }]);
+    const decoded = Reference.decodeReferenceFileDetailed(
+      Reference.encodeReferenceFile({
+        reference: make({ url: 'ssh://git@example.test/owner/alpha.git' }),
+        body: '\n# Notes\n',
+      }),
+    );
+    Vitest.expect(decoded.kind).toBe('invalid');
+    if (decoded.kind === 'invalid') Vitest.expect(decoded.reason).toContain('url:');
   });
 });

@@ -827,6 +827,28 @@ Vitest.describe('GitLifecycle sync', () => {
 });
 
 Vitest.describe('GitLifecycle status', () => {
+  Vitest.it.effect('reports an unusable entry as an invalid status row', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'broken', url: '/tmp/not-a-repo' }));
+        return yield* lifecycle.status(root, {});
+      }).pipe(Effect.provide(cloningLive(origin.dir, counters())));
+
+      if (!('rows' in outcome)) throw new Error('expected a status report');
+      Vitest.expect(outcome.refused).toBe(true);
+      Vitest.expect(outcome.rows[0]).toMatchObject({ slug: 'broken', state: 'invalid' });
+      Vitest.expect(outcome.rows[0]?.message).toContain('url:');
+      Vitest.expect(outcome.summary).toContain('invalid=1');
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
   Vitest.it.effect('reports missing, present, dirty, and ref-mismatch offline', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
@@ -866,7 +888,7 @@ Vitest.describe('GitLifecycle status', () => {
       });
       Vitest.expect(bySlug.get('mismatch')).toMatchObject({ state: 'ref-mismatch' });
       Vitest.expect(outcome.summary).toBe(
-        'summary total=4 missing=1 present=1 dirty=1 ref-mismatch=1 foreign=0',
+        'summary total=4 missing=1 present=1 dirty=1 ref-mismatch=1 foreign=0 invalid=0',
       );
 
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
@@ -970,7 +992,7 @@ Vitest.describe('GitLifecycle status', () => {
       Vitest.expect(outcome.refused).toBe(true);
       Vitest.expect(outcome.rows[0]).toMatchObject({ state: 'foreign', refused: true });
       Vitest.expect(outcome.summary).toBe(
-        'summary total=1 missing=0 present=0 dirty=0 ref-mismatch=0 foreign=1',
+        'summary total=1 missing=0 present=0 dirty=0 ref-mismatch=0 foreign=1 invalid=0',
       );
 
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));

@@ -71,17 +71,6 @@ export interface VerifyOptions {
 /** Default invocation used when a caller does not pass one. */
 export const DEFAULT_INVOCATION = '/mf-references';
 
-/** Every clone-scope issue id, emitted only by `verify --clones`. */
-export const CLONE_ISSUE_IDS = [
-  'clone-missing',
-  'clone-path',
-  'clone-not-git',
-  'clone-origin',
-  'clone-dirty',
-  'clone-head',
-  'ref-unresolvable',
-] as const;
-
 /** Canonical keys as a string set, for unknown-field checks. */
 const KNOWN_KEY_SET: ReadonlySet<string> = new Set(Reference.REFERENCE_KEYS);
 

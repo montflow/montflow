@@ -397,7 +397,7 @@ Vitest.describe('CLI engines status', () => {
         Vitest.expect(report.rows.map((row) => row.state)).toEqual(['missing', 'present']);
         Vitest.expect(report.refused).toBe(false);
         Vitest.expect(report.summary).toBe(
-          'summary total=2 missing=1 present=1 dirty=0 ref-mismatch=0 foreign=0',
+          'summary total=2 missing=1 present=1 dirty=0 ref-mismatch=0 foreign=0 invalid=0',
         );
         Vitest.expect(report.rows[1]?.path).toBe('.agents/references/present');
 

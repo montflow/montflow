@@ -501,15 +501,17 @@ export const remove = (
     const exists = yield* store.exists(root, name).pipe(Effect.mapError(storeError));
     if (!exists) return yield* Effect.fail(unknownReference(name, invocation));
 
-    const reference = yield* store
-      .readOne(root, name)
-      .pipe(Effect.mapError((error) => `failed: ${error.reason}`));
+    const decoded = yield* store.readOne(root, name).pipe(
+      Effect.mapError((error) => `failed: ${error.reason}`),
+      Effect.option,
+    );
+    const reference = Option.getOrUndefined(decoded);
     const clone = Reference.clonePath(root, name);
     const relative = relativeClone(name);
     const keepClone = options.keepClone === true;
     let removeClone = false;
 
-    if (!keepClone) {
+    if (!keepClone && reference !== undefined) {
       const observation = yield* probe.probe(root, reference);
       if (observation.dirtyError !== undefined) {
         return yield* Effect.fail(`failed ${name} status: ${observation.dirtyError}`);
@@ -551,9 +553,14 @@ export const remove = (
     return {
       kind: 'removed',
       slug: name,
-      keptClone: keepClone,
+      keptClone: keepClone || reference === undefined,
       path: relative,
-      message: keepClone ? `removed ${name} clone=kept` : `removed ${name}`,
+      message:
+        reference === undefined
+          ? `removed ${name} clone=kept (invalid entry)`
+          : keepClone
+            ? `removed ${name} clone=kept`
+            : `removed ${name}`,
     };
   });
 
