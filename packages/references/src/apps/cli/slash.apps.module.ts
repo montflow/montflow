@@ -130,7 +130,7 @@ interface SplitTokens {
   readonly positionals: readonly string[];
   /** String flags, value verbatim. Boolean flags are never recorded here. */
   readonly flags: Record<string, string>;
-  /** Boolean flags, last occurrence wins, exactly like the binary's flag parser. */
+  /** Boolean flags, first occurrence wins, exactly like the binary's flag parser. */
   readonly toggles: Record<string, boolean>;
   readonly unknown: readonly string[];
   readonly missingValues: readonly string[];
@@ -141,13 +141,21 @@ interface SplitTokens {
 const TRUE_VALUES = new Set(['true', '1', 'yes', 'on', 'y']);
 const FALSE_VALUES = new Set(['false', '0', 'no', 'off', 'n']);
 
+/** A boolean literal, or undefined when the token is not one. */
+const booleanOf = (value: string): boolean | undefined => {
+  if (TRUE_VALUES.has(value)) return true;
+  if (FALSE_VALUES.has(value)) return false;
+  return undefined;
+};
+
 /**
  * Split raw tokens into positionals and typed flags.
  *
- * A boolean flag never consumes the following token, so
- * `verify --clones alpha` keeps `alpha` positional. A string flag with no value
- * — last, or followed by another flag — is a missing value, never an absent flag.
- * A repeated boolean is last-wins: `--check --check=false` turns the check off.
+ * Boolean flags mirror the binary: `--flag`, `--no-flag`, `--flag=<literal>`, and
+ * a space-separated boolean literal (`--check false`) all set the value, the
+ * first occurrence wins, and any other following token stays positional
+ * (`verify --clones alpha` keeps `alpha`). A string flag with no value — last,
+ * or followed by another flag — is a missing value, never an absent flag.
  * @param tokens - tokens to split
  * @param spec - the verb's accepted flags
  * @returns the split, with any unrecognised or valueless flag names collected
@@ -157,10 +165,21 @@ const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => 
   const booleans = new Set(spec.booleans);
   const positionals: Array<string> = [];
   const pairs: Array<[string, string]> = [];
-  const togglePairs: Array<[string, boolean]> = [];
+  const toggles: Record<string, boolean> = {};
+  const seen = new Set<string>();
   const unknown: Array<string> = [];
   const missingValues: Array<string> = [];
   const invalidValues: Array<{ name: string; value: string }> = [];
+  const recordString = (name: string, value: string): void => {
+    if (seen.has(name)) return;
+    seen.add(name);
+    pairs.push([name, value]);
+  };
+  const recordToggle = (name: string, value: boolean): void => {
+    if (seen.has(name)) return;
+    seen.add(name);
+    toggles[name] = value;
+  };
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index] ?? '';
     if (!token.startsWith('--')) {
@@ -173,21 +192,24 @@ const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => 
       const name = body.slice(0, equals);
       const value = body.slice(equals + 1);
       if (booleans.has(name)) {
-        if (TRUE_VALUES.has(value)) {
-          togglePairs.push([name, true]);
-        } else if (FALSE_VALUES.has(value)) {
-          togglePairs.push([name, false]);
-        } else {
-          invalidValues.push({ name: `--${name}`, value });
-        }
+        const parsed = booleanOf(value);
+        if (parsed === undefined) invalidValues.push({ name: `--${name}`, value });
+        else recordToggle(name, parsed);
         continue;
       }
       if (!strings.has(name)) unknown.push(`--${name}`);
-      pairs.push([name, value]);
+      else recordString(name, value);
+      continue;
+    }
+    if (body.startsWith('no-') && booleans.has(body.slice(3))) {
+      recordToggle(body.slice(3), false);
       continue;
     }
     if (booleans.has(body)) {
-      togglePairs.push([body, true]);
+      const next = tokens[index + 1];
+      const parsed = next === undefined ? undefined : booleanOf(next);
+      if (parsed !== undefined) index++;
+      recordToggle(body, parsed ?? true);
       continue;
     }
     if (strings.has(body)) {
@@ -196,7 +218,7 @@ const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => 
         missingValues.push(`--${body}`);
         continue;
       }
-      pairs.push([body, next]);
+      recordString(body, next);
       index++;
       continue;
     }
@@ -205,7 +227,7 @@ const splitTokens = (tokens: readonly string[], spec: FlagSpec): SplitTokens => 
   return {
     positionals,
     flags: Object.fromEntries(pairs),
-    toggles: Object.fromEntries(togglePairs),
+    toggles,
     unknown,
     missingValues,
     invalidValues,

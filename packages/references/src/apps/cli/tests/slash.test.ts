@@ -187,15 +187,32 @@ Vitest.describe('/mf-references parser', () => {
     Vitest.expect(Slash.parseCliArgs('doctor --check=1')).toMatchObject({ check: true });
     Vitest.expect(Slash.parseCliArgs('doctor --check=off')).toMatchObject({ check: false });
     Vitest.expect(Slash.parseCliArgs('doctor --check=0')).toMatchObject({ check: false });
+    Vitest.expect(Slash.parseCliArgs('doctor --check false')).toMatchObject({ check: false });
+    Vitest.expect(Slash.parseCliArgs('doctor --check yes')).toMatchObject({ check: true });
+    Vitest.expect(Slash.parseCliArgs('doctor --check maybe')).toMatchObject({ kind: 'Usage' });
+    Vitest.expect(Slash.parseCliArgs('doctor --no-check')).toMatchObject({ check: false });
+    Vitest.expect(Slash.parseCliArgs('doctor --no-check=false')).toMatchObject({ kind: 'Usage' });
     Vitest.expect(Slash.parseCliArgs('doctor --check --check=false')).toMatchObject({
-      check: false,
-    });
-    Vitest.expect(Slash.parseCliArgs('doctor --check=false --check')).toMatchObject({
       check: true,
     });
+    Vitest.expect(Slash.parseCliArgs('doctor --check=false --check')).toMatchObject({
+      check: false,
+    });
+    Vitest.expect(Slash.parseCliArgs('doctor --no-check --check')).toMatchObject({ check: false });
+    Vitest.expect(Slash.parseCliArgs('doctor --check --no-check')).toMatchObject({ check: true });
     Vitest.expect(Slash.parseCliArgs('update alpha --force --force=false')).toMatchObject({
       kind: 'Update',
+      force: true,
+    });
+    Vitest.expect(Slash.parseCliArgs('update alpha --force=false --force')).toMatchObject({
+      kind: 'Update',
       force: false,
+    });
+    Vitest.expect(Slash.parseCliArgs('list --dir /a --dir /b')).toMatchObject({ dir: '/a' });
+    Vitest.expect(Slash.parseCliArgs('verify --clones false')).toMatchObject({
+      kind: 'Verify',
+      clones: false,
+      name: undefined,
     });
   });
 

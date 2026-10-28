@@ -309,6 +309,21 @@ export const verifyPackagedSkills = (
     const path = yield* Path.Path;
     const shipped = options.skillsDir ?? shippedSkillsDir(path);
     const shippedPresent = yield* exists(fs, shipped);
+    // A broken skills root is one cause for every skill, so name it directly
+    // instead of reporting each skill as missing from an unreadable directory.
+    let rootProblem: string | undefined;
+    if (shippedPresent) {
+      const info = yield* fs.stat(shipped).pipe(Effect.orElseSucceed(() => undefined));
+      if (info === undefined) {
+        rootProblem = `Packaged skills directory '${shipped}' cannot be read.`;
+      } else if (info.type !== 'Directory') {
+        rootProblem = `Packaged skills path '${shipped}' is not a directory.`;
+      } else if (
+        (yield* fs.readDirectory(shipped).pipe(Effect.orElseSucceed(() => undefined))) === undefined
+      ) {
+        rootProblem = `Packaged skills directory '${shipped}' cannot be read.`;
+      }
+    }
     const libs = yield* loadSkills();
     const reports: Array<PackagedSkillReport> = [];
 
@@ -316,7 +331,9 @@ export const verifyPackagedSkills = (
       const issues: Array<Verifier.Issue> = [];
       const sourceDir = path.join(shipped, name);
       let files: SkillPayload | undefined;
-      if (shippedPresent) {
+      if (rootProblem !== undefined) {
+        issues.push(Verifier.issue('payload', rootProblem));
+      } else if (shippedPresent) {
         const read = yield* readFromPackage(fs, path, sourceDir);
         if (read.kind === 'files') {
           files = read.files;

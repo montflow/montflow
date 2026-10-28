@@ -250,6 +250,38 @@ Vitest.describe('Doctor.verifyPackagedSkills', () => {
       drop(root);
     }).pipe(Effect.provide(NodeLive)),
   );
+
+  Vitest.it.effect('reports a non-directory skills root once per skill', () =>
+    Effect.gen(function* () {
+      const { root, skills } = bareRoot();
+      writeFileSync(skills, 'not a directory\n', 'utf8');
+      const reports = yield* Doctor.verifyPackagedSkills({ skillsDir: skills });
+      const messages = reports.flatMap((entry) => entry.issues.map((issue) => issue.message));
+      Vitest.expect(messages).toHaveLength(Doctor.SKILL_NAMES.length);
+      for (const message of messages) {
+        Vitest.expect(message).toContain(`path '${skills}' is not a directory`);
+        Vitest.expect(message).not.toContain('is missing from');
+      }
+      drop(root);
+    }).pipe(Effect.provide(NodeLive)),
+  );
+
+  Vitest.it.effect('reports an unreadable skills root instead of missing skills', () =>
+    Effect.gen(function* () {
+      if (process.platform === 'win32' || process.getuid?.() === 0) return;
+      const { root, skills } = bareRoot();
+      mkdirSync(skills, { recursive: true });
+      chmodSync(skills, 0o000);
+      const reports = yield* Doctor.verifyPackagedSkills({ skillsDir: skills });
+      chmodSync(skills, 0o755);
+      const messages = reports.flatMap((entry) => entry.issues.map((issue) => issue.message));
+      for (const message of messages) {
+        Vitest.expect(message).toContain(`directory '${skills}' cannot be read`);
+        Vitest.expect(message).not.toContain('is missing from');
+      }
+      drop(root);
+    }).pipe(Effect.provide(NodeLive)),
+  );
 });
 
 Vitest.describe('a skills tree installed from the embed', () => {
