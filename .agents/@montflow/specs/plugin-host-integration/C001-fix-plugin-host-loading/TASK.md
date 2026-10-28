@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: B001
 related-tasks: A001, B001
-status: in-progress
+status: done
 ---
 
 # Task C001: fix-plugin-host-loading
