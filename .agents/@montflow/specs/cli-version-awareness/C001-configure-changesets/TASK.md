@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: A002
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task C001: configure-changesets
@@ -28,4 +28,4 @@ Turn on real releases for the five CLI packages so every shipped change produces
 
 ## Completion
 
-- [ ] Done.
+- [x] Done.

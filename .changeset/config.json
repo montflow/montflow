@@ -3,27 +3,33 @@
   "changelog": ["@changesets/changelog-github", { "repo": "montflow/montflow" }],
   "commit": false,
   "linked": [],
+  "fixed": [
+    [
+      "@montflow/skills",
+      "@montflow/specs",
+      "@montflow/prompts",
+      "@montflow/profiles",
+      "@montflow/reviews"
+    ]
+  ],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": [
     "@montflow/linting",
     "@montflow/opencode",
-    "@montflow/profiles",
-    "@montflow/prompts",
-    "@montflow/reviews",
-    "@montflow/skills",
-    "@montflow/specs",
     "@montflow/stlx",
     "@montflow/tooling-pack",
     "@montflow/tooling-oxfmt",
     "@montflow/tooling-oxlint",
     "@montflow/tooling-typescript",
+    "@montflow/version",
     "@montflow/workspace",
     "@montflow/workflows"
   ],
   "privatePackages": {
-    "version": false,
-    "tag": false
-  }
+    "version": true,
+    "tag": true
+  },
+  "$comment": "The fixed group keeps the five mf-* CLIs on one version so an agent compares one number. Trade-off: a change to one CLI bumps all five. @montflow/core is intentionally outside the group and keeps its own cadence. These packages are private: changesets versions and tags them but never publishes them to npm."
 }
