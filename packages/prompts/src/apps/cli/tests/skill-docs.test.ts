@@ -45,8 +45,7 @@ const read = (dir: string, name: string, file: string): string =>
   readFileSync(resolve(dir, name, file), 'utf8');
 
 /** The packaged execute skill — the one carrying a verified output sample. */
-const executeSkill = (): string =>
-  read(PACKAGE_SKILLS_DIR, 'montflow-execute-prompts', 'SKILL.md');
+const executeSkill = (): string => read(PACKAGE_SKILLS_DIR, 'montflow-execute-prompts', 'SKILL.md');
 
 /**
  * The fenced block following a `<!-- verified-output:<name> -->` marker.
@@ -170,8 +169,7 @@ Vitest.describe('montflow-execute-prompts claims', () => {
 });
 
 Vitest.describe('montflow-create-prompts claims', () => {
-  const createSkill = (): string =>
-    read(PACKAGE_SKILLS_DIR, 'montflow-create-prompts', 'SKILL.md');
+  const createSkill = (): string => read(PACKAGE_SKILLS_DIR, 'montflow-create-prompts', 'SKILL.md');
 
   Vitest.it('works its own example: the prompt it teaches verifies clean', () => {
     const raw = JSON.stringify({

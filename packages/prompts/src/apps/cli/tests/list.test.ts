@@ -51,7 +51,8 @@ const stubLayer: Layer.Layer<PromptStore.PromptStore> = Layer.succeed(
         : Effect.succeed(raw);
     },
     write: () => Effect.fail(new PromptStore.StoreError({ message: 'unused' })),
-    readAllRaw: () => Effect.succeed([...files.entries()].map(([name, raw]) => ({ name, contents: raw }))),
+    readAllRaw: () =>
+      Effect.succeed([...files.entries()].map(([name, raw]) => ({ name, contents: raw }))),
   }),
 );
 

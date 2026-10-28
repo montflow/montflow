@@ -13,7 +13,8 @@ const LEGACY_PROMPTS_DIR = ['.agents', '@montflow', 'pi-prompts'] as const;
 /** Prompts root for a working directory: `<cwd>/.agents/@montflow/prompts`. */
 const promptsDir = (path: Path.Path, cwd: string): string => path.join(cwd, ...PROMPTS_DIR);
 
-const legacyPromptsDirPath = (path: Path.Path, cwd: string): string => path.join(cwd, ...LEGACY_PROMPTS_DIR);
+const legacyPromptsDirPath = (path: Path.Path, cwd: string): string =>
+  path.join(cwd, ...LEGACY_PROMPTS_DIR);
 
 /**
  * Directory the store reads/writes. An explicit `dir` wins (resolved
@@ -88,11 +89,9 @@ const make = Effect.gen(function* () {
     }
     const root = yield* storeDir(fs, path, cwd, dir);
     const file = path.join(root, `${name}.json`);
-    return yield* fs.readFileString(file).pipe(
-      Effect.catch((error) =>
-        Effect.fail(new StoreError({ message: `Unknown prompt '${name}'.` })),
-      ),
-    );
+    return yield* fs
+      .readFileString(file)
+      .pipe(Effect.catch(() => Effect.fail(new StoreError({ message: `Unknown prompt '${name}'.` }))));
   });
 
   const readAllRaw = Effect.fn('PromptStore.readAllRaw')(function* (cwd: string, dir?: string) {
@@ -104,7 +103,11 @@ const make = Effect.gen(function* () {
         Effect.map((contents) => ({ name: file.replace(/\.json$/u, ''), contents })),
         Effect.catch(() => Effect.succeed(undefined)),
       ),
-    ).pipe(Effect.map((items) => items.filter((item): item is { name: string; contents: string } => item !== undefined)));
+    ).pipe(
+      Effect.map((items) =>
+        items.filter((item): item is { name: string; contents: string } => item !== undefined),
+      ),
+    );
   });
 
   const write = Effect.fn('PromptStore.write')(function* (
@@ -121,7 +124,11 @@ const make = Effect.gen(function* () {
     yield* fs.writeFileString(path.join(root, `${name}.json`), contents);
   });
 
-  const save = Effect.fn('PromptStore.save')(function* (cwd: string, prompt: Prompts.Prompt, dir?: string) {
+  const save = Effect.fn('PromptStore.save')(function* (
+    cwd: string,
+    prompt: Prompts.Prompt,
+    dir?: string,
+  ) {
     const contents = JSON.stringify(prompt, null, 2) + '\n';
     yield* write(cwd, prompt.name, contents, dir);
   });
@@ -130,5 +137,7 @@ const make = Effect.gen(function* () {
 });
 
 export interface PromptStore extends Effect.Success<typeof make> {}
-export class PromptStore extends Context.Service<PromptStore, Effect.Success<typeof make>>()('PromptStore') {}
+export class PromptStore extends Context.Service<PromptStore, Effect.Success<typeof make>>()(
+  'PromptStore',
+) {}
 export const Default = Layer.effect(PromptStore, make);

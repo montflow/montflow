@@ -36,7 +36,7 @@ const stubLayer = (raw: string): Layer.Layer<PromptStore.PromptStore> =>
       save: () => Effect.fail(new PromptStore.StoreError({ message: 'unused' })),
       readRaw: () => Effect.succeed(raw),
       write: () => Effect.fail(new PromptStore.StoreError({ message: 'unused' })),
-    readAllRaw: () => Effect.succeed([{ name: 'commit', contents: raw }]),
+      readAllRaw: () => Effect.succeed([{ name: 'commit', contents: raw }]),
     }),
   );
 

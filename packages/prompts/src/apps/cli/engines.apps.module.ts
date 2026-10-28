@@ -275,7 +275,10 @@ export const verifyAll = (
     const skills = yield* SkillCheck.resolveSkills(scope.cwd);
     const entries = raws.map((entry: any) => ({
       name: entry.name,
-      result: Prompts.verifyPromptFile(entry.name, entry.contents ?? entry.raw, { skills, strict: options.strict }),
+      result: Prompts.verifyPromptFile(entry.name, entry.contents ?? entry.raw, {
+        skills,
+        strict: options.strict,
+      }),
     }));
     const allIssues = entries.flatMap((entry) => entry.result.issues);
     const issueCount = allIssues.filter((issue) => (issue.severity ?? 'error') === 'error').length;

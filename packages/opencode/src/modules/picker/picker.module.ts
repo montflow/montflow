@@ -17,7 +17,10 @@ export interface PickerConfig<T> {
   readonly loadItems: (cwd: string) => Promise<ReadonlyArray<T>>;
   readonly formatItem: (item: T) => PickerItem<T>;
   readonly getInsertText: (item: T) => string;
-  readonly search?: (query: string, items: ReadonlyArray<PickerItem<T>>) => ReadonlyArray<PickerItem<T>>;
+  readonly search?: (
+    query: string,
+    items: ReadonlyArray<PickerItem<T>>,
+  ) => ReadonlyArray<PickerItem<T>>;
   readonly forwardNonListToServer?: boolean;
 }
 
@@ -32,22 +35,28 @@ export interface PickerContext {
   };
   readonly client: {
     readonly session: {
-      command(input: { readonly sessionID: string; readonly name: string; readonly text: string }): Promise<unknown>;
+      command(input: {
+        readonly sessionID: string;
+        readonly name: string;
+        readonly text: string;
+      }): Promise<unknown>;
     };
   };
   readonly keymap: {
-    layer(factory: () => {
-      readonly mode?: string;
-      readonly commands: ReadonlyArray<{
-        readonly id: string;
-        readonly title: string;
-        readonly description?: string;
-        readonly group?: string;
-        readonly palette?: boolean;
-        readonly slash?: { readonly name: string; readonly arguments?: boolean };
-        readonly run: (input?: string) => void | Promise<void>;
-      }>;
-    }): void;
+    layer(
+      factory: () => {
+        readonly mode?: string;
+        readonly commands: ReadonlyArray<{
+          readonly id: string;
+          readonly title: string;
+          readonly description?: string;
+          readonly group?: string;
+          readonly palette?: boolean;
+          readonly slash?: { readonly name: string; readonly arguments?: boolean };
+          readonly run: (input?: string) => void | Promise<void>;
+        }>;
+      },
+    ): void;
   };
   readonly ui: {
     readonly dialog: {
@@ -61,12 +70,23 @@ export interface PickerContext {
         }>;
         readonly search?: (
           query: string,
-          options: ReadonlyArray<{ readonly title: string; readonly value: Value; readonly description?: string }>,
-        ) => ReadonlyArray<{ readonly title: string; readonly value: Value; readonly description?: string }>;
+          options: ReadonlyArray<{
+            readonly title: string;
+            readonly value: Value;
+            readonly description?: string;
+          }>,
+        ) => ReadonlyArray<{
+          readonly title: string;
+          readonly value: Value;
+          readonly description?: string;
+        }>;
       }): Promise<Value | undefined>;
     };
     readonly toast: {
-      show(options: { readonly message: string; readonly variant?: 'info' | 'success' | 'warning' | 'error' }): void;
+      show(options: {
+        readonly message: string;
+        readonly variant?: 'info' | 'success' | 'warning' | 'error';
+      }): void;
     };
     readonly router: {
       current(): { readonly type: string; readonly sessionID?: string | undefined };

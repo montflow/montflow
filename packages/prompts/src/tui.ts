@@ -31,8 +31,13 @@ const loadPrompts = async (directory: string): Promise<readonly StoredPrompt[]> 
           const raw = await readFile(path.join(legacyRoot, file), 'utf8').catch(() => undefined);
           if (raw === undefined) return undefined;
           try {
-            const parsed = JSON.parse(raw) as { name?: unknown; description?: unknown; template?: unknown };
-            if (typeof parsed.name !== 'string' || typeof parsed.template !== 'string') return undefined;
+            const parsed = JSON.parse(raw) as {
+              name?: unknown;
+              description?: unknown;
+              template?: unknown;
+            };
+            if (typeof parsed.name !== 'string' || typeof parsed.template !== 'string')
+              return undefined;
             return {
               name: parsed.name,
               description: typeof parsed.description === 'string' ? parsed.description : '',
@@ -54,8 +59,13 @@ const loadPrompts = async (directory: string): Promise<readonly StoredPrompt[]> 
       const raw = await readFile(path.join(root, file), 'utf8').catch(() => undefined);
       if (raw === undefined) return undefined;
       try {
-        const parsed = JSON.parse(raw) as { name?: unknown; description?: unknown; template?: unknown };
-        if (typeof parsed.name !== 'string' || typeof parsed.template !== 'string') return undefined;
+        const parsed = JSON.parse(raw) as {
+          name?: unknown;
+          description?: unknown;
+          template?: unknown;
+        };
+        if (typeof parsed.name !== 'string' || typeof parsed.template !== 'string')
+          return undefined;
         return {
           name: parsed.name,
           description: typeof parsed.description === 'string' ? parsed.description : '',
