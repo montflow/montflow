@@ -106,6 +106,8 @@ skills:
 
 ## Standards
 
-`.agents/skills/montflow-create-pi-profiles/SKILL.md` (repo `montflow/montflow`,
-installable via `npx skills add montflow/montflow -s montflow-create-pi-profiles -y`)
-holds authoring standards. Installed → follow it; rules above = mechanical core.
+`.agents/skills/montflow-create-pi-profiles/SKILL.md` (repo `montflow/montflow`;
+sync it from a checkout with
+`bun run --cwd "$M/packages/skills" cli sync --source "$M" --target <root>` — see
+`guides/installation.md`) holds authoring standards. Installed → follow it;
+rules above = mechanical core.

@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.3.0] - 2026-10-26
+
+### Changed
+
+- Registration now appends the reference to the local overlay `.agents/references/registry.md` instead of editing `.agents/skills/finding-references/SKILL.md`, so `mf-skills sync` no longer overwrites the registry.
+
 ## [2.2.0] - 2026-07-24
 
 ### Added

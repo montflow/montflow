@@ -1,9 +1,9 @@
 ---
 name: syncing-skills
-description: Installs skills from the montflow/montflow GitHub repo into the current project (or globally) via the npx skills CLI. Reads the repo to list what is available, presents the list to the user for selection, then installs the chosen skills non-interactively. Use when the user wants to install, sync, or update skills from this repo.
+description: Copies this repo's public skills into a workspace's `.agents/skills/` store with the in-repo `mf-skills sync` command. Resolves the source checkout (a local clone or a registered reference), syncs project-locally, verifies with `--check`, and reports each skill's outcome. Use when the user wants to install, sync, or update skills from this repo.
 id: 2eb6346337a80569
 author: Daniel Montilla
-version: 3.0.0
+version: 4.0.0
 license: MIT
 metadata:
   internal: true
@@ -16,91 +16,98 @@ groups:
 
 # When To Use
 
-Use when the user wants to install skills from the `montflow/montflow` GitHub repo into the current project or globally. This is a **guided installer** flow:
+Use when the user wants this repo's skills copied into a project's
+`.agents/skills/` store, or refreshed from a newer checkout. This is a **sync**
+flow:
 
-1. Read the repo → list what skills are available
-2. Present the list → user decides which go
-3. Install the chosen skills via `npx skills add`
+1. Resolve the source checkout — a local clone, or a reference registered by
+   [adding-references](../adding-references/SKILL.md)
+2. Sync the public skills into the target workspace with `mf-skills sync`
+3. Verify with `--check`, then report each skill's outcome
 
-> **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md) skill before running this pipeline. It governs how skills are loaded, executed, and verified.
+> **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md)
+> skill before running this pipeline. It governs how skills are loaded,
+> executed, and verified.
+
+Sync is project-local by design: it writes into `<target>/.agents/skills/`,
+never a machine-wide skill directory. There is no npm package and no network
+hop — the source is a checkout already on disk.
 
 # Pipeline
 
-## 1. Read the Repo — List Available Skills
+## 1. Resolve the Source Checkout
 
-Fetch what is installable from the repo:
+Prefer a checkout already on disk:
 
-```bash
-npx skills add montflow/montflow --list
-```
+- **This repository** — when the skill runs from a montflow clone, that clone is
+  the source; no reference step needed.
+- **A registered reference** — `.agents/references/montflow`, registered by the
+  [adding-references](../adding-references/SKILL.md) pipeline and confirmed with
+  [finding-references](../finding-references/SKILL.md).
+- **No checkout at all** — run `adding-references` against
+  `https://github.com/montflow/montflow` first. Do not clone by hand.
 
-This reads the repo and prints every installable skill with its description. `syncing-skills` is marked `metadata.internal: true`, so it never appears — and never installs by accident (it would be circular anyway).
-
-**Fallback** (CLI unavailable/offline — names only):
-
-```bash
-curl -s https://api.github.com/repos/montflow/montflow/contents/.agents/skills | grep '"name"'
-```
-
-Prefer the CLI: it also gives descriptions and validates the repo resolves.
-
-## 2. Present & Select
-
-Print the full list to the user: `name — description`.
-
-Ask the user which skills to install:
-
-- **Specific skills** by name: `grilling`, `i-have-adhd`, `authoring-skills`...
-- **All** (`--all`) — note that internal skills are excluded automatically
-
-Validate every requested name against the fetched list. Warn on unknown names and drop them. Confirm the install target before installing:
-
-| Choice | Flag | Effect |
-|--------|------|--------|
-| Agent | `-a pi` (default) | pi; also `claude-code`, `codex`, `cursor`, ... |
-| Scope | none (default) | project-local (`.agents/skills/` in cwd) |
-| Scope | `-g` | global (e.g. `~/.pi/agent/skills/`) |
-
-## 3. Install
+Record the path; pass it as `--source` whenever it is not the checkout the CLI
+runs from (`--from` is still accepted as an alias):
 
 ```bash
-# selected skills → pi, project-local
-npx skills add montflow/montflow -s grilling -s i-have-adhd -a pi -y
-
-# everything → pi, global
-npx skills add montflow/montflow --all -a pi -g -y
-
-# let the CLI auto-detect the user's agents (interactive picker)
-npx skills add montflow/montflow -s grilling
+S=.agents/references/montflow
 ```
 
-- `-y` skips confirmation prompts; omit it for an interactive pass.
-- Existing installs are updated in place by the CLI — no manual diffing needed.
+Install the checkout's dependencies once, and again after pulling:
+
+```bash
+(cd "$S" && bun install)
+```
+
+## 2. Present the Scope
+
+Name the source and the target before writing anything:
+
+- **Target** — `--target <workspace root>`, defaulting to the current
+  directory. Ask when the user's intent is ambiguous. (`--dir` remains an
+  alias.)
+- **Source** — `--source <checkout>`, defaulting to the montflow checkout the
+  package runs from. (`--from` remains an alias.)
+- **Public only** — a skill whose `SKILL.md` frontmatter carries
+  `metadata.internal: true` is skipped, reported, and never copied.
+  `syncing-skills` itself is internal, so it never lands in a target.
+
+## 3. Sync
+
+```bash
+# into the current workspace, from the checkout the CLI runs from
+bun run --cwd "$S/packages/skills" cli sync --target "$PWD"
+
+# explicit source and target
+bun run --cwd "$S/packages/skills" cli sync --source "$S" --target "$PWD"
+```
+
+Sync is idempotent and leaves unrelated skills untouched. The report groups
+skills as `Created`, `Updated`, `Unchanged`, and `Skipped` (internal), with a
+count line beneath.
 
 ## 4. Verify
 
-For each installed skill, confirm:
+```bash
+bun run --cwd "$S/packages/skills" cli sync --source "$S" --target "$PWD" --check
+```
 
-- `SKILL.md` exists at the target (`.agents/skills/<name>/` in project, or the agent's global skills dir)
-- Frontmatter has valid `name` and `description`
-- If the user expected an upgrade, the content/version changed from before
+`--check` reports the same outcomes, writes nothing, and exits `1` on drift. A
+non-zero exit means the target is behind the source — re-run step 3.
 
 ## 5. Report
 
-Summarize: skill, version, location (project/global).
+Summarize per skill: `name`, `version` (from its `SKILL.md` frontmatter), and
+outcome. Call out skipped internal skills once, not per skill.
 
 If the target is a git repo, ask whether to commit the `.agents/skills/` changes.
-
-# Maintenance
-
-- `npx skills list` — what's installed
-- `npx skills update [name]` — update installed skills
-- `npx skills remove [name]` — uninstall
-- `npx skills find [query]` — search the ecosystem
 
 # Reference
 
 - **Source repo**: `https://github.com/montflow/montflow`
-- **CLI usage**: `INSTALL.md` in the repo root
+- **Install guide**: `guides/installation.md` in the repo
+- **References**: [adding-references](../adding-references/SKILL.md),
+  [finding-references](../finding-references/SKILL.md)
 - **Skill authoring**: [authoring-skills](../authoring-skills/SKILL.md)
 - **Skill execution**: [executing-skills](../executing-skills/SKILL.md)
