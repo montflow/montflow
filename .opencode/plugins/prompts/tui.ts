@@ -1,6 +1,6 @@
 /**
- * Local dev TUI part for the prompts plugin: `/mf-prompts-tui` opens a select
- * dialog and pastes the chosen template into the composer.
+ * Local dev TUI part for the prompts plugin: `/mf-prompts` opens a select dialog
+ * and pastes the chosen template into the composer.
  *
  * The plugin API has no supported way to write the prompt input, so this uses
  * the renderer's focused editor (`insertText`) after the dialog restores focus.
@@ -35,6 +35,11 @@ interface Renderer {
 interface Context {
   readonly location?: { readonly directory?: string | undefined } | undefined;
   readonly renderer: Renderer;
+  readonly client: {
+    readonly session: {
+      command(input: { readonly sessionID: string; readonly name: string; readonly text: string }): Promise<unknown>;
+    };
+  };
   readonly keymap: {
     layer(factory: () => {
       readonly mode?: string;
@@ -44,7 +49,7 @@ interface Context {
         readonly description?: string;
         readonly group?: string;
         readonly palette?: boolean;
-        readonly slash?: { readonly name: string };
+        readonly slash?: { readonly name: string; readonly arguments?: boolean };
         readonly run: (input?: string) => void | Promise<void>;
       }[];
     }): void;
@@ -67,6 +72,9 @@ interface Context {
     };
     readonly toast: {
       show(options: { readonly message: string; readonly variant?: 'info' | 'success' | 'warning' | 'error' }): void;
+    };
+    readonly router: {
+      current(): { readonly type: string; readonly sessionID?: string | undefined };
     };
   };
 }
@@ -115,7 +123,7 @@ const insert = (context: Context, text: string, attempt = 0): void => {
         return;
       }
       context.ui.toast.show({
-        message: 'Could not reach the composer — focus the prompt and run /mf-prompts-tui again.',
+        message: 'Could not reach the composer — focus the prompt and run /mf-prompts again.',
         variant: 'warning',
       });
     },
@@ -123,10 +131,64 @@ const insert = (context: Context, text: string, attempt = 0): void => {
   );
 };
 
-/** Register `/mf-prompts-tui`: pick a stored prompt, paste its template. */
+/**
+ * Register `/mf-prompts`. One command, two behaviours: no arguments (or `list`)
+ * opens the picker, anything else is forwarded to the server command of the same
+ * name so `inspect`, `show`, `verify`, and friends keep working.
+ */
 export default {
   id: 'prompts',
   setup(context: Context) {
+    const pick = async (): Promise<void> => {
+      const directory = context.location?.directory ?? process.cwd();
+      const prompts = await loadPrompts(directory);
+      if (prompts.length === 0) {
+        context.ui.toast.show({
+          message: 'No prompts yet. Create one with: mf-prompts create <name> --template "…"',
+          variant: 'warning',
+        });
+        return;
+      }
+      const option = (prompt: StoredPrompt) => ({
+        title: prompt.name,
+        value: prompt,
+        description: prompt.description,
+      });
+      const options = prompts.map(option);
+      const chosen = await context.ui.dialog.select<StoredPrompt>({
+        title: 'Prompts',
+        placeholder: 'Search prompts',
+        options,
+        search: (query, all) => {
+          const needle = query.trim().toLowerCase();
+          if (needle === '') return all;
+          return all.filter(
+            (entry) =>
+              entry.title.toLowerCase().includes(needle) ||
+              (entry.description ?? '').toLowerCase().includes(needle),
+          );
+        },
+      });
+      if (chosen === undefined) return;
+      insert(context, chosen.template);
+    };
+
+    const forward = async (text: string): Promise<void> => {
+      const route = context.ui.router.current();
+      if (route.type !== 'session' || route.sessionID === undefined) {
+        context.ui.toast.show({ message: 'Open a session first', variant: 'warning' });
+        return;
+      }
+      await context.client.session
+        .command({ sessionID: route.sessionID, name: 'mf-prompts', text })
+        .catch((cause: unknown) =>
+          context.ui.toast.show({
+            message: cause instanceof Error ? cause.message : String(cause),
+            variant: 'error',
+          }),
+        );
+    };
+
     context.keymap.layer(() => ({
       mode: 'global',
       commands: [
@@ -136,39 +198,15 @@ export default {
           description: 'List the prompt store and paste the chosen template into the composer',
           group: 'Prompts',
           palette: true,
-          slash: { name: 'mf-prompts-tui' },
-          async run() {
-            const directory = context.location?.directory ?? process.cwd();
-            const prompts = await loadPrompts(directory);
-            if (prompts.length === 0) {
-              context.ui.toast.show({
-                message: 'No prompts yet. Create one with: mf-prompts create <name> --template "…"',
-                variant: 'warning',
-              });
+          slash: { name: 'mf-prompts', arguments: true },
+          async run(input) {
+            const args = (input ?? '').trim();
+            const [verb] = args.split(/\s+/u);
+            if (verb === undefined || verb === 'list') {
+              await pick();
               return;
             }
-            const option = (prompt: StoredPrompt) => ({
-              title: prompt.name,
-              value: prompt,
-              description: prompt.description,
-            });
-            const options = prompts.map(option);
-            const chosen = await context.ui.dialog.select<StoredPrompt>({
-              title: 'Prompts',
-              placeholder: 'Search prompts',
-              options,
-              search: (query, all) => {
-                const needle = query.trim().toLowerCase();
-                if (needle === '') return all;
-                return all.filter(
-                  (entry) =>
-                    entry.title.toLowerCase().includes(needle) ||
-                    (entry.description ?? '').toLowerCase().includes(needle),
-                );
-              },
-            });
-            if (chosen === undefined) return;
-            insert(context, chosen.template);
+            await forward(args);
           },
         },
       ],

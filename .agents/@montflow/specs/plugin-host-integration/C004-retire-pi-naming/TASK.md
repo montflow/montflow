@@ -32,8 +32,9 @@ types. It changes names only; behaviour and file formats stay as they are.
 - Rename the packaged skills to `montflow-create-prompts` and
   `montflow-execute-prompts`, and regenerate the embedded payload so `doctor`
   installs the new names.
-- Every command a user types is namespaced: `/mf-prompts` for the headless CLI
-  surface and `/mf-prompts-tui` for the picker. No bare `/prompts`.
+- Every command a user types is namespaced and there is exactly one prompts
+  command: `/mf-prompts`. With no arguments or `list` it opens the picker; every
+  other verb runs headless. No bare `/prompts` and no second `/mf-prompts-tui`.
 - No user-facing string names Pi: CLI help, refusals, fix lines, toasts, renderer
   output, README, installation guide, and the packaged skills.
 - Historical records are left as written: existing spec and review directories

@@ -53,11 +53,15 @@ host loader.
   exposes a picker through that contract, and `/mf-prompts list` and friends work
   in a real OpenCode host session.
 - The migration to OpenCode is complete in the names users type and read: no
-  user-facing surface says Pi. Commands are namespaced (`/mf-prompts` for the
-  headless surface, `/mf-prompts-tui` for the picker — never a bare `/prompts`),
-  and the prompts store, packaged skills, CLI help, refusals, toasts, and docs
-  carry no `pi-` prefix. Legacy store directories are migrated rather than
-  broken.
+  user-facing surface says Pi. There is exactly one prompts command,
+  `/mf-prompts`; no arguments or `list` opens the picker, and every other verb
+  keeps its headless behaviour. A second prompt command (`/prompts`,
+  `/mf-prompts-tui`) is not acceptable. The prompts store, packaged skills, CLI
+  help, refusals, toasts, and docs carry no `pi-` prefix; legacy store
+  directories are migrated rather than broken.
+- One command means one entry point in slash completion: the TUI picker
+  intercepts `/mf-prompts` and forwards any non-`list` argument to the server
+  command of the same name, so the two never diverge into separate verbs.
 - Plugin loading is verified mechanically: a check loads each plugin package
   through the host's loader path and fails when an entry cannot be imported.
 - The prompts stopgap is deleted, not left duplicated beside the packaged
