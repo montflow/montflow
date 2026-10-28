@@ -90,6 +90,8 @@ const makeClone = async (
   const dir = Reference.clonePath(root, slug);
   await mkdir(join(root, Reference.CLONE_DIR), { recursive: true });
   await git(root, ['clone', '--quiet', origin, dir]);
+  await git(dir, ['config', 'user.email', 'test@example.com']);
+  await git(dir, ['config', 'user.name', 'Test']);
   await git(dir, ['remote', 'set-url', 'origin', url]);
   if (rewrite) await git(dir, ['config', `url.${origin}.insteadOf`, url]);
   return dir;
