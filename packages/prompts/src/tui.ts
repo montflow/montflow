@@ -163,6 +163,57 @@ export default {
       resolveInsertText: async (prompt, pickerContext) => {
         const values: Record<string, string> = {};
         const directory = pickerContext.location?.directory ?? process.cwd();
+        if (prompt.name === 'spec-execute') {
+          const specs = await loadSpecNames(directory);
+          if (specs.length === 0) {
+            pickerContext.ui.toast.show({
+              message: `No specs found under ${path.join(directory, '.agents', '@montflow', 'specs')}.`,
+              variant: 'warning',
+            });
+            return undefined;
+          }
+          const current = await currentSpec(directory, specs);
+          const ordered =
+            current === undefined ? specs : [current, ...specs.filter((spec) => spec !== current)];
+          const choices: Array<SelectChoice> = ordered.map((spec) => {
+            const choice: SelectChoice = { title: spec, value: spec };
+            if (spec === current) choice.description = 'current branch';
+            return choice;
+          });
+          const specOptions = {
+            title: 'Spec',
+            placeholder: 'Search specs',
+            options: choices,
+            search: (query: string, options: ReadonlyArray<SelectChoice>) => {
+              const needle = query.trim().toLowerCase();
+              return needle === ''
+                ? options
+                : options.filter((option) => option.title.toLowerCase().includes(needle));
+            },
+          };
+          const spec = await pickerContext.ui.dialog.select(
+            current === undefined ? specOptions : { ...specOptions, current },
+          );
+          if (spec === undefined) return undefined;
+          const mode = await pickerContext.ui.dialog.select({
+            title: 'Execution mode',
+            placeholder: 'How should the orchestrator act?',
+            options: [
+              {
+                title: 'Guided',
+                value: 'guided',
+                description: 'Ask whenever a decision benefits from the human.',
+              },
+              {
+                title: 'Autonomous',
+                value: 'autonomous',
+                description: 'Ask only for destructive, dangerous, or undecidable calls.',
+              },
+            ],
+          });
+          if (mode === undefined) return undefined;
+          return `/specs execute --name ${spec} --mode ${mode}`;
+        }
         for (const variable of prompt.variables) {
           if (variable.source === 'specs') {
             // oxlint-disable-next-line no-await-in-loop -- dialogs must be answered in declaration order.
