@@ -496,6 +496,26 @@ Vitest.describe('GitLifecycle add', () => {
       yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
     }),
   );
+  Vitest.it.effect('refuses a routed add whose --ref cannot be applied', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(makeWorkspace);
+      const origin = yield* Effect.promise(makeOrigin);
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'fixture' }));
+        return yield* lifecycle.add(root, { url: URL, purpose: PURPOSE, ref: 'v1' });
+      }).pipe(Effect.provide(cloningLive(origin.dir, counters())));
+
+      Vitest.expect(outcome).toMatchObject({ kind: 'refused', code: 'usage' });
+      if (outcome.kind !== 'refused') throw new Error('expected a refusal');
+      Vitest.expect(outcome.message).toContain('--ref applies only when registering');
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
   Vitest.it.effect('refuses add when an unusable entry already claims the url', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(makeWorkspace);

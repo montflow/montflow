@@ -1013,6 +1013,16 @@ const make = Effect.gen(function* () {
       (entry) => Reference.normalizeUrl(entry.url) === Reference.normalizeUrl(url),
     );
     if (alreadyRegistered !== undefined) {
+      const requestedRef = input.ref?.trim() ?? '';
+      if (requestedRef !== '' && requestedRef !== (alreadyRegistered.ref ?? '')) {
+        return failure(
+          'refused',
+          'usage',
+          `refused: --ref applies only when registering; ${alreadyRegistered.name} is already registered${
+            alreadyRegistered.ref === undefined ? '' : ` at ref '${alreadyRegistered.ref}'`
+          } — edit the pin in ${Reference.STORE_DIR}/${alreadyRegistered.name}/${Reference.ENTRY_FILE}`,
+        );
+      }
       const notice = `routed add -> update ${alreadyRegistered.name}: ${url} is already registered as ${alreadyRegistered.name}`;
       const updateResult = yield* update(root, alreadyRegistered.name, { invocation });
       return {
