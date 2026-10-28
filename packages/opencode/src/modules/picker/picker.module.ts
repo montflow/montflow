@@ -5,7 +5,7 @@
 
 export interface PickerItem<T = unknown> {
   readonly title: string;
-  readonly description?: string;
+  readonly description?: string | undefined;
   readonly value: T;
 }
 
@@ -122,32 +122,29 @@ export const registerPicker = <T>(context: PickerContext, config: PickerConfig<T
       return;
     }
     const pickerItems = items.map((item) => config.formatItem(item));
-    const searchFn =
-      config.search ??
-      ((query, opts) =>
-        defaultSearch(
-          query,
-          opts as ReadonlyArray<PickerItem<T>>,
-        ));
+    const searchFn = config.search ?? defaultSearch;
     const chosen = await context.ui.dialog.select<T>({
       title: config.title,
       placeholder: `Search ${config.title.toLowerCase()}`,
-      options: pickerItems.map((item) => ({
-        title: item.title,
-        value: item.value,
-        description: item.description,
-      })),
+      options: pickerItems.map((item) => {
+        const opt: { title: string; value: T; description?: string } = {
+          title: item.title,
+          value: item.value,
+        };
+        if (item.description !== undefined) opt.description = item.description;
+        return opt;
+      }),
       search: (query, all) => {
-        const mapped = all.map((opt) => ({
+        const mapped: ReadonlyArray<PickerItem<T>> = all.map((opt) => ({
           title: opt.title,
-          description: opt.description,
           value: opt.value as T,
+          ...(opt.description !== undefined ? { description: opt.description } : {}),
         }));
         const result = searchFn(query, mapped);
         return result.map((item) => ({
           title: item.title,
-          description: item.description,
           value: item.value,
+          ...(item.description !== undefined ? { description: item.description } : {}),
         }));
       },
     });
