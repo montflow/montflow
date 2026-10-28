@@ -68,6 +68,10 @@ Vitest.describe('UpdateCheck tag prefix runtime', () => {
             }),
           );
           git(root, ['init', '-b', 'main']);
+          // Annotated tags need a committer identity; `-c user.*` on the
+          // commit does not persist it to the repository.
+          git(root, ['config', 'user.name', 'Test']);
+          git(root, ['config', 'user.email', 'test@example.com']);
           git(root, ['add', '.']);
           git(root, ['-c', 'user.name=T', '-c', 'user.email=t@e', 'commit', '-m', 'fixture']);
         });

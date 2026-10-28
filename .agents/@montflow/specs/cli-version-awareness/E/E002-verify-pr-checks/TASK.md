@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: E001
 related-tasks:
-status: pending
+status: in-progress
 ---
 
 # Task E002: verify-pr-checks

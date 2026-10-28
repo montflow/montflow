@@ -77,5 +77,5 @@ own state. `guides/updating.md` becomes the destination every warning names.
 | D003 | write-updating-guide      | execution | complete | Yes   |
 | D099 | review-phase              | review    | complete | No    |
 | E001 | reconcile-with-main       | execution | complete | Yes   |
-| E002 | verify-pr-checks          | execution | pending | Yes   |
+| E002 | verify-pr-checks          | execution | in-progress | Yes   |
 | E099 | review-phase              | review    | pending | No    |
