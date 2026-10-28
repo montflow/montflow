@@ -5,22 +5,18 @@ import * as Prompts from '../../modules/prompts/index.js';
 import * as Doctor from '../doctor/index.js';
 import { PromptStore } from '../../services/index.js';
 
-/** Slash-command name for the interactive menu (invoke as `/mf-prompts-tui`). */
-export const COMMAND_NAME = 'mf-prompts-tui';
+/** Slash-command name for the interactive menu (invoke as `/mf-prompts`). */
+export const COMMAND_NAME = 'mf-prompts';
 
 /**
  * Help text shown for the command and the `help` action.
- *
- * Named `mf-prompts-tui` rather than `mf-prompts` so that the headless CLI
- * keeps the plain name: `mf-prompts` is the binary, and `/mf-prompts` is the
- * same command inside the host. This one is the human-facing menu.
  */
 export const COMMAND_DESCRIPTION =
-  'Browse, create (manually or with an agent), show, inspect, modify (manually or with an agent), fill & render, or execute workspace prompts, or install the prompt skills (doctor). For the headless CLI use /mf-prompts.';
+  'Browse, create (manually or with an agent), show, inspect, modify (manually or with an agent), fill & render, or execute workspace prompts, or install the prompt skills (doctor). With no arguments /mf-prompts opens the picker.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-prompts-tui [browse | list | doctor | create [name] | show <name> | inspect <name> | modify [name] | render <name> [key=value ...] | execute <name> [key=value ...] | help]';
+  '/mf-prompts [browse | list | doctor | create [name] | show <name> | inspect <name> | modify [name] | render <name> [key=value ...] | execute <name> [key=value ...] | help]';
 
 /** Failure value when the user cancels a dialog. Shared with the other `/mf-*` commands. */
 export const CANCELLED = Interaction.CANCELLED;

@@ -113,6 +113,6 @@
 
 ### Added
 
-- Initial release of montflow-execute-pi-prompts
+- Initial release of montflow-execute-prompts
 - List, show, fill, and render guidance for `@montflow/pi-prompts` prompt templates
 - Execution handoff to the current session or a dispatched child session

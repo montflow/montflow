@@ -18,8 +18,7 @@ below the parser.
 - `slash.apps.module.ts` — the `/mf-prompts` parser, `run`, and `register`
 - `main.ts` — the binary entry
 
-The interactive menu is a different command: `/mf-prompts-tui`,
-`../interactive/`.
+The OpenCode TUI picker is registered by `../tui.ts` on `/mf-prompts`; no separate picker command exists.
 
 ## Rules
 

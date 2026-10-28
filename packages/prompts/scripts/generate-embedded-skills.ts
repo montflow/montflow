@@ -28,7 +28,7 @@ const SKILLS_DIR = join(PACKAGE_ROOT, 'skills');
 const OUTPUT = join(PACKAGE_ROOT, 'src', 'apps', 'doctor', 'embedded-payload.generated.ts');
 
 /** Must match `SKILL_NAMES` in the doctor module. */
-const SKILL_NAMES = ['montflow-create-pi-prompts', 'montflow-execute-pi-prompts'] as const;
+const SKILL_NAMES = ['montflow-create-prompts', 'montflow-execute-prompts'] as const;
 
 const readSkill = async (name: string): Promise<Record<string, string>> => {
   const dir = join(SKILLS_DIR, name);

@@ -117,7 +117,7 @@ export const verify = (
 ): string => {
   const report = Prompts.verifyReport(name, result);
   if (!options.verbose) return report;
-  return `${report}\n  checked: .agents/@montflow/pi-prompts/${name}.json`;
+  return `${report}\n  checked: .agents/@montflow/prompts/${name}.json`;
 };
 
 /**

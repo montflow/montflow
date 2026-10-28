@@ -46,6 +46,6 @@
 
 ### Added
 
-- Initial release of montflow-create-pi-prompts
+- Initial release of montflow-create-prompts
 - Create, modify, and verify guidance for `@montflow/pi-prompts` prompt templates
 - Prompt JSON schema, variable rules, and `mf-prompts-cli doctor` install path

@@ -38,7 +38,7 @@ const INSTALLED_SKILLS_DIR = resolve(
 );
 
 /** Every skill this package ships. */
-const SKILL_NAMES = ['montflow-create-pi-prompts', 'montflow-execute-pi-prompts'] as const;
+const SKILL_NAMES = ['montflow-create-prompts', 'montflow-execute-prompts'] as const;
 
 /** Read one file out of a skill directory. */
 const read = (dir: string, name: string, file: string): string =>
@@ -46,7 +46,7 @@ const read = (dir: string, name: string, file: string): string =>
 
 /** The packaged execute skill — the one carrying a verified output sample. */
 const executeSkill = (): string =>
-  read(PACKAGE_SKILLS_DIR, 'montflow-execute-pi-prompts', 'SKILL.md');
+  read(PACKAGE_SKILLS_DIR, 'montflow-execute-prompts', 'SKILL.md');
 
 /**
  * The fenced block following a `<!-- verified-output:<name> -->` marker.
@@ -110,7 +110,7 @@ Vitest.describe('packaged skills', () => {
   });
 });
 
-Vitest.describe('montflow-execute-pi-prompts documented output', () => {
+Vitest.describe('montflow-execute-prompts documented output', () => {
   Vitest.it('shows the exact bytes inspect produces for the sample prompt', () => {
     const documented = documentedBlock('inspect');
     Vitest.expect(documented).toBeDefined();
@@ -120,12 +120,8 @@ Vitest.describe('montflow-execute-pi-prompts documented output', () => {
   });
 });
 
-Vitest.describe('montflow-execute-pi-prompts claims', () => {
+Vitest.describe('montflow-execute-prompts claims', () => {
   Vitest.it('only names subcommands the named surface actually implements', () => {
-    // The skill names the CLI two ways — `mf-prompts x` for the binary and
-    // `/mf-prompts x` for the slash form — and a third surface, the menu,
-    // whose actions are not CLI subcommands. Both are checked against their
-    // own allow-list so a typo on either fails here.
     const cli = new Set([
       'doctor',
       'list',
@@ -139,35 +135,14 @@ Vitest.describe('montflow-execute-pi-prompts claims', () => {
       'delete',
       'help',
     ]);
-    const menu = new Set([
-      'browse',
-      'create',
-      'list',
-      'show',
-      'inspect',
-      'execute',
-      'render',
-      'modify',
-      'delete',
-      'doctor',
-      'help',
-    ]);
 
     const markdown = executeSkill();
-    // The menu is matched first and removed, so its actions never leak into the
-    // CLI list — `/mf-prompts-tui` would otherwise look like a CLI command.
-    const withoutMenu = markdown.replaceAll('/mf-prompts-tui', '\u0000');
-
-    const cliNames = [...withoutMenu.matchAll(/(?:^|[`/\s])mf-prompts ([a-z-]+)/gu)].map(
-      (match) => match[1] ?? '',
-    );
-    const menuNames = [...markdown.matchAll(/\/mf-prompts-tui ([a-z-]+)/gu)].map(
+    const cliNames = [...markdown.matchAll(/(?:^|[`/\s])mf-prompts ([a-z-]+)/gu)].map(
       (match) => match[1] ?? '',
     );
 
     Vitest.expect(cliNames.length).toBeGreaterThan(0);
     for (const command of cliNames) Vitest.expect(cli.has(command)).toBe(true);
-    for (const command of menuNames) Vitest.expect(menu.has(command)).toBe(true);
   });
 
   Vitest.it('documents the whole execute refusal vocabulary', () => {
@@ -194,9 +169,9 @@ Vitest.describe('montflow-execute-pi-prompts claims', () => {
   });
 });
 
-Vitest.describe('montflow-create-pi-prompts claims', () => {
+Vitest.describe('montflow-create-prompts claims', () => {
   const createSkill = (): string =>
-    read(PACKAGE_SKILLS_DIR, 'montflow-create-pi-prompts', 'SKILL.md');
+    read(PACKAGE_SKILLS_DIR, 'montflow-create-prompts', 'SKILL.md');
 
   Vitest.it('works its own example: the prompt it teaches verifies clean', () => {
     const raw = JSON.stringify({

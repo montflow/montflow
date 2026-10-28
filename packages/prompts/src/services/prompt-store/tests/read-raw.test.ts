@@ -8,7 +8,7 @@ const PlatformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 const StoreLive = Layer.provideMerge(PromptStore.Default, PlatformLayer);
 
 /** Store directory segments under a working directory. */
-const STORE_SEGMENTS = ['.agents', '@montflow', 'pi-prompts'] as const;
+const STORE_SEGMENTS = ['.agents', '@montflow', 'prompts'] as const;
 
 Vitest.describe('PromptStore.readRaw runtime', () => {
   Vitest.it.effect('reads a prompt file back verbatim', () =>

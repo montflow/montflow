@@ -1,5 +1,5 @@
 ---
-name: montflow-execute-pi-prompts
+name: montflow-execute-prompts
 description: Inspects and executes reusable prompt templates stored by @montflow/prompts on a chosen model, then returns the agent's reply. Use when an agent must run a stored prompt — inspect its variables, supply the required ones, pick a model, and execute it.
 id: a7fa5091d2615813
 author: Daniel Montilla
@@ -7,7 +7,7 @@ version: 3.4.2
 license: MIT
 dependencies:
   - executing-skills
-  - montflow-create-pi-prompts
+  - montflow-create-prompts
 groups:
   - workflow
 ---
@@ -39,7 +39,7 @@ renders, and stops there.
 Build it once with `bun run --cwd packages/prompts build:cli`, which emits
 `dist/mf-prompts` as a self-contained executable. Or run it from source with
 `bun packages/prompts/src/apps/cli/main.ts` from the repository root, so the
-working directory is the one holding `.agents/@montflow/pi-prompts`. The binary
+working directory is the one holding `.agents/@montflow/prompts`. The binary
 carries the prompt skills inside itself, so every subcommand below works from a
 compiled binary with no package checkout present.
 
@@ -185,4 +185,4 @@ undeclared variables included, which would otherwise render as nothing.
 - **Tools**: `prompt_inspect` (`name`, optional `values` as a record) and
   `prompt_execute` (`name`, optional `model`, optional `values`) — an agent can
   call these instead of either command
-- **Authoring a prompt**: skill `montflow-create-pi-prompts`
+- **Authoring a prompt**: skill `montflow-create-prompts`

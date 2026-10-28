@@ -1,6 +1,6 @@
 ---
-name: montflow-create-pi-prompts
-description: Creates and modifies reusable prompt templates for the @montflow/prompts plugin, stored as JSON under .agents/@montflow/pi-prompts/. Use when an agent must author a new prompt, or change an existing one, directly from the rules below instead of shelling out.
+name: montflow-create-prompts
+description: Creates and modifies reusable prompt templates for the @montflow/prompts plugin, stored as JSON under .agents/@montflow/prompts/. Use when an agent must author a new prompt, or change an existing one, directly from the rules below instead of shelling out.
 id: 1f2ac0720ecc0742
 author: Daniel Montilla
 version: 3.0.1
@@ -15,7 +15,7 @@ groups:
 
 Use when an agent must create or change a reusable prompt template for
 `@montflow/prompts`: a parameterized instruction stored as JSON under
-`.agents/@montflow/pi-prompts/`. The agent authors the file itself from the
+`.agents/@montflow/prompts/`. The agent authors the file itself from the
 rules below — it does not call a CLI, and it does not dispatch a session.
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md) skill before running this pipeline. It governs how skills are loaded, executed, and verified.
@@ -25,12 +25,12 @@ rules below — it does not call a CLI, and it does not dispatch a session.
 ## 1. Choose the Name
 
 `<name>` is a kebab-case slug and becomes the file name:
-`.agents/@montflow/pi-prompts/<name>.json`. If that file already exists, pick a
+`.agents/@montflow/prompts/<name>.json`. If that file already exists, pick a
 fresh name instead of overwriting it.
 
 ## 2. Write the File
 
-Create `.agents/@montflow/pi-prompts/<name>.json` — valid JSON with double
+Create `.agents/@montflow/prompts/<name>.json` — valid JSON with double
 quotes, no comments, and no trailing commas — with exactly these fields:
 
 | Field         | Type     | Rules                                               |
@@ -135,4 +135,4 @@ satisfied. Change only what the request asks for, and keep the file name and the
 
 - **Grammar and analysis**: `TemplateEngine` in `packages/prompts/src/modules/template-engine/`
 - **Verifier**: `Prompts.verifyPromptFile` and `Prompts.verifyReport` in `packages/prompts/src/modules/prompts/prompts.module.ts`
-- **Inspecting and executing a prompt**: skill `montflow-execute-pi-prompts`
+- **Inspecting and executing a prompt**: skill `montflow-execute-prompts`
