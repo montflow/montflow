@@ -121,13 +121,45 @@ Vitest.describe('Fold.run runtime', () => {
     });
   });
 
+  Vitest.it('folds every line after an empty truncate and rewrite', async () => {
+    await withStore(async (directory) => {
+      const path = seed(directory);
+      const database = join(directory, 'telemetry.db');
+      await Fold.run({ directory, database });
+      writeFileSync(path, '');
+      await Fold.run({ directory, database });
+      const rewritten = Array.from({ length: 40 }, (_, index) =>
+        JSON.stringify({
+          v: 1,
+          ts: index + 1,
+          type: 'session.idle',
+          sessionID: 'ses_fixture',
+          payload: {},
+        }),
+      );
+      writeFileSync(path, `${rewritten.join('\n')}\n`);
+      const result = await Fold.run({ directory, database });
+      Vitest.expect(result.spans).toBe(40);
+      Vitest.expect(await Fold.spans(database, 'ses_fixture')).toHaveLength(40);
+    });
+  });
+
   Vitest.it('serializes two concurrent folds without duplicating spans', async () => {
     await withStore(async (directory) => {
-      seed(directory);
+      const lines = Array.from({ length: 20_000 }, (_, index) =>
+        JSON.stringify({
+          v: 1,
+          ts: index + 1,
+          type: 'session.step.ended',
+          sessionID: 'ses_big',
+          payload: { sessionID: 'ses_big', cost: 0.001, tokens: { input: 1, output: 1 } },
+        }),
+      );
+      writeFileSync(join(directory, '2026-10-28.ndjson'), `${lines.join('\n')}\n`);
       const database = join(directory, 'telemetry.db');
       await Promise.all([Fold.run({ directory, database }), Fold.run({ directory, database })]);
-      Vitest.expect(await Fold.spans(database, 'ses_fixture')).toHaveLength(12);
-      Vitest.expect(await Fold.offsets(database)).toHaveProperty('2026-10-28.ndjson');
+      Vitest.expect(await Fold.spans(database, 'ses_big')).toHaveLength(20_000);
+      Vitest.expect((await Fold.sessions(database))[0]?.spanCount).toBe(20_000);
     });
   });
 });

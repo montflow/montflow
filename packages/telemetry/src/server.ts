@@ -86,7 +86,34 @@ export const setup = async (context: HostSlice): Promise<Cleanup> => {
       notifyWrite,
     );
     let dispose: (() => Promise<void>) | undefined;
-    let viewer: Viewer | undefined;
+    const viewers = new Set<Viewer>();
+    let currentViewer: Viewer | undefined;
+    let viewerPromise: Promise<Viewer> | undefined;
+    const getViewer = (sessionID: string): Promise<Viewer> => {
+      if (viewerPromise !== undefined) return viewerPromise;
+      const pending = import('./modules/viewer/index.js').then(({ start }) =>
+        start({ directory: settings.directory, sessionID }),
+      );
+      viewerPromise = pending.then(
+        (started) => {
+          viewers.add(started);
+          currentViewer = started;
+          void started.done.then(() => {
+            viewers.delete(started);
+            if (currentViewer === started) {
+              currentViewer = undefined;
+              viewerPromise = undefined;
+            }
+          });
+          return started;
+        },
+        (cause: unknown) => {
+          viewerPromise = undefined;
+          throw cause;
+        },
+      );
+      return viewerPromise;
+    };
     if (context.command !== undefined) {
       try {
         const registration = await context.command.transform((editor) => {
@@ -95,22 +122,11 @@ export const setup = async (context: HostSlice): Promise<Cleanup> => {
             description: 'Open /telemetry: the live trace and history viewer for this session.',
             execute: async (input) => {
               try {
-                if (viewer !== undefined) {
-                  const { open } = await import('./apps/viewer/index.js');
-                  open(viewer.url);
-                  return;
-                }
-                const { start } = await import('./modules/viewer/index.js');
                 const { open } = await import('./apps/viewer/index.js');
-                const started = await start({
-                  directory: settings.directory,
-                  sessionID: input.sessionID,
-                });
-                viewer = started;
-                void started.done.then(() => {
-                  if (viewer === started) viewer = undefined;
-                });
-                open(started.url);
+                const started = await getViewer(input.sessionID);
+                const url = `${started.url}?session=${encodeURIComponent(input.sessionID)}`;
+                console.log(`[${ID}] viewer: ${url}`);
+                open(url);
               } catch (cause) {
                 notifySetup(`viewer failed: ${String(cause)}`);
               }
@@ -134,7 +150,11 @@ export const setup = async (context: HostSlice): Promise<Cleanup> => {
         notifySetup(`cleanup failed: ${String(cause)}`);
       }
       try {
-        await viewer?.stop();
+        const started = await viewerPromise;
+        if (started !== undefined) await started.stop();
+        await Promise.allSettled([...viewers].map((viewer) => viewer.stop()));
+        viewers.clear();
+        viewerPromise = undefined;
       } catch (cause) {
         notifySetup(`viewer shutdown failed: ${String(cause)}`);
       }

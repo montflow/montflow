@@ -12,6 +12,8 @@ const LiveBody = Schema.Struct({
   cursors: Schema.Record(Schema.String, Schema.Number),
 });
 const decodeLive = Schema.decodeUnknownOption(LiveBody);
+const decodeRows = Schema.decodeUnknownOption(Schema.Array(Schema.JsonObject));
+const rowsOf = <T>(value: T) => Option.getOrElse(decodeRows(value), () => []);
 const liveOf = <T>(value: T) => {
   const decoded = Option.getOrUndefined(decodeLive(value));
   if (decoded === undefined) throw new Error('unexpected live body');
@@ -220,6 +222,69 @@ describe('Viewer.start runtime', () => {
           'ses_other',
           'ses_fixture',
         ]);
+        const sessions = rowsOf(await (await get(viewer, '/api/sessions')).json());
+        expect(sessions.map((session) => session['sessionID'])).toContain('ses_other');
+      } finally {
+        await viewer.stop();
+      }
+    });
+  });
+
+  it('resets the live cursor when a day file shrinks', async () => {
+    await withStore(async (directory) => {
+      const path = join(directory, '2026-10-28.ndjson');
+      seed(directory);
+      const viewer = await Viewer.start({ directory, sessionID: 'ses_fixture', idleMs: 60_000 });
+      try {
+        const folded = liveOf(await (await post(viewer, '/api/live', { fromFold: true })).json());
+        const rewritten = Array.from({ length: 40 }, (_, index) =>
+          JSON.stringify({
+            v: 1,
+            ts: index + 1,
+            type: 'session.idle',
+            sessionID: 'ses_fixture',
+            payload: {},
+          }),
+        );
+        writeFileSync(path, `${rewritten.join('\n')}\n`);
+        const next = liveOf(
+          await (await post(viewer, '/api/live', { cursors: folded.cursors })).json(),
+        );
+        expect(next.lines).toHaveLength(40);
+      } finally {
+        await viewer.stop();
+      }
+    });
+  });
+
+  it('keeps the viewer alive while another tab is open', async () => {
+    await withStore(async (directory) => {
+      const viewer = await Viewer.start({ directory, idleMs: 60_000, closeDelayMs: 40 });
+      try {
+        await post(viewer, '/heartbeat', { id: 'tab-a' });
+        await post(viewer, '/heartbeat', { id: 'tab-b' });
+        await post(viewer, '/close', { id: 'tab-a' });
+        await Bun.sleep(120);
+        expect((await get(viewer, '/')).status).toBe(200);
+      } finally {
+        await viewer.stop();
+      }
+    });
+  });
+
+  it('returns a JSON error when a span payload is corrupt', async () => {
+    await withStore(async (directory) => {
+      seed(directory);
+      const viewer = await Viewer.start({ directory, sessionID: 'ses_fixture', idleMs: 60_000 });
+      const db = await Sqlite.open(join(directory, 'telemetry.db'), true);
+      db.run(
+        "INSERT INTO spans (file, session_id, ts, type, payload) VALUES ('x', 'ses_fixture', 1, 'session.idle', 'not-json')",
+      );
+      db.close();
+      try {
+        const response = await get(viewer, '/api/spans?session=ses_fixture');
+        expect(response.status).toBe(500);
+        expect(await response.text()).not.toContain('at ');
       } finally {
         await viewer.stop();
       }

@@ -12,7 +12,7 @@ export const WINDOW_ROWS = 120;
 export const DEFAULT_IDLE_MS = 5 * 60 * 1_000;
 
 /** Default grace period after `pagehide`, so a refresh does not kill the viewer. */
-export const DEFAULT_CLOSE_DELAY_MS = 10_000;
+export const DEFAULT_CLOSE_DELAY_MS = 4_000;
 
 /** One viewer instance. */
 export interface Viewer {
@@ -56,6 +56,9 @@ const LiveRequest = Schema.Struct({
   cursors: Schema.optional(Schema.Record(Schema.String, Schema.Number)),
   fromFold: Schema.optional(Schema.Boolean),
 });
+const ClientRequest = Schema.Struct({ id: Schema.optional(Schema.String) });
+const decodeLiveRequest = Schema.decodeUnknownOption(LiveRequest);
+const decodeClientRequest = Schema.decodeUnknownOption(ClientRequest);
 
 const dayFiles = (directory: string): string[] => {
   try {
@@ -67,12 +70,20 @@ const dayFiles = (directory: string): string[] => {
   }
 };
 
-const live = (directory: string, cursors: Record<string, number>) => {
+const live = (
+  directory: string,
+  cursors: Record<string, number>,
+  fingerprints: Map<string, string>,
+) => {
   const next: Record<string, number> = {};
   const lines: Line[] = [];
   for (const name of dayFiles(directory)) {
     const path = file(directory, name);
-    const result = Tail.read(path, cursors[name] ?? 0);
+    const current = Tail.fingerprint(path);
+    const rewritten = fingerprints.has(name) && fingerprints.get(name) !== current;
+    fingerprints.set(name, current);
+    const cursor = rewritten ? 0 : (cursors[name] ?? 0);
+    const result = Tail.read(path, Tail.fileSize(path) < cursor ? 0 : cursor);
     next[name] = result.nextOffset;
     lines.push(...result.lines);
   }
@@ -114,7 +125,8 @@ export const page = (sessionID: string | undefined): string => `<!doctype html>
 </div>
 <script>${CLIENT_SCRIPT}</script>
 <script>
-const SESSION = ${scriptJson(sessionID ?? null)};
+const SESSION = new URLSearchParams(location.search).get('session') ?? ${scriptJson(sessionID ?? null)};
+const CLIENT_ID = crypto.randomUUID();
 const ROW = 16, MAX_WINDOW = ${WINDOW_ROWS};
 const viewport = document.getElementById('viewport');
 const spacer = document.getElementById('spacer');
@@ -207,6 +219,11 @@ function activate(sessionID) {
 async function loadSessions() {
   let list = [];
   try { list = await (await fetch('/api/sessions')).json(); } catch {}
+  const known = new Set(list.map((session) => session.sessionID));
+  for (const id of liveBySession.keys()) {
+    if (!known.has(id)) { list.push({ sessionID: id, title: null }); known.add(id); }
+  }
+  if (active !== null && !known.has(active)) list.push({ sessionID: active, title: null });
   sessionsEl.replaceChildren();
   for (const session of list) {
     const link = document.createElement('a');
@@ -229,6 +246,8 @@ async function openSession(sessionID) {
   activate(sessionID);
 }
 const cursors = {};
+let seeded = false;
+let polling = false;
 async function seekFold() {
   try {
     const response = await fetch('/api/live', {
@@ -241,6 +260,8 @@ async function seekFold() {
   } catch {}
 }
 async function poll() {
+  if (!seeded || polling) return;
+  polling = true;
   try {
     const response = await fetch('/api/live', {
       method: 'POST',
@@ -263,6 +284,7 @@ async function poll() {
       applyFilter();
     }
   } catch {}
+  finally { polling = false; }
 }
 async function bootstrap() {
   try {
@@ -273,15 +295,19 @@ async function bootstrap() {
   if (active !== null) await openSession(active);
   else applyFilter();
   await seekFold();
+  seeded = true;
   await poll();
 }
 viewport.addEventListener('scroll', () => requestAnimationFrame(render), { passive: true });
 filterEl.addEventListener('input', applyFilter);
 window.addEventListener('resize', () => requestAnimationFrame(render), { passive: true });
-window.addEventListener('pagehide', () => { navigator.sendBeacon('/close', '1'); });
-window.addEventListener('pageshow', () => { fetch('/heartbeat', { method: 'POST' }).catch(() => {}); });
-fetch('/heartbeat', { method: 'POST' }).catch(() => {});
-setInterval(() => { fetch('/heartbeat', { method: 'POST' }).catch(() => {}); }, 30000);
+function heartbeat() {
+  fetch('/heartbeat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: CLIENT_ID }) }).catch(() => {});
+}
+window.addEventListener('pagehide', () => { navigator.sendBeacon('/close', JSON.stringify({ id: CLIENT_ID })); });
+window.addEventListener('pageshow', heartbeat);
+heartbeat();
+setInterval(heartbeat, 30000);
 setInterval(poll, 400);
 setInterval(() => { void loadSessions(); }, 5000);
 void bootstrap();
@@ -305,10 +331,14 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
     foldError = String(cause);
     console.error(`viewer: history fold failed: ${foldError}`);
   }
+  const fingerprints = new Map<string, string>();
+  const liveSessions = new Set<string>();
+  if (options.sessionID !== undefined) liveSessions.add(options.sessionID);
   const idleMs = options.idleMs ?? DEFAULT_IDLE_MS;
   const closeDelayMs = options.closeDelayMs ?? DEFAULT_CLOSE_DELAY_MS;
   let lastHeartbeat = performance.now();
   let closeAt: number | undefined;
+  const clients = new Map<string, number>();
   let stopped = false;
   const { promise: done, resolve: resolveDone } = Promise.withResolvers<void>();
 
@@ -331,7 +361,24 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
       if (url.pathname === '/api/status') return Response.json({ foldError });
       if (url.pathname === '/api/sessions') {
         try {
-          return Response.json(await Fold.sessions(database));
+          const stored = await Fold.sessions(database);
+          const known = new Set(stored.map((session) => session.sessionID));
+          for (const sessionID of liveSessions) {
+            if (known.has(sessionID)) continue;
+            stored.push({
+              sessionID,
+              title: null,
+              agent: null,
+              model: null,
+              startedAt: null,
+              endedAt: null,
+              spanCount: 0,
+              costUSD: 0,
+              inputTokens: 0,
+              outputTokens: 0,
+            });
+          }
+          return Response.json(stored);
         } catch (cause) {
           return Response.json({ error: String(cause) }, { status: 500 });
         }
@@ -339,7 +386,11 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
       if (url.pathname === '/api/spans') {
         const session = url.searchParams.get('session');
         if (session === null) return Response.json([]);
-        return Response.json(await Fold.spans(database, session));
+        try {
+          return Response.json(await Fold.spans(database, session));
+        } catch (cause) {
+          return Response.json({ error: String(cause) }, { status: 500 });
+        }
       }
       if (url.pathname === '/api/live' && request.method === 'POST') {
         let body: unknown;
@@ -348,22 +399,38 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
         } catch {
           return Response.json({ lines: [], cursors: {} }, { status: 400 });
         }
-        const decoded = Option.getOrUndefined(Schema.decodeUnknownOption(LiveRequest)(body));
+        const decoded = Option.getOrUndefined(decodeLiveRequest(body));
         if (decoded === undefined) {
           return Response.json({ lines: [], cursors: {} }, { status: 400 });
         }
         if (decoded.fromFold === true) {
+          for (const name of dayFiles(directory)) {
+            fingerprints.set(name, Tail.fingerprint(file(directory, name)));
+          }
           return Response.json({ lines: [], cursors: await Fold.offsets(database) });
         }
-        return Response.json(live(directory, decoded.cursors ?? {}));
+        const result = live(directory, decoded.cursors ?? {}, fingerprints);
+        for (const line of result.lines) liveSessions.add(line.sessionID);
+        return Response.json(result);
       }
-      if (url.pathname === '/heartbeat') {
-        lastHeartbeat = performance.now();
-        closeAt = undefined;
-        return Response.json({ ok: true });
-      }
-      if (url.pathname === '/close') {
-        closeAt = performance.now() + closeDelayMs;
+      if (url.pathname === '/heartbeat' || url.pathname === '/close') {
+        let id = 'default';
+        try {
+          const body = JSON.parse((await request.text()) || '{}');
+          const decoded = Option.getOrUndefined(decodeClientRequest(body));
+          if (decoded?.id !== undefined) id = decoded.id;
+        } catch {
+          // A beacon without a JSON body still counts as the default client.
+        }
+        const now = performance.now();
+        lastHeartbeat = now;
+        if (url.pathname === '/heartbeat') {
+          clients.set(id, now);
+          closeAt = undefined;
+        } else {
+          clients.delete(id);
+          if (clients.size === 0) closeAt = now + closeDelayMs;
+        }
         return Response.json({ ok: true });
       }
       return new Response('not found', { status: 404 });
@@ -381,7 +448,10 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
     await Bun.sleep(500);
     if (stopped) return;
     const now = performance.now();
-    if ((closeAt !== undefined && now >= closeAt) || now - lastHeartbeat > idleMs) {
+    if (
+      (clients.size === 0 && closeAt !== undefined && now >= closeAt) ||
+      now - lastHeartbeat > idleMs
+    ) {
       await stop();
       return;
     }

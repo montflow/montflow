@@ -1,4 +1,4 @@
-import { Fs } from '../platform/index.js';
+import { createHash, Fs } from '../platform/index.js';
 import { Option } from 'effect';
 import { decodeLine, type Line } from '../event/index.js';
 
@@ -24,6 +24,24 @@ const parse = (row: string): Line | undefined => {
     return line;
   } catch {
     return undefined;
+  }
+};
+
+/** Prefix fingerprint: changes when a file is rewritten, stable across appends. */
+export const fingerprint = (path: string): string => {
+  try {
+    const fd = Fs.openSync(path, 'r');
+    try {
+      const size = Fs.fstatSync(fd).size;
+      const length = Math.min(size, 256);
+      const buffer = Buffer.alloc(length);
+      if (length > 0) Fs.readSync(fd, buffer, 0, length, 0);
+      return createHash('sha256').update(buffer).digest('hex');
+    } finally {
+      Fs.closeSync(fd);
+    }
+  } catch {
+    return '';
   }
 };
 

@@ -65,6 +65,7 @@ const optionalNumber = (value: Sqlite.SqlValue | undefined): number | null => {
 };
 
 const decodeNumber = Schema.decodeUnknownOption(Schema.Number);
+const decodeJsonObject = Schema.decodeUnknownOption(Schema.JsonObject);
 const decodeObject = Schema.decodeUnknownOption(Schema.JsonObject);
 const decodeString = Schema.decodeUnknownOption(Schema.String);
 
@@ -136,6 +137,8 @@ const applySpan = (db: Sqlite.Database, line: Line, fileName: string): void => {
 };
 
 const rebuildSession = (db: Sqlite.Database, sessionID: string): void => {
+  const previous = db.all('SELECT title FROM sessions WHERE session_id = ?', [sessionID])[0];
+  const title = previous === undefined ? null : text(previous['title']);
   db.run('DELETE FROM sessions WHERE session_id = ?', [sessionID]);
   db.run(
     `INSERT INTO sessions (session_id, title, agent, model, started_at, ended_at, span_count, cost_usd, input_tokens, output_tokens)
@@ -144,6 +147,9 @@ const rebuildSession = (db: Sqlite.Database, sessionID: string): void => {
      FROM spans WHERE session_id = ? GROUP BY session_id`,
     [sessionID],
   );
+  if (title !== null) {
+    db.run('UPDATE sessions SET title = ? WHERE session_id = ?', [title, sessionID]);
+  }
 };
 
 /** Drop one file's spans (after a truncate/rewrite) and rebuild affected sessions. */
@@ -153,6 +159,7 @@ const resetFile = (db: Sqlite.Database, fileName: string): void => {
     .map((row) => text(row['session_id']))
     .filter((value): value is string => value !== null);
   db.run('DELETE FROM spans WHERE file = ?', [fileName]);
+  db.run('UPDATE files SET offset = 0 WHERE path = ?', [fileName]);
   for (const sessionID of dirty) rebuildSession(db, sessionID);
 };
 
@@ -184,7 +191,14 @@ export const run = async (options: {
   let files = 0;
   let spans = 0;
   try {
-    ensureSchema(db);
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      ensureSchema(db);
+      db.exec('COMMIT');
+    } catch (cause) {
+      db.exec('ROLLBACK');
+      throw cause;
+    }
     for (const name of Fs.readdirSync(options.directory)) {
       if (!name.endsWith('.ndjson')) continue;
       const path = file(options.directory, name);
@@ -248,10 +262,7 @@ const spanOf = (row: Sqlite.Row): SpanRow => ({
   agent: text(row['agent']),
   model: text(row['model']),
   cost: optionalNumber(row['cost']),
-  payload: Option.getOrElse(
-    Schema.decodeUnknownOption(Schema.JsonObject)(JSON.parse(text(row['payload']) ?? '{}')),
-    () => ({}),
-  ),
+  payload: Option.getOrElse(decodeJsonObject(JSON.parse(text(row['payload']) ?? '{}')), () => ({})),
 });
 
 const readOnly = async (database: string): Promise<Sqlite.Database | undefined> => {

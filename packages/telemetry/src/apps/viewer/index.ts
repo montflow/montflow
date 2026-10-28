@@ -1,14 +1,16 @@
 /** Open the viewer URL with the platform's default browser. */
 export const open = (url: string): void => {
-  const [command, ...args] =
-    process.platform === 'darwin'
-      ? ['open', url]
-      : process.platform === 'win32'
-        ? ['cmd', '/c', 'start', '', url]
-        : ['xdg-open', url];
+  let command = 'xdg-open';
+  let args: string[] = [url];
+  if (process.platform === 'darwin') {
+    command = 'open';
+  } else if (process.platform === 'win32') {
+    command = 'cmd';
+    args = ['/c', 'start', '', url];
+  }
   try {
     Bun.spawn({
-      cmd: [command ?? 'xdg-open', ...args],
+      cmd: [command, ...args],
       stdout: 'ignore',
       stderr: 'ignore',
       stdin: 'ignore',
