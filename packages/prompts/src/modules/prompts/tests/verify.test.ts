@@ -19,6 +19,7 @@ interface VariableOverride {
   readonly description?: string;
   readonly type?: 'text' | 'textarea' | 'select';
   readonly options?: readonly string[];
+  readonly source?: 'specs';
   readonly required?: boolean;
   readonly default?: string;
 }

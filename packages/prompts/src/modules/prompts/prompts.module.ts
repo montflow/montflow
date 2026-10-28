@@ -19,6 +19,8 @@ export class Variable extends Schema.Class<Variable>('PromptVariable')({
   type: Schema.Literals(['text', 'textarea', 'select']),
   /** Allowed values for a `select`; empty for every other type. */
   options: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)),
+  /** Dynamic option source, such as the specs in this workspace. */
+  source: Schema.optionalKey(Schema.Literals(['specs'])),
   /**
    * True when the run dialog must collect a value before the prompt can
    * dispatch. Defaults to true, which preserves the pre-schema behaviour
@@ -40,6 +42,7 @@ const VariableFile = Schema.Struct({
   description: Schema.optionalKey(Schema.String),
   type: Schema.optionalKey(Schema.Literals(['text', 'textarea', 'select'])),
   options: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)),
+  source: Schema.optionalKey(Schema.Literals(['specs'])),
   required: Schema.optionalKey(Schema.Boolean),
   default: Schema.optionalKey(Schema.String),
 });
@@ -51,6 +54,7 @@ interface VariableFileValue {
   readonly description?: string;
   readonly type?: 'text' | 'textarea' | 'select';
   readonly options?: readonly string[];
+  readonly source?: 'specs';
   readonly required?: boolean;
   readonly default?: string;
 }
@@ -65,6 +69,7 @@ interface MutableVariableFile {
   description?: string;
   type?: 'text' | 'textarea' | 'select';
   options?: Array<string>;
+  source?: 'specs';
   required?: boolean;
   default?: string;
 }
@@ -86,6 +91,7 @@ const toFile = (variable: Variable): VariableFileValue => {
   if (variable.options !== undefined && variable.options.length > 0) {
     file.options = [...variable.options];
   }
+  if (variable.source !== undefined) file.source = variable.source;
   if (!variable.required) file.required = false;
   if (variable.default !== '') file.default = variable.default;
   return file;
@@ -98,31 +104,35 @@ interface ResolvedVariableFile {
   readonly description: string;
   readonly type: 'text' | 'textarea' | 'select';
   readonly options: ReadonlyArray<string>;
+  readonly source?: 'specs';
   readonly required: boolean;
   readonly default: string;
 }
 
 /** Fill in every default a `variables` entry left out. */
-const resolveFile = (entry: string | VariableFileValue): ResolvedVariableFile =>
-  isBareName(entry)
-    ? {
-        name: entry,
-        label: entry,
-        description: '',
-        type: 'text',
-        options: [],
-        required: true,
-        default: '',
-      }
-    : {
-        name: entry.name,
-        label: entry.label ?? entry.name,
-        description: entry.description ?? '',
-        type: entry.type ?? 'text',
-        options: entry.options ?? [],
-        required: entry.required ?? true,
-        default: entry.default ?? '',
-      };
+const resolveFile = (entry: string | VariableFileValue): ResolvedVariableFile => {
+  if (isBareName(entry)) {
+    return {
+      name: entry,
+      label: entry,
+      description: '',
+      type: 'text',
+      options: [],
+      required: true,
+      default: '',
+    };
+  }
+  const resolved: ResolvedVariableFile = {
+    name: entry.name,
+    label: entry.label ?? entry.name,
+    description: entry.description ?? '',
+    type: entry.type ?? 'text',
+    options: entry.options ?? [],
+    required: entry.required ?? true,
+    default: entry.default ?? '',
+  };
+  return entry.source === undefined ? resolved : { ...resolved, source: entry.source };
+};
 
 /**
  * One `variables` entry as it may appear in a prompt file: a bare name

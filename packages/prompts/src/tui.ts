@@ -1,5 +1,5 @@
 // oxlint-disable-next-line montflow/no-node-platform-imports -- this TUI entry is the composition root for its plugin store.
-import { readdir, readFile } from 'node:fs/promises';
+import { access, readdir, readFile } from 'node:fs/promises';
 // oxlint-disable-next-line montflow/no-node-platform-imports -- the TUI entry resolves its store path during host setup.
 import path from 'node:path';
 import type { TuiPlugin } from '@montflow/opencode';
@@ -40,6 +40,30 @@ const loadPrompts = async (directory: string): Promise<ReadonlyArray<Prompts.Pro
   return (await readPrompts(path.join(directory, ...LEGACY_PROMPTS_DIR))) ?? [];
 };
 
+/** Existing spec slugs under the workspace's specs store, sorted. */
+const loadSpecNames = async (directory: string): Promise<ReadonlyArray<string>> => {
+  const root = path.join(directory, '.agents', '@montflow', 'specs');
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  const names = await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map(async (entry): Promise<string | undefined> => {
+        const hasSpec = await access(path.join(root, entry.name, 'SPEC.md'))
+          .then(() => true)
+          .catch(() => false);
+        return hasSpec ? entry.name : undefined;
+      }),
+  );
+  return names.filter((name): name is string => name !== undefined).toSorted();
+};
+
+/** One option in a select dialog. */
+interface SelectChoice {
+  readonly title: string;
+  readonly value: string;
+  readonly description?: string;
+}
+
 /** Ask for a text variable, re-asking when a required answer is blank. */
 const askText = async (
   variable: Prompts.Variable,
@@ -77,7 +101,45 @@ export default {
       getInsertText: (prompt: Prompts.Prompt) => prompt.template,
       resolveInsertText: async (prompt, pickerContext) => {
         const values: Record<string, string> = {};
+        const directory = pickerContext.location?.directory ?? process.cwd();
         for (const variable of prompt.variables) {
+          if (variable.source === 'specs') {
+            // oxlint-disable-next-line no-await-in-loop -- dialogs must be answered in declaration order.
+            const specs = await loadSpecNames(directory);
+            const choices: Array<SelectChoice> = specs.map((spec) => ({
+              title: spec,
+              value: spec,
+            }));
+            if (!variable.required) choices.push({ title: 'Skip', value: '' });
+            if (choices.length === 0) {
+              pickerContext.ui.toast.show({
+                message: `No specs found under ${path.join(directory, '.agents', '@montflow', 'specs')}.`,
+                variant: 'warning',
+              });
+              return undefined;
+            }
+            const selectOptions = {
+              title: variable.label,
+              description: variable.description,
+              placeholder: 'Search specs',
+              options: choices,
+              search: (query: string, options: ReadonlyArray<SelectChoice>) => {
+                const needle = query.trim().toLowerCase();
+                return needle === ''
+                  ? options
+                  : options.filter((option) => option.title.toLowerCase().includes(needle));
+              },
+            };
+            // oxlint-disable-next-line no-await-in-loop -- dialogs must be answered in declaration order.
+            const chosen = await pickerContext.ui.dialog.select(
+              variable.default === ''
+                ? selectOptions
+                : { ...selectOptions, current: variable.default },
+            );
+            if (chosen === undefined) return undefined;
+            values[variable.name] = chosen;
+            continue;
+          }
           if (variable.default !== '') {
             values[variable.name] = variable.default;
             continue;

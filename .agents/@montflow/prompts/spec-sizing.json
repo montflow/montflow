@@ -14,13 +14,14 @@
     {
       "name": "name",
       "label": "Spec",
-      "description": "Spec directory slug this run sizes. Required when the scope is spec or phase.",
+      "description": "The spec to size. Pick one from this workspace; leave blank for the repo layer.",
+      "source": "specs",
       "required": false
     },
     {
       "name": "phase",
       "label": "Phase",
-      "description": "Phase id whose sizes this run overrides. Required when the scope is phase.",
+      "description": "Optional phase id, such as A. Required when the scope is phase.",
       "required": false
     },
     {
@@ -32,7 +33,7 @@
     {
       "name": "focus",
       "label": "Focus",
-      "description": "Extra direction to steer this run",
+      "description": "Optional extra direction, such as cost or latency.",
       "required": false
     }
   ],

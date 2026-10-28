@@ -6,35 +6,36 @@
     {
       "name": "name",
       "label": "Spec",
-      "description": "The spec directory slug to drive, e.g. montflow-ci-verification"
+      "description": "The spec to drive. Pick one from this workspace.",
+      "source": "specs"
     },
     {
       "name": "state",
       "label": "Derived state",
-      "description": "Output of `mf-specs state --name <spec>` for this session",
+      "description": "Derived by `mf-specs state --name <spec>`; `/specs execute` fills this.",
       "type": "textarea"
     },
     {
       "name": "next",
       "label": "Ready set",
-      "description": "Output of `mf-specs next --name <spec>` for this session",
+      "description": "Derived by `mf-specs next --name <spec>`; `/specs execute` fills this.",
       "type": "textarea"
     },
     {
       "name": "reviewBudget",
       "label": "Review-cycle budget",
-      "description": "Review cycles the active phase may spend: tiny 1, small 2, medium 3, large 3, hard cap 3"
+      "description": "Review cycles the active phase may spend. Derived by `/specs execute`."
     },
     {
       "name": "phase",
       "label": "Phase",
-      "description": "Restrict this session to one phase id. Leave blank to drive as far as the spec allows.",
+      "description": "Optional phase id, such as A. Leave blank to drive the active phase.",
       "required": false
     },
     {
       "name": "focus",
       "label": "Focus",
-      "description": "Extra direction to steer into every worker this session",
+      "description": "Optional extra direction, such as security or performance.",
       "required": false
     },
     {
