@@ -1,6 +1,6 @@
 ---
 name: spec-optimizations
-status: in-progress
+status: complete
 workspace-type: worktree
 author: Daniel Montilla
 created: 2026-10-26
@@ -8,6 +8,7 @@ locked-phases:
   - A
   - B
   - C
+  - D
 ---
 
 # Spec optimizations
@@ -155,4 +156,4 @@ unrelated config entry.
 | D002 | sizing-prompt | execution | complete | Yes |
 | D003 | config-command | execution | complete | Yes |
 | D004 | docs-and-handoffs | execution | complete | Yes |
-| D099 | review-phase | review | pending | No |
+| D099 | review-phase | review | complete | No |

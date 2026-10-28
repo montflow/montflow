@@ -2,10 +2,10 @@
 
 ## Context
 
-Phase D review (`D099`) is the last open task of `spec-optimizations`. Phases
+Phase D review (`D099`) closed the last task of `spec-optimizations`. Phases
 A, B, and C are locked and passed both reviewer series. All execution tasks
-D001–D004 are complete; review round `004` is open in both series and its
-findings are not yet resolved.
+D001–D004 are complete; review round `004` closed in both series with every
+finding resolved.
 
 ## Progress
 
@@ -13,56 +13,64 @@ findings are not yet resolved.
   `spec-optimizations-effect-reviewer` round `001` closed, `pass`.
 - Phase B: locked. Round `002` closed, `pass`.
 - Phase C: locked. Round `003` closed, `pass`.
-- Phase D: D001–D004 complete. Round `004` open —
-  `.agents/@montflow/reviews/spec-optimizations/004/REVIEW.md` (9 findings) and
+- Phase D: D001–D004 complete. Review round `004` closed `pass` in both series
+  after a fix → re-review loop: `.agents/@montflow/reviews/spec-optimizations/004/REVIEW.md`
+  (F22–F30, 9 Resolved) and
   `.agents/@montflow/reviews/spec-optimizations-effect-reviewer/004/REVIEW.md`
-  (8 findings).
+  (F36–F45, 10 Resolved).
+- D099 complete; phase D locked; spec complete.
 
 ## Findings
 
-Blocking findings from round 004 (verified by the reviewers):
+Round `004` closed with every finding `Resolved` in both series. The blocking
+pair and what closed them:
 
-- `F22` (base, Major): `mf-specs models` prints catalogue ids that
-  `sizing.json` rejects — multi-slash OpenRouter ids, `:` in Ollama tags,
-  mixed-case variants. `models --verify` and `check` then fail on a config the
-  wizard's own rule produced.
-- `F36` (effect, Major): `models --verify` never checks the root/spec exists;
-  a wrong `--dir` prints `no model or effort findings` and exits 0, and an
-  unknown `--name` leaks a raw `store.error`.
-
-Non-blocking: `F23`–`F30` (base) and `F37`–`F43` (effect) — scope-switch
-messaging, blank `--name`, ignored `--provider`/`--json` under `--verify`,
-authoring-skill gaps, test early-returns, diagnostics/cause and `Match` style.
+- `F22` — solved by widening the sizing grammar (user decision): the first `/`
+  separates provider from model, the model part may carry further `/` and `:`,
+  and effort tokens are case-insensitive; catalogue membership stays the
+  authoritative check. The catalogue boundary now exposes only storable targets
+  (`default` included) and refuses unstorable `--catalog` input as
+  `models.malformed-catalog`. Attempt 2 closed two post-pass defects the
+  reviewers reported: a `MODEL_HINT` prose leak inside quoted `fix` strings and
+  the boundary emitting unstorable ids/variants.
+- `F36` — `models --verify` now fails on a missing root and answers
+  `spec.not-found` for an unknown `--name`, matching every other surface.
+- `F44`/`F45` — the `default` label joined the storable rule, and id refusals
+  name the rule they actually break (`Set …` for a blank key, `Add …` only when
+  absent).
 
 ## Open Questions
 
-- Should catalogue ids with multiple `/` be normalized for sizing, or should
-  `sizing`'s model-id rule be widened? The fixer must pick one and justify it
-  against SPEC `sizing.malformed-model`.
-- `sizing-config` accepts unknown spec/phase ids by design (D003); confirm the
-  reviewer accepts that.
+- Resolved: the model-id grammar was widened rather than normalised at the
+  boundary, because OpenRouter namespaces and Ollama tags are normal host
+  shapes and slugifying would invent an id the host does not have.
+- Resolved: `sizing-config` accepts unknown spec/phase ids by design (D003);
+  no reviewer objected.
 
 ## Handoff
 
-Resume procedure, in order:
+Phase D is locked and the spec is complete. Nothing is pending.
 
-1. `bun run --cwd packages/specs cli state --dir "$PWD" --name spec-optimizations`
-   → expect `in-progress · pending · phase D · locked A,B,C`.
-2. `bun run --cwd packages/specs cli next --dir "$PWD" --name spec-optimizations`
-   → expect `D099` ready.
-3. Fix round 004 with the `montflow-addressing-adversarial-review` skill
-   (Status → In Review, Attempts++, `[Fixer]` discussion), starting with F22
-   and F36.
-4. Re-run both reviewer series for round 004 until both close `pass`.
-5. Complete `D099` (`status: complete` in `TASK.md` and the `SPEC.md` table),
-   add `- D` to `locked-phases`, set `status: complete` in `SPEC.md`, then run
-   `bun run --cwd packages/specs cli check --dir "$PWD" --name spec-optimizations`
-   (expect `0 failed · 0 issues`).
-6. Run `bun run mf:gate` (full) before any push.
+## Verification
 
-Never hand-edit review verdicts; they belong to the reviewer series.
+- `bun run --cwd packages/specs cli check --name spec-optimizations` →
+  `1 spec · 0 failed · 0 issues`.
+- `bun run --cwd packages/specs cli state --name spec-optimizations` →
+  `complete · state complete · phase none · locked A,B,C,D`.
+- `bun run mf:gate` → exit 0: turbo `lint:check` / `format:check` / `ts:check` /
+  `test` / `test:tui` / `smoke` (13 tasks each), then `mf:check` scopes:
+  `46 skills · 0 issues`, `5 prompts · 0 issues`, `6 specs · 0 failed · 0 issues`
+  (79 historical `task.missing-size` warnings), `12 profiles · 0 issues`,
+  `10 files · 0 issues`.
+- Package-level evidence for the round-004 fixes: `@montflow/specs` 84 files /
+  1039 tests, `ts:check` clean, `lint:check` and `format:check` clean.
 
 ## Deviations
 
 - The orchestrator fixed two one-line review findings directly in earlier
-  phases; round 004 should go through a fixer worker as usual.
+  phases; round 004 went through fixer workers.
+- Round 004 took two fixer re-engagements after both reviewers closed it `pass`:
+  the fixer's own `MODEL_HINT` widening and the still-lenient catalogue boundary
+  were reported as post-pass defects, so F22/F40 were reopened at attempt 2 and
+  the effect series filed `F44`/`F45`. All closed `Resolved`.
+

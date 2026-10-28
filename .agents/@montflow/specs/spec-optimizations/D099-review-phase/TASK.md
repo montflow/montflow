@@ -7,7 +7,7 @@ size: small
 depends-on: D004
 related-tasks:
 reviewer-profiles: effect-reviewer
-status: pending
+status: complete
 ---
 
 # Task D099: Review phase
@@ -65,8 +65,8 @@ wiring.
 
 ## Completion
 
-- [ ] All findings are resolved or escalated with a reason
-- [ ] Catalogue, verification, prompt, and command attacks were exercised and recorded
-- [ ] The merge-and-prove write contract was exercised end to end on a fixture
-- [ ] `bun run mf:gate` passes
-- [ ] The review round is linked with `- Phase: D`
+- [x] All findings are resolved or escalated with a reason
+- [x] Catalogue, verification, prompt, and command attacks were exercised and recorded
+- [x] The merge-and-prove write contract was exercised end to end on a fixture
+- [x] `bun run mf:gate` passes
+- [x] The review round is linked with `- Phase: D`
