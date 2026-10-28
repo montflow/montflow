@@ -16,10 +16,21 @@ No checkout. The agent must bring montflow in as a reference before anything is
 installed. The workspace must be a git repository; run `git init` first if it is
 not.
 
-1. **Bootstrap the clone — mandatory.** Run the
-   [montflow-add-reference](../.agents/skills/montflow-add-reference/SKILL.md) pipeline (or `mf-references add` from a checkout) against
-   `https://github.com/montflow/montflow`. It creates `.agents/references/`,
-   gitignores it, clones montflow to `.agents/references/montflow`, and writes
+1. **Bootstrap from a throwaway checkout — mandatory.** Nothing is installed yet,
+   so fetch the CLI once into a temp directory and let it create the real entry:
+
+   ```bash
+   tmp="$(mktemp -d)"
+   git clone --depth 1 https://github.com/montflow/montflow "$tmp/montflow"
+   bun run --cwd "$tmp/montflow/packages/references" cli add https://github.com/montflow/montflow \
+     --name montflow \
+     --purpose "The montflow monorepo, used as the install source." \
+     --dir "$PWD"
+   rm -rf "$tmp"
+   ```
+
+   `add` creates `.agents/references/`, its `.gitkeep`, the `.gitignore` entry,
+   the clone at `.agents/references/montflow`, and the committed
    `.agents/@montflow/references/montflow/REFERENCE.md`.
 2. **Confirm the entry — mandatory.**
 
@@ -67,7 +78,7 @@ Then follow the answer:
 
 | Answer | Do this |
 | --- | --- |
-| `all` | Run the [install-all recipe](#4-install-everything-all-five). |
+| `all` | Run the [install-all recipe](#4-install-everything-all-six). |
 | `none` | Write no utility store. Report each of the six as skipped. A remote-mode reference clone, if any, stays in place; nothing under `.agents/skills` or `.agents/@montflow` is written. |
 | subset | Run only the named sections in [step 3](#3-install-only-the-utilities-you-chose), in guide order. Report the rest as skipped. |
 | anything else | Ask again. Install nothing. |
@@ -375,6 +386,7 @@ checkout:
 | `mf-prompts` | `packages/prompts` |
 | `mf-profiles` | `packages/profiles` |
 | `mf-reviews` | `packages/reviews` |
+| `mf-references` | `packages/references` |
 
 ```bash
 bun run --cwd "$M/packages/specs" cli --help

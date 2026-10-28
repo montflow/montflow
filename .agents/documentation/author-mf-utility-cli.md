@@ -56,6 +56,7 @@ Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`;
 - `--dir <path>` = **workspace root**. Every store derives from it: `<root>/.agents/@montflow/<domain>`, skills at `<root>/.agents/skills`. Default `process.cwd()`. Domain exceptions must say so in their section.
 - `doctor` reads the same root and installs/verifies `<root>/.agents/skills/`.
 - `--verbose` adds per-item detail; never hides failures. Default token-lean.
+- `--human` renders readable tables and prose for a person; the default stays agent-first. `--human` and `--verbose` compose.
 - `--status valid|invalid` on `list` for file stores; lifecycle states on `list` for `mf-specs`.
 - `--check` on `doctor`: report-only, non-zero when unhealthy.
 - `--check` on `sync`: report-only, non-zero on drift.

@@ -80,14 +80,14 @@ Do not write a markdown table of references, and do not edit `REFERENCE.md` beyo
 # Reference
 
 - **CLI surface** — `mf-references` and `/mf-references` are one engine with the same flags:
-  - `doctor` — verify and repair scaffolding, installed skills, and the registry
+  - `doctor` — verify and repair scaffolding and installed skills; the registry is reported, never rewritten
   - `list` — every entry with clone presence and purpose (`--status installed|missing`)
   - `show` — one entry's `REFERENCE.md` bytes
   - `verify` — committed bytes, plus clone state with `--clones`; non-zero on issues
   - `add` — register and clone one https URL; a registered URL routes to `update`
   - `update` — refresh one entry or `--all`, by name or URL (`--force`)
   - `sync` — materialize missing clones or repair checkouts (`<name>` or `--all`)
-  - `status` — clone state per entry; `--fetch` adds behind/ahead, never gates
+  - `status` — clone state per entry; `--fetch` adds behind/ahead. It never writes, but a failed fetch, foreign clone, or invalid entry exits 1
   - `remove` — unregister one entry; `--keep-clone` keeps the clone
 
   Every verb takes `--dir <root>` (defaults to the working directory). The default output is agent-first; `--human` renders readable tables and prose, `--verbose` adds detail, and the two compose. `add` also takes `--name`, `--ref`, and `--purpose`; `verify` takes `--all` and `--clones`.
@@ -95,5 +95,5 @@ Do not write a markdown table of references, and do not edit `REFERENCE.md` beyo
 - **Binary / slash command**: `mf-references add …` and `/mf-references add …` — the same engine, the same output.
 - **Store contract**: `.agents/@montflow/references/<slug>/REFERENCE.md` (`packages/references/src/modules/reference/reference.module.ts`).
 - **Lifecycle**: `.agents/references/<slug>` is a plain clone; ownership, dirty state, and ref pins are `status`/`verify` jobs, not this skill's.
-- **In-host tool**: `reference_add` performs the same registration and returns the same created/routed/refused strings; prefer it when the tool is available.
+- **In-host tool**: `reference_add` performs the same registration; it returns the created/routed/refused lines plus the entry path, so read the first line and the outcome, not byte parity with the CLI.
 - **Changelog and migration**: [CHANGELOG.md](CHANGELOG.md).

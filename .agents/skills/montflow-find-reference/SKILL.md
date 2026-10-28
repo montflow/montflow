@@ -82,14 +82,14 @@ Never claim git state you did not read:
 # Reference
 
 - **CLI surface** — `mf-references` and `/mf-references` are one engine with the same flags:
-  - `doctor` — verify and repair scaffolding, installed skills, and the registry
+  - `doctor` — verify and repair scaffolding and installed skills; the registry is reported, never rewritten
   - `list` — every entry with clone presence and purpose (`--status installed|missing`)
   - `show` — one entry's `REFERENCE.md` bytes
   - `verify` — committed bytes, plus clone state with `--clones`; non-zero on issues
   - `add` — register and clone one https URL; a registered URL routes to `update`
   - `update` — refresh one entry or `--all`, by name or URL (`--force`)
   - `sync` — materialize missing clones or repair checkouts (`<name>` or `--all`)
-  - `status` — clone state per entry; `--fetch` adds behind/ahead, never gates
+  - `status` — clone state per entry; `--fetch` adds behind/ahead. It never writes, but a failed fetch, foreign clone, or invalid entry exits 1
   - `remove` — unregister one entry; `--keep-clone` keeps the clone
 
   Every verb takes `--dir <root>` (defaults to the working directory). The default output is agent-first; `--human` renders readable tables and prose, `--verbose` adds detail, and the two compose.
