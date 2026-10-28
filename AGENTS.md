@@ -74,6 +74,23 @@ pair, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
 - `release.yml` is separate: it gates publishing, not pushes, and keeps its own
   per-package conditions.
 
+## Spec completion gate
+
+- A change names the specs it closes with one `Spec: <kebab-name>` trailer per
+  spec in a commit message (repeat the line for several specs). No trailer means
+  no spec is gated.
+- CI job `spec-completion` reads the trailers from the pushed range and runs
+  `bun run --cwd packages/specs cli check --dir "$PWD" --name <spec> --require-complete`
+  for each. A missing spec, a spec that does not verify, a spec whose `SPEC.md`
+  status is not `complete`, or an invalid trailer fails the job. It is a
+  standalone job, not part of the `verify` matrix.
+- Without `--name`, `--require-complete` gates every spec in the store; the
+  trailer form always names one spec.
+- Run it locally before pushing:
+  `bun run --cwd packages/specs cli check --dir "$PWD" --name <spec> --require-complete`.
+- The rule applies to every spec in the store; only declared specs are gated, so
+  an unrelated in-progress spec never blocks a change.
+
 ## Skills
 
 - `.agents/skills/` — discovered by scanning this directory
