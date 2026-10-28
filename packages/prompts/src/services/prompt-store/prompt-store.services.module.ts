@@ -91,7 +91,9 @@ const make = Effect.gen(function* () {
     const file = path.join(root, `${name}.json`);
     return yield* fs
       .readFileString(file)
-      .pipe(Effect.catch(() => Effect.fail(new StoreError({ message: `Unknown prompt '${name}'.` }))));
+      .pipe(
+        Effect.catch(() => Effect.fail(new StoreError({ message: `Unknown prompt '${name}'.` }))),
+      );
   });
 
   const readAllRaw = Effect.fn('PromptStore.readAllRaw')(function* (cwd: string, dir?: string) {
