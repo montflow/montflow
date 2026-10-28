@@ -5,7 +5,7 @@ type: execution
 originator: user
 depends-on: C002
 related-tasks: B001, C002
-status: pending
+status: in-progress
 ---
 
 # Task C003: wire-plugin-pickers
