@@ -37,6 +37,28 @@ export default {
       }),
       getInsertText: (spec: string) => spec,
       forwardNonListToServer: true,
+      prepareForward: async (args, pickerContext) => {
+        if (!/^execute(?:\s|$)/u.test(args) || /(?:^|\s)--mode(?:\s|=|$)/u.test(args)) {
+          return args;
+        }
+        const mode = await pickerContext.ui.dialog.select({
+          title: 'Execution mode',
+          placeholder: 'How should the orchestrator act?',
+          options: [
+            {
+              title: 'Guided',
+              value: 'guided',
+              description: 'Ask whenever a decision benefits from the human.',
+            },
+            {
+              title: 'Autonomous',
+              value: 'autonomous',
+              description: 'Ask only for destructive, dangerous, or undecidable calls.',
+            },
+          ],
+        });
+        return mode === undefined ? undefined : `${args} --mode ${mode}`;
+      },
     });
     return () => {};
   },

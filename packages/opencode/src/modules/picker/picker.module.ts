@@ -31,6 +31,14 @@ export interface PickerConfig<T> {
     items: ReadonlyArray<PickerItem<T>>,
   ) => ReadonlyArray<PickerItem<T>>;
   readonly forwardNonListToServer?: boolean;
+  /**
+   * Rewrite non-list arguments before forwarding them to the server. Return
+   * undefined to cancel the invocation, for example when a dialog is dismissed.
+   */
+  readonly prepareForward?: (
+    args: string,
+    context: PickerContext,
+  ) => Promise<string | undefined> | string | undefined;
 }
 
 export interface PickerContext {
@@ -207,7 +215,11 @@ export const registerPicker = <T>(context: PickerContext, config: PickerConfig<T
             return;
           }
           if (config.forwardNonListToServer) {
-            await forward(args);
+            const prepared =
+              config.prepareForward === undefined
+                ? args
+                : await config.prepareForward(args, context);
+            if (prepared !== undefined) await forward(prepared);
             return;
           }
           await pick();
