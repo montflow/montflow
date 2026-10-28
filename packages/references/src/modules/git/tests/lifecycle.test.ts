@@ -516,6 +516,27 @@ Vitest.describe('GitLifecycle add', () => {
     }),
   );
 
+  Vitest.it.effect('routes a re-add of a pinned entry when the ref matches or is omitted', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(makeWorkspace);
+      const origin = yield* Effect.promise(makeOrigin);
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'fixture', ref: 'v1' }));
+        const sameRef = yield* lifecycle.add(root, { url: URL, purpose: PURPOSE, ref: 'v1' });
+        const noRef = yield* lifecycle.add(root, { url: URL, purpose: PURPOSE });
+        return { sameRef, noRef };
+      }).pipe(Effect.provide(cloningLive(origin.dir, counters())));
+
+      Vitest.expect(outcome.sameRef.kind).toBe('routed');
+      Vitest.expect(outcome.noRef.kind).toBe('routed');
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
   Vitest.it.effect('refuses add when an unusable entry already claims the url', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(makeWorkspace);
