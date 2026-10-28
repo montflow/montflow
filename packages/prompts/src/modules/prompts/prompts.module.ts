@@ -129,7 +129,7 @@ export const VariableEntry = Schema.decodeTo<typeof Variable, typeof VariableSou
  * `{{#if name}}` / `{{#unless name}}` branch on whether the variable has a
  * value, and nothing else is allowed.
  *
- * Persisted by the consuming extension (e.g. `.agents/@montflow/pi-prompts/`);
+ * Persisted by the consuming extension (e.g. `.agents/@montflow/prompts/`);
  * this package holds no filesystem code.
  */
 export class Prompt extends Schema.Class<Prompt>('Prompt')({
@@ -216,6 +216,12 @@ export const encode = Schema.encodeSync(Prompt);
 
 /** Schema that decodes/encodes a whole prompt file to/from a JSON string. */
 export const FromJson = Schema.fromJsonString(Prompt);
+
+/** Current prompt-store segments under a workspace root. */
+export const STORE_SEGMENTS = ['.agents', '@montflow', 'prompts'] as const;
+
+/** Retired prompt-store segments; read-only fallback until `doctor` migrates. */
+export const LEGACY_STORE_SEGMENTS = ['.agents', '@montflow', 'pi-prompts'] as const;
 
 /**
  * Every variable name the template mentions, in first-appearance order, whether

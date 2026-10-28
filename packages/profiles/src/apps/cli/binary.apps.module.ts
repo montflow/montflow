@@ -1,5 +1,5 @@
 import { Console, Effect, Option } from 'effect';
-import { Argument, Command, Flag } from 'effect/unstable/cli';
+import { Argument, Command, Flag } from 'effect/cli';
 import { Cli } from '@montflow/version';
 import type { BuildInfo } from '@montflow/version';
 import manifest from '../../../package.json' with { type: 'json' };
@@ -20,7 +20,7 @@ export const PACKAGE_IDENTITY = {
  * The `mf-profiles` binary's command tree, built with `effect/cli`.
  *
  * Every handler is a one-liner over `Engines` plus a `Renderers` function, so
- * the binary and the `/mf-profiles-cli` slash command cannot disagree about
+ * the binary and the `/mf-profiles` slash command cannot disagree about
  * behaviour. `--dir` is the workspace root; stores derive from it.
  */
 
@@ -34,22 +34,22 @@ const opt = (value: Option.Option<string>): string | undefined => Option.getOrUn
 
 /** Optional string flag. */
 const optionalString = (name: string, description: string) =>
-  Flag.string(name).pipe(Flag.withDescription(description), Flag.optional);
+  Flag.String(name).pipe(Flag.withDescription(description), Flag.optional);
 
 /** Boolean flag, defaulting to false. */
 const optionalBoolean = (name: string, description: string) =>
-  Flag.boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
+  Flag.Boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
 
 /** Workspace-root override, on every store-touching command. */
 const dirFlag = optionalString('dir', 'Workspace root. Defaults to the working directory.');
 
 /** The `name` positional the single-profile commands take. */
-const nameArg = Argument.string('name').pipe(
+const nameArg = Argument.String('name').pipe(
   Argument.withDescription('Profile name (the directory slug).'),
 );
 
 /** `verify`'s optional list of profile names. */
-const namesArg: Argument.Argument<ReadonlyArray<string>> = Argument.string('name').pipe(
+const namesArg: Argument.Argument<ReadonlyArray<string>> = Argument.String('name').pipe(
   Argument.variadic,
   Argument.withDescription('Profile names; omit to verify the whole store.'),
 );

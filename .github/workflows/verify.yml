@@ -219,6 +219,8 @@ jobs:
             script: mf:check:profiles
           - target: reviews
             script: mf:check:reviews
+          - target: naming
+            script: mf:check:naming
           - target: references
             script: mf:check:references
     steps:

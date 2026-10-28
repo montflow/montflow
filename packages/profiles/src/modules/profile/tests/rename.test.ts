@@ -1,0 +1,23 @@
+import { Effect } from 'effect';
+import * as Vitest from '@effect/vitest';
+import * as Profiles from '../index.js';
+
+Vitest.describe('Profiles.rename', () => {
+  Vitest.it.effect('renames a profile to a valid slug', () =>
+    Effect.gen(function* () {
+      const renamed = yield* Profiles.rename(
+        Profiles.make('code-reviewer', 'Reviews code'),
+        'security-auditor',
+      );
+      Vitest.expect(renamed.name).toBe('security-auditor');
+    }),
+  );
+
+  Vitest.it.effect('fails when the new name is not a valid slug', () =>
+    Effect.gen(function* () {
+      const profile = Profiles.make('code-reviewer', 'Reviews code');
+      const error = yield* Profiles.rename(profile, 'Bad Name').pipe(Effect.flip);
+      Vitest.expect(error).toStrictEqual("invalid profile name 'Bad Name'");
+    }),
+  );
+});

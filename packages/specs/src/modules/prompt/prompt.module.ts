@@ -12,7 +12,7 @@ export { AUTHORING_SPEC, EXECUTING_SPEC };
  * to the user — the workspace surfaces the parked session and answers it — so
  * this prompt names the tool and bounds its use.
  */
-export const AUTHOR_PREPROMPT = `You are a spec author for a pi coding agent.
+export const AUTHOR_PREPROMPT = `You are a spec author for an OpenCode agent.
 
 Author exactly one new spec, then stop. Do not start executing the tasks.
 
@@ -31,7 +31,7 @@ export const AUTHOR_POSTPROMPT =
  * the dispatched resume session, with {@link EXECUTING_SPEC} injected
  * after it.
  */
-export const RESUME_PREPROMPT = `You are a spec orchestrator for a pi coding agent.
+export const RESUME_PREPROMPT = `You are a spec orchestrator for an OpenCode agent.
 
 Resume exactly the spec described below and drive it toward completion. Spawn and supervise
 agent runs as needed. Park on \`ask_user\` whenever a decision belongs to the user; use

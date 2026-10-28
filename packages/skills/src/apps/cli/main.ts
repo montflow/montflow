@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { Cli } from '@montflow/version';
+import * as Cli from '@montflow/version/cli';
 import { PACKAGE_IDENTITY, PACKAGE_ROOT, rootCommand } from './binary.apps.module.js';
 
 /**

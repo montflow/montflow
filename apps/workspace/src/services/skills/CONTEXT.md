@@ -7,7 +7,7 @@ Skills panel: directory presence plus `SKILL.md` frontmatter parsing into
 ## Lazy extension loading
 
 Static imports from `@montflow/skills` are type-only (erased at build). The
-runtime resolves through `loadPiSkills()` — an Effect over a cached dynamic
+runtime resolves through `loadSkills()` — an Effect over a cached dynamic
 `import()`, first called inside `fetchSkills` / `getSkills` / `toSkill`, never
 at dashboard boot. Rejections classify into `ExtensionLoadError` (`network` vs
 `missing` vs `unknown`) via `classifyLoadError`, so the toast tells the user
@@ -26,17 +26,8 @@ whether to retry, reinstall, or just retry.
 - `toSkill` / `fromSkill` bridges between dashboard rows and `@montflow/skills`
   `Skill` (validated one way, total the other)
 - `panelInstalled` checks and `installHint` copy per panel
-- `parseModelsStore` / `parseDefaultModel` — pure decoders for the retired
-  Pi model files (`~/.pi/agent/models-store.json`,
-  `~/.pi/agent/settings.json`); malformed input reads as empty, never as a
-  failure. No production code calls them: only their file-reading wrappers
-  `listModelLabels` / `listDefaultModel` and the unit tests in
-  `tests/skill-write.test.ts` do. Those two wrappers read
-  `~/.pi/agent/models-store.json` and `~/.pi/agent/settings.json` on each call
-  and have no caller at all — no production code calls them and no test
-  references them (the tests exercise the parsers directly) — so they remain
-  `@deprecated` candidates for removal. The live model label comes from
-  `ModelPort.default()` in `grid-page.tsx`, not from this module.
+- The live model label comes from `ModelPort.default()` in `grid-page.tsx`;
+  the retired catalogue/settings decoders were removed in phase E.
 
 ## Does not belong here
 

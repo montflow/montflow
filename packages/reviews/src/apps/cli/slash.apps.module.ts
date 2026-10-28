@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
-import type { ProfileStore } from '@montflow/profiles';
-import type { SpecStore } from '@montflow/specs';
+import type { ProfileStore } from '@montflow/profiles/services';
+import type { SpecStore } from '@montflow/specs/services';
 import { ProfileProbe, ReviewStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
@@ -9,7 +9,7 @@ import * as Renderers from './renderers.apps.module.js';
  * The `/mf-reviews` slash-command front end: a hand-rolled parser over the
  * same engines the `mf-reviews` binary uses.
  *
- * A bespoke parser rather than `effect/cli` because a Pi slash command
+ * A bespoke parser rather than `effect/cli` because a OpenCode slash command
  * receives a single argument *string*, not an argv array, so the bin's
  * `Command` tree cannot be reused here. Everything below the parser is shared.
  */
@@ -209,10 +209,11 @@ export const run = (
       case 'Verify': {
         if (action.all || action.name === undefined) {
           const report = yield* Engines.verifyAll({ cwd: action.dir ?? cwd });
-          yield* say(Renderers.verifyAll(report));
+          const rendered = Renderers.verifyAll(report);
           if (report.issueCount > 0) {
-            return yield* Effect.fail(`verification failed:\n${Renderers.verifyAll(report)}`);
+            return yield* Effect.fail(`verification failed:\n${rendered}`);
           }
+          yield* say(rendered);
           return;
         }
         const report = yield* Engines.verifySeries({ cwd: action.dir ?? cwd }, action.name);

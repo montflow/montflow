@@ -2,7 +2,7 @@
  * Simplified `executing-spec` skill, aligned with the spec
  * contract (status enum, lifecycle states, CLI) and the native subagent tool.
  * Injected verbatim into a spec-resume session's prompt — never discovered as
- * a Pi skill.
+ * an OpenCode skill.
  */
 export const EXECUTING_SPEC = `# executing-spec
 

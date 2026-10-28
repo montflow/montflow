@@ -1,6 +1,6 @@
 # Fixtures
 
-Repo-tracked sample specs for exercising the CLI and the Pi extension
+Repo-tracked sample specs for exercising the CLI and the OpenCode plugin
 without touching a real workspace. They live under a realistic root so the
 default `.agents/@montflow/specs` path works when you `cd` into this
 directory. Every fixture uses the phase-directory layout

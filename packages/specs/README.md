@@ -43,7 +43,7 @@ in-place|worktree`. The generated tree passes `check`; edit it to carry the
   of `pending`, `in-progress`, `blocked`, `complete`, `inconsistent`
   (`completed` is accepted as an alias for `complete`).
 - `doctor` — checks `<root>/.agents/skills/` and installs the packaged
-  `montflow-create-pi-specs` and `montflow-find-pi-specs` skills
+  `montflow-create-specs` and `montflow-find-specs` skills
   when missing. Idempotent; resolves the repo root from the working
   directory.
 
@@ -162,5 +162,5 @@ no change:
 
 ## Status
 
-Early (`0.0.1`, private). Targets the spec contract inherited from the retired Pi toolchain.
+Early (`0.0.1`, private). Targets the spec contract inherited from the retired extension toolchain.
 Source-only — no build step: the OpenCode host loads the `.ts` files directly.

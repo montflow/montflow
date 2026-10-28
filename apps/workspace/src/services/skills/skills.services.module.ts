@@ -3,9 +3,8 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for skill files; both go away with the FileSystem migration.
 import { join } from 'node:path';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: home directory for the model catalogue; goes away with the FileSystem migration.
-import { homedir } from 'node:os';
 import type { Skill } from '@montflow/skills';
-import { Data, Effect, Schema } from 'effect';
+import { Data, Effect } from 'effect';
 
 /**
  * Lazy handle to the skills extension runtime. Static imports from
@@ -14,7 +13,7 @@ import { Data, Effect, Schema } from 'effect';
  * or missing extension therefore cannot crash the TUI; the failing
  * flow surfaces the load error as a toast instead.
  */
-type PiSkillsLib = typeof import('@montflow/skills');
+type SkillsLib = typeof import('@montflow/skills');
 
 /** Failure loading the skills extension runtime. `cause` classifies the import rejection. */
 export class ExtensionLoadError extends Data.TaggedError('@montflow/ExtensionLoadError')<{
@@ -74,13 +73,13 @@ export const classifyLoadError = (cause: unknown): ExtensionLoadError => {
 };
 
 /** Cached extension module promise. Cleared on failure so installing the extension then retrying reloads it. */
-let cachedLib: Promise<PiSkillsLib> | undefined;
+let cachedLib: Promise<SkillsLib> | undefined;
 
 /** The resolved extension runtime, once a flow has loaded it. Backs the synchronous picker matcher below. */
-let liveLib: PiSkillsLib | undefined;
+let liveLib: SkillsLib | undefined;
 
 /** Single import attempt: resolves the runtime, or rejects with a classified load error. */
-const importOnce = (): Promise<PiSkillsLib> => {
+const importOnce = (): Promise<SkillsLib> => {
   cachedLib ??= import('@montflow/skills').then(
     (libs) => {
       liveLib = libs;
@@ -108,7 +107,7 @@ export const resetExtensionCache = (): void => {
  * re-imports.
  * @returns Effect resolving to the extension module namespace
  */
-export const loadPiSkills = (): Effect.Effect<PiSkillsLib, ExtensionLoadError> =>
+export const loadSkills = (): Effect.Effect<SkillsLib, ExtensionLoadError> =>
   Effect.tryPromise({
     try: () => importOnce(),
     catch: (cause) => (cause instanceof ExtensionLoadError ? cause : classifyLoadError(cause)),
@@ -118,7 +117,7 @@ export const loadPiSkills = (): Effect.Effect<PiSkillsLib, ExtensionLoadError> =
  * The loaded extension runtime, if any flow has loaded it yet.
  * @returns the extension module namespace, or undefined before first load
  */
-export const loadedPiSkills = (): PiSkillsLib | undefined => liveLib;
+export const loadedSkills = (): SkillsLib | undefined => liveLib;
 
 /**
  * The shared subsequence matcher for the TUI filter picker, once a flow
@@ -134,8 +133,8 @@ export const loadedMatcher = (): ((label: string, query: string) => boolean) | u
  * string errors the TUI toasts (install, then retry).
  * @returns Effect resolving to the extension module namespace
  */
-const loadLibs = (): Effect.Effect<PiSkillsLib, string> =>
-  loadPiSkills().pipe(Effect.mapError((error) => error.message));
+const loadLibs = (): Effect.Effect<SkillsLib, string> =>
+  loadSkills().pipe(Effect.mapError((error) => error.message));
 
 /** Panel ids with an installable backing extension. */
 export type ExtensionPanel = 'skills' | 'prompts' | 'profiles';
@@ -143,7 +142,7 @@ export type ExtensionPanel = 'skills' | 'prompts' | 'profiles';
 /** Directory segments (under the workspace root) proving a panel installed. */
 const PANEL_DIRS = {
   skills: ['.agents', 'skills'],
-  prompts: ['.agents', '@montflow', 'pi-prompts'],
+  prompts: ['.agents', '@montflow', 'prompts'],
   profiles: ['.agents', '@montflow', 'profiles'],
 } satisfies Record<ExtensionPanel, ReadonlyArray<string>>;
 
@@ -429,7 +428,7 @@ export const saveSkill = (root: string, skill: SkillSummary): Effect.Effect<void
  * @param row - dashboard skill row
  * @returns Effect resolving to the Skill, failing on invalid rows
  */
-export const toSkill = (libs: PiSkillsLib, row: SkillSummary): Effect.Effect<Skill.Skill, string> =>
+export const toSkill = (libs: SkillsLib, row: SkillSummary): Effect.Effect<Skill.Skill, string> =>
   libs.Skill.decodeUnknown({
     id: row.id,
     name: row.name,
@@ -446,7 +445,7 @@ export const toSkill = (libs: PiSkillsLib, row: SkillSummary): Effect.Effect<Ski
  * @param skill - skills-plugin Skill
  * @returns dashboard row
  */
-export const fromSkill = (libs: PiSkillsLib, skill: Skill.Skill): SkillSummary => {
+export const fromSkill = (libs: SkillsLib, skill: Skill.Skill): SkillSummary => {
   const encoded = libs.Skill.encode(skill);
   return {
     id: encoded.id,
@@ -480,124 +479,5 @@ export const fetchSkills = (root: string): Effect.Effect<SkillSummary[], string>
             .toSorted((a, b) => a.name.localeCompare(b.name)),
         ),
       ),
-    ),
-  );
-
-/** One model ref: `provider/model-id`. */
-export interface ModelRef {
-  readonly provider: string;
-  readonly id: string;
-}
-
-/** One catalogue model: only the id is kept. */
-const CatalogueModel = Schema.Struct({ id: Schema.String });
-
-/** One provider entry: the models payload stays unchecked here so one odd provider never fails the catalogue — each entry is validated below. */
-const CatalogueEntry = Schema.Struct({ models: Schema.optional(Schema.Unknown) });
-
-/** One provider entry: a missing or malformed models list reads as none. */
-const CatalogueModels = Schema.Array(Schema.Unknown);
-
-/** The pi model catalogue: provider keys to provider entries. */
-const Catalogue = Schema.Record(Schema.String, CatalogueEntry);
-
-/**
- * Parse the retired pi model catalogue (`~/.pi/agent/models-store.json`:
- * provider keys holding `{ models: [{ id }] }`) into model refs. Decoded
- * by schema at the boundary — malformed JSON or unexpected shapes read
- * as empty. Called by `listModelLabels` and the unit tests; no production
- * caller.
- * @param json - raw catalogue contents
- * @returns `provider/id` refs in catalogue order
- */
-export const parseModelsStore = (json: string): ReadonlyArray<ModelRef> => {
-  let catalogue: typeof Catalogue.Type;
-  try {
-    catalogue = Schema.decodeUnknownSync(Catalogue)(JSON.parse(json));
-  } catch {
-    return [];
-  }
-  const refs: Array<ModelRef> = [];
-  for (const [provider, entry] of Object.entries(catalogue)) {
-    let models: ReadonlyArray<unknown>;
-    try {
-      models = Schema.decodeUnknownSync(CatalogueModels)(entry.models ?? []);
-    } catch {
-      continue;
-    }
-    for (const model of models) {
-      let id: string;
-      try {
-        id = Schema.decodeUnknownSync(CatalogueModel)(model).id;
-      } catch {
-        continue;
-      }
-      if (id !== '') refs.push({ provider, id });
-    }
-  }
-  return refs;
-};
-
-/**
- * Read the retired pi catalogue from `~/.pi/agent/models-store.json`.
- * Reads the file once per call — failures read as empty, never fail.
- * Unused: no caller at all (no production code, no tests); candidate for
- * removal.
- * @deprecated The live model label comes from `ModelPort.default()`.
- * @param home - home directory override (defaults to the live one)
- * @returns catalogue refs, or empty when unreadable
- */
-export const listModelLabels = (
-  home: string = homedir(),
-): Effect.Effect<ReadonlyArray<ModelRef>, never> =>
-  Effect.promise(() =>
-    readFile(join(home, '.pi', 'agent', 'models-store.json'), 'utf8').then(
-      (raw) => parseModelsStore(raw),
-      () => [],
-    ),
-  );
-
-/** The retired pi session defaults file shape: the provider/model pair Pi sessions fell back to. */
-const PiDefaults = Schema.Struct({
-  defaultProvider: Schema.optional(Schema.String),
-  defaultModel: Schema.optional(Schema.String),
-});
-
-/**
- * Parse the retired pi session defaults (`~/.pi/agent/settings.json`) into
- * the default model ref Pi sessions reported. Decoded by schema at the
- * boundary: malformed JSON or a missing pair reads as undefined. Called by
- * `listDefaultModel` and the unit tests; no production caller.
- * @param json - raw settings contents
- * @returns default ref, or undefined when absent
- */
-export const parseDefaultModel = (json: string): ModelRef | undefined => {
-  let defaults: typeof PiDefaults.Type;
-  try {
-    defaults = Schema.decodeUnknownSync(PiDefaults)(JSON.parse(json));
-  } catch {
-    return undefined;
-  }
-  if (defaults.defaultProvider === undefined || defaults.defaultModel === undefined)
-    return undefined;
-  if (defaults.defaultProvider === '' || defaults.defaultModel === '') return undefined;
-  return { provider: defaults.defaultProvider, id: defaults.defaultModel };
-};
-
-/**
- * Read the retired pi session default from `~/.pi/agent/settings.json`.
- * Failures read as undefined, never fail. Unused: no caller at all (no
- * production code, no tests); candidate for removal.
- * @deprecated The live model label comes from `ModelPort.default()`.
- * @param home - home directory override (defaults to the live one)
- * @returns default ref, or undefined when unreadable
- */
-export const listDefaultModel = (
-  home: string = homedir(),
-): Effect.Effect<ModelRef | undefined, never> =>
-  Effect.promise(() =>
-    readFile(join(home, '.pi', 'agent', 'settings.json'), 'utf8').then(
-      (raw) => parseDefaultModel(raw),
-      () => undefined,
     ),
   );

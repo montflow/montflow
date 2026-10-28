@@ -1,4 +1,4 @@
-import * as PiProfiles from '../../modules/pi-profiles/index.js';
+import * as Profiles from '../../modules/profile/index.js';
 import type { ProfileListEntry, ProfileVerifyReport } from './engines.apps.module.js';
 
 /**
@@ -28,7 +28,7 @@ export const list = (entries: ReadonlyArray<ProfileListEntry>): string =>
         .join('\n');
 
 /** Render one profile: description, model, skills, instructions, checklist. */
-export const show = (profile: PiProfiles.Profile): string => {
+export const show = (profile: Profiles.Profile): string => {
   const header =
     profile.description === '' ? profile.name : `${profile.name} — ${profile.description}`;
   const meta = [
@@ -44,16 +44,16 @@ export const show = (profile: PiProfiles.Profile): string => {
 };
 
 /** Render a save confirmation (also used after a create). */
-export const saved = (profile: PiProfiles.Profile): string => `Saved profile '${profile.name}'.`;
+export const saved = (profile: Profiles.Profile): string => `Saved profile '${profile.name}'.`;
 
 /** Render a delete confirmation. */
 export const deleted = (name: string): string => `Deleted profile '${name}'.`;
 
 /** Render one profile's verification outcome: a line when clean, findings otherwise. */
-export const verify = (name: string, result: PiProfiles.VerifyResult): string => {
+export const verify = (name: string, result: Profiles.VerifyResult): string => {
   if (result.issues.length === 0) return `✓ '${name}' matches the standard format.`;
-  const errors = PiProfiles.errorCount(result.issues);
-  const warnings = PiProfiles.warningCount(result.issues);
+  const errors = Profiles.errorCount(result.issues);
+  const warnings = Profiles.warningCount(result.issues);
   const warningClause = warnings === 0 ? '' : ` · ${warnings} warning${warnings === 1 ? '' : 's'}`;
   const header = result.valid
     ? `✓ '${name}' matches the standard format — ${warnings} warning${warnings === 1 ? '' : 's'}:`
@@ -71,7 +71,7 @@ export const renderVerifyAll = (report: ProfileVerifyReport, verbose = false): s
   const lines: Array<string> = [];
   for (const entry of report.entries) {
     if (entry.result.valid && entry.result.issues.length === 0 && !verbose) continue;
-    lines.push(`${entry.name}: ${PiProfiles.verifyInfoLine(entry.result)}`);
+    lines.push(`${entry.name}: ${Profiles.verifyInfoLine(entry.result)}`);
     for (const issue of entry.result.issues) lines.push(`  ${issue.field}: ${issue.message}`);
   }
   if (report.entries.length === 0) lines.push('No profiles.');

@@ -1,6 +1,10 @@
-import { NodeServices } from '@effect/platform-node';
-import { BuildInfo, Store } from '@montflow/version';
-import { Clock, Effect, FileSystem, Path } from 'effect';
+import * as NodeChildProcessSpawner from '@effect/platform-node/NodeChildProcessSpawner';
+import * as NodeCrypto from '@effect/platform-node/NodeCrypto';
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
+import * as NodePath from '@effect/platform-node/NodePath';
+import * as BuildInfo from '@montflow/version/build-info';
+import * as Store from '@montflow/version/store';
+import { Clock, Effect, FileSystem, Layer, Path } from 'effect';
 import { fieldString, parseSkillFile } from '../../modules/skill/index.js';
 
 /**
@@ -15,7 +19,10 @@ import { fieldString, parseSkillFile } from '../../modules/skill/index.js';
  * Internal skills are reported as `skipped` and never copied.
  */
 
-const NodeLive = NodeServices.layer;
+const PlatformLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, NodeCrypto.layer);
+
+/** Every platform service sync reads, with the spawner's own deps satisfied. */
+const NodeLive = Layer.provideMerge(NodeChildProcessSpawner.layer, PlatformLive);
 
 /** The default way a caller reaches `sync` when it does not say. */
 export const DEFAULT_SYNC_INVOCATION = '/mf-skills sync';
@@ -891,8 +898,7 @@ const buildManifest = (
 ): Effect.Effect<
   Store.SyncManifest,
   string,
-  | import('effect/unstable/process/ChildProcessSpawner').ChildProcessSpawner
-  | import('effect/Crypto').Crypto
+  import('effect/process').ChildProcessSpawner.ChildProcessSpawner | import('effect/Crypto').Crypto
 > =>
   Effect.gen(function* () {
     const facts = yield* BuildInfo.checkoutFacts(sourceRoot);
@@ -951,7 +957,7 @@ const buildManifest = (
  * @param options - source checkout, target workspace, and mode
  * @returns per-skill outcomes plus the aggregate drift flag
  */
-export const runSync = (options: SyncOptions = {}) =>
+const runSyncUnsafe = (options: SyncOptions = {}) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -1045,4 +1051,21 @@ export const runSync = (options: SyncOptions = {}) =>
         changed.length > 0 ||
         skills.some((skill) => skill.drift === 'stale' || skill.drift === 'diverged'),
     };
-  }).pipe(Effect.provide(NodeLive));
+  });
+
+/**
+ * Copy this checkout's public skills into a workspace store. The platform
+ * layer is provided once here; the inferred channel keeps the requirements
+ * visible only through the unsafe implementation.
+ * @param options - sync options
+ * @returns the sync report, or a displayable failure
+ */
+export const runSync = (
+  options: SyncOptions = {},
+): Effect.Effect<Effect.Success<ReturnType<typeof runSyncUnsafe>>, string> =>
+  // SAFETY: NodeLive supplies every platform service the unsafe body reads; the
+  // inferred environment is not dischargeable by the compiler here.
+  runSyncUnsafe(options).pipe(Effect.provide(NodeLive)) as Effect.Effect<
+    Effect.Success<ReturnType<typeof runSyncUnsafe>>,
+    string
+  >;

@@ -5,8 +5,8 @@ model:
 skills:
   - executing-skills
   - grilling
-  - montflow-create-pi-specs
-  - montflow-find-pi-specs
+  - montflow-create-specs
+  - montflow-find-specs
   - i-have-adhd
 ---
 
@@ -33,7 +33,7 @@ handoffs.
 4. **Author to the tier, not to habit.** Load the tier's instruction file and
    produce only the artifacts it requires. A `micro` spec gets one phase and
    one or two tasks; it gets no ceremony. Use
-   `montflow-create-pi-specs` for the artifact contract.
+   `montflow-create-specs` for the artifact contract.
 5. **Hand the records to the bookkeeper.** Dispatch `spec-bookkeeper` to run
    the spec verifier and repair bookkeeping. Apply only fixes it reports as
    prose or structure problems you own.

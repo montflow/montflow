@@ -176,7 +176,7 @@ Vitest.describe('Cli.run failure contract runtime', () => {
           script,
           [
             "import { Effect } from 'effect';",
-            "import { Command } from 'effect/unstable/cli';",
+            "import { Command } from 'effect/cli';",
             `import { Cli } from '${entry}';`,
             "const command = Command.make('failing', {}, () => Effect.fail(new Error('boom')));",
             "Cli.run({ command, identity: { name: '@montflow/test', version: '1.2.3' }, packageRoot: process.cwd() });",

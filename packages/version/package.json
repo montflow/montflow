@@ -21,7 +21,10 @@
   "type": "module",
   "exports": {
     "./package.json": "./package.json",
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./build-info": "./src/modules/build-info/index.ts",
+    "./store": "./src/modules/store/index.ts",
+    "./cli": "./src/modules/cli/index.ts"
   },
   "scripts": {
     "format:check": "oxfmt --check .",
@@ -33,18 +36,18 @@
     "check:release": "bun run scripts/check-release.ts"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.0-rc.112"
+    "@effect/platform-node": "4.0.1"
   },
   "devDependencies": {
-    "@effect/vitest": "4.0.0-rc.112",
+    "@effect/vitest": "4.0.1",
     "@types/node": "^26.1.2",
-    "effect": "4.0.0-rc.112",
+    "effect": "4.0.1",
     "oxfmt": "0.63.0",
     "oxlint": "1.78.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.4"
   },
   "peerDependencies": {
-    "effect": "4.0.0-rc.112"
+    "effect": "4.0.1"
   }
 }

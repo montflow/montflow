@@ -172,7 +172,7 @@ run the create command, then re-run `check`.
 #### Prompts (optional)
 
 Adds reusable prompt templates with typed variables, validated before a run.
-Owns the store `.agents/@montflow/pi-prompts`.
+Owns the store `.agents/@montflow/prompts`.
 
 Install — installs the packaged prompt skills:
 
@@ -340,7 +340,7 @@ fi
 step prompts
 bun run --cwd "$M/packages/prompts" cli doctor --dir "$PWD"
 installed+=(prompts)
-if [ -d "$PWD/.agents/@montflow/pi-prompts" ]; then
+if [ -d "$PWD/.agents/@montflow/prompts" ]; then
   bun run --cwd "$M/packages/prompts" cli verify --all --dir "$PWD"
   clean+=(prompts)
 else
