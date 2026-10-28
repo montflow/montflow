@@ -18,7 +18,10 @@ bun run --cwd packages/specs cli check
 - `check` — verifies the whole spec root (default
   `.agents/@montflow/specs`) or one `--name`. Token-lean by default
   (failures + summary); `--verbose` also lists passing specs and the
-  root. Exits non-zero when any spec fails.
+  root. Exits non-zero when any spec fails. `--require-complete` adds an error
+  for a spec whose `SPEC.md` status is not `complete`; with no `--name` it gates
+  every spec. CI runs it per `Spec: <name>` commit trailer. The slash form
+  accepts the same flag.
 - `status --name <spec>` — lifecycle, task counts, per-phase task
   list, and verification verdict. Exits non-zero when the spec fails
   verification.

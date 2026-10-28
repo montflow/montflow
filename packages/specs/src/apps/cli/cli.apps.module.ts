@@ -80,6 +80,11 @@ export interface CheckOptions {
   readonly concurrency?: number;
   /** Promote warnings to errors, so an advisory finding fails the check. */
   readonly strict?: boolean;
+  /**
+   * Fail a spec whose `SPEC.md` status is not `complete`. The `Spec: <name>`
+   * commit trailer names the specs a change closes; CI runs this per trailer.
+   */
+  readonly requireComplete?: boolean;
 }
 
 /** One spec's findings, before reduction into a report. */
@@ -87,6 +92,26 @@ export interface CheckEntry {
   readonly name: string;
   readonly issues: ReadonlyArray<Issue>;
 }
+
+/**
+ * The completion finding for a spec that a change names but has not finished.
+ * Absent when `SPEC.md` reads `status: complete`, or cannot be parsed (the tree
+ * verifier already reports that).
+ * @param snapshot - the spec directory listing
+ * @returns the finding, or undefined when the spec is complete
+ */
+const completionIssue = (snapshot: SpecSnapshot): Issue | undefined => {
+  const specFile = snapshot.files.find(
+    (entry) => entry.path === 'SPEC.md' && (entry.kind ?? 'file') === 'file',
+  );
+  const spec = specFile === undefined ? undefined : parseSpecFile(specFile.content);
+  if (spec?.status === 'complete') return undefined;
+  const status = spec?.status ?? 'unreadable';
+  return issue(
+    'status',
+    `Spec '${snapshot.name}' is not complete (status: '${status}'); finish it or drop the 'Spec: ${snapshot.name}' trailer.`,
+  );
+};
 
 /**
  * Reduce per-spec findings into a {@link CheckReport}. `strict` promotes every
@@ -143,6 +168,15 @@ export const check = (
         }),
       );
     }
+    if (options.name !== undefined && !isValidName(options.name)) {
+      const issues: ReadonlyArray<Issue> = [
+        {
+          field: options.name,
+          message: `'${options.name}' is not a valid spec name — use a kebab-case slug.`,
+        },
+      ];
+      return reduceCheck(root, [{ name: options.name, issues }], strict);
+    }
     if (options.name !== undefined && !(yield* store.exists(root, options.name))) {
       const issues: ReadonlyArray<Issue> = [
         { field: options.name, message: `Spec directory not found under ${root}.` },
@@ -156,7 +190,11 @@ export const check = (
         store.snapshot(root, name).pipe(
           Effect.map((snapshot): CheckEntry => {
             const result = verifySpecTree(snapshot);
-            return { name, issues: result.issues };
+            const completion =
+              options.requireComplete === true ? completionIssue(snapshot) : undefined;
+            const issues =
+              completion === undefined ? result.issues : [...result.issues, completion];
+            return { name, issues };
           }),
         ),
       { concurrency: options.concurrency ?? DEFAULT_CONCURRENCY },
@@ -1123,14 +1161,27 @@ const checkCommand = Command.make(
       Flag.withDescription('Treat warnings as errors.'),
       Flag.withDefault(false),
     ),
+    requireComplete: Flag.boolean('require-complete').pipe(
+      Flag.withDescription('Fail unless every checked spec status is complete.'),
+      Flag.withDefault(false),
+    ),
   },
   (config) =>
     Effect.gen(function* () {
       const name = Option.isSome(config.name) ? config.name.value : undefined;
       const options: CheckOptions =
         name === undefined
-          ? { concurrency: config.concurrency, strict: config.strict }
-          : { name, concurrency: config.concurrency, strict: config.strict };
+          ? {
+              concurrency: config.concurrency,
+              strict: config.strict,
+              requireComplete: config.requireComplete,
+            }
+          : {
+              name,
+              concurrency: config.concurrency,
+              strict: config.strict,
+              requireComplete: config.requireComplete,
+            };
       const report = yield* check(storeDirOf(config.dir), options);
       yield* Console.log(renderCheck(report, config.verbose));
       const exit = checkExitCode(report);
@@ -1406,6 +1457,7 @@ interface SlashArgs {
   readonly reviewerProfiles: ReadonlyArray<string>;
   readonly all: boolean;
   readonly dryRun: boolean;
+  readonly requireComplete: boolean;
 }
 
 /** Flags the slash parser accepts as `--key value` or `--key=value`. */
@@ -1459,6 +1511,7 @@ const parseSlashArgs = (args: string): SlashArgs => {
   let strict = false;
   let all = false;
   let dryRun = false;
+  let requireComplete = false;
   const assign = (key: string, value: string): void => {
     if (key === 'name') name = value;
     else if (key === 'dir') dir = value;
@@ -1491,6 +1544,10 @@ const parseSlashArgs = (args: string): SlashArgs => {
       dryRun = true;
       continue;
     }
+    if (token === '--require-complete') {
+      requireComplete = true;
+      continue;
+    }
     const inline = /^--([\w-]+)=(.*)$/.exec(token);
     if (inline !== null) {
       if (SLASH_VALUE_FLAGS.has(inline[1] ?? '')) assign(inline[1] ?? '', inline[2] ?? '');
@@ -1519,6 +1576,7 @@ const parseSlashArgs = (args: string): SlashArgs => {
     reviewerProfiles,
     all,
     dryRun,
+    requireComplete,
   };
 };
 
@@ -1630,8 +1688,17 @@ export const runSlash = (
     }
     const options: CheckOptions =
       parsed.name === undefined
-        ? { concurrency: DEFAULT_CONCURRENCY, strict: parsed.strict }
-        : { name: parsed.name, concurrency: DEFAULT_CONCURRENCY, strict: parsed.strict };
+        ? {
+            concurrency: DEFAULT_CONCURRENCY,
+            strict: parsed.strict,
+            requireComplete: parsed.requireComplete,
+          }
+        : {
+            name: parsed.name,
+            concurrency: DEFAULT_CONCURRENCY,
+            strict: parsed.strict,
+            requireComplete: parsed.requireComplete,
+          };
     const report = yield* check(dir, options);
     return { output: renderCheck(report, parsed.verbose), ok: report.failed === 0 };
   });
