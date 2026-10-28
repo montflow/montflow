@@ -105,7 +105,7 @@ fetches.
 | C099 | review-phase                    | review      | complete | No   |
 | D001 | align-skills                    | execution   | complete | Yes  |
 | D002 | align-docs-and-verify           | execution   | complete | Yes  |
-| D099 | review-phase                    | review      | pending | No    |
+| D099 | review-phase                    | review      | complete | No   |
 | E001 | audit-scoped-verification       | exploratory | complete | No   |
 | E002 | fix-agents-rule-and-spec-scoping | execution  | complete | Yes  |
 | E003 | document-scoping-per-cli        | execution   | complete | Yes  |

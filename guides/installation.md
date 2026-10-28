@@ -45,8 +45,9 @@ not.
 3. **Read the inventory.** Load
    [montflow-find-reference](../.agents/skills/montflow-find-reference/SKILL.md) and
    confirm the `montflow` entry resolves to `.agents/references/montflow`. The
-   reference is read-only for source files; local mode writes only its untracked
-   `node_modules`.
+   source files are read-only; `bun install` writes untracked `node_modules` and
+   runs the repo postinstall, which installs the Lefthook `pre-push` hook into
+   the clone's `.git/hooks`.
 4. **Hand off.** That clone is the checkout local mode needs. `M` is already set.
 
 ## Handoff
@@ -278,7 +279,7 @@ bun run --cwd "$M/packages/references" cli verify --all --dir "$PWD"
 ```
 
 It is working when `verify --all` reports `0 issues` and `doctor --check`
-reports `failed=0`. Clones stay gitignored and read-only.
+reports `failed=0`. Clones stay gitignored; source files are read-only. Running `bun install` in a clone writes untracked `node_modules` and the Lefthook hook its postinstall installs.
 
 ### 4. Install everything (all six)
 
