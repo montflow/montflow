@@ -774,6 +774,36 @@ Vitest.describe('GitLifecycle update', () => {
 });
 
 Vitest.describe('GitLifecycle sync', () => {
+  Vitest.it.effect('repairs a stale origin/HEAD after an upstream default-branch rename', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      yield* Effect.promise(() => git(origin.dir, ['branch', '-m', 'main', 'trunk']));
+
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'fixture' }));
+        return yield* lifecycle.sync(root, { name: 'fixture' });
+      }).pipe(Effect.provide(realLive));
+
+      if (!('entries' in outcome)) throw new Error('expected a sync report');
+      Vitest.expect(outcome.entries[0]?.kind).not.toBe('skipped');
+      Vitest.expect(outcome.entries[0]?.kind).not.toBe('failed');
+      Vitest.expect(outcome.failed).toBe(false);
+
+      const updated = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        return yield* lifecycle.update(root, 'fixture');
+      }).pipe(Effect.provide(realLive));
+      Vitest.expect(updated.kind).not.toBe('failed');
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
   Vitest.it.effect('sync --all clones every missing entry and changes no registry file', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
@@ -1173,6 +1203,50 @@ Vitest.describe('GitLifecycle status', () => {
 });
 
 Vitest.describe('GitLifecycle pinned refs', () => {
+  Vitest.it.effect('pins a tag whose name contains a slash', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() => git(origin.dir, ['tag', 'release/v1']));
+      yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'fixture', ref: 'release/v1' }));
+        return yield* lifecycle.update(root, 'fixture');
+      }).pipe(Effect.provide(realLive));
+
+      Vitest.expect(outcome.kind).toBe('present');
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
+  Vitest.it.effect('status --fetch reflects the post-fetch branch pin', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      yield* Effect.promise(async () => {
+        await git(origin.dir, ['commit', '--allow-empty', '-m', 'advance']);
+      });
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'fixture', ref: 'main' }));
+        return yield* lifecycle.status(root, { fetch: true });
+      }).pipe(Effect.provide(realLive));
+
+      if (!('rows' in outcome)) throw new Error('expected a status report');
+      Vitest.expect(outcome.rows[0]?.state).toBe('ref-mismatch');
+      Vitest.expect(outcome.rows[0]?.message).toContain('head=');
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
   Vitest.it.effect('resolves an annotated tag from its peeled remote row', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);

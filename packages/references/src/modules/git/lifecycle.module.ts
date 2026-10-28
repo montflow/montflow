@@ -1573,6 +1573,20 @@ const make = Effect.gen(function* () {
                 };
               }
             }
+          } else if (!resolution.resolved) {
+            row = {
+              slug,
+              state: 'ref-mismatch',
+              message: `ref-mismatch ${slug} ref=${ref} unresolvable`,
+              refused: false,
+            };
+          } else if (resolution.sha !== undefined && resolution.sha !== observed.head) {
+            row = {
+              slug,
+              state: 'ref-mismatch',
+              message: `ref-mismatch ${slug} head=${sha7(observed.head)} expected=${sha7(resolution.sha)}`,
+              refused: false,
+            };
           }
         }
       }
