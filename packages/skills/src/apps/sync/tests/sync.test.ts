@@ -1170,3 +1170,60 @@ Vitest.describe('sync manifest recovery runtime', () => {
     ),
   );
 });
+
+Vitest.describe('sync partial refusal runtime', () => {
+  Vitest.it.effect('records applied skills while preserving a refused entry', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'beta'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        yield* Effect.promise(() =>
+          write(
+            sandbox.checkout,
+            '.agents/skills/alpha/SKILL.md',
+            skillFile('alpha', 'version: 2.0.0\n'),
+          ),
+        );
+        yield* Effect.promise(() =>
+          writeFile(join(store(sandbox.workspace), 'beta', 'SKILL.md'), 'hand edited\n'),
+        );
+
+        const mixed = yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        Vitest.expect(mixed.refused).toStrictEqual(['beta']);
+        Vitest.expect(mixed.skills.find((skill) => skill.name === 'alpha')?.outcome).toBe(
+          'updated',
+        );
+
+        const check = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+        Vitest.expect(check.skills.find((skill) => skill.name === 'alpha')?.drift).toBe('current');
+        Vitest.expect(check.skills.find((skill) => skill.name === 'beta')?.drift).toBe('diverged');
+      }),
+    ),
+  );
+
+  Vitest.it.effect('never prunes a directory the manifest does not own', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        yield* Effect.promise(() =>
+          write(sandbox.workspace, '.agents/skills/gamma/notes.md', '# my notes\n'),
+        );
+
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+
+        Vitest.expect(
+          yield* Effect.promise(() =>
+            pathExists(join(store(sandbox.workspace), 'gamma', 'notes.md')),
+          ),
+        ).toBe(true);
+      }),
+    ),
+  );
+});

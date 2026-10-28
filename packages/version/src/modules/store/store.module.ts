@@ -228,7 +228,7 @@ export const serialize = (manifest: SyncManifest): string => {
       if (skill.removed === true) entry.removed = true;
       return entry;
     })
-    .toSorted((a, b) => a.name.localeCompare(b.name));
+    .toSorted((a, b) => byCodePoint(a.name, b.name));
   return `${JSON.stringify(
     {
       schemaVersion: manifest.schemaVersion,

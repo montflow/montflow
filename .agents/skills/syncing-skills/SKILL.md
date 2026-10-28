@@ -85,7 +85,8 @@ bun run --cwd "$S/packages/skills" cli sync --source "$S" --target "$PWD"
 ```
 
 Sync is idempotent and leaves unrelated skills untouched. The report groups
-skills as `Created`, `Updated`, `Unchanged`, and `Skipped` (internal), with a
+skills as `Created`, `Updated`, `Unchanged`, `Refused` (diverged without
+`--force`), and `Skipped` (internal), with a
 count line beneath.
 
 ## 4. Verify

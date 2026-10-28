@@ -361,5 +361,6 @@ is the exception: it takes `--source <checkout>` and `--target <workspace-root>`
 
 See [guides/updating.md](./updating.md) for the single update path: read the
 stale warning, run `mf-<cli> version --check`, pull the checkout and run
-`bun install`, re-sync installed stores, and verify the result. Every step works
-offline against a local checkout.
+`bun install`, re-sync installed stores, and verify the result. After the
+checkout is present every step works offline; `git pull`, `bun install`, and
+the optional update check need the network.

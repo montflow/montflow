@@ -115,8 +115,10 @@ Report the store from any checkout:
 bun run --cwd "$M/packages/skills" cli version --dir "$PWD"
 ```
 
-A managed store prints `store <version> @<commit>`; a store without a manifest
-prints `store unmanaged`; no store line means no store.
+A managed store prints `store <version> (<commit>)`; a store without a manifest
+prints `store unmanaged`; a damaged manifest prints `store corrupt|unreadable|unsupported manifest`;
+no store line means no store. A damaged manifest fails `sync` instead of being
+treated as unmanaged.
 
 Re-sync and inspect drift before writing:
 
@@ -126,7 +128,8 @@ bun run --cwd "$M/packages/skills" cli sync --source "$M" --target "$PWD" --chec
 
 Each skill reports `current`, `stale`, `diverged`, or `unmanaged` (internal
 skills report `skipped`). `--check` writes nothing and exits `1` for `stale`,
-`diverged`, or an `unmanaged` store whose bytes differ; it exits `0` otherwise. An
+`diverged`, or an `unmanaged` store whose bytes differ; it exits `0` otherwise. A
+corrupt or unsupported manifest is a non-zero error, not a blessing. An
 `unmanaged` store keeps the older byte comparison.
 
 Apply an update:
@@ -135,7 +138,8 @@ Apply an update:
 bun run --cwd "$M/packages/skills" cli sync --source "$M" --target "$PWD"
 ```
 
-A normal sync overwrites `stale` skills and refreshes the manifest. It refuses
+A normal sync overwrites `stale` skills, prunes files the source deleted, and
+refreshes the manifest. It refuses
 to overwrite a skill marked `diverged` (someone edited it locally). Review the
 named files, then pass `--force` to replace them:
 

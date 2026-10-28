@@ -682,12 +682,18 @@ const pruneExtraFiles = (
   path: Path.Path,
   target: string,
   sourceFiles: ReadonlySet<string>,
-): Effect.Effect<void> =>
+): Effect.Effect<void, string> =>
   Effect.gen(function* () {
     const present = yield* filesUnder(fs, path, target).pipe(Effect.orElseSucceed(() => []));
     for (const file of present) {
       if (sourceFiles.has(file)) continue;
-      yield* fs.remove(path.join(target, file), { force: true }).pipe(Effect.ignore);
+      yield* fs
+        .remove(path.join(target, file), { force: true })
+        .pipe(
+          Effect.mapError(
+            (cause) => `sync: cannot remove '${path.join(target, file)}': ${reasonOf(cause)}`,
+          ),
+        );
     }
   });
 
@@ -781,7 +787,7 @@ const syncSkill = (
     if (!check && !refused && pending.length > 0) {
       yield* writeStaged(fs, path, pending, yield* Clock.currentTimeMillis);
     }
-    if (!check && !refused && manifest !== undefined && targetPresent) {
+    if (!check && !refused && manifest !== undefined && entry !== undefined && targetPresent) {
       yield* pruneExtraFiles(fs, path, target, new Set(files));
     }
 
@@ -799,7 +805,7 @@ const syncSkill = (
       outcome,
       source,
       target,
-      files: statuses,
+      files: refused ? [] : statuses,
       drift,
       manifestCommit: manifest?.source.commit,
       differingFiles,
@@ -881,6 +887,7 @@ const buildManifest = (
   sourceRoot: string,
   names: ReadonlyArray<string>,
   previous: Store.SyncManifest | undefined,
+  keep: ReadonlySet<string> = new Set(),
 ): Effect.Effect<
   Store.SyncManifest,
   string,
@@ -905,7 +912,7 @@ const buildManifest = (
     }
     const current = new Set(names);
     const removed = (previous?.skills ?? [])
-      .filter((skill) => !current.has(skill.name))
+      .filter((skill) => !current.has(skill.name) && !keep.has(skill.name))
       .map((skill) => ({
         name: skill.name,
         version: skill.version,
@@ -913,6 +920,9 @@ const buildManifest = (
         files: skill.files,
         removed: true,
       }));
+    const preserved = (previous?.skills ?? []).filter(
+      (skill) => keep.has(skill.name) && !current.has(skill.name),
+    );
     return {
       schemaVersion: Store.SCHEMA_VERSION,
       source: {
@@ -923,16 +933,17 @@ const buildManifest = (
         version,
       },
       syncedAt: new Date(yield* Clock.currentTimeMillis).toISOString(),
-      skills: [...skills, ...removed],
+      skills: [...skills, ...preserved, ...removed],
     };
   });
 
 /**
  * Publish every public skill from a checkout into a workspace store.
  *
- * Idempotent: only files whose bytes differ are written, and target skills or
- * files absent from the source are never deleted. `check` computes the same
- * outcomes without writing; `drifted` reports whether anything would change.
+ * Idempotent: only files whose bytes differ are written. A managed skill loses
+ * files the source deleted, so an update cannot stay diverged; unrelated target
+ * skills are untouched. `check` computes the same outcomes without writing;
+ * `drifted` reports whether anything would change.
  *
  * Skills are published sequentially so a mid-run failure can name the skills
  * already applied, and each skill is staged in full before anything is
@@ -1009,11 +1020,12 @@ export const runSync = (options: SyncOptions = {}) =>
       .map((skill) => skill.name);
 
     const refusedSkills = skills.filter((skill) => skill.outcome === 'refused');
-    if (!check && refusedSkills.length === 0) {
+    const keep = new Set(refusedSkills.map((skill) => skill.name));
+    if (!check) {
       const publicNames = skills
-        .filter((skill) => skill.outcome !== 'skipped')
+        .filter((skill) => skill.outcome !== 'skipped' && skill.outcome !== 'refused')
         .map((skill) => skill.name);
-      const manifest = yield* buildManifest(fs, path, sourceRoot, publicNames, previous);
+      const manifest = yield* buildManifest(fs, path, sourceRoot, publicNames, previous, keep);
       if (previous === undefined || !Store.same(previous, manifest)) {
         yield* Store.write(targetRoot, manifest);
       }

@@ -29,7 +29,7 @@ export const COMMAND_DESCRIPTION =
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-skills doctor [--check] [--verbose] [--dir path] | list [--status valid|invalid] [--verbose] [--dir path] | show <name> [--dir path] | verify [name] [--verbose] [--dir path] | create <name> --description "text" [--body "markdown"] [--author a] [--version v] [--license l] [--groups a,b] [--dependencies a,b] [--dir path] | modify <name> [--description ... --body ... --author ... --version ... --license ... --groups ... --dependencies ... --dir path] | delete <name> [--dir path] | sync [--source path] [--target path] [--check] [--verbose] (aliases: --from, --dir) | help';
+  '/mf-skills doctor [--check] [--verbose] [--dir path] | list [--status valid|invalid] [--verbose] [--dir path] | show <name> [--dir path] | verify [name] [--verbose] [--dir path] | create <name> --description "text" [--body "markdown"] [--author a] [--version v] [--license l] [--groups a,b] [--dependencies a,b] [--dir path] | modify <name> [--description ... --body ... --author ... --version ... --license ... --groups ... --dependencies ... --dir path] | delete <name> [--dir path] | sync [--source path] [--target path] [--check] [--force] [--verbose] (aliases: --from, --dir) | help';
 
 /** Value flags `create` and `modify` share. Anything else is usage. */
 const EDIT_VALUE_FLAGS: ReadonlySet<string> = new Set([

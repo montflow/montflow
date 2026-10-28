@@ -324,7 +324,13 @@ export const announce = Effect.fn('Cli.announce')(function* (options: AnnounceOp
   if (!claimed) return;
 
   yield* Console.error(
-    noticeLine(cliName(identity.name), identity.version, result.verdict.available, checkout),
+    noticeLine(
+      cliName(identity.name),
+      identity.version,
+      result.verdict.available,
+      checkout,
+      result.verdict.state,
+    ),
   );
 });
 

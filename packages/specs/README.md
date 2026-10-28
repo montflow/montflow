@@ -40,7 +40,8 @@ bun run --cwd packages/specs cli check --name ship-spec
   directory.
 
 The `mf-*` CLIs are run from a git checkout, never installed globally or from
-npm. `--version` and `version` report the checkout they came from; see
+npm. `version` reports the checkout and package identity; `--version` prints the
+same package version. See
 [guides/updating.md](../../guides/updating.md) to update it.
 
 Built with `effect/cli`. Sample specs for trying the binary
