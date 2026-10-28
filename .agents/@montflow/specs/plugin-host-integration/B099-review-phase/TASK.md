@@ -6,7 +6,7 @@ originator: user
 depends-on: B001
 related-tasks: B001
 reviewer-profiles:
-status: pending
+status: done
 ---
 
 # Task B099: Review phase B
