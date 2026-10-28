@@ -22,6 +22,7 @@ export interface SessionRow {
 /** One span row from the folded history. */
 export interface SpanRow {
   readonly id: number;
+  readonly file: string;
   readonly sessionID: string;
   readonly ts: number;
   readonly type: string;
@@ -278,6 +279,7 @@ const spanOf = (row: Sqlite.Row): SpanRow => {
   }
   return {
     id: num(row['id']),
+    file: text(row['file']) ?? '',
     sessionID: text(row['session_id']) ?? '',
     ts: num(row['ts']),
     type: text(row['type']) ?? '',

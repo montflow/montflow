@@ -35,15 +35,10 @@ export const fingerprint = (path: string, bytes: number): string => {
     try {
       const size = Fs.fstatSync(fd).size;
       if (bytes > size) return '';
-      const window = Math.min(bytes, 64 * 1024);
-      const head = Buffer.alloc(window);
-      Fs.readSync(fd, head, 0, window, 0);
-      const tail = Buffer.alloc(window);
-      Fs.readSync(fd, tail, 0, window, Math.max(0, bytes - window));
-      const hash = createHash('sha256');
-      hash.update(head);
-      if (bytes > window) hash.update(tail);
-      return hash.digest('hex');
+      const length = Math.min(bytes, 64 * 1024 * 1024);
+      const buffer = Buffer.alloc(length);
+      Fs.readSync(fd, buffer, 0, length, 0);
+      return createHash('sha256').update(buffer).digest('hex');
     } finally {
       Fs.closeSync(fd);
     }

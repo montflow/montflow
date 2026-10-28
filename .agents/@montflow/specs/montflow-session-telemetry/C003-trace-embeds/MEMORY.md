@@ -20,11 +20,11 @@ bytes }` by default.
     spans at zoom ≥ 0.6; the tooltip shows the same icon as an `<img>`.
   - Inspector: click or `ArrowLeft`/`ArrowRight` opens the panel with the icon
     and the stored span JSON; copy is wired.
-  - Asset budget: 13 marks, all inline vector, total `svg` bytes under 24KB;
+  - Asset budget: 14 marks, all inline vector, total `svg` bytes under 24KB;
     no network origin and no third-party logo files.
-- 20k run after C003: first paint 579.8ms, pan p95 17.2ms / max 20.9ms, live
-  append 204ms, heap 13.3MB, no page errors.
-- Tests: 172 total (156 vitest + 16 bun); mapping/fallback/local-asset budget
+- 20k run after C003: first paint 609.6ms, pan p95 18.6ms / max 35.6ms, live
+  append 205ms, heap 13.9MB, no page errors.
+- Tests: 174 total (157 vitest + 17 bun); mapping/fallback/local-asset budget
   covered in `modules/icons/tests/icons.test.ts`; page assertions cover the
   icon layer and inspector.
 

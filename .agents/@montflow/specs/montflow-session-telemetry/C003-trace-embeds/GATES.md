@@ -3,7 +3,7 @@
 - [x] formatting passes (`bun run --cwd packages/telemetry format:check` — 44 files)
 - [x] linting passes (`bun run --cwd packages/telemetry lint:check` — no warnings)
 - [x] typecheck passes (`bun run --cwd packages/telemetry ts:check`)
-- [x] tests pass (`bun run --cwd packages/telemetry test` — 172 tests: 156 vitest + 16 bun)
+- [x] tests pass (`bun run --cwd packages/telemetry test` — 174 tests: 157 vitest + 17 bun)
 
 ## Stage 1: Identity
 
@@ -28,5 +28,5 @@
 ## Stage 4: Accessibility and assets
 
 - [x] canvas content has a DOM inspector path and focus order (`#trace` tabindex + arrow keys)
-- [x] the icon asset budget and licenses are recorded (13 inline marks, under 24KB, no third-party logos)
+- [x] the icon asset budget and licenses are recorded (14 inline marks, under 24KB, no third-party logos)
 - [x] the viewer still writes no NDJSON and the ingest isolation tests pass

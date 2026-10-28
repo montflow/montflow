@@ -10,6 +10,8 @@ import * as Viewer from '../index.js';
 const LiveBody = Schema.Struct({
   lines: Schema.Array(Schema.JsonObject),
   cursors: Schema.Record(Schema.String, Schema.Number),
+  resetFiles: Schema.optional(Schema.Array(Schema.String)),
+  resetSessions: Schema.optional(Schema.Array(Schema.String)),
 });
 const decodeLive = Schema.decodeUnknownOption(LiveBody);
 const decodeRows = Schema.decodeUnknownOption(Schema.Array(Schema.JsonObject));
@@ -74,7 +76,9 @@ describe('Viewer.start runtime', () => {
       const viewer = await Viewer.start({ directory, sessionID: 'ses_fixture', idleMs: 60_000 });
       try {
         expect(await (await get(viewer, '/api/sessions')).json()).toHaveLength(1);
-        expect(await (await get(viewer, '/api/spans?session=ses_fixture')).json()).toHaveLength(12);
+        const history = rowsOf(await (await get(viewer, '/api/spans?session=ses_fixture')).json());
+        expect(history).toHaveLength(12);
+        expect(history[0]?.file).toBe('2026-10-28.ndjson');
 
         const first = liveOf(await (await post(viewer, '/api/live', { cursors: {} })).json());
         expect(first.lines).toHaveLength(12);
@@ -230,6 +234,27 @@ describe('Viewer.start runtime', () => {
         ]);
         const sessions = rowsOf(await (await get(viewer, '/api/sessions')).json());
         expect(sessions.map((session) => session['sessionID'])).toContain('ses_other');
+      } finally {
+        await viewer.stop();
+      }
+    });
+  });
+
+  it('reports which files and sessions a rewrite reset', async () => {
+    await withStore(async (directory) => {
+      seed(directory);
+      const viewer = await Viewer.start({ directory, sessionID: 'ses_fixture', idleMs: 60_000 });
+      try {
+        const folded = liveOf(await (await post(viewer, '/api/live', { fromFold: true })).json());
+        writeFileSync(
+          join(directory, '2026-10-28.ndjson'),
+          `${JSON.stringify({ v: 1, ts: 1, type: 'session.idle', sessionID: 'ses_fixture', payload: {} })}\n`,
+        );
+        const next = liveOf(
+          await (await post(viewer, '/api/live', { cursors: folded.cursors })).json(),
+        );
+        expect(next.resetFiles).toContain('2026-10-28.ndjson');
+        expect(next.resetSessions).toContain('ses_fixture');
       } finally {
         await viewer.stop();
       }

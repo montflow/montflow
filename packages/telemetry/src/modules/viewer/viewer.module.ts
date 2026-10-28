@@ -66,6 +66,7 @@ const live = (
   const next: Record<string, number> = {};
   const lines: Line[] = [];
   const resetSessions = new Set<string>();
+  const resetFiles: string[] = [];
   let reset = false;
   for (const name of dayFiles(directory)) {
     const path = file(directory, name);
@@ -75,13 +76,16 @@ const live = (
     if (current !== '') fingerprints.set(name, current);
     const cursor = rewritten ? 0 : Math.max(0, cursors[name] ?? 0);
     const shrunk = Tail.fileSize(path) < cursor;
-    if (rewritten || shrunk) reset = true;
+    if (rewritten || shrunk) {
+      reset = true;
+      resetFiles.push(name);
+    }
     const result = Tail.read(path, shrunk ? 0 : cursor);
     next[name] = result.nextOffset;
     if (rewritten || shrunk) for (const line of result.lines) resetSessions.add(line.sessionID);
     lines.push(...result.lines);
   }
-  return { lines, cursors: next, reset, resetSessions: [...resetSessions] };
+  return { lines, cursors: next, reset, resetSessions: [...resetSessions], resetFiles };
 };
 
 /** JSON safe to embed inside a `<script>` element. */
@@ -322,12 +326,12 @@ const refreshTotals = () => {
   emptyEl.hidden = visibleCount !== 0;
   if (visibleCount === 0) {
     const query = filterEl.value.trim();
-    emptyEl.textContent = query !== ''
-      ? 'No spans match this filter.'
-      : historyError !== null
-        ? 'History unavailable: ' + historyError
-        : foldError !== null
-          ? 'History unavailable: ' + foldError
+    emptyEl.textContent = historyError !== null
+      ? 'History unavailable: ' + historyError
+      : foldError !== null
+        ? 'History unavailable: ' + foldError
+        : query !== ''
+          ? 'No spans match this filter.'
           : 'No telemetry yet. Run a session and reopen /telemetry.';
   }
 };
@@ -344,6 +348,15 @@ const addLine = (line) => {
   minTs = Math.min(minTs, line.ts);
   maxTs = Math.max(maxTs, line.ts);
   if (spans.length === 0) fit();
+  if (follow && maxTs - minTs > 0) {
+    const target = (width() - GUTTER - 20) / (maxTs - minTs);
+    if (target < baseScale * 0.66) {
+      baseScale = target;
+      for (const item of spans) {
+        if (item.particle) item.particle.x = (item.line.ts || 0) * baseScale;
+      }
+    }
+  }
   const view = makeView(line);
   const query = filterEl.value.trim().toLowerCase();
   const hay = (line.type + ' ' + (line.agent || '') + ' ' + modelOf(line)).toLowerCase();
@@ -413,7 +426,8 @@ const loadSessions = async () => {
 };
 const openSession = async (sessionID) => {
   active = sessionID;
-  titleEl.textContent = sessionID;
+  historyError = null;
+  titleEl.textContent = sessionID + (foldError !== null ? ' · history unavailable' : '');
   detail.hidden = true;
   selected = -1;
   if (!history.has(sessionID)) {
@@ -495,15 +509,18 @@ const poll = async () => {
     if (!response.ok) return;
     const body = await response.json();
     Object.assign(cursors, body.cursors);
-    const resetActive = body.reset === true && active !== null && (body.resetSessions ?? []).includes(active);
+    const resetFiles = body.resetFiles ?? [];
+    const resetActive = active !== null && (
+      (body.resetSessions ?? []).includes(active) ||
+      (history.get(active) ?? []).some((row) => resetFiles.includes(row.file))
+    );
     if (resetActive && active !== null) {
-      const activeLines = body.lines.filter((line) => line.sessionID === active);
-      history.set(active, []);
-      liveBySession.set(active, activeLines);
+      const rows = (history.get(active) ?? []).filter((row) => !resetFiles.includes(row.file));
+      history.set(active, rows);
+      liveBySession.set(active, []);
       rebuild();
     }
     for (const line of body.lines) {
-      if (resetActive && line.sessionID === active) continue;
       const buffer = liveBySession.get(line.sessionID) ?? [];
       buffer.push(line);
       liveBySession.set(line.sessionID, buffer);
@@ -586,9 +603,9 @@ const handleKey = (event) => {
   const view = spans[selected];
   if (view) {
     showDetail(view);
-    showTip(view, xOf(view.line.ts || 0), LANE_Y[view.lane] + 7);
     viewStart = Math.max(minTs, (view.line.ts || 0) - viewWidth() / 2);
     applyView();
+    showTip(view, xOf(view.line.ts || 0), LANE_Y[view.lane] + 7);
   }
 };
 trace.addEventListener('keydown', handleKey);
