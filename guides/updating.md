@@ -31,7 +31,8 @@ section below for that CLI. Stdout and the command's exit code are unchanged.
 bun run --cwd "$M/packages/skills" cli version --check
 ```
 
-Exits `0` with `current`, `unknown`, or `ahead`, and `1` with `behind`.
+Exits `0` with `current`, `unknown`, `ahead`, or `skipped`, and `1` with
+`behind` or `diverged`.
 Prove the update took effect:
 
 ```bash

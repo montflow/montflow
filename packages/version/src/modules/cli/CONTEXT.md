@@ -9,7 +9,8 @@ stale notice.
 - `run`/`execute`, the entry-point runner every `mf-*` `main.ts` calls.
 - `versionCommand`, registered by each package in its own command tree so that
   tree's `Command.provide` layers stay in force.
-- The `version` subcommand: `--json`, `--dir`, and `--check`.
+- The `version` subcommand: `--json`, `--dir`, `--check`, and `--remote`
+  (the last only affects `--check`; it selects a local mirror or fork).
 - `versionReport`, the single resolver for identity plus store state.
 - Human and JSON rendering of identity plus the workspace store version.
 - The notice: `announce`, `shouldAnnounce`, `noticeLine`, `cliName`, and the

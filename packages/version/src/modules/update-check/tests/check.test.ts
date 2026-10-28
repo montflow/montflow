@@ -73,6 +73,7 @@ const ttlOf = (file: string): Effect.Effect<number | undefined> =>
           MANIFEST.checkout,
           '0.0.1',
           MANIFEST.currentCommit,
+          UpdateCheck.DEFAULT_REMOTE,
         )
       ];
     return entry === undefined ? undefined : entry.expiresAt - entry.checkedAt;
@@ -267,6 +268,7 @@ Vitest.describe('UpdateCheck.check runtime', () => {
           MANIFEST.checkout,
           '0.0.1',
           MANIFEST.currentCommit,
+          UpdateCheck.DEFAULT_REMOTE,
         );
         const entry = cache.entries[key] ?? { checkedAt: 0, expiresAt: 0 };
         yield* Effect.promise(() =>
@@ -506,6 +508,7 @@ Vitest.describe('UpdateCheck cache hygiene runtime', () => {
           MANIFEST.checkout,
           '0.0.1',
           MANIFEST.currentCommit,
+          UpdateCheck.DEFAULT_REMOTE,
         );
         yield* Effect.promise(() =>
           writeFile(
@@ -671,6 +674,47 @@ Vitest.describe('UpdateCheck diverged and stale-remote runtime', () => {
           yield* Effect.promise(() => rm(origin, { recursive: true, force: true }));
           yield* Effect.promise(() => rm(clone, { recursive: true, force: true }));
         }
+      }),
+    ),
+  );
+});
+
+Vitest.describe('UpdateCheck cache invalidation runtime', () => {
+  Vitest.it.effect('misses when the version, commit, or remote changes', () =>
+    withCache((dir) =>
+      Effect.gen(function* () {
+        const fake = fakeProbe(Effect.succeed([tag('0.0.2')]));
+        const file = cacheFile(dir);
+        const base: UpdateCheck.CheckOptions = {
+          ...MANIFEST,
+          currentVersion: '0.0.1',
+          cacheFile: file,
+          probe: fake.probe,
+        };
+        yield* run(base);
+        yield* run({ ...base, currentVersion: '0.0.2' });
+        yield* run({ ...base, currentVersion: '0.0.1', currentCommit: 'd'.repeat(40) });
+        yield* run({ ...base, remote: 'https://example.com/other.git' });
+
+        Vitest.expect(fake.calls()).toBe(4);
+      }),
+    ),
+  );
+
+  Vitest.it.effect('keeps the notice stamp when the commit changes', () =>
+    withCache((dir) =>
+      Effect.gen(function* () {
+        const claim = (commit: string) =>
+          UpdateCheck.claimNotice({
+            packageName: MANIFEST.packageName,
+            currentVersion: '0.0.1',
+            currentCommit: commit,
+            checkout: MANIFEST.checkout,
+            cacheFile: cacheFile(dir),
+          }).pipe(Effect.provide(NodeServices.layer));
+
+        Vitest.expect(yield* claim(MANIFEST.currentCommit)).toBe(true);
+        Vitest.expect(yield* claim('d'.repeat(40))).toBe(false);
       }),
     ),
   );

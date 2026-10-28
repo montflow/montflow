@@ -28,7 +28,13 @@ const HEAD = spawnSync('git', ['rev-parse', 'HEAD'], {
 const VERSION: string = JSON.parse(
   spawnSync('cat', [`${REPO_ROOT}/packages/skills/package.json`], { encoding: 'utf8' }).stdout,
 ).version;
-const KEY = UpdateCheck.cacheKey('@montflow/skills', TOPLEVEL, VERSION, HEAD);
+const KEY = UpdateCheck.cacheKey(
+  '@montflow/skills',
+  TOPLEVEL,
+  VERSION,
+  HEAD,
+  UpdateCheck.DEFAULT_REMOTE,
+);
 const FAR_FUTURE = 4_102_444_800_000;
 
 interface VerdictSeed {
@@ -55,7 +61,17 @@ const seedCache = async (home: string, seed: VerdictSeed): Promise<void> => {
   if (seed.notifiedAt !== undefined) entry.notifiedAt = seed.notifiedAt;
   await writeFile(
     join(dir, 'version-check.json'),
-    `${JSON.stringify({ schemaVersion: 1, entries: { [KEY]: entry } })}\n`,
+    `${JSON.stringify(
+      seed.notifiedAt === undefined
+        ? { schemaVersion: 1, entries: { [KEY]: entry } }
+        : {
+            schemaVersion: 1,
+            entries: { [KEY]: entry },
+            notices: {
+              [UpdateCheck.noticeKey('@montflow/skills', TOPLEVEL, VERSION)]: seed.notifiedAt,
+            },
+          },
+    )}\n`,
   );
 };
 
@@ -165,8 +181,10 @@ Vitest.describe('cli update notice runtime', () => {
         await readFile(join(home, 'montflow', 'version-check.json'), 'utf8'),
       );
       // SAFETY: the CLI wrote this file; the assertion below reads one field.
-      const cache = parsed as { entries: Record<string, { notifiedAt?: number }> };
-      Vitest.expect(cache.entries[KEY]?.notifiedAt).toBeTypeOf('number');
+      const cache = parsed as { notices: Record<string, number> };
+      Vitest.expect(
+        cache.notices[UpdateCheck.noticeKey('@montflow/skills', TOPLEVEL, VERSION)],
+      ).toBeTypeOf('number');
     }),
   );
 
@@ -272,5 +290,8 @@ Vitest.describe('Cli.checkExit runtime', () => {
     Vitest.expect(Cli.checkLine({ state: 'diverged', available: 'abc1234' })).toBe(
       'diverged from abc1234',
     );
+    Vitest.expect(
+      Cli.noticeLine('mf-skills', '0.0.1', 'abc1234', '/checkout', 'diverged'),
+    ).toContain('has diverged from abc1234');
   });
 });

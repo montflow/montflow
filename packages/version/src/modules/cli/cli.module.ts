@@ -120,8 +120,14 @@ export const cliName = (packageName: string) =>
   `mf-${packageName.split('/').at(-1) ?? packageName}`;
 
 /** The one-line stale notice, naming every fact the reader needs. */
-export const noticeLine = (cli: string, installed: string, available: string, checkout: string) =>
-  `${cli} ${installed} is behind ${available} in ${checkout} — update: guides/updating.md#${cli}`;
+export const noticeLine = (
+  cli: string,
+  installed: string,
+  available: string,
+  checkout: string,
+  state: 'behind' | 'diverged' = 'behind',
+) =>
+  `${cli} ${installed} ${state === 'behind' ? 'is behind' : 'has diverged from'} ${available} in ${checkout} — update: guides/updating.md#${cli}`;
 
 /** Plain-language result for `version --check`. */
 export const checkLine = (verdict: Verdict) =>
@@ -160,7 +166,9 @@ const dirFlag = Flag.string('dir').pipe(
 
 /** Force an update check and report the verdict; exits 1 only when behind. */
 const checkFlag = Flag.boolean('check').pipe(
-  Flag.withDescription('Check upstream now (bypasses the cache) and exit 1 when behind.'),
+  Flag.withDescription(
+    'Check upstream now (bypasses the cache) and exit 1 when behind or diverged.',
+  ),
   Flag.withDefault(false),
 );
 

@@ -99,6 +99,7 @@ interface CacheEntry {
 interface CacheFile {
   readonly schemaVersion: number;
   readonly entries: Readonly<Record<string, CacheEntry>>;
+  readonly notices: Readonly<Record<string, number>>;
 }
 
 const VerdictSchema = Schema.Union([
@@ -128,6 +129,7 @@ const CacheEntrySchema = Schema.Struct({
 const CacheFileSchema = Schema.Struct({
   schemaVersion: Schema.Number,
   entries: Schema.Record(Schema.String, CacheEntrySchema),
+  notices: Schema.optional(Schema.Record(Schema.String, Schema.Number)),
 });
 
 /** SemVer core plus optional prerelease, enough for package versions. */
@@ -252,7 +254,7 @@ export const cacheFileFor = (
   return base === undefined ? undefined : path.join(base, 'montflow', 'version-check.json');
 };
 
-const emptyCache = (): CacheFile => ({ schemaVersion: 1, entries: {} });
+const emptyCache = (): CacheFile => ({ schemaVersion: 1, entries: {}, notices: {} });
 
 const readCache = (file: string): Effect.Effect<CacheFile, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
@@ -261,9 +263,8 @@ const readCache = (file: string): Effect.Effect<CacheFile, never, FileSystem.Fil
     if (text === undefined) return emptyCache();
     try {
       const parsed: unknown = JSON.parse(text);
-      return (
-        Option.getOrUndefined(Schema.decodeUnknownOption(CacheFileSchema)(parsed)) ?? emptyCache()
-      );
+      const decoded = Option.getOrUndefined(Schema.decodeUnknownOption(CacheFileSchema)(parsed));
+      return decoded === undefined ? emptyCache() : { ...decoded, notices: decoded.notices ?? {} };
     } catch {
       return emptyCache();
     }
@@ -299,7 +300,12 @@ export const cacheKey = (
   checkout: string,
   version: string,
   commit: string | undefined,
-) => `${packageName}\u0000${checkout}\u0000${version}\u0000${commit ?? ''}`;
+  remote: string,
+) => `${packageName}\u0000${checkout}\u0000${version}\u0000${commit ?? ''}\u0000${remote}`;
+
+/** Notice stamps live per package/checkout/version, independent of the commit. */
+export const noticeKey = (packageName: string, checkout: string, version: string) =>
+  `${packageName}\u0000${checkout}\u0000${version}`;
 
 /** Decide from the ref list, or `unknown` when there is nothing to compare. */
 export const decide = (
@@ -383,8 +389,61 @@ const revParse = (
     return code === 0 ? stdout.trim() : undefined;
   }).pipe(
     Effect.scoped,
+    Effect.timeoutOption(PROBE_TIMEOUT_MS),
+    Effect.map((answer) => (Option.isNone(answer) ? undefined : answer.value)),
     Effect.orElseSucceed(() => undefined),
   );
+
+/** Classify a commit-basis verdict instead of assuming every difference is behind. */
+const divergedFrom = (verdict: Verdict & { state: 'behind' }): Verdict => ({
+  state: 'diverged',
+  available: verdict.commit?.slice(0, 7) ?? verdict.available,
+});
+
+/** The remote commit is not local: classify against the last known origin/main. */
+const classifyAgainstKnownMain = (
+  options: CheckOptions,
+  verdict: Verdict & { state: 'behind' },
+  current: string,
+): Effect.Effect<Verdict, never, ChildProcessSpawner> =>
+  Effect.gen(function* () {
+    const knownMain = yield* revParse(options.checkout, 'origin/main', options.env);
+    if (knownMain === undefined) {
+      return {
+        state: 'unknown',
+        reason: 'cannot compare the local commit with refs/heads/main',
+      };
+    }
+    if (knownMain === current) return verdict;
+    const currentOnKnown = yield* isAncestor(options.checkout, current, knownMain, options.env);
+    if (currentOnKnown === true) return verdict;
+    const knownOnCurrent = yield* isAncestor(options.checkout, knownMain, current, options.env);
+    return knownOnCurrent === true
+      ? divergedFrom(verdict)
+      : {
+          state: 'unknown',
+          reason: 'cannot compare the local commit with refs/heads/main',
+        };
+  });
+
+/** The local commit is not an ancestor of main; decide ahead versus diverged. */
+const classifyNonAncestor = (
+  options: CheckOptions,
+  verdict: Verdict & { state: 'behind' },
+  remote: string,
+  current: string,
+): Effect.Effect<Verdict, never, ChildProcessSpawner> =>
+  Effect.gen(function* () {
+    const remoteIsAncestor = yield* isAncestor(options.checkout, remote, current, options.env);
+    return yield* Match.value(remoteIsAncestor).pipe(
+      Match.when(true, () =>
+        Effect.succeed({ state: 'ahead' as const, available: remote.slice(0, 7) }),
+      ),
+      Match.when(false, () => Effect.succeed(divergedFrom(verdict))),
+      Match.when(undefined, () => classifyAgainstKnownMain(options, verdict, current)),
+      Match.exhaustive,
+    );
+  });
 
 /** Classify a commit-basis verdict instead of assuming every difference is behind. */
 const classifyCommit = (
@@ -394,58 +453,21 @@ const classifyCommit = (
   Effect.gen(function* () {
     if (verdict.state !== 'behind' || verdict.basis !== 'commit') return verdict;
     if (options.currentCommit === undefined || verdict.commit === undefined) return verdict;
+    const remote = verdict.commit;
+    const current = options.currentCommit;
 
     const localIsAncestor = yield* isAncestor(
       options.checkout,
       options.currentCommit,
-      verdict.commit,
+      remote,
       options.env,
     );
-    if (localIsAncestor === true) return verdict;
-    if (localIsAncestor === false) {
-      const remoteIsAncestor = yield* isAncestor(
-        options.checkout,
-        verdict.commit,
-        options.currentCommit,
-        options.env,
-      );
-      if (remoteIsAncestor === true) {
-        return { state: 'ahead', available: verdict.commit.slice(0, 7) };
-      }
-      if (remoteIsAncestor === false)
-        return { state: 'diverged', available: verdict.commit.slice(0, 7) };
-    }
-
-    // The remote main object is not fetched. Compare against the last known
-    // origin/main instead: equal/ancestor means upstream moved ahead, while
-    // local commits on top of it mean both sides moved.
-    const knownMain = yield* revParse(options.checkout, 'origin/main', options.env);
-    if (knownMain === undefined) {
-      return {
-        state: 'unknown',
-        reason: 'cannot compare the local commit with refs/heads/main',
-      };
-    }
-    if (knownMain === options.currentCommit) return verdict;
-    const currentOnKnown = yield* isAncestor(
-      options.checkout,
-      options.currentCommit,
-      knownMain,
-      options.env,
+    return yield* Match.value(localIsAncestor).pipe(
+      Match.when(true, () => Effect.succeed(verdict)),
+      Match.when(false, () => classifyNonAncestor(options, verdict, remote, current)),
+      Match.when(undefined, () => classifyAgainstKnownMain(options, verdict, current)),
+      Match.exhaustive,
     );
-    if (currentOnKnown === true) return verdict;
-    const knownOnCurrent = yield* isAncestor(
-      options.checkout,
-      knownMain,
-      options.currentCommit,
-      options.env,
-    );
-    if (knownOnCurrent === true)
-      return { state: 'diverged', available: verdict.commit.slice(0, 7) };
-    return {
-      state: 'unknown',
-      reason: 'cannot compare the local commit with refs/heads/main',
-    };
   });
 
 /** Query the remote under the two-second cap. */
@@ -506,11 +528,13 @@ export const check = Effect.fn('UpdateCheck.check')(function* (options: CheckOpt
   const now = yield* Clock.currentTimeMillis;
   const file = options.cacheFile ?? cacheFileFor(path, options.env);
   const checkout = path.resolve(options.checkout);
+  const remote = options.remote ?? DEFAULT_REMOTE;
   const key = cacheKey(
     options.packageName,
     checkout,
     options.currentVersion,
     options.currentCommit,
+    remote,
   );
 
   if (!options.force && file !== undefined) {
@@ -533,7 +557,7 @@ export const check = Effect.fn('UpdateCheck.check')(function* (options: CheckOpt
     yield* writeCache(
       path,
       file,
-      { schemaVersion: 1, entries: { ...cache.entries, [key]: entry } },
+      { schemaVersion: 1, entries: { ...cache.entries, [key]: entry }, notices: cache.notices },
       now,
     );
   }
@@ -589,30 +613,20 @@ export const claimNotice = Effect.fn('UpdateCheck.claimNotice')(function* (optio
   if (file === undefined) return true;
 
   const cache = yield* readCache(file);
-  const key = cacheKey(
+  const key = noticeKey(
     options.packageName,
     path.resolve(options.checkout),
     options.currentVersion,
-    options.currentCommit,
   );
-  const entry = cache.entries[key];
-  if (entry?.notifiedAt !== undefined && now - entry.notifiedAt < SUCCESS_TTL_MS) {
-    return false;
-  }
+  const stamp = cache.notices[key];
+  if (stamp !== undefined && now - stamp < SUCCESS_TTL_MS) return false;
   yield* writeCache(
     path,
     file,
     {
       schemaVersion: 1,
-      entries: {
-        ...cache.entries,
-        [key]: {
-          checkedAt: entry?.checkedAt ?? now,
-          expiresAt: entry?.expiresAt ?? now + SUCCESS_TTL_MS,
-          verdict: entry?.verdict ?? { state: 'unknown', reason: 'no verdict' },
-          notifiedAt: now,
-        },
-      },
+      entries: cache.entries,
+      notices: { ...cache.notices, [key]: now },
     },
     now,
   );
