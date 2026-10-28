@@ -1,4 +1,6 @@
+// oxlint-disable-next-line montflow/no-node-platform-imports -- TUI plugin runs in host context; keep node APIs local with justification
 import { readdir, readFile } from 'node:fs/promises';
+// oxlint-disable-next-line montflow/no-node-platform-imports -- path needed for store location resolution
 import path from 'node:path';
 import type { TuiPlugin } from '@montflow/opencode';
 import { registerPicker } from '@montflow/opencode/tui';
