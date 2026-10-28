@@ -6,7 +6,7 @@ originator: user
 depends-on:
 related-tasks:
 reviewer-profiles:
-status: pending
+status: done
 ---
 
 # Task A099: Review phase
