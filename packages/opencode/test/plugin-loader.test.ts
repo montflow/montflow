@@ -47,11 +47,8 @@ const promptsTarget = targetOf('prompts');
 const profilesTarget = targetOf('profiles');
 const reviewsTarget = targetOf('reviews');
 const skillsTarget = targetOf('skills');
-<<<<<<< HEAD
 const referencesTarget = targetOf('references');
-=======
 const modelFallbackTarget = targetOf('model-fallback');
->>>>>>> origin/main
 
 /** The workspace lives under `apps/`, so it needs one more segment than `packages/*`. */
 const workspaceTarget = {
