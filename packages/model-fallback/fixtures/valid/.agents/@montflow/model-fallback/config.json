@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "chain": ["fixture/primary", "fixture/fallback"],
+  "triggers": ["quota"]
+}
