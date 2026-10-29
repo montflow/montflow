@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.10.0] - 2026-10-28
+
+### Added
+
+- A gate names the task's own verification commands: `mf-specs create` writes a `REPLACE` marker item that the author and the review replace, never a copied repo-wide suite
+- The record checks and the mechanical review budget: `task.completion-unchecked`, `gate.unchecked`, and a `review.budget-exceeded` error when a series holds more rounds for a phase than that phase's task sizes buy
+
+## [2.9.1] - 2026-10-28
+
+### Changed
+
+- Catalogue reads name their host-free form: `spec_models` in the host, `mf-specs models --catalog <path>` outside it, because a bare `mf-specs models` fails `models.unavailable` there
+- The sizing output distinction is explicit: compact `sizing` omits the budget, `--human` / `--verbose` prints it, and `models --verify` states the entries checked and skipped
+
+## [2.9.0] - 2026-10-28
+
+### Added
+
+- The prerequisite skill list and the two-tier behavior: doctor installs the required `montflow-create-specs` and `montflow-find-specs` skills, while a missing non-owned skill (`executing-skills`, `grilling`, `i-have-adhd`, or a review skill) is advisory and leaves a `prompt.skill-advisory` block in the rendered prompt
+
 ## [2.8.0] - 2026-10-28
 
 ### Added

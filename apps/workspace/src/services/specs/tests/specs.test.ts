@@ -70,7 +70,7 @@ const task = (
     '',
     '## Completion',
     '',
-    '- [ ] Fixture',
+    `- [${status === 'complete' ? 'x' : ' '}] Fixture`,
     '',
   ].join('\n');
 

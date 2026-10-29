@@ -5,7 +5,8 @@ import {
   SPEC_PROMPT_NAMES,
   SPEC_SKILL_NAMES,
   runDoctor,
-} from '../../apps/doctor/index.js';
+} from '../doctor/index.js';
+import { renderDiagnostic } from '../diagnostic/index.js';
 
 /**
  * The spec prompt loader: take a shipped prompt by name, prove it is current,
@@ -20,8 +21,8 @@ import {
  *   acts on guidance the package no longer ships.
  * - **No template text lives here.** Loading, verification, and rendering all
  *   come from `@montflow/prompts`; this module only maps its outcomes onto the
- *   spec tool's coded diagnostics and hands back the rendered text plus the
- *   skills the caller must load.
+ *   spec tool's coded diagnostics and hands back the rendered text, the installed
+ *   skills the caller must load, and an advisory per missing non-owned skill.
  */
 
 /** Shipped spec prompts, re-exported so callers never restate the list. */
@@ -41,10 +42,14 @@ export const CODES = {
   skillMissing: 'prompt.skill-missing',
   skillStale: 'prompt.skill-stale',
   skillBlocked: 'prompt.skill-blocked',
+  skillAdvisory: 'prompt.skill-advisory',
 } as const;
 
 /** One stable prompt-load failure code. */
-export type Code = (typeof CODES)[keyof typeof CODES];
+export type Code = Exclude<(typeof CODES)[keyof typeof CODES], (typeof CODES)['skillAdvisory']>;
+
+/** The code only an advisory carries; no load failure is ever failed with it. */
+export type AdvisoryCode = (typeof CODES)['skillAdvisory'];
 
 /** The one repair every prompt failure names. */
 export const DOCTOR_FIX =
@@ -134,15 +139,9 @@ export const parseMode = (value: string | undefined): ModeParse => {
   };
 };
 
-/**
- * A prompt the loader refused to render: which file failed, why, and the one
- * command that repairs it. Carries the same fields as the spec tool's other
- * agent-first diagnostics, so the CLI can render it without reinterpreting it.
- */
-export class PromptError extends Data.TaggedError('@montflow/PromptError')<{
-  /** Stable, greppable failure class. */
-  readonly code: Code;
-  /** Prompt file or root the failure concerns. */
+/** The fields every coded prompt report carries, apart from its code. */
+interface CodedReport {
+  /** Prompt file or root the report concerns. */
   readonly path: string;
   /** Field inside that path (`name`, `template`, or a variable name). */
   readonly field: string;
@@ -156,11 +155,34 @@ export class PromptError extends Data.TaggedError('@montflow/PromptError')<{
   readonly fix: string;
   /** Preserved underlying failure, when one exists. */
   readonly cause?: unknown;
-}> {}
+}
 
-/** Fields a {@link PromptError} is built from. */
-interface PromptErrorInput {
+/** The fields a {@link PromptError} carries. */
+interface PromptErrorFields extends CodedReport {
+  /** Stable, greppable failure class. */
   readonly code: Code;
+}
+
+/**
+ * A prompt the loader refused to render: which file failed, why, and the one
+ * command that repairs it. Carries the same fields as the spec tool's other
+ * agent-first diagnostics, so the CLI can render it without reinterpreting it.
+ */
+export class PromptError extends Data.TaggedError('@montflow/PromptError')<PromptErrorFields> {}
+
+/**
+ * One declared non-owned skill the workspace does not install. The same coded
+ * shape as {@link PromptError}, tagged with the advisory-only code, because the
+ * prompt still renders and no failure is raised.
+ */
+export interface SkillAdvisory extends CodedReport {
+  /** Always `prompt.skill-advisory`. */
+  readonly code: AdvisoryCode;
+}
+
+/** Fields a coded prompt report is built from. */
+interface CodedInput<C extends string> {
+  readonly code: C;
   readonly path: string;
   readonly field: string;
   readonly problem: string;
@@ -170,9 +192,9 @@ interface PromptErrorInput {
   readonly cause?: unknown;
 }
 
-/** A {@link PromptError} being filled in, so absent optional fields stay absent. */
-interface MutablePromptError {
-  code: Code;
+/** A coded prompt report being filled in, so absent optional fields stay absent. */
+interface MutableCoded<C extends string> {
+  code: C;
   path: string;
   field: string;
   problem: string;
@@ -182,9 +204,9 @@ interface MutablePromptError {
   cause?: unknown;
 }
 
-/** Build one coded failure, omitting absent optional fields. */
-const promptError = (input: PromptErrorInput): PromptError => {
-  const built: MutablePromptError = {
+/** Build the coded fields every report shares, omitting absent optional fields. */
+const coded = <C extends string>(input: CodedInput<C>): MutableCoded<C> => {
+  const built: MutableCoded<C> = {
     code: input.code,
     path: input.path,
     field: input.field,
@@ -194,8 +216,15 @@ const promptError = (input: PromptErrorInput): PromptError => {
   if (input.expected !== undefined) built.expected = input.expected;
   if (input.actual !== undefined) built.actual = input.actual;
   if (input.cause !== undefined) built.cause = input.cause;
-  return new PromptError(built);
+  return built;
 };
+
+/** Build one coded failure, omitting absent optional fields. */
+const promptError = (input: CodedInput<Code>): PromptError => new PromptError(coded(input));
+
+/** Build one skill advisory: the shared fields tagged with the advisory code. */
+const skillAdvisory = (input: Omit<CodedInput<AdvisoryCode>, 'code'>): SkillAdvisory =>
+  coded({ ...input, code: CODES.skillAdvisory });
 
 /**
  * Fold the public mode into the template's internal `unsupervised` flag and
@@ -218,10 +247,12 @@ const applyMode = (
 export interface LoadedPrompt {
   /** Prompt slug (`spec-create`, `spec-execute`, or `spec-sizing`). */
   readonly name: string;
-  /** Rendered text to send to the agent. */
+  /** Rendered text to send to the agent, with any skill advisories appended. */
   readonly text: string;
-  /** Skill names the caller must load alongside the prompt. */
+  /** Installed skills the caller must load alongside the prompt. */
   readonly skills: ReadonlyArray<string>;
+  /** Declared non-owned skills that are not installed, one advisory each. */
+  readonly advisories: ReadonlyArray<SkillAdvisory>;
   /** The decoded prompt, so callers can read its metadata without re-reading. */
   readonly prompt: Prompts.Prompt;
 }
@@ -360,36 +391,96 @@ const ownedSkillFailure = (
 /**
  * Gate a decoded prompt's declared skills. `doctor` already reports owned
  * skills, so a missing/stale/blocked owned skill fails before dispatch with its
- * own code and repair; a skill doctor does not ship is resolved against
- * `<root>/.agents/skills` and fails with its own installer. Skipping either
- * would dispatch a session whose first instruction is to load a skill that
- * does not exist.
+ * own code and repair. A skill doctor does not ship and the workspace does not
+ * install is advisory: the prompt still renders, names every missing skill, and
+ * hands only the installed skills to the executor. Skipping the owned failures
+ * would dispatch a session whose first instruction is to load a skill the
+ * package itself must install.
  */
-const skillGateFailure = (
+const skillGate = (
   root: string,
   promptName: string,
   declared: ReadonlyArray<string>,
   doctorSkills: ReadonlyArray<PayloadInstall>,
   resolution: Prompts.SkillResolution | undefined,
-): PromptError | undefined => {
+): SkillGate => {
+  const installed: Array<string> = [];
+  const advisories: Array<SkillAdvisory> = [];
   for (const skill of declared) {
     const owned = doctorSkills.find((entry) => entry.name === skill);
     if (owned !== undefined) {
       const failure = ownedSkillFailure(skill, promptName, owned);
-      if (failure !== undefined) return failure;
+      if (failure !== undefined) return { ok: false, failure };
+      installed.push(skill);
+      continue;
     }
-    if (resolution === undefined || resolution.names.has(skill)) continue;
-    return promptError({
-      code: CODES.skillMissing,
-      path: `${skillsRoot(root)}/${skill}`,
-      field: skill,
-      problem: `Skill '${skill}' declared by prompt '${promptName}' is not installed.`,
-      expected: `an installed skill named '${skill}' under ${skillsRoot(root)}/`,
-      actual: 'not installed',
-      fix: skillFix(root, skill),
-    });
+    if (resolution !== undefined && resolution.names.has(skill)) {
+      installed.push(skill);
+      continue;
+    }
+    advisories.push(missingSkillAdvisory(root, promptName, skill));
   }
-  return undefined;
+  return { ok: true, installed, advisories };
+};
+
+/** The gate's outcome: the split skill lists, or one fatal owned-skill failure. */
+type SkillGate =
+  | {
+      readonly ok: true;
+      /** Declared skills present in the workspace, in declaration order. */
+      readonly installed: ReadonlyArray<string>;
+      /** Declared non-owned skills that are not installed, one advisory each. */
+      readonly advisories: ReadonlyArray<SkillAdvisory>;
+    }
+  | {
+      readonly ok: false;
+      /** The doctor-owned skill that is missing, stale, or blocked. */
+      readonly failure: PromptError;
+    };
+
+/** The advisory for one declared non-owned skill the workspace does not install. */
+const missingSkillAdvisory = (root: string, promptName: string, skill: string): SkillAdvisory =>
+  skillAdvisory({
+    path: `${skillsRoot(root)}/${skill}`,
+    field: skill,
+    problem: `Skill '${skill}' declared by prompt '${promptName}' is not installed; the prompt renders without it.`,
+    expected: `an installed skill named '${skill}' under ${skillsRoot(root)}/`,
+    actual: 'not installed',
+    fix: skillFix(root, skill),
+  });
+
+/** The command that renders one shipped prompt, for an advisory's `next` row. */
+const rerunOf = (promptName: string): string =>
+  Match.value(promptName).pipe(
+    Match.when('spec-create', () => 'mf-specs author --request <text>'),
+    Match.when('spec-execute', () => 'mf-specs execute --name <spec>'),
+    Match.when('spec-sizing', () => 'mf-specs sizing-config'),
+    Match.orElse(() => 'mf-specs doctor'),
+  );
+
+/**
+ * Render the advisory block appended to a prompt's text through the one
+ * agent-first diagnostic renderer, so an advisory carries the same `! ` marker,
+ * rows, and `next` command as every other coded diagnostic. The advisory is
+ * passed through structurally, so every shared field it carries — `cause`
+ * included — is forwarded by construction instead of copied by hand. The block
+ * names each missing skill so a caller that only prints `text` still sees the
+ * prerequisite.
+ */
+const advisorySection = (advisories: ReadonlyArray<SkillAdvisory>, promptName: string): string => {
+  if (advisories.length === 0) return '';
+  const next = rerunOf(promptName);
+  const blocks = advisories.map((advisory) =>
+    renderDiagnostic({ ...advisory, next, warning: true }),
+  );
+  return [
+    '',
+    '## Skill advisories',
+    '',
+    'These declared skills are not installed in this workspace. The prompt renders without them; install each before relying on its guidance.',
+    '',
+    blocks.join('\n\n'),
+  ].join('\n');
 };
 
 /**
@@ -461,8 +552,8 @@ export const load = (
       ),
     );
 
-    const skillRefusal = skillGateFailure(root, name, prompt.skills, doctor.skills, resolution);
-    if (skillRefusal !== undefined) return yield* Effect.fail(skillRefusal);
+    const gate = skillGate(root, name, prompt.skills, doctor.skills, resolution);
+    if (!gate.ok) return yield* Effect.fail(gate.failure);
 
     const parsed = parseMode(values.mode);
     if (!parsed.ok) {
@@ -512,5 +603,11 @@ export const load = (
       ),
     );
 
-    return { name, text, skills: [...prompt.skills], prompt };
+    return {
+      name,
+      text: `${text}${advisorySection(gate.advisories, name)}`,
+      skills: [...gate.installed],
+      advisories: [...gate.advisories],
+      prompt,
+    };
   });

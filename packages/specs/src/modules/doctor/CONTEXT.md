@@ -54,6 +54,10 @@ author and discover specs, plus the shipped `spec-create`, `spec-execute`, and
 - Doctor owns exactly `SPEC_PROMPT_NAMES`. It never reads, rewrites, or deletes
   `commit.json`, `effect-review.json`, or any other prompt in the same
   directory.
+- Doctor owns exactly `SPEC_SKILL_NAMES`. Every other skill a shipped prompt
+  declares is external: doctor never installs or rewrites it, and the prompt
+  loader treats a missing one as advisory (`prompt.skill-advisory`) so a
+  doctor-only workspace still renders.
 - Check mode writes nothing: it reports `ok` / `missing` / `stale` / `blocked`
   per payload. Repair mode reports `present` (untouched), `installed` (created),
   `repaired` (rewrote), or `blocked` (cannot clear the obstruction). A condition

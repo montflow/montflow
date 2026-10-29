@@ -6,7 +6,7 @@ originator: user
 size: tiny
 depends-on: E001, E003
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task E004: docs-truth

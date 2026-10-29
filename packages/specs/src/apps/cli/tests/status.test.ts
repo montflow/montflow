@@ -11,6 +11,7 @@ import {
   SurfaceError,
   VALIDATION_EXIT_CODE,
   diagnoseCause,
+  dispatchExitCode,
   renderStatus,
   status,
 } from '../index.js';
@@ -77,7 +78,7 @@ Vitest.describe('Cli.status runtime', () => {
       const diagnosed = diagnoseCause(Cause.fail(error), {
         path: 'ship-spec',
         rerun: 'mf-specs check --name ship-spec',
-        verbose: false,
+        verbose: true,
       });
       Vitest.expect(diagnosed.exitCode).toBe(VALIDATION_EXIT_CODE);
       Vitest.expect(diagnosed.output).toContain('code     store.error');
@@ -85,6 +86,52 @@ Vitest.describe('Cli.status runtime', () => {
       Vitest.expect(diagnosed.output).toContain(
         'cause    EACCES: permission denied, open ship-spec/sizing.json',
       );
+      // Without `--verbose` the same failure prints no cause row.
+      const compact = diagnoseCause(Cause.fail(error), {
+        path: 'ship-spec',
+        rerun: 'mf-specs check --name ship-spec',
+        verbose: false,
+      });
+      Vitest.expect(compact.output).toContain('code     store.error');
+      Vitest.expect(compact.output).not.toContain('cause');
+    }),
+  );
+
+  Vitest.it.effect('renders an unreadable review store as its own path and repair', () =>
+    Effect.gen(function* () {
+      const failure = new SpecStore.StoreError({
+        operation: 'SpecStore.reviewSeries',
+        reason: "Cannot read the review store entry 'reviews/ship-spec/003/REVIEW.md': EACCES",
+        path: '/machine/.agents/@montflow/reviews/ship-spec/003/REVIEW.md',
+        origin: 'reviews',
+        cause: new Error('EACCES: permission denied, open REVIEW.md'),
+      });
+      const error = yield* status('.agents/@montflow/specs', 'ship-spec').pipe(
+        Effect.provide(
+          stubLayer(
+            new Map([['ship-spec', tree('in-progress', '', 'pending', 'pending')]]),
+            new Map(),
+            { reviewFailure: failure },
+          ),
+        ),
+        Effect.flip,
+      );
+      const diagnosed = diagnoseCause(Cause.fail(error), {
+        path: 'ship-spec',
+        rerun: 'mf-specs check --name ship-spec',
+        verbose: false,
+      });
+      Vitest.expect(diagnosed.exitCode).toBe(VALIDATION_EXIT_CODE);
+      Vitest.expect(diagnosed.output).toContain('code     store.error');
+      Vitest.expect(diagnosed.output).toContain('path     ship-spec/review-series');
+      Vitest.expect(diagnosed.output).toContain('field    review-series');
+      Vitest.expect(diagnosed.output).toContain(
+        'fix      Check that the review store beside the specs store is readable',
+      );
+      // Neither the doubled spec/absolute path nor a `--dir` repair appears.
+      Vitest.expect(diagnosed.output).not.toContain('/machine/');
+      Vitest.expect(diagnosed.output).not.toContain('ship-spec//');
+      Vitest.expect(diagnosed.output).not.toContain('field    root');
     }),
   );
 
@@ -326,6 +373,24 @@ Vitest.describe('Cli.renderStatus sizing runtime', () => {
       Vitest.expect(text).toContain('sizing \u2717 2 issues');
       Vitest.expect(taskLine(text, 'A001')).not.toContain('inherit');
       Vitest.expect(text).not.toContain('fixture/');
+    }),
+  );
+
+  Vitest.it.effect('omits targets when a tree-only error blocks dispatch', () =>
+    Effect.gen(function* () {
+      const files = [...sizedTree({ repo: REPO_SIZING }), entry('notes.txt', 'stray\n')];
+      const report = yield* status('.agents/@montflow/specs', 'ship-spec').pipe(
+        Effect.provide(
+          stubLayer(new Map([['ship-spec', files]]), new Map([['sizing.json', REPO_SIZING]])),
+        ),
+      );
+      const text = renderStatus(report);
+      Vitest.expect(dispatchExitCode(report.sizing, report.verify, report.name)).toBe(
+        VALIDATION_EXIT_CODE,
+      );
+      Vitest.expect(taskLine(text, 'A001')).not.toContain('fixture/');
+      Vitest.expect(taskLine(text, 'A001')).not.toContain('inherit');
+      Vitest.expect(text).not.toContain('  sizes ');
     }),
   );
 

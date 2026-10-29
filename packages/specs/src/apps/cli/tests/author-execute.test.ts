@@ -2,7 +2,7 @@ import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import * as Vitest from '@effect/vitest';
 import { PromptStore } from '@montflow/prompts';
 import { Cause, Effect, FileSystem, Layer, Path } from 'effect';
-import { runDoctor } from '../../../apps/doctor/index.js';
+import { runDoctor } from '../../../modules/doctor/index.js';
 import { PromptError } from '../../../modules/prompt/index.js';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import { memoryMarkdown, taskMarkdown } from '../../../modules/task/tests/helpers.js';
@@ -12,6 +12,8 @@ import {
   diagnoseCause,
   execute,
   type ExecuteOptions,
+  sizingConfig,
+  type SizingConfigOptions,
   storeDirOf,
   DEFAULT_ROOT,
   SurfaceError,
@@ -30,6 +32,37 @@ const StoreLive = Layer.mergeAll(
   Layer.provide(PromptStore.Default, Platform),
   Platform,
 );
+
+/** Wrap the real store so a test can count snapshot/config/review reads. */
+const makeCountingLayer = (counters: {
+  snapshot: number;
+  readRootFile: number;
+  reviewSeries: number;
+}) =>
+  Layer.provide(
+    Layer.effect(
+      SpecStore.SpecStore,
+      Effect.gen(function* () {
+        const real = yield* SpecStore.SpecStore;
+        return {
+          ...real,
+          snapshot: (root: string, name: string) => {
+            counters.snapshot += 1;
+            return real.snapshot(root, name);
+          },
+          readRootFile: (root: string, name: string) => {
+            counters.readRootFile += 1;
+            return real.readRootFile(root, name);
+          },
+          reviewSeries: (root: string, name: string) => {
+            counters.reviewSeries += 1;
+            return real.reviewSeries(root, name);
+          },
+        };
+      }),
+    ),
+    Layer.provide(SpecStore.Default, Platform),
+  );
 
 /** A throwaway workspace with its specs root. */
 interface Work {
@@ -80,6 +113,20 @@ const phaseA = (
   ],
   ['A099-review-phase/MEMORY.md', memoryMarkdown()],
 ];
+
+/** Write `count` review rounds attributed to `phase` for `series`. */
+const seedRounds = (work: Work, series: string, count: number, phase = 'A') =>
+  Effect.gen(function* () {
+    for (let index = 1; index <= count; index++) {
+      const round = String(index).padStart(3, '0');
+      const dir = work.path.join(work.dir, '.agents', '@montflow', 'reviews', series, round);
+      yield* work.fs.makeDirectory(dir, { recursive: true });
+      yield* work.fs.writeFileString(
+        work.path.join(dir, 'REVIEW.md'),
+        `# Review: ${series} / ${round}\n\n## Metadata\n\n- Round: ${round}\n- Phase: ${phase}\n\n## Findings\n\nNone.\n`,
+      );
+    }
+  });
 
 /** A three-phase spec: A locked and complete, B active, C still ahead. */
 const multiPhase = (spec: string): ReadonlyArray<readonly [string, string]> => [
@@ -225,6 +272,9 @@ const runExecute = (work: Work, options: ExecuteOptions = {}) =>
     Effect.provide(StoreLive),
   );
 
+const runSizing = (work: Work, options: SizingConfigOptions = {}) =>
+  sizingConfig(work.dir, options).pipe(Effect.provide(StoreLive));
+
 const diagnose = (error: PromptError | SurfaceError | SpecStore.StoreError): string =>
   diagnoseCause(Cause.fail(error), {
     path: 'specs',
@@ -321,6 +371,24 @@ Vitest.describe('Cli.execute runtime', () => {
       }).pipe(Effect.provide(StoreLive)),
   );
 
+  Vitest.it.effect('refuses an over-budget phase before rendering a session', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      // A tiny phase buys one review cycle; two rounds is exactly one over.
+      yield* seed(work, 'ship-login', phaseA('ship-login', 'tiny'));
+      yield* seedRounds(work, 'ship-login', 2);
+      yield* preparePrompts(work);
+
+      const error = yield* runExecute(work, { name: 'ship-login' }).pipe(Effect.flip);
+      const text = diagnose(error);
+      Vitest.expect(text).toContain('code     review.budget-exceeded');
+      Vitest.expect(text).toContain('2 rounds');
+      Vitest.expect(text).toContain('the phase budget is 1');
+      // No session is rendered, so no ready set can tell the session to work.
+      Vitest.expect(text).not.toContain('Work only phase');
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
   Vitest.it.effect('resumes a spec in progress from the derived ready set', () =>
     Effect.gen(function* () {
       const work = yield* prepare;
@@ -403,6 +471,70 @@ Vitest.describe('Cli.execute runtime', () => {
     }).pipe(Effect.provide(StoreLive)),
   );
 
+  Vitest.it.effect('treats a blank or whitespace-only --phase as absent', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login', 'small'));
+      yield* preparePrompts(work);
+
+      const omitted = yield* runExecute(work, { name: 'ship-login' });
+      for (const phase of ['', '   ', '\t']) {
+        const blank = yield* runExecute(work, { name: 'ship-login', phase });
+        Vitest.expect(blank.phase, JSON.stringify(phase)).toBeUndefined();
+        Vitest.expect(blank.state, JSON.stringify(phase)).toBe(omitted.state);
+        Vitest.expect(blank.prompt.text, JSON.stringify(phase)).toBe(omitted.prompt.text);
+        // The sibling verb reads the same blank value the same way.
+        const sizing = yield* runSizing(work, { name: 'ship-login', phase });
+        Vitest.expect(sizing.phase, JSON.stringify(phase)).toBeUndefined();
+      }
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('refuses a padded --phase instead of trimming it into a valid id', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login', 'small'));
+      yield* preparePrompts(work);
+
+      for (const phase of [' A ', '\tA', 'A ']) {
+        const refused = yield* runExecute(work, { name: 'ship-login', phase }).pipe(Effect.flip);
+        const text = diagnose(refused);
+        Vitest.expect(text, JSON.stringify(phase)).toContain('code     cli.invalid-argument');
+        Vitest.expect(text, JSON.stringify(phase)).toContain('field    --phase');
+        Vitest.expect(text, JSON.stringify(phase)).toContain(
+          'next     mf-specs execute --name <spec> --phase <id>',
+        );
+
+        const sizing = yield* runSizing(work, { name: 'ship-login', phase }).pipe(Effect.flip);
+        const sizingText = diagnose(sizing);
+        Vitest.expect(sizingText, JSON.stringify(phase)).toContain('code     cli.invalid-argument');
+        Vitest.expect(sizingText, JSON.stringify(phase)).toContain('field    --phase');
+        Vitest.expect(sizingText, JSON.stringify(phase)).toContain(
+          'next     mf-specs sizing-config --name <spec> --phase <id>',
+        );
+      }
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('refuses a spec config error once, naming the spec file it holds', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', [
+        ...phaseA('ship-login', 'small'),
+        ['sizing.json', '{ not json'],
+      ]);
+      yield* preparePrompts(work);
+
+      const refused = yield* runExecute(work, { name: 'ship-login' }).pipe(Effect.flip);
+      const text = diagnose(refused);
+      // One blocker, not the loader's copy plus the tree's copy.
+      Vitest.expect(text.split('code     sizing.malformed-json')).toHaveLength(2);
+      Vitest.expect(text).toContain('path     ship-login/sizing.json');
+      // Never the repo config's bare path for a spec-level defect.
+      Vitest.expect(text).not.toContain('path     sizing.json');
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
   Vitest.it.effect('refuses a locked phase and names the active one', () =>
     Effect.gen(function* () {
       const work = yield* prepare;
@@ -438,6 +570,29 @@ Vitest.describe('Cli.execute runtime', () => {
       Vitest.expect(active.next).toContain('B001');
       Vitest.expect(active.next).not.toContain('A001');
       Vitest.expect(active.next).not.toContain('C001');
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('names the resolved spec, not --dir, when the review store is unreadable', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login', 'small'));
+      yield* preparePrompts(work);
+      // A review store that is a regular file: every spec's series read fails.
+      yield* work.fs.writeFileString(
+        work.path.join(work.dir, '.agents', '@montflow', 'reviews'),
+        'not a directory',
+      );
+
+      const error = yield* runExecute(work, { name: 'ship-login' }).pipe(Effect.flip);
+      const text = diagnose(error);
+      Vitest.expect(text).toContain('code     store.error');
+      // One canonical locator: the spec the failed read belongs to, never the
+      // `--dir` base the command happened to be given.
+      Vitest.expect(text).toContain('path     ship-login/review-series');
+      Vitest.expect(text).toContain('field    review-series');
+      Vitest.expect(text).not.toContain('path     specs/review-series');
+      Vitest.expect(text).not.toContain(work.dir);
     }).pipe(Effect.provide(StoreLive)),
   );
 
@@ -491,7 +646,7 @@ Vitest.describe('Cli.execute runtime', () => {
     }).pipe(Effect.provide(StoreLive)),
   );
 
-  Vitest.it.effect('refuses a declared foreign skill and names its own installer', () =>
+  Vitest.it.effect('renders with an advisory when a declared non-doctor skill is missing', () =>
     Effect.gen(function* () {
       const work = yield* prepare;
       yield* seed(work, 'ship-login', phaseA('ship-login', 'small'));
@@ -501,14 +656,21 @@ Vitest.describe('Cli.execute runtime', () => {
         { recursive: true },
       );
 
-      const error = yield* runExecute(work, { name: 'ship-login' }).pipe(Effect.flip);
-      const text = diagnose(error);
-      Vitest.expect(text).toContain('code     prompt.skill-missing');
-      Vitest.expect(text).toContain("Skill 'montflow-adversarial-review'");
-      Vitest.expect(text).toContain(
+      const report = yield* runExecute(work, { name: 'ship-login' });
+      Vitest.expect(report.prompt.skills).toStrictEqual([
+        'montflow-find-specs',
+        'montflow-addressing-adversarial-review',
+      ]);
+      Vitest.expect(report.prompt.advisories.map((advisory) => advisory.field)).toStrictEqual([
+        'montflow-adversarial-review',
+      ]);
+      Vitest.expect(report.prompt.text).toContain('code     ! prompt.skill-advisory');
+      Vitest.expect(report.prompt.text).toContain("Skill 'montflow-adversarial-review'");
+      Vitest.expect(report.prompt.text).toContain(
         'npx skills add montflow/montflow -s montflow-adversarial-review',
       );
-      Vitest.expect(text).not.toContain('fix      Run mf-specs doctor');
+      Vitest.expect(report.prompt.text).toContain('next     mf-specs execute --name <spec>');
+      Vitest.expect(report.prompt.text).not.toContain('code     prompt.skill-missing');
     }).pipe(Effect.provide(StoreLive)),
   );
 
@@ -732,4 +894,68 @@ Vitest.describe('Cli.execute runtime', () => {
       Vitest.expect(text).toContain('fix      Run mf-specs doctor');
     }).pipe(Effect.provide(StoreLive)),
   );
+});
+
+Vitest.describe('Cli fresh doctor-only workspace', () => {
+  Vitest.it.effect('renders author, execute, and sizing with the packaged skills only', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login', 'small'));
+      // The only install step: no foreign skill is copied into this workspace.
+      yield* runDoctor(work.dir);
+
+      const authored = yield* runAuthor(work, { request: 'Ship login' });
+      Vitest.expect(authored.skills).toStrictEqual(['montflow-create-specs']);
+      Vitest.expect(authored.advisories).toStrictEqual([]);
+
+      const executed = yield* runExecute(work, { name: 'ship-login' });
+      Vitest.expect(executed.prompt.skills).toStrictEqual(['montflow-find-specs']);
+      Vitest.expect(executed.prompt.advisories.map((advisory) => advisory.field)).toStrictEqual([
+        'montflow-adversarial-review',
+        'montflow-addressing-adversarial-review',
+      ]);
+      Vitest.expect(executed.prompt.text).toContain('code     ! prompt.skill-advisory');
+      Vitest.expect(executed.prompt.text).toContain('next     mf-specs execute --name <spec>');
+
+      const sized = yield* runSizing(work, { scope: 'repo' });
+      Vitest.expect(sized.prompt.skills).toStrictEqual([
+        'montflow-find-specs',
+        'montflow-create-specs',
+      ]);
+      Vitest.expect(sized.prompt.advisories.map((advisory) => advisory.field)).toStrictEqual([
+        'executing-skills',
+        'grilling',
+        'i-have-adhd',
+      ]);
+      for (const skill of ['executing-skills', 'grilling', 'i-have-adhd']) {
+        Vitest.expect(sized.prompt.text).toContain(skill);
+      }
+    }).pipe(Effect.provide(StoreLive)),
+  );
+});
+
+Vitest.describe('Cli.execute store reads', () => {
+  Vitest.it.effect('reads the snapshot, repo config, and review series exactly once', () => {
+    const counters = { snapshot: 0, readRootFile: 0, reviewSeries: 0 };
+    const countingStore = makeCountingLayer(counters);
+    const storeLive = Layer.mergeAll(
+      countingStore,
+      Layer.provide(PromptStore.Default, Platform),
+      Platform,
+    );
+    return Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login', 'small'));
+      yield* preparePrompts(work);
+
+      const report = yield* execute(storeDirOf(work.dir), {
+        workspace: work.dir,
+        name: 'ship-login',
+      });
+      Vitest.expect(report.name).toBe('ship-login');
+      Vitest.expect(counters.snapshot).toBe(1);
+      Vitest.expect(counters.readRootFile).toBe(1);
+      Vitest.expect(counters.reviewSeries).toBe(1);
+    }).pipe(Effect.provide(storeLive));
+  });
 });

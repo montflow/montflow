@@ -4,7 +4,7 @@ import { NodeFileSystem, NodePath as PlatformPath } from '@effect/platform-node'
 import * as Vitest from '@effect/vitest';
 import { PromptStore } from '@montflow/prompts';
 import { Effect, FileSystem, Layer } from 'effect';
-import { runDoctor } from '../../../apps/doctor/index.js';
+import { runDoctor } from '../../doctor/index.js';
 import {
   CODES,
   DEFAULT_MODE,

@@ -24,6 +24,9 @@ export const FINDING_REF_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*\/\d{3}\/F\d+$/;
 /** Task frontmatter key listing a `review` task's ordered reviewer profile slugs. */
 export const REVIEWER_PROFILES_FIELD = 'reviewer-profiles';
 
+/** Stable code for a complete task whose completion checklist is not checked off. */
+export const COMPLETION_UNCHECKED_CODE = 'task.completion-unchecked';
+
 // ─── Enums ────────────────────────────────────────────────────────────
 
 /** Executor behavior for a task. `defect` is a type, never a status. */
@@ -265,6 +268,76 @@ const TASK_SECTIONS = [
   { label: '## Completion', pattern: /^## Completion\s*$/m },
 ] as const;
 
+/** Any level-2 heading, which ends a body section. */
+const SECTION_HEADING = /^##\s+\S/;
+
+/** One completion checklist row: `- [ ] text` or `- [x] text`. */
+const COMPLETION_ITEM = /^\s*-\s+\[([ xX])\]\s*(.*)$/;
+
+/** A body section's checklist census. */
+interface ChecklistCensus {
+  /** Items the section holds, checked or not. */
+  readonly total: number;
+  /** Items still left as `- [ ]`. */
+  readonly unchecked: number;
+}
+
+/**
+ * Count the checklist items in one `## <heading>` section of a body. Items
+ * outside that section and blank lines are ignored, so a task may carry
+ * other checklists without changing the completion rule.
+ * @param body - markdown body (frontmatter already stripped)
+ * @param heading - level-2 heading text without the `## `
+ * @returns the total and the unchecked count
+ */
+const censusChecklist = (body: string, heading: string): ChecklistCensus => {
+  let inside = false;
+  let total = 0;
+  let unchecked = 0;
+  for (const line of body.split(/\r?\n/)) {
+    if (SECTION_HEADING.test(line)) {
+      inside = line.trim() === `## ${heading}`;
+      continue;
+    }
+    if (!inside) continue;
+    const item = COMPLETION_ITEM.exec(line);
+    if (item === null) continue;
+    total++;
+    if ((item[1] ?? '') === ' ') unchecked++;
+  }
+  return { total, unchecked };
+};
+
+/**
+ * The completion rule on its own: a task that claims `complete` must show a
+ * checked `## Completion` checklist. An unchecked box is a record contradiction
+ * — the status says the work is done and the checklist says it is not — so it
+ * is a warning, never an error: historical records keep completing unchanged.
+ * @param status - declared status, as written
+ * @param body - markdown body (frontmatter already stripped)
+ * @returns the findings, in reporting order
+ */
+export const verifyTaskCompletion = (
+  status: string | undefined,
+  body: string,
+): ReadonlyArray<Issue> => {
+  if (status !== 'complete') return [];
+  const { total, unchecked } = censusChecklist(body, 'Completion');
+  if (unchecked === 0) return [];
+  const noun = unchecked === 1 ? 'item' : 'items';
+  return [
+    finding({
+      code: COMPLETION_UNCHECKED_CODE,
+      severity: 'warning',
+      field: 'completion',
+      message: `Completed task has ${unchecked} unchecked completion ${noun}; the status claims work its checklist does not confirm.`,
+      expected: `all ${total} completion ${total === 1 ? 'item' : 'items'} checked \`- [x]\``,
+      actual: `${unchecked} unchecked`,
+      fix: 'Check each finished item under `## Completion`, or set `status: in-progress`.',
+    }),
+  ];
+};
+
 /**
  * Mechanically verify a TASK.md file against the spec contract
  * standard: required frontmatter (`id`, `name`, `type`, `originator`,
@@ -359,6 +432,7 @@ export const verifyTaskFile = (dirName: string, markdown: string): Result => {
 
   const size = fieldString(fields, 'size');
   issues.push(...verifyTaskSize(size, status));
+  issues.push(...verifyTaskCompletion(status, body));
 
   for (const section of TASK_SECTIONS) {
     if (!section.pattern.test(body)) {

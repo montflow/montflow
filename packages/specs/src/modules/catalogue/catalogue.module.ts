@@ -1,4 +1,4 @@
-import { Match, Result as R, Schema, SchemaIssue } from 'effect';
+import { Result as R, Schema } from 'effect';
 import type { Effect } from 'effect';
 import type { Result } from 'effect/Result';
 import {
@@ -9,6 +9,8 @@ import {
   MODEL_RULE,
 } from '../sizing/index.js';
 import { type Issue, finding } from '../verify/index.js';
+import { kindOf, faultLeaves, faultActual, isBlankInput } from '../json/index.js';
+import type { FaultLeaf } from '../json/index.js';
 
 /**
  * The harness model catalogue: the models a host can dispatch, the effort
@@ -69,12 +71,25 @@ export interface CatalogueModel {
   readonly variants: readonly string[] | null;
 }
 
+/** Counts of host descriptors normalization dropped because the sizing grammar
+ * cannot store them. Zero when nothing was dropped. */
+export interface Omitted {
+  readonly models: number;
+  readonly variants: number;
+  readonly defaults: number;
+}
+
+/** Counts of host descriptors normalization dropped. Alias for {@link Omitted}. */
+export type OmittedCounts = Omitted;
+
 /** The normalized catalogue every surface consumes. */
 export interface Catalogue {
   /** Host default label, or `null` when the host reports none. */
   readonly default: string | null;
   /** Models sorted by provider then model. */
   readonly models: ReadonlyArray<CatalogueModel>;
+  /** How many host descriptors normalization dropped. */
+  readonly omitted: Omitted;
 }
 
 /** One model in the stable JSON document. */
@@ -91,30 +106,12 @@ export interface CatalogueDocumentModel {
 export interface CatalogueDocument {
   readonly default: string | null;
   readonly models: ReadonlyArray<CatalogueDocumentModel>;
+  /** How many host descriptors normalization dropped. Optional on input. */
+  readonly omitted?: Omitted;
 }
 
 const compare = (left: string, right: string): number => (left < right ? -1 : left > right ? 1 : 0);
 
-/**
- * Trim, dedupe, and sort a known variant list; `null`/absent stays unknown. A
- * known list keeps only the tokens `sizing.json` can store, and a known list
- * filtered to nothing becomes `[]` (known-empty), never `null` (unknown).
- */
-const variantsOf = (values: readonly string[] | null | undefined): Array<string> | null => {
-  if (values === null || values === undefined) return null;
-  const unique = new Set<string>();
-  for (const value of values) {
-    const variant = value.trim();
-    if (variant !== '' && EFFORT_PATTERN.test(variant)) unique.add(variant);
-  }
-  return [...unique].toSorted(compare);
-};
-
-/**
- * Two duplicate entries collapse. Known lists union; a `null` on either side
- * keeps the entry unknown, because one source refusing to report variants
- * means the catalogue cannot claim to know them.
- */
 const unionVariants = (
   left: Array<string> | null,
   right: Array<string> | null,
@@ -150,13 +147,32 @@ export const normalize = (
     variants: Array<string> | null;
   }
   const merged = new Map<string, Working>();
+  let omittedModels = 0;
+  let omittedVariants = 0;
   for (const source of sources) {
     const providerID = source.providerID.trim();
     const modelID = source.modelID.trim();
-    if (providerID === '' || modelID === '') continue;
+    if (providerID === '' || modelID === '') {
+      omittedModels++;
+      continue;
+    }
     const key = `${providerID}/${modelID}`;
-    if (!MODEL_PATTERN.test(key)) continue;
-    const variants = variantsOf(source.variants);
+    if (!MODEL_PATTERN.test(key)) {
+      omittedModels++;
+      continue;
+    }
+    let variants: Array<string> | null;
+    if (source.variants === null || source.variants === undefined) {
+      variants = null;
+    } else {
+      const unique = new Set<string>();
+      for (const value of source.variants) {
+        const variant = value.trim();
+        if (variant !== '' && EFFORT_PATTERN.test(variant)) unique.add(variant);
+        else omittedVariants++;
+      }
+      variants = [...unique].toSorted(compare);
+    }
     const current = merged.get(key);
     if (current === undefined) {
       merged.set(key, { providerID, modelID, variants });
@@ -175,23 +191,38 @@ export const normalize = (
       (left, right) =>
         compare(left.providerID, right.providerID) || compare(left.modelID, right.modelID),
     );
-  return { default: defaultLabel(defaultModel), models };
+  let omittedDefaults = 0;
+  const defaultResult = defaultLabel(defaultModel);
+  if (defaultModel !== undefined && defaultModel !== null) {
+    const hasLabel = Schema.is(Schema.String)(defaultModel) ? defaultModel.trim() !== '' : true;
+    if (hasLabel && defaultResult === null) omittedDefaults = 1;
+  }
+  return {
+    default: defaultResult,
+    models,
+    omitted: { models: omittedModels, variants: omittedVariants, defaults: omittedDefaults },
+  };
 };
 
 /**
- * Keep only one provider's models, preserving the default label. A filter that
- * matches nothing returns an empty catalogue; the caller decides whether that
- * is a diagnostic.
+ * Keep only one provider's models. The default label is kept only when it names
+ * a model that survives the filter: a filtered document must never carry a
+ * `default` pointing outside its own `models` array, because that document is
+ * also `--catalog` input and a `*` marker on a model the caller filtered out
+ * would contradict the list. A filter that matches nothing returns an empty,
+ * default-free catalogue; the caller decides whether that is a diagnostic.
  * @param catalogue - normalized catalogue
  * @param providerID - provider to keep, trimmed
  * @returns the filtered catalogue
  */
 export const filterProvider = (catalogue: Catalogue, providerID: string): Catalogue => {
   const provider = providerID.trim();
-  return {
-    default: catalogue.default,
-    models: catalogue.models.filter((model) => model.providerID === provider),
-  };
+  const models = catalogue.models.filter((model) => model.providerID === provider);
+  const kept =
+    catalogue.default !== null && models.some((model) => model.label === catalogue.default)
+      ? catalogue.default
+      : null;
+  return { default: kept, models, omitted: catalogue.omitted };
 };
 
 /** Distinct providers in catalogue order, for miss diagnostics. */
@@ -220,6 +251,7 @@ export const toDocument = (catalogue: Catalogue): CatalogueDocument => ({
     modelID: model.modelID,
     variants: model.variants,
   })),
+  omitted: catalogue.omitted,
 });
 
 /**
@@ -233,8 +265,9 @@ export const toJson = (catalogue: Catalogue): string =>
 
 /** The default table: one line per model, variants, and a default marker. */
 export const renderTable = (catalogue: Catalogue): string => {
-  if (catalogue.models.length === 0) return 'no models';
-  return catalogue.models
+  const footer = `omitted: ${catalogue.omitted.models} models, ${catalogue.omitted.variants} variants, ${catalogue.omitted.defaults} defaults`;
+  if (catalogue.models.length === 0) return `no models\n${footer}`;
+  const body = catalogue.models
     .map((model) => {
       const variants =
         model.variants === null
@@ -246,23 +279,13 @@ export const renderTable = (catalogue: Catalogue): string => {
       return `${model.label}  ${variants}${marker}`;
     })
     .join('\n');
+  return `${body}\n${footer}`;
 };
 
 // ─── Catalog file ─────────────────────────────────────────────────────
 
 /** Narrow to a JSON string. */
 const isString = Schema.is(Schema.String);
-
-/** Name a value's JSON kind for an `actual` field, without echoing a cause. */
-// oxlint-disable-next-line anti-slop/no-unknown-parameters -- schema issues report their rejected input as `unknown`; naming its JSON kind is this boundary's job.
-const kindOf = (value: unknown): string => {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'array';
-  if (isString(value)) return 'string';
-  if (Schema.is(Schema.Number)(value)) return 'number';
-  if (Schema.is(Schema.Boolean)(value)) return 'boolean';
-  return 'object';
-};
 
 const malformed = (
   path: string,
@@ -329,69 +352,16 @@ const FileDocument = Schema.Struct({
       ),
     ),
   ),
+  omitted: Schema.optionalKey(
+    Schema.Struct({
+      models: Schema.Int,
+      variants: Schema.Int,
+      defaults: Schema.Int,
+    }),
+  ),
 });
 
 type FileDocument = typeof FileDocument.Type;
-
-/** One leaf of a schema failure: the field path and the rejected input. */
-interface FaultLeaf {
-  readonly field: string;
-  readonly tag: string;
-  readonly hasInput: boolean;
-  readonly input: unknown;
-}
-
-/** One leaf as a coded repair row: its field path and the rejected input. */
-const leafOf = (node: Schema.SchemaError['issue'], path: ReadonlyArray<string>): FaultLeaf => ({
-  field: path.join('.'),
-  // oxlint-disable-next-line no-underscore-dangle -- `_tag` is the Effect schema-issue discriminant; this is its one read.
-  tag: node._tag,
-  hasInput: SchemaIssue.hasInput(node),
-  input: SchemaIssue.hasInput(node) ? node.input : undefined,
-});
-
-/** Flatten a schema failure to its leaves, carrying each leaf's field path. */
-const faultLeaves = (issue: Schema.SchemaError['issue']): ReadonlyArray<FaultLeaf> => {
-  const visit = (
-    node: Schema.SchemaError['issue'],
-    path: ReadonlyArray<string>,
-  ): ReadonlyArray<FaultLeaf> =>
-    Match.value(node).pipe(
-      Match.when({ _tag: 'Pointer' }, (pointer) =>
-        visit(pointer.issue, [...path, ...pointer.path.map(String)]),
-      ),
-      Match.when({ _tag: 'Composite' }, (composite) =>
-        composite.issues.flatMap((inner) => visit(inner, path)),
-      ),
-      // A failed `NullOr` union reports no inner issue, so the union itself is
-      // the leaf: the rejected input is all the repair text needs.
-      Match.when({ _tag: 'AnyOf' }, (union) =>
-        union.issues.length === 0
-          ? [leafOf(union, path)]
-          : union.issues.flatMap((inner) => visit(inner, path)),
-      ),
-      Match.when({ _tag: 'Filter' }, (filter) => visit(filter.issue, path)),
-      Match.when({ _tag: 'Encoding' }, (encoding) => visit(encoding.issue, path)),
-      Match.whenOr(
-        { _tag: 'MissingKey' },
-        { _tag: 'UnexpectedKey' },
-        { _tag: 'InvalidType' },
-        { _tag: 'InvalidValue' },
-        { _tag: 'Forbidden' },
-        { _tag: 'OneOf' },
-        (leaf) => [leafOf(leaf, path)],
-      ),
-      Match.exhaustive,
-    );
-  return visit(issue, []);
-};
-
-const faultActual = (leaf: FaultLeaf): string =>
-  leaf.tag === 'MissingKey' ? 'missing' : leaf.hasInput ? kindOf(leaf.input) : 'unknown';
-
-/** A rejected blank string, which needs its own wording rather than `string`. */
-const isBlankInput = (leaf: FaultLeaf): boolean =>
-  leaf.hasInput && isString(leaf.input) && leaf.input.trim() === '';
 
 /** The two id halves a rejected entry declares. */
 const IdHalves = Schema.Struct({ providerID: Schema.String, modelID: Schema.String });
@@ -635,15 +605,16 @@ export const decode = (text: string, path: string): Result<Catalogue, Issue> => 
     );
   }
   const document = decoded.success;
+  const catalogue = normalize(
+    document.models.map((model): SourceModel => ({
+      providerID: model.providerID,
+      modelID: model.modelID,
+      variants: model.variants ?? null,
+    })),
+    document.default ?? null,
+  );
   return R.succeed(
-    normalize(
-      document.models.map((model): SourceModel => ({
-        providerID: model.providerID,
-        modelID: model.modelID,
-        variants: model.variants ?? null,
-      })),
-      document.default ?? null,
-    ),
+    document.omitted === undefined ? catalogue : { ...catalogue, omitted: document.omitted },
   );
 };
 

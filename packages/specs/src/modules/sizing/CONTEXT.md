@@ -10,7 +10,9 @@ them.
 
 - `SIZES` / `Size` / `isSize` / `DEFAULT_SIZE`
 - Review budgets: `REVIEW_CYCLES`, `MAX_REVIEW_CYCLES`, `reviewCycles`,
-  `phaseReviewBudget`
+  `taskContribution` (the one per-input rule: a `review` task and an unsized
+  task contribute `0`, a sized one its cycles, a bare size its cycles),
+  `phaseReviewBudget` (the fold over it, floored at 1 for a non-empty phase)
 - Config shapes and patterns: `SizeEntry`, `SizingConfig`, `PhaseConfig`,
   `MODEL_PATTERN`, `EFFORT_PATTERN`, `CONFIG_FILE`
 - Coded diagnostics: `CODES`, `SizingError`, `verify`, `verifyText`, `parse`.

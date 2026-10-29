@@ -13,6 +13,15 @@ directory.
 - `mock-stale` — a bookkeeping contradiction: all tasks complete and phase
   A locked, but `status: in-progress`. Fails with 1 issue; derived state
   `inconsistent`.
+- `mock-history` — an untouched historical record: every task complete, every
+  completion box and gate item checked, and `.agents/@montflow/reviews/mock-history/`
+  holding exactly the one round phase A's `tiny` tasks buy. Passes with 0
+  issues and 0 warnings.
+- `mock-over-budget` — the mechanical review budget: a valid complete spec whose
+  `mock-over-budget` series holds four rounds attributed to phase `A`, whose
+  `tiny` tasks buy one. Fails with one `review.budget-exceeded` error naming the
+  series, phase, budget, and count. Its four round files exist only to prove the
+  check.
 - `mock-bad` — deliberately broken. Surfaces 10 issues across the failure
   classes: unknown task type, missing `MEMORY.md`, table/status drift, a
   forward-phase dependency, a `Gates` column with no `GATES.md`, a
@@ -33,7 +42,7 @@ directory.
 ```bash
 bun run --cwd packages/specs build:cli
 cd packages/specs/fixtures
-../dist/mf-specs check            # exits 1: mock-bad, mock-stale
+../dist/mf-specs check            # exits 1: mock-bad, mock-stale, mock-over-budget
 ../dist/mf-specs check --verbose  # also lists the passing specs
 ../dist/mf-specs status --name mock-ok        # state pending, sizing sources
 ../dist/mf-specs status --name mock-complete  # state complete, repo-only source

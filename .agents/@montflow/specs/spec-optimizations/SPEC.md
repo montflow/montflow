@@ -1,6 +1,6 @@
 ---
 name: spec-optimizations
-status: in-progress
+status: complete
 workspace-type: worktree
 author: Daniel Montilla
 created: 2026-10-26
@@ -9,6 +9,10 @@ locked-phases:
   - B
   - C
   - D
+  - E
+  - F
+  - G
+  - H
 ---
 
 # Spec optimizations
@@ -74,6 +78,19 @@ Phase G pays down structure and proof. Catalogue omissions become visible,
 `check --catalog` can prove a config, `execute` reads each spec once, sizing and
 catalogue share one JSON verifier, `apps/cli` splits into command modules, and
 prompt loading stops depending on an app.
+
+Phase H makes reviewer selection repo-local. A reviewer profile is declared by
+the consuming repo, but the shipped authoring prompt and skill name
+`effect-reviewer` and demand it on every phase holding an `execution` or `defect`
+task, so the package prescribes a profile another repo may never have declared
+and a rename, docs, or config phase buys a second review series it does not need.
+The shipped artifacts stop naming any concrete profile: the author reads the
+profiles the repo declares under `.agents/@montflow/profiles/` and declares one
+only when its focus matches the phase's work, and an empty list is the default on
+every phase. `mf-specs check` gains one advisory `reviewer-profile.unknown`
+finding so a typo or a deleted profile is visible instead of costing a silent
+review round every cycle. This repo's completed phases keep every profile they
+already declared.
 
 ## Requirements
 
@@ -164,7 +181,14 @@ prompt loading stops depending on an app.
 - `apps/cli` splits into command modules behind a stable barrel, with no source file above roughly 1,000 lines.
 - No module under `src/modules/**` imports `src/apps/**`; prompt loading depends on a module-level doctor gate, not an app.
 - Small surface inconsistencies close: the sizing budget label, the provider-filtered JSON default, the `which` prefix boundary, and slash-flag validation.
-- Historical locked phases, completed task records, and review rounds A-D are not rewritten; phases E-G append to the spec and treat this audit as their origin.
+- No artifact shipped by `packages/specs` — prompt template, skill body, embedded payload, CLI text, test fixture, or README — names a concrete reviewer profile. `effect-reviewer` survives only in this repo's `.agents/@montflow/profiles/` and its own spec records; historical CHANGELOG entries keep their wording.
+- Reviewer selection is a judgment from the profiles the repo declares, never a task-type predicate: the author reads `.agents/@montflow/profiles/` and declares a profile only when its focus matches the phase's work. An empty `reviewer-profiles` is the default and is valid on every phase, including one holding `execution` or `defect` tasks.
+- The authoring prompt and skill state the cost: each declared profile adds one review round per cycle in that phase, and the phase budget is unchanged by the declaration.
+- `mf-specs create --reviewer-profiles` seeds the review task of the one phase it scaffolds; no artifact describes it as a spec-wide default.
+- `mf-specs check` emits a warning-severity `reviewer-profile.unknown` finding when a declared slug has no `<workspace>/.agents/@montflow/profiles/<slug>/PROFILE.md`. With no profiles root the finding is skipped, an existing profile produces nothing, warnings keep exit `0`, and `--strict` promotes the finding like every other warning.
+- The packaged skill and its workspace mirror are byte-identical after `mf-specs doctor`, the embedded payload matches the package bytes, and `mf:check:skills`, `mf:check:prompts`, and `mf:check:specs` stay green.
+- Completed and locked phases keep every profile they declared; phase H backfills no record and rewrites no review series.
+- Historical locked phases, completed task records, and review rounds A-D are not rewritten; phases E-H append to the spec and treat this audit as their origin.
 
 ## Tasks
 
@@ -191,18 +215,21 @@ prompt loading stops depending on an app.
 | D003 | config-command | execution | complete | Yes |
 | D004 | docs-and-handoffs | execution | complete | Yes |
 | D099 | review-phase | review | complete | No |
-| E001 | validate-names | execution | pending | Yes |
-| E002 | skill-gate | execution | pending | Yes |
-| E003 | dispatch-truth | execution | pending | Yes |
-| E004 | docs-truth | execution | pending | Yes |
-| E099 | review-phase | review | pending | No |
-| F001 | warning-grouping | execution | pending | Yes |
-| F002 | record-checks | execution | pending | Yes |
-| F003 | surface-nits | execution | pending | Yes |
-| F099 | review-phase | review | pending | No |
-| G001 | catalogue-proof | execution | pending | Yes |
-| G002 | single-snapshot | execution | pending | Yes |
-| G003 | shared-json | execution | pending | Yes |
-| G004 | split-cli | execution | pending | Yes |
-| G005 | doctor-module | execution | pending | Yes |
-| G099 | review-phase | review | pending | No |
+| E001 | validate-names | execution | complete | Yes |
+| E002 | skill-gate | execution | complete | Yes |
+| E003 | dispatch-truth | execution | complete | Yes |
+| E004 | docs-truth | execution | complete | Yes |
+| E099 | review-phase | review | complete | No |
+| F001 | warning-grouping | execution | complete | Yes |
+| F002 | record-checks | execution | complete | Yes |
+| F003 | surface-nits | execution | complete | Yes |
+| F099 | review-phase | review | complete | No |
+| G001 | catalogue-proof | execution | complete | Yes |
+| G002 | single-snapshot | execution | complete | Yes |
+| G003 | shared-json | execution | complete | Yes |
+| G004 | split-cli | execution | complete | Yes |
+| G005 | doctor-module | execution | complete | Yes |
+| G099 | review-phase | review | complete | No |
+| H001 | declared-profiles-only | execution | complete | Yes |
+| H002 | profile-existence-check | execution | complete | Yes |
+| H099 | review-phase | review | complete | No |

@@ -26,13 +26,13 @@ import { join, resolve } from 'node:path';
 const PACKAGE_ROOT = resolve(import.meta.dirname, '..');
 const SKILLS_DIR = join(PACKAGE_ROOT, 'skills');
 const PROMPTS_DIR = join(PACKAGE_ROOT, 'prompts');
-const OUTPUT = join(PACKAGE_ROOT, 'src', 'apps', 'doctor', 'embedded-payload.generated.ts');
+const OUTPUT = join(PACKAGE_ROOT, 'src', 'modules', 'doctor', 'embedded-payload.generated.ts');
 
 // The payload set has exactly one owner: the doctor module. Importing the
 // constants means a phase that adds a skill or prompt to doctor cannot leave
 // this generator (and the embed test) behind.
 const { SPEC_PROMPT_NAMES: PROMPT_NAMES, SPEC_SKILL_NAMES: SKILL_NAMES } = await import(
-  '../src/apps/doctor/doctor.apps.module.js'
+  '../src/modules/doctor/doctor.module.js'
 );
 
 const readSkill = async (name: string): Promise<Record<string, string>> => {

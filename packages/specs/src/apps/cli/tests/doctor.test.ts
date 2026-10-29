@@ -3,7 +3,11 @@ import * as Os from 'node:os';
 import * as NodePath from 'node:path';
 import * as Vitest from '@effect/vitest';
 import { Effect } from 'effect';
-import { CREATE_SPEC_SKILL_NAME, SPEC_PROMPT_NAMES, runDoctor } from '../../doctor/index.js';
+import {
+  CREATE_SPEC_SKILL_NAME,
+  SPEC_PROMPT_NAMES,
+  runDoctor,
+} from '../../../modules/doctor/index.js';
 import { doctorExitCode, renderDoctor, runDoctorRun } from '../index.js';
 
 /**

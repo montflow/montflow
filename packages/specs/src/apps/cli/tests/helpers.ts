@@ -1,6 +1,7 @@
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { PromptStore } from '@montflow/prompts';
 import { Effect, FileSystem, Layer, Path } from 'effect';
+import type { SeriesSnapshot } from '../../../modules/review-link/index.js';
 import type { SpecFileEntry } from '../../../modules/structure/index.js';
 import { memoryMarkdown } from '../../../modules/task/tests/helpers.js';
 import { SpecStore } from '../../../services/index.js';
@@ -14,6 +15,10 @@ export interface StubOptions {
   readonly rootFileFailure?: SpecStore.StoreError;
   /** Make every `snapshot` fail, as an unreadable spec directory does. */
   readonly snapshotFailure?: SpecStore.StoreError;
+  /** Review series the store reports for a matching spec (`<name>` / `<name>-*`). */
+  readonly reviews?: ReadonlyArray<SeriesSnapshot>;
+  /** Make every `reviewSeries` fail, as an unreadable review store does. */
+  readonly reviewFailure?: SpecStore.StoreError;
 }
 
 /** MEMORY.md contents with the template's sections. */
@@ -75,6 +80,14 @@ export const stubLayer = (
             ? Effect.succeed({ name, files })
             : Effect.fail(options.snapshotFailure);
         },
+        reviewSeries: (_root, name) =>
+          options.reviewFailure === undefined
+            ? Effect.succeed(
+                (options.reviews ?? []).filter(
+                  (series) => series.name === name || series.name.startsWith(`${name}-`),
+                ),
+              )
+            : Effect.fail(options.reviewFailure),
         readRootFile: (_root, name) =>
           options.rootFileFailure === undefined
             ? Effect.succeed(rootFiles.get(name))

@@ -3,7 +3,7 @@ name: montflow-create-specs
 description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per task (TASK.md, MEMORY.md, GATES.md) — by scaffolding with `mf-specs create` then filling in the rules below. Use when an agent must create a spec directly, without dispatching a session.
 id: 6ebf45d24cb3d3a1
 author: Daniel Montilla
-version: 2.8.0
+version: 2.10.0
 license: MIT
 dependencies:
   - executing-skills
@@ -19,6 +19,18 @@ Use when a new **spec** must be authored under
 the spec itself — it does not dispatch an authoring session.
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md) skill before running this pipeline. It governs how skills are loaded, executed, and verified.
+
+**Prerequisite skill list.** `mf-specs doctor` installs the required
+`montflow-create-specs` and `montflow-find-specs` skills. A missing, stale, or
+blocked doctor-owned skill fails prompt load with `prompt.skill-missing` /
+`prompt.skill-stale` / `prompt.skill-blocked` and the `mf-specs doctor` fix; it is
+never downgraded. The execution and sizing prompts also declare
+`montflow-adversarial-review`, `montflow-addressing-adversarial-review`,
+`executing-skills`, `grilling`, and `i-have-adhd`, which this package does not
+ship. A missing one is advisory (`prompt.skill-advisory`): the prompt still
+renders and names every missing skill, and only installed skills are handed to
+the executor. Install an external skill with
+`npx skills add montflow/montflow -s <skill> -y` before relying on its guidance.
 
 # Pipeline
 
@@ -97,11 +109,30 @@ either `Yes` or `No`.
 - `originator`: `user`, `defect:<task-id>`, or `planner:<task-id>`.
 - `depends-on` may reference only tasks in the same phase or an earlier phase.
 - `reviewer-profiles` (`review` tasks only): comma-separated ordered reviewer
-  profile slugs (`reviewer-profiles: effect-reviewer, generic-reviewer`). Empty
+  profile slugs (`reviewer-profiles: example-reviewer, generic-reviewer`). Empty
   or absent keeps the single general reviewer; each entry adds a
   `<kebab-name>-<profile>` review series that the phase's review round is also
-  written to. Declare `effect-reviewer` on **code phases** — any phase holding an
-  `execution` or `defect` task; exploration and planning phases stay empty.
+  written to. Read the profiles the repo declares under
+  `.agents/@montflow/profiles/` and declare one only when its focus matches the
+  phase's work; an empty list is the default and is valid on every phase, and
+  each declared profile adds one review round per cycle in that phase, and the phase budget is unchanged by the declaration.
+
+### A Gate Names the Task's Own Commands
+
+`GATES.md` is this task's proof, never a copy of the repo-wide suite: every item
+names a command, or a named subjective check, that proves **this** task, so
+whoever runs the gate gets a verdict about this task and nothing else.
+`mf-specs create` writes one placeholder item,
+`- [ ] REPLACE with this task's own verification commands`; replace it with the
+real commands and check each box you actually ran. The review removes the
+replacement marker; it never deletes the gate.
+
+The `## Completion` checklist and the gate are records, not decoration: a
+`complete` task with unchecked completion items warns `task.completion-unchecked`,
+and a `complete` task whose gate has no checked item warns `gate.unchecked`.
+`mf-specs check` also verifies the phase review budget from the review series —
+more rounds attributed to a phase (`- Phase:` in a round's `## Metadata`) than
+the phase budget is an error, not a prose rule.
 
 ## 5. Size Every Task
 
@@ -146,9 +177,10 @@ the `model` argument and the current model runs.
 
 Never invent model ids and never add a `sizing.json` the user did not give you; a
 fresh spec is valid with no config at all. Inspect a dispatch target with
-`mf-specs sizing --name <kebab-name> --task <id> --human` (size, target,
-winning layer, budgets, and the size-by-layer matrix) or the machine-only
-`mf-specs resolve --name <kebab-name> --task <id>` (the target alone).
+`mf-specs sizing --name <kebab-name> --task <id>` — one compact line of id, size,
+target, and source — or add `--human` for the task budget, its contribution, the
+phase budget, and the size-by-layer matrix. The machine-only
+`mf-specs resolve --name <kebab-name> --task <id>` prints the target alone.
 
 **A task's size is yours; a config is generated.** Choosing the size is
 authoring. Writing the config entry is not: a spec's `sizing.json` is generated
@@ -157,8 +189,10 @@ afterwards from the live harness catalogue through the `spec-sizing` prompt —
 binary, `/specs sizing-config` or the `spec_sizing` tool in the host — and the
 `spec-sizing-orchestrator` role runs it when the user wants a tuned config.
 Never type a model id or an effort into a config by hand: a valid id is only one
-`mf-specs models` prints, and an effort is only one that model's known variants
-list contains. `variants unknown` and `variants none` both mean no effort.
+the catalogue lists, and an effort is only one that model's known variants list
+contains. Read the catalogue through `spec_models` in the host or
+`mf-specs models --catalog <path>` outside it; `variants unknown` and
+`variants none` both mean no effort.
 
 Omitting `--scope` leaves the layer **open**: the wizard asks which one to write.
 The flags only narrow an inferred layer — `--name <spec>` implies the spec layer,
@@ -169,8 +203,10 @@ layer.
 
 Prove a generated config in this order, scoped to what was touched:
 
-1. `mf-specs models --verify` (add `--name <spec>` for the spec layer) — every
-   entry must be a catalogue model with a known variant.
+1. `mf-specs models --verify` (add `--name <spec>` for the spec layer, and
+   `--catalog <path>` outside the host) — every entry must be a catalogue model
+   with a known variant. The count line states how many entries were checked and
+   skipped.
 2. `mf-specs check --name <kebab-name>` — zero issues.
 3. `mf-specs sizing --name <kebab-name> --task <id> --human` for one task per
    explicit target — the winning layer must be the one you wrote.
@@ -210,8 +246,8 @@ hand; a fresh `create` output already verifies.
 - **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`).
 - **Scaffold CLI**: `mf-specs create` (or `/specs create` in the OpenCode host) — flags `--name`, `--description`, `--author`, `--workspace-type`, `--tasks` (each `name[:type[:gates[:size]]]`, size defaulting to `medium`), `--reviewer-profiles`.
 - **Sizing config**: `<specs-root>/sizing.json` (repo layer) and `<spec>/sizing.json` (spec layer, with `phases.<PHASE>.sizes`); absent size entry means `inherit`.
-- **Sizing CLI**: `mf-specs sizing --name <spec> --task <id> [--verbose|--human]` for the provenance report, `mf-specs resolve --name <spec> --task <id>` for the bare dispatch target, `mf-specs status` / `next` for per-task size, target, and source.
-- **Catalogue CLI**: `mf-specs models [--catalog <path>]` lists the models this harness can dispatch and their effort variants (`variants unknown` vs `variants none`); `mf-specs models --verify [--name <spec>]` cross-checks every config entry and warns `models.unknown-model` / `models.unknown-effort`.
+- **Sizing CLI**: `mf-specs sizing --name <spec> --task <id> [--verbose|--human]` — compact by default (id, size, target, source); `--verbose` / `--human` add the task and phase budgets and the provenance matrix. `mf-specs resolve --name <spec> --task <id>` prints the bare dispatch target; `mf-specs status` / `next` show per-task size, target, and source.
+- **Catalogue CLI**: `mf-specs models [--provider <id>] [--json] [--catalog <path>]` lists the models this harness can dispatch and their effort variants (`variants unknown` vs `variants none`); outside the host pass `--catalog <path>` to either form, or use the `spec_models` tool in the host. `mf-specs models --verify [--name <spec>]` cross-checks every config entry, warns `models.unknown-model` / `models.unknown-effort`, and states the entries checked and skipped split by layer and provider.
 - **Prompt**: `packages/specs/prompts/spec-create.json` (`spec-create`), doctor-installed into `.agents/@montflow/prompts/`; render it with `mf-specs author --request <text>` or `/specs author` in the host.
 - **Sizing prompt**: `packages/specs/prompts/spec-sizing.json` (`spec-sizing`), the wizard the `spec-sizing-orchestrator` role runs; render it with `mf-specs sizing-config` or `/specs sizing-config` / the `spec_sizing` tool. It generates one config layer from the live catalogue and writes nothing before confirmation.
 - **Contract source**: `modules/scaffold`, `modules/lifecycle`, `modules/structure`, `modules/sizing`, and the shipped `spec-create` prompt.

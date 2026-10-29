@@ -83,9 +83,9 @@ scope, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
   `mf-specs sizing-config [--scope repo|spec|phase] [--name <spec>]`. Without
   `--name`, `execute` resolves the spec from the branch through
   `mf-specs which` and asks the user only on a miss or ambiguity.
-- `spec-sizing` generates one sizing layer from the live catalogue
-  (`mf-specs models`); never hand-write a model id or an effort into
-  `sizing.json`.
+- `spec-sizing` generates one sizing layer from the live catalogue — the
+  `spec_models` tool in the host, `mf-specs models --catalog <path>` outside it;
+  never hand-write a model id or an effort into `sizing.json`.
 - `guided` is the default; `autonomous` asks only for destructive or
   irreversible actions, very dangerous tool calls, or undecidable decisions.
 

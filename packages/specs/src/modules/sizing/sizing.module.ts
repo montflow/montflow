@@ -1,6 +1,8 @@
 import { Data, Effect, Result, Schema } from 'effect';
 import { PHASE_PATTERN } from '../spec/index.js';
 import { type Issue, type Result as VerifyResult, finding, noErrors } from '../verify/index.js';
+import { isRecord, kindOf, displayValue, faultLeaves, isBlankInput } from '../json/index.js';
+import type { FaultLeaf } from '../json/index.js';
 
 // ─── Sizes ────────────────────────────────────────────────────────────
 
@@ -54,10 +56,25 @@ export interface TaskSizing {
 export type BudgetInput = Size | TaskSizing;
 
 /**
- * Review budget of a phase: the largest budget among its non-review tasks,
- * capped at {@link MAX_REVIEW_CYCLES}. The phase's own `review` task never
- * raises the budget, and a phase of tiny tasks gets exactly 1 cycle. Bare
- * sizes count as non-review tasks.
+ * Review cycles one phase member contributes: the cycles its size buys, except
+ * a `review` task (which spends the budget) and an unsized task (which declares
+ * nothing), both `0`. A bare size counts as a non-review task. This is the only
+ * per-input rule; {@link phaseReviewBudget} folds over it and every renderer
+ * reads it, so a contribution a surface prints is the one the budget used.
+ * @param input - a phase member, as a bare size or a typed task
+ * @returns the cycles the member contributes
+ */
+export const taskContribution = (input: BudgetInput): number => {
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- `input` is the declared `Size | TaskSizing` union; `typeof` picks which arm of that contract to read, not an unparsed value.
+  if (typeof input === 'string') return reviewCycles(input);
+  if (input.type === 'review' || input.size === undefined) return 0;
+  return reviewCycles(input.size);
+};
+
+/**
+ * Review budget of a phase: the largest {@link taskContribution}, capped at
+ * {@link MAX_REVIEW_CYCLES}. The phase's own `review` task never raises the
+ * budget, and a phase of tiny tasks gets exactly 1 cycle.
  *
  * Every non-empty phase gets at least 1 cycle, even when no non-review task
  * declares a size (a review-only phase, or completed unsized tasks plus their
@@ -71,12 +88,7 @@ export const phaseReviewBudget = (sizes: ReadonlyArray<BudgetInput>): number => 
   if (sizes.length === 0) return 0;
   const largest = Math.min(
     MAX_REVIEW_CYCLES,
-    sizes.reduce((budget, input) => {
-      // oxlint-disable-next-line anti-slop/no-runtime-typeof -- `input` is the declared `Size | TaskSizing` union; `typeof` picks which arm of that contract to read, not an unparsed value.
-      if (typeof input === 'string') return Math.max(budget, reviewCycles(input));
-      if (input.type === 'review' || input.size === undefined) return budget;
-      return Math.max(budget, reviewCycles(input.size));
-    }, 0),
+    sizes.reduce((budget, input) => Math.max(budget, taskContribution(input)), 0),
   );
   return Math.max(1, largest);
 };
@@ -151,11 +163,24 @@ export interface SizeEntry {
 }
 
 const SizeEntrySchema = Schema.Struct({
-  model: Schema.String,
-  effort: Schema.optionalKey(Schema.String),
+  model: Schema.String.pipe(
+    Schema.check(
+      Schema.makeFilter((value: string) => value.trim() !== '' && MODEL_PATTERN.test(value)),
+    ),
+  ),
+  effort: Schema.optionalKey(
+    Schema.String.pipe(
+      Schema.check(Schema.makeFilter((value: string) => EFFORT_PATTERN.test(value))),
+    ),
+  ),
 });
 
-const SizeMapSchema = Schema.Record(Schema.String, SizeEntrySchema);
+const SizeMapSchema = Schema.Struct({
+  tiny: Schema.optionalKey(SizeEntrySchema),
+  small: Schema.optionalKey(SizeEntrySchema),
+  medium: Schema.optionalKey(SizeEntrySchema),
+  large: Schema.optionalKey(SizeEntrySchema),
+});
 
 const PhaseConfigSchema = Schema.Struct({ sizes: SizeMapSchema });
 
@@ -270,283 +295,408 @@ const invalidConfig = (source: ConfigSource, cause: unknown): SizingError =>
 /** JSON value decoded at the config boundary. */
 type Json = Schema.Json;
 
-const isRecord = Schema.is(Schema.Record(Schema.String, Schema.Json));
-
 const isString = Schema.is(Schema.String);
-
-const isNumber = Schema.is(Schema.Number);
-
-const isBoolean = Schema.is(Schema.Boolean);
-
-/** Name a value's JSON kind for an `actual` field, without echoing a cause. */
-const kindOf = (value: Json): string => {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'array';
-  if (isString(value)) return 'string';
-  if (isNumber(value)) return 'number';
-  if (isBoolean(value)) return 'boolean';
-  return 'object';
-};
-
-/** Render a value as an `actual` field, distinguishing an empty value. */
-const displayValue = (value: Json): string => {
-  if (isString(value)) return value === '' ? 'empty string' : value;
-  if (isNumber(value) || isBoolean(value)) return String(value);
-  return kindOf(value);
-};
-
-const unknownSize = (field: string): Issue => {
-  const key = field.slice(field.lastIndexOf('.') + 1);
-  return finding({
-    code: CODES.unknownConfigSize,
-    field,
-    message: `Unknown size '${key}'.`,
-    expected: SIZE_HINT,
-    actual: key,
-    fix: `Rename '${field}' to one of ${SIZE_HINT}, or remove it.`,
-  });
-};
-
-const verifyEntry = (issues: Array<Issue>, field: string, entry: Json): void => {
-  if (!isRecord(entry)) {
-    issues.push(
-      finding({
-        code: CODES.nonObjectEntry,
-        field,
-        message: 'A size entry must be an object.',
-        expected: 'an object with a "model"',
-        actual: kindOf(entry),
-        fix: `Rewrite ${field} as { "model": "${MODEL_HINT}" }.`,
-      }),
-    );
-    return;
-  }
-  for (const key of Object.keys(entry)) {
-    if (key === 'model' || key === 'effort') continue;
-    issues.push(
-      finding({
-        code: CODES.unknownKey,
-        field: `${field}.${key}`,
-        message: `Unknown key '${key}' in a size entry.`,
-        expected: 'model or effort',
-        actual: key,
-        fix: `Remove '${field}.${key}'.`,
-      }),
-    );
-  }
-
-  const model = entry.model;
-  const hasModel = model !== undefined && isString(model) && model.trim() !== '';
-  if (model === undefined || !isString(model) || model.trim() === '') {
-    issues.push(
-      finding({
-        code: CODES.missingModel,
-        field: `${field}.model`,
-        message: 'A size entry requires a model.',
-        expected: MODEL_RULE,
-        actual: model === undefined ? 'missing' : displayValue(model),
-        fix: `Add "model": "${MODEL_HINT}" to ${field}.`,
-      }),
-    );
-  } else if (!MODEL_PATTERN.test(model)) {
-    issues.push(
-      finding({
-        code: CODES.malformedModel,
-        field: `${field}.model`,
-        message: 'Model must be an id whose first segment is the provider.',
-        expected: MODEL_RULE,
-        actual: displayValue(model),
-        fix: `Set ${field}.model to a "${MODEL_HINT}" id.`,
-      }),
-    );
-  }
-
-  const effort = entry.effort;
-  if (effort === undefined) return;
-  if (!isString(effort) || !EFFORT_PATTERN.test(effort)) {
-    issues.push(
-      finding({
-        code: CODES.malformedEffort,
-        field: `${field}.effort`,
-        message: 'Effort must be a non-empty catalogue variant token.',
-        expected: EFFORT_HINT,
-        actual: displayValue(effort),
-        fix: `Set ${field}.effort to a token such as "low", "high", or "max".`,
-      }),
-    );
-  }
-  if (!hasModel) {
-    issues.push(
-      finding({
-        code: CODES.effortWithoutModel,
-        field: `${field}.effort`,
-        message: 'An effort without a model is invalid.',
-        expected: 'a "model" alongside "effort"',
-        actual: 'model missing',
-        fix: `Add "model" to ${field}, or remove "effort".`,
-      }),
-    );
-  }
-};
-
-const verifySizes = (issues: Array<Issue>, prefix: string, sizes: Json): void => {
-  if (!isRecord(sizes)) {
-    issues.push(
-      finding({
-        code: CODES.nonObjectSizes,
-        field: prefix,
-        message: '`sizes` must be an object keyed by size.',
-        expected: `an object keyed by ${SIZE_HINT}`,
-        actual: kindOf(sizes),
-        fix: `Rewrite ${prefix} as an object keyed by ${SIZE_HINT}.`,
-      }),
-    );
-    return;
-  }
-  for (const [key, entry] of Object.entries(sizes)) {
-    const field = `${prefix}.${key}`;
-    if (!isSize(key)) {
-      issues.push(unknownSize(field));
-      continue;
-    }
-    verifyEntry(issues, field, entry);
-  }
-};
 
 const phaseKnown = (source: ConfigSource, phase: string): boolean =>
   PHASE_PATTERN.test(phase) &&
   (source.phases === undefined || source.phases.some((known) => known === phase));
 
-const verifyPhases = (issues: Array<Issue>, source: ConfigSource, phases: Json): void => {
-  if (!isRecord(phases)) {
-    issues.push(
-      finding({
-        code: CODES.nonObjectPhases,
-        field: 'phases',
-        message: '`phases` must be an object keyed by phase id.',
-        expected: 'an object keyed by phase id such as A',
-        actual: kindOf(phases),
-        fix: 'Rewrite phases as an object keyed by phase id.',
-      }),
-    );
-    return;
+const issueFromFault = (source: ConfigSource, leaf: FaultLeaf): Issue | undefined => {
+  const field = leaf.field === '' ? 'root' : leaf.field;
+  const segments = leaf.field === '' ? [] : leaf.field.split('.');
+  const allowed = source.kind === 'repo' ? ['sizes'] : ['sizes', 'phases'];
+
+  // Root not an object.
+  if (leaf.field === '') {
+    return finding({
+      code: CODES.malformedConfig,
+      field: 'root',
+      message: 'Config must be a JSON object.',
+      expected: 'an object with a "sizes" map',
+      actual: kindOf(leaf.input),
+      fix: `Rewrite ${source.path} as a JSON object with a "sizes" map.`,
+    });
   }
-  for (const [phase, config] of Object.entries(phases)) {
-    const field = `phases.${phase}`;
-    if (!phaseKnown(source, phase)) {
-      issues.push(
-        finding({
-          code: CODES.unknownPhase,
-          field,
-          message: `Unknown phase '${phase}'.`,
-          expected: 'a phase id such as A or AA',
-          actual: phase,
-          fix: `Rename '${field}' to a phase id such as A, or remove it.`,
-        }),
-      );
-      continue;
-    }
-    if (!isRecord(config)) {
-      issues.push(
-        finding({
-          code: CODES.nonObjectPhase,
-          field,
-          message: 'A phase override must be an object.',
-          expected: 'an object with a "sizes" map',
-          actual: kindOf(config),
-          fix: `Rewrite ${field} as { "sizes": {} }.`,
-        }),
-      );
-      continue;
-    }
-    for (const key of Object.keys(config)) {
-      if (key === 'sizes') continue;
-      issues.push(
-        finding({
-          code: CODES.unknownKey,
-          field: `${field}.${key}`,
-          message: `Unknown key '${key}' in a phase override.`,
-          expected: 'sizes',
-          actual: key,
-          fix: `Remove '${field}.${key}'.`,
-        }),
-      );
-    }
-    if (config.sizes === undefined) {
-      issues.push(
-        finding({
+
+  // Unknown top-level key.
+  if (segments.length === 1 && leaf.tag === 'UnexpectedKey') {
+    const key = segments[0] ?? field;
+    return finding({
+      code: CODES.unknownKey,
+      field: key,
+      message: `Unknown key '${key}'.`,
+      expected: allowed.join(' or '),
+      actual: key,
+      fix: `Remove '${key}' from ${source.path}.`,
+    });
+  }
+
+  if (segments[0] === 'sizes') {
+    // `sizes` itself.
+    if (segments.length === 1) {
+      if (leaf.tag === 'MissingKey') {
+        return finding({
           code: CODES.missingSizes,
-          field: `${field}.sizes`,
+          field: 'sizes',
+          message: 'Config requires a `sizes` map.',
+          expected: 'an object keyed by size',
+          actual: 'missing',
+          fix: `Add "sizes": {} to ${source.path}.`,
+        });
+      }
+      return finding({
+        code: CODES.nonObjectSizes,
+        field: 'sizes',
+        message: '`sizes` must be an object keyed by size.',
+        expected: `an object keyed by ${SIZE_HINT}`,
+        actual: kindOf(leaf.input),
+        fix: `Rewrite sizes as an object keyed by ${SIZE_HINT}.`,
+      });
+    }
+
+    // Unknown size key at sizes.<key>.
+    if (segments.length === 2 && leaf.tag === 'UnexpectedKey') {
+      const key = segments[1] ?? '';
+      return finding({
+        code: CODES.unknownConfigSize,
+        field: `sizes.${key}`,
+        message: `Unknown size '${key}'.`,
+        expected: SIZE_HINT,
+        actual: key,
+        fix: `Rename 'sizes.${key}' to one of ${SIZE_HINT}, or remove it.`,
+      });
+    }
+
+    // Entry not an object.
+    if (segments.length === 2 && leaf.tag === 'InvalidType') {
+      const sizeKey = segments[1] ?? '';
+      return finding({
+        code: CODES.nonObjectEntry,
+        field: `sizes.${sizeKey}`,
+        message: 'A size entry must be an object.',
+        expected: 'an object with a "model"',
+        actual: kindOf(leaf.input),
+        fix: `Rewrite sizes.${sizeKey} as { "model": "${MODEL_HINT}" }.`,
+      });
+    }
+
+    const entryField = segments.slice(0, 2).join('.');
+    const keyName = segments[2];
+
+    if (keyName === 'model') {
+      if (leaf.tag === 'MissingKey') {
+        return finding({
+          code: CODES.missingModel,
+          field: `${entryField}.model`,
+          message: 'A size entry requires a model.',
+          expected: MODEL_RULE,
+          actual: 'missing',
+          fix: `Add "model": "${MODEL_HINT}" to ${entryField}.`,
+        });
+      }
+      if (isBlankInput(leaf)) {
+        return finding({
+          code: CODES.missingModel,
+          field: `${entryField}.model`,
+          message: 'A size entry requires a model.',
+          expected: MODEL_RULE,
+          actual: 'empty string',
+          fix: `Add "model": "${MODEL_HINT}" to ${entryField}.`,
+        });
+      }
+      // non-string input
+      if (leaf.tag === 'InvalidType') {
+        return finding({
+          code: CODES.missingModel,
+          field: `${entryField}.model`,
+          message: 'A size entry requires a model.',
+          expected: MODEL_RULE,
+          actual: displayValue(leaf.input),
+          fix: `Add "model": "${MODEL_HINT}" to ${entryField}.`,
+        });
+      }
+      return finding({
+        code: CODES.malformedModel,
+        field: `${entryField}.model`,
+        message: 'Model must be an id whose first segment is the provider.',
+        expected: MODEL_RULE,
+        actual: displayValue(leaf.input),
+        fix: `Set ${entryField}.model to a "${MODEL_HINT}" id.`,
+      });
+    }
+
+    if (keyName === 'effort') {
+      return finding({
+        code: CODES.malformedEffort,
+        field: `${entryField}.effort`,
+        message: 'Effort must be a non-empty catalogue variant token.',
+        expected: EFFORT_HINT,
+        actual: displayValue(leaf.input),
+        fix: `Set ${entryField}.effort to a token such as "low", "high", or "max".`,
+      });
+    }
+
+    // Unknown key inside an entry.
+    if (segments.length === 3 && leaf.tag === 'UnexpectedKey') {
+      const unknownKey = segments[2] ?? '';
+      return finding({
+        code: CODES.unknownKey,
+        field: `${entryField}.${unknownKey}`,
+        message: `Unknown key '${unknownKey}' in a size entry.`,
+        expected: 'model or effort',
+        actual: unknownKey,
+        fix: `Remove '${entryField}.${unknownKey}'.`,
+      });
+    }
+  }
+
+  if (segments[0] === 'phases') {
+    // `phases` itself.
+    if (segments.length === 1) {
+      if (leaf.tag === 'InvalidType') {
+        return finding({
+          code: CODES.nonObjectPhases,
+          field: 'phases',
+          message: '`phases` must be an object keyed by phase id.',
+          expected: 'an object keyed by phase id such as A',
+          actual: kindOf(leaf.input),
+          fix: 'Rewrite phases as an object keyed by phase id.',
+        });
+      }
+    }
+
+    const phase = segments[1] ?? '';
+    const phaseField = `phases.${phase}`;
+
+    // Phase config not an object.
+    if (segments.length === 2 && leaf.tag === 'InvalidType') {
+      return finding({
+        code: CODES.nonObjectPhase,
+        field: phaseField,
+        message: 'A phase override must be an object.',
+        expected: 'an object with a "sizes" map',
+        actual: kindOf(leaf.input),
+        fix: `Rewrite ${phaseField} as { "sizes": {} }.`,
+      });
+    }
+
+    if (segments.length === 3 && segments[2] === 'sizes') {
+      if (leaf.tag === 'MissingKey') {
+        return finding({
+          code: CODES.missingSizes,
+          field: `${phaseField}.sizes`,
           message: 'A phase override requires a `sizes` map.',
           expected: 'an object keyed by size',
           actual: 'missing',
-          fix: `Add "sizes": {} to ${field}.`,
-        }),
-      );
-      continue;
+          fix: `Add "sizes": {} to ${phaseField}.`,
+        });
+      }
+      if (leaf.tag === 'InvalidType') {
+        return finding({
+          code: CODES.nonObjectSizes,
+          field: `${phaseField}.sizes`,
+          message: '`sizes` must be an object keyed by size.',
+          expected: `an object keyed by ${SIZE_HINT}`,
+          actual: kindOf(leaf.input),
+          fix: `Rewrite ${phaseField}.sizes as an object keyed by ${SIZE_HINT}.`,
+        });
+      }
     }
-    verifySizes(issues, `${field}.sizes`, config.sizes);
+
+    // Unknown key inside a phase override.
+    if (segments.length === 3 && leaf.tag === 'UnexpectedKey') {
+      const unknownKey = segments[2] ?? '';
+      return finding({
+        code: CODES.unknownKey,
+        field: `${phaseField}.${unknownKey}`,
+        message: `Unknown key '${unknownKey}' in a phase override.`,
+        expected: 'sizes',
+        actual: unknownKey,
+        fix: `Remove '${phaseField}.${unknownKey}'.`,
+      });
+    }
+
+    // Unknown size key under phase.
+    if (segments.length === 4 && segments[2] === 'sizes' && leaf.tag === 'UnexpectedKey') {
+      const sizeKey = segments[3] ?? '';
+      return finding({
+        code: CODES.unknownConfigSize,
+        field: `phases.${phase}.sizes.${sizeKey}`,
+        message: `Unknown size '${sizeKey}'.`,
+        expected: SIZE_HINT,
+        actual: sizeKey,
+        fix: `Rename 'phases.${phase}.sizes.${sizeKey}' to one of ${SIZE_HINT}, or remove it.`,
+      });
+    }
+
+    // Entry not an object under phase.
+    if (segments.length === 4 && segments[2] === 'sizes' && leaf.tag === 'InvalidType') {
+      const sizeKey = segments[3] ?? '';
+      return finding({
+        code: CODES.nonObjectEntry,
+        field: `phases.${phase}.sizes.${sizeKey}`,
+        message: 'A size entry must be an object.',
+        expected: 'an object with a "model"',
+        actual: kindOf(leaf.input),
+        fix: `Rewrite phases.${phase}.sizes.${sizeKey} as { "model": "${MODEL_HINT}" }.`,
+      });
+    }
+
+    // Model/effort under phase: sizes.<size>.model/effort
+    if (segments.length === 5 && segments[2] === 'sizes') {
+      const sizeKey = segments[3] ?? '';
+      const entryField = `phases.${phase}.sizes.${sizeKey}`;
+      const keyName = segments[4];
+      if (keyName === 'model') {
+        if (leaf.tag === 'MissingKey') {
+          return finding({
+            code: CODES.missingModel,
+            field: `${entryField}.model`,
+            message: 'A size entry requires a model.',
+            expected: MODEL_RULE,
+            actual: 'missing',
+            fix: `Add "model": "${MODEL_HINT}" to ${entryField}.`,
+          });
+        }
+        if (isBlankInput(leaf)) {
+          return finding({
+            code: CODES.missingModel,
+            field: `${entryField}.model`,
+            message: 'A size entry requires a model.',
+            expected: MODEL_RULE,
+            actual: 'empty string',
+            fix: `Add "model": "${MODEL_HINT}" to ${entryField}.`,
+          });
+        }
+        if (leaf.tag === 'InvalidType') {
+          return finding({
+            code: CODES.missingModel,
+            field: `${entryField}.model`,
+            message: 'A size entry requires a model.',
+            expected: MODEL_RULE,
+            actual: displayValue(leaf.input),
+            fix: `Add "model": "${MODEL_HINT}" to ${entryField}.`,
+          });
+        }
+        return finding({
+          code: CODES.malformedModel,
+          field: `${entryField}.model`,
+          message: 'Model must be an id whose first segment is the provider.',
+          expected: MODEL_RULE,
+          actual: displayValue(leaf.input),
+          fix: `Set ${entryField}.model to a "${MODEL_HINT}" id.`,
+        });
+      }
+      if (keyName === 'effort') {
+        return finding({
+          code: CODES.malformedEffort,
+          field: `${entryField}.effort`,
+          message: 'Effort must be a non-empty catalogue variant token.',
+          expected: EFFORT_HINT,
+          actual: displayValue(leaf.input),
+          fix: `Set ${entryField}.effort to a token such as "low", "high", or "max".`,
+        });
+      }
+    }
   }
+
+  // Fallback for non-object sizes under phases? handled above. Default undefined.
+  return undefined;
 };
 
 /**
- * Mechanically verify one parsed `sizing.json` against the config contract:
- * known keys, known sizes and phases, object entries, and a well-formed model
- * plus effort. Pure — the caller supplies the decoded JSON value.
+ * Mechanically verify one parsed `sizing.json` against the config contract using
+ * schema-backed decoding: the config schemas are authoritative, and each schema
+ * fault maps to one coded sizing issue. Pure — the caller supplies the decoded
+ * JSON value.
  * @param source - where the config lives and which shape applies
  * @param value - the JSON value decoded at the config boundary
  * @returns the result; `valid` is true only with zero issues
  */
 export const verify = (source: ConfigSource, value: Json): VerifyResult => {
   const issues: Array<Issue> = [];
-  if (!isRecord(value)) {
-    return {
-      valid: false,
-      issues: [
-        finding({
-          code: CODES.malformedConfig,
-          field: 'root',
-          message: 'Config must be a JSON object.',
-          expected: 'an object with a "sizes" map',
-          actual: kindOf(value),
-          fix: `Rewrite ${source.path} as a JSON object with a "sizes" map.`,
-        }),
-      ],
+
+  const configSchema = source.kind === 'repo' ? RepoConfigSchema : SpecConfigSchema;
+  const decoded = Schema.decodeUnknownResult(configSchema, {
+    onExcessProperty: 'error',
+    reportInput: true,
+  })(value);
+
+  const unknownPhases = new Set<string>();
+  if (isRecord(value) && source.kind === 'spec' && isRecord(value.phases)) {
+    for (const phase of Object.keys(value.phases)) {
+      if (!phaseKnown(source, phase)) unknownPhases.add(phase);
+    }
+  }
+
+  // Map schema faults to coded issues, dropping any fault that lives under an
+  // unknown phase (that phase is reported once by the semantic pass below).
+  if (Result.isFailure(decoded)) {
+    const leaves = faultLeaves(decoded.failure.issue);
+    for (const leaf of leaves) {
+      const segments = leaf.field.split('.').filter((part) => part !== '');
+      if (segments[0] === 'phases' && segments[1] !== undefined && unknownPhases.has(segments[1])) {
+        continue;
+      }
+      const mapped = issueFromFault(source, leaf);
+      if (mapped !== undefined) issues.push(mapped);
+    }
+  }
+
+  // Semantic checks that the schemas cannot express per-key.
+  if (isRecord(value)) {
+    if (source.kind === 'spec' && isRecord(value.phases)) {
+      for (const phase of Object.keys(value.phases)) {
+        if (!phaseKnown(source, phase)) {
+          issues.push(
+            finding({
+              code: CODES.unknownPhase,
+              field: `phases.${phase}`,
+              message: `Unknown phase '${phase}'.`,
+              expected: 'a phase id such as A or AA',
+              actual: phase,
+              fix: `Rename 'phases.${phase}' to a phase id such as A, or remove it.`,
+            }),
+          );
+        }
+      }
+    }
+
+    // effort without a model (raw semantic check, independent of schema success)
+    // oxlint-disable-next-line anti-slop/no-unknown-parameters -- this reads a decoded JSON value whose shape is validated by the schema above.
+    const checkEffortWithoutModel = (prefix: string, sizesValue: unknown): void => {
+      if (!isRecord(sizesValue)) return;
+      for (const [sizeKey, entry] of Object.entries(sizesValue)) {
+        if (!isSize(sizeKey)) continue;
+        if (!isRecord(entry)) continue;
+        if (entry.effort === undefined) continue;
+        const model = entry.model;
+        const hasModel = model !== undefined && isString(model) && model.trim() !== '';
+        if (!hasModel) {
+          issues.push(
+            finding({
+              code: CODES.effortWithoutModel,
+              field: `${prefix}.${sizeKey}.effort`,
+              message: 'An effort without a model is invalid.',
+              expected: 'a "model" alongside "effort"',
+              actual: 'model missing',
+              fix: `Add "model" to ${prefix}.${sizeKey}, or remove "effort".`,
+            }),
+          );
+        }
+      }
     };
-  }
-
-  const allowed = source.kind === 'repo' ? ['sizes'] : ['sizes', 'phases'];
-  for (const key of Object.keys(value)) {
-    if (allowed.includes(key)) continue;
-    issues.push(
-      finding({
-        code: CODES.unknownKey,
-        field: key,
-        message: `Unknown key '${key}'.`,
-        expected: allowed.join(' or '),
-        actual: key,
-        fix: `Remove '${key}' from ${source.path}.`,
-      }),
-    );
-  }
-
-  if (value.sizes === undefined) {
-    issues.push(
-      finding({
-        code: CODES.missingSizes,
-        field: 'sizes',
-        message: 'Config requires a `sizes` map.',
-        expected: 'an object keyed by size',
-        actual: 'missing',
-        fix: `Add "sizes": {} to ${source.path}.`,
-      }),
-    );
-  } else {
-    verifySizes(issues, 'sizes', value.sizes);
-  }
-
-  if (source.kind === 'spec' && value.phases !== undefined) {
-    verifyPhases(issues, source, value.phases);
+    if (isRecord(value.sizes)) checkEffortWithoutModel('sizes', value.sizes);
+    if (source.kind === 'spec' && isRecord(value.phases)) {
+      for (const phase of Object.keys(value.phases)) {
+        if (!phaseKnown(source, phase)) continue;
+        const phaseConfig = value.phases[phase];
+        if (!isRecord(phaseConfig)) continue;
+        if (isRecord(phaseConfig.sizes)) {
+          checkEffortWithoutModel(`phases.${phase}.sizes`, phaseConfig.sizes);
+        }
+      }
+    }
   }
 
   return { valid: noErrors(issues), issues };

@@ -342,6 +342,31 @@ Vitest.describe('Catalogue rendering', () => {
     Vitest.expect(Catalogue.providersOf(catalogue)).toStrictEqual(['fixture']);
     Vitest.expect(Catalogue.filterProvider(catalogue, 'nope').models).toStrictEqual([]);
   });
+
+  Vitest.it('drops a default the filter leaves outside the document', () => {
+    const both = Catalogue.normalize(
+      [source('fixture', 'default-model', ['high']), source('alpha', 'a-model', [])],
+      'fixture/default-model',
+    );
+    const kept = Catalogue.filterProvider(both, 'fixture');
+    Vitest.expect(kept.default).toBe('fixture/default-model');
+    Vitest.expect(Catalogue.renderTable(kept)).toContain('fixture/default-model  variants high  *');
+
+    const other = Catalogue.filterProvider(both, 'alpha');
+    Vitest.expect(other.default).toBeNull();
+    Vitest.expect(Catalogue.renderTable(other)).not.toContain('*');
+    // A filtered document is still valid `--catalog` input, default included.
+    const decoded = successOf(Catalogue.decode(Catalogue.toJson(other), 'catalog.json'));
+    Vitest.expect(decoded).toStrictEqual(other);
+    Vitest.expect(decoded.models.map((model) => model.label)).toStrictEqual(['alpha/a-model']);
+
+    const miss = Catalogue.filterProvider(both, 'nope');
+    Vitest.expect(miss).toStrictEqual({
+      default: null,
+      models: [],
+      omitted: { models: 0, variants: 0, defaults: 0 },
+    });
+  });
 });
 
 Vitest.describe('Catalogue.verify', () => {

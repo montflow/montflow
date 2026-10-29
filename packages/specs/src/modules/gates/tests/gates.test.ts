@@ -17,8 +17,20 @@ const goodGates = [
 Vitest.describe('Gates.parseGates runtime', () => {
   Vitest.it('parses stages and their items', () => {
     Vitest.expect(Gates.parseGates(goodGates)).toStrictEqual([
-      { heading: 'Stage 0: Core Validation', items: ['format:check', 'lint:check'] },
-      { heading: 'Stage 1: Verification', items: ['ts:check', 'test'] },
+      {
+        heading: 'Stage 0: Core Validation',
+        items: [
+          { text: 'format:check', checked: false },
+          { text: 'lint:check', checked: false },
+        ],
+      },
+      {
+        heading: 'Stage 1: Verification',
+        items: [
+          { text: 'ts:check', checked: false },
+          { text: 'test', checked: false },
+        ],
+      },
     ]);
   });
 });
@@ -53,5 +65,41 @@ Vitest.describe('Gates.verifyGatesFile runtime', () => {
         message: "Checklist item is still a placeholder: '<custom validation>'.",
       },
     ]);
+  });
+});
+
+Vitest.describe('Gates.verifyGateProgress runtime', () => {
+  Vitest.it('warns when a complete task has no checked gate item', () => {
+    Vitest.expect(Gates.verifyGateProgress(goodGates, true)).toStrictEqual({
+      valid: true,
+      issues: [
+        {
+          code: 'gate.unchecked',
+          field: 'gate',
+          severity: 'warning',
+          message:
+            'Completed task has 4 gate items and none checked; the gate records no verification result.',
+          expected: 'at least one checked gate item (`- [x]`)',
+          actual: '4 unchecked',
+          fix: 'Run the gate and check each item that passed, or set `status: in-progress`.',
+        },
+      ],
+    });
+  });
+
+  Vitest.it('stays quiet for a pending task, a checked gate, and an itemless gate', () => {
+    Vitest.expect(Gates.verifyGateProgress(goodGates, false)).toStrictEqual({
+      valid: true,
+      issues: [],
+    });
+    const partlyChecked = goodGates.replace('- [ ] test', '- [x] test');
+    Vitest.expect(Gates.verifyGateProgress(partlyChecked, true)).toStrictEqual({
+      valid: true,
+      issues: [],
+    });
+    Vitest.expect(Gates.verifyGateProgress('## Stage 0\n', true)).toStrictEqual({
+      valid: true,
+      issues: [],
+    });
   });
 });

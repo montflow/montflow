@@ -6,34 +6,51 @@ agents and humans:
 
 - `check` — mechanically verify the whole spec store (`--dir` selects the
   workspace root, default cwd; the store is `<root>/.agents/@montflow/specs`)
-  or one `--name`. Token-lean by default
-  (failures + summary); `--verbose` also lists passing specs and the root,
-  and adds the cause chain plus a `layers` trace (`consulted`, winning
-  `layer`, `phase`) for sizing findings. Verifies the repo-level `sizing.json`
-  once and every spec config plus task size, aggregating every finding in one
-  run. Exits non-zero when any check fails.
+  or one `--name`. Token-lean by default (failures + summary): every error in
+  its full block, coded warnings grouped to one line per spec, carrying each
+  code's count and one representative path, so a historical backlog stays
+  readable. `--verbose` lists
+  passing specs and the root, expands every warning group back into its full
+  block, and adds the cause chain plus a `layers` trace (`consulted`, winning
+  `layer`, `phase`) for sizing findings. `--strict` promotes warnings, which
+  then render in full as errors and fail the run. Verifies the repo-level
+  `sizing.json` once and every spec config plus task size, the record checks
+  (unchecked completion, an all-unchecked gate), and the review budget read from
+  the review store, aggregating every
+  finding in one run. The review series is part of the one tree verdict every
+  surface reads, so an over-budget phase also blocks `status`, `next`, `state`,
+  and `execute`. Exits non-zero when any check fails.
 - `status --name <spec>` — readable status panel for one spec:
   lifecycle, counts, the config files found, each phase's review budget and
   effective size -> target mapping, per-task size/target/source, and the
-  verification verdict. Exits non-zero when that spec fails verification or a
-  config file is invalid.
+  verification verdict. Exits non-zero on every error `check` reports for that
+  spec, config or tree.
 - `state --name <spec>` — compact derived state, active phase, and
-  locked phases for an orchestrator.
+  locked phases for an orchestrator. Exits non-zero on the same dispatch errors
+  `status` reports, and the line stays compact: a blocked spec appends
+  `· blocked <codes>` and a `next mf-specs status --name <spec>` line, so the
+  exit code never sits beside a clean-looking `state complete`. `--verbose`
+  expands those codes into the same full blocker blocks `status` prints.
 - `next --name <spec>` — the ready task set for the active phase, with the
   phase review budget in the header and each task's size, target, and winning
-  layer. Exits non-zero on the same config and task-size errors as `check`.
+  layer. Exits non-zero on every error `check` reports, config or tree, and
+  prints those errors as blockers.
 - `resolve --name <spec> --task <id>` — machine-only: prints exactly
   `provider/model#effort` or `inherit`, and exits non-zero through the
   diagnostic renderer for an unknown spec/task or an invalid config.
 - `sizing --name <spec> --task <id> [--verbose|--human]` — one compact line
   (id, size, target, winning layer) or the detailed provenance matrix across
-  all four sizes and the repo/spec/phase layers, plus the task and phase review
-  budgets.
+  all four sizes and the repo/spec/phase layers, plus the labelled budget line
+  (`size budget <task> · contributes <cycles> · phase <id> · phase budget
+<phase>`). A `review` task contributes `0` while still carrying its own size
+  budget, and the compact line is unchanged by the detailed labels.
 - `which [--branch <name>] [--dir <path>]` — the mechanical spec resolver:
   reads `<dir>/.git` (a directory, or a file naming a worktree's gitdir), reads
   its `HEAD`, parses the branch as `<prefix>/<feature-name>`, and prints exactly
   one spec name. Matching goes through `modules/which` — exact normalized match
-  first, then a unique prefix pair, never fuzzy. `--branch` overrides detection
+  first, then a unique prefix pair whose shorter name ends at a `-` boundary,
+  never fuzzy and never mid-word (`feat/s` does not match `spec-optimizations`).
+  `--branch` overrides detection
   for tests and CI. `--dir` defaults to the nearest repository root, like
   `author`/`execute`, so the package script resolves the repo's specs. A
   detached HEAD, a branch without a conventional prefix, a missing `.git`, or
@@ -46,7 +63,8 @@ agents and humans:
   with an exact state list (`completed` is an alias for `complete`).
 - `create --name <spec>` — deterministic, model-free scaffold: renders a
   fresh spec tree via `modules/scaffold` and writes it through
-  `SpecStore.write`. Refuses to overwrite an existing spec.
+  `SpecStore.write`. Refuses to overwrite an existing spec. A malformed `--name`
+  is `cli.invalid-argument` with the slug rule, before `--tasks` is parsed.
 - `author --request <text> [--notes <text>]` — loads `spec-create` through
   `modules/prompt` (which gates on `mf-specs doctor`), renders it with the
   request, and prints the prompt and nothing else. Model-free: it never opens a
@@ -59,8 +77,12 @@ agents and humans:
   An absent or ambiguous branch fails with `SPEC_NO_MATCH` / `SPEC_AMBIGUOUS`,
   the candidate list, the exact `--name` values, and `next ask the user`; it
   never picks a spec. `--mode` is parsed at the command boundary before any spec
-  read and accepts exactly `guided` (default) and `autonomous`. A phase id no
-  task carries fails `spec.phase-not-found`; an id that is not the active phase
+  read and accepts exactly `guided` (default) and `autonomous`. A blank or
+  whitespace-only `--phase` is absent, the same rule `sizing-config` applies; a
+  padded or otherwise malformed `--phase` is `cli.invalid-argument` in both
+  verbs, never trimmed into a valid id. A
+  phase id no task carries fails `spec.phase-not-found`; an id that is not the
+  active phase
   (locked or later) fails `spec.phase-not-active` naming the active phase; a
   spec with no active phase (complete, inconsistent, or all phases locked)
   fails `spec.no-active-phase` and renders no session. A tree `check` rejects
@@ -72,7 +94,10 @@ agents and humans:
   `--catalog` input. The document carries only ids, variant tokens, and a default
   label the sizing grammar can store: a host descriptor it cannot store is
   dropped, while a `--catalog` file carrying one is refused as
-  `models.malformed-catalog`. Outside
+  `models.malformed-catalog`. A `--provider`-filtered `--json` document sets
+  `"default": null` unless the default model survives the filter, so the
+  document never points at a model it does not list and still round-trips as
+  `--catalog` input. Outside
   the host a bare run exits non-zero with
   `models.unavailable` and names `--catalog` as the fix; a malformed file is
   `models.malformed-catalog`. `--verify` cross-checks the repo config, and with
@@ -81,8 +106,15 @@ agents and humans:
   variants never produce an effort finding. `--provider` scopes either action (a
   miss is `models.unknown-provider`); under `--verify` it checks only that
   provider's entries and an unknown `--name` is `spec.not-found`; `--json` is
-  refused with `--verify`. A missing specs root fails the store diagnostic
-  instead of reporting a clean verification.
+  refused with `--verify`, and `--name` is refused without it
+  (`cli.invalid-argument`) instead of being dropped — the same refusal the
+  `spec_models` tool's `list` action returns. Every `--verify` run ends
+  with one count line —
+  entries checked and skipped, split by layer and provider — so a pass that
+  checked nothing states its zero instead of claiming success. The `provider`
+  segment is printed only for a filtered run, so no sentinel label exists to
+  confuse with a real provider id. A missing specs
+  root fails the store diagnostic instead of reporting a clean verification.
 - `sizing-config [--scope repo|spec|phase] [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous]`
   — loads `spec-sizing` through `modules/prompt` (gated on `mf-specs doctor`),
   renders it for one config layer, and prints it. Writes no file and dispatches
@@ -93,7 +125,10 @@ agents and humans:
   `--name`, `--scope phase` without `--phase`, a contradictory `--scope`, a
   supplied-but-blank `--name`, and an unknown `--scope` all fail
   `cli.invalid-argument` with the corrected command; omitting `--name` keeps
-  the scope open. `--mode` reuses `parseMode` (guided default).
+  the scope open. `--name` and `--phase` are validated as supplied by
+  `resolveSizingScope` — a padded identifier is refused, never trimmed — and a
+  blank `--phase` is absent, so both verbs apply one identifier rule.
+  `--mode` reuses `parseMode` (guided default).
 - `doctor` — install or verify the packaged spec skills and prompts in
   `<repo>/.agents/`. Idempotent; the repo root is resolved from the working
   directory unless `--dir` names it (`apps/doctor`). Repair mode reports
@@ -104,15 +139,26 @@ agents and humans:
   anything is `missing`, `stale`, or `blocked`.
 
 Every sizing failure renders through one agent-first diagnostic: stable `code`,
-`path`, `field`, `problem`, `expected`, `actual`, `fix`, `cause`, and `next`.
+`path`, `field`, `problem`, `expected`, `actual`, `fix`, and `next`, with the
+`cause`, `layers`, and `stack` detail rows added only under `--verbose`, so the
+flag means the same thing on `check`, `status`, `next`, and every other verb.
 Every command body runs through `runDiagnosed`, so `diagnoseCause` sees every
 caught `Cause`: an expected failure renders its own block and exits `1`, an
 unrecognised expected failure renders `failure.unhandled` (still `1`), a pure
 interruption exits `130` with no block, and an unexpected defect is labelled
-`internal` and exits `2` with its stack shown only under `--verbose`. `status`
-and `next` gate their target columns on `dispatchExitCode` — the same config and
-task-size errors `check` reports — so no dispatchable target is printed for a
-task the contract calls invalid, and all three agree on the exit code.
+`internal` and exits `2` with its stack shown only under `--verbose`. `status`,
+`next`, and `state` gate on `dispatchExitCode` — every error `check` reports,
+config, task size, tree, or review budget — and `status` / `next` print those
+errors as blockers, so no dispatchable target is printed for a task the contract
+calls invalid, and all of them agree with `check` on the exit code. One review
+series read feeds `check`, `status`, `next`, and `execute`, so no surface can
+disagree about an over-budget phase. A failed review-store read renders the same
+finding everywhere — field `review-series`, path `<spec>/review-series`, never a
+machine-absolute path — and `list` degrades that one spec's row instead of
+aborting the whole listing. Warnings are never dispatch errors,
+including the ones `check --strict` promotes: that flag is a gate decision, so a
+strict-only warning fails `check` alone. `/specs status`, `/specs next`, and
+`/specs state` report `ok` from that same exit code.
 
 ## Belongs here
 
@@ -122,14 +168,15 @@ task the contract calls invalid, and all three agree on the exit code.
   `SpecStore` service, the prompt loader, and the host model catalogue
 - Pure renderers (`renderCheck`, `renderStatus`, `renderNext`, `renderList`,
   `renderScaffold`, `renderSizing`, `renderSizingReport`, `renderModelFindings`,
-  `renderDiagnostic`, `renderWhich`)
-  — the token-efficiency contract and the agent-first diagnostic shape live here
+  `renderWhich`) — the token-efficiency contract lives here; the agent-first
+  diagnostic block is `modules/diagnostic`, re-exported for the library surface
 - `diagnoseCause` — maps expected failures (recognised and unrecognised,
   including `PromptError`) to `1`, interruption to `130`, and internal defects
   to `2`
-- Dispatch gating (`dispatchErrors`, `dispatchErrorText`, `dispatchExitCode`)
-  shared by `status` and `next`, and `runDiagnosed` — the one command boundary
-  that catches `Cause`
+- Dispatch gating (`dispatchErrors`, `dispatchBlocked`, `dispatchErrorText`,
+  `dispatchExitCode`) shared by `status` and `next` for both the exit code and
+  the target columns, and `runDiagnosed` — the one command boundary that catches
+  `Cause`
 - `Command`/`Flag` wiring (`checkCommand`, `statusCommand`, `resolveCommand`,
   `sizingCommand`, `whichCommand`, `listCommand`, `createCommand`,
   `authorCommand`, `executeCommand`, `sizingConfigCommand`, `doctorCommand`,
@@ -185,7 +232,22 @@ The same plugin registers the `spec_author`, `spec_execute`, `spec_sizing`, and
 `@montflow/prompts`' executor and the host `ModelPort` + `SessionDispatchPort`;
 `spec_models` reads the same host `ModelPort` catalogue the slash form prints.
 Prose values for `--request`, `--notes`, and `--focus` are joined up to the next
-`--flag`, so a slash invocation keeps its spaces without shell quoting.
+`--flag`, so a slash invocation keeps its spaces without shell quoting. The
+`=` spelling joins the same words (`--request=Ship login` is the request
+`Ship login`), so the two forms never disagree about the value.
+
+Flags are validated per command before any store, prompt, or git read. Each verb
+accepts `--dir` and `--verbose` plus the row in `SLASH_COMMAND_FLAGS`; an unknown
+or misplaced flag is `cli.invalid-argument` with the offending `field`, the row it
+does accept, and the `next` command that reads it (`/specs execute --scope repo`
+→ `/specs sizing-config --scope repo`, `/specs check --json` → `/specs models
+--json`, `/specs status --task A001` → `/specs resolve --name <spec> --task
+A001`). A switch written with an inline value (`--strict=true`, `--human=1`) is
+refused the same way and names the bare switch, because the parser cannot set a
+switch from `=value` and would otherwise accept a silent no-op. Adding a slash
+flag means adding it to `SLASH_FLAG_KINDS` and that command's row, both typed by
+the known-flag union, so a misspelled or mis-shaped flag fails typecheck instead
+of parsing.
 
 ## Building & distributing
 

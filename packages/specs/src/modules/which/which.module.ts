@@ -46,7 +46,10 @@ const HEAD_REF_PREFIX = 'ref:';
 /** Prefix of the `.git` file line that names a worktree's git directory. */
 const GITDIR_PREFIX = 'gitdir:';
 
-/** Separator a feature name normalizes `/` and `_` into. */
+/**
+ * Separator a feature name normalizes `/` and `_` into, and the only character
+ * a prefix match may stop in front of.
+ */
 const FEATURE_SEPARATOR = '-';
 
 /** Stable codes for the two match failures. */
@@ -162,9 +165,18 @@ export const parseGitFile = (text: string, workspace: string): string | undefine
 
 // ─── Matching ─────────────────────────────────────────────────────────
 
-/** One name is a prefix of the other. */
-const isPrefixPair = (feature: string, name: string): boolean =>
-  name.startsWith(feature) || feature.startsWith(name);
+/**
+ * One name is a prefix of the other *ending on a segment boundary*: the shorter
+ * name must stop exactly where the longer one continues after a `-`. A bare
+ * substring prefix is not a match, because `feat/s` would otherwise name every
+ * spec whose name starts with `s` and `feat/fix` every `fixture-*` spec. A
+ * whole-name prefix that ends mid-word (`spec` in `special-case`) is a different
+ * word, not a shortening of it.
+ */
+const isPrefixPair = (feature: string, name: string): boolean => {
+  const [shorter, longer] = feature.length <= name.length ? [feature, name] : [name, feature];
+  return longer.startsWith(shorter) && longer.charAt(shorter.length) === FEATURE_SEPARATOR;
+};
 
 /** What a feature name matched among the candidate spec names. */
 export type MatchRead =
@@ -178,9 +190,9 @@ export type MatchRead =
 
 /**
  * Match a normalized feature name against spec directory names: an exact
- * normalized name wins, otherwise a unique prefix pair (either direction)
- * wins. Zero or two or more candidates fail with a coded miss. There is no
- * fuzzy, edit-distance, keyword, or description matching.
+ * normalized name wins, otherwise a unique prefix pair (either direction, ending
+ * at a `-` boundary) wins. Zero or two or more candidates fail with a coded
+ * miss. There is no fuzzy, edit-distance, keyword, or description matching.
  * @param feature - normalized feature name from the branch
  * @param names - every spec directory name that holds a `SPEC.md`
  * @returns the one match, or the candidate list that stopped it
@@ -296,7 +308,7 @@ export const resolve = (request: WhichRequest): WhichResolution => {
     problem: ambiguous
       ? `Feature '${parsed.feature}' from branch '${source.branch}' matches ${matched.candidates.length} specs.`
       : `No spec matches feature '${parsed.feature}' from branch '${source.branch}'.`,
-    expected: 'exactly one spec name equal to the feature or a prefix of it',
+    expected: 'exactly one spec name equal to the feature, or a prefix of it ending at a "-"',
     actual: `${source.branch} · candidates ${candidateText(matched.candidates)}`,
     branch: source.branch,
     candidates: matched.candidates,

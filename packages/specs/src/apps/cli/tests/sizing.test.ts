@@ -132,6 +132,27 @@ Vitest.describe('Cli.sizingOf compact runtime', () => {
     }),
   );
 
+  Vitest.it.effect('couples the printed contribution and phase budget to one rule', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizing({ repo: REPO_SIZING, specSizing: SPEC_SIZING });
+      const line = renderSizingReport(report).split('\n')[1] ?? '';
+      const contributes = Number(/contributes (\d+)/.exec(line)?.[1]);
+      const phaseBudget = Number(/phase budget (\d+)/.exec(line)?.[1]);
+      // Phase A holds A001 (tiny), A002 (small), and A099 (review, medium).
+      const members = [
+        { type: 'execution', size: 'tiny' as const },
+        { type: 'execution', size: 'small' as const },
+        { type: 'review', size: 'medium' as const },
+      ];
+      // Both numbers on the one line come from the sizing module's rule.
+      const declared = report.task.size;
+      const size = declared !== undefined && Sizing.isSize(declared) ? declared : undefined;
+      Vitest.expect(contributes).toBe(Sizing.taskContribution({ type: report.task.type, size }));
+      Vitest.expect(phaseBudget).toBe(Sizing.phaseReviewBudget(members));
+      Vitest.expect(phaseBudget).toBe(Math.max(1, ...members.map(Sizing.taskContribution)));
+    }),
+  );
+
   Vitest.it.effect('reports inherit when no layer defines the size', () =>
     Effect.gen(function* () {
       const report = yield* runSizing();
@@ -148,6 +169,13 @@ Vitest.describe('Cli.sizingOf compact runtime', () => {
       Vitest.expect(review.budget).toBe(3);
       Vitest.expect(review.phaseBudget).toBe(2);
       Vitest.expect(renderSizingReport(review)).toContain('contributes 0');
+      // The three numbers are labelled: the task's own size budget, what it
+      // adds to the phase (a review task adds none), and the phase budget.
+      Vitest.expect(renderSizingReport(review).split('\n')[1]).toBe(
+        'size budget 3 · contributes 0 · phase A · phase budget 2',
+      );
+      // A review task's compact line is unchanged by the detailed labels.
+      Vitest.expect(renderSizing(review)).toBe('A099  medium  inherit');
     }),
   );
 });
@@ -160,7 +188,7 @@ Vitest.describe('Cli.renderSizingReport runtime', () => {
       Vitest.expect(lines[0]).toBe(
         'A001 · declared tiny · target fixture/phase-model#high · source phase',
       );
-      Vitest.expect(lines[1]).toBe('budget 1 · contributes 1 · phase A budget 2');
+      Vitest.expect(lines[1]).toBe('size budget 1 · contributes 1 · phase A · phase budget 2');
       Vitest.expect((lines[3] ?? '').split(/\s{2,}/)).toStrictEqual([
         'size',
         'repo',
@@ -275,9 +303,24 @@ Vitest.describe('Cli.diagnoseCause runtime', () => {
             cause: new Error('Unexpected token'),
           }),
         ),
-        { path: specName, rerun: 'mf-specs check', verbose: false },
+        { path: specName, rerun: 'mf-specs check', verbose: true },
       );
       Vitest.expect(caused.output).toContain('cause    Unexpected token');
+      // The default block carries no detail rows: `verbose` is the one switch.
+      const compact = diagnoseCause(
+        Cause.fail(
+          new Sizing.SizingError({
+            operation: 'Sizing.parse',
+            path: 'sizing.json',
+            field: 'root',
+            code: 'sizing.malformed-json',
+            message: 'Config is not valid JSON.',
+            cause: new Error('Unexpected token'),
+          }),
+        ),
+        { path: specName, rerun: 'mf-specs check', verbose: false },
+      );
+      Vitest.expect(compact.output).not.toContain('cause');
     }),
   );
 
@@ -381,7 +424,10 @@ Vitest.describe('Cli.check sizing aggregation runtime', () => {
       Vitest.expect(report.warningCount).toBe(1);
       const text = renderCheck(report, false);
       Vitest.expect(text).toContain('\u2713 ship-spec (1 warning)');
-      Vitest.expect(text).toContain('  code     ! sizing.unknown-phase');
+      Vitest.expect(text).toContain(
+        '  ! sizing.unknown-phase \u00d7 1 \u00b7 ship-spec/sizing.json',
+      );
+      Vitest.expect(renderCheck(report, true)).toContain('  code     ! sizing.unknown-phase');
     }),
   );
 
@@ -447,7 +493,9 @@ Vitest.describe('Cli dispatch gating runtime', () => {
         Effect.provide(layer({ a001Size: 'huge' })),
       );
       Vitest.expect(report.tasks.map((task) => task.id)).toStrictEqual(['A001', 'A002', 'A099']);
-      Vitest.expect(dispatchExitCode(report.sizing, report.verify)).toBe(VALIDATION_EXIT_CODE);
+      Vitest.expect(dispatchExitCode(report.sizing, report.verify, report.name)).toBe(
+        VALIDATION_EXIT_CODE,
+      );
     }),
   );
 
@@ -460,8 +508,12 @@ Vitest.describe('Cli dispatch gating runtime', () => {
       const ready = yield* next(root, specName).pipe(Effect.provide(shared));
 
       Vitest.expect(checkExitCode(checked)).toBe(VALIDATION_EXIT_CODE);
-      Vitest.expect(dispatchExitCode(reported.sizing, reported.verify)).toBe(VALIDATION_EXIT_CODE);
-      Vitest.expect(dispatchExitCode(ready.sizing, ready.verify)).toBe(VALIDATION_EXIT_CODE);
+      Vitest.expect(dispatchExitCode(reported.sizing, reported.verify, reported.name)).toBe(
+        VALIDATION_EXIT_CODE,
+      );
+      Vitest.expect(dispatchExitCode(ready.sizing, ready.verify, ready.name)).toBe(
+        VALIDATION_EXIT_CODE,
+      );
 
       const text = renderNext(ready);
       Vitest.expect(text).toContain('A001  execution  build');

@@ -6,7 +6,7 @@ originator: user
 size: medium
 depends-on: F001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task F002: record-checks

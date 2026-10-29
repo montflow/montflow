@@ -75,6 +75,37 @@ const runList = (options: Parameters<typeof listModels>[0], modelList = source) 
 const runVerify = (name: string | undefined, layer: TestLayer) =>
   verifyModels(root, name === undefined ? {} : { name }, source).pipe(Effect.provide(layer));
 
+/** The flags a printed `models --verify` row carries. */
+interface VerifyFlags {
+  provider?: string;
+  catalog?: string;
+  name?: string;
+}
+
+/**
+ * Parse a printed `mf-specs models --verify …` row back into the flags the
+ * binary reads, replacing the `<spec>` placeholder with a real name, so a test
+ * runs the exact command a diagnostic tells the caller to re-run.
+ * @param command - the diagnostic's `next` row
+ * @param name - the repaired spec name to substitute for `<spec>`
+ * @returns the flags that row selects
+ */
+const flagsOf = (command: string, name: string): VerifyFlags => {
+  const flags: VerifyFlags = {};
+  // Drop `mf-specs models --verify`; every remaining token is `<flag> <value>`.
+  const tokens = command.split(' ').slice(3);
+  for (let index = 0; index + 1 < tokens.length; index += 2) {
+    const flag = tokens[index];
+    const raw = tokens[index + 1];
+    if (flag === undefined || raw === undefined) continue;
+    const value = raw === '<spec>' ? name : raw;
+    if (flag === '--provider') flags.provider = value;
+    if (flag === '--catalog') flags.catalog = value;
+    if (flag === '--name') flags.name = value;
+  }
+  return flags;
+};
+
 /** Decode a rendered JSON document, failing the test when it is malformed. */
 const jsonOf = (text: string): Catalogue.Catalogue => {
   const decoded = Catalogue.decode(text, 'models --json');
@@ -122,18 +153,54 @@ Vitest.describe('Cli.models listing', () => {
     }),
   );
 
+  Vitest.it.effect('refuses --name on the listing path instead of dropping it', () =>
+    Effect.gen(function* () {
+      const error = yield* models(root, { catalog, name: 'spec-a' }, source).pipe(
+        Effect.provide(stubLayer(specs)),
+        Effect.flip,
+      );
+      Vitest.expect(error).toBeInstanceOf(SurfaceError);
+      if (!(error instanceof SurfaceError)) return;
+      const found = error.diagnostics[0];
+      Vitest.expect(found?.code).toBe('cli.invalid-argument');
+      Vitest.expect(found?.field).toBe('--name');
+      Vitest.expect(found?.fix).toContain('--verify');
+      Vitest.expect(found?.fix).toContain('--name spec-a');
+      Vitest.expect(found?.next).toBe(
+        'mf-specs models --verify --catalog fixtures/catalog.json --name spec-a',
+      );
+    }),
+  );
+
   Vitest.it.effect('filters by provider and fails a provider with no models', () =>
     Effect.gen(function* () {
       const hit = yield* runList({ catalog, provider: 'alpha', json: true });
       const document = jsonOf(hit.output);
       Vitest.expect(document.models).toHaveLength(1);
       Vitest.expect(document.models[0]?.modelID).toBe('a-model');
+      // The fixture default belongs to another provider, so the filtered
+      // document carries none rather than a label pointing outside its list.
+      Vitest.expect(document.default).toBeNull();
 
       const error = yield* runList({ catalog, provider: 'nope' }).pipe(Effect.flip);
       Vitest.expect(error).toBeInstanceOf(SurfaceError);
       Vitest.expect(error.diagnostics[0]?.code).toBe(Catalogue.CODES.unknownProvider);
       Vitest.expect(error.diagnostics[0]?.fix).toContain('--provider');
     }),
+  );
+
+  Vitest.it.effect('round-trips a provider-filtered --json document back through --catalog', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-specs-catalog-filtered-' });
+      const first = yield* runList({ catalog, provider: 'alpha', json: true });
+      const file = path.join(dir, 'catalog.json');
+      yield* fs.writeFileString(file, first.output);
+      const second = yield* runList({ catalog: file, json: true });
+      Vitest.expect(second.output).toBe(first.output);
+      Vitest.expect(jsonOf(second.output).default).toBeNull();
+    }).pipe(Effect.provide(Platform)),
   );
 
   Vitest.it.effect('fails outside a host without --catalog and names the fix', () =>
@@ -253,11 +320,46 @@ Vitest.describe('Cli.models verification', () => {
     }),
   );
 
-  Vitest.it.effect('a repo with no config is a clean no-op', () =>
+  Vitest.it.effect('a repo with no config checks nothing and says so', () =>
     Effect.gen(function* () {
       const report = yield* runVerify(undefined, stubLayer(specs));
       Vitest.expect(report.findings).toStrictEqual([]);
-      Vitest.expect(report.output).toBe('\u2713 no model or effort findings');
+      Vitest.expect(report.counts).toStrictEqual({
+        checked: 0,
+        skipped: 0,
+        layers: [{ layer: 'repo', checked: 0, skipped: 0 }],
+      });
+      Vitest.expect(report.output).toBe(
+        '0 entries checked \u00b7 0 skipped \u00b7 repo 0 checked, 0 skipped',
+      );
+      Vitest.expect(report.output).not.toContain('\u2713');
+    }),
+  );
+
+  Vitest.it.effect('counts checked and skipped entries per layer', () =>
+    Effect.gen(function* () {
+      const layer = stubLayer(specs, new Map([['sizing.json', repoConfig]]));
+
+      const repoOnly = yield* runVerify(undefined, layer);
+      Vitest.expect(repoOnly.counts.checked).toBe(2);
+      Vitest.expect(repoOnly.counts.skipped).toBe(0);
+      Vitest.expect(repoOnly.counts.layers).toStrictEqual([
+        { layer: 'repo', checked: 2, skipped: 0 },
+      ]);
+      Vitest.expect(repoOnly.output).toContain(
+        '2 entries checked \u00b7 0 skipped \u00b7 repo 2 checked, 0 skipped',
+      );
+
+      const withSpec = yield* runVerify('spec-a', layer);
+      Vitest.expect(withSpec.counts.checked).toBe(5);
+      Vitest.expect(withSpec.counts.skipped).toBe(0);
+      Vitest.expect(withSpec.counts.layers).toStrictEqual([
+        { layer: 'repo', checked: 2, skipped: 0 },
+        { layer: 'spec', checked: 3, skipped: 0 },
+      ]);
+      Vitest.expect(withSpec.output).toContain(
+        '5 entries checked \u00b7 0 skipped \u00b7 repo 2 checked, 0 skipped \u00b7 spec 3 checked, 0 skipped',
+      );
     }),
   );
 
@@ -301,7 +403,10 @@ Vitest.describe('Cli.models verification', () => {
           Effect.provide(layer),
         );
         Vitest.expect(verified.findings).toStrictEqual([]);
-        Vitest.expect(verified.output).toBe('\u2713 no model or effort findings');
+        Vitest.expect(verified.output).toContain('\u2713 no model or effort findings');
+        Vitest.expect(verified.output).toContain(
+          '2 entries checked \u00b7 0 skipped \u00b7 repo 2 checked, 0 skipped',
+        );
 
         const checked = yield* check(root).pipe(
           Effect.provide(stubLayer(new Map(), new Map([['sizing.json', sizing]]))),
@@ -357,7 +462,17 @@ Vitest.describe('Cli.models verification', () => {
         Effect.provide(layer),
       );
       Vitest.expect(scoped.findings).toStrictEqual([]);
-      Vitest.expect(scoped.output).toBe('\u2713 no model or effort findings');
+      Vitest.expect(scoped.counts).toStrictEqual({
+        checked: 0,
+        skipped: 2,
+        layers: [{ layer: 'repo', checked: 0, skipped: 2 }],
+        provider: 'alpha',
+      });
+      Vitest.expect(scoped.output).toContain('0 entries checked');
+      Vitest.expect(scoped.output).toContain('2 skipped');
+      Vitest.expect(scoped.output).toContain('provider alpha');
+      Vitest.expect(scoped.output).not.toContain('\u2713');
+      Vitest.expect(scoped.output).not.toBe('');
 
       const kept = yield* verifyModels(root, { catalog, provider: 'fixture' }, source).pipe(
         Effect.provide(layer),
@@ -366,6 +481,8 @@ Vitest.describe('Cli.models verification', () => {
         Catalogue.CODES.unknownModel,
         Catalogue.CODES.unknownModel,
       ]);
+      Vitest.expect(kept.counts.checked).toBe(2);
+      Vitest.expect(kept.counts.skipped).toBe(0);
       Vitest.expect(kept.output).toContain('fixture/ghost');
 
       const miss = yield* verifyModels(root, { catalog, provider: 'nope' }, source).pipe(
@@ -375,6 +492,55 @@ Vitest.describe('Cli.models verification', () => {
       Vitest.expect(miss).toBeInstanceOf(SurfaceError);
       if (!(miss instanceof SurfaceError)) return;
       Vitest.expect(miss.diagnostics[0]?.code).toBe(Catalogue.CODES.unknownProvider);
+    }),
+  );
+
+  Vitest.it.effect('a provider literally named all is never mistaken for an unfiltered run', () =>
+    Effect.gen(function* () {
+      const allSource: Catalogue.ModelSource = {
+        list: () => Effect.succeed([{ providerID: 'all', modelID: 'known', variants: ['low'] }]),
+        default: () => Effect.succeed(undefined),
+      };
+      const layer = stubLayer(
+        new Map(),
+        new Map([
+          [
+            'sizing.json',
+            JSON.stringify({ sizes: { tiny: { model: 'all/known', effort: 'low' } } }),
+          ],
+        ]),
+      );
+
+      const unfiltered = yield* verifyModels(root, {}, allSource).pipe(Effect.provide(layer));
+      const filtered = yield* verifyModels(root, { provider: 'all' }, allSource).pipe(
+        Effect.provide(layer),
+      );
+
+      // The unfiltered run prints no provider segment at all, so the only
+      // `provider all` line is the one a genuine filter produces.
+      Vitest.expect(unfiltered.counts.provider).toBeUndefined();
+      Vitest.expect(unfiltered.output).not.toContain('provider');
+      Vitest.expect(filtered.counts.provider).toBe('all');
+      Vitest.expect(filtered.output).toContain('provider all');
+      Vitest.expect(unfiltered.output).not.toBe(filtered.output);
+    }),
+  );
+
+  Vitest.it.effect('a zero-entry provider filter on a named spec states the zero', () =>
+    Effect.gen(function* () {
+      const layer = stubLayer(specs, new Map([['sizing.json', repoConfig]]));
+      const report = yield* verifyModels(
+        root,
+        { name: 'spec-a', provider: 'alpha', catalog },
+        source,
+      ).pipe(Effect.provide(layer));
+      Vitest.expect(report.findings).toStrictEqual([]);
+      Vitest.expect(report.counts.layers).toStrictEqual([
+        { layer: 'repo', checked: 0, skipped: 2 },
+        { layer: 'spec', checked: 0, skipped: 3 },
+      ]);
+      Vitest.expect(report.output).toContain('0 entries checked');
+      Vitest.expect(report.output).not.toContain('\u2713');
     }),
   );
 
@@ -394,5 +560,35 @@ Vitest.describe('Cli.models verification', () => {
         `mf-specs models --verify --provider fixture --catalog ${catalog}`,
       );
     }),
+  );
+
+  Vitest.it.effect(
+    'a refused --name names a command that keeps --catalog and --provider, and it runs',
+    () =>
+      Effect.gen(function* () {
+        const layer = stubLayer(specs, new Map([['sizing.json', repoConfig]]));
+        const error = yield* verifyModels(
+          root,
+          { name: '..', catalog, provider: 'fixture' },
+          source,
+        ).pipe(Effect.provide(layer), Effect.flip);
+        Vitest.expect(error).toBeInstanceOf(SurfaceError);
+        if (!(error instanceof SurfaceError)) return;
+        const found = error.diagnostics[0];
+        Vitest.expect(found?.code).toBe('cli.invalid-argument');
+        Vitest.expect(found?.next).toBe(
+          `mf-specs models --verify --provider fixture --catalog ${catalog} --name <spec>`,
+        );
+
+        // Replay the printed row as the binary would: those flags alone, no host
+        // model source (so `--catalog` is the only catalogue), and a real spec.
+        const replayed = yield* models(root, {
+          verify: true,
+          ...flagsOf(found?.next ?? '', 'spec-a'),
+        }).pipe(Effect.provide(layer));
+        Vitest.expect(replayed.exitCode).toBe(0);
+        Vitest.expect(replayed.output).not.toContain('models.unavailable');
+        Vitest.expect(replayed.output).toContain('entries checked');
+      }),
   );
 });

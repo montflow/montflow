@@ -109,6 +109,31 @@ Vitest.describe('Which.matchFeature runtime', () => {
     ).toStrictEqual({ ok: true, name: 'spec-optimizations' });
   });
 
+  Vitest.it('requires a prefix to end at a segment boundary', () => {
+    // A one-letter feature is not a shortening of a word it only starts.
+    Vitest.expect(Which.matchFeature('s', ['spec-optimizations'])).toStrictEqual({
+      ok: false,
+      code: Which.CODES.noMatch,
+      candidates: ['spec-optimizations'],
+    });
+    // The same letter matches when the name really continues after a `-`.
+    Vitest.expect(Which.matchFeature('s', ['s-optimizations'])).toStrictEqual({
+      ok: true,
+      name: 's-optimizations',
+    });
+    // A prefix that stops mid-word is a different name, not a shorter one.
+    Vitest.expect(Which.matchFeature('shipwright', ['ship'])).toStrictEqual({
+      ok: false,
+      code: Which.CODES.noMatch,
+      candidates: ['ship'],
+    });
+    // One boundary candidate is unique even when a non-boundary one exists.
+    Vitest.expect(Which.matchFeature('ship', ['ship-login', 'shipwright'])).toStrictEqual({
+      ok: true,
+      name: 'ship-login',
+    });
+  });
+
   Vitest.it('lists both candidates for an ambiguous prefix', () => {
     Vitest.expect(Which.matchFeature('spec', ['spec-two', 'spec-one', 'other'])).toStrictEqual({
       ok: false,
@@ -164,6 +189,14 @@ Vitest.describe('Which.resolve runtime', () => {
   Vitest.it('resolves a unique prefix match', () => {
     const resolution = Which.resolve({ source: branch('feat/spec'), names });
     Vitest.expect(resolution.ok ? resolution.match.name : '').toBe('spec-optimizations');
+  });
+
+  Vitest.it('fails a one-letter feature instead of matching every spec in the store', () => {
+    const miss = missOf(Which.resolve({ source: branch('feat/s'), names }));
+    Vitest.expect(miss.code).toBe(Which.CODES.noMatch);
+    Vitest.expect(miss.candidates).toStrictEqual(names);
+    Vitest.expect(miss.problem).toContain("No spec matches feature 's'");
+    Vitest.expect(miss.expected).toContain('ending at a "-"');
   });
 
   Vitest.it('fails an ambiguous prefix with both --name values', () => {

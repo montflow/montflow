@@ -3,10 +3,10 @@ id: G004
 name: split-cli
 type: execution
 originator: user
-size: large
+size: small
 depends-on: G002, G003
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task G004: split-cli

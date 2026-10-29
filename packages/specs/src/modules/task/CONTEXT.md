@@ -2,7 +2,8 @@
 
 Schema + verification for one `TASK.md`. Owns the task descriptor, the
 task-id / directory patterns, the task type and status vocabularies, the
-declared `size` (required unless the task is complete), and the per-file
+declared `size` (required unless the task is complete), the completion-record
+rule, and the per-file
 mechanical verification (frontmatter, enum membership, id/name↔directory
 agreement, body sections).
 
@@ -18,6 +19,9 @@ Note: namespace + class share the name, so call-site reads `Task.Task`.
 - `parseTaskDirName`, `parseTaskFile`, `verifyTaskFile`, `decodeUnknown`
 - `sizeOf` (narrow a declared value to a known size) and `verifyTaskSize`
   (the size rule on its own, reused by the dispatch verbs)
+- `verifyTaskCompletion` (the completion-record rule on its own): a `complete`
+  task with unchecked `## Completion` items is `task.completion-unchecked`,
+  a warning that keeps historical records succeeding
 - Type/status guards (`isTaskType`, `isTaskStatus`, `isReview`)
 - Enforcing a declared task size; the size vocabulary itself lives in
   `sizing`. The schema keeps the declared value as written so an unknown size

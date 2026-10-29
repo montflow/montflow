@@ -141,7 +141,7 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
         id: 'A099',
         name: 'review-phase',
         type: 'review',
-        reviewerProfiles: 'effect-reviewer, generic-reviewer',
+        reviewerProfiles: 'example-reviewer, generic-reviewer',
       }),
     );
     Vitest.expect(result.valid).toBe(true);
@@ -179,11 +179,11 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
         id: 'A099',
         name: 'review-phase',
         type: 'review',
-        reviewerProfiles: 'effect-reviewer,effect-reviewer',
+        reviewerProfiles: 'example-reviewer,example-reviewer',
       }),
     );
     Vitest.expect(result.issues).toStrictEqual([
-      { field: 'reviewer-profiles', message: "'effect-reviewer' is listed more than once." },
+      { field: 'reviewer-profiles', message: "'example-reviewer' is listed more than once." },
     ]);
   });
 
@@ -194,7 +194,7 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
         id: 'A001',
         name: 'implement-login',
         type: 'execution',
-        reviewerProfiles: 'effect-reviewer',
+        reviewerProfiles: 'example-reviewer',
       }),
     );
     Vitest.expect(result.issues).toStrictEqual([
@@ -225,5 +225,43 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
       'body',
       'body',
     ]);
+  });
+
+  Vitest.it('warns for a complete task with an unchecked completion item', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({
+        id: 'A001',
+        name: 'implement-login',
+        status: 'complete',
+        completion: ['- [x] One', '- [ ] Two', '- [ ] Three'].join('\n'),
+      }),
+    );
+    Vitest.expect(result.valid).toBe(true);
+    Vitest.expect(result.issues).toStrictEqual([
+      {
+        code: 'task.completion-unchecked',
+        field: 'completion',
+        severity: 'warning',
+        message:
+          'Completed task has 2 unchecked completion items; the status claims work its checklist does not confirm.',
+        expected: 'all 3 completion items checked `- [x]`',
+        actual: '2 unchecked',
+        fix: 'Check each finished item under `## Completion`, or set `status: in-progress`.',
+      },
+    ]);
+  });
+
+  Vitest.it('does not warn for a pending task or a fully checked completion list', () => {
+    const pending = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({ id: 'A001', name: 'implement-login' }),
+    );
+    Vitest.expect(pending.issues).toStrictEqual([]);
+    const checked = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({ id: 'A001', name: 'implement-login', status: 'complete' }),
+    );
+    Vitest.expect(checked.issues).toStrictEqual([]);
   });
 });

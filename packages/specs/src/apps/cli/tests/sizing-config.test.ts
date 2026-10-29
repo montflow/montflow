@@ -2,7 +2,7 @@ import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import * as Vitest from '@effect/vitest';
 import { PromptStore } from '@montflow/prompts';
 import { Cause, Effect, FileSystem, Layer, Path } from 'effect';
-import { runDoctor } from '../../../apps/doctor/index.js';
+import { runDoctor } from '../../../modules/doctor/index.js';
 import { PromptError } from '../../../modules/prompt/index.js';
 import {
   type SizingConfigOptions,
@@ -142,12 +142,18 @@ Vitest.describe('Cli.resolveSizingScope', () => {
     }),
   );
 
-  Vitest.it.effect('trims identifiers and refuses a supplied but blank --name', () =>
+  Vitest.it.effect('refuses padded identifiers and refuses a supplied but blank --name', () =>
     Effect.sync(() => {
-      Vitest.expect(accepted(resolveSizingScope({ name: '  ship-login  ' }))).toStrictEqual({
-        scope: 'spec',
-        name: 'ship-login',
-      });
+      // A padded identifier is malformed, not a value to trim: the guard sees
+      // the string the caller passed, the same rule `execute` applies.
+      const paddedName = refused(resolveSizingScope({ name: '  ship-login  ' }));
+      Vitest.expect(paddedName.field).toBe('--name');
+      Vitest.expect(paddedName.actual).toBe("'  ship-login  '");
+      Vitest.expect(paddedName.next).toBe('mf-specs sizing-config --name <spec>');
+      const paddedPhase = refused(resolveSizingScope({ name: 'ship-login', phase: ' A ' }));
+      Vitest.expect(paddedPhase.field).toBe('--phase');
+      Vitest.expect(paddedPhase.actual).toBe("' A '");
+      Vitest.expect(paddedPhase.next).toBe('mf-specs sizing-config --name <spec> --phase <id>');
       // Supplied but blank is a typo, not the open scope; omitting it is open.
       for (const options of [{ name: '' }, { name: '   ' }, { name: ' ', phase: 'A' }] as const) {
         const blank = refused(resolveSizingScope(options));
@@ -316,6 +322,27 @@ Vitest.describe('Cli.sizingConfig runtime', () => {
         'Phase: A. The write target is `phases.A.sizes` inside `ship-login/sizing.json`.',
       );
       Vitest.expect(report.prompt.text).toContain('The scope is fixed for this run: `phase`.');
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('keeps the D003 wizard for a well-formed unknown spec and phase', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* preparePrompts(work);
+
+      // D003: a slug the store does not hold is not a usage error. The wizard
+      // still renders and names the target it was asked to size.
+      const spec = yield* run(work, { name: 'unknown-spec' });
+      Vitest.expect(spec.scope).toBe('spec');
+      Vitest.expect(spec.name).toBe('unknown-spec');
+      Vitest.expect(spec.prompt.text).toContain('Spec: unknown-spec.');
+
+      const phase = yield* run(work, { name: 'unknown-spec', phase: 'B' });
+      Vitest.expect(phase.scope).toBe('phase');
+      Vitest.expect(phase.phase).toBe('B');
+      Vitest.expect(phase.prompt.text).toContain(
+        'Phase: B. The write target is `phases.B.sizes` inside `unknown-spec/sizing.json`.',
+      );
     }).pipe(Effect.provide(StoreLive)),
   );
 

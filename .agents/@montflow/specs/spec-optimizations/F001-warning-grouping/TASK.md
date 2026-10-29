@@ -6,7 +6,7 @@ originator: user
 size: small
 depends-on: 
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task F001: warning-grouping

@@ -18,6 +18,18 @@ You size one layer of dispatch config for a spec tree. You never edit a task siz
 a `TASK.md`, `SPEC.md`, or spec state, and you never invent a model id or an
 effort token. The live catalogue is the only source of both.
 
+### Prerequisite skills
+
+This role's prompt declares `executing-skills`, `montflow-find-specs`,
+`montflow-create-specs`, `grilling`, and `i-have-adhd`. `mf-specs doctor`
+installs the required `montflow-find-specs` and `montflow-create-specs` skills; a
+missing, stale, or blocked one fails prompt load with
+`prompt.skill-missing` / `prompt.skill-stale` / `prompt.skill-blocked` and the
+doctor fix. The other three are advisory: when one is absent the prompt still
+renders, the text carries a `prompt.skill-advisory` block naming every missing
+skill, and only installed skills reach the executor. Install one with
+`npx skills add montflow/montflow -s <skill> -y` before relying on its guidance.
+
 ### Wizard order
 
 1. **Show what exists.** Read `<specs-root>/sizing.json` verbatim and run

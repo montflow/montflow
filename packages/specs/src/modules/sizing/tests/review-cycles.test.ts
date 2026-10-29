@@ -16,6 +16,25 @@ Vitest.describe('Sizing.reviewCycles runtime', () => {
   });
 });
 
+Vitest.describe('Sizing.taskContribution runtime', () => {
+  Vitest.it('gives a review task and an unsized task zero cycles', () => {
+    Vitest.expect(Sizing.taskContribution({ type: 'review', size: 'large' })).toBe(0);
+    Vitest.expect(Sizing.taskContribution({ type: 'review' })).toBe(0);
+    Vitest.expect(Sizing.taskContribution({ type: 'execution' })).toBe(0);
+  });
+
+  Vitest.it('gives a sized non-review task its size budget', () => {
+    Vitest.expect(Sizing.taskContribution({ type: 'execution', size: 'tiny' })).toBe(1);
+    Vitest.expect(Sizing.taskContribution({ type: 'defect', size: 'small' })).toBe(2);
+    Vitest.expect(Sizing.taskContribution({ type: 'execution', size: 'large' })).toBe(3);
+  });
+
+  Vitest.it('counts a bare size as a non-review task', () => {
+    Vitest.expect(Sizing.taskContribution('tiny')).toBe(1);
+    Vitest.expect(Sizing.taskContribution('medium')).toBe(3);
+  });
+});
+
 Vitest.describe('Sizing.phaseReviewBudget runtime', () => {
   Vitest.it('takes the largest budget in a phase mixing tiny and medium', () => {
     const budget = Sizing.phaseReviewBudget([

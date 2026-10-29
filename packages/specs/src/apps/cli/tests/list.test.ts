@@ -111,6 +111,7 @@ Vitest.describe('Cli.list runtime', () => {
               hasFile: () => Effect.succeed(false),
               snapshot: () =>
                 Effect.fail(new SpecStore.StoreError({ operation: 'unused', reason: 'unused' })),
+              reviewSeries: () => Effect.succeed([]),
               readRootFile: () => Effect.succeed(undefined),
               write: () => Effect.void,
             }),
@@ -139,6 +140,42 @@ Vitest.describe('Cli.renderList runtime', () => {
     Effect.gen(function* () {
       const report = yield* runList({ statuses: ['complete'] });
       Vitest.expect(renderList(report, true).startsWith(`root ${root}`)).toBe(true);
+    }),
+  );
+
+  Vitest.it.effect('degrades one unreadable review store instead of aborting the listing', () =>
+    Effect.gen(function* () {
+      const failure = new SpecStore.StoreError({
+        operation: 'SpecStore.reviewSeries',
+        reason: "Cannot read the review store entry 'alpha': EACCES",
+        path: '/machine/.agents/@montflow/reviews/alpha',
+        origin: 'reviews',
+        cause: new Error('EACCES: permission denied, scandir alpha'),
+      });
+      const report = yield* list(root, {}).pipe(
+        Effect.provide(stubLayer(specs, new Map(), { reviewFailure: failure })),
+      );
+      // Every spec still lists; the broken one carries the failure as an error.
+      Vitest.expect(report.total).toBe(4);
+      Vitest.expect(report.specs.map((spec) => spec.name)).toStrictEqual([
+        'alpha',
+        'beta',
+        'delta',
+        'gamma',
+      ]);
+      for (const spec of report.specs) {
+        Vitest.expect(spec.verify.valid).toBe(false);
+        Vitest.expect(spec.verify.issues[0]).toMatchObject({
+          code: 'store.error',
+          // Nested so the renderer prefixes the spec name to the one canonical
+          // locator `<spec>/review-series`.
+          field: 'review-series: review-series',
+          expected: 'a readable review store',
+        });
+      }
+      Vitest.expect(renderList(report, false)).toContain(
+        '\u25cb alpha  in-progress \u00b7 pending \u00b7 2 pending \u00b7 \u2717 1',
+      );
     }),
   );
 

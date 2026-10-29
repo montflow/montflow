@@ -2,22 +2,6 @@ import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Data, Effect, FileSystem, Layer, Match, Path, Predicate, Result, Schema } from 'effect';
 import { EMBEDDED_PROMPT_PAYLOAD, EMBEDDED_SKILL_PAYLOAD } from './embedded-payload.generated.js';
 
-/**
- * `mf-specs doctor`: install the spec skills an agent needs to author and
- * discover specs, plus the prompts those skills render.
- *
- * Two properties matter more than the install itself:
- *
- * - **Every payload is reported.** A read, write, or validation failure on one
- *   file becomes that payload's outcome — a coded {@link DoctorError} on a
- *   `blocked` entry — never an aborted run that hides the other files.
- * - **The advertised fix converges.** A stale or partial skill is rewritten
- *   from the package in repair mode, exactly like a stale prompt, and only the
- *   files the package ships are touched: a file doctor did not install is user
- *   data, so it is reported and left in place. A condition repair cannot clear
- *   is `blocked` in check mode too, so the reported fix is always one that works.
- */
-
 /** Skills shipped with the package and installed into a repo. */
 export const SPEC_SKILL_NAMES = ['montflow-create-specs', 'montflow-find-specs'] as const;
 
@@ -65,32 +49,15 @@ export class DoctorError extends Data.TaggedError('@montflow/DoctorError')<{
 
 const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-/** Root of the installed package, holding `skills/` and `prompts/`. */
-const packageRoot = (path: Path.Path): string =>
-  path.resolve(import.meta.dirname, '..', '..', '..');
+import {
+  shippedSkillDir,
+  installedSkillDir,
+  installedPromptDir,
+  installedPromptFile,
+  shippedPromptFile,
+} from './doctor.paths.module.js';
 
-/** Directory the package ships a skill in. */
-const shippedSkillDir = (path: Path.Path, name: string): string =>
-  path.join(packageRoot(path), 'skills', name);
-
-/** Directory the package ships its prompts in. */
-const shippedPromptDir = (path: Path.Path): string => path.join(packageRoot(path), 'prompts');
-
-/** Directory `doctor` installs one skill into. */
-export const installedSkillDir = (path: Path.Path, root: string, name: string): string =>
-  path.join(root, '.agents', 'skills', name);
-
-/** Directory `doctor` installs its prompts into. */
-export const installedPromptDir = (path: Path.Path, root: string): string =>
-  path.join(root, '.agents', '@montflow', 'prompts');
-
-/** File `doctor` installs one prompt into. */
-export const installedPromptFile = (path: Path.Path, root: string, name: string): string =>
-  path.join(installedPromptDir(path, root), `${name}.json`);
-
-/** File the package ships one prompt in. */
-export const shippedPromptFile = (path: Path.Path, name: string): string =>
-  path.join(shippedPromptDir(path), `${name}.json`);
+export { installedSkillDir, installedPromptDir, installedPromptFile, shippedPromptFile };
 
 const reasonOf = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);

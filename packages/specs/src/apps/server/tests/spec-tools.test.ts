@@ -3,12 +3,19 @@ import * as Vitest from '@effect/vitest';
 import type { PromptExecute } from '@montflow/prompts';
 import { PromptStore } from '@montflow/prompts';
 import type { ToolDefinition, ToolRunContext } from '@montflow/opencode';
-import { Effect, FileSystem, Layer, Path, Schema } from 'effect';
-import { runDoctor } from '../../../apps/doctor/index.js';
+import { Effect, FileSystem, Layer, Path, Schema, Cause } from 'effect';
+import { runDoctor } from '../../../modules/doctor/index.js';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import { memoryMarkdown, taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import { SpecStore } from '../../../services/index.js';
-import { DEFAULT_ROOT, listModels, sizingConfig, verifyModels } from '../../cli/index.js';
+import {
+  DEFAULT_ROOT,
+  diagnoseCause,
+  listModels,
+  models,
+  sizingConfig,
+  verifyModels,
+} from '../../cli/index.js';
 import * as Catalogue from '../../../modules/catalogue/index.js';
 import {
   SpecAuthorInput,
@@ -315,6 +322,51 @@ Vitest.describe('spec_execute tool', () => {
     }).pipe(Effect.provide(Platform)),
   );
 
+  Vitest.it.effect('refuses a padded phase instead of trimming it into a valid id', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login'));
+      yield* preparePrompts(work);
+      const fake = recorder();
+
+      const tool = specExecuteTool(options(work, { execute: fake.execute }));
+      for (const phase of [' A ', 'A ', '\tA']) {
+        const failure = yield* runTool(tool, { name: 'ship-login', phase }).pipe(Effect.flip);
+        Vitest.expect(failure, JSON.stringify(phase)).toContain('code     cli.invalid-argument');
+        Vitest.expect(failure, JSON.stringify(phase)).toContain('field    --phase');
+        Vitest.expect(failure, JSON.stringify(phase)).toContain(
+          'next     mf-specs execute --name <spec> --phase <id>',
+        );
+      }
+      // The name flag follows the same rule as the phase flag.
+      for (const name of [' ship-login ', '..', 'A', '']) {
+        const failure = yield* runTool(tool, { name }).pipe(Effect.flip);
+        Vitest.expect(failure, JSON.stringify(name)).toContain('code     cli.invalid-argument');
+        Vitest.expect(failure, JSON.stringify(name)).toContain('field    --name');
+        Vitest.expect(failure, JSON.stringify(name)).toContain(
+          'next     mf-specs execute --name <spec>',
+        );
+      }
+      Vitest.expect(fake.runs).toHaveLength(0);
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('treats a blank phase as absent and dispatches the active phase', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login'));
+      yield* preparePrompts(work);
+      const fake = recorder();
+
+      const tool = specExecuteTool(options(work, { execute: fake.execute }));
+      yield* runTool(tool, { name: 'ship-login', phase: '   ', model: 'fixture/model' });
+
+      const run = fake.runs[0];
+      Vitest.expect(run?.text).not.toContain('Work only phase');
+      Vitest.expect(run?.text).toContain('phase A');
+    }).pipe(Effect.provide(Platform)),
+  );
+
   Vitest.it.effect('refuses to dispatch without a model or a host default', () =>
     Effect.gen(function* () {
       const work = yield* prepare;
@@ -439,6 +491,42 @@ Vitest.describe('spec_sizing tool', () => {
     }).pipe(Effect.provide(Platform)),
   );
 
+  Vitest.it.effect('refuses a padded phase as supplied, the same rule the binary applies', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* prepareSizingPrompts(work);
+      const fake = recorder();
+
+      const tool = specSizingTool(options(work, { execute: fake.execute }));
+      for (const phase of [' A ', 'A ', '\tA']) {
+        const failure = yield* runTool(tool, {
+          name: 'ship-login',
+          phase,
+          model: 'fixture/model',
+        }).pipe(Effect.flip);
+        Vitest.expect(failure, JSON.stringify(phase)).toContain('code     cli.invalid-argument');
+        Vitest.expect(failure, JSON.stringify(phase)).toContain('field    --phase');
+        Vitest.expect(failure, JSON.stringify(phase)).toContain(
+          'next     mf-specs sizing-config --name <spec> --phase <id>',
+        );
+      }
+      // A blank phase is still "absent" for the same tool.
+      yield* runTool(tool, { name: 'ship-login', phase: '   ', model: 'fixture/model' });
+      Vitest.expect(fake.runs).toHaveLength(1);
+      Vitest.expect(fake.runs[0]?.text).toContain('`ship-login/sizing.json`');
+
+      // A padded name is refused with the binary's name rule, not trimmed.
+      const paddedName = yield* runTool(tool, {
+        name: ' ship-login ',
+        model: 'fixture/model',
+      }).pipe(Effect.flip);
+      Vitest.expect(paddedName).toContain('code     cli.invalid-argument');
+      Vitest.expect(paddedName).toContain('field    --name');
+      Vitest.expect(paddedName).toContain('next     mf-specs sizing-config --name <spec>');
+      Vitest.expect(fake.runs).toHaveLength(1);
+    }).pipe(Effect.provide(Platform)),
+  );
+
   Vitest.it.effect('returns the doctor diagnostic instead of dispatching on a missing prompt', () =>
     Effect.gen(function* () {
       const work = yield* prepare;
@@ -524,6 +612,8 @@ Vitest.describe('spec_models tool', () => {
       Vitest.expect(reply).toBe(binary.output);
       Vitest.expect(reply).toContain('code     ! models.unknown-model');
       Vitest.expect(reply).toContain('code     ! models.unknown-effort');
+      Vitest.expect(reply).toContain('2 entries checked');
+      Vitest.expect(reply).toContain('spec 2 checked, 0 skipped');
     }).pipe(Effect.provide(Store)),
   );
 
@@ -534,6 +624,36 @@ Vitest.describe('spec_models tool', () => {
       const failure = yield* runTool(tool, { action: 'list' }).pipe(Effect.flip);
       Vitest.expect(failure).toContain('code     models.unavailable');
       Vitest.expect(failure).toContain('--catalog');
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('refuses a name on list with exactly the diagnostic the binary prints', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      const tool = specModelsTool({ cwd: work.dir, model: catalogueSource });
+      const root = work.path.join(work.dir, DEFAULT_ROOT);
+      for (const name of ['ship-login', '..', 'a/b']) {
+        const failure = yield* runTool(tool, { action: 'list', name }).pipe(Effect.flip);
+        const binary = yield* models(root, { name }, catalogueSource).pipe(
+          Effect.provide(Store),
+          Effect.flip,
+        );
+        const binaryText = diagnoseCause(Cause.fail(binary), {
+          path: root,
+          rerun: 'mf-specs models',
+          verbose: false,
+        }).output;
+        // The tool returns the catalogue JSON today; it must return the CLI's
+        // usage refusal instead, byte for byte.
+        Vitest.expect(failure, name).toBe(binaryText);
+        Vitest.expect(failure, name).toContain('code     cli.invalid-argument');
+        Vitest.expect(failure, name).toContain('field    --name');
+        Vitest.expect(failure, name).toContain('--name has no meaning without --verify');
+        Vitest.expect(failure, name).not.toContain('"models"');
+      }
+      // A blank name means "no name", exactly as on the CLI listing path.
+      const blank = yield* runTool(tool, { action: 'list', name: '   ' });
+      Vitest.expect(blank).toContain('"default": "fixture/known"');
     }).pipe(Effect.provide(Platform)),
   );
 });

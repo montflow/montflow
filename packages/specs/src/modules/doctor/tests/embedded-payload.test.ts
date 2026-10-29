@@ -46,4 +46,12 @@ Vitest.describe('embedded payload', () => {
       [...SPEC_PROMPT_NAMES].toSorted(),
     );
   });
+
+  Vitest.it('states the task-specific gate rule and its replacement marker', () => {
+    const skill = packageSkill('montflow-create-specs')['SKILL.md'] ?? '';
+    Vitest.expect(skill).toContain("A Gate Names the Task's Own Commands");
+    Vitest.expect(skill).toContain("REPLACE with this task's own verification commands");
+    Vitest.expect(skill).toContain('task.completion-unchecked');
+    Vitest.expect(skill).toContain('gate.unchecked');
+  });
 });

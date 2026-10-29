@@ -6,13 +6,16 @@ import {
   verifySpecFile,
 } from '../spec/index.js';
 import { parseMarkdown } from '../frontmatter/index.js';
-import { verifyGatesFile } from '../gates/index.js';
+import { verifyGateProgress, verifyGatesFile } from '../gates/index.js';
 import { verify as verifyLifecycle } from '../lifecycle/index.js';
 import { verifyMemoryFile } from '../memory/index.js';
 import {
+  type PhaseBudget,
   type ReviewTaskEntry,
   type SeriesSnapshot,
+  seriesNames,
   verify as verifyReviewLink,
+  verifyBudgets as verifyReviewBudgets,
 } from '../review-link/index.js';
 import {
   type Task,
@@ -20,9 +23,16 @@ import {
   parseTaskFile,
   phaseOf,
   phaseRank,
+  sizeOf,
   verifyTaskFile,
 } from '../task/index.js';
-import { CODES, CONFIG_FILE, type ConfigSource, verifyText } from '../sizing/index.js';
+import {
+  CODES,
+  CONFIG_FILE,
+  type ConfigSource,
+  phaseReviewBudget,
+  verifyText,
+} from '../sizing/index.js';
 import { type Issue, type Result, issue, noErrors } from '../verify/index.js';
 
 /**
@@ -126,27 +136,48 @@ const verifySpecConfig = (name: string, phases: ReadonlyArray<string>, text: str
   return { valid: noErrors(found), issues: found };
 };
 
+/** Review-store input for the cross-store checks. */
+export interface ReviewInput {
+  /** The spec's review series, as the review store supplies them. */
+  readonly series: ReadonlyArray<SeriesSnapshot>;
+  /**
+   * True when every complete `review` task must have a round attributed to its
+   * phase in every expected series. A disk-driven `check` passes false: a
+   * historical spec may predate the review store, and its absence must not turn
+   * `check` red. The budget check still applies to every series that exists.
+   */
+  readonly requireRounds: boolean;
+}
+
+/**
+ * The review input for a caller that holds no review store: no series, no
+ * round-presence requirement. Structure-only verification and a store that has
+ * no review directory pass this explicitly, so omitting the review input can
+ * never silently disable the budget check.
+ */
+export const NO_REVIEW: ReviewInput = { series: [], requireRounds: false };
+
 /**
  * Mechanically verify the whole on-disk structure of a spec:
  * required files, task-directory naming and placement, id/name agreement,
  * unique ids, task-table agreement (type/status/gates), `TASK.md` /
- * `GATES.md` / `MEMORY.md` content, an optional spec-root `sizing.json`,
+ * `GATES.md` / `MEMORY.md` content, the record checks (a complete task's
+ * completion checklist and gate progress), an optional spec-root `sizing.json`,
  * dependency existence + phase ordering + cycles, a `review` task per phase,
  * and `locked-phases` pointing at real phases. Pure — no IO.
  *
- * When `review` is supplied, the tree's review tasks are additionally
- * checked against the convention link (`ReviewLink`): each complete `review`
- * task must have a round attributed to its phase in every expected series.
- * Omitting it skips the cross-store check, so a caller without review-store
- * access is unaffected.
+ * The tree's review tasks are additionally checked against the convention link
+ * (`ReviewLink`): each expected series may hold no more rounds attributed to a
+ * phase than that phase's size-derived review budget, and — only when
+ * `review.requireRounds` is set — each complete `review` task must have a round
+ * attributed to its phase in every expected series. Every caller supplies the
+ * input, so one snapshot yields one verdict for `check`, `status`, `next`, and
+ * `execute`; a caller with no review store passes {@link NO_REVIEW}.
  * @param snapshot - the spec directory listing
- * @param review - the linked review series, when the caller has them
+ * @param review - the linked review series and round-presence rule
  * @returns the result; `valid` is true only with zero issues
  */
-export const verifySpecTree = (
-  snapshot: SpecSnapshot,
-  review?: ReadonlyArray<SeriesSnapshot>,
-): Result => {
+export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Result => {
   const issues: Array<Issue> = [];
 
   for (const file of snapshot.files) {
@@ -212,19 +243,25 @@ export const verifySpecTree = (
     gates.set(dirName.id, names.has('GATES.md'));
 
     const taskFile = files.find((file) => file.path === `${dir}/TASK.md`);
+    const parsedTask = taskFile === undefined ? undefined : parseTaskFile(taskFile.content);
     if (taskFile !== undefined) {
       issues.push(...nest(`${dir}/TASK.md`, verifyTaskFile(dir, taskFile.content)));
-      const task = parseTaskFile(taskFile.content);
-      if (task !== undefined) {
-        if (tasks.has(task.id))
-          issues.push(issue(`${dir}/TASK.md`, `Duplicate task id '${task.id}'.`));
-        tasks.set(task.id, task);
+      if (parsedTask !== undefined) {
+        if (tasks.has(parsedTask.id))
+          issues.push(issue(`${dir}/TASK.md`, `Duplicate task id '${parsedTask.id}'.`));
+        tasks.set(parsedTask.id, parsedTask);
       }
     }
 
     const gatesFile = files.find((file) => file.path === `${dir}/GATES.md`);
     if (gatesFile !== undefined) {
       issues.push(...nest(`${dir}/GATES.md`, verifyGatesFile(gatesFile.content)));
+      issues.push(
+        ...nest(
+          `${dir}/GATES.md`,
+          verifyGateProgress(gatesFile.content, parsedTask?.status === 'complete'),
+        ),
+      );
     }
     const memoryFile = files.find((file) => file.path === `${dir}/MEMORY.md`);
     if (memoryFile !== undefined) {
@@ -304,6 +341,16 @@ export const verifySpecTree = (
 
   const phases = new Set<string>();
   for (const id of tasks.keys()) phases.add(phaseOf(id));
+  const phaseBudgets: ReadonlyArray<PhaseBudget> = [...phases]
+    .toSorted((a, b) => phaseRank(a) - phaseRank(b))
+    .map((phase) => ({
+      phase,
+      budget: phaseReviewBudget(
+        Array.from(tasks.values())
+          .filter((task) => phaseOf(task.id) === phase)
+          .map((task) => ({ type: task.type, size: sizeOf(task) })),
+      ),
+    }));
   const configFile = snapshot.files.find((file) => file.path === CONFIG_FILE);
   if (configFile !== undefined) {
     issues.push(
@@ -331,16 +378,20 @@ export const verifySpecTree = (
     }
   }
 
-  if (review !== undefined) {
-    const reviewTasks: ReadonlyArray<ReviewTaskEntry> = Array.from(tasks.values())
-      .filter((task) => task.type === 'review')
-      .map((task) => ({
-        phase: phaseOf(task.id),
-        profiles: task.reviewerProfiles,
-        complete: task.status === 'complete',
-      }));
-    issues.push(...verifyReviewLink(snapshot.name, reviewTasks, review).issues);
+  const reviewTasks: ReadonlyArray<ReviewTaskEntry> = Array.from(tasks.values())
+    .filter((task) => task.type === 'review')
+    .map((task) => ({
+      phase: phaseOf(task.id),
+      profiles: task.reviewerProfiles,
+      complete: task.status === 'complete',
+    }));
+  if (review.requireRounds) {
+    issues.push(...verifyReviewLink(snapshot.name, reviewTasks, review.series).issues);
   }
+  const expectedSeries = [
+    ...new Set(reviewTasks.flatMap((task) => seriesNames(snapshot.name, task.profiles))),
+  ];
+  issues.push(...verifyReviewBudgets(expectedSeries, phaseBudgets, review.series).issues);
 
   return { valid: noErrors(issues), issues };
 };

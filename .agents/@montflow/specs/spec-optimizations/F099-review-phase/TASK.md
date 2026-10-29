@@ -6,8 +6,8 @@ originator: user
 size: small
 depends-on: F003
 related-tasks:
-reviewer-profiles: effect-reviewer
-status: pending
+reviewer-profiles: generic-reviewer
+status: complete
 ---
 
 # Task F099: review-phase

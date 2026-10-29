@@ -18,18 +18,23 @@ bun run --cwd packages/specs cli check
 
 - `check` — verifies the whole spec root (default
   `.agents/@montflow/specs`) or one `--name`. Token-lean by default
-  (failures + summary); `--verbose` also lists passing specs and the
+  (failures + summary), with every coded warning for a spec on one grouped
+  line; `--verbose` also lists passing specs and the
   root, and adds the cause chain and layer trace for sizing findings.
   Exits non-zero when any spec fails.
 - `status --name <spec>` — lifecycle, task counts, per-phase task
   list, and verification verdict. Exits non-zero when the spec fails
-  verification.
+  verification, including the review budget read from the review store.
 - `state --name <spec>` — compact derived state, active phase, and
-  locked phases, for an orchestrator to read before acting.
+  locked phases, for an orchestrator to read before acting. Exits non-zero on
+  the same dispatch errors `status` reports, and names them: a blocked spec
+  appends `· blocked <codes>` and `next mf-specs status --name <spec>` to the
+  one-line state, with `--verbose` expanding the full blocker blocks.
 - `next --name <spec>` — the ready task set for the active phase
   (pending tasks whose `depends-on` targets are complete, review last;
-  `gated` marks a task with a `GATES.md`). Exits non-zero when the phase
-  carries the same config or task-size errors as `check`.
+  `gated` marks a task with a `GATES.md`). Exits non-zero on every error
+  `check` reports — config, task size, tree, or review budget — so `status`,
+  `next`, and `check` agree.
 - `create --name <spec>` — deterministic, model-free scaffold: writes
   `SPEC.md`, one task directory per `--tasks` entry (each
   `name[:type[:gates[:size]]]`, with `size` defaulting to `medium` when the
@@ -49,6 +54,8 @@ bun run --cwd packages/specs cli check
   versus resume, so one command covers both. `--phase` may only name the active
   phase: a locked or later phase fails `spec.phase-not-active`, and a spec with
   no active phase fails `spec.no-active-phase` instead of rendering a session.
+  A blank `--phase` is absent; a padded or otherwise malformed one is
+  `cli.invalid-argument`, the same rule `sizing-config` applies.
 - `which [--branch <name>] [--dir <path>]` — the mechanical spec resolver:
   prints exactly one spec name and nothing else. On no match or an ambiguous
   match it exits non-zero with the branch it read, every candidate spec, and
@@ -61,13 +68,19 @@ bun run --cwd packages/specs cli check
   Without a host catalogue, pass `--catalog`; a bare run fails
   `models.unavailable` and names that flag. `--provider` keeps one provider on
   either action, and a miss is `models.unknown-provider` rather than an empty
-  table. `--verify` cross-checks the repo config, or the named spec's config
+  table. A filtered `--json` document carries `"default": null` unless the
+  default model itself survives the filter, so the document never points at a
+  model it does not list — and it stays valid `--catalog` input. `--verify` cross-checks the repo config, or the named spec's config
   including every phase override, and reports `models.unknown-model` /
   `models.unknown-effort` as warnings because a host catalogue can be partial;
   an unknown variant list never produces an effort finding. With `--verify`,
   `--provider` scopes the checked entries to that provider and an unknown spec
   is `spec.not-found`; `--json` is refused with `cli.invalid-argument` because
-  verification has no JSON document.
+  verification has no JSON document. Every `--verify` run ends with one count
+  line — entries checked and skipped, split by layer and provider — so a pass
+  that checked nothing states its zero instead of printing a bare success. The
+  `provider` segment appears only when a filter was applied, so an unfiltered
+  run can never be read as a pass filtered to a provider named `all`.
 - `sizing-config [--scope repo|spec|phase] [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous]`
   — renders the `spec-sizing` wizard for one config layer and prints it. It
   writes no file and dispatches nothing; the wizard confirms before writing.
@@ -99,7 +112,9 @@ bun run --cwd packages/specs cli check
   `blocked` payload with a coded failure instead of aborting the run. Skill
   repair rewrites only the files the package ships and leaves any other file in
   the directory in place. Idempotent; resolves the repo root from the working
-  directory. It never touches any prompt it does not own.
+  directory. It never touches any prompt or skill it does not own. The other
+  skills the shipped prompts declare are external prerequisites, not doctor
+  payloads: see [Prerequisite skills and advisories](#prerequisite-skills-and-advisories).
 
 ### Authoring, execution, and sizing prompts
 
@@ -110,6 +125,48 @@ the spec or flag state, and prints it. Inside the OpenCode host, `/specs author`
 `spec_execute` / `spec_sizing` tools dispatch the same rendered text
 through `@montflow/prompts`' executor. A missing or stale prompt fails before
 anything renders, with the file, the problem, and the `mf-specs doctor` fix.
+
+The `/specs` form validates flags per command. Every verb accepts `--dir` and
+`--verbose`, plus the flags its binary counterpart implements; a flag the verb
+does not implement is refused with `cli.invalid-argument`, the row of flags it
+does accept, and the `next` command to run instead — `/specs execute --scope repo`
+points at `/specs sizing-config --scope repo`, and `/specs check --json` at
+`/specs models --json`. A flag no verb reads is refused the same way, so a typo
+can never parse into silence.
+
+#### Prerequisite skills and advisories
+
+`mf-specs doctor` installs the two skills this package owns and treats them as
+required. The shipped prompts also declare skills this package does not ship, and
+those are advisory.
+
+Required skills and advisory skills, by prompt:
+
+- `spec-create` requires `montflow-create-specs` and declares no advisory skill.
+- `spec-execute` requires `montflow-find-specs`; advisory:
+  `montflow-adversarial-review`, `montflow-addressing-adversarial-review`.
+- `spec-sizing` requires `montflow-find-specs` and `montflow-create-specs`;
+  advisory: `executing-skills`, `grilling`, `i-have-adhd`.
+
+A missing, stale, or blocked **doctor-owned** skill fails prompt load before
+anything renders with `prompt.skill-missing`, `prompt.skill-stale`, or
+`prompt.skill-blocked`, the skill as `field`, and `mf-specs doctor` as the fix. It
+is never downgraded to an advisory.
+
+A missing **non-owned** skill does not fail the load. The prompt renders, the
+rendered text ends with a `prompt.skill-advisory` block naming every missing
+skill with its install command, and `LoadedPrompt.advisories` carries the same
+diagnostics for a caller that reports rather than prints. `LoadedPrompt.skills` —
+the list handed to the executor — contains only the declared skills installed in
+the workspace, in declaration order. Install one with:
+
+```bash
+npx skills add montflow/montflow -s <skill> -y
+```
+
+The behavior is deliberate: doctor's ownership boundary stays exactly the two
+spec skills and the three prompts it ships, while a fresh workspace with only
+`mf-specs doctor` applied can still render every shipped prompt.
 
 `sizing-config` sizes exactly one layer — repo-wide, one spec, or one phase —
 and writes nothing itself. With no scope flag the prompt asks which layer;
@@ -145,8 +202,10 @@ branch names, so the branch is the default selector. A branch is
 `chore`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`, `release`, or
 `hotfix` — then the feature name after the first `/`, lowercased with `/` and
 `_` normalized to `-`. Matching is exact first, then a unique prefix match
-between the feature name and a spec name. There is no fuzzy, edit-distance, or
-keyword matching.
+between the feature name and a spec name where the shorter name ends at a `-`
+boundary: `feat/ship` matches `ship-login`, while `feat/s` matches nothing
+because `s` stops inside `spec-optimizations`. A prefix must stop on a segment,
+never mid-word. There is no fuzzy, edit-distance, or keyword matching.
 
 A detached HEAD, a branch without a conventional prefix, no candidate, two or
 more prefix candidates, or unreadable git metadata all mean "no match". The
@@ -165,7 +224,9 @@ machine; a Node build would be required for `npx` without Bun.
 
 Built with `effect/cli`. Sample specs for trying the binary
 live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
-`mock-complete` (complete), `mock-stale` (inconsistent), and `mock-bad`
+`mock-complete` (complete), `mock-stale` (inconsistent), `mock-history` (an
+untouched record at its review budget), `mock-over-budget` (one review-budget
+error), and `mock-bad`
 (10 issues across every failure class).
 
 ## Prompt sync
@@ -194,7 +255,7 @@ user prompt — is never read, rewritten, or deleted by doctor.
 Both payloads are embedded in the `mf-specs` binary at build time
 (`bun run generate:payload` from `skills/` and `prompts/`), so `doctor` works
 from the standalone binary with no package checkout beside it. The package
-directory still wins when present, and `src/apps/doctor/tests/embedded-payload.test.ts`
+directory still wins when present, and `src/modules/doctor/tests/embedded-payload.test.ts`
 fails if the embed drifts from the package.
 
 ## Sizing
@@ -224,7 +285,12 @@ a phase of only `tiny` tasks gets exactly one review cycle, and the phase's own
 `review` task never raises its budget. A non-empty phase always gets at least
 one cycle, so a phase holding only its review task (or only completed tasks
 without sizes) can still be reviewed. `status` and `next` print the phase
-budget; `sizing --task` prints the task's budget.
+budget. Compact `sizing --task` omits it: the default line carries only the task
+id, declared size, effective target, and winning layer. `--verbose` or `--human`
+prints the labelled budget line — `size budget <task> · contributes <cycles> ·
+phase <id> · phase budget <phase>` — so the task's own size budget and the cycles
+it adds to its phase are never mistaken for one another; a `review` task always
+contributes `0`.
 
 ### Config
 
@@ -318,14 +384,16 @@ fixed:
    permission; an unchanged entry, an empty entry, and a new file do not.
 6. **Write exactly one layer.** Unrelated sizes, `phases` entries, and keys
    survive; a second layer takes a second run.
-7. **Prove it.** `models --verify` for the touched scope, then `check` for the
-   same scope, then `sizing --task <id> --human` for one task per explicit
-   target. A failing check blocks the report; the report carries the path, the
-   four-size mapping, the catalogue entries used, and every result.
+7. **Prove it.** `models --verify` for the touched scope (with
+   `--catalog <path>` outside the host), then `check` for the same scope, then
+   `sizing --task <id> --human` for one task per explicit target. A failing
+   check blocks the report; the report carries the path, the four-size mapping,
+   the catalogue entries used, and every result.
 
 The config is generated from the live catalogue rather than remembered because
 the catalogue is the only authority on what this harness can dispatch. A model
-id is valid only if `mf-specs models` prints it, and `--json` is stable enough
+id is valid only if the catalogue lists it — `spec_models` in the host,
+`mf-specs models --catalog <path>` outside it — and `--json` is stable enough
 to round-trip as `--catalog` input. The catalogue only advertises targets a
 config can hold: a host id, variant, or default label the sizing grammar
 rejects is dropped at the boundary (a known variant list filtered to nothing
@@ -368,9 +436,9 @@ $ mf-specs sizing-config --name ship-login
 [wizard] scope: spec ship-login (fixed by --name); existing config: none, so
          every size is inherit.
 [wizard] catalogue:
-$ mf-specs models
-provider/cheap-model     variants none
-provider/deep-model      variants high,max
+$ mf-specs models --catalog <path>
+provider/cheap-model  variants none
+provider/deep-model  variants high,max
 provider/standard-model  variants high,low,max  *
 
 [wizard] proposal -> .agents/@montflow/specs/ship-login/sizing.json
@@ -380,13 +448,15 @@ provider/standard-model  variants high,low,max  *
   large   inherit                         no better target than the current model
 [wizard] write .agents/@montflow/specs/ship-login/sizing.json? [user: yes]
 [wizard] wrote ship-login/sizing.json: sizes only, 2-space JSON, trailing newline
-$ mf-specs models --verify --name ship-login
+$ mf-specs models --verify --name ship-login --catalog <path>
 ✓ no model or effort findings
+
+3 entries checked · 0 skipped · repo 0 checked, 0 skipped · spec 3 checked, 0 skipped
 $ mf-specs check --name ship-login
 1 spec · 0 failed · 0 issues
 $ mf-specs sizing --name ship-login --task A002 --human
 A002 · declared small · target provider/standard-model#high · source spec
-budget 2 · contributes 2 · phase A budget 2
+size budget 2 · contributes 2 · phase A · phase budget 2
 
 size    repo    spec                          phase   winner
 tiny    absent  provider/cheap-model          absent  spec
@@ -398,9 +468,11 @@ large   absent  -                             absent  inherit
 ### Diagnostics
 
 Every sizing failure renders as one agent-first, greppable block: `code`, `path`,
-`field`, `problem`, `expected`, `actual`, `fix`, `cause` when the failure wraps
-an underlying error, and `next` naming the command to re-run. One diagnostic
-with every field populated:
+`field`, `problem`, `expected`, `actual`, `fix`, and `next` naming the command to
+re-run. `--verbose` adds the detail rows — `cause` when the failure wraps an
+underlying error, the sizing `layers` trace, and a defect's `stack` — so the
+default block stays token-lean and the flag means the same thing on every verb.
+One diagnostic with every field populated (`--verbose`):
 
 ```text
 code     sizing.malformed-json
@@ -416,16 +488,46 @@ next     mf-specs check --name ship-login
 
 `check` aggregates every sizing error across the repo config, the spec config,
 and the task sizes in one pass instead of stopping at the first one — including
-an unreadable config file, which becomes a coded `store.error` finding. Its
-compact output is unchanged; `check --verbose` adds the cause chain and a
-`layers` line for sizing findings (`consulted repo,spec` plus the winning
-`layer`, and the `phase` for a nested override or a task-size finding). Exit
+an unreadable config file, which becomes a coded `store.error` finding. Every
+error keeps its full block. Warning findings group into one line per spec,
+carrying every code with its count and a representative path — codes in sorted
+order and each path a lexicographic minimum, so the line does not depend on
+discovery order — so a historical
+backlog stays readable; `check --verbose` expands every group back into its full
+block
+and adds the cause chain plus a `layers` line for sizing findings (`consulted
+repo,spec` plus the winning `layer`, and the `phase` for a nested override or a
+task-size finding). `check --strict` promotes warnings, which then render in
+full as errors and fail the run. Exit
 codes: `0` clean, `1` a validation failure, `2` an internal defect. Every
 command catches `Cause`: an unexpected defect renders `code internal` and exits
 `2` with its stack only under `--verbose`, while an interruption exits `130`.
-`status` and `next` gate their target columns and exit non-zero on the same
-config and task-size errors `check` reports, so a dispatchable target is never
-printed for a task the contract calls invalid.
+`status`, `next`, and `state` gate their target columns and exit non-zero on
+every error `check` reports, so a dispatchable target is never printed for a task
+the contract calls invalid. They read the same review series `check` reads, so an
+over-budget phase also blocks `execute` before it renders a session. Warnings
+stay advisory there: `check --strict` promotes them for the gate, and that
+promotion is a `check` decision, not dispatch truth, so `status`, `next`, and
+`state` never block on a warning.
+
+The record checks are warnings, so historical specs keep passing unchanged:
+
+- `task.completion-unchecked` — a `complete` task whose `## Completion`
+  checklist still holds unchecked items; the message names the task file and the
+  unchecked count.
+- `gate.unchecked` — a `complete` task whose `GATES.md` has no checked item.
+- `review.phase-unattributed` — a round in a linked review series with no
+  parsable `- Phase:` attribution, so it counts toward no phase budget. A
+  warning, promoted by `--strict`, so a dropped or decorated line is never a
+  silent exemption.
+- `review.budget-exceeded` — an **error**: a review series holds more rounds
+  attributed to a phase (`- Phase:` in a round's `## Metadata`) than that phase's
+  size-derived budget. The message names the series, phase, budget, and actual
+  count. `check` reads the review store beside the specs store
+  (`<specs-root>/../reviews`); a spec with no series is skipped, so a historical
+  record never turns red for predating the store, while a round file it cannot
+  read is a `store.error` instead of a silently uncounted round. The execute
+  prompt's review-cycle cap is therefore mechanical, not prose.
 
 ## Library surface
 
@@ -434,12 +536,15 @@ printed for a task the contract calls invalid.
   table (`TaskRow`, `parseTaskTable`).
 - **`Task`** — `Task` Schema Class, `TaskId`, `TaskType`, `TaskStatus`,
   the optional `size` field, `parseTaskDirName`, `parseTaskFile`,
-  `verifyTaskFile`, the optional
+  `verifyTaskFile`, `verifyTaskSize`, `verifyTaskCompletion` (a complete task
+  with unchecked `## Completion` items is `task.completion-unchecked`), the
+  optional
   `reviewer-profiles` list (`REVIEWER_PROFILES_FIELD`) on a review task, the
   `finding-ref` locator pattern (`FINDING_REF_PATTERN`), plus the task-id /
   directory / originator patterns.
 - **`Gates`** — `parseGates`, `verifyGatesFile` (stages + checklist
-  items, no placeholders).
+  items, no placeholders), and `verifyGateProgress` (a complete task with no
+  checked gate item is `gate.unchecked`).
 - **`Memory`** — `verifyMemoryFile`, `MEMORY_SECTIONS` (title + template
   sections).
 - **`Lifecycle`** — `analyze` / `verify`: derives `pending` /
@@ -450,22 +555,33 @@ printed for a task the contract calls invalid.
   split idle `pending` from active `in-progress`.
 - **`Structure`** — `verifySpecTree` over an in-memory
   `SpecSnapshot`: required files, task-directory naming and placement,
-  id/name agreement, task-table agreement (name/type/status/gates),
-  dependency validity (existence, phase order, cycles), one `review` task
-  per phase, and `locked-phases` sanity.
+  id/name agreement, task-table agreement (name/type/status/gates), the
+  record checks, dependency validity (existence, phase order, cycles), one
+  `review` task per phase, and `locked-phases` sanity. Its review input is
+  required (`NO_REVIEW` when the caller has no store), so every surface that
+  verifies a tree also fails a series holding more rounds for a phase than that
+  phase's budget.
+- **`ReviewLink`** — the review-series convention: `seriesName`,
+  `profileSeriesName`, `seriesNames`, `roundForPhase`, `roundPhase`,
+  `reviewPhases`, `verify` (a complete review has its round), and
+  `verifyBudgets` (a series at or under its phase budget; over is
+  `review.budget-exceeded`, and a round with no parsable attribution is the
+  `review.phase-unattributed` warning).
 - **`Prompt`** — `load(root, name, values)`: gate the shipped template on
   `mf-specs doctor`, read and verify it through `@montflow/prompts`, render it
-  with the caller's values, and return the text plus the skills to load.
-  `PROMPT_NAMES` is `spec-create`, `spec-execute`, and `spec-sizing`, and the
-  templates live only in `packages/specs/prompts/`. `parseMode` / `MODES` carry
-  the public `guided` (default) and `autonomous` names.
+  with the caller's values, and return the text plus the installed skills, the
+  `SkillAdvisory` items for missing non-owned declared skills, and the decoded
+  prompt. `PROMPT_NAMES` is `spec-create`, `spec-execute`, and `spec-sizing`, and
+  the templates live only in `packages/specs/prompts/`. `parseMode` / `MODES`
+  carry the public `guided` (default) and `autonomous` names.
 - **`Scaffold`** — `renderSpecScaffold` / `ScaffoldSpecInput` /
   `ScaffoldTask`: pure renderer for a fresh spec tree (the mechanical
   half of `mf-specs create`), emitting each task's `size` and each review
   task's `reviewer-profiles` list.
 - **`Sizing`** — the single size vocabulary (`SIZES`, `Size`, `isSize`,
   `DEFAULT_SIZE`), the review-cycle budget (`REVIEW_CYCLES`,
-  `MAX_REVIEW_CYCLES`, `reviewCycles`, `phaseReviewBudget`), the coded verifier
+  `MAX_REVIEW_CYCLES`, `reviewCycles`, `taskContribution`,
+  `phaseReviewBudget`), the coded verifier
   (`verify`, `verifyText`), the effectful `parse` with preserved cause, and the
   layered resolver (`LAYERS`, `merge`, `mergedEntry`, `resolve`, `targetOf`,
   `INHERIT`).
@@ -475,15 +591,22 @@ printed for a task the contract calls invalid.
   code list). The only normalizer the `models` command and the sizing flow use.
 - **`Verify` / `Frontmatter`** — shared `Issue` / `Result` vocabulary and
   the tolerant frontmatter grammar.
+- **`Diagnostic`** — `DiagnosticBlock`, `renderDiagnostic` /
+  `renderDiagnostics`, and `causeMessage`: the one agent-first block
+  (`code`, `path`, `field`, `problem`, `expected`, `actual`, `fix`,
+  `next`, plus `cause`, `layers`, and `stack` under `--verbose`) every surface
+  prints through, CLI and prompt advisories alike.
 - **`SpecStore`** — filesystem reader (`names`, `hasRoot`, `exists`,
-  `snapshot`) backing the CLI.
+  `snapshot`, `reviewSeries`) backing the CLI. `reviewSeries` reads the review
+  store beside the specs store (`<specs-root>/../reviews`) for the series a
+  spec owns.
 - **`Cli`** — pure engines (`check`, `status`, `list`, `sizingOf`, `models`,
   `listModels`, `verifyModels`, `author`,
   `execute`, `sizingConfig`, `resolveSizingScope`, `which`), pure renderers
   (`renderCheck`, `renderStatus`,
   `renderNext`, `renderList`, `renderSizing`, `renderSizingReport`,
-  `renderModelFindings`, `renderDiagnostic`, `renderWhich`), and the
-  `effect/cli` commands.
+  `renderModelFindings`, `renderWhich`), and the `effect/cli` commands.
+  `renderDiagnostic` is `Diagnostic`'s, re-exported here.
 - **`Doctor`** — `runDoctor(root)` / `runDoctorAt(startDir)` install the
   packaged spec skills into `.agents/skills/` and the packaged spec prompts
   into `.agents/@montflow/prompts/`, reporting one outcome per skill and prompt
@@ -497,7 +620,8 @@ issue list, so callers can render or repair.
 
 Multi-reviewer support adds an optional `reviewer-profiles` field to a review
 task and one review series per declared profile. Existing specs and series need
-no change:
+no change: profiles are declared by the repo and optional per phase, and nothing
+in this package recommends one.
 
 1. **No declared profiles is unchanged.** A review task with no
    `reviewer-profiles` (absent, blank, or `[]`) dispatches one general reviewer

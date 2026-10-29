@@ -11,6 +11,9 @@ port or a catalog file themselves.
 - Vocabulary: `Catalogue`, `CatalogueModel`, `SourceModel`, `ModelSource`
 - Normalization: `normalize` (trim, drop blanks, dedupe, sort by provider then
   model, union known variant lists on duplicates, `null` wins), `filterProvider`
+  (keeps only one provider's models, and keeps the default only when it names a
+  model still in the filtered document, so a filtered `--json` never points
+  outside itself)
 - Stable JSON: `CatalogueDocument`, `toDocument`, `toJson`, `decode`. The
   document is date-free and is also valid `--catalog` input.
 - Table rendering: `renderTable` (`variants unknown`, `variants none`, and a
@@ -23,7 +26,7 @@ port or a catalog file themselves.
 
 - Reading a model port or a `--catalog` file — the `cli` app and `apps/server`
   own the Effect wiring
-- Rendering a finding as an agent-first diagnostic — the `cli` app owns
+- Rendering a finding as an agent-first diagnostic — the `diagnostic` module owns
   `renderDiagnostic`
 - Loading or parsing `sizing.json` — `sizing` owns the config contract
 - Any I/O, clock, or process state

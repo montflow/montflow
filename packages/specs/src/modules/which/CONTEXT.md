@@ -10,7 +10,8 @@ model, no guessing.
 - Branch grammar: `PREFIXES` / `Prefix` / `BRANCH_PATTERN`, `parseBranch`,
   `normalizeFeature`
 - Git metadata text: `parseHead`, `parseGitFile`, `BranchSource`
-- Matching: `matchFeature` (exact first, then a unique prefix pair, then a miss)
+- Matching: `matchFeature` (exact first, then a unique prefix pair whose shorter
+  name ends at a `-` boundary, then a miss)
 - The one resolver every caller shares: `resolve`, `WhichRequest`,
   `WhichResolution`, `WhichMatch`, `WhichMiss`
 - Stable codes: `CODES` (`SPEC_NO_MATCH`, `SPEC_AMBIGUOUS`)
@@ -20,7 +21,7 @@ model, no guessing.
 
 - Reading `.git` / `HEAD` from disk — the `cli` app owns it (`which`), and the
   host tool reuses that effect
-- Rendering diagnostics — the agent-first diagnostic shape lives in `cli`
+- Rendering diagnostics — the `diagnostic` module owns the agent-first shape
 - Fuzzy, edit-distance, keyword, or description matching — never
 
 ## Consumers

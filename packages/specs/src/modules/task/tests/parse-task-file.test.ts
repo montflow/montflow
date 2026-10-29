@@ -49,10 +49,10 @@ Vitest.describe('Task.parseTaskFile runtime', () => {
         id: 'A004',
         name: 'review-later',
         type: 'review',
-        reviewerProfiles: 'effect-reviewer, generic-reviewer',
+        reviewerProfiles: 'example-reviewer, generic-reviewer',
       }),
     );
-    Vitest.expect(task?.reviewerProfiles).toStrictEqual(['effect-reviewer', 'generic-reviewer']);
+    Vitest.expect(task?.reviewerProfiles).toStrictEqual(['example-reviewer', 'generic-reviewer']);
   });
 
   Vitest.it('parses an empty reviewer-profiles value as an empty list', () => {
@@ -73,14 +73,14 @@ Vitest.describe('Task.parseTaskFile runtime', () => {
         'depends-on:',
         'related-tasks:',
         'reviewer-profiles:',
-        '  - effect-reviewer',
+        '  - example-reviewer',
         '  - generic-reviewer',
         'status: pending',
         '---',
         '',
       ].join('\n'),
     );
-    Vitest.expect(task?.reviewerProfiles).toStrictEqual(['effect-reviewer', 'generic-reviewer']);
+    Vitest.expect(task?.reviewerProfiles).toStrictEqual(['example-reviewer', 'generic-reviewer']);
   });
 
   Vitest.it('splits comma-separated depends-on and related-tasks', () => {

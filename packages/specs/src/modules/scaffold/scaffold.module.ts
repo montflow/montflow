@@ -236,15 +236,16 @@ const renderMemory = (): string =>
     '',
   ].join('\n');
 
-/** Render a default `GATES.md` when a task requests gates. */
+/**
+ * Render a default `GATES.md` when a task requests gates. The single item is a
+ * replacement marker, not a generic suite: a gate proves *this* task, so the
+ * author (and the review) replaces it with the task's own commands.
+ */
 const renderGates = (): string =>
   [
     '## Stage 0: Verification',
     '',
-    '- [ ] formatting passes',
-    '- [ ] linting passes',
-    '- [ ] typecheck passes',
-    '- [ ] tests pass',
+    "- [ ] REPLACE with this task's own verification commands",
     '',
   ].join('\n');
 

@@ -9,6 +9,6 @@
 
 ## Stage 1: Behaviour
 
-- [ ] `bun run --cwd packages/specs cli check --dir . --name spec-optimizations` reports unchecked record warnings in the grouped form
-- [ ] A synthetic series with four rounds for a tiny phase fails with the budget and count
-- [ ] A synthetic series exactly at budget stays green
+- [ ] `bun run --cwd packages/specs cli check --dir ../.. --name spec-optimizations` reports unchecked record warnings in the grouped form
+- [ ] `bun run --cwd packages/specs cli check --dir fixtures --name mock-over-budget` exits 1 with `review.budget-exceeded`, naming the series, phase, budget, and round count
+- [ ] `bun run --cwd packages/specs cli check --dir fixtures --name mock-history` exits 0

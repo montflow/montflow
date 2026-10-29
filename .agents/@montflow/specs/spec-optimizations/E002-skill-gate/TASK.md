@@ -6,7 +6,7 @@ originator: user
 size: medium
 depends-on: 
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task E002: skill-gate

@@ -9,6 +9,9 @@ import {
   diagnoseCause,
   execute,
   listModels,
+  listNameDiagnostic,
+  modelsVerifyCommand,
+  renderDiagnostic,
   sizingConfig,
   storeDirOf,
   verifyModels,
@@ -223,12 +226,25 @@ export interface ModelsToolOptions {
 export const specModelsTool = (options: ModelsToolOptions): ToolDefinition<SpecModelsInput> => ({
   name: 'spec_models',
   description:
-    "Read the harness model catalogue. `list` returns the stable catalogue JSON (provider/model ids, effort variants, and the default marker); `verify` cross-checks the repo config and, when `name` is supplied, that spec config including every phase override, returning the same warnings as `mf-specs models --verify`. `provider` keeps one provider on either action; a miss is a diagnostic, and on `verify` only that provider's config entries are checked. Unknown variants never produce an effort finding.",
+    "Read the harness model catalogue. `list` returns the stable catalogue JSON (provider/model ids, effort variants, and the default marker); `verify` cross-checks the repo config and, when `name` is supplied, that spec config including every phase override, returning the same warnings and the same checked/skipped counts as `mf-specs models --verify`. `provider` keeps one provider on either action; a miss is a diagnostic, and on `verify` only that provider's config entries are checked, with the rest counted as skipped. `name` is refused on `list`, exactly as the binary refuses `--name` without `--verify`, because only the verification path can honour it. Unknown variants never produce an effort finding.",
   input: SpecModelsInput,
   execute: (input) =>
     Effect.gen(function* () {
       const root = storeDirOf(options.cwd);
       if (input.action === 'list') {
+        // The listing cannot honour `name`, so a supplied one is refused with
+        // the same diagnostic `mf-specs models --name` prints — the tool must
+        // not return a full catalogue that looks scoped. A blank value means
+        // "no name", exactly as on the CLI.
+        const name = input.name;
+        if (name !== undefined && name.trim() !== '') {
+          return yield* Effect.fail(
+            renderDiagnostic(
+              listNameDiagnostic(name, modelsVerifyCommand({ name, provider: input.provider })),
+            ),
+          );
+        }
+
         const report = yield* listModels(
           { provider: input.provider, json: true },
           options.model,

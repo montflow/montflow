@@ -6,7 +6,7 @@ originator: user
 size: small
 depends-on: E003
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task G002: single-snapshot

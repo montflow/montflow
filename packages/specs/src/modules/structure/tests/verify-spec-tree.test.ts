@@ -4,6 +4,10 @@ import { specMarkdown } from '../../spec/tests/helpers.js';
 import { taskMarkdown } from '../../task/tests/helpers.js';
 import { entry, memory, snapshot } from './helpers.js';
 
+/** Structure-only verification: the tree rules with no review store. */
+const verifyTree = (tree: Structure.SpecSnapshot) =>
+  Structure.verifySpecTree(tree, Structure.NO_REVIEW);
+
 const validTree = () =>
   snapshot([
     entry('SPEC.md', specMarkdown()),
@@ -18,13 +22,13 @@ const validTree = () =>
 
 Vitest.describe('Structure.verifySpecTree runtime', () => {
   Vitest.it('accepts a structurally valid spec', () => {
-    const result = Structure.verifySpecTree(validTree());
+    const result = verifyTree(validTree());
     Vitest.expect(result.issues).toStrictEqual([]);
     Vitest.expect(result.valid).toBe(true);
   });
 
   Vitest.it('fails when SPEC.md is missing', () => {
-    const result = Structure.verifySpecTree(snapshot([entry('A001-x/TASK.md', '')]));
+    const result = verifyTree(snapshot([entry('A001-x/TASK.md', '')]));
     Vitest.expect(result).toStrictEqual({
       valid: false,
       issues: [{ field: 'SPEC.md', message: 'Required file is missing.' }],
@@ -33,7 +37,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
 
   Vitest.it('flags a missing TASK.md in a task directory', () => {
     const tree = validTree();
-    const result = Structure.verifySpecTree({
+    const result = verifyTree({
       name: tree.name,
       files: tree.files.filter((file) => file.path !== 'A001-implement-login/TASK.md'),
     });
@@ -46,7 +50,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
 
   Vitest.it('flags an unexpected file at the spec root', () => {
     const tree = validTree();
-    const result = Structure.verifySpecTree({
+    const result = verifyTree({
       name: tree.name,
       files: [...tree.files, entry('notes.txt', 'scratch')],
     });
@@ -58,7 +62,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
 
   Vitest.it('allows a valid sizing.json at the spec root', () => {
     const tree = validTree();
-    const result = Structure.verifySpecTree({
+    const result = verifyTree({
       name: tree.name,
       files: [
         ...tree.files,
@@ -71,7 +75,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
 
   Vitest.it('verifies a spec-root sizing.json and nests its findings', () => {
     const tree = validTree();
-    const result = Structure.verifySpecTree({
+    const result = verifyTree({
       name: tree.name,
       files: [...tree.files, entry('sizing.json', '{"sizes":{"huge":{"model":"a/b"}}}')],
     });
@@ -90,7 +94,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
 
   Vitest.it('codes malformed JSON in a spec-root sizing.json', () => {
     const tree = validTree();
-    const result = Structure.verifySpecTree({
+    const result = verifyTree({
       name: tree.name,
       files: [...tree.files, entry('sizing.json', '{ nope')],
     });
@@ -107,7 +111,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
   });
 
   Vitest.it('flags a task-table type that disagrees with TASK.md', () => {
-    const result = Structure.verifySpecTree(
+    const result = verifyTree(
       snapshot([
         entry(
           'SPEC.md',
@@ -143,7 +147,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
   });
 
   Vitest.it('flags a Gates column that disagrees with GATES.md', () => {
-    const result = Structure.verifySpecTree(
+    const result = verifyTree(
       snapshot([
         entry(
           'SPEC.md',
@@ -179,7 +183,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
   });
 
   Vitest.it('flags a forward-phase dependency', () => {
-    const result = Structure.verifySpecTree(
+    const result = verifyTree(
       snapshot([
         entry(
           'SPEC.md',
@@ -215,7 +219,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
   });
 
   Vitest.it('flags a dependency cycle', () => {
-    const result = Structure.verifySpecTree(
+    const result = verifyTree(
       snapshot([
         entry(
           'SPEC.md',
@@ -246,7 +250,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
   });
 
   Vitest.it('flags a phase without a review task', () => {
-    const result = Structure.verifySpecTree(
+    const result = verifyTree(
       snapshot([
         entry(
           'SPEC.md',
@@ -277,7 +281,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
 
   Vitest.it('flags a locked phase with no tasks', () => {
     const tree = validTree();
-    const result = Structure.verifySpecTree({
+    const result = verifyTree({
       name: tree.name,
       files: [
         entry('SPEC.md', specMarkdown({ lockedPhases: 'A,B' })),
@@ -292,7 +296,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
 
   Vitest.it('flags a TASK.md at the spec root with placement guidance', () => {
     const tree = validTree();
-    const result = Structure.verifySpecTree({
+    const result = verifyTree({
       name: tree.name,
       files: [...tree.files, entry('TASK.md', taskMarkdown({ id: 'A050', name: 'stray' }))],
     });
@@ -303,7 +307,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
   });
 
   Vitest.it('flags a task directory missing its kebab name', () => {
-    const result = Structure.verifySpecTree(
+    const result = verifyTree(
       snapshot([
         entry(
           'SPEC.md',
@@ -324,7 +328,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
   });
 
   Vitest.it('flags a task-table name that disagrees with TASK.md', () => {
-    const result = Structure.verifySpecTree(
+    const result = verifyTree(
       snapshot([
         entry(
           'SPEC.md',
@@ -355,7 +359,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
 
   Vitest.it('flags invalid GATES.md content', () => {
     const tree = validTree();
-    const result = Structure.verifySpecTree({
+    const result = verifyTree({
       name: tree.name,
       files: [...tree.files, entry('A001-implement-login/GATES.md', 'Validate manually.\n')],
     });
@@ -366,7 +370,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
 
   Vitest.it('flags a MEMORY.md missing template sections', () => {
     const tree = validTree();
-    const result = Structure.verifySpecTree({
+    const result = verifyTree({
       name: tree.name,
       files: tree.files.map((file) =>
         file.path === 'A001-implement-login/MEMORY.md' ? entry(file.path, '# Memory\n') : file,
@@ -379,7 +383,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
   });
 
   Vitest.it('flags a complete spec that still has a pending task', () => {
-    const result = Structure.verifySpecTree(
+    const result = verifyTree(
       snapshot([
         entry(
           'SPEC.md',
@@ -442,16 +446,19 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
           id: 'A099',
           name: 'review-phase',
           type: 'review',
-          reviewerProfiles: 'effect-reviewer',
+          reviewerProfiles: 'example-reviewer',
           status: 'complete',
         }),
       ),
       entry('A099-review-phase/MEMORY.md', memory),
     ]);
-    const result = Structure.verifySpecTree(tree, [
-      { name: 'ship-spec', rounds: [{ round: '001', phase: 'A' }] },
-      { name: 'ship-spec-effect-reviewer', rounds: [{ round: '001', phase: 'A' }] },
-    ]);
+    const result = Structure.verifySpecTree(tree, {
+      series: [
+        { name: 'ship-spec', rounds: [{ round: '001', phase: 'A' }] },
+        { name: 'ship-spec-example-reviewer', rounds: [{ round: '001', phase: 'A' }] },
+      ],
+      requireRounds: true,
+    });
     Vitest.expect(result.issues).toStrictEqual([]);
     Vitest.expect(result.valid).toBe(true);
   });
@@ -481,19 +488,20 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
           id: 'A099',
           name: 'review-phase',
           type: 'review',
-          reviewerProfiles: 'effect-reviewer',
+          reviewerProfiles: 'example-reviewer',
           status: 'complete',
         }),
       ),
       entry('A099-review-phase/MEMORY.md', memory),
     ]);
-    const result = Structure.verifySpecTree(tree, [
-      { name: 'ship-spec', rounds: [{ round: '001', phase: 'A' }] },
-    ]);
+    const result = Structure.verifySpecTree(tree, {
+      series: [{ name: 'ship-spec', rounds: [{ round: '001', phase: 'A' }] }],
+      requireRounds: true,
+    });
     Vitest.expect(result.issues).toContainEqual({
       field: 'review-series',
       message:
-        "Phase 'A' has a review task but review series 'ship-spec-effect-reviewer' does not exist.",
+        "Phase 'A' has a review task but review series 'ship-spec-example-reviewer' does not exist.",
     });
   });
 });

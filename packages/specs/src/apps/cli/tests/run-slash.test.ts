@@ -1,6 +1,6 @@
 import * as Vitest from '@effect/vitest';
 import { Effect, FileSystem, Path } from 'effect';
-import { runDoctor } from '../../../apps/doctor/index.js';
+import { runDoctor } from '../../../modules/doctor/index.js';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import * as Catalogue from '../../../modules/catalogue/index.js';
@@ -77,6 +77,27 @@ Vitest.describe('Cli.runSlash runtime', () => {
     }),
   );
 
+  Vitest.it.effect('runs next for a valid spec and reports ok', () =>
+    Effect.gen(function* () {
+      const report = yield* runSlash('next --name ok', root).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(report.ok).toBe(true);
+      Vitest.expect(report.output).toContain('state pending');
+      Vitest.expect(report.output).toContain('A001');
+    }),
+  );
+
+  Vitest.it.effect('reports next as not ok under the same rule as status', () =>
+    Effect.gen(function* () {
+      const layer = stubLayer(specs);
+      const statusReport = yield* runSlash('status --name bad', root).pipe(Effect.provide(layer));
+      const nextReport = yield* runSlash('next --name bad', root).pipe(Effect.provide(layer));
+      Vitest.expect(statusReport.ok).toBe(false);
+      Vitest.expect(nextReport.ok).toBe(statusReport.ok);
+      Vitest.expect(nextReport.output).toContain('code     unspecified');
+      Vitest.expect(nextReport.output).toContain('next     mf-specs check --name bad');
+    }),
+  );
+
   Vitest.it.effect('rejects status without --name', () =>
     Effect.gen(function* () {
       const error = yield* runSlash('status', root).pipe(
@@ -120,6 +141,146 @@ Vitest.describe('Cli.runSlash runtime', () => {
         Effect.flip,
       );
       Vitest.expect(slashProblem(error)).toContain("Unknown status 'bogus'");
+    }),
+  );
+});
+
+Vitest.describe('Cli.runSlash flag validation', () => {
+  /** One refusal case: the args, the offending flag, and the corrected command. */
+  interface Refusal {
+    readonly args: string;
+    readonly field: string;
+    readonly next: string;
+  }
+
+  const refused: ReadonlyArray<Refusal> = [
+    {
+      args: 'execute --scope repo',
+      field: '--scope',
+      next: '/specs sizing-config --scope repo',
+    },
+    { args: 'check --json', field: '--json', next: '/specs models --json' },
+    {
+      args: 'status --task A001',
+      field: '--task',
+      next: '/specs resolve --name <spec> --task A001',
+    },
+    { args: 'sizing-config --strict', field: '--strict', next: '/specs check --strict' },
+    { args: 'which --name ok', field: '--name', next: '/specs check --name ok' },
+  ];
+
+  Vitest.it.effect('refuses a misplaced flag and names the command that reads it', () =>
+    Effect.gen(function* () {
+      for (const { args, field, next } of refused) {
+        const report = yield* runSlash(args, root).pipe(Effect.provide(stubLayer(specs)));
+        Vitest.expect(report.ok, args).toBe(false);
+        Vitest.expect(report.output, args).toContain('code     cli.invalid-argument');
+        Vitest.expect(report.output, args).toContain(`field    ${field}`);
+        Vitest.expect(report.output, args).toContain(`next     ${next}`);
+        Vitest.expect(report.output, args).toContain(`fix      Run ${next}`);
+      }
+    }),
+  );
+
+  Vitest.it.effect('refuses a flag no slash command reads', () =>
+    Effect.gen(function* () {
+      const report = yield* runSlash('check --bogus --name ok', root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).toContain('code     cli.invalid-argument');
+      Vitest.expect(report.output).toContain('field    --bogus');
+      Vitest.expect(report.output).toContain('not a flag any /specs command implements');
+      Vitest.expect(report.output).toContain('next     /specs check --name ok');
+    }),
+  );
+
+  Vitest.it.effect('refuses a switch written with an inline value and names the bare form', () =>
+    Effect.gen(function* () {
+      const cases = [
+        {
+          args: 'check --name ok --strict=true',
+          field: '--strict',
+          next: '/specs check --name ok --strict',
+        },
+        {
+          args: 'sizing --name ok --task A001 --human=1',
+          field: '--human',
+          next: '/specs sizing --name ok --task A001 --human',
+        },
+        { args: 'list --pending=yes', field: '--pending', next: '/specs list --pending' },
+        {
+          args: 'models --json=true --provider fixture --catalog fixtures/catalog.json',
+          field: '--json',
+          next: '/specs models --json --provider fixture --catalog fixtures/catalog.json',
+        },
+      ];
+      for (const { args, field, next } of cases) {
+        const report = yield* runSlash(args, root).pipe(Effect.provide(stubLayer(specs)));
+        Vitest.expect(report.ok, args).toBe(false);
+        Vitest.expect(report.output, args).toContain('code     cli.invalid-argument');
+        Vitest.expect(report.output, args).toContain(`field    ${field}`);
+        Vitest.expect(report.output, args).toContain('is a switch and takes no value');
+        Vitest.expect(report.output, args).toContain(`next     ${next}`);
+        Vitest.expect(report.output, args).toContain(`fix      Write ${field} alone: ${next}.`);
+      }
+    }),
+  );
+
+  Vitest.it.effect('does not set a switch written with an inline value', () =>
+    Effect.gen(function* () {
+      // A broken spec would fail `check --strict`; the refusal must arrive
+      // before the run, so an ignored `--strict=true` can never look clean.
+      const report = yield* runSlash('check --name bad --strict=true', root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).not.toContain('\u2717 bad');
+    }),
+  );
+
+  Vitest.it.effect('refuses a flag a command does not implement before any store read', () =>
+    Effect.gen(function* () {
+      // The specs root does not exist: a usage error about the invocation is
+      // reported as such instead of degrading into a store failure.
+      const report = yield* runSlash('execute --scope repo', '.agents/@montflow/absent').pipe(
+        Effect.provide(stubLayer(new Map())),
+      );
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).toContain('code     cli.invalid-argument');
+      Vitest.expect(report.output).not.toContain('store.error');
+    }),
+  );
+
+  Vitest.it.effect('accepts every documented flag on every command', () =>
+    Effect.gen(function* () {
+      const documented = [
+        'check --name ok --strict --verbose',
+        'status --name ok --verbose',
+        'state --name ok --verbose',
+        'next --name ok --verbose',
+        'resolve --name ok --task A001 --verbose',
+        'sizing --name ok --task A001 --human --verbose',
+        'models --json --provider fixture',
+        'models --verify --name ok --provider fixture --catalog fixtures/catalog.json',
+        'which --branch feat/ok --verbose',
+        'list --pending --verbose',
+        'list --status=complete',
+        'create --name ship-login --description Ship --author Tester --workspace-type in-place --tasks build:execution:gates --reviewer-profiles reviewer',
+        'author --request Ship login --notes Note',
+        'execute --name ok --phase A --focus Steer --mode guided',
+        'sizing-config --scope repo',
+        'sizing-config --scope spec --name ok',
+        'sizing-config --scope phase --name ok --phase A --focus Steer --mode autonomous',
+        'sizing-config --name ok --phase A',
+      ];
+      // A throwaway copy of the store: `create` writes, and the shared fixture
+      // map must not grow a spec the earlier suites counted.
+      const local = new Map(specs);
+      for (const args of documented) {
+        const report = yield* runSlash(args, root).pipe(Effect.provide(stubLayer(local)));
+        Vitest.expect(report.output, args).not.toContain('cli.invalid-argument');
+      }
     }),
   );
 });
@@ -382,6 +543,25 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
       Vitest.expect(report.output).toContain('Ship login');
       Vitest.expect(report.output).toContain('Extra constraints');
       Vitest.expect(report.output).toContain('Do not touch packages/core.');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('joins the prose after an inline value instead of truncating it', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const spaced = yield* runSlash(
+        'author --request Ship login --notes Do not touch packages/core.',
+        work.root,
+      ).pipe(Effect.provide(stubLayer(specs)));
+      const inline = yield* runSlash(
+        'author --request=Ship login --notes=Do not touch packages/core.',
+        work.root,
+      ).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(inline.ok).toBe(true);
+      // The `=` form is the same request, never `Ship` plus a dropped `login`.
+      Vitest.expect(inline.output).toBe(spaced.output);
+      Vitest.expect(inline.output).toContain('Ship login');
+      Vitest.expect(inline.output).toContain('Do not touch packages/core.');
     }).pipe(Effect.provide(stubLayer(specs))),
   );
 

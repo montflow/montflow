@@ -3,10 +3,10 @@ id: G005
 name: doctor-module
 type: execution
 originator: user
-size: medium
+size: small
 depends-on: F002
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task G005: doctor-module

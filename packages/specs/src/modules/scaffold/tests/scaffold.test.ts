@@ -1,5 +1,5 @@
 import * as Vitest from '@effect/vitest';
-import { verifySpecTree } from '../../structure/index.js';
+import { NO_REVIEW, verifySpecTree } from '../../structure/index.js';
 import { renderSpecScaffold } from '../index.js';
 
 /** Base inputs; individual tests override `tasks`/metadata. */
@@ -25,7 +25,7 @@ Vitest.describe('renderSpecScaffold', () => {
       'A099-review-phase/TASK.md',
       'SPEC.md',
     ]);
-    const verify = verifySpecTree({ name: base.name, files: result.files });
+    const verify = verifySpecTree({ name: base.name, files: result.files }, NO_REVIEW);
     Vitest.expect(verify.issues).toStrictEqual([]);
     Vitest.expect(verify.valid).toBe(true);
   });
@@ -40,7 +40,22 @@ Vitest.describe('renderSpecScaffold', () => {
     });
     Vitest.expect(result.files.map((file) => file.path)).toContain('A001-build/GATES.md');
     Vitest.expect(result.files.map((file) => file.path)).not.toContain('A002-explore/GATES.md');
-    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }).valid).toBe(true);
+    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }, NO_REVIEW).valid).toBe(
+      true,
+    );
+  });
+
+  Vitest.it("marks the gate stub for replacement with the task's own commands", () => {
+    const result = renderSpecScaffold({
+      ...base,
+      tasks: [{ name: 'build', type: 'execution', gates: true }],
+    });
+    const gates = result.files.find((file) => file.path === 'A001-build/GATES.md');
+    Vitest.expect(gates?.content).toContain("REPLACE with this task's own verification commands");
+    Vitest.expect(gates?.content).not.toContain('formatting passes');
+    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }, NO_REVIEW).valid).toBe(
+      true,
+    );
   });
 
   Vitest.it('wires task ids, depends-on, and the task table', () => {
@@ -57,7 +72,9 @@ Vitest.describe('renderSpecScaffold', () => {
     Vitest.expect(table).toContain('| A099 | review-phase | review | pending | No |');
     const task = result.files.find((file) => file.path === 'A002-verify/TASK.md')?.content ?? '';
     Vitest.expect(task).toContain('depends-on: A001');
-    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }).valid).toBe(true);
+    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }, NO_REVIEW).valid).toBe(
+      true,
+    );
   });
 
   Vitest.it('emits a size on every task, defaulting to medium', () => {
@@ -76,7 +93,9 @@ Vitest.describe('renderSpecScaffold', () => {
     const review =
       result.files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
     Vitest.expect(review).toContain('size: medium');
-    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }).valid).toBe(true);
+    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }, NO_REVIEW).valid).toBe(
+      true,
+    );
   });
 
   Vitest.it('emits an empty reviewer-profiles line on the review task by default', () => {
@@ -87,20 +106,24 @@ Vitest.describe('renderSpecScaffold', () => {
     const review =
       result.files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
     Vitest.expect(review).toContain('reviewer-profiles:');
-    Vitest.expect(review).not.toContain('reviewer-profiles: effect-reviewer');
-    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }).valid).toBe(true);
+    Vitest.expect(review).not.toContain('reviewer-profiles: example-reviewer');
+    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }, NO_REVIEW).valid).toBe(
+      true,
+    );
   });
 
   Vitest.it('emits supplied reviewer-profiles on the review task', () => {
     const result = renderSpecScaffold({
       ...base,
-      reviewerProfiles: ['effect-reviewer', 'generic-reviewer'],
+      reviewerProfiles: ['example-reviewer', 'generic-reviewer'],
       tasks: [{ name: 'implement', type: 'execution' }],
     });
     const review =
       result.files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
-    Vitest.expect(review).toContain('reviewer-profiles: effect-reviewer, generic-reviewer');
-    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }).valid).toBe(true);
+    Vitest.expect(review).toContain('reviewer-profiles: example-reviewer, generic-reviewer');
+    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }, NO_REVIEW).valid).toBe(
+      true,
+    );
   });
 
   Vitest.it('honors a custom phase letter', () => {

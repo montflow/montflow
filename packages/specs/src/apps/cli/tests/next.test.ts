@@ -3,7 +3,15 @@ import { Effect } from 'effect';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import type { SpecFileEntry } from '../../../modules/structure/index.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
-import { next, renderNext, renderState, state } from '../index.js';
+import {
+  VALIDATION_EXIT_CODE,
+  dispatchErrorText,
+  dispatchExitCode,
+  next,
+  renderNext,
+  renderState,
+  state,
+} from '../index.js';
 import { REPO_SIZING, SPEC_SIZING, entry, memory, stubLayer } from './helpers.js';
 
 const GATES = ['## Stage 0: Core', '', '- [ ] Tests pass', ''].join('\n');
@@ -68,8 +76,47 @@ Vitest.describe('Cli.state runtime', () => {
       Vitest.expect(report.state).toBe('pending');
       Vitest.expect(report.phase).toBe('A');
       Vitest.expect(report.lockedPhases).toStrictEqual([]);
+      Vitest.expect(report.blocked).toBe(false);
+      Vitest.expect(report.blockers).toStrictEqual([]);
       Vitest.expect(renderState(report)).toBe(
         'ship-spec · in-progress · state pending · phase A · locked none',
+      );
+    }),
+  );
+
+  Vitest.it.effect('names the blocking code and the next command, never a clean line', () =>
+    Effect.gen(function* () {
+      const report = yield* state('.agents/@montflow/specs', 'ship-spec').pipe(
+        Effect.provide(
+          stubLayer(
+            new Map([['ship-spec', tree({ a001: 'pending', a002: 'pending', a099: 'pending' })]]),
+            new Map(),
+            // Four rounds attributed to phase A whose budget is 3 (its largest
+            // task size): the same `review.budget-exceeded` `check` reports.
+            {
+              reviews: [
+                {
+                  name: 'ship-spec',
+                  rounds: [
+                    { round: '001', phase: 'A' },
+                    { round: '002', phase: 'A' },
+                    { round: '003', phase: 'A' },
+                    { round: '004', phase: 'A' },
+                  ],
+                },
+              ],
+            },
+          ),
+        ),
+      );
+      Vitest.expect(report.blocked).toBe(true);
+      Vitest.expect(report.blockers).toStrictEqual(['review.budget-exceeded']);
+      // The exit code and the printed line agree: one reason, one repair.
+      Vitest.expect(renderState(report)).toBe(
+        [
+          'ship-spec · in-progress · state pending · phase A · locked none · blocked review.budget-exceeded',
+          'next mf-specs status --name ship-spec',
+        ].join('\n'),
       );
     }),
   );
@@ -257,6 +304,47 @@ Vitest.describe('Cli.next sizing runtime', () => {
       Vitest.expect(renderNext(report)).toBe(
         'state pending · phase A · budget 2\nA001  execution  build',
       );
+    }),
+  );
+
+  Vitest.it.effect('omits targets when a tree-only error blocks dispatch', () =>
+    Effect.gen(function* () {
+      const files = [
+        ...sizedTree({
+          repo: REPO_SIZING,
+          specSizing: SPEC_SIZING,
+          a001: 'pending',
+          a002: 'pending',
+          a099: 'pending',
+        }),
+        // A stray file at the spec root: a tree error with no config finding.
+        entry('notes.txt', 'stray\n'),
+      ];
+      const report = yield* next('.agents/@montflow/specs', 'ship-spec').pipe(
+        Effect.provide(
+          stubLayer(new Map([['ship-spec', files]]), new Map([['sizing.json', REPO_SIZING]])),
+        ),
+      );
+      Vitest.expect(dispatchExitCode(report.sizing, report.verify, report.name)).toBe(
+        VALIDATION_EXIT_CODE,
+      );
+      Vitest.expect(renderNext(report)).toBe(
+        'state pending · phase A · budget 2\nA001  execution  build',
+      );
+    }),
+  );
+
+  Vitest.it.effect('prints a spec-level config error exactly once', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizedNext({
+        specSizing: '{ not json',
+        a001: 'pending',
+        a002: 'pending',
+        a099: 'pending',
+      });
+      const blockers = dispatchErrorText(report.sizing, report.verify, report.name);
+      Vitest.expect(blockers.match(/sizing\.malformed-json/g) ?? []).toHaveLength(1);
+      Vitest.expect(blockers.match(/path\s+ship-spec\/sizing\.json/g) ?? []).toHaveLength(1);
     }),
   );
 });

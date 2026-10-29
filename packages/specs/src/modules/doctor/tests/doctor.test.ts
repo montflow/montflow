@@ -147,7 +147,7 @@ Vitest.describe('runDoctor', () => {
         'ok',
       ]);
 
-      Fs.appendFileSync(installedSkillFile(root, CREATE_SPEC_SKILL_NAME), '\nstale\n');
+      Fs.appendFileSync(installedSkillFile(root, CREATE_SPEC_SKILL_NAME), '\nhand-edit-marker\n');
       Fs.appendFileSync(installedPromptFile(root, CREATE_PROMPT_NAME), '\nstale\n');
       const stale = yield* runDoctor(root, { check: true });
       Vitest.expect(stale.status).toBe('drifted');
@@ -159,7 +159,7 @@ Vitest.describe('runDoctor', () => {
       ]);
       Vitest.expect(
         Fs.readFileSync(installedSkillFile(root, CREATE_SPEC_SKILL_NAME), 'utf-8'),
-      ).toContain('stale');
+      ).toContain('hand-edit-marker');
       Vitest.expect(
         Fs.readFileSync(installedPromptFile(root, CREATE_PROMPT_NAME), 'utf-8'),
       ).toContain('stale');
@@ -325,7 +325,7 @@ Vitest.describe('runDoctor', () => {
       const root = freshRoot();
       yield* runDoctor(root);
       const skillFile = installedSkillFile(root, CREATE_SPEC_SKILL_NAME);
-      Fs.appendFileSync(skillFile, '\nstale\n');
+      Fs.appendFileSync(skillFile, '\nhand-edit-marker\n');
 
       const checked = yield* runDoctor(root, { check: true });
       Vitest.expect(checked.skills.map((skill) => skill.status)).toStrictEqual(['stale', 'ok']);
@@ -340,7 +340,7 @@ Vitest.describe('runDoctor', () => {
 
       const again = yield* runDoctor(root, { check: true });
       Vitest.expect(again.status).toBe('ok');
-      Vitest.expect(Fs.readFileSync(skillFile, 'utf-8')).not.toContain('stale');
+      Vitest.expect(Fs.readFileSync(skillFile, 'utf-8')).not.toContain('hand-edit-marker');
     }),
   );
 

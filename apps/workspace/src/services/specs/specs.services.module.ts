@@ -3,6 +3,9 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for spec files; both go away with the FileSystem migration.
 import { join } from 'node:path';
 import { Data, Effect } from 'effect';
+// Type-only (erased at build), like the lazy runtime handles below: the
+// verifier's review input shape, so the dashboard cannot pass a bare series.
+import type { Structure } from '@montflow/specs';
 
 /**
  * Lazy handles to the specs and reviews runtimes. Static imports are
@@ -138,10 +141,7 @@ export const readReviewSeries = async (
             const raw = await readFile(join(dir, round, reviews.Review.FILE_NAME), 'utf8').catch(
               () => undefined,
             );
-            const phase =
-              raw === undefined
-                ? undefined
-                : reviews.Review.parseRound(round, raw).metadata['Phase'];
+            const phase = raw === undefined ? undefined : libs.ReviewLink.roundPhase(raw);
             return phase === undefined || phase === '' ? { round } : { round, phase };
           }),
       );
@@ -261,12 +261,25 @@ const descriptionOf = (content: string): string => {
 /** Phase prefix of a task id, e.g. `AA012` → `AA`. */
 const phaseOf = (id: string): string => id.replace(/\d+$/, '');
 
+/**
+ * The verifier's review input for one spec: its linked series, with the link
+ * rule on. The dashboard is the surface an agent opens before dispatching, so a
+ * complete review task with no round attributed to its phase is an issue here —
+ * the same rule `status` and `next` apply, not the advisory `check` one.
+ * @param series - the spec's linked series as read from the review store
+ * @returns the required review input, so the budget and link rules both run
+ */
+const reviewInput = (series: ReadonlyArray<ReviewSeries>): Structure.ReviewInput => ({
+  series,
+  requireRounds: true,
+});
+
 /** Parsed pieces shared by the summary and the detail builders. */
 const inspect = (
   libs: SpecsLib,
   id: string,
   files: ReadonlyArray<SnapshotFile>,
-  review: ReadonlyArray<ReviewSeries>,
+  review: Structure.ReviewInput,
 ) => {
   const specFile = files.find((file) => file.path === 'SPEC.md');
   const spec = specFile === undefined ? undefined : libs.Spec.parseSpecFile(specFile.content);
@@ -292,7 +305,7 @@ const summarize = (
   libs: SpecsLib,
   id: string,
   files: ReadonlyArray<SnapshotFile>,
-  review: ReadonlyArray<ReviewSeries>,
+  review: Structure.ReviewInput,
 ): SpecSummary => {
   const { spec, specFile, tasks, verify, analysis } = inspect(libs, id, files, review);
   return {
@@ -319,7 +332,7 @@ const readSpecs = async (root: string, libs: SpecsLib): Promise<ReadonlyArray<Sp
       if (!info.isDirectory()) return undefined;
       const files = await readSnapshot(root, name);
       const review = await readReviewSeries(root, name, libs, files);
-      return summarize(libs, name, files, review);
+      return summarize(libs, name, files, reviewInput(review));
     }),
   );
   return rows.filter((row): row is SpecSummary => row !== undefined);
@@ -363,7 +376,8 @@ export const loadSpec = (root: string, id: string): Effect.Effect<SpecDetail, st
         try: async (): Promise<SpecDetail> => {
           const files = await readSnapshot(root, id);
           const review = await readReviewSeries(root, id, libs, files);
-          const { spec, specFile, tasks, verify, analysis } = inspect(libs, id, files, review);
+          const input = reviewInput(review);
+          const { spec, specFile, tasks, verify, analysis } = inspect(libs, id, files, input);
           const phases = (analysis?.phases ?? []).map((phase) => ({
             phase: phase.phase,
             locked: phase.locked,
@@ -377,7 +391,7 @@ export const loadSpec = (root: string, id: string): Effect.Effect<SpecDetail, st
               })),
           }));
           return {
-            summary: summarize(libs, id, files, review),
+            summary: summarize(libs, id, files, input),
             meta:
               spec === undefined
                 ? undefined

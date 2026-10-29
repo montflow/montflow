@@ -112,8 +112,10 @@ instead of guessing a target. Size one layer with
 `mf-specs sizing-config [--scope repo|spec|phase] --name <spec> [--phase <id>]`,
 or leave `--scope` off so the wizard asks; `/specs sizing-config` and the
 `spec_sizing` tool dispatch the same prompt. The role shows the existing config,
-inventories `mf-specs models`, proposes all four sizes, writes only after
-confirmation, and proves the layer with `models --verify`, `check`, and
+inventories the live catalogue with the `spec_models` tool in the host or
+`mf-specs models --catalog <path>` outside it, proposes all four sizes, writes
+only after confirmation, and proves the layer with the `spec_models` `verify`
+action (or `mf-specs models --verify --catalog <path>`), `check`, and
 `sizing --human`.
 
 A missing config is not an emergency: a size no layer defines stays `inherit`,

@@ -91,6 +91,27 @@ Vitest.describe('Cli.which runtime', () => {
     }).pipe(Effect.provide(PlatformLayer)),
   );
 
+  Vitest.it.effect('refuses a one-letter branch feature instead of matching a spec', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare(['spec-optimizations', 'ship-login']);
+      yield* writeGitDir(work, 'feat/s');
+      const error = yield* runWhich(work).pipe(Effect.flip);
+      Vitest.expect(error).toBeInstanceOf(SurfaceError);
+      const text = diagnose(error);
+      Vitest.expect(text).toContain('code     SPEC_NO_MATCH');
+      Vitest.expect(text).toContain('--name spec-optimizations');
+      Vitest.expect(text).not.toContain('candidates spec-optimizations');
+    }).pipe(Effect.provide(PlatformLayer)),
+  );
+
+  Vitest.it.effect('still resolves a prefix that ends at a segment boundary', () =>
+    Effect.gen(function* () {
+      const unique = yield* prepare(['spec-optimizations', 'ship-login']);
+      yield* writeGitDir(unique, 'feat/spec');
+      Vitest.expect((yield* runWhich(unique)).name).toBe('spec-optimizations');
+    }).pipe(Effect.provide(PlatformLayer)),
+  );
+
   Vitest.it.effect('lists both candidates and both --name values for an ambiguous match', () =>
     Effect.gen(function* () {
       const work = yield* prepare(['spec-one', 'spec-two', 'ship-login']);

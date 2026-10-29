@@ -3,10 +3,10 @@ id: G001
 name: catalogue-proof
 type: execution
 originator: user
-size: medium
+size: small
 depends-on: 
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task G001: catalogue-proof

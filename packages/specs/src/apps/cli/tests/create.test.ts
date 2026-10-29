@@ -1,7 +1,7 @@
 import * as Vitest from '@effect/vitest';
 import { Effect } from 'effect';
 import type { SpecFileEntry } from '../../../modules/structure/index.js';
-import { parseScaffoldTask, runSlash, scaffold } from '../index.js';
+import { SurfaceError, parseScaffoldTask, runSlash, scaffold } from '../index.js';
 import { stubLayer } from './helpers.js';
 
 const root = '.agents/@montflow/specs';
@@ -62,14 +62,19 @@ Vitest.describe('Cli.scaffold engine', () => {
     }),
   );
 
-  Vitest.it.effect('refuses an invalid name', () =>
+  Vitest.it.effect('refuses an invalid name with the usage diagnostic', () =>
     Effect.gen(function* () {
       const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
       const error = yield* scaffold(root, { name: 'Ship_Login' }).pipe(
         Effect.provide(stubLayer(specs)),
         Effect.flip,
       );
-      Vitest.expect(slashProblem(error)).toContain('not a valid spec name');
+      Vitest.expect(error).toBeInstanceOf(SurfaceError);
+      if (!(error instanceof SurfaceError)) return;
+      Vitest.expect(error.diagnostics[0]?.code).toBe('cli.invalid-argument');
+      Vitest.expect(error.diagnostics[0]?.field).toBe('--name');
+      Vitest.expect(error.diagnostics[0]?.fix).toContain('slug');
+      Vitest.expect(specs.size).toBe(0);
     }),
   );
 
@@ -101,11 +106,11 @@ Vitest.describe('Cli.scaffold engine', () => {
       yield* scaffold(root, {
         name: 'ship-login',
         author: 'Tester',
-        reviewerProfiles: ['effect-reviewer'],
+        reviewerProfiles: ['example-reviewer'],
       }).pipe(Effect.provide(stubLayer(specs)));
       const files = specs.get('ship-login') ?? [];
       const review = files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
-      Vitest.expect(review).toContain('reviewer-profiles: effect-reviewer');
+      Vitest.expect(review).toContain('reviewer-profiles: example-reviewer');
       const checked = yield* runSlash('check --name ship-login', root).pipe(
         Effect.provide(stubLayer(specs)),
       );
@@ -120,7 +125,7 @@ Vitest.describe('Cli.scaffold engine', () => {
       const files = specs.get('ship-login') ?? [];
       const review = files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
       Vitest.expect(review).toContain('reviewer-profiles:');
-      Vitest.expect(review).not.toContain('reviewer-profiles: effect-reviewer');
+      Vitest.expect(review).not.toContain('reviewer-profiles: example-reviewer');
     }),
   );
 
@@ -165,7 +170,7 @@ Vitest.describe('Cli.scaffold engine', () => {
       const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
       const error = yield* scaffold(root, {
         name: 'ship-login',
-        reviewerProfiles: ['effect-reviewer', 'effect-reviewer'],
+        reviewerProfiles: ['example-reviewer', 'example-reviewer'],
       }).pipe(Effect.provide(stubLayer(specs)), Effect.flip);
       Vitest.expect(slashProblem(error)).toContain('listed more than once');
     }),
@@ -252,13 +257,13 @@ Vitest.describe('Cli.runSlash create', () => {
     Effect.gen(function* () {
       const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
       const created = yield* runSlash(
-        'create --name ship-login --reviewer-profiles effect-reviewer',
+        'create --name ship-login --reviewer-profiles example-reviewer',
         root,
       ).pipe(Effect.provide(stubLayer(specs)));
       Vitest.expect(created.ok).toBe(true);
       const files = specs.get('ship-login') ?? [];
       const review = files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
-      Vitest.expect(review).toContain('reviewer-profiles: effect-reviewer');
+      Vitest.expect(review).toContain('reviewer-profiles: example-reviewer');
       const checked = yield* runSlash('check --name ship-login', root).pipe(
         Effect.provide(stubLayer(specs)),
       );
@@ -274,6 +279,41 @@ Vitest.describe('Cli.runSlash create', () => {
         Effect.flip,
       );
       Vitest.expect(slashProblem(error)).toContain('create requires --name');
+    }),
+  );
+
+  Vitest.it.effect('refuses a malformed --name with the usage diagnostic', () =>
+    Effect.gen(function* () {
+      const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
+      for (const name of ['..', 'A', 'a/b']) {
+        const created = yield* runSlash(`create --name ${name}`, root).pipe(
+          Effect.provide(stubLayer(specs)),
+        );
+        Vitest.expect(created.ok, name).toBe(false);
+        Vitest.expect(created.output, name).toContain('code     cli.invalid-argument');
+        Vitest.expect(created.output, name).toContain('field    --name');
+        Vitest.expect(created.output, name).toContain('slug');
+        Vitest.expect(created.output, name).not.toContain('store.error');
+      }
+      Vitest.expect(specs.size).toBe(0);
+    }),
+  );
+
+  Vitest.it.effect('refuses a supplied-but-blank --name with the same guard as its siblings', () =>
+    Effect.gen(function* () {
+      const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
+      // `--name=` parses to a supplied empty value, not a missing flag: it must
+      // take the coded guard every sibling arm applies, not a store error.
+      const created = yield* runSlash('create --name=', root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(created.ok).toBe(false);
+      Vitest.expect(created.output).toContain('code     cli.invalid-argument');
+      Vitest.expect(created.output).toContain('field    --name');
+      Vitest.expect(created.output).toContain('actual   empty string');
+      Vitest.expect(created.output).toContain('next     mf-specs create --name <slug>');
+      Vitest.expect(created.output).not.toContain('store.error');
+      Vitest.expect(specs.size).toBe(0);
     }),
   );
 });

@@ -6,7 +6,7 @@ originator: user
 size: small
 depends-on: E001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task E003: dispatch-truth

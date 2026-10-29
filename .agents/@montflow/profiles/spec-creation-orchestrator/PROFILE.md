@@ -99,8 +99,9 @@ A spec's `sizing.json` is not authoring output. When the user wants a tuned
 config, dispatch `spec-sizing-orchestrator` — the role that loads the
 `spec-sizing` prompt through `mf-specs sizing-config` (or `/specs sizing-config`
 / the `spec_sizing` tool). It shows the existing config first, resolves exactly
-one layer, inventories the live catalogue with `mf-specs models`, proposes all
-four sizes, and writes only after confirmation.
+one layer, inventories the live catalogue with the `spec_models` tool in the
+host or `mf-specs models --catalog <path>` outside it, proposes all four sizes,
+and writes only after confirmation.
 
 Never let a worker, the appraiser, or yourself guess a model or an effort. If no
 layer defines a size, `inherit` is the answer: the dispatcher omits the `model`

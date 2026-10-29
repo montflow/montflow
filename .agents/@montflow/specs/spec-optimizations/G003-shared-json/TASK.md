@@ -3,10 +3,10 @@ id: G003
 name: shared-json
 type: execution
 originator: user
-size: medium
+size: small
 depends-on: G001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task G003: shared-json
