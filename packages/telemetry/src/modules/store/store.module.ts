@@ -1,6 +1,7 @@
 import { Fs } from '../platform/index.js';
 import type { Line } from '../event/index.js';
 import { file } from '../path/index.js';
+import { olderThan } from '../purge/index.js';
 
 const DAY_MS = 86_400_000;
 
@@ -27,6 +28,7 @@ export interface Writer {
 /** Pruning inputs; `now` is epoch milliseconds. */
 export interface PruneOptions {
   readonly directory: string;
+  readonly database?: string;
   readonly retentionDays: number;
   readonly now: number;
   readonly notify: (message: string) => void;
@@ -177,38 +179,30 @@ export const make = (options: WriterOptions): Writer => {
 /**
  * Delete day files older than the retention window. Only files named
  * `YYYY-MM-DD.ndjson` are candidates; anything else in the directory is left
- * alone. Failure to prune is reported once and otherwise ignored.
+ * alone. When a `database` is given it is dropped too, so the next fold cannot
+ * serve spans from pruned files. Failure to prune is reported once and
+ * otherwise ignored. Returns the number of day files removed.
  */
-export const prune = (options: PruneOptions): void => {
+export const prune = (options: PruneOptions): number => {
   if (
     !Number.isSafeInteger(options.retentionDays) ||
     options.retentionDays < 0 ||
     options.retentionDays > 3650
   ) {
     options.notify(`prune skipped: invalid retentionDays ${String(options.retentionDays)}`);
-    return;
+    return 0;
   }
-  if (!Fs.existsSync(options.directory)) return;
-  const cutoff = dayOf(options.now - options.retentionDays * DAY_MS);
-  if (cutoff === undefined) {
+  if (dayOf(options.now) === undefined) {
     options.notify(`prune skipped: invalid clock ${String(options.now)}`);
-    return;
+    return 0;
   }
-  let entries: string[];
   try {
-    entries = Fs.readdirSync(options.directory);
+    return olderThan(
+      { directory: options.directory, database: options.database ?? '' },
+      options.now - options.retentionDays * DAY_MS,
+    ).files;
   } catch (cause) {
     options.notify(`prune failed: ${String(cause)}`);
-    return;
-  }
-  for (const entry of entries) {
-    const match = /^(\d{4}-\d{2}-\d{2})\.ndjson$/u.exec(entry);
-    const candidate = match?.[1];
-    if (candidate === undefined || candidate >= cutoff) continue;
-    try {
-      Fs.rmSync(fileOf(options.directory, candidate), { force: true });
-    } catch (cause) {
-      options.notify(`prune failed: ${String(cause)}`);
-    }
+    return 0;
   }
 };

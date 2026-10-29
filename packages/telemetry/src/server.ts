@@ -1,20 +1,32 @@
 import { Plugin } from '@opencode/plugin';
+import { file } from './modules/path/index.js';
 import { homedir } from './modules/platform/index.js';
 import type { Environment, RawOptions } from './modules/config/index.js';
-import { resolve } from './modules/config/index.js';
+import { resolve, retentionFromFile } from './modules/config/index.js';
 import { sha256 } from './modules/digest/index.js';
 import type { IncomingInput } from './modules/event/index.js';
 import { consume, ID } from './modules/plugin/index.js';
+import { all, parseDuration, session as purgeSession, olderThan } from './modules/purge/index.js';
 import { make, once, prune } from './modules/store/index.js';
 import type { Viewer } from './modules/viewer/index.js';
 
 /** Cleanup returned to the host; idempotent. */
 export type Cleanup = () => Promise<void> | void;
 
-/** The command invocation fields the viewer launcher reads. */
+/** The command invocation fields the viewer and delete actions read. */
 export interface CommandInvocation {
   readonly sessionID: string;
+  readonly prompt?: { readonly text?: string };
 }
+
+/** Text shown when `/mf-telemetry` gets an action it does not understand. */
+export const USAGE =
+  'mf-telemetry [delete --all | --session <id|current> | --older-than <30d>] | cleanup';
+
+const valueOf = (tokens: readonly string[], name: string): string | undefined => {
+  const index = tokens.indexOf(name);
+  return index === -1 ? undefined : tokens[index + 1];
+};
 
 /** The command the plugin registers with the host. */
 export interface CommandDefinition {
@@ -65,11 +77,19 @@ export const setup = async (context: HostSlice): Promise<Cleanup> => {
   const notifyWrite = once(log);
   try {
     const settings = resolve(context.options, readEnvironment());
+    const database = file(settings.directory, 'telemetry.db');
+    const store = { directory: settings.directory, database };
+    const configuredRetention =
+      context.options['retentionDays'] === undefined
+        ? retentionFromFile(settings.directory)
+        : undefined;
+    const retentionDays = configuredRetention ?? settings.retentionDays;
     const writer = make({ directory: settings.directory, notify: notifyWrite });
     try {
       prune({
         directory: settings.directory,
-        retentionDays: settings.retentionDays,
+        database,
+        retentionDays,
         now: clock(),
         notify: notifyPrune,
       });
@@ -114,21 +134,74 @@ export const setup = async (context: HostSlice): Promise<Cleanup> => {
       );
       return viewerPromise;
     };
+    const stopViewer = async (): Promise<void> => {
+      const started =
+        viewerPromise === undefined ? undefined : await viewerPromise.catch(() => undefined);
+      if (started !== undefined) await started.stop();
+    };
+    const deletion = async (input: CommandInvocation, tokens: readonly string[]): Promise<void> => {
+      const action = tokens[0];
+      const allFlag = tokens.includes('--all');
+      const target = valueOf(tokens, '--session');
+      const window = valueOf(tokens, '--older-than');
+      const selectors = [allFlag, target !== undefined, window !== undefined].filter(
+        Boolean,
+      ).length;
+      const cleanup = action === 'cleanup';
+      if ((!cleanup && action !== 'delete') || (!cleanup && selectors === 0)) {
+        log(USAGE);
+        return;
+      }
+      if ((!cleanup && selectors !== 1) || (cleanup && (allFlag || target !== undefined))) {
+        log(USAGE);
+        return;
+      }
+      await stopViewer();
+      writer.close();
+      let result;
+      if (allFlag) {
+        result = all(store);
+      } else if (target !== undefined) {
+        const sessionID = target === 'current' ? input.sessionID : target;
+        result = purgeSession(store, sessionID);
+      } else {
+        const duration = window === undefined ? retentionDays * 86_400_000 : parseDuration(window);
+        if (duration === undefined) {
+          log(`invalid window ${String(window)}; use 30d, 12h, 45m, or 10s`);
+          return;
+        }
+        result = olderThan(store, clock() - duration);
+      }
+      console.log(
+        `[${ID}] removed ${result.files} files, ${result.lines} lines, ${result.bytes} bytes${result.database ? ', database' : ''}`,
+      );
+    };
     if (context.command !== undefined) {
       try {
         const registration = await context.command.transform((editor) => {
           editor.add({
             name: 'mf-telemetry',
-            description: 'Open /mf-telemetry: the live trace and history viewer for this session.',
+            description:
+              'Open /mf-telemetry, or delete history: delete --all | --session <id|current> | --older-than <30d>, or cleanup.',
             execute: async (input) => {
               try {
+                const tokens = (input.prompt?.text ?? '')
+                  .split(/\s+/u)
+                  .filter(
+                    (token) =>
+                      token !== '' && token !== '/mf-telemetry' && token !== 'mf-telemetry',
+                  );
+                if (tokens.length > 0) {
+                  await deletion(input, tokens);
+                  return;
+                }
                 const { open } = await import('./apps/viewer/index.js');
                 const started = await getViewer(input.sessionID);
                 const url = `${started.url}?session=${encodeURIComponent(input.sessionID)}`;
                 console.log(`[${ID}] viewer: ${url}`);
                 open(url);
               } catch (cause) {
-                notifySetup(`viewer failed: ${String(cause)}`);
+                notifySetup(`command failed: ${String(cause)}`);
               }
             },
           });

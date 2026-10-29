@@ -5,6 +5,7 @@ export * from './fold/index.js';
 export * from './icons/index.js';
 export * from './path/index.js';
 export * from './plugin/index.js';
+export * from './purge/index.js';
 export * from './sqlite/index.js';
 export * from './store/index.js';
 export * from './tail/index.js';

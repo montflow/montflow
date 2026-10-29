@@ -31,6 +31,48 @@ after a session, or `/mf-telemetry` inside OpenCode.
 The viewer starts on explicit action, binds a loopback port, and stops on the
 page close beacon or the five-minute idle timeout.
 
+## Delete history
+
+From a shell:
+
+```sh
+mf-telemetry delete --all --yes
+mf-telemetry delete --session <id> --yes
+mf-telemetry delete --older-than 30d --yes
+mf-telemetry cleanup --yes          # uses config.json retentionDays
+```
+
+Inside OpenCode, the same actions are arguments to the command:
+
+```
+/mf-telemetry delete --all
+/mf-telemetry delete --session current
+/mf-telemetry delete --older-than 7d
+/mf-telemetry cleanup
+```
+
+Without `--yes`, the CLI asks for confirmation on a terminal and refuses on a
+non-interactive stdin. A specific session is removed by rewriting the day
+files, so the derived database is dropped and rebuilt by the next fold.
+
+Run a CLI deletion while OpenCode is stopped, or use the slash command while
+the session is open: the plugin closes its writer first. An external rewrite
+can race the live writer, and an external `--all` can leave that writer
+appending to a deleted inode until the next day rotation.
+
+## Retention config
+
+`config.json` in the data directory sets the shared retention window:
+
+```json
+{ "retentionDays": 14 }
+```
+
+`setup` prunes older day files (and the derived database) on every session,
+`mf-telemetry cleanup` uses the same value, and an explicit `--older-than`
+overrides it. A plugin `retentionDays` option wins over the file. Invalid or
+missing values fall back to 30 days.
+
 ## Sessions and subagents
 
 `session.created` payloads carry a `parentID` when the host creates a child

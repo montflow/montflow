@@ -1,7 +1,19 @@
 import * as Vitest from '@effect/vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import * as Config from '../index.js';
 
 const environment = { HOME: '/home/tester' };
+
+const withDirectory = (run: (directory: string) => void): void => {
+  const directory = mkdtempSync(join(tmpdir(), 'telemetry-config-'));
+  try {
+    run(directory);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
 
 Vitest.describe('Config.resolve runtime', () => {
   Vitest.it('uses $XDG_DATA_HOME/opencode/telemetry when set', () => {
@@ -55,6 +67,20 @@ Vitest.describe('Config.resolve runtime', () => {
       retentionDays: Config.DEFAULT_RETENTION_DAYS,
       captureDeltas: false,
       captureBodies: false,
+    });
+  });
+
+  Vitest.it('reads retentionDays from config.json and ignores invalid files', () => {
+    withDirectory((directory) => {
+      Vitest.expect(Config.retentionFromFile(directory)).toBeUndefined();
+      writeFileSync(join(directory, 'config.json'), '{"retentionDays":14}');
+      Vitest.expect(Config.retentionFromFile(directory)).toBe(14);
+      writeFileSync(join(directory, 'config.json'), '{"retentionDays":"soon"}');
+      Vitest.expect(Config.retentionFromFile(directory)).toBeUndefined();
+      writeFileSync(join(directory, 'config.json'), '{"retentionDays":-1}');
+      Vitest.expect(Config.retentionFromFile(directory)).toBeUndefined();
+      writeFileSync(join(directory, 'config.json'), 'not json');
+      Vitest.expect(Config.retentionFromFile(directory)).toBeUndefined();
     });
   });
 

@@ -1,5 +1,5 @@
 import * as Vitest from '@effect/vitest';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { IncomingInput } from '../../event/index.js';
@@ -109,6 +109,50 @@ Vitest.describe('Server.setup runtime', () => {
       Vitest.expect(registered[0]?.execute).toBeTypeOf('function');
       if (cleanup !== undefined) await cleanup();
       Vitest.expect(disposed).toBe(true);
+    });
+  });
+
+  Vitest.it('deletes one session from the command with --session current', async () => {
+    await withTemp(async (directory) => {
+      let execute: CommandDefinition['execute'] | undefined;
+      const context: HostSlice = {
+        ...contextOf(directory, recorded()),
+        command: {
+          transform: async (callback) => {
+            callback({ add: (definition) => (execute = definition.execute) });
+            return { dispose: async () => {} };
+          },
+        },
+      };
+      const cleanup = await setup(context);
+      if (cleanup !== undefined) await cleanup();
+      if (execute === undefined) throw new Error('command was not registered');
+      const file = join(directory, '2026-10-28.ndjson');
+      Vitest.expect(existsSync(file)).toBe(true);
+      await execute({ sessionID: 'ses_fixture', prompt: { text: 'delete --session current' } });
+      Vitest.expect(existsSync(file)).toBe(false);
+    });
+  });
+
+  Vitest.it('deletes every file from the command with delete --all', async () => {
+    await withTemp(async (directory) => {
+      let execute: CommandDefinition['execute'] | undefined;
+      const context: HostSlice = {
+        ...contextOf(directory, recorded()),
+        command: {
+          transform: async (callback) => {
+            callback({ add: (definition) => (execute = definition.execute) });
+            return { dispose: async () => {} };
+          },
+        },
+      };
+      const cleanup = await setup(context);
+      if (cleanup !== undefined) await cleanup();
+      if (execute === undefined) throw new Error('command was not registered');
+      const file = join(directory, '2026-10-28.ndjson');
+      Vitest.expect(existsSync(file)).toBe(true);
+      await execute({ sessionID: 'ses_fixture', prompt: { text: 'delete --all' } });
+      Vitest.expect(existsSync(file)).toBe(false);
     });
   });
 
