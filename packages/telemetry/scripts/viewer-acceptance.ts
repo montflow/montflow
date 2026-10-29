@@ -77,8 +77,9 @@ for (let i = 0; i < 400; i += 1) {
   ready = await evaluate(`(() => {
     const canvas = document.querySelector('#trace canvas');
     const totals = document.getElementById('totals')?.textContent || '';
-    if (!canvas || !totals.includes('20000 spans')) return null;
-    return { firstPaintMs: performance.now() - (window.__t0 || 0), canvas: { width: canvas.width, height: canvas.height }, totals };
+    const runs = Number(document.getElementById('trace')?.dataset.runs || 0);
+    if (!canvas || !totals.includes('20000 spans') || runs === 0) return null;
+    return { firstPaintMs: performance.now() - (window.__t0 || 0), canvas: { width: canvas.width, height: canvas.height }, totals, runs };
   })()`);
   if (ready) break;
   await Bun.sleep(50);

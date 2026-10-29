@@ -267,7 +267,11 @@ const drawRun = (lane, from, to) => {
  */
 const redrawBars = () => {
   for (const layer of barLayers.values()) layer.clear();
-  if (spans.length === 0) return;
+  if (spans.length === 0) {
+    trace.dataset.runs = '0';
+    return;
+  }
+  let drawn = 0;
   const end = viewStart + viewWidth();
   const runs = new Map(LANES.map((lane) => [lane, null]));
   for (let index = lowerBound(viewStart); index < spans.length; index += 1) {
@@ -286,12 +290,17 @@ const redrawBars = () => {
       run.to = column;
     } else {
       drawRun(view.lane, run.from, run.to);
+      drawn += 1;
       runs.set(view.lane, { from: column, to: column });
     }
   }
   for (const [lane, run] of runs) {
-    if (run !== null) drawRun(lane, run.from, run.to);
+    if (run !== null) {
+      drawRun(lane, run.from, run.to);
+      drawn += 1;
+    }
   }
+  trace.dataset.runs = String(drawn);
 };
 const applyView = () => {
   container.x = GUTTER - (viewStart - origin) * baseScale * zoom;
