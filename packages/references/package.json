@@ -1,6 +1,6 @@
 {
   "name": "@montflow/references",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Effect-first reference-code primitives (REFERENCE.md store, pinned git clones) and the mf-references CLI",
   "keywords": [

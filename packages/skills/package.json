@@ -1,6 +1,6 @@
 {
   "name": "@montflow/skills",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Effect-first agent skill primitives (skill descriptors, slug names) and the mf-skills CLI",
   "keywords": [
