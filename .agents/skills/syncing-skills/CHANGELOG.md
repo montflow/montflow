@@ -2,7 +2,7 @@
 
 ### Changed
 
-- Switched the flow from the external skills installer to the in-repo `mf-skills sync` command: resolve the source checkout (local clone or an `adding-references` reference), sync public skills into `<root>/.agents/skills/` with `--source`/`--target` (`--from`/`--dir` remain aliases), and verify with `--check`.
+- Switched the flow from the external skills installer to the in-repo `mf-skills sync` command: resolve the source checkout (local clone or a registered montflow reference), sync public skills into `<root>/.agents/skills/` with `--source`/`--target` (`--from`/`--dir` remain aliases), and verify with `--check`.
 - Sync is project-local only: removed every global-install instruction, `-g` flag, agent-target table, and external-CLI maintenance command.
 - Documented the public/internal split — `metadata.internal: true` skills are skipped, reported, and never copied.
 - Earlier entries reworded to name the external skills CLI rather than its invocation; the installer is no longer used.

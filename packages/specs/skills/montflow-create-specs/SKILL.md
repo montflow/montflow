@@ -121,7 +121,7 @@ hand; a fresh `create` output already verifies.
 - `locked-phases:` is empty and the spec is `status: in-progress`.
 - Nothing outside `.agents/@montflow/specs/` was touched.
 - `mf-specs check --name <kebab-name>` reports zero issues
-  (run `bun run --cwd packages/specs cli check --name <kebab-name>`).
+  (run `bun run --cwd packages/specs cli check --name <kebab-name> --dir $PWD`).
 
 # Reference
 

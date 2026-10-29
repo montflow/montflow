@@ -41,9 +41,14 @@ pair, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
   (`node_modules/.bin/*`, `bunx`, `npx`) — e.g. never run `vitest`, `oxlint`,
   `oxfmt`, or `tsc` by hand.
 - Always scope verification to the working area. Never run repo-wide checks when
-  you touched one package:
+  you touched one package. This rule is unconditional: whole-store forms
+  (`mf:check:<domain>`, `mf:check`, `mf:gate`) run only when the change spans
+  scopes, at the final gate, or when the user asks for them.
   - package scope: `turbo <task> --filter=<package>` from the root, or
     `bun run --cwd <pkg-path> <script>` (e.g. `bun run --cwd packages/core test`).
+  - single artifact: the owning package's CLI in its single-artifact form with
+    `--dir $PWD` — see the scoped-invocation table in
+    `.agents/documentation/author-mf-utility-cli.md`.
   - single test file: `bun run --cwd <pkg-path> test -- <path-to-test-file>`
     (vitest treats the positional arg as a filename filter).
   - lint/format are package-scoped by design (`oxlint .`, `oxfmt .` cover the
@@ -66,11 +71,12 @@ pair, `mf:check` runs every scope, `mf:gate[:fast]` is the gate.
   `pre-push` hook runs it; install once per clone with
   `bun run hooks:install`, bypass with `git push --no-verify` or `LEFTHOOK=0`.
 - Utility verifies, each runnable alone: `mf:check:release`,
-  `mf:check:skills`, `:prompts`, `:specs`, `:profiles`, `:reviews`, `:naming`.
-  They verify release metadata (CLI versions, tags, changelogs) and this repo's
-  own artifacts (`.agents/skills`, `.agents/@montflow/prompts`,
-  `.agents/@montflow/specs`, `.agents/@montflow/profiles`,
-  `.agents/@montflow/reviews`) plus packaged-skill freshness; `:naming` fails
+  `mf:check:skills`, `:prompts`, `:specs`, `:profiles`, `:reviews`,
+  `:references`, `:naming`. They verify release metadata (CLI versions, fixed
+  group, tags, changelogs) and this repo's own artifacts (`.agents/skills`,
+  `.agents/@montflow/prompts`, `.agents/@montflow/specs`,
+  `.agents/@montflow/profiles`, `.agents/@montflow/reviews`,
+  `.agents/@montflow/references`) plus packaged-skill freshness; `:naming` fails
   when a live file carries a retired pre-OpenCode name (frozen history and the
   migration constant excepted).
 - `release.yml` is separate: it gates publishing, not pushes, and keeps its own

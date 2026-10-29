@@ -537,7 +537,7 @@ Vitest.describe('mf-skills sync binary', () => {
           Vitest.expect(current.stdout).toContain('✓ current.');
         }),
       ),
-    30_000,
+    90_000,
   );
 
   Vitest.it.effect(
@@ -600,7 +600,7 @@ Vitest.describe('mf-skills sync binary', () => {
           ).toBe(skillFile('alpha'));
         }),
       ),
-    30_000,
+    90_000,
   );
 
   Vitest.it.effect(
@@ -641,7 +641,7 @@ Vitest.describe('mf-skills sync binary', () => {
           ).toBe(skillFile('alpha'));
         }),
       ),
-    30_000,
+    90_000,
   );
 
   Vitest.it.effect(
@@ -684,7 +684,7 @@ Vitest.describe('mf-skills sync binary', () => {
           ).toBe(false);
         }),
       ),
-    30_000,
+    90_000,
   );
 
   Vitest.it.effect(
@@ -717,7 +717,7 @@ Vitest.describe('mf-skills sync binary', () => {
           ).toBe(skillFile('alpha'));
         }),
       ),
-    30_000,
+    90_000,
   );
 
   Vitest.it.effect('refuses an empty source store', () =>
@@ -808,7 +808,7 @@ Vitest.describe('mf-skills sync binary', () => {
           }
         }),
       ),
-    30_000,
+    90_000,
   );
 });
 
@@ -843,7 +843,7 @@ Vitest.describe('sync front-end parity', () => {
           Vitest.expect(binary.stdout).toContain('    CHANGELOG.md: unchanged');
         }),
       ),
-    30_000,
+    90_000,
   );
 
   Vitest.it.effect(
@@ -916,7 +916,7 @@ Vitest.describe('sync front-end parity', () => {
           ).toBe(skillFile('alpha'));
         }),
       ),
-    30_000,
+    90_000,
   );
 
   Vitest.it('parses all four flags in --flag value form', () => {

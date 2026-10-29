@@ -221,6 +221,8 @@ jobs:
             script: mf:check:reviews
           - target: naming
             script: mf:check:naming
+          - target: references
+            script: mf:check:references
     steps:
       - uses: actions/checkout@v4
 

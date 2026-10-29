@@ -4,6 +4,7 @@
 "@montflow/prompts": patch
 "@montflow/profiles": patch
 "@montflow/reviews": patch
+"@montflow/references": patch
 ---
 
 First tracked release of the five `mf-*` CLIs. They are versioned and tagged

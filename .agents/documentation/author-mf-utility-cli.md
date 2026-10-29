@@ -19,6 +19,7 @@ Not for `core`, `format`, `linting`, `stlx` — no CLI, different rules.
 | `reviews` | `mf-reviews` | `doctor`, `list`, `show`, `verify`, `new` |
 | `skills` | `mf-skills` | `doctor`, `list`, `show`, `verify`, `create`, `modify`, `delete`, `sync` |
 | `specs` | `mf-specs` | `doctor`, `check`, `status`, `state`, `next`, `list`, `create` |
+| `references` | `mf-references` | `doctor`, `list`, `show`, `verify`, `add`, `update`, `sync`, `status`, `remove` |
 
 `opencode` (the adapter) and `workflows` are libraries. No CLI.
 
@@ -55,6 +56,7 @@ Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`;
 - `--dir <path>` = **workspace root**. Every store derives from it: `<root>/.agents/@montflow/<domain>`, skills at `<root>/.agents/skills`. Default `process.cwd()`. Domain exceptions must say so in their section.
 - `doctor` reads the same root and installs/verifies `<root>/.agents/skills/`.
 - `--verbose` adds per-item detail; never hides failures. Default token-lean.
+- `--human` renders readable tables and prose for a person; the default stays agent-first. `--human` and `--verbose` compose.
 - `--status valid|invalid` on `list` for file stores; lifecycle states on `list` for `mf-specs`.
 - `--check` on `doctor`: report-only, non-zero when unhealthy.
 - `--check` on `sync`: report-only, non-zero on drift.
@@ -102,3 +104,22 @@ Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`;
 - `bun run --cwd packages/<domain> cli verify --all` (or `check`) exits non-zero on invalid store.
 - `bun run --cwd packages/<domain> test` and `bun run --cwd packages/<domain> ts:check` pass.
 - `bun run mf:check:<domain>` passes.
+
+## Scoped invocation
+
+Every `mf-*` CLI documents one single-artifact form, run from the workspace
+root with `--dir $PWD`. A check is scoped to the artifact you changed; the
+whole-store forms (`--all`, `mf:check:<domain>`, `mf:check`, `mf:gate`) belong
+to CI, cross-scope changes, or an explicit request.
+
+| Package | Single artifact | Whole store |
+| --- | --- | --- |
+| `skills` | `bun run --cwd packages/skills cli verify <name> --dir $PWD` | `verify --dir $PWD` |
+| `prompts` | `bun run --cwd packages/prompts cli verify <name> --dir $PWD` | `verify --all --dir $PWD` |
+| `specs` | `bun run --cwd packages/specs cli check --name <spec> --dir $PWD` | `check --dir $PWD` |
+| `profiles` | `bun run --cwd packages/profiles cli verify <name> --dir $PWD` | `verify --dir $PWD` |
+| `reviews` | `bun run --cwd packages/reviews cli verify <series> --dir $PWD` | `verify --all --dir $PWD` |
+| `references` | `bun run --cwd packages/references cli verify <slug> --dir $PWD` | `verify --all --dir $PWD` |
+
+`--dir` is the workspace root, never the store. Keep each CLI's docs to this
+form; do not present `mf:check` as the local check for one artifact.

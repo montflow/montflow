@@ -47,6 +47,7 @@ const promptsTarget = targetOf('prompts');
 const profilesTarget = targetOf('profiles');
 const reviewsTarget = targetOf('reviews');
 const skillsTarget = targetOf('skills');
+const referencesTarget = targetOf('references');
 const modelFallbackTarget = targetOf('model-fallback');
 
 /** The workspace lives under `apps/`, so it needs one more segment than `packages/*`. */
@@ -406,12 +407,13 @@ test('the /specs slash command registers in the host command transform', async (
   expect(host.commands).toEqual(['mf-specs']);
 });
 
-test('prompts, profiles, reviews, skills, and model-fallback expose native server and TUI faces', async () => {
+test('prompts, profiles, reviews, skills, references, and model-fallback expose native server and TUI faces', async () => {
   const targets = [
     ['prompts', promptsTarget],
     ['profiles', profilesTarget],
     ['reviews', reviewsTarget],
     ['skills', skillsTarget],
+    ['references', referencesTarget],
     ['model-fallback', modelFallbackTarget],
   ] as const;
   await Promise.all(
@@ -427,6 +429,16 @@ test('prompts, profiles, reviews, skills, and model-fallback expose native serve
       expect(tui.default.setup).toBeTypeOf('function');
     }),
   );
+});
+
+test('references registers /mf-references, reference_add, and reference_find', async () => {
+  const entries = Host.resolve(referencesTarget);
+  const server = await load<ServerModule>(entries.server, 'server');
+  const host = makeHost(process.cwd());
+  await run(server, host.context);
+  expect(host.commands).toEqual(['mf-references']);
+  expect(host.tools).toEqual(['reference_add', 'reference_find']);
+  expect(host.agents).toEqual([]);
 });
 
 test('prompts registers /mf-prompts and its tools without an OpenCode runtime', async () => {

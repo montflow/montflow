@@ -39,6 +39,12 @@ const ALLOWED_LINES: ReadonlyArray<{ readonly file: string; readonly line: RegEx
     file: 'apps/workspace/src/services/prompts/prompts.services.module.ts',
     line: /LEGACY_PROMPTS_DIR = \['\.agents', '@montflow', 'pi-prompts'\]/,
   },
+  // The migrated registry keeps third-party repo names verbatim; these are
+  // upstream URLs, not montflow surface names.
+  {
+    file: '.agents/@montflow/references/pi-subagents/REFERENCE.md',
+    line: /^(?:name: pi-subagents|url: https:\/\/github\.com\/nicobailon\/pi-subagents\.git|purpose: .*retired pi surface\.)$/,
+  },
 ];
 
 /** Below this many tracked files the scan is not trustworthy. */

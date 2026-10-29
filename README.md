@@ -11,6 +11,7 @@ TUI plugins; the text stores and CLIs live in the same packages.
 - `@montflow/profiles` — profile store, `mf-profiles` CLI, `profile_execute` tool
 - `@montflow/reviews` — review series format, `mf-reviews` CLI, `review_create` tool
 - `@montflow/skills` — skill store, `mf-skills` CLI, `skill_create` / `skill_modify` tools
+- `@montflow/references` — reference store, `mf-references` CLI, `reference_add` / `reference_find` tools, `montflow-add-reference` / `montflow-find-reference` skills
 - `@montflow/model-fallback` — model fallback chains: owned `.agents` store, `mf-model-fallback` CLI, `/mf-fallback` dialogs, retry/resume fallback
 - `@montflow/workspace` — TUI dashboard route (grid, panels, detail views)
 
@@ -35,3 +36,15 @@ so in-repo skills need no install.
 Install, flags, verification, and the `mf-*` CLIs:
 [guides/installation.md](./guides/installation.md). Updating a checkout or an
 installed store: [guides/updating.md](./guides/updating.md).
+
+### Skill sync matrix
+
+| Source | Skills | How they arrive |
+| --- | --- | --- |
+| `.agents/skills` (workspace store) | every workspace skill (authoring, review, TypeScript, specs, …) | `mf-skills sync --source <checkout> --target <workspace>` |
+| `packages/references` | `montflow-add-reference`, `montflow-find-reference` | `mf-references doctor` installs and freshness-checks them |
+| `packages/specs` / `reviews` / `prompts` | their packaged skills | each package's `doctor` |
+| `packages/profiles` | no skills | none; profiles has no setup command |
+
+Workspace skills live in `.agents/skills/`; packaged skills live in
+`packages/*/skills/` and are installed by their owning CLI's `doctor`.

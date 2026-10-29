@@ -166,3 +166,15 @@ Set any one of these to skip the automatic check entirely:
 There is no TTY detection: agents capture output, so the warning must still be
 visible without a terminal. An explicit `version --check` is the only path that
 turns staleness into a non-zero exit.
+
+## mf-references
+
+```bash
+bun run --cwd "$M/packages/references" cli version --check
+```
+
+Prove the update took effect:
+
+```bash
+bun run --cwd "$M/packages/references" cli version --json
+```

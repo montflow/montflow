@@ -17,8 +17,8 @@ skills:
   - adding-to-changelog
   - montflow-adversarial-review
   - montflow-addressing-adversarial-review
-  - adding-references
-  - finding-references
+  - montflow-add-reference
+  - montflow-find-reference
   - authoring-rules
   - i-have-adhd
 ---
@@ -43,14 +43,14 @@ Know every store, its expected layout, its verifier, and its repair skill. Load 
 | Wiki           | `wiki/<page>.md`                                | value-statement opener + `See also`; no plans or decision logs                                               | manual structure check               | `contributing-to-wiki`                                           |
 | Changelogs     | `CHANGELOG.md` per package                      | Keep a Changelog + SemVer, unreleased-first                                                                  | manual structure check               | `adding-to-changelog`                                            |
 | Reviews        | `.agents/@montflow/reviews/<name>/`              | `REVIEW.md` ledger + one directory per round (`<NNN>/REVIEW.md`)                                             | `bun run mf:check:reviews`    | `montflow-adversarial-review`, `montflow-addressing-adversarial-review`            |
-| References     | `.agents/references/<name>/`                     | cloned third-party repo, one package per directory                                                           | manual structure check               | `adding-references`, `finding-references`                        |
+| References     | `.agents/@montflow/references/<slug>/REFERENCE.md` | committed entry (`name`, `url`, `purpose`, `added`, optional `ref`) + `# Notes`; the clone lives in the gitignored `.agents/references/<slug>` | `bun run mf:check:references`   | `montflow-add-reference`, `montflow-find-reference`              |
 | Agent rules    | `AGENTS.md`                                     | minimal contract: language, package manager, commands, verification                                            | manual structure check               | `authoring-rules`                                                |
 
 ### Verify mechanically, never by eye
 
-- **Run the verifier, don't guess.** For every artifact family in scope, run its `bun run mf:check:<family>` command from the repo root. To check all five extension families at once, run `bun run mf:check`.
+- **Run the verifier, don't guess.** For the artifact being changed, run the owning package's single-artifact `cli` command with `--dir $PWD`; `bun run mf:check:<family>` is the whole-family gate (CI, cross-scope changes, or an explicit request). To check all six extension families at once, run `bun run mf:check`.
 - **Only package.json scripts.** Per `AGENTS.md`, never invoke a tool binary directly (`node_modules/.bin/*`, `bunx`, `npx`). The `mf:check:<family>` scripts and the owning package's `cli` script are the sanctioned entrypoints.
-- **Scope to the artifact.** A single artifact is checked through its owning package's `cli` script, e.g. `bun run --cwd packages/skills cli verify <name> --dir $PWD`, `bun run --cwd packages/prompts cli verify <name> --dir $PWD/.agents/@montflow/prompts`, `bun run --cwd packages/specs cli check --dir $PWD --name <name>`. Never run the repo-wide gate when one family changed.
+- **Scope to the artifact.** A single artifact is checked through its owning package's `cli` script, e.g. `bun run --cwd packages/skills cli verify <name> --dir $PWD`, `bun run --cwd packages/prompts cli verify <name> --dir $PWD`, `bun run --cwd packages/specs cli check --dir $PWD --name <name>`. Never run the repo-wide gate when one family changed.
 - **Read the failure verbatim.** Capture the artifact path, the failing field or section, and the verifier's exact message. A finding you cannot quote from the verifier's output is not a finding.
 
 ### Fix at the source

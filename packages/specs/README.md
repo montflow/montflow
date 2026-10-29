@@ -8,7 +8,7 @@ text injected into dispatched sessions.
 
 ```bash
 # from the checkout; there is no npm or global install
-bun run --cwd packages/specs cli check --name ship-spec
+bun run --cwd packages/specs cli check --name ship-spec --dir $PWD
 ```
 
 - `check` — verifies the whole spec root (default
