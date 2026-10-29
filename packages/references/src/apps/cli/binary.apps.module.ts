@@ -1,8 +1,19 @@
 import { Console, Effect, Option } from 'effect';
 import { Argument, Command, Flag } from 'effect/cli';
-import packageJson from '../../../package.json';
+import packageJson from '../../../package.json' with { type: 'json' };
+import { Cli } from '@montflow/version';
+import type { BuildInfo } from '@montflow/version';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
+
+/** This package's root: three levels up from `src/apps/cli`. */
+export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
+
+/** Identity embedded from this package's manifest, so a compiled binary keeps it. */
+export const PACKAGE_IDENTITY = {
+  name: packageJson.name,
+  version: packageJson.version,
+} satisfies BuildInfo.GeneratedIdentity;
 
 /**
  * The `mf-references` binary's command tree, built with `effect/cli`.
@@ -340,6 +351,7 @@ export const rootCommand = Command.make('mf-references').pipe(
     syncCommand,
     statusCommand,
     removeCommand,
+    Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
   Command.provide(Engines.Live),
 );

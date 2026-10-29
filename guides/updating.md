@@ -169,9 +169,12 @@ turns staleness into a non-zero exit.
 
 ## mf-references
 
-Reinstall the packaged skills and re-verify the store from the updated checkout:
+```bash
+bun run --cwd "$M/packages/references" cli version --check
+```
+
+Prove the update took effect:
 
 ```bash
-bun run --cwd "$M/packages/references" cli doctor --dir "$PWD"
-bun run --cwd "$M/packages/references" cli verify --all --dir "$PWD"
+bun run --cwd "$M/packages/references" cli version --json
 ```

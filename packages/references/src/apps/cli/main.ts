@@ -1,21 +1,12 @@
 #!/usr/bin/env bun
-import { NodeServices } from '@effect/platform-node';
-import { Effect } from 'effect';
-import { Command } from 'effect/cli';
-import { VERSION, rootCommand } from './binary.apps.module.js';
+import * as Cli from '@montflow/version/cli';
+import { PACKAGE_IDENTITY, PACKAGE_ROOT, rootCommand } from './binary.apps.module.js';
 
 /**
  * `mf-references` binary entry.
  *
- * The runtime is Bun and the CLI is `effect/cli`, matching the other `mf-*`
- * binaries. `bun build --compile` embeds this runtime, so `dist/mf-references`
- * is a single file. A failure sets `process.exitCode` rather than calling
- * `process.exit`, so buffered stdout is flushed before the process leaves.
+ * The version comes from this package's embedded manifest and the command tree
+ * owns its `version` subcommand; everything else — argv, help, platform layers,
+ * exit codes — lives in `@montflow/version`.
  */
-const program = Command.run(rootCommand, { version: VERSION }).pipe(
-  Effect.provide(NodeServices.layer),
-);
-
-program.pipe(Effect.runPromise).catch(() => {
-  process.exitCode = 1;
-});
+Cli.run({ identity: PACKAGE_IDENTITY, packageRoot: PACKAGE_ROOT, command: rootCommand });
