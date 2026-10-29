@@ -75,11 +75,12 @@ await send('Page.navigate', { url: `${viewer.url}?session=ses_bench` });
 let ready = null;
 for (let i = 0; i < 400; i += 1) {
   ready = await evaluate(`(() => {
-    const canvas = document.querySelector('#trace canvas');
+    const viewport = document.getElementById('rows-viewport');
     const totals = document.getElementById('totals')?.textContent || '';
-    const runs = Number(document.getElementById('trace')?.dataset.runs || 0);
-    if (!canvas || !totals.includes('20000 spans') || runs === 0) return null;
-    return { firstPaintMs: performance.now() - (window.__t0 || 0), canvas: { width: canvas.width, height: canvas.height }, totals, runs };
+    const rendered = document.querySelectorAll('#rows .row').length;
+    const total = Number(document.getElementById('trace')?.dataset.rows || 0);
+    if (!viewport || !totals.includes('20000 spans') || rendered === 0 || total === 0) return null;
+    return { firstPaintMs: performance.now() - (window.__t0 || 0), viewport: { width: viewport.clientWidth, height: viewport.clientHeight }, totals, rows: total, rendered };
   })()`);
   if (ready) break;
   await Bun.sleep(50);
@@ -89,11 +90,16 @@ const errors = await evaluate('window.__errs ?? []');
 const pan = await evaluate(`(async () => {
   const trace = document.getElementById('trace');
   const rect = trace.getBoundingClientRect();
+  for (let step = 0; step < 5; step += 1) {
+    trace.dispatchEvent(new WheelEvent('wheel', { deltaY: 12, shiftKey: true, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, bubbles: true, cancelable: true }));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
   const intervals = [];
   let last = performance.now();
   for (let step = 0; step < 120; step += 1) {
     trace.dispatchEvent(new WheelEvent('wheel', {
       deltaY: step % 2 === 0 ? -12 : 12,
+      shiftKey: true,
       clientX: rect.left + rect.width / 2,
       clientY: rect.top + rect.height / 2,
       bubbles: true,
@@ -116,7 +122,7 @@ const pan = await evaluate(`(async () => {
 const followAfterPan = await evaluate(`document.getElementById('follow').textContent`);
 await evaluate(`document.getElementById('follow').click()`);
 const followAfterResume = await evaluate(`document.getElementById('follow').textContent`);
-await evaluate(`document.getElementById('trace').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))`);
+await evaluate(`document.getElementById('trace').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))`);
 const detailVisible = await evaluate(`!document.getElementById('detail').hidden`);
 
 const before = await evaluate(`Number(document.getElementById('totals')?.textContent?.split(' ')[0] || 0)`);

@@ -48,22 +48,19 @@ const post = <T>(viewer: Viewer.Viewer, path: string, body: T): Promise<Response
   });
 
 describe('Viewer.start runtime', () => {
-  it('serves the canvas shell, empty state, and Pixi module', async () => {
+  it('serves the trace shell, empty state, and session endpoint', async () => {
     await withStore(async (directory) => {
       const viewer = await Viewer.start({ directory, idleMs: 60_000 });
       try {
         const html = await (await get(viewer, '/')).text();
         expect(html).toContain('No telemetry yet');
-        expect(html).toContain('/pixi.mjs');
         expect(html).toContain('id="trace"');
+        expect(html).toContain('id="rows-viewport"');
+        expect(html).toContain('id="overview"');
         expect(html).toContain('id="follow"');
         expect(html).toContain('permission');
         expect(await (await get(viewer, '/api/sessions')).json()).toStrictEqual([]);
         expect(viewer.foldError).toBeNull();
-        const pixi = await get(viewer, '/pixi.mjs');
-        expect(pixi.status).toBe(200);
-        expect(pixi.headers.get('content-type')).toContain('javascript');
-        expect((await pixi.text()).length).toBeGreaterThan(10_000);
       } finally {
         await viewer.stop();
       }
@@ -349,17 +346,17 @@ describe('Viewer.start runtime', () => {
     expect(html).toContain('\\u003c/script');
   });
 
-  it('ships a parseable canvas script that loads Pixi locally', () => {
+  it('ships a parseable trace script', () => {
     const html = Viewer.page('ses_fixture');
     const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gu)].map(
       (match) => match[1] ?? '',
     );
     expect(scripts).toHaveLength(1);
     expect(() => new Function(`return (async () => {${scripts[0] ?? ''}})()`)).not.toThrow();
-    expect(scripts[0]).toContain("await import('/pixi.mjs')");
-    expect(scripts[0]).toContain('const LANES');
+    expect(scripts[0]).toContain('const ROW_H');
     expect(scripts[0]).toContain('const ICONS');
-    expect(scripts[0]).toContain('iconPool');
+    expect(scripts[0]).toContain('const build = () =>');
+    expect(scripts[0]).toContain('followWindow');
     expect(html).toContain('id="detail-icon"');
     expect(html).toContain('following');
   });

@@ -3,7 +3,7 @@
 In-process OpenCode session telemetry. The server plugin appends normalized
 events to day-rotated NDJSON under `$XDG_DATA_HOME/opencode/telemetry`
 (default `~/.local/share/opencode/telemetry`); the viewer is an on-demand local
-page with a realtime canvas timeline.
+page with a realtime trace waterfall.
 
 ## Enable in OpenCode
 
