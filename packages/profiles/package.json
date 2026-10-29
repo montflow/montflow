@@ -25,7 +25,9 @@
     "./package.json": "./package.json",
     ".": "./src/index.ts",
     "./server": "./src/server.ts",
-    "./tui": "./src/tui.ts"
+    "./tui": "./src/tui.ts",
+    "./services": "./src/services/index.ts",
+    "./modules": "./src/modules/index.ts"
   },
   "scripts": {
     "cli": "bun run src/apps/cli/main.ts",
@@ -38,20 +40,21 @@
     "ts:check": "tsc --noEmit"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.0-rc.112",
+    "@effect/platform-node": "4.0.1",
     "@montflow/opencode": "workspace:*",
-    "@montflow/skills": "workspace:*"
+    "@montflow/skills": "workspace:*",
+    "@montflow/version": "workspace:*"
   },
   "devDependencies": {
-    "@effect/vitest": "4.0.0-rc.112",
+    "@effect/vitest": "4.0.1",
     "@types/node": "^26.1.2",
-    "effect": "4.0.0-rc.112",
+    "effect": "4.0.1",
     "oxfmt": "0.63.0",
     "oxlint": "1.78.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.4"
   },
   "peerDependencies": {
-    "effect": "4.0.0-rc.112"
+    "effect": "4.0.1"
   }
 }

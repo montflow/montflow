@@ -72,6 +72,14 @@ const makeContext = (directory: string, picked?: string) => {
         layers.push(input());
       },
     },
+    renderer: {
+      currentFocusedEditor: null,
+    },
+    client: {
+      session: {
+        command: async () => {},
+      },
+    },
     storage: {
       store: <Value extends object>(_key: string, options: { readonly initial: Value }) =>
         [options.initial, async () => {}] as const,

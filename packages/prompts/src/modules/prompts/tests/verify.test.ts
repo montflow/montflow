@@ -8,7 +8,7 @@ import * as Prompts from '../index.js';
 const modelRaw = readFileSync(
   resolve(
     dirname(fileURLToPath(import.meta.url)),
-    '../../../../../../.agents/@montflow/pi-prompts/commit.json',
+    '../../../../../../.agents/@montflow/prompts/commit.json',
   ),
   'utf8',
 );

@@ -1,10 +1,10 @@
 ---
 name: model-fallback-alignment
-status: in-progress
+status: complete
 workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-28
-locked-phases:
+locked-phases: A
 ---
 
 # model-fallback-alignment

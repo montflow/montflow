@@ -1,18 +1,17 @@
-import { Model } from '@opencode/schema/model';
 import * as Vitest from '@effect/vitest';
 import { ModelChain } from '../index.js';
 
 Vitest.describe('ModelChain.parse runtime', () => {
   Vitest.it('parses provider/model into a reference', () => {
     Vitest.expect(ModelChain.parse(['deepseek/deepseek-chat'])).toStrictEqual([
-      Model.Ref.parse('deepseek/deepseek-chat'),
+      ModelChain.parseOne('deepseek/deepseek-chat'),
     ]);
   });
 
   Vitest.it('parses provider/model#variant into a reference carrying the variant', () => {
     const [ref] = ModelChain.parse(['openrouter/claude-sonnet-4#beta']);
 
-    Vitest.expect(ref).toStrictEqual(Model.Ref.parse('openrouter/claude-sonnet-4#beta'));
+    Vitest.expect(ref).toStrictEqual(ModelChain.parseOne('openrouter/claude-sonnet-4#beta'));
     Vitest.expect(ref?.variant).toBe('beta');
   });
 

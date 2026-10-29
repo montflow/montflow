@@ -1,8 +1,20 @@
 import { Console, Effect, Option } from 'effect';
-import { Argument, Command, Flag } from 'effect/unstable/cli';
+import { Argument, Command, Flag } from 'effect/cli';
+import { Cli } from '@montflow/version';
+import type { BuildInfo } from '@montflow/version';
+import manifest from '../../../package.json' with { type: 'json' };
 import { PromptStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
+
+/** This package's root: three levels up from `src/apps/cli`. */
+export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
+
+/** Identity embedded from this package's manifest, so a compiled binary keeps it. */
+export const PACKAGE_IDENTITY = {
+  name: manifest.name,
+  version: manifest.version,
+} satisfies BuildInfo.GeneratedIdentity;
 
 /**
  * The `mf-prompts` binary's command tree, built with `effect/cli`.
@@ -29,11 +41,11 @@ const opt = (value: Option.Option<string>): string | undefined => Option.getOrUn
 
 /** Optional string flag. */
 const optionalString = (name: string, description: string) =>
-  Flag.string(name).pipe(Flag.withDescription(description), Flag.optional);
+  Flag.String(name).pipe(Flag.withDescription(description), Flag.optional);
 
 /** Boolean flag, defaulting to false. */
 const optionalBoolean = (name: string, description: string) =>
-  Flag.boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
+  Flag.Boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
 
 /** Workspace-root override, on every store-touching command. */
 const dirFlag = optionalString('dir', 'Workspace root. Defaults to the working directory.');
@@ -42,12 +54,12 @@ const dirFlag = optionalString('dir', 'Workspace root. Defaults to the working d
 const verboseFlag = optionalBoolean('verbose', 'Show per-item detail. Default is token-lean.');
 
 /** The `name` positional every prompt command takes. */
-const nameArg = Argument.string('name').pipe(
+const nameArg = Argument.String('name').pipe(
   Argument.withDescription('Prompt name (the file slug).'),
 );
 
 /** Trailing `key=value` positionals, shared with the slash command. */
-const valuesArg = Argument.string('values').pipe(
+const valuesArg = Argument.String('values').pipe(
   Argument.variadic,
   Argument.map(Engines.keyValues),
   Argument.withDescription('Variable values, as key=value pairs.'),
@@ -195,10 +207,10 @@ const executeCommand = Command.make(
         return yield* report(Effect.fail(resolved.message), (text: string) => text);
       }
       // The binary owns no child-agent runtime: running a prompt needs a
-      // ModelRuntime, which lives in the Pi extension. So this validates and
+      // ModelRuntime, which lives in the OpenCode plugin. So this validates and
       // renders end to end, then prints what would be sent — which is what
-      // makes it useful outside a Pi session. To actually execute, use
-      // `/mf-prompts execute` or the `prompt_execute` Pi tool.
+      // makes it useful outside a OpenCode session. To actually execute, use
+      // `/mf-prompts execute` or the `prompt_execute` agent tool.
       yield* Console.log(`Rendered for ${resolved.model}:\n\n${resolved.text}`);
       return yield* Effect.void;
     }).pipe(Effect.catch((message) => Console.log(message).pipe(Effect.andThen(exitFailed)))),
@@ -216,7 +228,7 @@ const verifyCommand = Command.make(
   'verify',
   {
     dir: dirFlag,
-    name: Argument.string('name').pipe(
+    name: Argument.String('name').pipe(
       Argument.withDescription('Prompt name. Omit to verify every prompt.'),
       Argument.optional,
     ),
@@ -257,7 +269,7 @@ const createCommand = Command.make(
   {
     ...editFlags,
     name: nameArg,
-    template: Flag.string('template').pipe(Flag.withDescription('Prompt text. Required.')),
+    template: Flag.String('template').pipe(Flag.withDescription('Prompt text. Required.')),
   },
   (config) =>
     report(
@@ -303,7 +315,7 @@ const deleteCommand = Command.make('delete', { dir: dirFlag, name: nameArg }, (c
 /** The root command the binary runs. */
 export const rootCommand = Command.make('mf-prompts').pipe(
   Command.withDescription(
-    'Inspect, verify, and execute reusable prompt templates stored in .agents/@montflow/pi-prompts.',
+    'Inspect, verify, and execute reusable prompt templates stored in .agents/@montflow/prompts.',
   ),
   Command.withSubcommands([
     doctorCommand,
@@ -316,9 +328,7 @@ export const rootCommand = Command.make('mf-prompts').pipe(
     createCommand,
     modifyCommand,
     deleteCommand,
+    Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
   Command.provide(PromptStore.Default),
 );
-
-/** Version reported by `--version`. Mirrors the package version. */
-export const VERSION = '0.0.1';

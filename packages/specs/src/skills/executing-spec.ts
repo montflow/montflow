@@ -2,7 +2,7 @@
  * Simplified `executing-spec` skill, aligned with the spec
  * contract (status enum, lifecycle states, CLI) and the native subagent tool.
  * Injected verbatim into a spec-resume session's prompt — never discovered as
- * a Pi skill.
+ * an OpenCode skill.
  */
 export const EXECUTING_SPEC = `# executing-spec
 
@@ -11,7 +11,7 @@ completion. Work one phase at a time.
 
 ## Read the state
 
-- Read \`SPEC.md\` and every \`TASK.md\`. The active phase is the first phase holding any
+- Read \`SPEC.md\`, each phase directory, and every \`TASK.md\`. The active phase is the first phase holding any
   \`pending\` or \`in-progress\` task.
 - Derived states: pending (idle), in-progress (work has started), blocked, complete,
   inconsistent.

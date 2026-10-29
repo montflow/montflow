@@ -52,7 +52,7 @@ const reasonOf = (cause: unknown): string =>
 /** State directory the host writes `model.json` into. */
 const stateDirectory = (): Effect.Effect<string> =>
   Effect.gen(function* () {
-    const xdg = yield* Config.string('XDG_STATE_HOME').pipe(Effect.orElseSucceed(() => ''));
+    const xdg = yield* Config.String('XDG_STATE_HOME').pipe(Effect.orElseSucceed(() => ''));
     return xdg === '' ? join(homedir(), '.local', 'state') : xdg;
   });
 

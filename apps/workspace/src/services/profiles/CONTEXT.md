@@ -8,7 +8,7 @@ verification, and change-stream surfaces the grid page and workspace report use.
 ## Lazy extension loading
 
 Static imports from `@montflow/profiles` are type-only (erased at build). The
-runtime resolves through `loadPiProfiles()` — a cached dynamic `import()`, first
+runtime resolves through `loadProfiles()` — a cached dynamic `import()`, first
 called inside `fetchProfiles` / `saveProfile`, never at dashboard boot.
 Consequences:
 
@@ -21,7 +21,7 @@ Consequences:
 ## Belongs here
 
 - `ProfileSummary` rows plus `fromProfile` / `toProfile` bridges between
-  dashboard rows and `PiProfiles.Profile`
+  dashboard rows and `Profiles.Profile`
 - `fetchProfiles` (sorted rows through the loaded module, failing with a
   displayable message) — the list method behind the panel and the report
 - `deleteProfile` (store directory removal, slug-guarded) plus

@@ -1,7 +1,7 @@
-import { Model } from '@opencode/schema/model';
 import * as Vitest from '@effect/vitest';
 import { Effect } from 'effect';
 import { FallbackConfig } from '../index.js';
+import { ModelChain } from '../../model-chain/index.js';
 import { FallbackTrigger } from '../../fallback-trigger/index.js';
 
 Vitest.describe('FallbackConfig.decode runtime', () => {
@@ -13,8 +13,8 @@ Vitest.describe('FallbackConfig.decode runtime', () => {
       });
 
       Vitest.expect(config.chain).toStrictEqual([
-        Model.Ref.parse('deepseek/deepseek-chat'),
-        Model.Ref.parse('openrouter/claude-sonnet-4#beta'),
+        ModelChain.parseOne('deepseek/deepseek-chat'),
+        ModelChain.parseOne('openrouter/claude-sonnet-4#beta'),
       ]);
       Vitest.expect(config.triggers).toStrictEqual(['quota', 'timeout']);
     }),
@@ -28,8 +28,8 @@ Vitest.describe('FallbackConfig.decode runtime', () => {
       });
 
       Vitest.expect(config.chain).toStrictEqual([
-        Model.Ref.parse('a/one'),
-        Model.Ref.parse('b/two'),
+        ModelChain.parseOne('a/one'),
+        ModelChain.parseOne('b/two'),
       ]);
       Vitest.expect(config.triggers).toStrictEqual(['auth', 'quota']);
     }),

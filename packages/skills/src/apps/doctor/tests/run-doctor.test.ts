@@ -125,3 +125,39 @@ Vitest.describe('Doctor.runDoctor', () => {
     }),
   );
 });
+
+Vitest.describe('Doctor store manifest runtime', () => {
+  Vitest.it.effect('reports the managed store and stays silent without a manifest', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const store = join(root, '.agents', 'skills');
+      yield* Effect.promise(() => mkdir(store, { recursive: true }));
+      yield* Effect.promise(() =>
+        writeFile(
+          join(store, '.montflow-sync.json'),
+          JSON.stringify({
+            schemaVersion: 1,
+            source: { path: '/checkout', version: '7.6.5', commit: 'a'.repeat(40) },
+            syncedAt: '2026-10-28T00:00:00.000Z',
+            skills: [],
+          }),
+        ),
+      );
+
+      const withManifest = yield* Doctor.runDoctor(root);
+      Vitest.expect(withManifest.store).toStrictEqual({
+        state: 'managed',
+        version: '7.6.5',
+        commit: 'a'.repeat(40),
+        syncedAt: '2026-10-28T00:00:00.000Z',
+      });
+      Vitest.expect(withManifest.message).toContain('store     7.6.5');
+
+      yield* Effect.promise(() => rm(join(store, '.montflow-sync.json'), { force: true }));
+      const withoutManifest = yield* Doctor.runDoctor(root);
+      Vitest.expect(withoutManifest.store).toBeUndefined();
+      Vitest.expect(withoutManifest.message).not.toContain('store     ');
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+    }),
+  );
+});

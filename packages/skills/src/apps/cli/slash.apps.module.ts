@@ -1,4 +1,4 @@
-import { NodePath } from '@effect/platform-node';
+import * as NodePath from '@effect/platform-node/NodePath';
 import { Effect, Path } from 'effect';
 import * as Doctor from '../doctor/index.js';
 import * as Sync from '../sync/index.js';
@@ -9,7 +9,7 @@ import * as Renderers from './renderers.apps.module.js';
  * The `/mf-skills` slash-command front end: a hand-rolled parser over the
  * same engines the `mf-skills` binary uses.
  *
- * A bespoke parser rather than `effect/cli` because a Pi slash
+ * A bespoke parser rather than `effect/cli` because an OpenCode slash
  * command receives a single argument *string*, not an argv array. Everything
  * below the parser is shared; only the tokenizing differs.
  */
@@ -18,18 +18,18 @@ import * as Renderers from './renderers.apps.module.js';
  * Slash-command name.
  *
  * `mf-skills` — the same name as the binary, because it is the same command.
- * A Pi session runs the headless CLI; the interactive menu is
- * `/mf-skills-tui`.
+ * The host runs the headless CLI; browsing is the TUI picker behind the same
+ * command.
  */
 export const COMMAND_NAME = 'mf-skills';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Run the skills CLI headlessly: doctor, list [--status valid|invalid], show, verify, create, modify, sync, or delete a skill. Store operations accept --dir to target a workspace root other than the working directory; sync uses --source and --target (--from and --dir stay as aliases). For the interactive menu use /mf-skills-tui.';
+  'Run the skills CLI headlessly: doctor, list [--status valid|invalid], show, verify, create, modify, sync, or delete a skill. Store operations accept --dir to target a workspace root other than the working directory; sync uses --source and --target (--from and --dir stay as aliases).';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-skills doctor [--check] [--verbose] [--dir path] | list [--status valid|invalid] [--verbose] [--dir path] | show <name> [--dir path] | verify [name] [--verbose] [--dir path] | create <name> --description "text" [--body "markdown"] [--author a] [--version v] [--license l] [--groups a,b] [--dependencies a,b] [--dir path] | modify <name> [--description ... --body ... --author ... --version ... --license ... --groups ... --dependencies ... --dir path] | delete <name> [--dir path] | sync [--source path] [--target path] [--check] [--verbose] (aliases: --from, --dir) | help';
+  '/mf-skills doctor [--check] [--verbose] [--dir path] | list [--status valid|invalid] [--verbose] [--dir path] | show <name> [--dir path] | verify [name] [--verbose] [--dir path] | create <name> --description "text" [--body "markdown"] [--author a] [--version v] [--license l] [--groups a,b] [--dependencies a,b] [--dir path] | modify <name> [--description ... --body ... --author ... --version ... --license ... --groups ... --dependencies ... --dir path] | delete <name> [--dir path] | sync [--source path] [--target path] [--check] [--force] [--verbose] (aliases: --from, --dir) | help';
 
 /** Value flags `create` and `modify` share. Anything else is usage. */
 const EDIT_VALUE_FLAGS: ReadonlySet<string> = new Set([
@@ -114,7 +114,7 @@ const DELETE_GRAMMAR: FlagGrammar = {
 
 /** `sync`: `--check`/`--verbose` switches, `--source`/`--target` and aliases, no positional. */
 const SYNC_GRAMMAR: FlagGrammar = {
-  booleans: new Set(['check', 'verbose']),
+  booleans: new Set(['check', 'verbose', 'force']),
   values: new Set(['source', 'target', 'from', 'dir']),
   positionals: NO_POSITIONALS,
 };
@@ -315,6 +315,7 @@ export type CliAction =
       /** Canonical `--target`; `--dir` is the alias folded into it. */
       readonly target: string | undefined;
       readonly check: boolean;
+      readonly force: boolean;
       readonly verbose: boolean;
     };
 
@@ -384,6 +385,7 @@ export const parseCliArgs = (args: string): CliAction => {
         source: one(split.values['source']) ?? one(split.values['from']),
         target: one(split.values['target']) ?? one(split.values['dir']),
         check: split.booleans['check'] ?? false,
+        force: split.booleans['force'] ?? false,
         verbose: split.booleans['verbose'] ?? false,
       };
     }
@@ -507,20 +509,27 @@ export const run = (args: string, ui: CliUi, cwd: string): Effect.Effect<void, s
         return;
       }
       case 'Sync': {
-        const result = yield* Sync.runSync({
+        // SAFETY: runSync provides its own platform layer; its inferred channel
+        // loses that evidence.
+        const sync = Sync.runSync({
           from: paths.source,
           // An absent `--target` means the session directory, as it does for
           // every other store command.
           dir: paths.target ?? cwd,
           check: action.check,
+          force: action.force,
           cwd,
           invocation: '/mf-skills sync',
-        });
+        }) as Effect.Effect<Effect.Success<ReturnType<typeof Sync.runSync>>, string>;
+        const result = yield* sync;
         // Notified once here; the failure below names the fix rather than
         // repeating the report, so the reader does not read it twice.
         yield* say(Renderers.sync(result, { verbose: action.verbose }));
         if (result.check && result.drifted) {
           return yield* Effect.fail(Renderers.syncRefusal(result));
+        }
+        if (result.refused.length > 0) {
+          return yield* Effect.fail(Renderers.forceRefusal(result));
         }
         return;
       }
@@ -537,10 +546,11 @@ export const run = (args: string, ui: CliUi, cwd: string): Effect.Effect<void, s
       }
       case 'Verify': {
         const report = yield* Engines.verify({ cwd, dir: paths.dir }, action.name);
-        yield* say(Renderers.verify(report, { verbose: action.verbose }));
+        const rendered = Renderers.verify(report, { verbose: action.verbose });
         if (!report.valid) {
-          return yield* Effect.fail(`Verification failed:\n${Renderers.verify(report)}`);
+          return yield* Effect.fail(`Verification failed:\n${rendered}`);
         }
+        yield* say(rendered);
         return;
       }
       case 'Create': {

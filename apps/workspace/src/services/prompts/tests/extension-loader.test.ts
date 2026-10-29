@@ -5,8 +5,8 @@ import * as Prompts from '../index.js';
 Vitest.describe('Prompts extension loader', () => {
   Vitest.it.effect('loads the runtime lazily and caches it', () =>
     Effect.gen(function* () {
-      const first = yield* Prompts.loadPiPrompts();
-      const second = yield* Prompts.loadPiPrompts();
+      const first = yield* Prompts.loadPrompts();
+      const second = yield* Prompts.loadPrompts();
       Vitest.expect(second).toBe(first);
       Vitest.expect(first.Interactive.CANCELLED).toBe('Cancelled.');
       Vitest.expect(first.Prompts.make('demo', 'Hello').name).toBe('demo');
@@ -15,7 +15,7 @@ Vitest.describe('Prompts extension loader', () => {
 
   Vitest.it.effect('exposes the shared matcher once loaded', () =>
     Effect.gen(function* () {
-      yield* Prompts.loadPiPrompts();
+      yield* Prompts.loadPrompts();
       const matcher = Prompts.loadedMatcher();
       Vitest.expect(matcher?.('anthropic/claude-sonnet-4-5', 'sonnet')).toBe(true);
       Vitest.expect(matcher?.('anthropic/claude-sonnet-4-5', 'zzz')).toBe(false);
@@ -41,10 +41,10 @@ Vitest.describe('Prompts extension loader', () => {
 
   Vitest.it.effect('reset drops the cache so the next load re-imports', () =>
     Effect.gen(function* () {
-      yield* Prompts.loadPiPrompts();
+      yield* Prompts.loadPrompts();
       Prompts.resetExtensionCache();
-      Vitest.expect(Prompts.loadedPiPrompts()).toBe(undefined);
-      const reloaded = yield* Prompts.loadPiPrompts();
+      Vitest.expect(Prompts.loadedPrompts()).toBe(undefined);
+      const reloaded = yield* Prompts.loadPrompts();
       Vitest.expect(reloaded.Interactive.CANCELLED).toBe('Cancelled.');
     }),
   );

@@ -42,7 +42,7 @@
     "ts:check": "tsc --noEmit"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.0-rc.112",
+    "@effect/platform-node": "4.0.1",
     "@montflow/opencode": "workspace:*",
     "@montflow/prompts": "workspace:*",
     "@opencode/client": "2.0.18",
@@ -51,11 +51,11 @@
     "jsonc-parser": "^3.3.1"
   },
   "devDependencies": {
-    "@effect/vitest": "4.0.0-rc.112",
+    "@effect/vitest": "4.0.1",
     "@opentui/core": "0.5.12",
     "@opentui/solid": "0.5.12",
     "@types/node": "^26.1.2",
-    "effect": "4.0.0-rc.112",
+    "effect": "4.0.1",
     "oxfmt": "0.63.0",
     "oxlint": "1.78.0",
     "solid-js": "1.9.15",
@@ -65,7 +65,7 @@
   "peerDependencies": {
     "@opentui/core": ">=0.5.12",
     "@opentui/solid": ">=0.5.12",
-    "effect": "4.0.0-rc.112",
+    "effect": "4.0.1",
     "solid-js": ">=1.9.0"
   }
 }

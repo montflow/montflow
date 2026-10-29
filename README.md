@@ -33,4 +33,5 @@ matching `@montflow/*` plugin). OpenCode discovers `.agents/skills/` natively,
 so in-repo skills need no install.
 
 Install, flags, verification, and the `mf-*` CLIs:
-[guides/installation.md](./guides/installation.md).
+[guides/installation.md](./guides/installation.md). Updating a checkout or an
+installed store: [guides/updating.md](./guides/updating.md).

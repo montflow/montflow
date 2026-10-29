@@ -1,7 +1,9 @@
-import { Model } from '@opencode/schema/model';
-
-/** One model a session may fall back to. */
-export type Ref = Model.Ref;
+/** One model a session may fall back to: `provider/model[#variant]`. */
+export interface Ref {
+  readonly providerID: string;
+  readonly id: string;
+  readonly variant?: string | undefined;
+}
 
 /** Stable identity of a model reference, ignoring its variant. */
 export const key = (ref: Pick<Ref, 'id' | 'providerID'>): string => `${ref.providerID}/${ref.id}`;
@@ -10,16 +12,45 @@ export const key = (ref: Pick<Ref, 'id' | 'providerID'>): string => `${ref.provi
 export const label = (ref: Ref): string =>
   ref.variant === undefined ? key(ref) : `${key(ref)}#${ref.variant}`;
 
+/** Thrown for a label that is not `provider/model` or `provider/model#variant`. */
+export class InvalidReference extends Error {
+  constructor(reference: string) {
+    super(`Invalid model reference: ${reference}`);
+    this.name = 'InvalidReference';
+  }
+}
+
 /**
- * Parse configured `provider/model[#variant]` strings into model references.
- * Repeats collapse onto the first occurrence, so a chain never retries a model
- * twice.
+ * Parse one `provider/model[#variant]` label. This mirrors the host's own model
+ * reference grammar without importing its schema, which cannot be evaluated
+ * against the current Effect release.
+ */
+export const parseOne = (entry: string): Ref => {
+  const slash = entry.indexOf('/');
+  if (slash <= 0) throw new InvalidReference(entry);
+  const providerID = entry.slice(0, slash);
+  const variantAt = entry.indexOf('#', slash + 1);
+  const id = entry.slice(slash + 1, variantAt === -1 ? undefined : variantAt);
+  const variant = variantAt === -1 ? undefined : entry.slice(variantAt + 1);
+  if (
+    id === '' ||
+    providerID.includes('#') ||
+    (variant !== undefined && (variant === '' || variant.includes('#')))
+  ) {
+    throw new InvalidReference(entry);
+  }
+  return variant === undefined ? { providerID, id } : { providerID, id, variant };
+};
+
+/**
+ * Parse configured labels into model references. Repeats collapse onto the
+ * first occurrence, so a chain never retries a model twice.
  */
 export const parse = (entries: ReadonlyArray<string>): ReadonlyArray<Ref> => {
   const seen = new Set<string>();
   const refs: Array<Ref> = [];
   for (const entry of entries) {
-    const ref = Model.Ref.parse(entry);
+    const ref = parseOne(entry);
     const id = key(ref);
     if (seen.has(id)) continue;
     seen.add(id);

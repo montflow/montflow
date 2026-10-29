@@ -1,7 +1,7 @@
 /**
  * Simplified `authoring-spec` skill, aligned with the spec
  * contract (frontmatter, status enum, tree verifier, CLI). Injected verbatim
- * into a spec-author session's prompt — never discovered as a Pi skill.
+ * into a spec-author session's prompt — never discovered as an OpenCode skill.
  */
 export const AUTHORING_SPEC = `# authoring-spec
 
@@ -14,8 +14,11 @@ Author the spec; do not execute it.
   \`workspace-type: in-place\`, \`author\`, \`created\` (YYYY-MM-DD), \`locked-phases:\` (empty).
   Body sections: \`## Description\`, \`## Requirements\`, \`## Tasks\`.
 - \`## Tasks\` is a table \`| ID | Name | Type | Status | Gates |\` with \`Gates\` either \`Yes\` or \`No\`.
-- One directory per task: \`<PHASE_LETTERS><NNN>-<kebab-name>/\` containing \`TASK.md\` and
-  \`MEMORY.md\`, plus \`GATES.md\` when \`Gates\` is \`Yes\`.
+- One directory per phase (\`A/\`, \`B/\`, \`AA/\`), holding only task directories.
+- One task directory per task: \`<PHASE>/<PHASE_LETTERS><NNN>-<kebab-name>/\` containing
+  \`TASK.md\` and \`MEMORY.md\`, plus \`GATES.md\` when \`Gates\` is \`Yes\`.
+- No file at a phase level and no directory inside a task directory; an empty phase
+  directory fails the checker.
 
 ## Scaffold
 
@@ -24,9 +27,11 @@ already passes \`check\`:
 
 \`bun run --cwd packages/specs cli create --name <name> [--description "<line>"] [--author "<name>"] [--tasks "<name>[:<type>[:gates]],…"] [--reviewer-profiles "<a>,<b>"]\`
 
-Each task is \`name[:type[:gates]]\` (type defaults to \`execution\`); the command appends
-\`<PHASE>099-review-phase\` and refuses to overwrite an existing spec. \`--reviewer-profiles\`
-seeds the review task's profile list. Then edit the rendered files to carry the real
+Each task is \`name[:type[:gates]]\` (type defaults to \`execution\`); the command writes the
+nested phase layout, appends \`<PHASE>099-review-phase\`, and refuses to overwrite an
+existing spec. \`--reviewer-profiles\` seeds the review task's profile list. It scaffolds
+phase A only; add later phases by hand. An existing flat spec is moved with
+\`mf-specs migrate --name <spec>\`. Then edit the rendered files to carry the real
 requirements.
 
 ## TASK.md
@@ -51,8 +56,9 @@ Body sections: \`## Type: <type>\`, \`## Description\`, \`## Requirements\`, \`#
 
 ## Rules
 
-- A phase is the leading letters of a task id (\`A001\` is phase \`A\`). End every phase with
-  exactly one \`review\` task named \`<PHASE>099-review-phase\`.
+- A phase is a directory named by its letters; a task's leading letters must equal its
+  containing phase directory (\`A/A001-…\`). End every phase with exactly one \`review\` task
+  named \`<PHASE>099-review-phase\`.
 - Leave \`locked-phases:\` empty and the spec \`status: in-progress\`.
 - Ask the user with \`ask_user\` only when the decision is theirs (scope, naming, ambiguity);
   otherwise decide and proceed. Use \`notify_user\` for progress the user should see.

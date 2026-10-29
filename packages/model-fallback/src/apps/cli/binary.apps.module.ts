@@ -1,5 +1,5 @@
 import { Console, Effect, Option } from 'effect';
-import { Command, Flag } from 'effect/unstable/cli';
+import { Command, Flag } from 'effect/cli';
 import { ModelChain } from '../../modules/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
@@ -15,10 +15,10 @@ export const VERSION = '0.0.1';
 const opt = (value: Option.Option<string>): string | undefined => Option.getOrUndefined(value);
 
 const optionalString = (name: string, description: string) =>
-  Flag.string(name).pipe(Flag.withDescription(description), Flag.optional);
+  Flag.String(name).pipe(Flag.withDescription(description), Flag.optional);
 
 const optionalBoolean = (name: string, description: string) =>
-  Flag.boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
+  Flag.Boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
 
 const dirFlag = optionalString('dir', 'Workspace root. Defaults to the working directory.');
 const serverFlag = optionalString(
@@ -95,7 +95,7 @@ const modelsCommand = Command.make(
     dir: dirFlag,
     server: serverFlag,
     json: jsonFlag,
-    limit: Flag.integer('limit').pipe(
+    limit: Flag.Int('limit').pipe(
       Flag.withDescription('Maximum models to list. Defaults to 20.'),
       Flag.withDefault(20),
     ),
@@ -111,7 +111,7 @@ const modelsCommand = Command.make(
 const setCommand = Command.make(
   'set',
   {
-    chain: Flag.string('chain').pipe(
+    chain: Flag.String('chain').pipe(
       Flag.withDescription('Comma-separated chain: <provider/model>[,<provider/model>...].'),
     ),
     trigger: optionalString(

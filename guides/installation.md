@@ -123,7 +123,8 @@ bun run --cwd "$M/packages/skills" cli verify --dir "$PWD"
 
 It is working when `--check` exits `0` and prints `✓ current.`, and `verify`
 exits `0` with `0 issues`. `--check` writes nothing and exits `1` when the
-workspace is behind — re-run the install. Add `--verbose` to either sync command
+workspace is behind — re-run the install. If a skill reports `diverged`, it was
+edited locally: review the named files and re-run with `--force` to replace it. Add `--verbose` to either sync command
 for per-file detail. Internal skills (`metadata.internal: true`, e.g.
 `syncing-skills`) are skipped, reported, and never copied.
 
@@ -158,7 +159,7 @@ run the create command, then re-run `check`.
 #### Prompts (optional)
 
 Adds reusable prompt templates with typed variables, validated before a run.
-Owns the store `.agents/@montflow/pi-prompts`.
+Owns the store `.agents/@montflow/prompts`.
 
 Install — installs the packaged prompt skills:
 
@@ -297,7 +298,7 @@ fi
 step prompts
 bun run --cwd "$M/packages/prompts" cli doctor --dir "$PWD"
 installed+=(prompts)
-if [ -d "$PWD/.agents/@montflow/pi-prompts" ]; then
+if [ -d "$PWD/.agents/@montflow/prompts" ]; then
   bun run --cwd "$M/packages/prompts" cli verify --all --dir "$PWD"
   clean+=(prompts)
 else
@@ -355,3 +356,11 @@ Every store derives from it: `<root>/.agents/@montflow/<domain>`, skills at
 `<root>/.agents/skills`. Pass it on every command that writes. `mf-skills sync`
 is the exception: it takes `--source <checkout>` and `--target <workspace-root>`
 (keeping `--from` and `--dir` as aliases), while every other CLI uses `--dir`.
+
+## Updating
+
+See [guides/updating.md](./updating.md) for the single update path: read the
+stale warning, run `mf-<cli> version --check`, pull the checkout and run
+`bun install`, re-sync installed stores, and verify the result. After the
+checkout is present every step works offline; `git pull`, `bun install`, and
+the optional update check need the network.

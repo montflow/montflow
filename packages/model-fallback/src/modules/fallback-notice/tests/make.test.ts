@@ -1,13 +1,13 @@
-import { Model } from '@opencode/schema/model';
 import * as Vitest from '@effect/vitest';
 import { FallbackNotice } from '../index.js';
+import { ModelChain } from '../../model-chain/index.js';
 
 Vitest.describe('FallbackNotice.make runtime', () => {
   Vitest.it('announces a resume when the provider sent a status', () => {
     const notice = FallbackNotice.make({
       phase: 'resume',
-      from: Model.Ref.parse('deepseek/deepseek-chat'),
-      to: Model.Ref.parse('openrouter/claude-sonnet-4#beta'),
+      from: ModelChain.parseOne('deepseek/deepseek-chat'),
+      to: ModelChain.parseOne('openrouter/claude-sonnet-4#beta'),
       failure: { type: 'provider.rate-limit', status: 429 },
     });
 
@@ -27,8 +27,8 @@ Vitest.describe('FallbackNotice.make runtime', () => {
   Vitest.it('announces a retry without a status', () => {
     const notice = FallbackNotice.make({
       phase: 'retry',
-      from: Model.Ref.parse('a/one'),
-      to: Model.Ref.parse('b/two'),
+      from: ModelChain.parseOne('a/one'),
+      to: ModelChain.parseOne('b/two'),
       failure: { type: 'provider.auth' },
     });
 
@@ -45,8 +45,8 @@ Vitest.describe('FallbackNotice.make runtime', () => {
   Vitest.it('keeps the variant out of the metadata keys', () => {
     const notice = FallbackNotice.make({
       phase: 'resume',
-      from: Model.Ref.parse('a/one#fast'),
-      to: Model.Ref.parse('b/two#deep'),
+      from: ModelChain.parseOne('a/one#fast'),
+      to: ModelChain.parseOne('b/two#deep'),
       failure: { type: 'provider.timeout', status: 504 },
     });
 

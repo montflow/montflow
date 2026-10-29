@@ -182,6 +182,22 @@ interface TuiHostContext {
     }>;
   };
   readonly keymap: { layer(input: () => object): void };
+  readonly renderer: {
+    readonly currentFocusedEditor: {
+      insertText(text: string): void;
+      gotoBufferEnd?(): void;
+    } | null;
+    requestRender?(): void;
+  };
+  readonly client: {
+    readonly session: {
+      command(input: {
+        readonly sessionID: string;
+        readonly name: string;
+        readonly text: string;
+      }): Promise<void>;
+    };
+  };
   readonly storage: {
     store<Value extends object>(
       key: string,
@@ -333,6 +349,14 @@ const makeTuiHost = (directory: string) => {
         layers.push(input());
       },
     },
+    renderer: {
+      currentFocusedEditor: null,
+    },
+    client: {
+      session: {
+        command: async () => {},
+      },
+    },
     storage: {
       store: <Value extends object>(_key: string, options: { readonly initial: Value }) =>
         [options.initial, async () => {}] as const,
@@ -379,7 +403,7 @@ test('the /specs slash command registers in the host command transform', async (
   const server = await load<ServerModule>(entries.server, 'server');
   const host = makeHost(process.cwd());
   await run(server, host.context);
-  expect(host.commands).toEqual(['specs']);
+  expect(host.commands).toEqual(['mf-specs']);
 });
 
 test('prompts, profiles, reviews, skills, and model-fallback expose native server and TUI faces', async () => {
@@ -405,7 +429,7 @@ test('prompts, profiles, reviews, skills, and model-fallback expose native serve
   );
 });
 
-test('prompts registers /mf-prompts and its tools without a Pi runtime', async () => {
+test('prompts registers /mf-prompts and its tools without an OpenCode runtime', async () => {
   const entries = Host.resolve(promptsTarget);
   const server = await load<ServerModule>(entries.server, 'server');
   const host = makeHost(process.cwd());
@@ -455,7 +479,7 @@ test('profiles registers stored profiles as agents plus /mf-profiles and its too
   expect(host.tools).toEqual(['profile_execute']);
 });
 
-test('reviews registers /mf-reviews and review_create without a Pi runtime', async () => {
+test('reviews registers /mf-reviews and review_create without an OpenCode runtime', async () => {
   const entries = Host.resolve(reviewsTarget);
   const server = await load<ServerModule>(entries.server, 'server');
   const host = makeHost(process.cwd());
@@ -539,4 +563,36 @@ test('the workspace TUI registers the grid route page and its chrome', async () 
   expect(host.slots).toEqual(['app', 'home.footer.status']);
   cleanup?.();
   expect(host.unregistered).toEqual(['workspace']);
+});
+
+test('every plugin TUI registers one picker layer on its own slash command', async () => {
+  const targets = [
+    ['prompts', promptsTarget, 'mf-prompts'],
+    ['skills', skillsTarget, 'mf-skills'],
+    ['specs', specsTarget, 'mf-specs'],
+    ['profiles', profilesTarget, 'mf-profiles'],
+    ['reviews', reviewsTarget, 'mf-reviews'],
+  ] as const;
+
+  await Promise.all(
+    targets.map(async ([id, target, command]) => {
+      const root = await mkdtemp(path.join(tmpdir(), `montflow-picker-${id}-`));
+      const entries = Host.resolve(target);
+      const tui = await load<TuiModule>(entries.tui, 'tui');
+      const host = makeTuiHost(root);
+      let cleanup: (() => void) | undefined;
+      try {
+        cleanup = tui.default.setup(host.context);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+      // SAFETY: the fake keymap records exactly what the plugin's setup passes to `layer`.
+      const layer = host.layers[0] as
+        | { readonly commands?: ReadonlyArray<{ readonly slash?: { readonly name: string } }> }
+        | undefined;
+      expect(layer?.commands?.map((entry) => entry.slash?.name)).toEqual([command]);
+      expect(cleanup).toBeTypeOf('function');
+      cleanup?.();
+    }),
+  );
 });

@@ -8,7 +8,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { EMBEDDED_PROMPT_PAYLOAD } from './embedded-payload.generated.js';
 
-/** Prompt templates this package ships and installs into `.agents/@montflow/pi-prompts`. */
+/** Prompt templates this package ships and installs into the prompts store. */
 export const PROMPT_NAMES = ['model-fallback'] as const;
 
 /** Directory of the package's readable prompt sources. Absent in a compiled binary. */
@@ -16,8 +16,7 @@ export const shippedPromptsDir = (): string =>
   join(resolve(import.meta.dirname, '..', '..', '..'), 'prompts');
 
 /** Directory `doctor` installs prompt templates into. */
-export const installedPromptsDir = (root: string): string =>
-  join(root, '.agents', '@montflow', 'pi-prompts');
+export const installedPromptsDir = (root: string): string => join(root, ...Prompts.STORE_SEGMENTS);
 
 /** Where one installed prompt lives. */
 export const installedPrompt = (root: string, name: string): string =>

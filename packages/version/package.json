@@ -1,0 +1,53 @@
+{
+  "name": "@montflow/version",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Build identity and update awareness for the mf-* CLIs: package version, git commit, dirty state, and checkout",
+  "keywords": [
+    "cli",
+    "effect",
+    "version"
+  ],
+  "bugs": {
+    "url": "https://github.com/montflow/montflow/issues"
+  },
+  "license": "MIT",
+  "author": "Daniel Montilla",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/montflow/montflow.git",
+    "directory": "packages/version"
+  },
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./build-info": "./src/modules/build-info/index.ts",
+    "./store": "./src/modules/store/index.ts",
+    "./cli": "./src/modules/cli/index.ts"
+  },
+  "scripts": {
+    "format:check": "oxfmt --check .",
+    "format:fix": "oxfmt .",
+    "lint:check": "oxlint --deny-warnings .",
+    "lint:fix": "oxlint . --fix",
+    "test": "vitest run --typecheck",
+    "ts:check": "tsc --noEmit",
+    "check:release": "bun run scripts/check-release.ts"
+  },
+  "dependencies": {
+    "@effect/platform-node": "4.0.1"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.1",
+    "@types/node": "^26.1.2",
+    "effect": "4.0.1",
+    "oxfmt": "0.63.0",
+    "oxlint": "1.78.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  },
+  "peerDependencies": {
+    "effect": "4.0.1"
+  }
+}

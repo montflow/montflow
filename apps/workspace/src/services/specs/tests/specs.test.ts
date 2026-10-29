@@ -152,16 +152,16 @@ const makeRoot = (reviewed = false): string => {
   const root = mkdtempSync(join(tmpdir(), 'mf-workspace-specs-'));
   const name = reviewed ? 'mock-reviewed' : 'mock-ok';
   const dir = join(root, '.agents', '@montflow', 'specs', name);
-  mkdirSync(join(dir, 'A001-implement-thing'), { recursive: true });
-  mkdirSync(join(dir, 'A099-review-phase'), { recursive: true });
+  mkdirSync(join(dir, 'A', 'A001-implement-thing'), { recursive: true });
+  mkdirSync(join(dir, 'A', 'A099-review-phase'), { recursive: true });
   writeFileSync(join(dir, 'SPEC.md'), spec(name, reviewed ? 'complete' : 'pending'));
   writeFileSync(
-    join(dir, 'A001-implement-thing', 'TASK.md'),
+    join(dir, 'A', 'A001-implement-thing', 'TASK.md'),
     task('A001', 'implement-thing', 'execution'),
   );
-  writeFileSync(join(dir, 'A001-implement-thing', 'MEMORY.md'), MEMORY);
+  writeFileSync(join(dir, 'A', 'A001-implement-thing', 'MEMORY.md'), MEMORY);
   writeFileSync(
-    join(dir, 'A099-review-phase', 'TASK.md'),
+    join(dir, 'A', 'A099-review-phase', 'TASK.md'),
     task(
       'A099',
       'review-phase',
@@ -170,7 +170,7 @@ const makeRoot = (reviewed = false): string => {
       reviewed ? ['reviewer-profiles: effect-reviewer'] : [],
     ),
   );
-  writeFileSync(join(dir, 'A099-review-phase', 'MEMORY.md'), MEMORY);
+  writeFileSync(join(dir, 'A', 'A099-review-phase', 'MEMORY.md'), MEMORY);
   if (reviewed) {
     writeRound(root, name, 'A');
     writeRound(root, `${name}-effect-reviewer`, 'A');

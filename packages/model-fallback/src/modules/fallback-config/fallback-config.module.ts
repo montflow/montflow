@@ -1,4 +1,3 @@
-import { Model } from '@opencode/schema/model';
 import { Data, Effect, Schema } from 'effect';
 import { FallbackTrigger } from '../fallback-trigger/index.js';
 import { ModelChain } from '../model-chain/index.js';
@@ -11,7 +10,7 @@ export const Options = Schema.Struct({
 
 /** Decoded plugin configuration. */
 export interface Config {
-  readonly chain: ReadonlyArray<Model.Ref>;
+  readonly chain: ReadonlyArray<ModelChain.Ref>;
   readonly triggers: ReadonlyArray<FallbackTrigger.Trigger>;
 }
 

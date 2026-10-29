@@ -5,7 +5,6 @@ import path from 'node:path';
 import type { CommandContext, PortsContext } from '@montflow/opencode';
 import { Effect, type Scope } from 'effect';
 import * as Vitest from '@effect/vitest';
-import { TestConsole } from 'effect/testing';
 import { specMarkdown } from '../modules/spec/tests/helpers.js';
 import { memoryMarkdown, taskMarkdown } from '../modules/task/tests/helpers.js';
 import server from '../server.js';
@@ -24,8 +23,16 @@ type Invocation = Parameters<Definition['execute']>[0];
  */
 const makeHost = (directory: string) => {
   const commands: Definition[] = [];
+  const messages: string[] = [];
+  captured = messages;
   const context: PortsContext = {
     location: { directory },
+    session: {
+      create: () => Effect.die('unused in this test'),
+      prompt: (input) => Effect.sync(() => messages.push(input.text)),
+      wait: () => Effect.void,
+      context: () => Effect.succeed([]),
+    },
     command: {
       transform: (callback) =>
         Effect.sync(() => {
@@ -63,18 +70,24 @@ const register = (root: string) =>
     const host = makeHost(root);
     yield* plugin.effect(host.context).pipe(Effect.scoped);
     const command = host.commands[0];
-    if (command === undefined) return yield* Effect.die('the /specs command did not register');
+    if (command === undefined) return yield* Effect.die('the /mf-specs command did not register');
     return command;
   });
+
+/** Lines the command posted into its invoking session; reset per host. */
+let captured: string[] = [];
 
 /** Invoke the registered command with slash text, the way the host does. */
 const invoke = (command: Definition, text: string) =>
   // SAFETY: only `prompt.text` is read; the host fills the rest of the invocation.
-  command.execute({ prompt: { text } } as Invocation);
+  command.execute({
+    prompt: { text },
+    sessionID: 'ses_test',
+    delivery: 'queue',
+  } as Invocation);
 
-/** Read everything the command logged. */
-const logged = (): Effect.Effect<string> =>
-  TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String).join('\n')));
+/** Read everything the command posted into the session. */
+const logged = (): Effect.Effect<string> => Effect.sync(() => captured.join('\n'));
 
 /** A throwaway workspace root. */
 const freshRoot = (): Promise<string> => mkdtemp(path.join(tmpdir(), 'mf-specs-server-'));
@@ -82,7 +95,7 @@ const freshRoot = (): Promise<string> => mkdtemp(path.join(tmpdir(), 'mf-specs-s
 /** Write one valid spec under `<root>/.agents/@montflow/specs`. */
 const writeSpec = async (root: string, name: string): Promise<void> => {
   const spec = path.join(root, '.agents', '@montflow', 'specs', name);
-  const task = path.join(spec, 'A001-implement-login');
+  const task = path.join(spec, 'A/A001-implement-login');
   await mkdir(task, { recursive: true });
   await writeFile(path.join(spec, 'SPEC.md'), specMarkdown({ name }));
   await writeFile(

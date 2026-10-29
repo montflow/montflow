@@ -1,9 +1,10 @@
 # Fixtures
 
-Repo-tracked sample specs for exercising the CLI and the Pi extension
+Repo-tracked sample specs for exercising the CLI and the OpenCode plugin
 without touching a real workspace. They live under a realistic root so the
 default `.agents/@montflow/specs` path works when you `cd` into this
-directory.
+directory. Every fixture uses the phase-directory layout
+(`<spec>/<PHASE>/<PHASE><NNN>-<name>/`).
 
 - `mock-ok` — a fully valid, **pending** phase: execution task with
   `GATES.md`, exploratory task depending on it, and a phase-end `review`
@@ -18,17 +19,21 @@ directory.
   forward-phase dependency, a `Gates` column with no `GATES.md`, a
   `MEMORY.md` missing a section, a placeholder `GATES.md`, a table row
   with no task directory, and a phase with no `review` task.
+- `mock-stray` — a valid phase tree plus one stray file in a phase
+  directory and one unexpected directory inside a task directory. Fails
+  with 3 issues (the stray file, the directory, and the deep path).
 
 ## Standalone binary
 
 ```bash
 bun run --cwd packages/specs build:cli
 cd packages/specs/fixtures
-../dist/mf-specs check            # exits 1: mock-bad, mock-stale
+../dist/mf-specs check            # exits 1: mock-bad, mock-stale, mock-stray
 ../dist/mf-specs check --verbose  # also lists the passing specs
 ../dist/mf-specs status --name mock-ok        # state pending
 ../dist/mf-specs status --name mock-complete  # state complete
 ../dist/mf-specs status --name mock-stale     # state inconsistent, exit 1
+../dist/mf-specs migrate --name mock-ok --dry-run  # already migrated: prints a no-op
 ```
 
 ## From source

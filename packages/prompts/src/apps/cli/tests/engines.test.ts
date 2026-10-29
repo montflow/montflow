@@ -49,7 +49,7 @@ interface PromptFileFields {
 /** Write one prompt file into a repo root. */
 const writePrompt = (root: string, file: string, prompt: PromptFileFields): Effect.Effect<void> =>
   Effect.gen(function* () {
-    const dir = join(root, '.agents', '@montflow', 'pi-prompts');
+    const dir = join(root, '.agents', '@montflow', 'prompts');
     yield* Effect.promise(() => mkdir(dir, { recursive: true }));
     yield* Effect.promise(() =>
       writeFile(join(dir, file), `${JSON.stringify(prompt, null, 2)}\n`, 'utf8'),

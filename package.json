@@ -10,8 +10,8 @@
     "apps/*"
   ],
   "overrides": {
-    "effect": "4.0.0-rc.112",
-    "@effect/platform-node-shared": "4.0.0-rc.112"
+    "effect": "4.0.1",
+    "@effect/platform-node-shared": "4.0.1"
   },
   "scripts": {
     "changeset": "changeset",
@@ -33,11 +33,14 @@
     "mf:check:profiles": "bun run --cwd packages/profiles cli verify --dir $PWD",
     "mf:check:model-fallback": "bun run --cwd packages/model-fallback cli doctor --check --dir $PWD && bun run --cwd packages/model-fallback cli status --dir $PWD && bun run --cwd packages/model-fallback cli status --check --dir $PWD/packages/model-fallback/fixtures/valid && (bun run --cwd packages/model-fallback cli status --dir $PWD/packages/model-fallback/fixtures/invalid >/dev/null 2>&1; test $? -eq 1)",
     "mf:check:reviews": "bun run --cwd packages/reviews cli verify --all --dir $PWD && bun run --cwd packages/reviews cli doctor --check --dir $PWD",
-    "mf:check": "bun run mf:check:skills && bun run mf:check:prompts && bun run mf:check:specs && bun run mf:check:profiles && bun run mf:check:model-fallback && bun run mf:check:reviews",
+    "mf:check": "bun run mf:check:release && bun run mf:check:skills && bun run mf:check:prompts && bun run mf:check:specs && bun run mf:check:profiles && bun run mf:check:model-fallback && bun run mf:check:reviews && bun run mf:check:naming",
     "mf:gate:fast": "turbo lint:check && turbo format:check && turbo ts:check && bun run mf:check",
     "mf:gate": "turbo lint:check && turbo format:check && turbo ts:check && turbo test && turbo test:tui && turbo smoke && bun run mf:check",
     "hooks:install": "lefthook install",
-    "postinstall": "lefthook install"
+    "postinstall": "lefthook install",
+    "mf:check:naming": "bun run scripts/check-retired-names.ts",
+    "mf:check:release": "bun run --cwd packages/version check:release -- --root $PWD",
+    "mf:check:release-and-skills": "bun run mf:check:release && bun run mf:check:skills"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",

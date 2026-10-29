@@ -1,10 +1,22 @@
 import { Console, Effect, Layer, Option } from 'effect';
-import { Argument, Command, Flag } from 'effect/unstable/cli';
-import { ProfileStore } from '@montflow/profiles';
-import { SpecStore } from '@montflow/specs';
+import { Argument, Command, Flag } from 'effect/cli';
+import { ProfileStore } from '@montflow/profiles/services';
+import { SpecStore } from '@montflow/specs/services';
+import { Cli } from '@montflow/version';
+import type { BuildInfo } from '@montflow/version';
+import manifest from '../../../package.json' with { type: 'json' };
 import { ProfileProbe, ReviewStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
+
+/** This package's root: three levels up from `src/apps/cli`. */
+export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
+
+/** Identity embedded from this package's manifest, so a compiled binary keeps it. */
+export const PACKAGE_IDENTITY = {
+  name: manifest.name,
+  version: manifest.version,
+} satisfies BuildInfo.GeneratedIdentity;
 
 /**
  * The `mf-reviews` binary's command tree, built with `effect/cli`.
@@ -20,11 +32,11 @@ const opt = (value: Option.Option<string>): string | undefined => Option.getOrUn
 
 /** Optional string flag. */
 const optionalString = (name: string, description: string) =>
-  Flag.string(name).pipe(Flag.withDescription(description), Flag.optional);
+  Flag.String(name).pipe(Flag.withDescription(description), Flag.optional);
 
 /** Boolean flag, defaulting to false. */
 const optionalBoolean = (name: string, description: string) =>
-  Flag.boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
+  Flag.Boolean(name).pipe(Flag.withDescription(description), Flag.withDefault(false));
 
 /** Workspace-root override, on every store-touching command. */
 const dirFlag = optionalString('dir', 'Workspace root. Defaults to the working directory.');
@@ -33,7 +45,7 @@ const dirFlag = optionalString('dir', 'Workspace root. Defaults to the working d
 const verboseFlag = optionalBoolean('verbose', 'Show per-item detail. Default is token-lean.');
 
 /** The `name` positional every series command takes. */
-const nameArg = Argument.string('name').pipe(
+const nameArg = Argument.String('name').pipe(
   Argument.withDescription('Review series name (the directory slug).'),
 );
 
@@ -103,7 +115,7 @@ const verifyCommand = Command.make(
   'verify',
   {
     dir: dirFlag,
-    name: Argument.string('name').pipe(
+    name: Argument.String('name').pipe(
       Argument.withDescription('Review series name. Omit to verify every series.'),
       Argument.optional,
     ),
@@ -184,6 +196,7 @@ export const rootCommand = Command.make('mf-reviews').pipe(
     createCommand,
     newCommand,
     resumeCommand,
+    Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
   Command.provide(
     Layer.mergeAll(
@@ -194,6 +207,3 @@ export const rootCommand = Command.make('mf-reviews').pipe(
     ),
   ),
 );
-
-/** Version reported by `--version`. Mirrors the package version. */
-export const VERSION = '0.0.1';

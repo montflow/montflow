@@ -62,11 +62,11 @@ name is omitted:
 
 ```bash
 mf-skills verify <name>          # the binary, scriptable — non-zero on failure
-/mf-skills verify <name>         # the same command inside a Pi session
+/mf-skills verify <name>         # the same command inside the OpenCode host
 ```
 
-The interactive `/mf-skills-tui` browse opens each skill's detail menu with the
-same verdict: `✓ verified` or `✗ not verified — N issues`. What "verified"
+The picker behind `/mf-skills` opens each skill for browsing; `verify` reports
+the same verdict: `✓ verified` or `✗ not verified — N issues`. What "verified"
 means depends on ownership:
 
 - **Montflow skills** (`montflow-*`) are held to the full standard

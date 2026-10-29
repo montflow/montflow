@@ -3,18 +3,25 @@ import { Effect } from 'effect';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import { issue, warning } from '../../../modules/verify/index.js';
-import { type CheckReport, check, checkExitCode, reduceCheck, renderCheck } from '../index.js';
+import {
+  type CheckReport,
+  check,
+  checkExitCode,
+  reduceCheck,
+  renderCheck,
+  runSlash,
+} from '../index.js';
 import { entry, memory, stubLayer } from './helpers.js';
 
 const okFiles = [
   entry('SPEC.md', specMarkdown({ name: 'ok' })),
-  entry('A001-implement-login/TASK.md', taskMarkdown({ id: 'A001', name: 'implement-login' })),
-  entry('A001-implement-login/MEMORY.md', memory),
+  entry('A/A001-implement-login/TASK.md', taskMarkdown({ id: 'A001', name: 'implement-login' })),
+  entry('A/A001-implement-login/MEMORY.md', memory),
   entry(
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
   ),
-  entry('A099-review-phase/MEMORY.md', memory),
+  entry('A/A099-review-phase/MEMORY.md', memory),
 ];
 
 const specs = new Map([
@@ -39,6 +46,135 @@ Vitest.describe('Cli.check runtime', () => {
       );
       Vitest.expect(report.specs).toHaveLength(1);
       Vitest.expect(report.failed).toBe(0);
+    }),
+  );
+
+  Vitest.it.effect('requires completion only when asked', () =>
+    Effect.gen(function* () {
+      const plain = yield* check('.agents/@montflow/specs', { name: 'ok' }).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(plain.failed).toBe(0);
+
+      const required = yield* check('.agents/@montflow/specs', {
+        name: 'ok',
+        requireComplete: true,
+      }).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(required.failed).toBe(1);
+      Vitest.expect(required.specs[0]?.issues).toContainEqual({
+        field: 'status',
+        message:
+          "Spec 'ok' is not complete (status: 'in-progress'); finish it or drop the 'Spec: ok' trailer.",
+      });
+    }),
+  );
+
+  Vitest.it.effect('threads --require-complete through the slash form', () =>
+    Effect.gen(function* () {
+      const report = yield* runSlash(
+        'check --name ok --require-complete',
+        '.agents/@montflow/specs',
+      ).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).toContain("Spec 'ok' is not complete");
+    }),
+  );
+
+  Vitest.it.effect('passes a complete spec when completion is required', () =>
+    Effect.gen(function* () {
+      const complete = [
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            name: 'done',
+            status: 'complete',
+            lockedPhases: 'A',
+            rows: [
+              {
+                id: 'A001',
+                name: 'implement-login',
+                type: 'execution',
+                status: 'complete',
+                gates: 'No',
+              },
+              {
+                id: 'A099',
+                name: 'review-phase',
+                type: 'review',
+                status: 'complete',
+                gates: 'No',
+              },
+            ],
+          }),
+        ),
+        entry(
+          'A/A001-implement-login/TASK.md',
+          taskMarkdown({ id: 'A001', name: 'implement-login', status: 'complete' }),
+        ),
+        entry('A/A001-implement-login/MEMORY.md', memory),
+        entry(
+          'A/A099-review-phase/TASK.md',
+          taskMarkdown({
+            id: 'A099',
+            name: 'review-phase',
+            type: 'review',
+            status: 'complete',
+          }),
+        ),
+        entry('A/A099-review-phase/MEMORY.md', memory),
+      ];
+      const report = yield* check('.agents/@montflow/specs', {
+        name: 'done',
+        requireComplete: true,
+      }).pipe(Effect.provide(stubLayer(new Map([['done', complete]]))));
+      Vitest.expect(report.specs[0]?.issues).toStrictEqual([]);
+    }),
+  );
+
+  Vitest.it.effect('refuses an invalid spec name before touching the store', () =>
+    Effect.gen(function* () {
+      const report = yield* check('.agents/@montflow/specs', { name: '../..' }).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.failed).toBe(1);
+      Vitest.expect(report.specs[0]?.issues[0]?.message).toContain('not a valid spec name');
+    }),
+  );
+
+  Vitest.it.effect('gates every spec when no name is given', () =>
+    Effect.gen(function* () {
+      const report = yield* check('.agents/@montflow/specs', { requireComplete: true }).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.specs.find((spec) => spec.name === 'ok')?.valid).toBe(false);
+    }),
+  );
+
+  Vitest.it.effect('keeps tree findings while adding the completion error', () =>
+    Effect.gen(function* () {
+      const report = yield* check('.agents/@montflow/specs', {
+        name: 'bad',
+        requireComplete: true,
+      }).pipe(Effect.provide(stubLayer(specs)));
+      const fields = report.specs[0]?.issues.map((found) => found.field) ?? [];
+      Vitest.expect(fields).toContain('status');
+      Vitest.expect(fields.some((field) => field.startsWith('SPEC.md'))).toBe(true);
+    }),
+  );
+
+  Vitest.it.effect('reports an unreadable SPEC.md as unreadable', () =>
+    Effect.gen(function* () {
+      const report = yield* check('.agents/@montflow/specs', {
+        name: 'broken',
+        requireComplete: true,
+      }).pipe(
+        Effect.provide(stubLayer(new Map([['broken', [entry('SPEC.md', 'no frontmatter')]]]))),
+      );
+      Vitest.expect(report.specs[0]?.issues).toContainEqual({
+        field: 'status',
+        message:
+          "Spec 'broken' is not complete (status: 'unreadable'); finish it or drop the 'Spec: broken' trailer.",
+      });
     }),
   );
 
@@ -81,12 +217,12 @@ Vitest.describe('Cli.check runtime', () => {
               }),
             ),
             entry(
-              'A001-implement-login/TASK.md',
+              'A/A001-implement-login/TASK.md',
               taskMarkdown({ id: 'A001', name: 'implement-login', status: 'complete' }),
             ),
-            entry('A001-implement-login/MEMORY.md', memory),
+            entry('A/A001-implement-login/MEMORY.md', memory),
             entry(
-              'A099-review-phase/TASK.md',
+              'A/A099-review-phase/TASK.md',
               taskMarkdown({
                 id: 'A099',
                 name: 'review-phase',
@@ -94,7 +230,7 @@ Vitest.describe('Cli.check runtime', () => {
                 status: 'complete',
               }),
             ),
-            entry('A099-review-phase/MEMORY.md', memory),
+            entry('A/A099-review-phase/MEMORY.md', memory),
           ],
         ],
       ]);

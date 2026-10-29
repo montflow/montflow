@@ -102,7 +102,7 @@ lead the ranking, followed by the cheapest tools-capable model per provider.
 ## Agentic setup
 
 `mf-model-fallback doctor` installs the packaged prompt into
-`.agents/@montflow/pi-prompts/model-fallback.json`. Run that prompt and the agent
+`.agents/@montflow/prompts/model-fallback.json`. Run that prompt and the agent
 checks `status`, lists the live choices, asks which models you want and in what
 order, writes the store, verifies it, and reports the result.
 

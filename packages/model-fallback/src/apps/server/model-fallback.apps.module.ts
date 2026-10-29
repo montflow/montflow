@@ -1,4 +1,5 @@
-import { Plugin } from '@opencode/plugin/effect';
+import type { Plugin } from '@opencode/plugin/effect';
+import type { Model } from '@opencode/schema/model';
 import type { Session } from '@opencode/schema/session';
 import { Effect, Ref, Stream, type Scope } from 'effect';
 import { FallbackNotice, FallbackStore, FallbackTrigger, ModelChain } from '../../modules/index.js';
@@ -29,7 +30,11 @@ const configOf = (snapshot: FallbackStore.Snapshot): FallbackStore.Config => sna
 const switchTo = (context: Context, input: SwitchInput): Effect.Effect<boolean> =>
   Effect.gen(function* () {
     const switched = yield* context.session
-      .switchModel({ sessionID: input.sessionID, model: input.to })
+      .switchModel({
+        sessionID: input.sessionID,
+        // SAFETY: model refs are parsed from validated labels; the host brands the fields at the type level only.
+        model: input.to as Model.Ref,
+      })
       .pipe(Effect.as(true), Effect.catch(describeFailure('switch model', false)));
     if (!switched) return false;
 

@@ -1,11 +1,10 @@
-import { Model } from '@opencode/schema/model';
 import * as Vitest from '@effect/vitest';
 import { ModelChain } from '../index.js';
 
 const chain = ModelChain.parse(['a/one', 'b/two', 'c/three']);
-const one = Model.Ref.parse('a/one');
-const two = Model.Ref.parse('b/two');
-const three = Model.Ref.parse('c/three');
+const one = ModelChain.parseOne('a/one');
+const two = ModelChain.parseOne('b/two');
+const three = ModelChain.parseOne('c/three');
 
 Vitest.describe('ModelChain.next types', () => {
   Vitest.it('resolves to a reference or undefined', () => {
@@ -26,13 +25,13 @@ Vitest.describe('ModelChain.next runtime', () => {
 
   Vitest.it('starts at the head when the current model is outside the chain', () => {
     Vitest.expect(
-      ModelChain.next(chain, Model.Ref.parse('x/other'), new Set<string>()),
+      ModelChain.next(chain, ModelChain.parseOne('x/other'), new Set<string>()),
     ).toStrictEqual(one);
   });
 
   Vitest.it('starts at the first untried entry when the current model is outside the chain', () => {
     Vitest.expect(
-      ModelChain.next(chain, Model.Ref.parse('x/other'), new Set([ModelChain.key(one)])),
+      ModelChain.next(chain, ModelChain.parseOne('x/other'), new Set([ModelChain.key(one)])),
     ).toStrictEqual(two);
   });
 
@@ -52,7 +51,7 @@ Vitest.describe('ModelChain.next runtime', () => {
 
   Vitest.it('matches the current model by key, ignoring its variant', () => {
     Vitest.expect(
-      ModelChain.next(chain, Model.Ref.parse('a/one#fast'), new Set<string>()),
+      ModelChain.next(chain, ModelChain.parseOne('a/one#fast'), new Set<string>()),
     ).toStrictEqual(two);
   });
 });

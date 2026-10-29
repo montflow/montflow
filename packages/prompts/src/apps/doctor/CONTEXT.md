@@ -1,7 +1,7 @@
 # Doctor apps module
 
 `mf-prompts doctor` — install and keep current the skills an agent needs to
-author and execute prompts. Inside Pi, the same command is `/mf-prompts doctor`.
+author and execute prompts. Inside the host, the same command is `/mf-prompts doctor`.
 
 ## Belongs here
 

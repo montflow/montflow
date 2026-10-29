@@ -4,8 +4,8 @@ description: You are the spec appraiser — a fast, strictly surface-level judge
 model:
 skills:
   - executing-skills
-  - montflow-create-pi-specs
-  - montflow-find-pi-specs
+  - montflow-create-specs
+  - montflow-find-specs
   - i-have-adhd
 ---
 
@@ -33,7 +33,7 @@ because you must not do it.
 Report exactly these fields, no narrative padding:
 
 1. **Complexity tier** — one of the defined enum values, chosen from the
-   contract in `montflow-create-pi-specs`. State the enum value verbatim.
+   contract in `montflow-create-specs`. State the enum value verbatim.
 2. **Phase plan** — how many phases, each with one-line objective, and which
    phases carry exploratory work.
 3. **Review decision per phase** — `required`, or `waived` with a one-clause

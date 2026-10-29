@@ -82,6 +82,7 @@ const SYNC_GROUPS = [
   { outcome: 'added', heading: 'Created', total: 'created' },
   { outcome: 'updated', heading: 'Updated', total: 'updated' },
   { outcome: 'unchanged', heading: 'Unchanged', total: 'unchanged' },
+  { outcome: 'refused', heading: 'Refused', total: 'refused' },
   { outcome: 'skipped', heading: 'Skipped', total: 'skipped' },
 ] as const;
 
@@ -101,10 +102,20 @@ const syncFooter = (result: Sync.SyncResult): string => {
     .map((entry) => `${entry.count} ${entry.total}`)
     .join(' \u00b7 ');
   if (!result.check) return totals;
+  const attention = result.skills.filter(
+    (skill) => skill.drift === 'stale' || skill.drift === 'diverged',
+  ).length;
+  const wouldChange = attention > 0 ? attention : result.changed.length;
   return result.drifted
-    ? `${totals}\n\u2717 drift \u2014 ${counted(result.changed.length, 'skill')} would change.`
+    ? `${totals}\n\u2717 drift \u2014 ${counted(wouldChange, 'skill')} would change.`
     : `${totals}\n\u2713 current.`;
 };
+
+/** One line of drift detail for a managed or unmanaged check run. */
+const driftNote = (skill: Sync.SyncSkillStatus): string =>
+  skill.drift === 'diverged'
+    ? `diverged (${(skill.differingFiles ?? []).join(', ')}; manifest @${(skill.manifestCommit ?? 'unknown').slice(0, 7)})`
+    : (skill.drift ?? 'current');
 
 /**
  * A `sync` report: a header naming both roots, one group per present outcome,
@@ -127,11 +138,13 @@ export const sync = (
     if (skills.length === 0) continue;
     lines.push(`${group.heading} (${skills.length})`);
     for (const skill of skills) {
-      lines.push(
+      const note =
         skill.outcome === 'skipped'
-          ? `  ${skill.name} \u2014 ${skill.reason ?? 'internal'}`
-          : `  ${skill.name}`,
-      );
+          ? (skill.reason ?? 'internal')
+          : result.check
+            ? driftNote(skill)
+            : undefined;
+      lines.push(note === undefined ? `  ${skill.name}` : `  ${skill.name} \u2014 ${note}`);
       if (options.verbose === true) {
         for (const file of skill.files) lines.push(`    ${file.file}: ${file.outcome}`);
       }
@@ -150,6 +163,18 @@ export const sync = (
  */
 export const syncRefusal = (result: Sync.SyncResult): string =>
   `Re-run without --check to apply: ${result.invocation}`;
+
+/** The fix after a normal sync refused to overwrite diverged skills. */
+export const forceRefusal = (result: Sync.SyncResult): string => {
+  const detail = result.skills
+    .filter((skill) => skill.outcome === 'refused')
+    .map(
+      (skill) =>
+        `${skill.name} (${(skill.differingFiles ?? []).join(', ')} @${(skill.manifestCommit ?? 'unknown').slice(0, 7)})`,
+    )
+    .join('; ');
+  return `Refusing to overwrite diverged skill(s): ${detail}. Re-run with ${result.invocation} --force to replace them.`;
+};
 
 /** Confirmation after a create. */
 export const created = (skill: Skill.Skill): string =>

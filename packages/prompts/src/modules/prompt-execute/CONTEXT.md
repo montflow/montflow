@@ -29,7 +29,7 @@ not.
 
 - **`execute` is pure and returns a plan, never a run.** Validation an agent
   has to satisfy is then testable without a model, and the same plan drives
-  the CLI, the TUI, and a Pi tool.
+  the CLI, the TUI, and an OpenCode tool.
 - **Check order is deliberate**: empty template → unparseable template →
   missing model → missing required values. The cheapest decisive check runs
   first so a blocked plan names _one_ real problem instead of a pile.

@@ -1,7 +1,7 @@
 # CLI app
 
 Two front ends over one set of engines: the `mf-prompts` binary (Bun +
-`effect/cli`) and the Pi slash command of the same name. A hand-rolled
+`effect/cli`) and the OpenCode slash command of the same name. A hand-rolled
 parser for the slash form, a `Command` tree for the binary, and nothing shared
 below the parser.
 
@@ -18,8 +18,7 @@ below the parser.
 - `slash.apps.module.ts` — the `/mf-prompts` parser, `run`, and `register`
 - `main.ts` — the binary entry
 
-The interactive menu is a different command: `/mf-prompts-tui`,
-`../interactive/`.
+The OpenCode TUI picker is registered by `../tui.ts` on `/mf-prompts`; no separate picker command exists.
 
 ## Rules
 
