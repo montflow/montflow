@@ -99,16 +99,18 @@ export const page = (sessionID: string | undefined): string => `<!doctype html>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   body { margin: 0; background: #0f1115; color: #d7dbe0; font: 12px/16px ui-monospace, monospace; }
-  #app { display: grid; grid-template-columns: 210px 1fr; height: 100vh; }
+  html, body { overflow: hidden; }
+  #app { display: grid; grid-template-columns: 210px 1fr; height: 100vh; min-width: 0; overflow: hidden; }
   aside { border-right: 1px solid #242a33; overflow: auto; padding: 8px; }
   aside h1 { font-size: 12px; margin: 0 0 8px; color: #8b95a5; font-weight: normal; }
   aside a { display: block; color: #d7dbe0; padding: 4px 6px; text-decoration: none; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   aside a.active, aside a:hover { background: #1c2330; }
-  main { display: flex; flex-direction: column; min-width: 0; position: relative; }
-  header { display: flex; gap: 10px; align-items: center; padding: 8px; border-bottom: 1px solid #242a33; }
-  header input { flex: 1; background: #0b0d11; color: inherit; border: 1px solid #2a313c; padding: 4px 6px; font: inherit; }
+  main { display: flex; flex-direction: column; min-width: 0; position: relative; overflow: hidden; }
+  header { display: flex; gap: 10px; align-items: center; padding: 8px; border-bottom: 1px solid #242a33; overflow: hidden; }
+  header strong { min-width: 0; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  header input { flex: 1 1 140px; min-width: 120px; background: #0b0d11; color: inherit; border: 1px solid #2a313c; padding: 4px 6px; font: inherit; }
   header button { background: #1c2330; color: inherit; border: 1px solid #2a313c; padding: 4px 8px; font: inherit; cursor: pointer; }
-  header span { color: #8b95a5; white-space: nowrap; }
+  header span { flex: 0 1 auto; min-width: 0; color: #8b95a5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #trace { flex: 1; min-height: 0; position: relative; overflow: hidden; }
   #trace canvas { display: block; }
   #tip { position: absolute; z-index: 3; max-width: 360px; padding: 6px 8px; background: #171b23; border: 1px solid #2a313c; border-radius: 4px; pointer-events: none; white-space: pre-wrap; }
@@ -154,6 +156,7 @@ let spans = [];
 let minTs = Infinity;
 let maxTs = -Infinity;
 let baseScale = 0.05;
+let origin = 0;
 let zoom = 1;
 let viewStart = 0;
 let follow = true;
@@ -180,8 +183,10 @@ const tokensOf = (line) => payloadOf(line).tokens || null;
 const app = new PIXI.Application();
 await app.init({ background: '#0f1115', antialias: false, autoDensity: true, resolution: window.devicePixelRatio || 1, resizeTo: trace, preference: 'webgl' });
 trace.appendChild(app.canvas);
-const container = new PIXI.ParticleContainer({ texture: PIXI.Texture.WHITE, dynamicProperties: { position: true } });
+const container = new PIXI.Container();
 app.stage.addChild(container);
+const barLayers = new Map(LANES.map((lane) => [lane, new PIXI.Graphics()]));
+for (const layer of barLayers.values()) container.addChild(layer);
 const laneLabels = LANES.map((lane, index) => {
   const label = new PIXI.Text({ text: lane, style: { fill: '#8b95a5', fontFamily: 'monospace', fontSize: 10 } });
   label.position.set(8, LANE_Y[lane] - 5);
@@ -209,7 +214,6 @@ const viewWidth = () => (width() - GUTTER - 20) / (baseScale * zoom);
 const timeOf = (x) => viewStart + (x - GUTTER) / (baseScale * zoom);
 const xOf = (ts) => GUTTER + (ts - viewStart) * baseScale * zoom;
 const tailStart = (ts) => Math.max(minTs, ts - viewWidth() * 0.9);
-const colorOf = (line) => COLORS[laneOf(line.type)] ?? 0x6ea8fe;
 const providerOf = (line) => {
   if (line.model && typeof line.model === 'object') return line.model.providerID;
   if (typeof line.model === 'string') return line.model.split('/')[0];
@@ -251,23 +255,46 @@ const lowerBound = (ts) => {
   return low;
 };
 
-const makeView = (line) => ({ line, lane: laneOf(line.type), color: colorOf(line), duration: durationOf(line), hidden: false, particle: null });
-const addParticle = (view) => {
-  view.particle = new PIXI.Particle({
-    texture: PIXI.Texture.WHITE,
-    x: (view.line.ts || 0) * baseScale,
-    y: LANE_Y[view.lane],
-    scaleX: 4,
-    scaleY: 14,
-    color: view.color,
-  });
-  container.addParticle(view.particle);
+const makeView = (line) => ({ line, lane: laneOf(line.type), duration: durationOf(line), hidden: false });
+const drawRun = (lane, from, to) => {
+  const layer = barLayers.get(lane);
+  layer?.rect(from, LANE_Y[lane] - 7, Math.max(1, to - from + 1), 14).fill(COLORS[lane]);
 };
-const clearParticles = () => {
-  container.removeParticles();
+/**
+ * Merge each lane's visible spans into pixel runs, so the canvas never draws
+ * more than one bar per screen column. Dense sessions become readable bands;
+ * zooming in splits them back into individual spans.
+ */
+const redrawBars = () => {
+  for (const layer of barLayers.values()) layer.clear();
+  if (spans.length === 0) return;
+  const end = viewStart + viewWidth();
+  const runs = new Map(LANES.map((lane) => [lane, null]));
+  for (let index = lowerBound(viewStart); index < spans.length; index += 1) {
+    const view = spans[index];
+    const ts = view.line.ts || 0;
+    if (ts > end) break;
+    if (view.hidden) continue;
+    const x = GUTTER + (ts - viewStart) * baseScale * zoom;
+    if (x < GUTTER) continue;
+    if (x > width() - 20) break;
+    const column = Math.floor(x);
+    const run = runs.get(view.lane);
+    if (run === null) {
+      runs.set(view.lane, { from: column, to: column });
+    } else if (column <= run.to + 1) {
+      run.to = column;
+    } else {
+      drawRun(view.lane, run.from, run.to);
+      runs.set(view.lane, { from: column, to: column });
+    }
+  }
+  for (const [lane, run] of runs) {
+    if (run !== null) drawRun(lane, run.from, run.to);
+  }
 };
 const applyView = () => {
-  container.x = GUTTER - viewStart * baseScale * zoom;
+  container.x = GUTTER - (viewStart - origin) * baseScale * zoom;
   container.scale.x = zoom;
   const start = viewStart;
   const end = viewStart + viewWidth();
@@ -287,7 +314,9 @@ const applyView = () => {
   let slot = 0;
   if (zoom >= 0.6) {
     const first = lowerBound(viewStart);
-    for (let index = first; index < spans.length && slot < iconPool.length; index += 1) {
+    const last = lowerBound(viewStart + viewWidth());
+    const stride = Math.max(1, Math.ceil(Math.max(1, last - first) / iconPool.length));
+    for (let index = first; index < last && slot < iconPool.length; index += stride) {
       const view = spans[index];
       if (view.hidden) continue;
       const x = xOf(view.line.ts || 0);
@@ -308,6 +337,7 @@ const applyView = () => {
     const label = iconPool[slot];
     if (label !== undefined) label.visible = false;
   }
+  redrawBars();
 };
 const refreshTotals = () => {
   let cost = 0;
@@ -339,6 +369,7 @@ const refreshTotals = () => {
 };
 const fit = () => {
   const span = Math.max(1000, maxTs - minTs);
+  origin = minTs === Infinity ? 0 : minTs;
   baseScale = Math.max(0.000001, (width() - GUTTER - 20) / span);
   zoom = 1;
   viewStart = minTs === Infinity ? 0 : minTs;
@@ -350,13 +381,13 @@ const addLine = (line) => {
   minTs = Math.min(minTs, line.ts);
   maxTs = Math.max(maxTs, line.ts);
   if (spans.length === 0) fit();
+  if (line.ts < origin) {
+    origin = line.ts;
+  }
   if (follow && maxTs - minTs > 0) {
     const target = (width() - GUTTER - 20) / (maxTs - minTs);
     if (target < baseScale * 0.66) {
       baseScale = target;
-      for (const item of spans) {
-        if (item.particle) item.particle.x = (item.line.ts || 0) * baseScale;
-      }
     }
   }
   const view = makeView(line);
@@ -364,14 +395,11 @@ const addLine = (line) => {
   const hay = (line.type + ' ' + (line.agent || '') + ' ' + modelOf(line)).toLowerCase();
   view.hidden = query !== '' && !hay.includes(query);
   spans.push(view);
-  addParticle(view);
-  if (view.hidden && view.particle) view.particle.y = -100;
   if (follow) viewStart = tailStart(line.ts);
   applyView();
   refreshTotals();
 };
 const rebuild = () => {
-  clearParticles();
   startedAt.clear();
   spans = [];
   minTs = Infinity;
@@ -386,7 +414,6 @@ const rebuild = () => {
   for (const line of lines) {
     const view = makeView(line);
     spans.push(view);
-    addParticle(view);
   }
   applyView();
   refreshTotals();
@@ -397,7 +424,6 @@ const applyFilter = () => {
   for (const view of spans) {
     const hay = (view.line.type + ' ' + (view.line.agent || '') + ' ' + modelOf(view.line)).toLowerCase();
     view.hidden = query !== '' && !hay.includes(query);
-    if (view.particle) view.particle.y = view.hidden ? -100 : LANE_Y[view.lane];
   }
   refreshTotals();
   applyView();
