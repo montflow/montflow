@@ -1,5 +1,6 @@
 import { Console, Effect, Option } from 'effect';
 import { Command, Flag } from 'effect/unstable/cli';
+import { ModelChain } from '../../modules/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
 
@@ -31,15 +32,22 @@ const exitFailed = Effect.sync(() => {
   process.exitCode = 1;
 });
 
+/** Label a chain for JSON output instead of leaking branded ref objects. */
+const withLabels = <A extends { readonly chain: ReadonlyArray<ModelChain.Ref> }>(value: A) => ({
+  ...value,
+  chain: value.chain.map(ModelChain.label),
+});
+
 const report = <A, R>(
   self: Effect.Effect<A, string, R>,
   render: (value: A) => string,
   json: boolean,
+  serialize: (value: A) => string = (value) => JSON.stringify(value, null, 2),
 ): Effect.Effect<void, never, R> =>
   self.pipe(
     Effect.matchEffect({
       onFailure: (message) => Console.log(message).pipe(Effect.andThen(exitFailed)),
-      onSuccess: (value) => Console.log(json ? JSON.stringify(value, null, 2) : render(value)),
+      onSuccess: (value) => Console.log(json ? serialize(value) : render(value)),
     }),
   );
 
@@ -50,7 +58,35 @@ const scopeOf = (dir: Option.Option<string>, server: Option.Option<string>): Eng
 };
 
 const showCommand = Command.make('show', { dir: dirFlag, json: jsonFlag }, (config) =>
-  report(Engines.show(scopeOf(config.dir, Option.none())), Renderers.show, config.json),
+  report(Engines.show(scopeOf(config.dir, Option.none())), Renderers.show, config.json, (value) =>
+    JSON.stringify(withLabels(value), null, 2),
+  ),
+);
+
+const statusCommand = Command.make(
+  'status',
+  {
+    check: optionalBoolean('check', 'Fail when no chain is configured.'),
+    dir: dirFlag,
+    json: jsonFlag,
+  },
+  (config) =>
+    Effect.gen(function* () {
+      const result = yield* Engines.status(scopeOf(config.dir, Option.none()));
+      yield* Console.log(
+        config.json ? JSON.stringify(withLabels(result), null, 2) : Renderers.status(result),
+      );
+      if (!result.ok || (config.check && result.chain.length === 0)) {
+        if (config.check && result.chain.length === 0 && !config.json) {
+          yield* Console.log('No chain configured. Run `mf-model-fallback set --chain ...`.');
+        }
+        yield* exitFailed;
+      }
+    }).pipe(
+      Effect.catch((message) =>
+        Console.log(message).pipe(Effect.andThen(exitFailed), Effect.asVoid),
+      ),
+    ),
 );
 
 const modelsCommand = Command.make(
@@ -105,14 +141,29 @@ const setCommand = Command.make(
       }),
       Renderers.set,
       config.json,
+      (value) => JSON.stringify(withLabels(value), null, 2),
     ),
+);
+
+const migrateCommand = Command.make('migrate', { dir: dirFlag, json: jsonFlag }, (config) =>
+  report(
+    Engines.migrate(scopeOf(config.dir, Option.none())),
+    Renderers.migrate,
+    config.json,
+    (value) => JSON.stringify(withLabels(value), null, 2),
+  ),
 );
 
 const verifyCommand = Command.make(
   'verify',
   { dir: dirFlag, server: serverFlag, json: jsonFlag },
   (config) =>
-    report(Engines.verify(scopeOf(config.dir, config.server)), Renderers.verify, config.json),
+    report(
+      Engines.verify(scopeOf(config.dir, config.server)),
+      Renderers.verify,
+      config.json,
+      (value) => JSON.stringify(withLabels(value), null, 2),
+    ),
 );
 
 const doctorCommand = Command.make(
@@ -139,9 +190,11 @@ export const rootCommand = Command.make('mf-model-fallback').pipe(
     'Show, set, and verify model fallback chains for this workspace, and install the packaged prompt.',
   ),
   Command.withSubcommands([
+    statusCommand,
     showCommand,
     modelsCommand,
     setCommand,
+    migrateCommand,
     verifyCommand,
     doctorCommand,
     removeCommand,

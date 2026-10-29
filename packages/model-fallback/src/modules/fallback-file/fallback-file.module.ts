@@ -7,8 +7,6 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser';
 import { FallbackConfig } from '../fallback-config/index.js';
-import type { FallbackTrigger } from '../fallback-trigger/index.js';
-import { ModelChain } from '../model-chain/index.js';
 
 /** Package spec the host matches in `plugins`; also the identity used to find the entry. */
 export const packageName = '@montflow/model-fallback';
@@ -97,14 +95,6 @@ const parseDocument = (text: string, file: string) => {
 const entryIndex = (plugins: ReadonlyArray<typeof PluginEntry.Type> | undefined): number =>
   plugins?.findIndex((entry) => isOurs(isString(entry) ? entry : entry.package)) ?? -1;
 
-/** The spec already in the file, so a local path survives an update. */
-const entrySpec = (plugins: ReadonlyArray<typeof PluginEntry.Type> | undefined): string => {
-  const index = entryIndex(plugins);
-  const entry = index === -1 || plugins === undefined ? undefined : plugins[index];
-  if (entry === undefined) return packageName;
-  return isString(entry) ? entry : entry.package;
-};
-
 /** Decode this plugin's options for one `plugins` array. */
 const entryConfig = (
   plugins: ReadonlyArray<typeof PluginEntry.Type> | undefined,
@@ -144,49 +134,8 @@ const writeText = (file: string, text: string): Effect.Effect<void, FileError> =
     catch: (cause) => new FileError({ reason: `Could not write ${file}: ${reasonOf(cause)}` }),
   });
 
-const applyDocument = (text: string, file: string, next: (draft: string) => string): string => {
-  const base = text.trim() === '' ? '{}\n' : text;
-  const edited = next(base);
-  return edited.trim() === '' ? base : edited;
-};
-
-/** Write this plugin's entry, updating it in place when it already exists. */
-export const write = (
-  cwd: string,
-  config: {
-    readonly chain: ReadonlyArray<ModelChain.Ref>;
-    readonly triggers: ReadonlyArray<FallbackTrigger.Trigger>;
-  },
-): Effect.Effect<Written, FileError> =>
-  Effect.gen(function* () {
-    const file = locate(cwd);
-    const text = existsSync(file) ? yield* readText(file) : '';
-    const document = yield* Effect.try({
-      try: () => parseDocument(text.trim() === '' ? '{}' : text, file),
-      catch: (cause) => new FileError({ reason: reasonOf(cause) }),
-    });
-    const entry = {
-      package: entrySpec(document.plugins),
-      options: {
-        chain: config.chain.map((ref) => ModelChain.label(ref)),
-        triggers: config.triggers,
-      },
-    };
-    const index = entryIndex(document.plugins);
-    const next = applyDocument(text, file, (base) => {
-      if (document.plugins === undefined) {
-        return applyEdits(base, modify(base, ['plugins'], [entry], formatting));
-      }
-      const path = index === -1 ? ['plugins', document.plugins.length] : ['plugins', index];
-      return applyEdits(base, modify(base, path, entry, formatting));
-    });
-    if (next === text) return { path: file, changed: false };
-    yield* writeText(file, next);
-    return { path: file, changed: true };
-  });
-
-/** Remove this plugin's entry, if present. */
-export const remove = (cwd: string): Effect.Effect<Written, FileError> =>
+/** Drop the options block from this plugin's entry, keeping the entry itself. */
+export const clearOptions = (cwd: string): Effect.Effect<Written, FileError> =>
   Effect.gen(function* () {
     const file = locate(cwd);
     if (!existsSync(file)) return { path: file, changed: false };
@@ -196,8 +145,15 @@ export const remove = (cwd: string): Effect.Effect<Written, FileError> =>
       catch: (cause) => new FileError({ reason: reasonOf(cause) }),
     });
     const index = entryIndex(document.plugins);
-    if (index === -1) return { path: file, changed: false };
-    const next = applyEdits(text, modify(text, ['plugins', index], undefined, formatting));
+    const entry =
+      index === -1 || document.plugins === undefined ? undefined : document.plugins[index];
+    if (index === -1 || entry === undefined || isString(entry) || entry.options === undefined) {
+      return { path: file, changed: false };
+    }
+    const next = applyEdits(
+      text,
+      modify(text, ['plugins', index, 'options'], undefined, formatting),
+    );
     yield* writeText(file, next);
     return { path: file, changed: true };
   });

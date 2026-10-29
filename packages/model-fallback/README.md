@@ -5,81 +5,91 @@ current model runs out of quota, rate limits, or rejects its key, the session
 switches to the next configured model and continues — in place on the retry, or
 by resuming after the failure — and records a visible note in the model history.
 
-Three faces, all writing the same `opencode.jsonc` entry:
+Three faces, one store:
 
-| Face                    | Use it for                                                    |
-| ----------------------- | ------------------------------------------------------------- |
-| `mf-model-fallback` CLI | Agents and scripts: show, set, verify, remove, doctor         |
-| `model-fallback` prompt | Agentic setup: the agent presents live model choices and asks |
-| `/mf-fallback`          | In-session dialogs: show, pick a chain, or remove it          |
+| Face                    | Use it for                                                             |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `mf-model-fallback` CLI | Agents and scripts: status, show, set, migrate, verify, remove, doctor |
+| `model-fallback` prompt | Agentic setup: the agent presents live model choices and asks          |
+| `/mf-fallback`          | In-session dialogs: show, pick a chain, or remove it                   |
 
-## Enable it
+## Configuration
 
-```jsonc
-// opencode.jsonc
+The plugin owns its configuration:
+
+```
+.agents/@montflow/model-fallback/config.json
+```
+
+```json
 {
-  "plugins": [
-    {
-      "package": "@montflow/model-fallback",
-      "options": {
-        "chain": [
-          "deepseek/deepseek-chat",
-          "openrouter/anthropic/claude-sonnet-4",
-          "anthropic/claude-haiku-4",
-        ],
-        "triggers": ["quota", "rate-limit", "auth"],
-      },
-    },
+  "version": 1,
+  "chain": [
+    "deepseek/deepseek-chat",
+    "openrouter/anthropic/claude-sonnet-4",
+    "anthropic/claude-haiku-4"
   ],
+  "triggers": ["quota", "rate-limit", "auth"]
 }
 ```
 
 - `chain` — `provider/model` or `provider/model#variant`, ordered. The plugin
   never wraps: the last entry failing leaves the session where it is.
 - `triggers` — defaults to `["quota", "rate-limit", "auth"]`; `timeout`,
-  `provider-internal`, and `transport` are opt-in.
+  `provider-internal`, and `transport` are opt-in. An explicit empty list means
+  "never fall back".
+- Unknown keys are preserved. Duplicates, unknown triggers, and unparsable labels
+  are shape errors reported by `status`.
 
-No chain means the plugin stays loaded and idle, and logs why.
+The plugin reads the store at activation and watches it (re-arming when the
+store directory appears), so a valid edit applies to the next failure without
+restarting the host. An invalid edit never replaces the chain already in force;
+the issues are logged and reported by `status`.
 
-## Local development install
-
-The host installs a bare spec from npm, so a checkout has to be registered by
-**absolute path** — relative paths are treated as npm specs too:
+`opencode.jsonc` still has to register the plugin package, but it carries no
+options:
 
 ```jsonc
 {
-  "plugins": [
-    {
-      "package": "/abs/path/to/montflow/packages/model-fallback",
-      "options": { "chain": ["deepseek/deepseek-chat", "opencode/glm-5.3-flash-free"] },
-    },
-  ],
+  "plugins": [{ "package": "/abs/path/to/packages/model-fallback" }],
 }
 ```
 
-The CLI recognises that entry (last path segment `model-fallback`) and updates it
-in place, keeping the path. Restart the host after adding it; existing plugin
-lists are resolved at startup.
+`opencode.jsonc` `plugins[].options` remains a **legacy** source: it is used only
+when no store exists, and `migrate` moves it into the store and clears it.
 
 ## Configure it
 
-Never hand-edit the entry; the CLI preserves the file's comments and other
-plugins.
+Never hand-edit either file; the CLI writes the store and preserves the host
+config.
 
 ```sh
-# What is configured now, and where
+# Is this workspace configured correctly? (offline, shape only)
+mf-model-fallback status
+
+# What is in force, and from which source
 mf-model-fallback show
 
-# Models this machine can actually run, favorites/recents first, plus a suggestion
+# Models this machine can run, favorites/recents first, plus a suggestion
 mf-model-fallback models
 
-# Write a chain (validated against the live catalog) and confirm it
+# Write a chain (validated against the live catalog), then confirm it
 mf-model-fallback set --chain deepseek/deepseek-chat,openrouter/anthropic/claude-sonnet-4
 mf-model-fallback verify
 
-# Remove only this plugin's entry
+# Move legacy opencode.jsonc options into the store and clear them
+mf-model-fallback migrate
+
+# Deactivate: delete the store and clear legacy options
 mf-model-fallback remove
 ```
+
+`status` is offline and exits `0` for a valid configuration _and_ for a workspace
+with no configuration at all; it exits `1` when the configuration in force is
+invalid — a malformed store, or legacy `opencode.jsonc` options that do not
+decode. Add `--check` when a missing chain should also fail (CI that expects a
+configured workspace). `verify` is the live check: shape plus every chain model
+resolving against the running catalog.
 
 Every command takes `--dir <workspace>` and `--json`; catalog commands take
 `--server <url>` when the local service is not discoverable. `set` refuses models
@@ -93,11 +103,12 @@ lead the ranking, followed by the cheapest tools-capable model per provider.
 
 `mf-model-fallback doctor` installs the packaged prompt into
 `.agents/@montflow/pi-prompts/model-fallback.json`. Run that prompt and the agent
-lists the live choices, asks which models you want and in what order, writes the
-chain, verifies it, and reports the result.
+checks `status`, lists the live choices, asks which models you want and in what
+order, writes the store, verifies it, and reports the result.
 
 `doctor --check` never writes and exits non-zero when the installed prompt is
-missing, stale, or invalid; the repo gate runs it as `mf:check:model-fallback`.
+missing, stale, or invalid; the repo gate runs it with `status` as
+`mf:check:model-fallback`.
 
 ## In-session
 
@@ -124,11 +135,19 @@ The summary lands in a modal.
 - Each session remembers the models it already abandoned, so a chain is walked
   once per session and never ping-pongs.
 
+## Local development install
+
+The host installs a bare spec from npm, so a checkout has to be registered by
+**absolute path** — relative paths are treated as npm specs too. Restart the host
+after adding the plugin; existing plugin lists are resolved at startup. Store
+edits need no restart.
+
 ## Verification
 
 ```sh
 bun run --cwd packages/model-fallback test
 bun run --cwd packages/model-fallback ts:check
 bun run --cwd packages/model-fallback lint:check
-bun run --cwd packages/model-fallback cli doctor --check --dir <workspace>
+bun run --cwd packages/model-fallback cli status --dir <workspace>
+bun run --cwd packages/model-fallback cli verify --dir <workspace>
 ```

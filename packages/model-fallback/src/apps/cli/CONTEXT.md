@@ -1,7 +1,7 @@
 # Model-fallback CLI app
 
-The `mf-model-fallback` binary: show, set, verify, remove, and doctor the
-workspace chain. Agents drive this instead of editing `opencode.jsonc`.
+The `mf-model-fallback` binary: status, show, set, migrate, verify, remove, and
+doctor the workspace configuration. Agents drive this instead of editing files.
 
 ## Belongs here
 
@@ -11,6 +11,7 @@ workspace chain. Agents drive this instead of editing `opencode.jsonc`.
 
 ## Does not belong here
 
-- Config parsing and writes — `fallback-file`
+- Store shape, writes, and precedence — `fallback-store`
+- Legacy `opencode.jsonc` handling — `fallback-file`
 - Catalog and ranking rules — `model-catalog`
 - Artifact installation — `apps/doctor`

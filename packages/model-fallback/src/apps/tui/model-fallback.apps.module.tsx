@@ -1,13 +1,11 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPorts } from '@montflow/opencode';
 import { Effect } from 'effect';
-import { FallbackFile, FallbackTrigger, ModelCatalog, ModelChain } from '../../modules/index.js';
+import { ModelCatalog } from '../../modules/index.js';
+import * as Engines from '../cli/engines.apps.module.js';
 
 /** Longest chain the picker builds in one pass. */
 const MAX_CHAIN = 4;
-
-/** Run a host-side effect from the dialog flow. */
-const run = <A, E>(effect: Effect.Effect<A, E>): Promise<A> => effect.pipe(Effect.runPromise);
 
 /** Summary shown in the host dialog. */
 interface Outcome {
@@ -15,13 +13,13 @@ interface Outcome {
   readonly lines: ReadonlyArray<string>;
 }
 
+/** Run a host-side effect from the dialog flow. */
+const run = <A, E>(effect: Effect.Effect<A, E>): Promise<A> => effect.pipe(Effect.runPromise);
+
 const contextLabel = (tokens: number): string =>
   tokens >= 1000 ? `${Math.round(tokens / 1000)}k ctx` : `${tokens} ctx`;
 
 const costLabel = (usd: number): string => `$${usd.toFixed(2)}/M out`;
-
-const chainLines = (chain: ReadonlyArray<ModelChain.Ref>): ReadonlyArray<string> =>
-  chain.map((ref, index) => `${index + 1}. ${ModelChain.label(ref)}`);
 
 const Modal = (props: { readonly outcome: Outcome }) => (
   <box flexDirection="column">
@@ -71,24 +69,31 @@ const pick = async (ports: TuiPorts): Promise<void> => {
   }
 
   if (picked.length === 0) return;
-  const chain = ModelChain.parse(picked);
   const written = await run(
-    FallbackFile.write(ports.cwd, { chain, triggers: FallbackTrigger.defaults }),
+    Engines.set({ cwd: ports.cwd }, { chain: picked, triggers: undefined, allowUnknown: false }),
   );
   present(ports, {
     title: `${written.changed ? 'Updated' : 'Unchanged'} ${written.path}`,
-    lines: [...chainLines(chain), `triggers: ${FallbackTrigger.defaults.join(', ')}`],
+    lines: [
+      ...written.chain.map((ref, index) => `${index + 1}. ${ref.providerID}/${ref.id}`),
+      `triggers: ${written.triggers.join(', ')}`,
+    ],
   });
 };
 
 const show = async (ports: TuiPorts): Promise<void> => {
-  const current = await run(FallbackFile.read(ports.cwd));
+  const result = await run(Engines.status({ cwd: ports.cwd }));
+  const lines =
+    result.chain.length === 0
+      ? ['Not configured yet.', 'Pick a chain to start.']
+      : [
+          ...result.chain.map((ref, index) => `${index + 1}. ${ref.providerID}/${ref.id}`),
+          `triggers: ${result.triggers.join(', ')}`,
+          `source: ${result.source}`,
+        ];
   present(ports, {
-    title: current.path,
-    lines:
-      current.config.chain.length === 0
-        ? ['No fallback chain configured.', 'Run /mf-fallback and pick a chain.']
-        : [...chainLines(current.config.chain), `triggers: ${current.config.triggers.join(', ')}`],
+    title: result.ok ? result.path : `${result.path} (invalid)`,
+    lines: [...lines, ...result.issues.map((issue) => `✗ ${issue.field}: ${issue.message}`)],
   });
 };
 
@@ -96,16 +101,14 @@ const remove = async (ports: TuiPorts): Promise<void> => {
   const confirmed = await run(
     ports.interaction.confirm({
       title: 'Remove the model fallback chain?',
-      message: 'Only the model-fallback entry is removed from opencode.jsonc.',
+      message: 'The store file is deleted and legacy opencode.jsonc options are cleared.',
     }),
   );
   if (confirmed !== true) return;
-  const removed = await run(FallbackFile.remove(ports.cwd));
+  const removed = await run(Engines.remove({ cwd: ports.cwd }));
   present(ports, {
-    title: removed.changed
-      ? `Removed from ${removed.path}`
-      : `Nothing to remove in ${removed.path}`,
-    lines: [],
+    title: removed.changed ? `Removed ${removed.path}` : `Nothing to remove in ${removed.path}`,
+    lines: removed.cleared ? ['Cleared legacy opencode.jsonc options.'] : [],
   });
 };
 

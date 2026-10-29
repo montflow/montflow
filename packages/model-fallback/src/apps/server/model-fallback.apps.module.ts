@@ -1,12 +1,7 @@
 import { Plugin } from '@opencode/plugin/effect';
 import type { Session } from '@opencode/schema/session';
-import { Effect, Stream, type Scope } from 'effect';
-import {
-  FallbackConfig,
-  FallbackNotice,
-  FallbackTrigger,
-  ModelChain,
-} from '../../modules/index.js';
+import { Effect, Ref, Stream, type Scope } from 'effect';
+import { FallbackNotice, FallbackStore, FallbackTrigger, ModelChain } from '../../modules/index.js';
 import { FallbackState } from '../../services/index.js';
 
 /** Plugin id shared with the host loader and `opencode.jsonc`. */
@@ -23,6 +18,8 @@ interface SwitchInput {
   readonly failure: FallbackTrigger.Failure;
   readonly resume: boolean;
 }
+
+const configOf = (snapshot: FallbackStore.Snapshot): FallbackStore.Config => snapshot.config;
 
 /**
  * Switch the session model and leave the visible history note. A failed switch
@@ -69,7 +66,7 @@ const advance = (
   input: {
     readonly sessionID: Session.ID;
     readonly from: ModelChain.Ref;
-    readonly config: FallbackConfig.Config;
+    readonly config: FallbackStore.Config;
   },
 ): Effect.Effect<ModelChain.Ref | undefined> =>
   Effect.gen(function* () {
@@ -88,11 +85,12 @@ const advance = (
 const onRetry = (
   context: Context,
   state: FallbackState.Impl,
-  config: FallbackConfig.Config,
+  current: Ref.Ref<FallbackStore.Config>,
 ): Effect.Effect<void, never, Scope.Scope> =>
   context.session
     .hook('retry', (input) =>
       Effect.gen(function* () {
+        const config = yield* Ref.get(current);
         if (!FallbackTrigger.matches(input.error, config.triggers)) return;
         const to = yield* advance(state, { sessionID: input.sessionID, from: input.model, config });
         if (to === undefined) return;
@@ -113,10 +111,11 @@ const onRetry = (
 const onFailure = (
   context: Context,
   state: FallbackState.Impl,
-  config: FallbackConfig.Config,
+  current: Ref.Ref<FallbackStore.Config>,
   event: Extract<Event, { type: 'session.execution.failed' }>,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
+    const config = yield* Ref.get(current);
     if (!FallbackTrigger.matches(event.data.error, config.triggers)) return;
     const session = yield* context.session
       .get({ sessionID: event.data.sessionID })
@@ -142,12 +141,13 @@ const onFailure = (
 const onEvents = (
   context: Context,
   state: FallbackState.Impl,
-  config: FallbackConfig.Config,
+  current: Ref.Ref<FallbackStore.Config>,
 ): Effect.Effect<void, never, Scope.Scope> =>
   context.event.subscribe().pipe(
     Stream.runForEach((event) => {
-      if (event.type === 'session.execution.failed')
-        return onFailure(context, state, config, event);
+      if (event.type === 'session.execution.failed') {
+        return onFailure(context, state, current, event);
+      }
       if (event.type === 'session.deleted') return state.forget(event.data.sessionID);
       return Effect.void;
     }),
@@ -155,32 +155,70 @@ const onEvents = (
     Effect.asVoid,
   );
 
-/** Read options and wire the hooks; an unusable chain leaves the plugin inert. */
+/** Log every issue, without claiming a chain the plugin is not using. */
+const reportIssues = (snapshot: FallbackStore.Snapshot): Effect.Effect<void> =>
+  Effect.forEach(snapshot.issues, (issue) =>
+    Effect.logWarning(
+      `[${ID}] ${FallbackStore.plain(issue.field)} ${FallbackStore.plain(issue.message)}`,
+    ),
+  ).pipe(Effect.asVoid);
+
+/** Report which source is in force, and every issue that kept a store out. */
+const report = (snapshot: FallbackStore.Snapshot): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const chain = snapshot.config.chain.map(ModelChain.label).join(' -> ');
+    if (snapshot.source === 'none' || snapshot.config.chain.length === 0) {
+      yield* Effect.logWarning(
+        `[${ID}] no fallback chain configured; write ${snapshot.path} (see mf-model-fallback status).`,
+      );
+    } else {
+      yield* Effect.logInfo(`[${ID}] chain from ${snapshot.source}: ${FallbackStore.plain(chain)}`);
+    }
+    if (snapshot.legacy) {
+      yield* Effect.logWarning(
+        `[${ID}] opencode.jsonc options are ignored while the store is valid; run mf-model-fallback migrate.`,
+      );
+    }
+    yield* reportIssues(snapshot);
+  });
+
+/** Re-resolve the store; an invalid store never replaces the last good chain. Exported for its tests. */
+export const reload = (
+  root: string,
+  options: Context['options'],
+  current: Ref.Ref<FallbackStore.Config>,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const previous = yield* Ref.get(current);
+    const next = yield* FallbackStore.resolve(root, options);
+    const adopted = FallbackStore.adopt(previous, next);
+    if (next.issues.length > 0) {
+      yield* Effect.logWarning(`[${ID}] store edit rejected; keeping the chain in force.`);
+      yield* reportIssues(next);
+      return;
+    }
+    yield* Ref.set(current, adopted);
+    yield* report(next);
+  });
+
+/** Resolve the store at activation, then register hooks and the change watcher. */
 const run = (
   context: Context,
 ): Effect.Effect<void, never, FallbackState.FallbackState | Scope.Scope> =>
   Effect.gen(function* () {
-    const config = yield* FallbackConfig.decode(context.options).pipe(
-      Effect.catch((error) =>
-        Effect.logError(`[${ID}] invalid options: ${error.reason}`).pipe(
-          Effect.as(FallbackConfig.idle),
-        ),
-      ),
-    );
-    if (config.chain.length === 0) {
-      yield* Effect.logWarning(
-        `[${ID}] no fallback chain configured; set options.chain in opencode.jsonc.`,
-      );
-      return;
-    }
-    yield* Effect.logInfo(
-      `[${ID}] fallback chain: ${config.chain.map(ModelChain.label).join(' -> ')}`,
-    );
+    const root = context.location.directory;
+    const initial = yield* FallbackStore.resolve(root, context.options);
+    yield* report(initial);
+
+    const current = yield* Ref.make(configOf(initial));
     const state = yield* FallbackState.FallbackState;
-    yield* onRetry(context, state, config);
-    yield* onEvents(context, state, config);
+    yield* onRetry(context, state, current);
+    yield* onEvents(context, state, current);
+    yield* FallbackStore.watch(root, reload(root, context.options, current)).pipe(
+      Effect.forkScoped,
+    );
   });
 
-/** Activate the plugin: `session.hook("retry")` plus the terminal-failure resume. */
+/** Activate the plugin: store-backed config, retry hook, and terminal-failure resume. */
 export const activate = (context: Context): Effect.Effect<void, never, Scope.Scope> =>
   run(context).pipe(Effect.provide(FallbackState.Default));

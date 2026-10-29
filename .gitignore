@@ -264,6 +264,13 @@ tmp/
 # --- montflow loop runtime state ---
 .agents/@montflow/loops
 
+# --- machine-local plugin configuration ---
+# A worktree's own model-fallback chain names providers/models only this
+# machine has; the host config that registers the local checkout is local too.
+.agents/@montflow/model-fallback/
+/opencode.jsonc
+/opencode.json
+
 # --- montflow session transcripts (local only) ---
 .agents/@montflow/sessions
 

@@ -11,7 +11,7 @@ picks a new one from the live catalog, or removes it — through host dialogs.
 
 ## Does not belong here
 
-- Config parsing and writes — `fallback-file`
+- The operations themselves — this face calls the CLI engines, so the dialog and
+  the binary cannot disagree
+- Store shape and precedence — `fallback-store`
 - Ranking and catalog reads — `model-catalog`
-- Anything the CLI already owns: this face calls the same modules, never a
-  second implementation

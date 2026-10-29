@@ -11,7 +11,7 @@ TUI plugins; the text stores and CLIs live in the same packages.
 - `@montflow/profiles` — profile store, `mf-profiles` CLI, `profile_execute` tool
 - `@montflow/reviews` — review series format, `mf-reviews` CLI, `review_create` tool
 - `@montflow/skills` — skill store, `mf-skills` CLI, `skill_create` / `skill_modify` tools
-- `@montflow/model-fallback` — model fallback chains: `mf-model-fallback` CLI, `/mf-fallback` dialogs, retry/resume fallback
+- `@montflow/model-fallback` — model fallback chains: owned `.agents` store, `mf-model-fallback` CLI, `/mf-fallback` dialogs, retry/resume fallback
 - `@montflow/workspace` — TUI dashboard route (grid, panels, detail views)
 
 ## Skills
