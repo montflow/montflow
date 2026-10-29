@@ -3,7 +3,7 @@ id: G001
 name: add-references-panel
 type: execution
 originator: user
-depends-on: F099
+depends-on:
 related-tasks: G002
 status: pending
 ---

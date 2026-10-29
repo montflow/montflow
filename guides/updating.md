@@ -166,3 +166,12 @@ Set any one of these to skip the automatic check entirely:
 There is no TTY detection: agents capture output, so the warning must still be
 visible without a terminal. An explicit `version --check` is the only path that
 turns staleness into a non-zero exit.
+
+## mf-references
+
+Reinstall the packaged skills and re-verify the store from the updated checkout:
+
+```bash
+bun run --cwd "$M/packages/references" cli doctor --dir "$PWD"
+bun run --cwd "$M/packages/references" cli verify --all --dir "$PWD"
+```

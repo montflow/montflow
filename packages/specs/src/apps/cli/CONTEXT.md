@@ -51,7 +51,7 @@ agents and humans:
 ```bash
 # from anywhere in the repo (workspace bin link created by the root devDependency)
 bun run --cwd packages/specs cli check
-bun run --cwd packages/specs cli mf-specs check --name ship-spec --verbose
+bun run --cwd packages/specs cli check --name ship-spec --dir $PWD --verbose
 
 # or by package script
 bun run --cwd packages/specs cli check

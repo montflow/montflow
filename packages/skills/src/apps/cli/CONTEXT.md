@@ -71,7 +71,7 @@ The interactive module is used by dispatch sessions, not a command:
 ```bash
 # from source (Bun required)
 bun run --cwd packages/skills cli list
-bun run --cwd packages/skills cli verify <name>
+bun run --cwd packages/skills cli verify <name> --dir $PWD
 
 # standalone binary — Bun runtime embedded, no install, no node
 bun run --cwd packages/skills build:cli

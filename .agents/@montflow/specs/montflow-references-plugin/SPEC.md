@@ -1,10 +1,10 @@
 ---
 name: montflow-references-plugin
-status: in-progress
+status: complete
 workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-26
-locked-phases: A, B
+locked-phases: A, B, C, D, E, F
 ---
 
 # montflow-references-plugin
@@ -109,10 +109,7 @@ fetches.
 | E001 | audit-scoped-verification       | exploratory | complete | No   |
 | E002 | fix-agents-rule-and-spec-scoping | execution  | complete | Yes  |
 | E003 | document-scoping-per-cli        | execution   | complete | Yes  |
-| E099 | review-phase                    | review      | pending | No    |
-| F001 | pull-and-reconcile               | execution   | pending | Yes   |
-| F002 | prepare-pull-request             | execution   | pending | Yes   |
-| F099 | review-phase                     | review      | pending | No    |
-| G001 | add-references-panel             | execution   | pending | Yes   |
-| G002 | wire-tui-seams                   | execution   | pending | Yes   |
-| G099 | review-phase                     | review      | pending | No    |
+| E099 | review-phase                    | review      | complete | No   |
+| F001 | pull-and-reconcile               | execution   | complete | Yes  |
+| F002 | prepare-pull-request             | execution   | complete | Yes  |
+| F099 | review-phase                     | review      | complete | No   |

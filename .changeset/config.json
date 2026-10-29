@@ -9,7 +9,8 @@
       "@montflow/specs",
       "@montflow/prompts",
       "@montflow/profiles",
-      "@montflow/reviews"
+      "@montflow/reviews",
+      "@montflow/references"
     ]
   ],
   "access": "public",

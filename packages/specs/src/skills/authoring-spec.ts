@@ -62,6 +62,6 @@ Body sections: \`## Type: <type>\`, \`## Description\`, \`## Requirements\`, \`#
 - Leave \`locked-phases:\` empty and the spec \`status: in-progress\`.
 - Ask the user with \`ask_user\` only when the decision is theirs (scope, naming, ambiguity);
   otherwise decide and proceed. Use \`notify_user\` for progress the user should see.
-- Verify before finishing: \`bun run --cwd packages/specs cli check --name <name>\` must
+- Verify before finishing: \`bun run --cwd packages/specs cli check --name <name> --dir $PWD\` must
   report zero issues.
 - Touch nothing outside \`.agents/@montflow/specs/\`.`;

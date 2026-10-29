@@ -6,7 +6,7 @@ originator: user
 depends-on:
 related-tasks:
 reviewer-profiles: effect-reviewer, generic-reviewer
-status: pending
+status: complete
 ---
 
 # Task E099: Review phase
