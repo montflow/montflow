@@ -1,10 +1,10 @@
 ---
 name: montflow-session-telemetry
-status: in-progress
+status: complete
 workspace-type: worktree
 author: Daniel Montilla
 created: 2026-10-28
-locked-phases:
+locked-phases: A, B, C
 ---
 
 # montflow-session-telemetry
@@ -55,4 +55,4 @@ and shipped the data layer. `B001`'s DOM surface is superseded by `C001`.
 | C001 | canvas-surface | exploratory | complete | No |
 | C002 | realtime-canvas | execution | complete | Yes |
 | C003 | trace-embeds | execution | complete | Yes |
-| C099 | review-phase | review | pending | No |
+| C099 | review-phase | review | complete | No |

@@ -217,10 +217,7 @@ export const run = async (options: {
         let offset = previous === undefined ? 0 : num(previous['offset']);
         const current = Tail.fingerprint(path, offset);
         const previousPrint = previous === undefined ? '' : (text(previous['fingerprint']) ?? '');
-        if (
-          size < offset ||
-          (current !== '' && previousPrint !== '' && current !== previousPrint)
-        ) {
+        if (size < offset || (current !== '' && current !== previousPrint)) {
           resetFile(db, name);
           offset = 0;
         }

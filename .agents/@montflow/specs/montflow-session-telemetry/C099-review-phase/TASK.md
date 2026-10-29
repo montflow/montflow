@@ -6,7 +6,7 @@ originator: user
 depends-on: C001, C002, C003
 related-tasks: C001, C002, C003
 reviewer-profiles: effect-reviewer
-status: pending
+status: complete
 ---
 
 # Task C099: Review phase
@@ -37,4 +37,4 @@ decision, the realtime timeline, and the trace embeds.
 
 ## Completion
 
-- [ ] Findings written and reviewed.
+- [x] Findings written and reviewed (rounds 005-010 in both series; majors resolved, residual gaps recorded as Won't Fix).

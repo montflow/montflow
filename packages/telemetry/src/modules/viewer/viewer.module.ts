@@ -64,7 +64,7 @@ const live = (
   bases: Map<string, number>,
 ) => {
   const next: Record<string, number> = {};
-  const lines: Line[] = [];
+  const lines: Array<Line & { readonly file: string }> = [];
   const resetSessions = new Set<string>();
   const resetFiles: string[] = [];
   let reset = false;
@@ -83,7 +83,7 @@ const live = (
     const result = Tail.read(path, shrunk ? 0 : cursor);
     next[name] = result.nextOffset;
     if (rewritten || shrunk) for (const line of result.lines) resetSessions.add(line.sessionID);
-    lines.push(...result.lines);
+    for (const line of result.lines) lines.push({ ...line, file: name });
   }
   return { lines, cursors: next, reset, resetSessions: [...resetSessions], resetFiles };
 };
@@ -330,9 +330,11 @@ const refreshTotals = () => {
       ? 'History unavailable: ' + historyError
       : foldError !== null
         ? 'History unavailable: ' + foldError
-        : query !== ''
-          ? 'No spans match this filter.'
-          : 'No telemetry yet. Run a session and reopen /telemetry.';
+        : spans.length === 0
+          ? 'No telemetry yet. Run a session and reopen /telemetry.'
+          : query !== ''
+            ? 'No spans match this filter.'
+            : 'No telemetry yet. Run a session and reopen /telemetry.';
   }
 };
 const fit = () => {
@@ -421,7 +423,13 @@ const renderSessions = () => {
   sessionsEl.scrollTop = scroll;
 };
 const loadSessions = async () => {
-  try { sessionList = await (await fetch('/api/sessions')).json(); } catch { sessionList = []; }
+  try {
+    const data = await (await fetch('/api/sessions')).json();
+    sessionList = Array.isArray(data) ? data : [];
+    if (!Array.isArray(data)) historyError = 'session list unavailable';
+  } catch {
+    sessionList = [];
+  }
   renderSessions();
 };
 const openSession = async (sessionID) => {
@@ -433,6 +441,7 @@ const openSession = async (sessionID) => {
   if (!history.has(sessionID)) {
     try {
       const rows = await (await fetch('/api/spans?session=' + encodeURIComponent(sessionID))).json();
+      if (!Array.isArray(rows)) throw new Error('unexpected spans response');
       history.set(sessionID, rows.map((row) => ({ ...row, type: row.type, ts: row.ts, payload: row.payload || {}, model: row.model })));
       historyError = null;
     } catch {
@@ -512,12 +521,18 @@ const poll = async () => {
     const resetFiles = body.resetFiles ?? [];
     const resetActive = active !== null && (
       (body.resetSessions ?? []).includes(active) ||
-      (history.get(active) ?? []).some((row) => resetFiles.includes(row.file))
+      (history.get(active) ?? []).some((row) => resetFiles.includes(row.file)) ||
+      (liveBySession.get(active) ?? []).some((line) => resetFiles.includes(line.file))
     );
+    if (resetFiles.length > 0) {
+      for (const [sessionID, rows] of history) {
+        history.set(sessionID, rows.filter((row) => !resetFiles.includes(row.file)));
+      }
+      for (const [sessionID, lines] of liveBySession) {
+        liveBySession.set(sessionID, lines.filter((line) => !resetFiles.includes(line.file)));
+      }
+    }
     if (resetActive && active !== null) {
-      const rows = (history.get(active) ?? []).filter((row) => !resetFiles.includes(row.file));
-      history.set(active, rows);
-      liveBySession.set(active, []);
       rebuild();
     }
     for (const line of body.lines) {
@@ -749,6 +764,13 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
         try {
           const result = live(directory, decoded.cursors ?? {}, fingerprints, bases);
           for (const line of result.lines) liveSessions.add(line.sessionID);
+          if (result.reset) {
+            try {
+              await Fold.run({ directory, database });
+            } catch {
+              // The next successful fold repairs the derived DB.
+            }
+          }
           return Response.json(result);
         } catch (cause) {
           return Response.json({ error: String(cause) }, { status: 500 });

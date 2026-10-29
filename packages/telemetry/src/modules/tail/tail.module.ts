@@ -27,10 +27,29 @@ const parse = (row: string): Line | undefined => {
   }
 };
 
+interface CachedFingerprint {
+  readonly bytes: number;
+  readonly size: number;
+  readonly mtime: number;
+  readonly hash: string;
+}
+
+const fingerprintCache = new Map<string, CachedFingerprint>();
+
 /** Prefix fingerprint: changes when a file is rewritten, stable across appends. */
 export const fingerprint = (path: string, bytes: number): string => {
   try {
     if (bytes < 16) return '';
+    const stat = Fs.statSync(path);
+    const cached = fingerprintCache.get(path);
+    if (
+      cached !== undefined &&
+      cached.bytes === bytes &&
+      cached.size === stat.size &&
+      cached.mtime === stat.mtimeMs
+    ) {
+      return cached.hash;
+    }
     const fd = Fs.openSync(path, 'r');
     try {
       const size = Fs.fstatSync(fd).size;
@@ -38,7 +57,9 @@ export const fingerprint = (path: string, bytes: number): string => {
       const length = Math.min(bytes, 64 * 1024 * 1024);
       const buffer = Buffer.alloc(length);
       Fs.readSync(fd, buffer, 0, length, 0);
-      return createHash('sha256').update(buffer).digest('hex');
+      const hash = createHash('sha256').update(buffer).digest('hex');
+      fingerprintCache.set(path, { bytes, size: stat.size, mtime: stat.mtimeMs, hash });
+      return hash;
     } finally {
       Fs.closeSync(fd);
     }
