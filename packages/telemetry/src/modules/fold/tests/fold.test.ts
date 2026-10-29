@@ -22,6 +22,15 @@ const seed = (directory: string): string => {
   return path;
 };
 
+const created = (sessionID: string, parentID?: string): string =>
+  JSON.stringify({
+    v: 1,
+    ts: 1,
+    type: 'session.created',
+    sessionID,
+    payload: { sessionID, slug: sessionID, parentID },
+  });
+
 Vitest.describe('Fold.run runtime', () => {
   Vitest.it('folds a fixture into span rows and session totals', async () => {
     await withStore(async (directory) => {
@@ -175,6 +184,26 @@ Vitest.describe('Fold.run runtime', () => {
       await Fold.run({ directory, database });
       Vitest.expect(await Fold.spans(database, 'ses_fixture')).toHaveLength(12);
       Vitest.expect((await Fold.sessions(database))[0]?.spanCount).toBe(12);
+    });
+  });
+
+  Vitest.it('records the parent session id from session.created', async () => {
+    await withStore(async (directory) => {
+      writeFileSync(
+        join(directory, '2026-10-28.ndjson'),
+        `${created('ses_parent')}
+${created('ses_child', 'ses_parent')}
+`,
+      );
+      const database = join(directory, 'telemetry.db');
+      await Fold.run({ directory, database });
+      const sessions = await Fold.sessions(database);
+      Vitest.expect(sessions.find((session) => session.sessionID === 'ses_child')?.parentID).toBe(
+        'ses_parent',
+      );
+      Vitest.expect(
+        sessions.find((session) => session.sessionID === 'ses_parent')?.parentID,
+      ).toBeNull();
     });
   });
 

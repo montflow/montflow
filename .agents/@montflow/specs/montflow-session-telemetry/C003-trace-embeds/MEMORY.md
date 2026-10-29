@@ -24,7 +24,7 @@ bytes }` by default.
     no network origin and no third-party logo files.
 - 20k run after C003: first paint 623.2ms, pan p95 19ms / max 31.1ms, live
   append 257ms, heap 14.1MB, no page errors.
-- Tests: 174 total (157 vitest + 17 bun); mapping/fallback/local-asset budget
+- Tests: 176 total (159 vitest + 17 bun); mapping/fallback/local-asset budget
   covered in `modules/icons/tests/icons.test.ts`; page assertions cover the
   icon layer and inspector.
 

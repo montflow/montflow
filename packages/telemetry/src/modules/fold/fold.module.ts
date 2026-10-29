@@ -8,6 +8,7 @@ import * as Tail from '../tail/index.js';
 /** One folded history session. */
 export interface SessionRow {
   readonly sessionID: string;
+  readonly parentID: string | null;
   readonly title: string | null;
   readonly agent: string | null;
   readonly model: string | null;
@@ -43,10 +44,9 @@ const SCHEMA_VERSION = 1;
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS files (path TEXT PRIMARY KEY, offset INTEGER NOT NULL, fingerprint TEXT NOT NULL DEFAULT '');`,
-  'CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, title TEXT, agent TEXT, model TEXT, started_at INTEGER, ended_at INTEGER, span_count INTEGER NOT NULL DEFAULT 0, cost_usd REAL NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0);',
+  'CREATE TABLE IF NOT EXISTS sessions (session_id TEXT PRIMARY KEY, parent_id TEXT, title TEXT, agent TEXT, model TEXT, started_at INTEGER, ended_at INTEGER, span_count INTEGER NOT NULL DEFAULT 0, cost_usd REAL NOT NULL DEFAULT 0, input_tokens INTEGER NOT NULL DEFAULT 0, output_tokens INTEGER NOT NULL DEFAULT 0);',
   "CREATE TABLE IF NOT EXISTS spans (id INTEGER PRIMARY KEY AUTOINCREMENT, file TEXT NOT NULL DEFAULT '', session_id TEXT NOT NULL, ts INTEGER NOT NULL, type TEXT NOT NULL, agent TEXT, model TEXT, cost REAL, input_tokens INTEGER, output_tokens INTEGER, payload TEXT NOT NULL);",
   'CREATE INDEX IF NOT EXISTS spans_session ON spans(session_id, ts, id);',
-  'CREATE INDEX IF NOT EXISTS spans_file ON spans(file);',
 ].join('\n');
 
 const num = (value: Sqlite.SqlValue | undefined, fallback = 0): number => {
@@ -94,6 +94,8 @@ const applySpan = (db: Sqlite.Database, line: Line, fileName: string): void => {
     line.type === 'session.created'
       ? (stringField(line.payload, 'title') ?? stringField(line.payload, 'slug') ?? null)
       : null;
+  const parentID =
+    line.type === 'session.created' ? (stringField(line.payload, 'parentID') ?? null) : null;
 
   db.run(
     'INSERT INTO spans (file, session_id, ts, type, agent, model, cost, input_tokens, output_tokens, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -111,9 +113,10 @@ const applySpan = (db: Sqlite.Database, line: Line, fileName: string): void => {
     ],
   );
   db.run(
-    `INSERT INTO sessions (session_id, title, agent, model, started_at, ended_at, span_count, cost_usd, input_tokens, output_tokens)
-     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+    `INSERT INTO sessions (session_id, parent_id, title, agent, model, started_at, ended_at, span_count, cost_usd, input_tokens, output_tokens)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
      ON CONFLICT(session_id) DO UPDATE SET
+       parent_id = COALESCE(excluded.parent_id, sessions.parent_id),
        title = COALESCE(excluded.title, sessions.title),
        agent = COALESCE(excluded.agent, sessions.agent),
        model = COALESCE(excluded.model, sessions.model),
@@ -125,6 +128,7 @@ const applySpan = (db: Sqlite.Database, line: Line, fileName: string): void => {
        output_tokens = sessions.output_tokens + excluded.output_tokens`,
     [
       line.sessionID,
+      parentID,
       title,
       line.agent ?? null,
       model,
@@ -138,12 +142,15 @@ const applySpan = (db: Sqlite.Database, line: Line, fileName: string): void => {
 };
 
 const rebuildSession = (db: Sqlite.Database, sessionID: string): void => {
-  const previous = db.all('SELECT title FROM sessions WHERE session_id = ?', [sessionID])[0];
+  const previous = db.all('SELECT title, parent_id FROM sessions WHERE session_id = ?', [
+    sessionID,
+  ])[0];
   const title = previous === undefined ? null : text(previous['title']);
+  const parentID = previous === undefined ? null : text(previous['parent_id']);
   db.run('DELETE FROM sessions WHERE session_id = ?', [sessionID]);
   db.run(
-    `INSERT INTO sessions (session_id, title, agent, model, started_at, ended_at, span_count, cost_usd, input_tokens, output_tokens)
-     SELECT session_id, NULL, MAX(agent), MAX(model), MIN(ts), MAX(ts), COUNT(*),
+    `INSERT INTO sessions (session_id, parent_id, title, agent, model, started_at, ended_at, span_count, cost_usd, input_tokens, output_tokens)
+     SELECT session_id, NULL, NULL, MAX(agent), MAX(model), MIN(ts), MAX(ts), COUNT(*),
             COALESCE(SUM(cost), 0), COALESCE(SUM(input_tokens), 0), COALESCE(SUM(output_tokens), 0)
      FROM spans WHERE session_id = ? GROUP BY session_id`,
     [sessionID],
@@ -152,8 +159,15 @@ const rebuildSession = (db: Sqlite.Database, sessionID: string): void => {
     db.run('UPDATE sessions SET title = ? WHERE session_id = ?', [title, sessionID]);
     const present = db.all('SELECT session_id FROM sessions WHERE session_id = ?', [sessionID])[0];
     if (present === undefined) {
-      db.run('INSERT INTO sessions (session_id, title) VALUES (?, ?)', [sessionID, title]);
+      db.run('INSERT INTO sessions (session_id, parent_id, title) VALUES (?, ?, ?)', [
+        sessionID,
+        parentID,
+        title,
+      ]);
     }
+  }
+  if (parentID !== null) {
+    db.run('UPDATE sessions SET parent_id = ? WHERE session_id = ?', [parentID, sessionID]);
   }
 };
 
@@ -173,6 +187,10 @@ const ensureSchema = (db: Sqlite.Database): void => {
   const columns = db.all('PRAGMA table_info(spans)').map((row) => text(row['name']));
   if (!columns.includes('file'))
     db.exec("ALTER TABLE spans ADD COLUMN file TEXT NOT NULL DEFAULT '';");
+  db.exec('CREATE INDEX IF NOT EXISTS spans_file ON spans(file);');
+  const sessionColumns = db.all('PRAGMA table_info(sessions)').map((row) => text(row['name']));
+  if (!sessionColumns.includes('parent_id'))
+    db.exec('ALTER TABLE sessions ADD COLUMN parent_id TEXT;');
   const fileColumns = db.all('PRAGMA table_info(files)').map((row) => text(row['name']));
   if (!fileColumns.includes('fingerprint'))
     db.exec("ALTER TABLE files ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';");
@@ -253,6 +271,7 @@ export const run = async (options: {
 
 const sessionOf = (row: Sqlite.Row): SessionRow => ({
   sessionID: text(row['session_id']) ?? '',
+  parentID: text(row['parent_id']),
   title: text(row['title']),
   agent: text(row['agent']),
   model: text(row['model']),

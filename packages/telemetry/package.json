@@ -20,6 +20,9 @@
     "url": "git+https://github.com/montflow/montflow.git",
     "directory": "packages/telemetry"
   },
+  "bin": {
+    "mf-telemetry": "./src/apps/cli/main.ts"
+  },
   "type": "module",
   "exports": {
     "./package.json": "./package.json",
@@ -27,6 +30,7 @@
     "./server": "./src/server.ts"
   },
   "scripts": {
+    "cli": "bun run src/apps/cli/main.ts",
     "format:check": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "lint:check": "oxlint --deny-warnings .",

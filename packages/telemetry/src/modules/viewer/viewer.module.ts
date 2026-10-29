@@ -409,16 +409,33 @@ const renderSessions = () => {
   sessionsEl.replaceChildren();
   const ids = new Set(sessionList.map((session) => session.sessionID));
   for (const id of liveBySession.keys()) {
-    if (!ids.has(id)) { sessionList.push({ sessionID: id, title: null }); ids.add(id); }
+    if (!ids.has(id)) { sessionList.push({ sessionID: id, parentID: null, title: null }); ids.add(id); }
   }
-  if (active !== null && !ids.has(active)) sessionList.push({ sessionID: active, title: null });
+  if (active !== null && !ids.has(active)) sessionList.push({ sessionID: active, parentID: null, title: null });
+  const children = new Map();
+  const roots = [];
   for (const session of sessionList) {
-    const link = document.createElement('a');
-    link.href = '#';
-    link.textContent = session.title || session.sessionID;
-    link.className = session.sessionID === active ? 'active' : '';
-    link.onclick = (event) => { event.preventDefault(); void openSession(session.sessionID); };
-    sessionsEl.appendChild(link);
+    const parent = session.parentID;
+    if (typeof parent === 'string' && ids.has(parent) && parent !== session.sessionID) {
+      const list = children.get(parent) ?? [];
+      list.push(session);
+      children.set(parent, list);
+    } else {
+      roots.push(session);
+    }
+  }
+  for (const session of roots) {
+    const add = (item, depth) => {
+      const link = document.createElement('a');
+      link.href = '#';
+      link.textContent = (depth > 0 ? '↳ ' : '') + (item.title || item.sessionID);
+      link.style.paddingLeft = (6 + depth * 14) + 'px';
+      link.className = item.sessionID === active ? 'active' : '';
+      link.onclick = (event) => { event.preventDefault(); void openSession(item.sessionID); };
+      sessionsEl.appendChild(link);
+      for (const child of children.get(item.sessionID) ?? []) add(child, depth + 1);
+    };
+    add(session, 0);
   }
   sessionsEl.scrollTop = scroll;
 };
@@ -712,6 +729,7 @@ export const start = async (options: ViewerOptions): Promise<Viewer> => {
             if (known.has(sessionID)) continue;
             stored.push({
               sessionID,
+              parentID: null,
               title: null,
               agent: null,
               model: null,

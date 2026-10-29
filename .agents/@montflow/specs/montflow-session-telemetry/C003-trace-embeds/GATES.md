@@ -3,7 +3,7 @@
 - [x] formatting passes (`bun run --cwd packages/telemetry format:check` — 44 files)
 - [x] linting passes (`bun run --cwd packages/telemetry lint:check` — no warnings)
 - [x] typecheck passes (`bun run --cwd packages/telemetry ts:check`)
-- [x] tests pass (`bun run --cwd packages/telemetry test` — 174 tests: 157 vitest + 17 bun)
+- [x] tests pass (`bun run --cwd packages/telemetry test` — 176 tests: 159 vitest + 17 bun)
 
 ## Stage 1: Identity
 
