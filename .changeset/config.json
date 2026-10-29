@@ -17,6 +17,7 @@
   "updateInternalDependencies": "patch",
   "ignore": [
     "@montflow/linting",
+    "@montflow/model-fallback",
     "@montflow/opencode",
     "@montflow/stlx",
     "@montflow/tooling-pack",

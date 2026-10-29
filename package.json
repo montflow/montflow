@@ -31,8 +31,9 @@
     "mf:check:prompts": "bun run --cwd packages/prompts cli verify --all --dir $PWD && bun run --cwd packages/prompts cli doctor --check --dir $PWD",
     "mf:check:specs": "bun run --cwd packages/specs cli check --dir $PWD && bun run --cwd packages/specs cli doctor --check --dir $PWD",
     "mf:check:profiles": "bun run --cwd packages/profiles cli verify --dir $PWD",
+    "mf:check:model-fallback": "bun run --cwd packages/model-fallback cli doctor --check --dir $PWD && bun run --cwd packages/model-fallback cli status --dir $PWD && bun run --cwd packages/model-fallback cli status --check --dir $PWD/packages/model-fallback/fixtures/valid && (bun run --cwd packages/model-fallback cli status --dir $PWD/packages/model-fallback/fixtures/invalid >/dev/null 2>&1; test $? -eq 1)",
     "mf:check:reviews": "bun run --cwd packages/reviews cli verify --all --dir $PWD && bun run --cwd packages/reviews cli doctor --check --dir $PWD",
-    "mf:check": "bun run mf:check:release && bun run mf:check:skills && bun run mf:check:prompts && bun run mf:check:specs && bun run mf:check:profiles && bun run mf:check:reviews && bun run mf:check:naming",
+    "mf:check": "bun run mf:check:release && bun run mf:check:skills && bun run mf:check:prompts && bun run mf:check:specs && bun run mf:check:profiles && bun run mf:check:model-fallback && bun run mf:check:reviews && bun run mf:check:naming",
     "mf:gate:fast": "turbo lint:check && turbo format:check && turbo ts:check && bun run mf:check",
     "mf:gate": "turbo lint:check && turbo format:check && turbo ts:check && turbo test && turbo test:tui && turbo smoke && bun run mf:check",
     "hooks:install": "lefthook install",
@@ -44,6 +45,7 @@
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
+    "@montflow/model-fallback": "workspace:*",
     "lefthook": "2.1.10",
     "oxfmt": "0.63.0",
     "oxlint": "1.78.0",

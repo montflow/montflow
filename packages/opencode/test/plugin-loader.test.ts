@@ -47,6 +47,7 @@ const promptsTarget = targetOf('prompts');
 const profilesTarget = targetOf('profiles');
 const reviewsTarget = targetOf('reviews');
 const skillsTarget = targetOf('skills');
+const modelFallbackTarget = targetOf('model-fallback');
 
 /** The workspace lives under `apps/`, so it needs one more segment than `packages/*`. */
 const workspaceTarget = {
@@ -405,18 +406,19 @@ test('the /specs slash command registers in the host command transform', async (
   expect(host.commands).toEqual(['mf-specs']);
 });
 
-test('prompts, profiles, reviews, and skills expose native server and TUI faces', async () => {
+test('prompts, profiles, reviews, skills, and model-fallback expose native server and TUI faces', async () => {
   const targets = [
     ['prompts', promptsTarget],
     ['profiles', profilesTarget],
     ['reviews', reviewsTarget],
     ['skills', skillsTarget],
+    ['model-fallback', modelFallbackTarget],
   ] as const;
   await Promise.all(
     targets.map(async ([id, target]) => {
       const entries = Host.resolve(target);
       expect(entries.server?.endsWith('/src/server.ts')).toBe(true);
-      expect(entries.tui?.endsWith('/src/tui.ts')).toBe(true);
+      expect(/\/src\/tui\.tsx?$/.test(entries.tui ?? '')).toBe(true);
       const server = await load<ServerModule>(entries.server, 'server');
       const tui = await load<TuiModule>(entries.tui, 'tui');
       expect(server.default.id).toBe(id);
