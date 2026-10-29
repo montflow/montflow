@@ -16,7 +16,7 @@ status: complete
 
 Implement the surface chosen in `C001-canvas-surface/MEMORY.md` (§ Handoff): a
 realtime trace timeline that grows while a session runs. Keep the existing data
-layer (`tail`, `fold`, `sqlite`) and the `/telemetry` lifecycle; replace the
+layer (`tail`, `fold`, `sqlite`) and the `/mf-telemetry` lifecycle; replace the
 phase B DOM row list with the canvas renderer.
 
 ## Requirements
@@ -35,7 +35,7 @@ phase B DOM row list with the canvas renderer.
   and pooled text; no per-span DOM nodes.
 - Expose the identity and hit-test hooks C003 needs: a per-span icon slot and a
   pointer/keyboard lookup that returns the span under the cursor.
-- `/telemetry` remains the only entry point, the viewer still starts only on
+- `/mf-telemetry` remains the only entry point, the viewer still starts only on
   explicit action, and close/idle still stops the loopback listener.
 - Collection is untouched: the viewer never writes NDJSON or authoritative
   state. Carry the unresolved phase B data-layer findings into this task
@@ -49,6 +49,6 @@ phase B DOM row list with the canvas renderer.
 - [x] The chosen canvas surface renders a session timeline with lanes, axis, zoom, pan, and minimap.
 - [x] A running session appends spans within one second without a full reload; follow-tail pauses on manual scroll and resumes explicitly.
 - [x] The 20k acceptance test in `C001-canvas-surface/MEMORY.md` passes.
-- [x] `/telemetry` starts and stops the viewer with no process left behind; nothing listens before the command.
+- [x] `/mf-telemetry` starts and stops the viewer with no process left behind; nothing listens before the command.
 - [x] The data layer is unchanged and the ingest isolation tests still pass.
 - [x] `bun run --cwd packages/telemetry test ts:check lint:check format:check` passes.

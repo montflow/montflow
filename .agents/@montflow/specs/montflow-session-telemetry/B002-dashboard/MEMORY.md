@@ -1,13 +1,13 @@
 # Memory
 
 > **Superseded by C002.** The DOM renderer is replaced by the realtime canvas
-> timeline; the data layer, `/telemetry` lifecycle, and isolation remain in
+> timeline; the data layer, /mf-telemetry` lifecycle, and isolation remain in
 > force. See `C002-realtime-canvas`.
 
 ## Context
 
 Implement the surface chosen in `B001-render-surface/MEMORY.md` (§ Handoff): an
-on-demand `Bun.serve` viewer with a virtualized list, started by `/telemetry`,
+on-demand `Bun.serve` viewer with a virtualized list, started by /mf-telemetry`,
 plus the surface-independent data layer (NDJSON tail + SQLite fold).
 
 ## Progress
@@ -45,7 +45,7 @@ plus the surface-independent data layer (NDJSON tail + SQLite fold).
 
 ### Shape
 
-- `/telemetry` (registered by `setup` through `context.command`) dynamically
+- /mf-telemetry` (registered by `setup` through `context.command`) dynamically
   imports `modules/viewer` (so the ingest path stays free of the viewer), starts
   a loopback server in-process, and hands the URL to `xdg-open`/`open`/`start`.
   Re-running the command reopens the active viewer URL; cleanup stops it.
@@ -93,8 +93,8 @@ plus the surface-independent data layer (NDJSON tail + SQLite fold).
 - **Viewer lifecycle is in-process**, not a dedicated child (B001's note
   proposed a child). The packaged artifact only emits `server.js`/`index.js`,
   so a child entry cannot survive `pack:plugins`; running the loopback server in
-  the plugin process keeps `/telemetry` working on the shipped install and
-  removes the launcher/orphan class of defects. `/telemetry` still starts it
+  the plugin process keeps /mf-telemetry` working on the shipped install and
+  removes the launcher/orphan class of defects. /mf-telemetry` still starts it
   only on explicit action, and close/idle stops the listener.
 - **Close uses a 10s grace period** so a refresh can re-heartbeat and cancel
   the shutdown. Closing a tab leaves only that listener for at most 10s.
@@ -106,6 +106,6 @@ plus the surface-independent data layer (NDJSON tail + SQLite fold).
   exercised under vitest. Expected; the Bun runtime uses `bun:sqlite`.
 - The real command evidence used a standalone server and
   `POST /api/session/{id}/command` rather than the interactive TUI: `opencode
-  run "/telemetry"` sends the text as a prompt, it does not invoke the command.
+  run "/mf-telemetry"` sends the text as a prompt, it does not invoke the command.
 - `telemetry.db` is written by the viewer's fold. It is a derived cache of the
   NDJSON, never authoritative, and can be deleted without data loss.

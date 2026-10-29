@@ -85,7 +85,7 @@ Vitest.describe('Server.setup runtime', () => {
     });
   });
 
-  Vitest.it('registers /telemetry and disposes it on cleanup', async () => {
+  Vitest.it('registers /mf-telemetry and disposes it on cleanup', async () => {
     await withTemp(async (directory) => {
       const registered: CommandDefinition[] = [];
       let disposed = false;
@@ -103,7 +103,9 @@ Vitest.describe('Server.setup runtime', () => {
         },
       };
       const cleanup = await setup(context);
-      Vitest.expect(registered.map((definition) => definition.name)).toStrictEqual(['telemetry']);
+      Vitest.expect(registered.map((definition) => definition.name)).toStrictEqual([
+        'mf-telemetry',
+      ]);
       Vitest.expect(registered[0]?.execute).toBeTypeOf('function');
       if (cleanup !== undefined) await cleanup();
       Vitest.expect(disposed).toBe(true);

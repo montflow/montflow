@@ -34,7 +34,7 @@ Candidates to evaluate, at minimum:
 - Record the results in `B001-render-surface/MEMORY.md` (§ Handoff): the matrix, the measured numbers, the chosen surface, the rejected reasons, and the concrete acceptance test B002 must pass.
 - The decision names how large traces stay usable: virtualization strategy, row budget per frame, and what is collapsed by default.
 - The decision names the on-demand lifecycle: what starts the viewer, what stops it, and the idle timeout.
-- The decision must keep `/telemetry` as the single entry point, whatever the surface.
+- The decision must keep /mf-telemetry` as the single entry point, whatever the surface.
 - No production code is written in this task.
 
 ## Completion

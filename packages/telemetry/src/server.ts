@@ -51,7 +51,7 @@ const readEnvironment = (): Environment => {
 /* oxlint-enable montflow/no-process-env */
 
 /**
- * Start collection and register `/telemetry`. Collection is one in-process
+ * Start collection and register `/mf-telemetry`. Collection is one in-process
  * subscription appending NDJSON; the viewer is spawned only when the command
  * runs. Nothing listens and nothing is spawned at setup.
  */
@@ -118,8 +118,8 @@ export const setup = async (context: HostSlice): Promise<Cleanup> => {
       try {
         const registration = await context.command.transform((editor) => {
           editor.add({
-            name: 'telemetry',
-            description: 'Open /telemetry: the live trace and history viewer for this session.',
+            name: 'mf-telemetry',
+            description: 'Open /mf-telemetry: the live trace and history viewer for this session.',
             execute: async (input) => {
               try {
                 const { open } = await import('./apps/viewer/index.js');

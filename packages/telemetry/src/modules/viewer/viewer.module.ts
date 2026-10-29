@@ -121,7 +121,7 @@ export const page = (sessionID: string | undefined): string => `<!doctype html>
   <aside><h1>sessions</h1><div id="sessions"></div></aside>
   <main>
     <header><strong id="title">live</strong><input id="filter" placeholder="filter spans" /><button id="follow">following</button><span id="totals"></span></header>
-    <div id="trace" tabindex="0"><div id="tip" hidden></div><div id="empty" class="empty">No telemetry yet. Run a session and reopen /telemetry.</div></div>
+    <div id="trace" tabindex="0"><div id="tip" hidden></div><div id="empty" class="empty">No telemetry yet. Run a session and reopen /mf-telemetry.</div></div>
     <div id="detail" role="dialog" aria-label="Span detail" tabindex="-1" hidden><button id="close-detail">close</button><button id="copy-detail">copy</button><img id="detail-icon" width="14" height="14" alt="" style="vertical-align:middle;margin-left:8px" /><pre id="detail-body"></pre></div>
   </main>
 </div>
@@ -331,10 +331,10 @@ const refreshTotals = () => {
       : foldError !== null
         ? 'History unavailable: ' + foldError
         : spans.length === 0
-          ? 'No telemetry yet. Run a session and reopen /telemetry.'
+          ? 'No telemetry yet. Run a session and reopen /mf-telemetry.'
           : query !== ''
             ? 'No spans match this filter.'
-            : 'No telemetry yet. Run a session and reopen /telemetry.';
+            : 'No telemetry yet. Run a session and reopen /mf-telemetry.';
   }
 };
 const fit = () => {

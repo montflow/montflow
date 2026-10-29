@@ -7,7 +7,7 @@
 
 ## Stage 1: Surface
 
-- [x] `/telemetry` opens the surface chosen in `B001-render-surface/MEMORY.md` (§ Handoff) (real OpenCode server: `POST /api/session/{id}/command` with `name: telemetry` returned 200; the fake `xdg-open` received a `http://127.0.0.1:PORT/` URL that served the viewer with HTTP 200; the in-process viewer left only the OpenCode server listener after close)
+- [x] /mf-telemetry` opens the surface chosen in `B001-render-surface/MEMORY.md` (§ Handoff) (real OpenCode server: `POST /api/session/{id}/command` with `name: telemetry` returned 200; the fake `xdg-open` received a `http://127.0.0.1:PORT/` URL that served the viewer with HTTP 200; the in-process viewer left only the OpenCode server listener after close)
 - [x] a 20k-span fixture meets the recorded acceptance test (first row 129.7ms ≤ 1000ms; 60 rows / 81 nodes ≤ budget; scroll avg 16.67ms, p95 16.8ms, max 16.8ms, 0 frames over 20ms; heap 11.5MB ≤ 50MB; live append visible in 303ms ≤ 1000ms; worst observed first row across runs 237ms)
 - [x] closing the viewer leaves no process behind (no separate viewer process exists; `POST /close` closes the loopback listener after the 10s grace period, and `viewer.test.ts` covers close, idle, and the refresh-cancelled close)
 - [x] nothing listens before the user asks (setup only subscribes and registers the command; `Bun.serve` exists only in the viewer module, reached by a dynamic import from the command, and the isolation test keeps it out of the ingest path)

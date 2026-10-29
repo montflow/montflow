@@ -1,6 +1,6 @@
 ## Stage 0: Verification
 
-- [x] formatting passes (`bun run --cwd packages/telemetry format:check` — 44 files)
+- [x] formatting passes (`bun run --cwd packages/telemetry format:check` — 47 files)
 - [x] linting passes (`bun run --cwd packages/telemetry lint:check` — no warnings)
 - [x] typecheck passes (`bun run --cwd packages/telemetry ts:check`)
 - [x] tests pass (`bun run --cwd packages/telemetry test` — 176 tests: 159 vitest + 17 bun)
@@ -21,7 +21,7 @@
 
 ## Stage 3: Integration and lifecycle
 
-- [x] `/telemetry` starts the viewer and opens the current session; history still renders after NDJSON pruning (existing fold/viewer tests)
+- [x] `/mf-telemetry` starts the viewer and opens the current session; history still renders after NDJSON pruning (existing fold/viewer tests)
 - [x] close and the idle timeout stop the listener; nothing listens before the command (viewer lifecycle tests; real command check)
 - [x] the shell exposes session list, filter, detail inspector, and controls without blocking the canvas
 

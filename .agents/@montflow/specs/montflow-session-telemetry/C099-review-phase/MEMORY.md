@@ -32,7 +32,7 @@ series ran rounds 005-010 (`montflow-session-telemetry` and
 
 ## Handoff
 
-- Phase C is the shipping surface. `/telemetry` starts the in-process viewer;
+- Phase C is the shipping surface. /mf-telemetry` starts the in-process viewer;
   the data layer, collector isolation, and lifecycle are unchanged.
 - The packaged artifact carries `pixi.js`; the viewer serves `/pixi.mjs` from
   the installed dependency and the page from `server.js`.

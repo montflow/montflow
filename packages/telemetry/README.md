@@ -19,11 +19,11 @@ TS
 
 For a single project, put the same file under `<project>/.opencode/plugins/telemetry/index.ts`.
 Confirm collection by checking `~/.local/share/opencode/telemetry/YYYY-MM-DD.ndjson`
-after a session, or `/telemetry` inside OpenCode.
+after a session, or `/mf-telemetry` inside OpenCode.
 
 ## Open the trace
 
-- Inside OpenCode: `/telemetry` (opens the current session).
+- Inside OpenCode: `/mf-telemetry` (opens the current session).
 - From a shell after `cd packages/telemetry && bun link`:
   `mf-telemetry` opens the newest folded session, or
   `mf-telemetry --session <id>` / `--directory <dir>` / `--no-open`.

@@ -46,7 +46,7 @@ Candidates: OpenTUI panel, static HTML export, `Bun.serve` browser UI, native we
 
 ### Decision
 
-**On-demand web UI**: `/telemetry` starts a dedicated local viewer process that
+**On-demand web UI**: /mf-telemetry` starts a dedicated local viewer process that
 serves one virtualized page on `127.0.0.1:0` and opens it in the default
 browser. The page is the single surface for both the live session tail and the
 `telemetry.db` history view.
@@ -75,7 +75,7 @@ browser. The page is the single surface for both the live session tail and the
   highest development cost for the axes this viewer needs, not because it is
   too slow.
 - **Static HTML export**: 2.87MB per session and 35ms average scroll at 20k
-  (84/121 frames over budget). Not live, so `/telemetry` could not show a
+  (84/121 frames over budget). Not live, so /mf-telemetry` could not show a
   running session; rejected for the live view, not for size alone.
 - **Native webview**: `webview-bun` is only 458KB but needs WebKitGTK (170MB
   on disk) and a native binding; Electrobun bundles its own runtime and build
@@ -98,13 +98,13 @@ browser. The page is the single surface for both the live session tail and the
 
 ### On-demand lifecycle
 
-- Started only by `/telemetry`: spawn a dedicated Bun viewer process, bind
+- Started only by /mf-telemetry`: spawn a dedicated Bun viewer process, bind
   `Bun.serve` to `127.0.0.1:0` (random loopback port), open
   `http://127.0.0.1:<port>/` through the platform opener, print the URL.
 - Stopped by the page's `pagehide` beacon, or after **5 minutes** without a
   heartbeat (page pings every 30s). The child process closes the listener and
   exits; nothing listens before the command and no process survives close.
-- `/telemetry` remains the only entry point for both live and history views.
+- /mf-telemetry` remains the only entry point for both live and history views.
 
 ### B002 acceptance test (pass condition)
 
@@ -117,7 +117,7 @@ browser. The page is the single surface for both the live session tail and the
    lifecycle, and the browser numbers are recorded in B002's MEMORY.
 4. **JS heap ≤ 50MB** at 20k spans (measured 3.0MB).
 5. An event appended to the live NDJSON file appears in the page **≤ 1000ms**.
-6. No listener before `/telemetry`; after close or 5-minute idle, the port is
+6. No listener before /mf-telemetry`; after close or 5-minute idle, the port is
    closed and the viewer PID is gone **≤ 5s**.
 7. Empty or absent store renders an explicit empty state, not a throw;
    a session whose NDJSON has been pruned still renders from `telemetry.db`.

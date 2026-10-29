@@ -12,7 +12,7 @@ locked-phases: A, B, C
 ## Description
 
 Headless OpenCode session telemetry: in-process event ingest to a local NDJSON
-store and a derived SQLite history, plus `/telemetry`, a single on-demand
+store and a derived SQLite history, plus `/mf-telemetry`, a single on-demand
 viewer for the entire trace of a session.
 
 Collection must cost nothing to run: no collector, no daemon, no port, no
