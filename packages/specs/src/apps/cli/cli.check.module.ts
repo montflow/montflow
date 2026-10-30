@@ -1,7 +1,7 @@
 import { Console, Effect, FileSystem, Option, Result as EffectResult } from 'effect';
 import { Command, Flag } from 'effect/cli';
 
-import { PHASE_PATTERN } from '../../modules/spec/index.js';
+import { PHASE_PATTERN, parseSpecFile } from '../../modules/spec/index.js';
 
 import {
   CODES,
@@ -84,6 +84,8 @@ export interface CheckOptions {
   readonly strict?: boolean;
   /** Read a catalogue file and cross-check config entries against it. */
   readonly catalog?: string;
+  /** Fail a spec whose SPEC.md status is not complete. */
+  readonly requireComplete?: boolean;
 }
 
 /** One spec's findings, before reduction into a report. */
@@ -396,6 +398,19 @@ export const check = (
         const review = yield* store.reviewSeries(root, name);
         const result = verifySpecTree(snapshot, { series: review, requireRounds: false });
         const issues: Array<Issue> = result.issues.map(withSpecLayers);
+        if (options.requireComplete === true) {
+          const specFile = snapshot.files.find((entry) => entry.path === 'SPEC.md');
+          const spec = specFile === undefined ? undefined : parseSpecFile(specFile.content);
+          if (spec?.status !== 'complete') {
+            const status = spec?.status ?? 'unreadable';
+            issues.push({
+              code: 'spec.incomplete',
+              severity: 'error',
+              field: 'status',
+              message: `Spec '${snapshot.name}' is not complete (status: '${status}'); finish it or drop the 'Spec: ${snapshot.name}' trailer.`,
+            });
+          }
+        }
         if (profilesRootExists) {
           for (const file of snapshot.files) {
             if (!file.path.endsWith('TASK.md')) continue;
@@ -642,6 +657,10 @@ export const checkCommand = Command.make(
         Flag.withDescription('Read a catalogue file and cross-check config entries against it.'),
       ),
     ),
+    requireComplete: Flag.Boolean('require-complete').pipe(
+      Flag.withDescription('Fail unless every checked spec status is complete.'),
+      Flag.withDefault(false),
+    ),
   },
   (config) =>
     runDiagnosed(
@@ -651,11 +670,31 @@ export const checkCommand = Command.make(
         const options: CheckOptions =
           name === undefined
             ? catalog === undefined
-              ? { concurrency: config.concurrency, strict: config.strict }
-              : { concurrency: config.concurrency, strict: config.strict, catalog }
+              ? {
+                  concurrency: config.concurrency,
+                  strict: config.strict,
+                  requireComplete: config.requireComplete,
+                }
+              : {
+                  concurrency: config.concurrency,
+                  strict: config.strict,
+                  catalog,
+                  requireComplete: config.requireComplete,
+                }
             : catalog === undefined
-              ? { name, concurrency: config.concurrency, strict: config.strict }
-              : { name, concurrency: config.concurrency, strict: config.strict, catalog };
+              ? {
+                  name,
+                  concurrency: config.concurrency,
+                  strict: config.strict,
+                  requireComplete: config.requireComplete,
+                }
+              : {
+                  name,
+                  concurrency: config.concurrency,
+                  strict: config.strict,
+                  catalog,
+                  requireComplete: config.requireComplete,
+                };
         const report = yield* check(storeDirOf(config.dir), options);
         yield* Console.log(renderCheck(report, config.verbose));
         const exit = checkExitCode(report);
