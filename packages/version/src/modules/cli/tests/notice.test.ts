@@ -118,7 +118,7 @@ Vitest.describe('cli update notice runtime', () => {
       const stale = runList(home, workspace);
 
       Vitest.expect(stale.status).toBe(0);
-      Vitest.expect(stale.stderr).toContain(`mf-skills 0.0.1 is behind 9.9.9 in ${REPO_ROOT}`);
+      Vitest.expect(stale.stderr).toContain(`mf-skills 0.0.2 is behind 9.9.9 in ${REPO_ROOT}`);
       Vitest.expect(stale.stderr).toContain('guides/updating.md#mf-skills');
       Vitest.expect(stale.stderr.trim().split('\n')).toHaveLength(1);
     }),
@@ -197,7 +197,7 @@ Vitest.describe('cli update notice runtime', () => {
       const result = runCli(home, ['show', 'missing', '--dir', workspace]);
 
       Vitest.expect(result.status).not.toBe(0);
-      Vitest.expect(result.stderr).toContain('mf-skills 0.0.1 is behind 9.9.9');
+      Vitest.expect(result.stderr).toContain('mf-skills 0.0.2 is behind 9.9.9');
     }),
   );
 });
@@ -265,16 +265,16 @@ Vitest.describe('version --check runtime', () => {
         git(['init', '-b', 'main']);
         git(['add', '.']);
         git(['-c', 'user.name=T', '-c', 'user.email=t@example.com', 'commit', '-m', 'one']);
-        git(['tag', '@montflow/skills@0.0.1']);
+        git(['tag', '@montflow/skills@0.0.2']);
 
         const current = runCli(home, ['version', '--check', '--remote', repo]);
         Vitest.expect(current.status).toBe(0);
         Vitest.expect(current.stdout).toContain('current');
 
-        git(['tag', '@montflow/skills@0.0.2']);
+        git(['tag', '@montflow/skills@0.0.3']);
         const behind = runCli(home, ['version', '--check', '--remote', repo]);
         Vitest.expect(behind.status).toBe(1);
-        Vitest.expect(behind.stdout).toContain('behind 0.0.2');
+        Vitest.expect(behind.stdout).toContain('behind 0.0.3');
       } finally {
         await rm(repo, { recursive: true, force: true });
         await rm(home, { recursive: true, force: true });
