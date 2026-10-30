@@ -2,7 +2,6 @@
 id: A001
 name: explore-host-integration
 type: exploratory
-size: small
 originator: user
 depends-on:
 related-tasks:

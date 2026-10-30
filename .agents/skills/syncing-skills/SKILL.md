@@ -21,9 +21,10 @@ Use when the user wants this repo's skills copied into a project's
 flow:
 
 1. Resolve the source checkout — a local clone, or a reference registered by
-   [adding-references](../adding-references/SKILL.md)
+   `montflow-add-reference`
 2. Sync the public skills into the target workspace with `mf-skills sync`
-3. Verify with `--check`, then report each skill's outcome
+3. Verify with `--check` (or update with `--force` when a skill diverged), then
+   report each skill's outcome
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md)
 > skill before running this pipeline. It governs how skills are loaded,
@@ -42,9 +43,9 @@ Prefer a checkout already on disk:
 - **This repository** — when the skill runs from a montflow clone, that clone is
   the source; no reference step needed.
 - **A registered reference** — `.agents/references/montflow`, registered by the
-  [adding-references](../adding-references/SKILL.md) pipeline and confirmed with
-  [finding-references](../finding-references/SKILL.md).
-- **No checkout at all** — run `adding-references` against
+  `montflow-add-reference` pipeline and confirmed with
+  `montflow-find-reference`.
+- **No checkout at all** — run `montflow-add-reference` against
   `https://github.com/montflow/montflow` first. Do not clone by hand.
 
 Record the path; pass it as `--source` whenever it is not the checkout the CLI
@@ -84,7 +85,8 @@ bun run --cwd "$S/packages/skills" cli sync --source "$S" --target "$PWD"
 ```
 
 Sync is idempotent and leaves unrelated skills untouched. The report groups
-skills as `Created`, `Updated`, `Unchanged`, and `Skipped` (internal), with a
+skills as `Created`, `Updated`, `Unchanged`, `Refused` (diverged without
+`--force`), and `Skipped` (internal), with a
 count line beneath.
 
 ## 4. Verify
@@ -94,7 +96,14 @@ bun run --cwd "$S/packages/skills" cli sync --source "$S" --target "$PWD" --chec
 ```
 
 `--check` reports the same outcomes, writes nothing, and exits `1` on drift. A
-non-zero exit means the target is behind the source — re-run step 3.
+non-zero exit means the target is behind the source — re-run step 3. Each
+outcome is `current`, `stale`, `diverged`, or `unmanaged`; a `diverged` skill
+was edited locally, so review the named files before passing `--force`.
+
+Sync writes `.agents/skills/.montflow-sync.json` recording the source path,
+remote, commit, ref, version, and a version plus hash per skill. `mf-skills
+version --dir <workspace>` reports it. The full update path, including
+re-syncing a store, is [guides/updating.md](../../../guides/updating.md).
 
 ## 5. Report
 
@@ -107,7 +116,7 @@ If the target is a git repo, ask whether to commit the `.agents/skills/` changes
 
 - **Source repo**: `https://github.com/montflow/montflow`
 - **Install guide**: `guides/installation.md` in the repo
-- **References**: [adding-references](../adding-references/SKILL.md),
-  [finding-references](../finding-references/SKILL.md)
+- **References**: `montflow-add-reference`,
+  `montflow-find-reference`
 - **Skill authoring**: [authoring-skills](../authoring-skills/SKILL.md)
 - **Skill execution**: [executing-skills](../executing-skills/SKILL.md)

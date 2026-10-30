@@ -1,11 +1,5 @@
 # Changelog
 
-## [1.2.0] - 2026-10-26
-
-### Changed
-
-- Renamed from `montflow-modify-pi-profiles` to `montflow-modify-profiles`; cross-references name `montflow-create-profiles`
-
 ## [1.1.0] - 2026-10-06
 
 ### Changed

@@ -14,5 +14,5 @@ finish with `compile` to render the ANSI-escaped string.
 - The `Color` branded type, codes, and constructors — those live in
   `structs/color`; format only consumes colors through `Color.code`
 - Class-merging or CSS concerns — that is `@montflow/stlx`
-- Terminal widgets or prompts — those live in the Pi packages
+- Terminal widgets or prompts — those live in the montflow packages
 - Logging sinks — consume the compiled string, do not add appenders here

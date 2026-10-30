@@ -834,3 +834,9 @@ with {{#if}} if you want that default suppressed when the field is left
 blank. Never mark a variable "required": true and give it a "default" — a
 required variable with a default can never be blank, and the verifier rejects
 it.`;
+
+/** Current prompt-store segments under a workspace root. */
+export const STORE_SEGMENTS = ['.agents', '@montflow', 'prompts'] as const;
+
+/** Retired prompt-store segments; read-only fallback until `doctor` migrates. */
+export const LEGACY_STORE_SEGMENTS = ['.agents', '@montflow', 'pi-prompts'] as const;

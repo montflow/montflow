@@ -1,10 +1,10 @@
 # Changelog
 
-## [1.7.0] - 2026-10-26
+## [1.6.1] - 2026-10-26
 
 ### Changed
 
-- Platform-tooling names drop the retired Pi infix: `montflow-<verb>-<noun>`, with `montflow-find-specs` and `montflow-create-specs` as the examples
+- Group taxonomy examples now point at the scoped `montflow-add-reference` / `montflow-find-reference` skills after the generic `adding-references` / `finding-references` pair was retired
 
 ## [1.6.0] - 2026-10-07
 

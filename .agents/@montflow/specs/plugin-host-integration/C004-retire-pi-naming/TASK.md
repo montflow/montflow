@@ -2,11 +2,10 @@
 id: C004
 name: retire-pi-naming
 type: execution
-size: medium
 originator: user
 depends-on: C003
 related-tasks: C001
-status: in-progress
+status: complete
 ---
 
 # Task C004: retire-pi-naming

@@ -1,7 +1,7 @@
 # PromptStore service
 
 File-backed prompt store as an Effect service. Methods take `cwd` per call
-(Pi serves many folders); the `FileSystem`/`Path` dependencies are captured
+(serves many folders); the `FileSystem`/`Path` dependencies are captured
 in `make` and hidden behind `Default` — consumers only see `PromptStore`.
 
 ## Belongs here

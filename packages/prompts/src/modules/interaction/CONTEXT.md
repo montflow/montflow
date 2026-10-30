@@ -1,6 +1,6 @@
 # Interaction module
 
-Host-neutral dialog ports and model-picker logic for the `/mf-prompts-tui`
+Host-neutral dialog ports and model-picker logic for the `/mf-prompts`
 menu. The `/mf-*` flows stay structurally identical across plugins; this
 module is the non-TUI fallback plus the option plumbing both paths share.
 

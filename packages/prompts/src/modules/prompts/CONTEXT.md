@@ -24,7 +24,7 @@ and annotation are each a single export.
 
 - Parsing and compiling templates — that is `../template-engine/`, which knows
   about templates and bare variable names but nothing about prompt files
-- Pi business logic (commands, tools, event handlers) — the interactive command
+- OpenCode business logic (commands, tools, event handlers) — the interactive command
   in `../interactive/` and the CLI in `../cli/`
 - Host UI primitives (`notify`, `confirm`, `select`, `input`) — those reach
   the plugin through `@montflow/opencode`'s `InteractionPort`

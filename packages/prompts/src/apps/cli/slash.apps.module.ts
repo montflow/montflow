@@ -8,7 +8,7 @@ import * as Renderers from './renderers.apps.module.js';
  * The `/mf-prompts` slash-command front end: a hand-rolled parser over the
  * same engines the `mf-prompts` binary uses.
  *
- * A bespoke parser rather than `effect/cli` for one reason — a Pi
+ * A bespoke parser rather than `effect/cli` for one reason — an OpenCode
  * slash command receives a single argument *string*, not an argv array, so the
  * bin's `Command` tree cannot be reused here. Everything below the parser is
  * shared; only the tokenizing differs, which is exactly the seam worth
@@ -19,8 +19,8 @@ import * as Renderers from './renderers.apps.module.js';
  * Slash-command name.
  *
  * `mf-prompts` — the same name as the binary, because it is the same command.
- * A Pi session runs the headless CLI; the interactive menu is
- * `/mf-prompts-tui`. Splitting them the other way round (CLI as
+ * A session runs the headless CLI; the interactive menu is
+ * `/mf-prompts`. Splitting them the other way round (CLI as
  * `mf-prompts-cli`) put a suffix on the thing people actually reach for and
  * left the menu holding the plain name.
  */
@@ -28,7 +28,7 @@ export const COMMAND_NAME = 'mf-prompts';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Run the prompts CLI headlessly: doctor, list [--status valid|invalid], inspect, execute, show, verify [<name>|--all], render, create, modify, or delete a prompt. Store operations accept --dir to target a workspace root other than the working directory. For the interactive menu use /mf-prompts-tui.';
+  'Run the prompts CLI headlessly: doctor, list [--status valid|invalid], inspect, execute, show, verify [<name>|--all], render, create, modify, or delete a prompt. Store operations accept --dir to target a workspace root other than the working directory. Type /mf-prompts with no arguments to open the picker.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =

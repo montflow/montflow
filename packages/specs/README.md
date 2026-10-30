@@ -656,5 +656,5 @@ in this package recommends one.
 
 ## Status
 
-Early (`0.0.1`, private). Targets the spec contract inherited from the retired Pi toolchain.
+Early (`0.0.1`, private). Targets the spec contract inherited from the retired toolchain.
 Source-only — no build step: the OpenCode host loads the `.ts` files directly.

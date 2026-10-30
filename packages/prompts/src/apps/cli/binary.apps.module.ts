@@ -3,6 +3,9 @@ import { Argument, Command, Flag } from 'effect/cli';
 import { PromptStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
+import { Cli } from '@montflow/version';
+import type { BuildInfo } from '@montflow/version';
+import manifest from '../../../package.json' with { type: 'json' };
 
 /**
  * The `mf-prompts` binary's command tree, built with `effect/cli`.
@@ -195,10 +198,10 @@ const executeCommand = Command.make(
         return yield* report(Effect.fail(resolved.message), (text: string) => text);
       }
       // The binary owns no child-agent runtime: running a prompt needs a
-      // ModelRuntime, which lives in the Pi extension. So this validates and
+      // ModelRuntime, which lives in the OpenCode extension. So this validates and
       // renders end to end, then prints what would be sent — which is what
-      // makes it useful outside a Pi session. To actually execute, use
-      // `/mf-prompts execute` or the `prompt_execute` Pi tool.
+      // makes it useful outside an OpenCode session. To actually execute, use
+      // `/mf-prompts execute` or the `prompt_execute` OpenCode tool.
       yield* Console.log(`Rendered for ${resolved.model}:\n\n${resolved.text}`);
       return yield* Effect.void;
     }).pipe(Effect.catch((message) => Console.log(message).pipe(Effect.andThen(exitFailed)))),
@@ -300,6 +303,14 @@ const deleteCommand = Command.make('delete', { dir: dirFlag, name: nameArg }, (c
   report(Engines.remove(scope(config.dir), config.name), () => Renderers.deleted(config.name)),
 ).pipe(Command.withDescription('Delete a prompt file.'));
 
+/** This package's root: three levels up from src/apps/cli. */
+export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
+
+/** Identity embedded from this package's manifest. */
+export const PACKAGE_IDENTITY = {
+  name: manifest.name,
+  version: manifest.version,
+} satisfies BuildInfo.GeneratedIdentity;
 /** The root command the binary runs. */
 export const rootCommand = Command.make('mf-prompts').pipe(
   Command.withDescription(
@@ -316,6 +327,7 @@ export const rootCommand = Command.make('mf-prompts').pipe(
     createCommand,
     modifyCommand,
     deleteCommand,
+    Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
   Command.provide(PromptStore.Default),
 );

@@ -62,10 +62,10 @@ name is omitted:
 
 ```bash
 mf-skills verify <name>          # the binary, scriptable — non-zero on failure
-/mf-skills verify <name>         # the same command inside a Pi session
+/mf-skills verify <name>         # the same command inside an OpenCode session
 ```
 
-The interactive `/mf-skills-tui` browse opens each skill's detail menu with the
+The interactive `/mf-skills` browse opens each skill's detail menu with the
 same verdict: `✓ verified` or `✗ not verified — N issues`. What "verified"
 means depends on ownership:
 

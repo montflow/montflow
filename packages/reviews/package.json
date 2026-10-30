@@ -1,6 +1,6 @@
 {
   "name": "@montflow/reviews",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Effect-first adversarial review primitives (review series, finding verification) and the mf-reviews CLI",
   "keywords": [
@@ -42,7 +42,8 @@
     "@effect/platform-node": "4.0.1",
     "@montflow/opencode": "workspace:*",
     "@montflow/profiles": "workspace:*",
-    "@montflow/specs": "workspace:*"
+    "@montflow/specs": "workspace:*",
+    "@montflow/version": "workspace:*"
   },
   "devDependencies": {
     "@effect/vitest": "4.0.1",

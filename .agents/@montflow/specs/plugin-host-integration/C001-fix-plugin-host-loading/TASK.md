@@ -2,7 +2,6 @@
 id: C001
 name: fix-plugin-host-loading
 type: execution
-size: medium
 originator: user
 depends-on: B001
 related-tasks: A001, B001

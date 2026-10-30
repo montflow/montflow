@@ -21,7 +21,7 @@ export { LIST_STATUSES, resolveListStatus };
  * The `/mf-profiles-cli` slash front end: a hand-rolled parser over the same
  * engines the `mf-profiles` binary uses.
  *
- * A bespoke parser rather than `effect/cli` because a Pi slash command
+ * A bespoke parser rather than `effect/cli` because an OpenCode slash command
  * receives a single argument *string*, not an argv array, so the bin's
  * `Command` tree cannot be reused here. Everything below the parser is shared.
  */
@@ -180,7 +180,7 @@ export const parseCliArgs = (args: string): CliAction => {
  * workflows: every field comes from flags, so agents and scripts can
  * drive it mechanically.
  * @param args - raw slash-command args
- * @param ui - Pi ui surface (notify only; dialogs never called)
+ * @param ui - OpenCode ui surface (notify only; dialogs never called)
  * @param cwd - workspace root owning the profiles and skills stores
  * @returns Effect completing once done, failing with displayable message
  */

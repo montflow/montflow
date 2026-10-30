@@ -1,23 +1,20 @@
 # Memory
+# C003: wire-plugin-pickers - Memory
 
 Wiring all five plugins to use shared picker from @montflow/opencode/tui.
 
 ## Context
-
-None.
+Wired prompts, skills, specs, profiles, reviews to shared picker.
 
 ## Progress
-
-None.
+- Added picker usage in all plugins.
+- Deleted stopgap .opencode/plugins/prompts.
 
 ## Open Questions
-
-None.
+- None.
 
 ## Handoff
-
-None.
+Done.
 
 ## Deviations
-
-None.
+- None.

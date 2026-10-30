@@ -5,6 +5,9 @@ import { SpecStore } from '@montflow/specs';
 import { ProfileProbe, ReviewStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
+import { Cli } from '@montflow/version';
+import type { BuildInfo } from '@montflow/version';
+import manifest from '../../../package.json' with { type: 'json' };
 
 /**
  * The `mf-reviews` binary's command tree, built with `effect/cli`.
@@ -171,6 +174,14 @@ const resumeCommand = Command.make('resume', { dir: dirFlag, name: nameArg }, (c
   Command.withDescription('Show where an existing review left off, and the round to continue.'),
 );
 
+/** This package's root: three levels up from src/apps/cli. */
+export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
+
+/** Identity embedded from this package's manifest. */
+export const PACKAGE_IDENTITY = {
+  name: manifest.name,
+  version: manifest.version,
+} satisfies BuildInfo.GeneratedIdentity;
 /** The root command the binary runs. */
 export const rootCommand = Command.make('mf-reviews').pipe(
   Command.withDescription(
@@ -184,6 +195,7 @@ export const rootCommand = Command.make('mf-reviews').pipe(
     createCommand,
     newCommand,
     resumeCommand,
+    Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
   Command.provide(
     Layer.mergeAll(

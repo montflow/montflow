@@ -2,7 +2,6 @@
 id: C002
 name: add-shared-tui-picker
 type: execution
-size: medium
 originator: user
 depends-on: C001
 related-tasks: B001, C001

@@ -3,7 +3,7 @@ name: montflow-modify-profiles
 description: Modifies, updates, extends, or audits existing agent profiles in .agents/@montflow/profiles/. Use when the user wants to edit an existing profile, add content to a profile, audit a profile for quality, or update profile metadata.
 id: 6be1129292870a51
 author: Daniel
-version: 1.2.0
+version: 1.1.0
 license: MIT
 groups:
   - profiles

@@ -9,7 +9,7 @@ import * as Renderers from './renderers.apps.module.js';
  * The `/mf-skills` slash-command front end: a hand-rolled parser over the
  * same engines the `mf-skills` binary uses.
  *
- * A bespoke parser rather than `effect/cli` because a Pi slash
+ * A bespoke parser rather than `effect/cli` because an OpenCode slash
  * command receives a single argument *string*, not an argv array. Everything
  * below the parser is shared; only the tokenizing differs.
  */
@@ -18,14 +18,14 @@ import * as Renderers from './renderers.apps.module.js';
  * Slash-command name.
  *
  * `mf-skills` — the same name as the binary, because it is the same command.
- * A Pi session runs the headless CLI; the interactive menu is
- * `/mf-skills-tui`.
+ * A session runs the headless CLI; the interactive menu is
+ * `/mf-skills`.
  */
 export const COMMAND_NAME = 'mf-skills';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Run the skills CLI headlessly: doctor, list [--status valid|invalid], show, verify, create, modify, sync, or delete a skill. Store operations accept --dir to target a workspace root other than the working directory; sync uses --source and --target (--from and --dir stay as aliases). For the interactive menu use /mf-skills-tui.';
+  'Run the skills CLI headlessly: doctor, list [--status valid|invalid], show, verify, create, modify, sync, or delete a skill. Store operations accept --dir to target a workspace root other than the working directory; sync uses --source and --target (--from and --dir stay as aliases). For the interactive menu use /mf-skills.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =

@@ -64,7 +64,18 @@ import {
   status,
   state,
 } from './cli.apps.module.js';
+import * as Cli from '@montflow/version/cli';
+import type { BuildInfo } from '@montflow/version';
+import manifest from '../../../package.json' with { type: 'json' };
+
 /** Spec store directory, relative to the workspace root. */
+
+export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
+
+export const PACKAGE_IDENTITY = {
+  name: manifest.name,
+  version: manifest.version,
+} satisfies BuildInfo.GeneratedIdentity;
 
 export const rootCommand = Command.make('mf-specs').pipe(
   Command.withDescription('List, verify, scaffold, inspect, and render montflow spec prompts.'),
@@ -83,6 +94,7 @@ export const rootCommand = Command.make('mf-specs').pipe(
     executeCommand,
     sizingConfigCommand,
     doctorCommand,
+    Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
 );
 

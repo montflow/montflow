@@ -38,13 +38,13 @@ const pinned: Prompts.Prompt = Prompts.make(
 /** A repo root with the shipped skills installed, so the doctor gate passes. */
 const readyRoot = (): Promise<string> =>
   Effect.gen(function* () {
-    const root = yield* Effect.promise(() => mkdtemp(join(tmpdir(), 'mf-prompts-tui-')));
+    const root = yield* Effect.promise(() => mkdtemp(join(tmpdir(), 'mf-prompts-')));
     yield* Doctor.runDoctor(root);
     return root;
   }).pipe(Effect.runPromise);
 
 /** A repo root with no installed skills. */
-const bareRoot = (): Promise<string> => mkdtemp(join(tmpdir(), 'mf-prompts-tui-bare-'));
+const bareRoot = (): Promise<string> => mkdtemp(join(tmpdir(), 'mf-prompts-bare-'));
 
 const cleanup = (root: string): Effect.Effect<void> =>
   Effect.promise(() => rm(root, { recursive: true, force: true }));

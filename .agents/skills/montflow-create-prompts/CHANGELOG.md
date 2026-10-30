@@ -1,12 +1,5 @@
 # Changelog
 
-## [3.1.0] - 2026-10-26
-
-### Changed
-
-- Renamed from `montflow-create-pi-prompts` to `montflow-create-prompts`
-- The prompt store path is `.agents/@montflow/prompts/` everywhere in the skill, and the execution cross-reference names `montflow-execute-prompts`
-
 ## [3.0.1] - 2026-10-22
 
 ### Changed
@@ -53,6 +46,6 @@
 
 ### Added
 
-- Initial release of montflow-create-pi-prompts
+- Initial release of montflow-create-prompts
 - Create, modify, and verify guidance for `@montflow/pi-prompts` prompt templates
 - Prompt JSON schema, variable rules, and `mf-prompts-cli doctor` install path

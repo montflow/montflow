@@ -27,12 +27,11 @@ whether to retry, reinstall, or just retry.
   `Skill` (validated one way, total the other)
 - `panelInstalled` checks and `installHint` copy per panel
 - `parseModelsStore` / `parseDefaultModel` — pure decoders for the retired
-  Pi model files (`~/.pi/agent/models-store.json`,
-  `~/.pi/agent/settings.json`); malformed input reads as empty, never as a
+  model files; malformed input reads as empty, never as a
   failure. No production code calls them: only their file-reading wrappers
   `listModelLabels` / `listDefaultModel` and the unit tests in
   `tests/skill-write.test.ts` do. Those two wrappers read
-  `~/.pi/agent/models-store.json` and `~/.pi/agent/settings.json` on each call
+  the legacy settings paths on each call
   and have no caller at all — no production code calls them and no test
   references them (the tests exercise the parsers directly) — so they remain
   `@deprecated` candidates for removal. The live model label comes from

@@ -557,24 +557,24 @@ export const listModelLabels = (
     ),
   );
 
-/** The retired pi session defaults file shape: the provider/model pair Pi sessions fell back to. */
-const PiDefaults = Schema.Struct({
+/** The retired session defaults file shape: the provider/model pair legacy sessions fell back to. */
+const LegacyDefaults = Schema.Struct({
   defaultProvider: Schema.optional(Schema.String),
   defaultModel: Schema.optional(Schema.String),
 });
 
 /**
- * Parse the retired pi session defaults (`~/.pi/agent/settings.json`) into
- * the default model ref Pi sessions reported. Decoded by schema at the
+ * Parse the retired session defaults (`~/.pi/agent/settings.json`) into
+ * the default model ref legacy sessions reported. Decoded by schema at the
  * boundary: malformed JSON or a missing pair reads as undefined. Called by
  * `listDefaultModel` and the unit tests; no production caller.
  * @param json - raw settings contents
  * @returns default ref, or undefined when absent
  */
 export const parseDefaultModel = (json: string): ModelRef | undefined => {
-  let defaults: typeof PiDefaults.Type;
+  let defaults: typeof LegacyDefaults.Type;
   try {
-    defaults = Schema.decodeUnknownSync(PiDefaults)(JSON.parse(json));
+    defaults = Schema.decodeUnknownSync(LegacyDefaults)(JSON.parse(json));
   } catch {
     return undefined;
   }
@@ -585,7 +585,7 @@ export const parseDefaultModel = (json: string): ModelRef | undefined => {
 };
 
 /**
- * Read the retired pi session default from `~/.pi/agent/settings.json`.
+ * Read the retired session default from the legacy settings file.
  * Failures read as undefined, never fail. Unused: no caller at all (no
  * production code, no tests); candidate for removal.
  * @deprecated The live model label comes from `ModelPort.default()`.

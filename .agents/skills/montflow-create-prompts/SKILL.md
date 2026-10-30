@@ -3,7 +3,7 @@ name: montflow-create-prompts
 description: Creates and modifies reusable prompt templates for the @montflow/prompts plugin, stored as JSON under .agents/@montflow/prompts/. Use when an agent must author a new prompt, or change an existing one, directly from the rules below instead of shelling out.
 id: 1f2ac0720ecc0742
 author: Daniel Montilla
-version: 3.1.0
+version: 3.0.1
 license: MIT
 dependencies:
   - executing-skills

@@ -2,7 +2,6 @@
 id: B099
 name: review-phase
 type: review
-size: small
 originator: user
 depends-on: B001
 related-tasks: B001

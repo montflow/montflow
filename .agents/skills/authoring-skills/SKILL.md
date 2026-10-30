@@ -3,7 +3,7 @@ name: authoring-skills
 description: Guides the creation, formatting, and refinement of Skills. Use when the user wants to write a new Skill, convert documentation into a Skill, or audit an existing Skill.
 id: b186a4a0ab10373c
 author: Daniel Montilla
-version: 1.7.0
+version: 1.6.1
 license: MIT
 dependencies:
   - executing-skills
@@ -197,12 +197,12 @@ The `groups` field in frontmatter categorizes skills for discovery. Each skill s
 | `scaffolding` | Code generation and project/package/module setup | montflow-typescript-package-setup, montflow-typescript-modules |
 | `refactoring` | Code improvement, restructuring, and cleanup | applying-solid, detecting-duplication, simplifying-code |
 | `documentation` | Doc/rule/schema authoring | writing-jsdoc, authoring-rules |
-| `workflow` | Process-oriented git and reference operations | planning-git-commits, using-git-worktrees, adding-references |
+| `workflow` | Process-oriented git and reference operations | planning-git-commits, using-git-worktrees, montflow-find-reference |
 | `skills` | Meta-skills about the skill system itself | authoring-skills, finding-skills, executing-skills |
 | `typescript` | TypeScript-specific | montflow-typescript-project-structure, montflow-typescript-modules |
 | `javascript` | JavaScript-specific | simplifying-code, detecting-duplication |
 | `conventions` | Code style and convention enforcement | leaving-it-cleaner, favoring-composition |
 | `testing` | Testing infrastructure and review | montflow-typescript-testing |
-| `git` | Git operations | planning-git-commits, adding-references |
-| `references` | Reference code management | finding-references, adding-references |
+| `git` | Git operations | planning-git-commits, montflow-add-reference |
+| `references` | Reference code management | montflow-find-reference, montflow-add-reference |
 | `effect` | Effect TS ecosystem | effect, montflow-typescript-services, montflow-typescript-testing, montflow-typescript-structs |

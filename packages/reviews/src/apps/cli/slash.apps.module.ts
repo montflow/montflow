@@ -9,7 +9,7 @@ import * as Renderers from './renderers.apps.module.js';
  * The `/mf-reviews` slash-command front end: a hand-rolled parser over the
  * same engines the `mf-reviews` binary uses.
  *
- * A bespoke parser rather than `effect/cli` because a Pi slash command
+ * A bespoke parser rather than `effect/cli` because an OpenCode slash command
  * receives a single argument *string*, not an argv array, so the bin's
  * `Command` tree cannot be reused here. Everything below the parser is shared.
  */

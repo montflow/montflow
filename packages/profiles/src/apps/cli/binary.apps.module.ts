@@ -3,6 +3,9 @@ import { Argument, Command, Flag } from 'effect/cli';
 import { ProfileStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
+import { Cli } from '@montflow/version';
+import type { BuildInfo } from '@montflow/version';
+import manifest from '../../../package.json' with { type: 'json' };
 
 /**
  * The `mf-profiles` binary's command tree, built with `effect/cli`.
@@ -192,6 +195,14 @@ const deleteCommand = Command.make('delete', { dir: dirFlag, name: nameArg }, (c
   ),
 ).pipe(Command.withDescription('Delete a profile directory.'));
 
+/** This package's root: three levels up from src/apps/cli. */
+export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
+
+/** Identity embedded from this package's manifest. */
+export const PACKAGE_IDENTITY = {
+  name: manifest.name,
+  version: manifest.version,
+} satisfies BuildInfo.GeneratedIdentity;
 /** The root command the binary runs. */
 export const rootCommand = Command.make('mf-profiles').pipe(
   Command.withDescription(
@@ -204,6 +215,7 @@ export const rootCommand = Command.make('mf-profiles').pipe(
     createCommand,
     modifyCommand,
     deleteCommand,
+    Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
   Command.provide(ProfileStore.Default),
 );

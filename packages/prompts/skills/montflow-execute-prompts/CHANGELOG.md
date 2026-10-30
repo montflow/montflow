@@ -1,12 +1,5 @@
 # Changelog
 
-## [3.5.0] - 2026-10-26
-
-### Changed
-
-- Renamed from `montflow-execute-pi-prompts` to `montflow-execute-prompts`
-- The prompt store path is `.agents/@montflow/prompts/` everywhere in the skill, and the authoring cross-reference names `montflow-create-prompts`
-
 ## [3.4.2] - 2026-10-22
 
 ### Changed
@@ -120,6 +113,6 @@
 
 ### Added
 
-- Initial release of montflow-execute-pi-prompts
+- Initial release of montflow-execute-prompts
 - List, show, fill, and render guidance for `@montflow/pi-prompts` prompt templates
 - Execution handoff to the current session or a dispatched child session

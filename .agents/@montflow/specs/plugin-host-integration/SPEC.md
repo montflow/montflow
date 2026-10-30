@@ -1,10 +1,10 @@
 ---
 name: plugin-host-integration
-status: in-progress
+status: complete
 workspace-type: worktree
 author: Daniel Montilla
 created: 2026-10-28
-locked-phases:
+locked-phases: A, B, C, D, E
 ---
 
 # plugin-host-integration
@@ -68,6 +68,20 @@ host loader.
   implementation.
 - `bun run mf:gate` stays green, with the prompts package scoped verification
   green at every cut.
+- The branch stays mergeable with `origin/main`: upstream's phase-directory spec
+  layout is adopted without dropping any branch work.
+
+Phase D reconciles the branch with `origin/main` after upstream moved every
+spec task under a phase directory. It merges the upstream commit, resolves the
+conflicts so both the Pi-naming retirement and the new layout survive, migrates
+this spec's own task directories into the phase layout, and reviews the result
+so the branch can be offered as a pull request.
+
+Phase E completes the naming retirement. Phase C removed Pi-era names from
+everything a user types or reads; phase E removes the remaining internal
+identifiers — the `pi-profiles` module and the `Pi*` host aliases — reduces the
+retired prompts-store name to one documented constant that migration still
+needs, and adds a checked guard so no fresh `pi-` name can land again.
 
 ## Tasks
 
@@ -80,6 +94,14 @@ host loader.
 | C001 | fix-plugin-host-loading | execution | complete | Yes |
 | C002 | add-shared-tui-picker | execution | complete | Yes |
 | C003 | wire-plugin-pickers | execution | complete | Yes |
-| C004 | retire-pi-naming | execution | in-progress | Yes |
-| C005 | verify-host-integration | execution | pending | Yes |
-| C099 | review-phase | review | pending | No |
+| C004 | retire-pi-naming | execution | complete | Yes |
+| C005 | verify-host-integration | execution | complete | Yes |
+| C099 | review-phase | review | complete | No |
+| D001 | merge-upstream | execution | complete | Yes |
+| D002 | migrate-task-layout | execution | complete | Yes |
+| D099 | review-phase | review | complete | No |
+| E001 | rename-profile-module | execution | complete | Yes |
+| E002 | rename-host-lib-aliases | execution | complete | Yes |
+| E003 | consolidate-legacy-store-name | execution | complete | Yes |
+| E004 | add-pi-free-guard | execution | complete | Yes |
+| E099 | review-phase | review | complete | No |

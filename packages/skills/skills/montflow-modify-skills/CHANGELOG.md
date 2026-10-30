@@ -1,11 +1,5 @@
 # Changelog
 
-## [1.1.0] - 2026-10-26
-
-### Changed
-
-- Renamed from `montflow-modify-pi-skills` to `montflow-modify-skills`; the creation-standard cross-reference points at `montflow-create-skills`
-
 ## [1.0.1] - 2026-10-22
 
 ### Changed

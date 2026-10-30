@@ -3,7 +3,7 @@ name: montflow-execute-prompts
 description: Inspects and executes reusable prompt templates stored by @montflow/prompts on a chosen model, then returns the agent's reply. Use when an agent must run a stored prompt — inspect its variables, supply the required ones, pick a model, and execute it.
 id: a7fa5091d2615813
 author: Daniel Montilla
-version: 3.5.0
+version: 3.4.2
 license: MIT
 dependencies:
   - executing-skills

@@ -2,7 +2,6 @@
 id: B001
 name: decide-integration-strategy
 type: planning
-size: small
 originator: user
 depends-on: A001
 related-tasks: A001

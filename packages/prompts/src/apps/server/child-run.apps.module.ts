@@ -7,7 +7,7 @@ import type * as PromptExecute from '../../modules/prompt-execute/index.js';
  * `provider/model-id` label, create a session, prompt it with the rendered
  * text (skills first), wait for it to settle, and return its last reply.
  *
- * The old Pi path ran a child agent through `ModelRuntime`; the native path
+ * The old path ran a child agent through `ModelRuntime`; the native path
  * dispatches a peer session and reads its durable context, so no montflow
  * runtime owns the model loop.
  * @param ports - adapter seam ports from the server plugin

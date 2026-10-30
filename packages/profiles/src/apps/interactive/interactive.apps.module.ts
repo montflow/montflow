@@ -17,7 +17,7 @@ export const USAGE =
 export const CANCELLED = 'Cancelled.';
 
 /**
- * Minimal UI surface the flows need. Mirrors Pi's own narrowing for dialogs,
+ * Minimal UI surface the flows need. Mirrors OpenCode's own narrowing for dialogs,
  * so any real `ctx.ui` is assignable and fakes stay tiny.
  */
 export interface InteractiveUi {
@@ -90,13 +90,13 @@ export interface ModifyInput {
 
 export type ProfileModifier = (input: ModifyInput) => Effect.Effect<Profiles.Profile, string>;
 
-/** Minimal model reference carried from the Pi context (provider + id only). */
+/** Minimal model reference carried from the OpenCode context (provider + id only). */
 export interface ModelRef {
   readonly provider: string;
   readonly id: string;
 }
 
-/** Minimal model catalogue carried from the Pi context. */
+/** Minimal model catalogue carried from the OpenCode context. */
 export interface ModelCatalog {
   readonly getAvailable: () => ReadonlyArray<ModelRef>;
 }
@@ -203,7 +203,7 @@ export const parseAction = (args: string): Action => {
 
 /**
  * Notify the profile list, or a hint when empty.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param profiles - profiles to list
  * @returns Effect completing once notified
  */
@@ -224,7 +224,7 @@ export const listProfiles = (
 
 /**
  * Notify a profile's description and body, failing on unknown names.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param profiles - profiles to search
  * @param name - profile name
  * @returns Effect completing once notified, failing on unknown names
@@ -258,7 +258,7 @@ export const showProfile = (
 
 /**
  * Manual create flow: name (when missing) then description via dialogs.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param name - initial name, if already given
  * @returns Effect resolving to the new descriptor, failing on cancel or blank input
  */
@@ -294,7 +294,7 @@ export const createManual = (
 /**
  * Resolve the modify target: use the named profile when given, else pick
  * from the list via dialog.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param profiles - profiles to search
  * @param name - profile name, if already given
  * @returns Effect resolving to the target profile, failing on cancel or unknown names
@@ -328,7 +328,7 @@ export const resolveModifyTarget = (
  * session model pinned first, single-keystroke keep), else the
  * menu-driven `pickModel`. Notifies the chosen runtime, unless the
  * loading modal is showing it instead.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param models - picker options from {@link resolveModelOptions}
  * @param modelPicker - TUI widget port, if available
  * @param verb - progress verb for the notify line (Generating/Modifying)
@@ -385,7 +385,7 @@ export const MENU_INSTALL = 'Install required skills';
 
 /**
  * TUI main-menu port the consuming extension injects (heading, info
- * panel, then options). Absent outside the TUI (falls back to Pi-native
+ * panel, then options). Absent outside the TUI (falls back to OpenCode-native
  * `select`).
  */
 export type MenuFn = (
@@ -485,7 +485,7 @@ export const requirementRow = (status: RequirementStatus, selected: boolean): st
  * (checked = will inject, toggle by picking), installing the missing
  * ones on request. Present skills start checked; the check itself is the
  * pure {@link checkRequirements} — this flow only presents it.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param store - injected skill inventory port
  * @param installer - injected skill installer port
  * @param required - required skill names (from `Profiles.*_REQUIREMENTS`)
@@ -545,7 +545,7 @@ export const ensureRequirements = (
  * Manual modify flow: pick the profile (when unnamed) then enter a new
  * description. Persists nothing itself — the caller saves the returned
  * descriptor.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param profiles - profiles to search
  * @param name - profile name, if already given
  * @returns Effect resolving to the updated descriptor, failing on cancel or unknown names
@@ -574,7 +574,7 @@ export const modifyManual = (
  * the loading modal when available. Uses the injected TUI widget when
  * provided, else the menu-driven `pickModel` — same picker as
  * {@link createAgentic}.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param profiles - profiles to search
  * @param name - profile name, if already given
  * @param models - picker options from {@link modelOptions}
@@ -624,7 +624,7 @@ export const modifyAgentic = (
 /**
  * Modify flow entry: manual vs agentic choice, then the chosen flow.
  * Persists nothing itself — the caller saves the returned descriptor.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param profiles - profiles to search
  * @param name - profile name, if already given
  * @param models - picker options from {@link modelOptions}
@@ -691,7 +691,7 @@ export const modelOptions = (
  * Resolve picker options from the command source: scoped models when the
  * session scopes them, otherwise the live catalogue (models with usable
  * auth). Pure and total — catalogue reads are sync snapshots.
- * @param source - model source from the Pi context
+ * @param source - model source from the OpenCode context
  * @returns picker options, possibly empty
  */
 export const resolveModelOptions = (source: ModelSource): ReadonlyArray<ModelOption> => {
@@ -751,7 +751,7 @@ const modelLabelFor = (
  * `Pick another model…` entry. The filter step uses the live
  * search dialog when provided, else input-then-select.
  * Non-TUI path — the TUI uses the injected `ModelPickerFn` widget instead.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param models - picker options from {@link resolveModelOptions}
  * @returns Effect resolving to the picked label, failing on cancel or no match
  */
@@ -789,7 +789,7 @@ export const pickModel = (
  * pick the authoring model (current session model first), then run the
  * injected generator behind the loading modal when available. Uses the
  * injected TUI widget when provided, else the menu-driven `pickModel`.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param models - picker options from {@link modelOptions}
  * @param generate - injected agentic generation port
  * @param modelPicker - TUI widget port, if available
@@ -827,7 +827,7 @@ export const createAgentic = (
 
 /**
  * Create flow entry: manual vs agentic choice, then the chosen flow.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param models - picker options from {@link modelOptions}
  * @param generate - injected agentic generation port
  * @param name - initial manual name, if already given
@@ -859,7 +859,7 @@ export const createProfile = (
  * Finish a create: announce the saved file, then land on the new profile's
  * detail menu (Show / Modify / Delete / Back) so it can be inspected
  * right away.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param store - injected persistence port
  * @param profile - the saved profile
  * @param models - picker options from {@link resolveModelOptions}
@@ -909,7 +909,7 @@ export const completeCreate = (
 /**
  * Delete flow: pick the profile (when unnamed), confirm, then delete.
  * Returns nothing itself — the caller notifies.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param profiles - profiles to search
  * @param store - injected persistence port
  * @param name - profile name, if already given
@@ -951,7 +951,7 @@ export const deleteProfile = (
  * Browse loop: pick a profile, then loop its detail menu until Back or Delete.
  * The list refreshes after every mutation. An empty list offers creation
  * inline (`Create profile` first, `← Back` second) instead of failing.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param store - injected persistence port
  * @param models - picker options from {@link resolveModelOptions}
  * @param generate - injected agentic generation port (empty-list creates)
@@ -993,7 +993,7 @@ export const browse = (
  * Detail loop for one profile: Show / Modify / Delete / Back until Back,
  * Delete, or cancel. Show and Modify return to this menu; Delete and Back
  * return to the browse list.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param store - injected persistence port
  * @param name - picked profile name
  * @param models - picker options from {@link resolveModelOptions}
@@ -1054,7 +1054,7 @@ export const verifyProfile = (
  * Notify a verify outcome: one clean line, then the findings when failing.
  * Errors are counted apart from warnings so an advisory finding is never
  * reported as an issue, mirroring {@link Profiles.verifyInfoLine}.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param name - verified profile name
  * @param result - result from {@link verifyProfile}
  * @returns Effect completing once notified
@@ -1091,7 +1091,7 @@ export const FIX_INSTRUCTION =
 
 /**
  * Agentic fix flow with model picker and optional extra prompt.
- * @param ui - Pi ui dialogs
+ * @param ui - OpenCode ui dialogs
  * @param profile - profile to fix
  * @param models - picker options
  * @param fix - injected agentic fix port

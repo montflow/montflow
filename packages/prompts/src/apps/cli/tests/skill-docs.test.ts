@@ -154,13 +154,13 @@ Vitest.describe('montflow-execute-prompts claims', () => {
 
     const markdown = executeSkill();
     // The menu is matched first and removed, so its actions never leak into the
-    // CLI list — `/mf-prompts-tui` would otherwise look like a CLI command.
-    const withoutMenu = markdown.replaceAll('/mf-prompts-tui', '\u0000');
+    // CLI list — `/mf-prompts` would otherwise look like a CLI command.
+    const withoutMenu = markdown.replaceAll('/mf-prompts', '\u0000');
 
     const cliNames = [...withoutMenu.matchAll(/(?:^|[`/\s])mf-prompts ([a-z-]+)/gu)].map(
       (match) => match[1] ?? '',
     );
-    const menuNames = [...markdown.matchAll(/\/mf-prompts-tui ([a-z-]+)/gu)].map(
+    const menuNames = [...markdown.matchAll(/\/mf-prompts ([a-z-]+)/gu)].map(
       (match) => match[1] ?? '',
     );
 

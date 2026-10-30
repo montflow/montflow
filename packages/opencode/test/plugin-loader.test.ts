@@ -403,7 +403,7 @@ test('prompts, profiles, reviews, and skills expose native server and TUI faces'
   );
 });
 
-test('prompts registers /mf-prompts and its tools without a Pi runtime', async () => {
+test('prompts registers /mf-prompts and its tools without an OpenCode runtime', async () => {
   const entries = Host.resolve(promptsTarget);
   const server = await load<ServerModule>(entries.server, 'server');
   const host = makeHost(process.cwd());
@@ -453,7 +453,7 @@ test('profiles registers stored profiles as agents plus /mf-profiles and its too
   expect(host.tools).toEqual(['profile_execute']);
 });
 
-test('reviews registers /mf-reviews and review_create without a Pi runtime', async () => {
+test('reviews registers /mf-reviews and review_create without an OpenCode runtime', async () => {
   const entries = Host.resolve(reviewsTarget);
   const server = await load<ServerModule>(entries.server, 'server');
   const host = makeHost(process.cwd());

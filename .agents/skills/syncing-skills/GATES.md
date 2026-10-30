@@ -4,7 +4,7 @@ Validation gates for the `mf-skills sync` flow. Run through these after every sy
 
 ## Phase 1: Source & Target
 
-- [ ] Source checkout resolved — a local clone or a registered `montflow` reference (per `adding-references`)
+- [ ] Source checkout resolved — a local clone or a registered `montflow` reference (with `mf-references add`)
 - [ ] When no checkout existed, the reference was registered through the skill, not cloned by hand
 - [ ] Source named explicitly (`--source`) whenever it is not the checkout the CLI runs from
 - [ ] Source dependencies installed (`bun install` in the checkout) so `cli sync` can run

@@ -67,7 +67,7 @@ const createTool = (ports: ServerPorts) =>
 /**
  * OpenCode server plugin entry: registers `/mf-reviews` for the headless CLI
  * and `review_create` for agentic dispatch. A review pass runs in its own
- * native session, so no Pi session host is involved.
+ * native session, so no OpenCode session host is involved.
  */
 export default entry(ID, (ports) =>
   Effect.gen(function* () {

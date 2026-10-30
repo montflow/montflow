@@ -1,13 +1,5 @@
 #!/usr/bin/env bun
-import { NodeServices } from '@effect/platform-node';
-import { Effect } from 'effect';
-import { Command } from 'effect/cli';
-import { rootCommand } from './cli.apps.module.js';
+import * as Cli from '@montflow/version/cli';
+import { PACKAGE_IDENTITY, PACKAGE_ROOT, rootCommand } from './cli.slash.module.js';
 
-const program = Command.run(rootCommand, { version: '0.0.1' }).pipe(
-  Effect.provide(NodeServices.layer),
-);
-
-program.pipe(Effect.runPromise).catch(() => {
-  process.exitCode = 1;
-});
+Cli.run({ identity: PACKAGE_IDENTITY, packageRoot: PACKAGE_ROOT, command: rootCommand });

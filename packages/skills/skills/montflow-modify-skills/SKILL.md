@@ -3,7 +3,7 @@ name: montflow-modify-skills
 description: Modifies, updates, extends, or audits an existing workspace skill under .agents/skills/<name>/ while keeping the skill schema valid. Use when an agent must edit a skill, add to it, or fix its shape without dispatching a session.
 id: c0eec01fb3fdeac6
 author: montflow
-version: 1.1.0
+version: 1.0.1
 license: MIT
 groups:
   - skills

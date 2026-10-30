@@ -2,7 +2,6 @@
 id: C003
 name: wire-plugin-pickers
 type: execution
-size: medium
 originator: user
 depends-on: C002
 related-tasks: B001, C002
