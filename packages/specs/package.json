@@ -1,6 +1,6 @@
 {
   "name": "@montflow/specs",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Effect-first spec primitives and the mf-specs CLI, ported onto the OpenCode v2 adapter",
   "keywords": [

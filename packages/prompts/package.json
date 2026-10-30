@@ -1,6 +1,6 @@
 {
   "name": "@montflow/prompts",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Effect-first prompt template primitives (prompt descriptors, variable rendering) and the mf-prompts CLI",
   "keywords": [
