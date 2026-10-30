@@ -155,7 +155,7 @@
     },
     "packages/profiles": {
       "name": "@montflow/profiles",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "bin": {
         "mf-profiles": "./src/apps/cli/main.ts",
       },
@@ -180,7 +180,7 @@
     },
     "packages/prompts": {
       "name": "@montflow/prompts",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "bin": {
         "mf-prompts": "./src/apps/cli/main.ts",
       },
@@ -205,7 +205,7 @@
     },
     "packages/references": {
       "name": "@montflow/references",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "bin": {
         "mf-references": "./src/apps/cli/main.ts",
       },
@@ -230,7 +230,7 @@
     },
     "packages/reviews": {
       "name": "@montflow/reviews",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "bin": {
         "mf-reviews": "./src/apps/cli/main.ts",
       },
@@ -256,7 +256,7 @@
     },
     "packages/skills": {
       "name": "@montflow/skills",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "bin": {
         "mf-skills": "./src/apps/cli/main.ts",
       },
@@ -280,13 +280,14 @@
     },
     "packages/specs": {
       "name": "@montflow/specs",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "bin": {
         "mf-specs": "./src/apps/cli/main.ts",
       },
       "dependencies": {
         "@effect/platform-node": "4.0.1",
         "@montflow/opencode": "workspace:*",
+        "@montflow/prompts": "workspace:*",
         "@montflow/version": "workspace:*",
       },
       "devDependencies": {

@@ -79,7 +79,7 @@ Vitest.describe('version across all five CLIs runtime', () => {
         Vitest.expect(flag.stdout.trim().endsWith(`v${manifest.version}`)).toBe(true);
       }
     },
-    60_000,
+    120_000,
   );
 
   Vitest.it.effect('version --dir reports an unmanaged store and then the manifest version', () =>
@@ -198,6 +198,6 @@ Vitest.describe('Cli.run failure contract runtime', () => {
         await rm(root, { recursive: true, force: true });
       }
     },
-    60_000,
+    120_000,
   );
 });

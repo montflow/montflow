@@ -1,15 +1,17 @@
-import { COMMAND_NAME, ID } from './ids.js';
-
-export { ID, COMMAND_NAME };
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import * as NodePath from '@effect/platform-node/NodePath';
-import { defineTool, entry, makeCommandReply, type ServerPorts } from '@montflow/opencode';
-import { ProfileStore } from '@montflow/profiles/services';
-import { SpecStore } from '@montflow/specs/services';
+import { NodeFileSystem, NodePath } from '@effect/platform-node';
+import { defineTool, entry, type ServerPorts } from '@montflow/opencode';
+import { ProfileStore } from '@montflow/profiles';
+import { SpecStore } from '@montflow/specs';
 import { Effect, Layer, Schema } from 'effect';
-import * as Cli from './apps/cli/slash.apps.module.js';
+import * as Cli from './apps/cli/index.js';
 import { startReview } from './apps/dispatch/index.js';
 import { ProfileProbe, ReviewStore } from './services/index.js';
+
+/** Plugin id shared by the server and TUI entries. */
+export const ID = 'reviews';
+
+/** Slash command registered by the server plugin (invoke as `/mf-reviews`). */
+export const COMMAND_NAME = Cli.COMMAND_NAME;
 
 /** Help text shown for the slash command. */
 export const COMMAND_DESCRIPTION = Cli.COMMAND_DESCRIPTION;
@@ -29,6 +31,11 @@ const Live: Layer.Layer<
   Layer.provide(ProfileStore.Default, NodeLive),
   Layer.provide(SpecStore.Default, NodeLive),
 );
+
+/** Log a command result where the server host can see it. */
+const notify = (message: string): void => {
+  Effect.logInfo(message).pipe(Effect.runSync);
+};
 
 /**
  * The `review_create` tool: scaffold a series if needed, then dispatch one
@@ -68,14 +75,10 @@ export default entry(ID, (ports) =>
       name: COMMAND_NAME,
       description: COMMAND_DESCRIPTION,
       execute: (invocation) =>
-        Effect.gen(function* () {
-          const reply = makeCommandReply(ports.session, invocation);
-          yield* Cli.run(invocation.prompt.text, { notify: reply.notify }, ports.cwd).pipe(
-            Effect.provide(Live),
-            Effect.catch((message) => Effect.sync(() => reply.notify(message, 'error'))),
-          );
-          yield* reply.flush();
-        }),
+        Cli.run(invocation.prompt.text, { notify }, ports.cwd).pipe(
+          Effect.provide(Live),
+          Effect.catch((message) => Effect.sync(() => notify(message))),
+        ),
     });
     yield* ports.tool.add(createTool(ports));
   }),

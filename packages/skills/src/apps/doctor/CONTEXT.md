@@ -1,7 +1,7 @@
 # Doctor apps module
 
 `mf-skills doctor` — install and keep current the skills an agent needs to
-author and modify skills. Inside the host, the same command is `/mf-skills doctor`.
+author and modify skills. Inside OpenCode, the same command is `/mf-skills doctor`.
 
 ## Belongs here
 

@@ -44,6 +44,75 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
     ]);
   });
 
+  Vitest.it('accepts a declared size', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({ id: 'A001', name: 'implement-login', size: 'large' }),
+    );
+    Vitest.expect(result.issues).toStrictEqual([]);
+    Vitest.expect(result.valid).toBe(true);
+  });
+
+  Vitest.it('requires a size on a pending task', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({ id: 'A001', name: 'implement-login', withoutSize: true }),
+    );
+    Vitest.expect(result.issues).toStrictEqual([
+      {
+        code: 'task.missing-size',
+        field: 'size',
+        message:
+          "Required frontmatter field is missing; a declared size is required for 'pending' tasks.",
+        expected: 'tiny, small, medium, large',
+        actual: 'missing',
+        fix: 'Add `size: medium` to TASK.md frontmatter (tiny, small, medium, large).',
+      },
+    ]);
+    Vitest.expect(result.valid).toBe(false);
+  });
+
+  Vitest.it('warns about a missing size on a complete task', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({
+        id: 'A001',
+        name: 'implement-login',
+        status: 'complete',
+        withoutSize: true,
+      }),
+    );
+    Vitest.expect(result.issues).toStrictEqual([
+      {
+        code: 'task.missing-size',
+        field: 'size',
+        message: 'Completed task declares no size; sizing is advisory for historical work.',
+        severity: 'warning',
+        expected: 'tiny, small, medium, large',
+        actual: 'missing',
+        fix: 'Add `size: medium` to TASK.md frontmatter (tiny, small, medium, large).',
+      },
+    ]);
+    Vitest.expect(result.valid).toBe(true);
+  });
+
+  Vitest.it('rejects an unknown size', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({ id: 'A001', name: 'implement-login', size: 'huge' }),
+    );
+    Vitest.expect(result.issues).toStrictEqual([
+      {
+        code: 'task.unknown-size',
+        field: 'size',
+        message: "Unknown size 'huge'.",
+        expected: 'tiny, small, medium, large',
+        actual: 'huge',
+        fix: 'Change `size: huge` to one of tiny, small, medium, large.',
+      },
+    ]);
+  });
+
   Vitest.it('flags a malformed originator, dependency, and finding ref', () => {
     const result = Task.verifyTaskFile(
       'A001-implement-login',
@@ -72,7 +141,7 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
         id: 'A099',
         name: 'review-phase',
         type: 'review',
-        reviewerProfiles: 'effect-reviewer, generic-reviewer',
+        reviewerProfiles: 'example-reviewer, generic-reviewer',
       }),
     );
     Vitest.expect(result.valid).toBe(true);
@@ -110,11 +179,11 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
         id: 'A099',
         name: 'review-phase',
         type: 'review',
-        reviewerProfiles: 'effect-reviewer,effect-reviewer',
+        reviewerProfiles: 'example-reviewer,example-reviewer',
       }),
     );
     Vitest.expect(result.issues).toStrictEqual([
-      { field: 'reviewer-profiles', message: "'effect-reviewer' is listed more than once." },
+      { field: 'reviewer-profiles', message: "'example-reviewer' is listed more than once." },
     ]);
   });
 
@@ -125,7 +194,7 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
         id: 'A001',
         name: 'implement-login',
         type: 'execution',
-        reviewerProfiles: 'effect-reviewer',
+        reviewerProfiles: 'example-reviewer',
       }),
     );
     Vitest.expect(result.issues).toStrictEqual([
@@ -142,6 +211,7 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
         'name: implement-login',
         'type: execution',
         'originator: user',
+        'size: medium',
         'status: pending',
         '---',
         '',
@@ -155,5 +225,43 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
       'body',
       'body',
     ]);
+  });
+
+  Vitest.it('warns for a complete task with an unchecked completion item', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({
+        id: 'A001',
+        name: 'implement-login',
+        status: 'complete',
+        completion: ['- [x] One', '- [ ] Two', '- [ ] Three'].join('\n'),
+      }),
+    );
+    Vitest.expect(result.valid).toBe(true);
+    Vitest.expect(result.issues).toStrictEqual([
+      {
+        code: 'task.completion-unchecked',
+        field: 'completion',
+        severity: 'warning',
+        message:
+          'Completed task has 2 unchecked completion items; the status claims work its checklist does not confirm.',
+        expected: 'all 3 completion items checked `- [x]`',
+        actual: '2 unchecked',
+        fix: 'Check each finished item under `## Completion`, or set `status: in-progress`.',
+      },
+    ]);
+  });
+
+  Vitest.it('does not warn for a pending task or a fully checked completion list', () => {
+    const pending = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({ id: 'A001', name: 'implement-login' }),
+    );
+    Vitest.expect(pending.issues).toStrictEqual([]);
+    const checked = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({ id: 'A001', name: 'implement-login', status: 'complete' }),
+    );
+    Vitest.expect(checked.issues).toStrictEqual([]);
   });
 });

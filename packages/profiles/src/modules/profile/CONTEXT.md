@@ -1,7 +1,6 @@
 # Profiles module
 
-Effect-first agent profile primitives for OpenCode plugins (profile
-descriptors, slug names).
+Effect-first agent profile primitives (profile descriptors, slug names).
 
 ## Belongs here
 
@@ -10,7 +9,7 @@ descriptors, slug names).
 
 ## Does not belong here
 
-- Host-side business logic (commands, tools, event handlers) — that lives in the
-  consuming extension
+- Host business logic (commands, tools, event handlers) — that lives in
+  `extension.ts`
 - Host UI primitives (`notify`, `confirm`, `select`, `input`) — those reach
   the plugin through `@montflow/opencode`'s `InteractionPort`

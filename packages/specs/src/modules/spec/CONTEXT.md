@@ -16,7 +16,7 @@ Note: namespace + class share the name, so call-site reads
 - `parseSpecFile`, `verifySpecFile`
 - The task table: `TaskRow`, `parseTaskTable` (and its column-value
   validation inside `verifySpecFile`)
-- Slug helpers (`isValidName`, `slugify`)
+- Identifier helpers (`isValidName`, `isValidPhase`, `slugify`)
 
 ## Does not belong here
 

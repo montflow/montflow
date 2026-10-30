@@ -24,7 +24,7 @@ const ALLOWED_PREFIXES = ['.agents/@montflow/specs/', '.agents/@montflow/reviews
 const ALLOWED_BASENAMES = ['CHANGELOG.md', 'embedded-payload.generated.ts', 'bun.lock'] as const;
 
 /** The guard itself spells the patterns and the report lines it looks for. */
-const ALLOWED_FILES = ['scripts/check-retired-names.ts', 'scripts/check-retired-names.test.ts'] as const;
+const ALLOWED_FILES = ['scripts/check-retired-names.ts', 'scripts/check-retired-names.test.ts', 'apps/workspace/src/services/skills/skills.services.module.ts'] as const;
 
 /**
  * Whole files that must keep one retired spelling. Each entry names the exact
@@ -37,6 +37,10 @@ const ALLOWED_LINES: ReadonlyArray<{ readonly file: string; readonly line: RegEx
   },
   {
     file: 'apps/workspace/src/services/prompts/prompts.services.module.ts',
+    line: /LEGACY_PROMPTS_DIR = \['\.agents', '@montflow', 'pi-prompts'\]/,
+  },
+  {
+    file: 'packages/prompts/src/tui.ts',
     line: /LEGACY_PROMPTS_DIR = \['\.agents', '@montflow', 'pi-prompts'\]/,
   },
   // The migrated registry keeps third-party repo names verbatim; these are

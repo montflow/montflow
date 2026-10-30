@@ -5,9 +5,10 @@ import path from 'node:path';
 import type { CommandContext, PortsContext } from '@montflow/opencode';
 import { Effect, type Scope } from 'effect';
 import * as Vitest from '@effect/vitest';
+import { TestConsole } from 'effect/testing';
 import { specMarkdown } from '../modules/spec/tests/helpers.js';
 import { memoryMarkdown, taskMarkdown } from '../modules/task/tests/helpers.js';
-import server from '../server.js';
+import server, { COMMAND_DESCRIPTION } from '../server.js';
 
 type CommandDomain = NonNullable<CommandContext['command']>;
 type Editor = Parameters<CommandDomain['transform']>[0] extends (editor: infer E) => void
@@ -17,22 +18,15 @@ type Definition = Parameters<Editor['add']>[0];
 type Invocation = Parameters<Definition['execute']>[0];
 
 /**
- * A server host context that records the registered command, so the plugin
- * effect can run without the real host. `directory` is the plugin directory the
- * command must resolve its spec root from.
+ * A server host context that records the registered command and tools, so the
+ * plugin effect can run without the real host. `directory` is the plugin
+ * directory the command must resolve its spec root from.
  */
 const makeHost = (directory: string) => {
   const commands: Definition[] = [];
-  const messages: string[] = [];
-  captured = messages;
+  const tools: Array<{ readonly name: string }> = [];
   const context: PortsContext = {
     location: { directory },
-    session: {
-      create: () => Effect.die('unused in this test'),
-      prompt: (input) => Effect.sync(() => messages.push(input.text)),
-      wait: () => Effect.void,
-      context: () => Effect.succeed([]),
-    },
     command: {
       transform: (callback) =>
         Effect.sync(() => {
@@ -45,8 +39,23 @@ const makeHost = (directory: string) => {
         }),
       list: () => Effect.succeed({ data: [] }),
     },
+    tool: {
+      transform: (callback) =>
+        Effect.sync(() => {
+          callback({
+            list: () => [],
+            add: (definition) => {
+              tools.push(definition);
+            },
+            update: () => {},
+            remove: () => {},
+          });
+          return { dispose: Effect.void };
+        }),
+      list: () => Effect.succeed([]),
+    },
   };
-  return { context, commands };
+  return { context, commands, tools };
 };
 
 /** The plugin entry as this test drives it, with the narrowed port context. */
@@ -64,30 +73,24 @@ interface ServerEntry {
 // side of the same contract).
 const plugin = server as ServerEntry;
 
-/** Register the plugin and hand back the command it published. */
+/** Register the plugin and hand back the command and tools it published. */
 const register = (root: string) =>
   Effect.gen(function* () {
     const host = makeHost(root);
     yield* plugin.effect(host.context).pipe(Effect.scoped);
     const command = host.commands[0];
-    if (command === undefined) return yield* Effect.die('the /mf-specs command did not register');
-    return command;
+    if (command === undefined) return yield* Effect.die('the /specs command did not register');
+    return { command, tools: host.tools };
   });
-
-/** Lines the command posted into its invoking session; reset per host. */
-let captured: string[] = [];
 
 /** Invoke the registered command with slash text, the way the host does. */
 const invoke = (command: Definition, text: string) =>
   // SAFETY: only `prompt.text` is read; the host fills the rest of the invocation.
-  command.execute({
-    prompt: { text },
-    sessionID: 'ses_test',
-    delivery: 'queue',
-  } as Invocation);
+  command.execute({ prompt: { text } } as Invocation);
 
-/** Read everything the command posted into the session. */
-const logged = (): Effect.Effect<string> => Effect.sync(() => captured.join('\n'));
+/** Read everything the command logged. */
+const logged = (): Effect.Effect<string> =>
+  TestConsole.logLines.pipe(Effect.map((lines) => lines.map(String).join('\n')));
 
 /** A throwaway workspace root. */
 const freshRoot = (): Promise<string> => mkdtemp(path.join(tmpdir(), 'mf-specs-server-'));
@@ -95,7 +98,7 @@ const freshRoot = (): Promise<string> => mkdtemp(path.join(tmpdir(), 'mf-specs-s
 /** Write one valid spec under `<root>/.agents/@montflow/specs`. */
 const writeSpec = async (root: string, name: string): Promise<void> => {
   const spec = path.join(root, '.agents', '@montflow', 'specs', name);
-  const task = path.join(spec, 'A/A001-implement-login');
+  const task = path.join(spec, 'A001-implement-login');
   await mkdir(task, { recursive: true });
   await writeFile(path.join(spec, 'SPEC.md'), specMarkdown({ name }));
   await writeFile(
@@ -111,7 +114,7 @@ Vitest.describe('specs server command', () => {
       const root = yield* Effect.promise(freshRoot);
       try {
         yield* Effect.promise(() => writeSpec(root, 'ok'));
-        const command = yield* register(root);
+        const { command } = yield* register(root);
         // `status` only runs when the invocation text is forwarded; the old
         // empty argument defaulted to `check`.
         yield* invoke(command, 'status --name ok');
@@ -128,7 +131,7 @@ Vitest.describe('specs server command', () => {
       const root = yield* Effect.promise(freshRoot);
       const name = 'created-from-invocation';
       try {
-        const command = yield* register(root);
+        const { command } = yield* register(root);
         yield* invoke(command, `create --name ${name}`);
         const created = path.join(root, '.agents', '@montflow', 'specs', name, 'SPEC.md');
         Vitest.expect(existsSync(created)).toBe(true);
@@ -148,7 +151,7 @@ Vitest.describe('specs server command', () => {
         // The relative name only resolves when it joins onto the plugin
         // directory; the server process directory has no such checkout.
         yield* Effect.promise(() => writeSpec(path.join(root, 'nested'), 'nested'));
-        const command = yield* register(root);
+        const { command } = yield* register(root);
         yield* invoke(command, 'status --name nested --dir nested');
         Vitest.expect(yield* logged()).toContain('Phase A');
         Vitest.expect(yield* logged()).not.toContain('failed');
@@ -158,16 +161,44 @@ Vitest.describe('specs server command', () => {
     }),
   );
 
-  Vitest.it.effect('surfaces a store failure instead of swallowing it', () =>
+  Vitest.it.effect('surfaces an unknown spec as a coded diagnostic instead of swallowing it', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
       try {
-        const command = yield* register(root);
+        yield* Effect.promise(() => writeSpec(root, 'ok'));
+        const { command } = yield* register(root);
         yield* invoke(command, 'status --name missing');
-        Vitest.expect(yield* logged()).toContain('SpecStatus failed:');
+        const text = yield* logged();
+        Vitest.expect(text).toContain('spec.not-found');
+        Vitest.expect(text).toContain("problem  Spec 'missing' not found.");
+        Vitest.expect(text).toContain('next     mf-specs list');
       } finally {
         yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
       }
     }),
+  );
+
+  Vitest.it.effect(
+    'registers the spec_author, spec_execute, spec_sizing, and spec_models tools',
+    () =>
+      Effect.gen(function* () {
+        const root = yield* Effect.promise(freshRoot);
+        try {
+          const { tools } = yield* register(root);
+          Vitest.expect(tools.map((tool) => tool.name)).toStrictEqual([
+            'spec_author',
+            'spec_execute',
+            'spec_sizing',
+            'spec_models',
+          ]);
+          Vitest.expect(COMMAND_DESCRIPTION).toContain('author --request <text>');
+          Vitest.expect(COMMAND_DESCRIPTION).toContain('execute [--name <spec>]');
+          Vitest.expect(COMMAND_DESCRIPTION).toContain('sizing-config [--scope repo|spec|phase]');
+          Vitest.expect(COMMAND_DESCRIPTION).toContain('no --scope asks which layer');
+          Vitest.expect(COMMAND_DESCRIPTION).toContain('models [--provider <id>]');
+        } finally {
+          yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+        }
+      }),
   );
 });

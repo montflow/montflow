@@ -4,9 +4,6 @@ import { memoryMarkdown } from '../../task/tests/helpers.js';
 /** Build one snapshot file entry. */
 export const entry = (path: string, content: string): SpecFileEntry => ({ path, content });
 
-/** Build one snapshot directory entry. */
-export const dirEntry = (path: string): SpecFileEntry => ({ path, content: '', kind: 'directory' });
-
 /** Wrap file entries in a spec snapshot named `ship-spec` by default. */
 export const snapshot = (
   files: ReadonlyArray<SpecFileEntry>,

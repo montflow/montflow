@@ -27,9 +27,3 @@ Boilerplate (`0.0.1`, private). Source-only — no build step: a local-path
 OpenCode install loads the `.ts` files directly. Run `bun install` from the repo
 root for dependencies, then `turbo` `test` / `ts:check` cover this package like
 the rest.
-
-Single artifact, from the workspace root:
-
-```bash
-bun run --cwd packages/profiles cli verify <name> --dir $PWD
-```

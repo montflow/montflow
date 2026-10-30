@@ -4,8 +4,8 @@ import { dirname, join } from 'node:path';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Effect, Layer } from 'effect';
 import * as Vitest from '@effect/vitest';
-import { ProfileStore } from '@montflow/profiles/services';
-import { SpecStore } from '@montflow/specs/services';
+import { ProfileStore } from '@montflow/profiles';
+import { SpecStore } from '@montflow/specs';
 import { ProfileProbe, ReviewStore } from '../../../services/index.js';
 import * as Engines from '../engines.apps.module.js';
 
@@ -61,7 +61,7 @@ const writeReviewTask = (
   status = 'pending',
 ): Promise<void> =>
   writeAt(
-    join(root, '.agents', '@montflow', 'specs', spec, 'C', taskDir, 'TASK.md'),
+    join(root, '.agents', '@montflow', 'specs', spec, taskDir, 'TASK.md'),
     [
       '---',
       'id: C099',
@@ -125,7 +125,7 @@ Vitest.describe('Engines.verifySpecProfiles', () => {
       const entries = yield* Engines.verifySpecProfiles({ cwd: root });
       Vitest.expect(entries).toHaveLength(1);
       Vitest.expect(entries[0]?.path).toBe(
-        '.agents/@montflow/specs/demo/C/C099-review-phase/TASK.md',
+        '.agents/@montflow/specs/demo/C099-review-phase/TASK.md',
       );
       Vitest.expect(entries[0]?.result.issues[0]?.field).toBe('reviewer-profiles');
       Vitest.expect(entries[0]?.result.issues[0]?.message).toBe(
@@ -166,7 +166,7 @@ Vitest.describe('Engines.verifySpecProfiles', () => {
       const root = yield* Effect.promise(freshRoot);
       yield* Effect.promise(() =>
         writeAt(
-          join(root, '.agents', '@montflow', 'specs', 'demo', 'C', 'C001-do-work', 'TASK.md'),
+          join(root, '.agents', '@montflow', 'specs', 'demo', 'C001-do-work', 'TASK.md'),
           [
             '---',
             'id: C001',

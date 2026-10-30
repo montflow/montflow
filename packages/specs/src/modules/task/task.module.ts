@@ -1,7 +1,8 @@
 import { Schema } from 'effect';
 import { fieldList, fieldString, parseMarkdown } from '../frontmatter/index.js';
 import type { FieldValue } from '../frontmatter/index.js';
-import { type Issue, type Result, issue, noErrors } from '../verify/index.js';
+import { CODES, SIZES, SIZE_HINT, Size, isSize } from '../sizing/index.js';
+import { type Issue, type Result, finding, issue, noErrors } from '../verify/index.js';
 
 // ─── Patterns ─────────────────────────────────────────────────────────
 
@@ -22,6 +23,9 @@ export const FINDING_REF_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*\/\d{3}\/F\d+$/;
 
 /** Task frontmatter key listing a `review` task's ordered reviewer profile slugs. */
 export const REVIEWER_PROFILES_FIELD = 'reviewer-profiles';
+
+/** Stable code for a complete task whose completion checklist is not checked off. */
+export const COMPLETION_UNCHECKED_CODE = 'task.completion-unchecked';
 
 // ─── Enums ────────────────────────────────────────────────────────────
 
@@ -98,6 +102,13 @@ export class Task extends Schema.Class<Task>('SpecTask')({
   reviewerProfiles: Schema.Array(Schema.String.check(Schema.isPattern(SLUG_PATTERN))),
   /** Adversarial-review finding this task addresses (`<series>/<round>/F<n>`), if any. */
   findingRef: Schema.optionalKey(Schema.String.check(Schema.isPattern(FINDING_REF_PATTERN))),
+  /**
+   * Declared task size, as written; absent only on historical completed tasks.
+   * Decoding deliberately keeps a non-enum value so an unknown size stays a
+   * `task.unknown-size` finding instead of deleting the task from every
+   * consumer. {@link verifyTaskSize} owns the enum.
+   */
+  size: Schema.optionalKey(Schema.String),
   /** Current task state. */
   status: TaskStatus,
 }) {}
@@ -118,10 +129,12 @@ interface TaskInput {
   readonly reviewerProfiles: ReadonlyArray<string>;
   readonly status: string;
   readonly findingRef?: string;
+  readonly size?: string;
 }
 
 const taskInput = (fields: Record<string, FieldValue>): TaskInput => {
   const findingRef = fieldString(fields, 'finding-ref');
+  const size = fieldString(fields, 'size');
   const base: TaskInput = {
     id: fieldString(fields, 'id') ?? '',
     name: fieldString(fields, 'name') ?? '',
@@ -132,8 +145,8 @@ const taskInput = (fields: Record<string, FieldValue>): TaskInput => {
     reviewerProfiles: fieldList(fields, REVIEWER_PROFILES_FIELD),
     status: fieldString(fields, 'status') ?? '',
   };
-  if (findingRef === undefined || findingRef === '') return base;
-  return { ...base, findingRef };
+  const withRef = findingRef === undefined || findingRef === '' ? base : { ...base, findingRef };
+  return size === undefined || size === '' ? withRef : { ...withRef, size };
 };
 
 /**
@@ -150,6 +163,15 @@ export const parseTaskFile = (markdown: string): Task | undefined => {
     return undefined;
   }
 };
+
+/**
+ * A parsed task's declared size, or undefined when it declares none or its
+ * value is not one of the four sizes.
+ * @param task - parsed task
+ * @returns the size every resolver can act on
+ */
+export const sizeOf = (task: Task): Size | undefined =>
+  task.size === undefined || !isSize(task.size) ? undefined : task.size;
 
 // ─── Directory name ───────────────────────────────────────────────────
 
@@ -174,8 +196,8 @@ export const phaseRank = (phase: string): number => {
 };
 
 /**
- * Parse a leaf task directory name of the form `<PHASE_LETTERS><NNN>-<name>`.
- * @param dir - task directory name (the leaf, not a path)
+ * Parse a task directory name of the form `<PHASE_LETTERS><NNN>-<name>`.
+ * @param dir - directory name relative to the spec root
  * @returns the parsed parts, or undefined when malformed
  */
 export const parseTaskDirName = (dir: string): TaskDirName | undefined => {
@@ -187,6 +209,57 @@ export const parseTaskDirName = (dir: string): TaskDirName | undefined => {
 
 // ─── Mechanical verification ──────────────────────────────────────────
 
+/**
+ * The `size` rule on its own, so an already-parsed task is held to the same
+ * contract as its file: an unknown size is an error, and a missing size is an
+ * error unless the task is complete. Dispatch surfaces call this on the parsed
+ * task, so a dispatchable task can never carry an invalid size.
+ * @param size - declared size, as written
+ * @param status - declared status, as written
+ * @returns the findings, in reporting order
+ */
+export const verifyTaskSize = (
+  size: string | undefined,
+  status: string | undefined,
+): ReadonlyArray<Issue> => {
+  if (size === undefined || size.trim() === '') {
+    if (status === 'complete') {
+      return [
+        finding({
+          code: CODES.missingSize,
+          severity: 'warning',
+          field: 'size',
+          message: 'Completed task declares no size; sizing is advisory for historical work.',
+          expected: SIZE_HINT,
+          actual: 'missing',
+          fix: `Add \`size: medium\` to TASK.md frontmatter (${SIZE_HINT}).`,
+        }),
+      ];
+    }
+    return [
+      finding({
+        code: CODES.missingSize,
+        field: 'size',
+        message: `Required frontmatter field is missing; a declared size is required for '${status ?? 'unknown'}' tasks.`,
+        expected: SIZE_HINT,
+        actual: 'missing',
+        fix: `Add \`size: medium\` to TASK.md frontmatter (${SIZE_HINT}).`,
+      }),
+    ];
+  }
+  if (isSize(size)) return [];
+  return [
+    finding({
+      code: CODES.unknownTaskSize,
+      field: 'size',
+      message: `Unknown size '${size}'.`,
+      expected: SIZE_HINT,
+      actual: size,
+      fix: `Change \`size: ${size}\` to one of ${SIZES.join(', ')}.`,
+    }),
+  ];
+};
+
 /** Required sections of a TASK.md body; `Type:` is a prefixed heading. */
 const TASK_SECTIONS = [
   { label: '## Type:', pattern: /^## Type:\s*\S/m },
@@ -195,11 +268,82 @@ const TASK_SECTIONS = [
   { label: '## Completion', pattern: /^## Completion\s*$/m },
 ] as const;
 
+/** Any level-2 heading, which ends a body section. */
+const SECTION_HEADING = /^##\s+\S/;
+
+/** One completion checklist row: `- [ ] text` or `- [x] text`. */
+const COMPLETION_ITEM = /^\s*-\s+\[([ xX])\]\s*(.*)$/;
+
+/** A body section's checklist census. */
+interface ChecklistCensus {
+  /** Items the section holds, checked or not. */
+  readonly total: number;
+  /** Items still left as `- [ ]`. */
+  readonly unchecked: number;
+}
+
+/**
+ * Count the checklist items in one `## <heading>` section of a body. Items
+ * outside that section and blank lines are ignored, so a task may carry
+ * other checklists without changing the completion rule.
+ * @param body - markdown body (frontmatter already stripped)
+ * @param heading - level-2 heading text without the `## `
+ * @returns the total and the unchecked count
+ */
+const censusChecklist = (body: string, heading: string): ChecklistCensus => {
+  let inside = false;
+  let total = 0;
+  let unchecked = 0;
+  for (const line of body.split(/\r?\n/)) {
+    if (SECTION_HEADING.test(line)) {
+      inside = line.trim() === `## ${heading}`;
+      continue;
+    }
+    if (!inside) continue;
+    const item = COMPLETION_ITEM.exec(line);
+    if (item === null) continue;
+    total++;
+    if ((item[1] ?? '') === ' ') unchecked++;
+  }
+  return { total, unchecked };
+};
+
+/**
+ * The completion rule on its own: a task that claims `complete` must show a
+ * checked `## Completion` checklist. An unchecked box is a record contradiction
+ * — the status says the work is done and the checklist says it is not — so it
+ * is a warning, never an error: historical records keep completing unchanged.
+ * @param status - declared status, as written
+ * @param body - markdown body (frontmatter already stripped)
+ * @returns the findings, in reporting order
+ */
+export const verifyTaskCompletion = (
+  status: string | undefined,
+  body: string,
+): ReadonlyArray<Issue> => {
+  if (status !== 'complete') return [];
+  const { total, unchecked } = censusChecklist(body, 'Completion');
+  if (unchecked === 0) return [];
+  const noun = unchecked === 1 ? 'item' : 'items';
+  return [
+    finding({
+      code: COMPLETION_UNCHECKED_CODE,
+      severity: 'warning',
+      field: 'completion',
+      message: `Completed task has ${unchecked} unchecked completion ${noun}; the status claims work its checklist does not confirm.`,
+      expected: `all ${total} completion ${total === 1 ? 'item' : 'items'} checked \`- [x]\``,
+      actual: `${unchecked} unchecked`,
+      fix: 'Check each finished item under `## Completion`, or set `status: in-progress`.',
+    }),
+  ];
+};
+
 /**
  * Mechanically verify a TASK.md file against the spec contract
  * standard: required frontmatter (`id`, `name`, `type`, `originator`,
  * `depends-on`, `related-tasks`, `status`; `id`/`name` matching the
- * directory) plus the body shape. Pure — no IO.
+ * directory), the declared `size` (required unless the task is complete),
+ * plus the body shape. Pure — no IO.
  * @param dirName - task directory name (`A001-explore-auth`)
  * @param markdown - raw TASK.md contents
  * @returns the result; `valid` is true only with zero issues
@@ -285,6 +429,10 @@ export const verifyTaskFile = (dirName: string, markdown: string): Result => {
   } else if (!isTaskStatus(status)) {
     issues.push(issue('status', `Must be one of: ${TASK_STATUSES.join(', ')}.`));
   }
+
+  const size = fieldString(fields, 'size');
+  issues.push(...verifyTaskSize(size, status));
+  issues.push(...verifyTaskCompletion(status, body));
 
   for (const section of TASK_SECTIONS) {
     if (!section.pattern.test(body)) {

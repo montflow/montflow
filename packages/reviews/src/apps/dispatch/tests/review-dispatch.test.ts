@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import type { ModelPort, SessionDispatchPort } from '@montflow/opencode';
-import { ProfileStore } from '@montflow/profiles/services';
+import { ProfileStore } from '@montflow/profiles';
 
 import { Effect, Layer } from 'effect';
 import * as Vitest from '@effect/vitest';

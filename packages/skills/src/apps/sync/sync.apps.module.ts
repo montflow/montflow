@@ -1,11 +1,5 @@
-import * as NodeChildProcessSpawner from '@effect/platform-node/NodeChildProcessSpawner';
-import * as NodeCrypto from '@effect/platform-node/NodeCrypto';
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import * as NodePath from '@effect/platform-node/NodePath';
-import * as BuildInfo from '@montflow/version/build-info';
-import * as Store from '@montflow/version/store';
+import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Clock, Effect, FileSystem, Layer, Path } from 'effect';
-import { fieldString, parseSkillFile } from '../../modules/skill/index.js';
 
 /**
  * `mf-skills sync` — copy this checkout's public skills into a workspace
@@ -19,10 +13,7 @@ import { fieldString, parseSkillFile } from '../../modules/skill/index.js';
  * Internal skills are reported as `skipped` and never copied.
  */
 
-const PlatformLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, NodeCrypto.layer);
-
-/** Every platform service sync reads, with the spawner's own deps satisfied. */
-const NodeLive = Layer.provideMerge(NodeChildProcessSpawner.layer, PlatformLive);
+const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
 /** The default way a caller reaches `sync` when it does not say. */
 export const DEFAULT_SYNC_INVOCATION = '/mf-skills sync';
@@ -64,7 +55,7 @@ const given = (value: string | undefined): string | undefined =>
 export const resolveDefaultSource = (options: {
   readonly packageCheckout: string;
   readonly cwd?: string | undefined;
-}) =>
+}): Effect.Effect<string, string> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -93,10 +84,7 @@ export const resolveDefaultSource = (options: {
   }).pipe(Effect.provide(NodeLive));
 
 /** Fate of one skill in a sync run. */
-export type SyncOutcome = 'added' | 'updated' | 'unchanged' | 'skipped' | 'refused';
-
-/** Drift between one skill on disk, its manifest entry, and the source. */
-export type SkillDrift = 'current' | 'stale' | 'diverged' | 'unmanaged';
+export type SyncOutcome = 'added' | 'updated' | 'unchanged' | 'skipped';
 
 /** Fate of one file inside a synced skill. */
 export type SyncFileOutcome = 'added' | 'updated' | 'unchanged';
@@ -119,12 +107,6 @@ export interface SyncSkillStatus {
   readonly reason?: string | undefined;
   /** One entry per source file; empty for an internal (`skipped`) skill. */
   readonly files: ReadonlyArray<SyncFileStatus>;
-  /** Drift against the previous manifest; `unmanaged` when the store has none. */
-  readonly drift?: SkillDrift | undefined;
-  /** Commit the skill was installed from, for a diverged report. */
-  readonly manifestCommit?: string | undefined;
-  /** Files whose bytes differ from the manifest, for a diverged skill. */
-  readonly differingFiles?: ReadonlyArray<string> | undefined;
 }
 
 /** Outcome of a sync run across every skill in the source store. */
@@ -144,9 +126,7 @@ export interface SyncResult {
   readonly skills: ReadonlyArray<SyncSkillStatus>;
   /** Names that were added or updated; empty when the target is current. */
   readonly changed: ReadonlyArray<string>;
-  /** Names refused because they diverged and `--force` was not given. */
-  readonly refused: ReadonlyArray<string>;
-  /** True when the target is behind the source or locally diverged. */
+  /** True when the target is behind the source. */
   readonly drifted: boolean;
 }
 
@@ -165,8 +145,6 @@ export interface SyncOptions {
   readonly dir?: string | undefined;
   /** Report only — compute the same outcomes, write nothing. */
   readonly check?: boolean;
-  /** Overwrite a skill whose target bytes diverged from its manifest. */
-  readonly force?: boolean;
   /**
    * Caller's working directory. Used only as a last-resort source checkout
    * when the package-relative one is not a checkout; the engine never reads
@@ -683,27 +661,6 @@ const writeStaged = (
     );
   });
 
-/** Remove files the source no longer has, so an update cannot stay diverged. */
-const pruneExtraFiles = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  target: string,
-  sourceFiles: ReadonlySet<string>,
-): Effect.Effect<void, string> =>
-  Effect.gen(function* () {
-    const present = yield* filesUnder(fs, path, target).pipe(Effect.orElseSucceed(() => []));
-    for (const file of present) {
-      if (sourceFiles.has(file)) continue;
-      yield* fs
-        .remove(path.join(target, file), { force: true })
-        .pipe(
-          Effect.mapError(
-            (cause) => `sync: cannot remove '${path.join(target, file)}': ${reasonOf(cause)}`,
-          ),
-        );
-    }
-  });
-
 /** Copy one public skill's files, writing only the bytes that differ. */
 const syncSkill = (
   fs: FileSystem.FileSystem,
@@ -713,10 +670,7 @@ const syncSkill = (
   targetRoot: string,
   store: StoreRoot,
   check: boolean,
-  manifest: Store.SyncManifest | undefined,
-  sourceCommit: string | undefined,
-  force: boolean,
-) =>
+): Effect.Effect<SyncSkillStatus | undefined, string> =>
   Effect.gen(function* () {
     const source = path.join(sourceRoot, name);
     const target = path.join(targetRoot, name);
@@ -754,69 +708,15 @@ const syncSkill = (
       }),
     );
 
-    const sourceHash = yield* Store.hashSkill(
-      Object.fromEntries(plan.map((file) => [file.file, file.bytes])),
-    );
-    const entry = manifest?.skills.find((skill) => skill.name === name && skill.removed !== true);
-    let drift: SkillDrift = 'unmanaged';
-    let differingFiles: ReadonlyArray<string> | undefined;
-    if (manifest !== undefined) {
-      if (entry === undefined || !targetPresent) {
-        drift = 'stale';
-      } else {
-        const targetBytes = targetPresent ? yield* skillBytes(fs, path, target) : undefined;
-        const targetHash =
-          targetBytes === undefined ? undefined : yield* Store.hashSkill(targetBytes);
-        if (targetHash !== undefined && targetHash.sha256 !== entry.sha256) {
-          const names = new Set([
-            ...Object.keys(targetHash.files),
-            ...Object.keys(entry.files ?? {}),
-          ]);
-          differingFiles = [...names]
-            .filter((file) => targetHash.files[file] !== (entry.files ?? {})[file])
-            .toSorted();
-          drift = 'diverged';
-        } else if (
-          sourceHash.sha256 !== entry.sha256 ||
-          (manifest.source.commit !== undefined &&
-            sourceCommit !== undefined &&
-            manifest.source.commit !== sourceCommit)
-        ) {
-          drift = 'stale';
-        } else {
-          drift = 'current';
-        }
-      }
-    }
-
-    const refused = drift === 'diverged' && !check && !force;
     const pending = plan.filter((file) => file.outcome !== 'unchanged');
-    if (!check && !refused && pending.length > 0) {
+    if (!check && pending.length > 0) {
       yield* writeStaged(fs, path, pending, yield* Clock.currentTimeMillis);
-    }
-    if (!check && !refused && manifest !== undefined && entry !== undefined && targetPresent) {
-      yield* pruneExtraFiles(fs, path, target, new Set(files));
     }
 
     const statuses = plan.map(({ file, outcome }) => ({ file, outcome }));
     const changed = statuses.some((status) => status.outcome !== 'unchanged');
-    const outcome: SyncOutcome = refused
-      ? 'refused'
-      : !targetPresent
-        ? 'added'
-        : changed
-          ? 'updated'
-          : 'unchanged';
-    return {
-      name,
-      outcome,
-      source,
-      target,
-      files: refused ? [] : statuses,
-      drift,
-      manifestCommit: manifest?.source.commit,
-      differingFiles,
-    };
+    const outcome: SyncOutcome = !targetPresent ? 'added' : changed ? 'updated' : 'unchanged';
+    return { name, outcome, source, target, files: statuses };
   });
 
 /**
@@ -836,120 +736,12 @@ const failureReport = (
     : `${message} — already applied: ${done}; failed: ${failed}`;
 };
 
-/** Version from a SKILL.md frontmatter, defaulting like the skill module. */
-const skillVersion = (markdown: string): string => {
-  const parsed = parseSkillFile(markdown);
-  if (parsed === null) return '1.0.0';
-  return fieldString(parsed.fields, 'version') ?? '1.0.0';
-};
-
-/** Bytes for every file under one skill, keyed by relative path. */
-const skillBytes = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  dir: string,
-): Effect.Effect<Record<string, Uint8Array>, string> =>
-  Effect.gen(function* () {
-    const files = yield* filesUnder(fs, path, dir);
-    const entries = yield* Effect.forEach(files, (file) =>
-      fs.readFile(path.join(dir, file)).pipe(
-        Effect.map((bytes) => [file, bytes] as const),
-        Effect.mapError(
-          (cause) => `sync: cannot read '${path.join(dir, file)}': ${reasonOf(cause)}`,
-        ),
-      ),
-    );
-    return Object.fromEntries(entries);
-  });
-
-/** Version declared by the source checkout's skills package, when present. */
-const sourceVersion = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  sourceRoot: string,
-): Effect.Effect<string | undefined> => {
-  const manifest = path.join(sourceRoot, 'packages', 'skills', 'package.json');
-  return fs.readFileString(manifest).pipe(
-    Effect.map((text) => {
-      try {
-        const parsed: { version?: string } = JSON.parse(text);
-        return parsed.version;
-      } catch {
-        return undefined;
-      }
-    }),
-    Effect.orElseSucceed(() => undefined),
-  );
-};
-
-/**
- * Build the manifest for one completed sync.
- *
- * Names, bytes, and git facts all come from the source checkout, so the result
- * depends only on what was synced; `syncedAt` is the one moving field.
- */
-const buildManifest = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  sourceRoot: string,
-  names: ReadonlyArray<string>,
-  previous: Store.SyncManifest | undefined,
-  keep: ReadonlySet<string> = new Set(),
-): Effect.Effect<
-  Store.SyncManifest,
-  string,
-  import('effect/process').ChildProcessSpawner.ChildProcessSpawner | import('effect/Crypto').Crypto
-> =>
-  Effect.gen(function* () {
-    const facts = yield* BuildInfo.checkoutFacts(sourceRoot);
-    const version = yield* sourceVersion(fs, path, sourceRoot);
-    const skills: Array<Store.ManifestSkill> = [];
-    for (const name of names) {
-      const dir = path.join(skillsStoreDir(path, sourceRoot), name);
-      const markdown = (yield* readTextIfPresent(fs, path.join(dir, 'SKILL.md'))) ?? '';
-      const bytes = yield* skillBytes(fs, path, dir);
-      const hashed = yield* Store.hashSkill(bytes);
-      skills.push({
-        name,
-        version: skillVersion(markdown),
-        sha256: hashed.sha256,
-        files: hashed.files,
-      });
-    }
-    const current = new Set(names);
-    const removed = (previous?.skills ?? [])
-      .filter((skill) => !current.has(skill.name) && !keep.has(skill.name))
-      .map((skill) => ({
-        name: skill.name,
-        version: skill.version,
-        sha256: skill.sha256,
-        files: skill.files,
-        removed: true,
-      }));
-    const preserved = (previous?.skills ?? []).filter(
-      (skill) => keep.has(skill.name) && !current.has(skill.name),
-    );
-    return {
-      schemaVersion: Store.SCHEMA_VERSION,
-      source: {
-        path: sourceRoot,
-        remote: facts.remote,
-        commit: facts.commit,
-        ref: facts.ref,
-        version,
-      },
-      syncedAt: new Date(yield* Clock.currentTimeMillis).toISOString(),
-      skills: [...skills, ...preserved, ...removed],
-    };
-  });
-
 /**
  * Publish every public skill from a checkout into a workspace store.
  *
- * Idempotent: only files whose bytes differ are written. A managed skill loses
- * files the source deleted, so an update cannot stay diverged; unrelated target
- * skills are untouched. `check` computes the same outcomes without writing;
- * `drifted` reports whether anything would change.
+ * Idempotent: only files whose bytes differ are written, and target skills or
+ * files absent from the source are never deleted. `check` computes the same
+ * outcomes without writing; `drifted` reports whether anything would change.
  *
  * Skills are published sequentially so a mid-run failure can name the skills
  * already applied, and each skill is staged in full before anything is
@@ -957,7 +749,7 @@ const buildManifest = (
  * @param options - source checkout, target workspace, and mode
  * @returns per-skill outcomes plus the aggregate drift flag
  */
-const runSyncUnsafe = (options: SyncOptions = {}) =>
+export const runSync = (options: SyncOptions = {}): Effect.Effect<SyncResult, string> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -980,33 +772,12 @@ const runSyncUnsafe = (options: SyncOptions = {}) =>
 
     const names = yield* directoryNames(fs, path, source);
     const store = yield* storeRootOf(fs, path, target);
-    const previousState = yield* Store.read(targetRoot);
-    if (
-      previousState.status === 'corrupt' ||
-      previousState.status === 'unreadable' ||
-      previousState.status === 'unsupported'
-    ) {
-      return yield* Effect.fail(
-        `sync: the manifest at '${Store.file(path, targetRoot)}' is ${previousState.status} — repair or remove it before syncing, so local edits are not overwritten`,
-      );
-    }
-    const previous = previousState.status === 'managed' ? previousState.manifest : undefined;
-    const facts = yield* BuildInfo.checkoutFacts(sourceRoot);
     const skills: Array<SyncSkillStatus> = [];
     const applied: Array<SyncSkillStatus> = [];
     for (const name of names) {
-      const status = yield* syncSkill(
-        fs,
-        path,
-        name,
-        source,
-        target,
-        store,
-        check,
-        previous,
-        facts.commit,
-        options.force === true,
-      ).pipe(Effect.mapError((message) => failureReport(message, applied, name)));
+      const status = yield* syncSkill(fs, path, name, source, target, store, check).pipe(
+        Effect.mapError((message) => failureReport(message, applied, name)),
+      );
       if (status === undefined) continue;
       skills.push(status);
       if (status.outcome === 'added' || status.outcome === 'updated') applied.push(status);
@@ -1024,19 +795,6 @@ const runSyncUnsafe = (options: SyncOptions = {}) =>
     const changed = skills
       .filter((skill) => skill.outcome === 'added' || skill.outcome === 'updated')
       .map((skill) => skill.name);
-
-    const refusedSkills = skills.filter((skill) => skill.outcome === 'refused');
-    const keep = new Set(refusedSkills.map((skill) => skill.name));
-    if (!check) {
-      const publicNames = skills
-        .filter((skill) => skill.outcome !== 'skipped' && skill.outcome !== 'refused')
-        .map((skill) => skill.name);
-      const manifest = yield* buildManifest(fs, path, sourceRoot, publicNames, previous, keep);
-      if (previous === undefined || !Store.same(previous, manifest)) {
-        yield* Store.write(targetRoot, manifest);
-      }
-    }
-
     return {
       sourceRoot,
       targetRoot,
@@ -1046,26 +804,6 @@ const runSyncUnsafe = (options: SyncOptions = {}) =>
       invocation,
       skills,
       changed,
-      refused: skills.filter((skill) => skill.outcome === 'refused').map((skill) => skill.name),
-      drifted:
-        changed.length > 0 ||
-        skills.some((skill) => skill.drift === 'stale' || skill.drift === 'diverged'),
+      drifted: changed.length > 0,
     };
-  });
-
-/**
- * Copy this checkout's public skills into a workspace store. The platform
- * layer is provided once here; the inferred channel keeps the requirements
- * visible only through the unsafe implementation.
- * @param options - sync options
- * @returns the sync report, or a displayable failure
- */
-export const runSync = (
-  options: SyncOptions = {},
-): Effect.Effect<Effect.Success<ReturnType<typeof runSyncUnsafe>>, string> =>
-  // SAFETY: NodeLive supplies every platform service the unsafe body reads; the
-  // inferred environment is not dischargeable by the compiler here.
-  runSyncUnsafe(options).pipe(Effect.provide(NodeLive)) as Effect.Effect<
-    Effect.Success<ReturnType<typeof runSyncUnsafe>>,
-    string
-  >;
+  }).pipe(Effect.provide(NodeLive));

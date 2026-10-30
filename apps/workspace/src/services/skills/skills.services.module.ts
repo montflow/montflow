@@ -3,8 +3,9 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: path joins for skill files; both go away with the FileSystem migration.
 import { join } from 'node:path';
 // eslint-disable-next-line montflow/no-node-platform-imports -- same boundary as above: home directory for the model catalogue; goes away with the FileSystem migration.
+import { homedir } from 'node:os';
 import type { Skill } from '@montflow/skills';
-import { Data, Effect } from 'effect';
+import { Data, Effect, Schema } from 'effect';
 
 /**
  * Lazy handle to the skills extension runtime. Static imports from
@@ -479,5 +480,124 @@ export const fetchSkills = (root: string): Effect.Effect<SkillSummary[], string>
             .toSorted((a, b) => a.name.localeCompare(b.name)),
         ),
       ),
+    ),
+  );
+
+/** One model ref: `provider/model-id`. */
+export interface ModelRef {
+  readonly provider: string;
+  readonly id: string;
+}
+
+/** One catalogue model: only the id is kept. */
+const CatalogueModel = Schema.Struct({ id: Schema.String });
+
+/** One provider entry: the models payload stays unchecked here so one odd provider never fails the catalogue — each entry is validated below. */
+const CatalogueEntry = Schema.Struct({ models: Schema.optional(Schema.Unknown) });
+
+/** One provider entry: a missing or malformed models list reads as none. */
+const CatalogueModels = Schema.Array(Schema.Unknown);
+
+/** The pi model catalogue: provider keys to provider entries. */
+const Catalogue = Schema.Record(Schema.String, CatalogueEntry);
+
+/**
+ * Parse the retired pi model catalogue (`~/.pi/agent/models-store.json`:
+ * provider keys holding `{ models: [{ id }] }`) into model refs. Decoded
+ * by schema at the boundary — malformed JSON or unexpected shapes read
+ * as empty. Called by `listModelLabels` and the unit tests; no production
+ * caller.
+ * @param json - raw catalogue contents
+ * @returns `provider/id` refs in catalogue order
+ */
+export const parseModelsStore = (json: string): ReadonlyArray<ModelRef> => {
+  let catalogue: typeof Catalogue.Type;
+  try {
+    catalogue = Schema.decodeUnknownSync(Catalogue)(JSON.parse(json));
+  } catch {
+    return [];
+  }
+  const refs: Array<ModelRef> = [];
+  for (const [provider, entry] of Object.entries(catalogue)) {
+    let models: ReadonlyArray<unknown>;
+    try {
+      models = Schema.decodeUnknownSync(CatalogueModels)(entry.models ?? []);
+    } catch {
+      continue;
+    }
+    for (const model of models) {
+      let id: string;
+      try {
+        id = Schema.decodeUnknownSync(CatalogueModel)(model).id;
+      } catch {
+        continue;
+      }
+      if (id !== '') refs.push({ provider, id });
+    }
+  }
+  return refs;
+};
+
+/**
+ * Read the retired pi catalogue from `~/.pi/agent/models-store.json`.
+ * Reads the file once per call — failures read as empty, never fail.
+ * Unused: no caller at all (no production code, no tests); candidate for
+ * removal.
+ * @deprecated The live model label comes from `ModelPort.default()`.
+ * @param home - home directory override (defaults to the live one)
+ * @returns catalogue refs, or empty when unreadable
+ */
+export const listModelLabels = (
+  home: string = homedir(),
+): Effect.Effect<ReadonlyArray<ModelRef>, never> =>
+  Effect.promise(() =>
+    readFile(join(home, '.pi', 'agent', 'models-store.json'), 'utf8').then(
+      (raw) => parseModelsStore(raw),
+      () => [],
+    ),
+  );
+
+/** The retired session defaults file shape: the provider/model pair legacy sessions fell back to. */
+const LegacyDefaults = Schema.Struct({
+  defaultProvider: Schema.optional(Schema.String),
+  defaultModel: Schema.optional(Schema.String),
+});
+
+/**
+ * Parse the retired session defaults (`~/.pi/agent/settings.json`) into
+ * the default model ref legacy sessions reported. Decoded by schema at the
+ * boundary: malformed JSON or a missing pair reads as undefined. Called by
+ * `listDefaultModel` and the unit tests; no production caller.
+ * @param json - raw settings contents
+ * @returns default ref, or undefined when absent
+ */
+export const parseDefaultModel = (json: string): ModelRef | undefined => {
+  let defaults: typeof LegacyDefaults.Type;
+  try {
+    defaults = Schema.decodeUnknownSync(LegacyDefaults)(JSON.parse(json));
+  } catch {
+    return undefined;
+  }
+  if (defaults.defaultProvider === undefined || defaults.defaultModel === undefined)
+    return undefined;
+  if (defaults.defaultProvider === '' || defaults.defaultModel === '') return undefined;
+  return { provider: defaults.defaultProvider, id: defaults.defaultModel };
+};
+
+/**
+ * Read the retired session default from the legacy settings file.
+ * Failures read as undefined, never fail. Unused: no caller at all (no
+ * production code, no tests); candidate for removal.
+ * @deprecated The live model label comes from `ModelPort.default()`.
+ * @param home - home directory override (defaults to the live one)
+ * @returns default ref, or undefined when unreadable
+ */
+export const listDefaultModel = (
+  home: string = homedir(),
+): Effect.Effect<ModelRef | undefined, never> =>
+  Effect.promise(() =>
+    readFile(join(home, '.pi', 'agent', 'settings.json'), 'utf8').then(
+      (raw) => parseDefaultModel(raw),
+      () => undefined,
     ),
   );

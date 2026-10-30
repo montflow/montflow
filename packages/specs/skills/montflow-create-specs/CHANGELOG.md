@@ -1,16 +1,68 @@
 # Changelog
 
-## [3.0.0] - 2026-10-28
-
-### Changed
-
-- **Breaking:** a spec is `SPEC.md` plus one directory per phase, each holding one directory per task (`<spec>/<PHASE>/<PHASE><NNN>-<name>/`); a task id's letters must match its phase directory
-- The strict per-level allowlist: root = `SPEC.md` + phase dirs, phase = task dirs, task = `TASK.md`/`MEMORY.md`/`GATES.md`; an empty phase directory or a stray file/directory fails
-- `mf-specs create` writes the nested layout; `create` still scaffolds phase A only
+## [2.10.0] - 2026-10-28
 
 ### Added
 
-- `mf-specs migrate --name <spec>` / `--all` (with `--dry-run`) moves a flat spec under its phases without editing a file
+- A gate names the task's own verification commands: `mf-specs create` writes a `REPLACE` marker item that the author and the review replace, never a copied repo-wide suite
+- The record checks and the mechanical review budget: `task.completion-unchecked`, `gate.unchecked`, and a `review.budget-exceeded` error when a series holds more rounds for a phase than that phase's task sizes buy
+
+## [2.9.1] - 2026-10-28
+
+### Changed
+
+- Catalogue reads name their host-free form: `spec_models` in the host, `mf-specs models --catalog <path>` outside it, because a bare `mf-specs models` fails `models.unavailable` there
+- The sizing output distinction is explicit: compact `sizing` omits the budget, `--human` / `--verbose` prints it, and `models --verify` states the entries checked and skipped
+
+## [2.9.0] - 2026-10-28
+
+### Added
+
+- The prerequisite skill list and the two-tier behavior: doctor installs the required `montflow-create-specs` and `montflow-find-specs` skills, while a missing non-owned skill (`executing-skills`, `grilling`, `i-have-adhd`, or a review skill) is advisory and leaves a `prompt.skill-advisory` block in the rendered prompt
+
+## [2.8.0] - 2026-10-28
+
+### Added
+
+- Open-versus-fixed scope: omitting `--scope` leaves the layer open and the wizard asks; `--name` implies the spec layer, `--name --phase` implies that phase, and an explicit `--scope` wins and refuses flags it cannot honour
+- The proof loop for a generated config: `models --verify` for the touched scope, then `check`, then `sizing --task <id> --human` for one task per explicit target
+
+## [2.7.0] - 2026-10-26
+
+### Added
+
+- The authoring-versus-generation boundary: a task's size is chosen while authoring, but a spec's `sizing.json` is generated afterwards by the `spec-sizing` prompt (`mf-specs sizing-config` / `/specs sizing-config` / `spec_sizing`), run by the `spec-sizing-orchestrator` role
+- The catalogue rule: never type a model id or an effort into a config by hand; `mf-specs models` is the only authority, and `variants unknown` or `variants none` forbids an effort
+
+### Changed
+
+- The reference names `spec-sizing` beside `spec-create` and adds `mf-specs models` / `models --verify`
+
+## [2.6.0] - 2026-10-26
+
+### Added
+
+- Front-end section pointing at the shipped `spec-create` prompt, `mf-specs author --request` / `/specs author` / `spec_author`, and the doctor gate
+
+### Changed
+
+- The reference names `packages/specs/prompts/spec-create.json` and drops the deleted `src/skills/authoring-spec.ts` contract source
+
+## [2.5.0] - 2026-10-26
+
+### Changed
+
+- Renamed from `montflow-create-pi-specs` to `montflow-create-specs`; the retired Pi infix is gone from the directory, the frontmatter `name`, and every cross-reference
+
+## [2.4.0] - 2026-10-26
+
+### Added
+
+- Task `size` in `TASK.md` frontmatter: `tiny`, `small`, `medium`, or `large`, chosen per task by risk
+- The review-cycle budget each size buys (`tiny` 1, `small` 2, `medium` 3, `large` 3), the hard cap of 3, and the rule that a phase's budget is its largest non-review task's
+- Layered `sizing.json` config (repo → spec → phase), the whole-entry merge rule, and the `inherit` fallback when no layer defines a size
+- `size` as the fourth `--tasks` token, `name[:type[:gates[:size]]]`, defaulting to `medium`
+- `mf-specs sizing --task --human` / `mf-specs resolve --task` as the way to read a dispatch target and its provenance
 
 ## [2.3.0] - 2026-10-25
 

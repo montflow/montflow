@@ -19,8 +19,10 @@ import * as Renderers from './renderers.apps.module.js';
  * Slash-command name.
  *
  * `mf-prompts` — the same name as the binary, because it is the same command.
- * With no arguments or `list` the OpenCode TUI picker opens; other verbs run
- * headless.
+ * A session runs the headless CLI; the interactive menu is
+ * `/mf-prompts`. Splitting them the other way round (CLI as
+ * `mf-prompts-cli`) put a suffix on the thing people actually reach for and
+ * left the menu holding the plain name.
  */
 export const COMMAND_NAME = 'mf-prompts';
 
@@ -318,19 +320,19 @@ export const run = (
       case 'Verify': {
         if (action.all || action.name === undefined) {
           const report = yield* Engines.verifyAll({ cwd: action.dir ?? cwd });
-          const rendered = Renderers.verifyAll(report);
+          yield* say(Renderers.verifyAll(report));
           if (report.entries.some((entry) => !entry.result.valid)) {
-            return yield* Effect.fail(`verification failed:\n${rendered}`);
+            return yield* Effect.fail(`verification failed:\n${Renderers.verifyAll(report)}`);
           }
-          yield* say(rendered);
           return;
         }
         const result = yield* Engines.verify({ cwd: action.dir ?? cwd }, action.name);
-        const rendered = Renderers.verify(action.name, result);
+        yield* say(Renderers.verify(action.name, result));
         if (!result.valid) {
-          return yield* Effect.fail(`'${action.name}' failed verification:\n${rendered}`);
+          return yield* Effect.fail(
+            `'${action.name}' failed verification:\n${Renderers.verify(action.name, result)}`,
+          );
         }
-        yield* say(rendered);
         return;
       }
       case 'Create': {

@@ -1,7 +1,6 @@
 import { Clock, Effect } from 'effect';
-import { ProfileStore } from '@montflow/profiles/services';
-import { SpecStore } from '@montflow/specs/services';
-import { Task } from '@montflow/specs/modules';
+import { ProfileStore } from '@montflow/profiles';
+import { SpecStore, Task } from '@montflow/specs';
 import * as Review from '../../modules/review/index.js';
 import { ProfileProbe, ReviewStore } from '../../services/index.js';
 import * as Doctor from '../doctor/index.js';

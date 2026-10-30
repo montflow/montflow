@@ -20,7 +20,8 @@ export interface VariableSummary {
   /** Label shown in the run dialog; equals `name` when unset. */
   readonly label: string;
   /** `text` or `textarea`. */
-  readonly type: 'text' | 'textarea';
+  readonly type: 'text' | 'textarea' | 'select';
+  readonly options?: readonly string[];
   /** True when the run cannot dispatch without a value. */
   readonly required: boolean;
   /** Value used when the user leaves the field blank. Empty when none. */
@@ -354,7 +355,7 @@ export interface ExecutionRequest {
 
 /**
  * Port that actually runs an agent on a resolved execution. Injected by the
- * consuming extension (the retired child-agent runtime) so this module stays free of
+ * consuming extension (OpenCode child-agent runtime) so this module stays free of
  * any model dependency, and so tests need no runtime.
  * @param request - the resolved execution
  * @returns Effect resolving to the agent's reply text

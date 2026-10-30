@@ -1,18 +1,21 @@
 import {
-  type TaskRow,
   PHASE_PATTERN,
+  type TaskRow,
   parseSpecFile,
   parseTaskTable,
   verifySpecFile,
 } from '../spec/index.js';
 import { parseMarkdown } from '../frontmatter/index.js';
-import { verifyGatesFile } from '../gates/index.js';
+import { verifyGateProgress, verifyGatesFile } from '../gates/index.js';
 import { verify as verifyLifecycle } from '../lifecycle/index.js';
 import { verifyMemoryFile } from '../memory/index.js';
 import {
+  type PhaseBudget,
   type ReviewTaskEntry,
   type SeriesSnapshot,
+  seriesNames,
   verify as verifyReviewLink,
+  verifyBudgets as verifyReviewBudgets,
 } from '../review-link/index.js';
 import {
   type Task,
@@ -20,32 +23,35 @@ import {
   parseTaskFile,
   phaseOf,
   phaseRank,
+  sizeOf,
   verifyTaskFile,
 } from '../task/index.js';
+import {
+  CODES,
+  CONFIG_FILE,
+  type ConfigSource,
+  phaseReviewBudget,
+  verifyText,
+} from '../sizing/index.js';
 import { type Issue, type Result, issue, noErrors } from '../verify/index.js';
 
 /**
- * One entry inside a spec directory, as seen by the verifier.
- * `path` is POSIX-relative to the spec root (e.g. `A/A001-explore/TASK.md`).
+ * One file inside a spec directory, as seen by the verifier.
+ * `path` is POSIX-relative to the spec root (e.g. `A001-explore/TASK.md`).
  * The verifier never touches disk — the caller supplies the snapshot.
  */
 export interface SpecFileEntry {
   /** POSIX-relative path from the spec root. */
   readonly path: string;
-  /** Raw file contents. Empty for directories. */
+  /** Raw file contents. */
   readonly content: string;
-  /**
-   * Whether the entry is a file or a directory. Optional so a caller may
-   * supply a file-only listing; a missing kind means `file`.
-   */
-  readonly kind?: 'file' | 'directory';
 }
 
 /** In-memory listing of a spec directory, supplied by the caller. */
 export interface SpecSnapshot {
   /** Spec directory slug (matches SPEC.md `name`). */
   readonly name: string;
-  /** Every file and, optionally, directory under the spec root. */
+  /** Every file under the spec root. */
   readonly files: ReadonlyArray<SpecFileEntry>;
 }
 
@@ -55,62 +61,18 @@ const TASK_DIR_FILES = new Set(['TASK.md', 'MEMORY.md', 'GATES.md']);
 /** Files every task directory must contain. */
 const TASK_DIR_REQUIRED = ['TASK.md', 'MEMORY.md'] as const;
 
-/** The one file allowed directly at the spec root. */
-const SPEC_ROOT_FILE = 'SPEC.md';
+/** Root files a spec directory may contain; everything else is stray. */
+const SPEC_ROOT_FILES = new Set(['SPEC.md', CONFIG_FILE]);
 
-/** Helpful placement hints for spec files found at the wrong level. */
-const SPEC_FILE_PLACEMENT = new Map<string, string>([
-  ['TASK.md', 'TASK.md must live inside a task directory: <phase>/A001-<kebab-name>/TASK.md.'],
-  [
-    'MEMORY.md',
-    'MEMORY.md must live inside a task directory: <phase>/A001-<kebab-name>/MEMORY.md.',
-  ],
-  ['GATES.md', 'GATES.md must live inside a task directory: <phase>/A001-<kebab-name>/GATES.md.'],
+/** Helpful placement hints for files that belong inside a task directory. */
+const ROOT_STRAY_HINT = new Map<string, string>([
+  ['TASK.md', 'TASK.md must live inside a task directory: A001-<kebab-name>/TASK.md.'],
+  ['MEMORY.md', 'MEMORY.md must live inside a task directory: A001-<kebab-name>/MEMORY.md.'],
+  ['GATES.md', 'GATES.md must live inside a task directory: A001-<kebab-name>/GATES.md.'],
 ]);
 
 /** A leading task id with no `-<name>` yet, e.g. `A001`. */
 const TASK_ID_PREFIX = /^[A-Z]{1,2}\d{3}/;
-
-/** Normalize an entry's kind, treating a missing kind as a file. */
-const kindOf = (entry: SpecFileEntry): 'file' | 'directory' => entry.kind ?? 'file';
-
-/** Parent directory path, or `''` for a top-level entry. */
-const parentOf = (path: string): string => {
-  const slash = path.lastIndexOf('/');
-  return slash === -1 ? '' : path.slice(0, slash);
-};
-
-/** Final path segment. */
-const baseOf = (path: string): string => {
-  const slash = path.lastIndexOf('/');
-  return slash === -1 ? path : path.slice(slash + 1);
-};
-
-/**
- * Every directory path implied by the snapshot: the declared directory entries
- * plus the parents of every file path. The union lets a file-only snapshot keep
- * verifying while a declared empty directory stays observable.
- */
-const directoryPaths = (entries: ReadonlyArray<SpecFileEntry>): Set<string> => {
-  const dirs = new Set<string>();
-  for (const entry of entries) {
-    if (kindOf(entry) !== 'directory') continue;
-    let declared = entry.path;
-    while (declared !== '') {
-      dirs.add(declared);
-      declared = parentOf(declared);
-    }
-  }
-  for (const entry of entries) {
-    if (kindOf(entry) !== 'file') continue;
-    let parent = parentOf(entry.path);
-    while (parent !== '') {
-      dirs.add(parent);
-      parent = parentOf(parent);
-    }
-  }
-  return dirs;
-};
 
 /**
  * Find the first `depends-on` cycle, if any. Returns the offending ids in
@@ -151,89 +113,124 @@ const nest = (path: string, result: Result): ReadonlyArray<Issue> =>
   result.issues.map((found) => ({ ...found, field: `${path}: ${found.field}` }));
 
 /**
- * Mechanically verify the whole on-disk structure of a spec: the
- * phase-directory layout (`SPEC.md`, one directory per phase, one directory per
- * task) with a strict allowlist at every level, plus task-directory naming and
- * id/name agreement, unique ids, task-table agreement (type/status/gates),
- * `TASK.md` / `GATES.md` / `MEMORY.md` content, dependency existence + phase
- * ordering + cycles, a `review` task per phase, and `locked-phases` pointing at
- * real phase directories. Pure — no IO.
+ * Verify an optional spec-root `sizing.json` against the contract, given the
+ * phase ids the spec actually holds. A phase override with a well-formed id
+ * but no task in this spec is an unused override (warning), not a broken
+ * config; a malformed phase key stays an error.
+ */
+const verifySpecConfig = (name: string, phases: ReadonlyArray<string>, text: string): Result => {
+  const source: ConfigSource = { path: `${name}/${CONFIG_FILE}`, kind: 'spec', phases };
+  const found = verifyText(source, text).issues.map((issueFound) =>
+    issueFound.code === CODES.unknownPhase &&
+    issueFound.actual !== undefined &&
+    PHASE_PATTERN.test(issueFound.actual)
+      ? {
+          ...issueFound,
+          severity: 'warning' as const,
+          message: `Phase '${issueFound.actual}' has no tasks in this spec; the override is unused.`,
+          expected: 'a phase with at least one task',
+          fix: `Remove '${issueFound.field}' from ${CONFIG_FILE}, or add a task in phase ${issueFound.actual}.`,
+        }
+      : issueFound,
+  );
+  return { valid: noErrors(found), issues: found };
+};
+
+/** Review-store input for the cross-store checks. */
+export interface ReviewInput {
+  /** The spec's review series, as the review store supplies them. */
+  readonly series: ReadonlyArray<SeriesSnapshot>;
+  /**
+   * True when every complete `review` task must have a round attributed to its
+   * phase in every expected series. A disk-driven `check` passes false: a
+   * historical spec may predate the review store, and its absence must not turn
+   * `check` red. The budget check still applies to every series that exists.
+   */
+  readonly requireRounds: boolean;
+}
+
+/**
+ * The review input for a caller that holds no review store: no series, no
+ * round-presence requirement. Structure-only verification and a store that has
+ * no review directory pass this explicitly, so omitting the review input can
+ * never silently disable the budget check.
+ */
+export const NO_REVIEW: ReviewInput = { series: [], requireRounds: false };
+
+/**
+ * Mechanically verify the whole on-disk structure of a spec:
+ * required files, task-directory naming and placement, id/name agreement,
+ * unique ids, task-table agreement (type/status/gates), `TASK.md` /
+ * `GATES.md` / `MEMORY.md` content, the record checks (a complete task's
+ * completion checklist and gate progress), an optional spec-root `sizing.json`,
+ * dependency existence + phase ordering + cycles, a `review` task per phase,
+ * and `locked-phases` pointing at real phases. Pure — no IO.
  *
- * A task directory at the spec root is an error naming its target path.
- *
- * When `review` is supplied, the tree's review tasks are additionally
- * checked against the convention link (`ReviewLink`): each complete `review`
- * task must have a round attributed to its phase in every expected series.
- * Omitting it skips the cross-store check, so a caller without review-store
- * access is unaffected.
+ * The tree's review tasks are additionally checked against the convention link
+ * (`ReviewLink`): each expected series may hold no more rounds attributed to a
+ * phase than that phase's size-derived review budget, and — only when
+ * `review.requireRounds` is set — each complete `review` task must have a round
+ * attributed to its phase in every expected series. Every caller supplies the
+ * input, so one snapshot yields one verdict for `check`, `status`, `next`, and
+ * `execute`; a caller with no review store passes {@link NO_REVIEW}.
  * @param snapshot - the spec directory listing
- * @param review - the linked review series, when the caller has them
+ * @param review - the linked review series and round-presence rule
  * @returns the result; `valid` is true only with zero issues
  */
-export const verifySpecTree = (
-  snapshot: SpecSnapshot,
-  review?: ReadonlyArray<SeriesSnapshot>,
-): Result => {
+export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Result => {
   const issues: Array<Issue> = [];
 
-  const files = snapshot.files.filter((entry) => kindOf(entry) === 'file');
-  const dirs = directoryPaths(snapshot.files);
-  const childrenOf = (dir: string): ReadonlyArray<string> =>
-    [...dirs].filter((path) => parentOf(path) === dir);
-
-  // ── Root ── only SPEC.md and phase directories may live here.
-  for (const file of files) {
-    if (parentOf(file.path) !== '' || file.path === SPEC_ROOT_FILE) continue;
+  for (const file of snapshot.files) {
+    if (file.path.includes('/') || SPEC_ROOT_FILES.has(file.path)) continue;
     issues.push(
-      issue(file.path, SPEC_FILE_PLACEMENT.get(file.path) ?? 'Unexpected file at the spec root.'),
+      issue(file.path, ROOT_STRAY_HINT.get(file.path) ?? 'Unexpected file at the spec root.'),
     );
   }
-  for (const file of files) {
-    if (file.path.split('/').length > 3) {
-      issues.push(issue(file.path, 'Path is deeper than <phase>/<task>/<file>.'));
-    }
-  }
 
-  const specFile = files.find((file) => file.path === SPEC_ROOT_FILE);
+  const specFile = snapshot.files.find((file) => file.path === 'SPEC.md');
   if (specFile === undefined) {
-    issues.push(issue(SPEC_ROOT_FILE, 'Required file is missing.'));
+    issues.push(issue('SPEC.md', 'Required file is missing.'));
     return { valid: false, issues };
   }
-  issues.push(...nest(SPEC_ROOT_FILE, verifySpecFile(snapshot.name, specFile.content)));
+  issues.push(...nest('SPEC.md', verifySpecFile(snapshot.name, specFile.content)));
 
   const parsedSpec = parseMarkdown(specFile.content);
   const spec = parseSpecFile(specFile.content);
   const rows: ReadonlyArray<TaskRow> = parsedSpec === null ? [] : parseTaskTable(parsedSpec.body);
 
-  // ── Phases ── every root directory is a phase directory or a finding.
-  const phaseDirs: Array<string> = [];
-  for (const dir of childrenOf('')) {
-    if (PHASE_PATTERN.test(dir)) {
-      phaseDirs.push(dir);
+  const dirs = new Map<string, Array<SpecFileEntry>>();
+  for (const file of snapshot.files) {
+    const slash = file.path.indexOf('/');
+    if (slash === -1) continue;
+    const dir = file.path.slice(0, slash);
+    const rest = file.path.slice(slash + 1);
+    if (rest.includes('/')) {
+      issues.push(
+        issue(file.path, 'Nested path inside a task directory — task files are one level deep.'),
+      );
       continue;
     }
-    const taskDir = parseTaskDirName(dir);
-    if (taskDir !== undefined) {
-      const target = `${taskDir.phase}/${dir}`;
+    const bucket = dirs.get(dir) ?? [];
+    bucket.push(file);
+    dirs.set(dir, bucket);
+  }
+
+  const tasks = new Map<string, Task>();
+  const gates = new Map<string, boolean>();
+  for (const [dir, files] of dirs) {
+    const dirName = parseTaskDirName(dir);
+    if (dirName === undefined) {
       issues.push(
         issue(
           dir,
-          `Task directory '${dir}' must live inside a phase directory: ${target}/.`,
-          `Move it to ${target}/.`,
+          TASK_ID_PREFIX.test(dir)
+            ? `Task directory '${dir}' is missing its kebab name; expected <PHASE_LETTERS><NNN>-<kebab-name>.`
+            : 'Task directory must match <PHASE_LETTERS><NNN>-<kebab-name>.',
         ),
       );
       continue;
     }
-    issues.push(issue(dir, 'Unexpected directory at the spec root.'));
-  }
-  phaseDirs.sort((a, b) => phaseRank(a) - phaseRank(b));
-
-  // ── Tasks ── one reader per task directory.
-  const tasks = new Map<string, Task>();
-  const gates = new Map<string, boolean>();
-  const readTaskDir = (dir: string, leaf: string): void => {
-    const dirFiles = files.filter((file) => parentOf(file.path) === dir);
-    const names = new Set(dirFiles.map((file) => baseOf(file.path)));
+    const names = new Set(files.map((file) => file.path.slice(dir.length + 1)));
     for (const required of TASK_DIR_REQUIRED) {
       if (!names.has(required))
         issues.push(issue(`${dir}/${required}`, 'Required file is missing.'));
@@ -243,72 +240,32 @@ export const verifySpecTree = (
         issues.push(issue(`${dir}/${name}`, 'Unexpected file in a task directory.'));
       }
     }
-    for (const sub of childrenOf(dir)) {
-      issues.push(issue(sub, 'Unexpected directory inside a task directory.'));
-    }
-    const dirName = parseTaskDirName(leaf);
-    if (dirName !== undefined) gates.set(dirName.id, names.has('GATES.md'));
+    gates.set(dirName.id, names.has('GATES.md'));
 
-    const taskFile = dirFiles.find((file) => file.path === `${dir}/TASK.md`);
+    const taskFile = files.find((file) => file.path === `${dir}/TASK.md`);
+    const parsedTask = taskFile === undefined ? undefined : parseTaskFile(taskFile.content);
     if (taskFile !== undefined) {
-      issues.push(...nest(`${dir}/TASK.md`, verifyTaskFile(leaf, taskFile.content)));
-      const task = parseTaskFile(taskFile.content);
-      if (task !== undefined) {
-        if (tasks.has(task.id))
-          issues.push(issue(`${dir}/TASK.md`, `Duplicate task id '${task.id}'.`));
-        tasks.set(task.id, task);
+      issues.push(...nest(`${dir}/TASK.md`, verifyTaskFile(dir, taskFile.content)));
+      if (parsedTask !== undefined) {
+        if (tasks.has(parsedTask.id))
+          issues.push(issue(`${dir}/TASK.md`, `Duplicate task id '${parsedTask.id}'.`));
+        tasks.set(parsedTask.id, parsedTask);
       }
     }
 
-    const gatesFile = dirFiles.find((file) => file.path === `${dir}/GATES.md`);
+    const gatesFile = files.find((file) => file.path === `${dir}/GATES.md`);
     if (gatesFile !== undefined) {
       issues.push(...nest(`${dir}/GATES.md`, verifyGatesFile(gatesFile.content)));
-    }
-    const memoryFile = dirFiles.find((file) => file.path === `${dir}/MEMORY.md`);
-    if (memoryFile !== undefined) {
-      issues.push(...nest(`${dir}/MEMORY.md`, verifyMemoryFile(memoryFile.content)));
-    }
-  };
-
-  for (const phase of phaseDirs) {
-    const taskDirs = childrenOf(phase);
-    if (taskDirs.length === 0) {
-      issues.push(issue(phase, 'Phase directory has no task directories.'));
-    }
-    for (const file of files) {
-      if (parentOf(file.path) !== phase) continue;
       issues.push(
-        issue(
-          file.path,
-          SPEC_FILE_PLACEMENT.get(baseOf(file.path)) ??
-            'Unexpected file in a phase directory; files live in a task directory.',
+        ...nest(
+          `${dir}/GATES.md`,
+          verifyGateProgress(gatesFile.content, parsedTask?.status === 'complete'),
         ),
       );
     }
-
-    for (const dir of taskDirs) {
-      const leaf = baseOf(dir);
-      const dirName = parseTaskDirName(leaf);
-      if (dirName === undefined) {
-        issues.push(
-          issue(
-            dir,
-            TASK_ID_PREFIX.test(leaf)
-              ? `Task directory '${leaf}' is missing its kebab name; expected <PHASE_LETTERS><NNN>-<kebab-name>.`
-              : 'Unexpected directory in a phase directory; a phase holds task directories only.',
-          ),
-        );
-        continue;
-      }
-      if (dirName.phase !== phase) {
-        issues.push(
-          issue(
-            dir,
-            `Task id '${dirName.id}' belongs to phase '${dirName.phase}', but lives under '${phase}/'.`,
-          ),
-        );
-      }
-      readTaskDir(dir, leaf);
+    const memoryFile = files.find((file) => file.path === `${dir}/MEMORY.md`);
+    if (memoryFile !== undefined) {
+      issues.push(...nest(`${dir}/MEMORY.md`, verifyMemoryFile(memoryFile.content)));
     }
   }
 
@@ -382,7 +339,25 @@ export const verifySpecTree = (
   if (cycle !== undefined)
     issues.push(issue('depends-on', `Dependency cycle: ${cycle.join(' -> ')}.`));
 
-  for (const phase of phaseDirs) {
+  const phases = new Set<string>();
+  for (const id of tasks.keys()) phases.add(phaseOf(id));
+  const phaseBudgets: ReadonlyArray<PhaseBudget> = [...phases]
+    .toSorted((a, b) => phaseRank(a) - phaseRank(b))
+    .map((phase) => ({
+      phase,
+      budget: phaseReviewBudget(
+        Array.from(tasks.values())
+          .filter((task) => phaseOf(task.id) === phase)
+          .map((task) => ({ type: task.type, size: sizeOf(task) })),
+      ),
+    }));
+  const configFile = snapshot.files.find((file) => file.path === CONFIG_FILE);
+  if (configFile !== undefined) {
+    issues.push(
+      ...nest(CONFIG_FILE, verifySpecConfig(snapshot.name, [...phases], configFile.content)),
+    );
+  }
+  for (const phase of phases) {
     const hasReview = Array.from(tasks.values()).some(
       (task) => phaseOf(task.id) === phase && task.type === 'review',
     );
@@ -398,21 +373,25 @@ export const verifySpecTree = (
       }).issues,
     );
     for (const phase of spec.lockedPhases) {
-      if (!phaseDirs.includes(phase))
-        issues.push(issue('locked-phases', `Locked phase '${phase}' has no phase directory.`));
+      if (!phases.has(phase))
+        issues.push(issue('locked-phases', `Locked phase '${phase}' has no tasks.`));
     }
   }
 
-  if (review !== undefined) {
-    const reviewTasks: ReadonlyArray<ReviewTaskEntry> = Array.from(tasks.values())
-      .filter((task) => task.type === 'review')
-      .map((task) => ({
-        phase: phaseOf(task.id),
-        profiles: task.reviewerProfiles,
-        complete: task.status === 'complete',
-      }));
-    issues.push(...verifyReviewLink(snapshot.name, reviewTasks, review).issues);
+  const reviewTasks: ReadonlyArray<ReviewTaskEntry> = Array.from(tasks.values())
+    .filter((task) => task.type === 'review')
+    .map((task) => ({
+      phase: phaseOf(task.id),
+      profiles: task.reviewerProfiles,
+      complete: task.status === 'complete',
+    }));
+  if (review.requireRounds) {
+    issues.push(...verifyReviewLink(snapshot.name, reviewTasks, review.series).issues);
   }
+  const expectedSeries = [
+    ...new Set(reviewTasks.flatMap((task) => seriesNames(snapshot.name, task.profiles))),
+  ];
+  issues.push(...verifyReviewBudgets(expectedSeries, phaseBudgets, review.series).issues);
 
   return { valid: noErrors(issues), issues };
 };

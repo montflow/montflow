@@ -1,7 +1,8 @@
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Effect, FileSystem, Layer, Path } from 'effect';
+import * as Fs from 'node:fs';
 import * as Vitest from '@effect/vitest';
-import * as PromptStore from '../prompt-store.services.module.js';
+import { PromptStore } from '../index.js';
 
 /** Node platform layers, then the real file-backed store built on top. */
 const PlatformLayer = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
@@ -46,6 +47,29 @@ Vitest.describe('PromptStore.readRaw runtime', () => {
       const store = yield* PromptStore.PromptStore;
       const error = yield* store.readRaw(cwd, 'Bad Name').pipe(Effect.flip);
       Vitest.expect(error.message).toBe("Unknown prompt 'Bad Name'.");
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('reports a permission failure as unreadable, not as an unknown name', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-prompts-store-' });
+      const dir = path.join(cwd, ...STORE_SEGMENTS);
+      yield* fs.makeDirectory(dir, { recursive: true });
+      const file = path.join(dir, 'commit.json');
+      yield* fs.writeFileString(file, '{"name":"commit"}\n');
+      Fs.chmodSync(file, 0o000);
+
+      const store = yield* PromptStore.PromptStore;
+      const error = yield* store.readRaw(cwd, 'commit').pipe(Effect.flip);
+      Vitest.expect(error.message).toContain(`Cannot read '${file}'`);
+      Vitest.expect(error.message).toContain('PermissionDenied');
+      Vitest.expect(error.message).not.toContain('Unknown prompt');
+      Vitest.expect(error.path).toBe(file);
+      Vitest.expect(error.cause).toBeDefined();
+
+      Fs.chmodSync(file, 0o644);
     }).pipe(Effect.provide(StoreLive)),
   );
 });

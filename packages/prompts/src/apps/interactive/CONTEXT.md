@@ -20,8 +20,9 @@ codecs, and the store service stay out (`modules/`, `services/`).
   injected executor. A prompt that pins its own `model` never prompts for one
 - Verify notification for the mechanical result (`notifyVerifyResult`)
 - `doctor` install hook and execute gate via the shared `../doctor` module
-- Command registration as an Effect (`register`, `COMMAND_NAME`) via
-  the host effect API; cancellation maps to info severity
+- Command naming (`COMMAND_NAME`); registration as an Effect goes through the
+  injected command port (`ports.command.register`) in `../../server.ts`, and
+  cancellation maps to info severity
 - Store access through the `PromptStore` service (`../../services/`),
   provided as `live` at invocation — no injected port object
 - Manual vs agentic create/modify (`createAgentic`, `modifyAgentic`) over

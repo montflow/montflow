@@ -18,16 +18,16 @@ import * as Renderers from './renderers.apps.module.js';
 export { LIST_STATUSES, resolveListStatus };
 
 /**
- * The `/mf-profiles` slash front end: a hand-rolled parser over the same
+ * The `/mf-profiles-cli` slash front end: a hand-rolled parser over the same
  * engines the `mf-profiles` binary uses.
  *
- * A bespoke parser rather than `effect/cli` because a OpenCode slash command
+ * A bespoke parser rather than `effect/cli` because an OpenCode slash command
  * receives a single argument *string*, not an argv array, so the bin's
  * `Command` tree cannot be reused here. Everything below the parser is shared.
  */
 
-/** Slash-command name (invoke as `/mf-profiles`). */
-export const COMMAND_NAME = 'mf-profiles';
+/** Slash-command name (invoke as `/mf-profiles-cli`). */
+export const COMMAND_NAME = 'mf-profiles-cli';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
@@ -35,12 +35,12 @@ export const COMMAND_DESCRIPTION =
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-profiles list [--status valid|invalid] | show <name> | verify [<name>...] | create <name> --description "text" [--model p/m] [--skills a,b] [--instructions "text"] [--checklist "item 1; item 2"] | modify <name> [--description ...] [--model ...] [--skills ...] [--instructions ...] [--checklist ...] | delete <name> | help';
+  '/mf-profiles-cli list [--status valid|invalid] | show <name> | verify [<name>...] | create <name> --description "text" [--model p/m] [--skills a,b] [--instructions "text"] [--checklist "item 1; item 2"] | modify <name> [--description ...] [--model ...] [--skills ...] [--instructions ...] [--checklist ...] | delete <name> | help';
 
 /** Fields for `create` / `modify`, re-exported under the historical name. */
 export type CliFields = ProfileFields;
 
-/** Parsed `/mf-profiles` invocation. Never prompts — gaps fail. */
+/** Parsed `/mf-profiles-cli` invocation. Never prompts — gaps fail. */
 export type CliAction =
   | { readonly kind: 'Help' }
   | { readonly kind: 'List'; readonly status: string | undefined }
@@ -180,7 +180,7 @@ export const parseCliArgs = (args: string): CliAction => {
  * workflows: every field comes from flags, so agents and scripts can
  * drive it mechanically.
  * @param args - raw slash-command args
- * @param ui - host ui surface (notify only; dialogs never called)
+ * @param ui - OpenCode ui surface (notify only; dialogs never called)
  * @param cwd - workspace root owning the profiles and skills stores
  * @returns Effect completing once done, failing with displayable message
  */

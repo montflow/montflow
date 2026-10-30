@@ -15,8 +15,7 @@
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
-    "resolveJsonModule": true
+    "noEmit": true
   },
   "include": ["src/**/*.ts", "vitest.config.ts"]
 }

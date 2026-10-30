@@ -10,6 +10,12 @@ export interface ModelDescriptor {
   readonly label: string;
   readonly providerID: string;
   readonly modelID: string;
+  /**
+   * Effort variants the host reports for this model. Absent means the host
+   * does not know them; an empty array means it knows there are none. The two
+   * are never collapsed into each other.
+   */
+  readonly variants?: readonly string[];
 }
 
 /** Failure raised when a `provider/model-id` label cannot be parsed. */
@@ -21,10 +27,17 @@ export class ModelResolveError extends Schema.TaggedError<ModelResolveError>()(
   },
 ) {}
 
+/** One effort variant a host model entry reports. */
+export interface ModelVariant {
+  readonly id: string;
+}
+
 /** The catalog fields the port reads from a host model entry. */
 export interface ModelEntry {
   readonly providerID: string;
   readonly id: string;
+  /** Absent when the host entry carries no variant data. */
+  readonly variants?: readonly ModelVariant[];
 }
 
 /** The slice of the host `ModelEditor` the port reads. */
@@ -98,6 +111,22 @@ const unavailable = (): Error =>
 const labelOf = (model: ModelEntry): string => `${model.providerID}/${model.id}`;
 
 /**
+ * Flatten one host entry into the descriptor both host halves expose.
+ * `variants` is copied only when the host entry carries it, so a missing list
+ * stays unknown instead of becoming an empty one.
+ */
+const descriptorOf = (entry: ModelEntry): ModelDescriptor => {
+  const descriptor = {
+    label: labelOf(entry),
+    providerID: entry.providerID,
+    modelID: entry.id,
+  };
+  return entry.variants === undefined
+    ? descriptor
+    : { ...descriptor, variants: entry.variants.map((variant) => variant.id) };
+};
+
+/**
  * Run a callback over the host model editor and return the collected value.
  * The transform scope is closed before the value is handed back, so callers
  * never leak a registration to read once.
@@ -137,19 +166,11 @@ export const makeModelPort = (context: ModelContext): ModelPort => ({
         (providerID === undefined
           ? catalog
           : catalog.filter((entry) => entry.providerID === providerID)
-        ).map((entry) => ({
-          label: labelOf(entry),
-          providerID: entry.providerID,
-          modelID: entry.id,
-        })),
+        ).map(descriptorOf),
       );
     }
     return read(context, (editor) =>
-      (providerID === undefined ? editor.list() : editor.list(providerID)).map((model) => ({
-        label: labelOf(model),
-        providerID: model.providerID,
-        modelID: model.id,
-      })),
+      (providerID === undefined ? editor.list() : editor.list(providerID)).map(descriptorOf),
     );
   },
   get: (providerID, modelID) => {

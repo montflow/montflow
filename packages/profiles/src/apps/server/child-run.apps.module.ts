@@ -6,7 +6,7 @@ import {
   type SessionDispatchPort,
 } from '@montflow/opencode';
 import { Effect, Scope } from 'effect';
-import * as Profiles from '../../modules/profile/index.js';
+import * as Profiles from '../../modules/profiles/index.js';
 
 /** Prefix keeping profile-backed agents out of the host's built-in id space. */
 export const AGENT_PREFIX = 'mf-';

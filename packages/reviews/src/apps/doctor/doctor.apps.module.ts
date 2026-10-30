@@ -1,5 +1,4 @@
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import * as NodePath from '@effect/platform-node/NodePath';
+import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Effect, FileSystem, Layer, Path } from 'effect';
 import { EMBEDDED_SKILL_PAYLOAD } from './embedded-payload.generated.js';
 

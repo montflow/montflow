@@ -50,13 +50,9 @@ mf-skills sync --source <checkout> --target <workspace-root> [--check] [--verbos
 - Each skill directory is copied whole — `SKILL.md`, plus `CHANGELOG.md`,
   `GATES.md`, and any other file when present — and unrelated skills at the
   target are left untouched.
-- Outcomes are grouped as `Created`, `Updated`, `Unchanged`, `Refused`, and
-  `Skipped`, with a count line; `--check` adds `✓ current.` or a `✗ drift` line
-  and one `— <drift>` note per skill (`current`/`stale`/`diverged`/`unmanaged`).
+- Outcomes are grouped as `Created`, `Updated`, `Unchanged`, and `Skipped`,
+  with a count line; `--check` adds `✓ current.` or a `✗ drift` line.
 - `--check` reports the same outcomes, writes nothing, and exits `1` on drift.
-- A diverged skill is refused (not overwritten) unless `--force` is passed.
-- Sync writes `.agents/skills/.montflow-sync.json`; `mf-skills version --dir`
-  reports it, and [guides/updating.md](../../guides/updating.md) is the update path.
 - `--verbose` adds one line per file under the skill it came from.
 
 ## Packaged skills
@@ -99,9 +95,3 @@ Boilerplate (`0.0.1`, private). Source-only — no build step: a local-path
 OpenCode install loads the `.ts` files directly. Run `bun install` from the repo
 root for dependencies, then `turbo` `test` / `ts:check` cover this package like
 the rest.
-
-Single artifact, from the workspace root:
-
-```bash
-bun run --cwd packages/skills cli verify <name> --dir $PWD
-```

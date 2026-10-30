@@ -1,4 +1,4 @@
-import * as Profiles from '../../modules/profile/index.js';
+import * as Profiles from '../../modules/profiles/index.js';
 import type { ProfileListEntry, ProfileVerifyReport } from './engines.apps.module.js';
 
 /**

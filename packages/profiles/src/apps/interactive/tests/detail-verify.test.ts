@@ -3,7 +3,7 @@ import { Effect, Layer } from 'effect';
 import { FileSystem } from 'effect/FileSystem';
 import * as Vitest from '@effect/vitest';
 import * as Interactive from '../index.js';
-import * as Profiles from '../../../modules/profile/index.js';
+import * as Profiles from '../../../modules/profiles/index.js';
 
 const validRaw = `---
 name: code-reviewer

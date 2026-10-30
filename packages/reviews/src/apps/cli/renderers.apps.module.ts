@@ -4,7 +4,7 @@ import type * as Engines from './engines.apps.module.js';
 
 /**
  * Pure `data -> text` renderers, one per engine result. Same contract as the
- * sibling CLIs: token-lean by default, `--verbose` adds and never removes,
+ * other `mf-*` CLIs: token-lean by default, `--verbose` adds and never removes,
  * failures are never suppressed, and no ANSI or colour (the output is piped,
  * captured, and diffed).
  */

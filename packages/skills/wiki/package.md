@@ -1,6 +1,6 @@
-Import skill primitives into an OpenCode plugin in 1 minute.
+Import skill primitives into an OpenCode extension in 1 minute.
 
-`@montflow/skills` is the Effect-first home for [skill](./skills.md) descriptors, the `mf-skills` CLI (also `/mf-skills` in the OpenCode host), the shared TUI picker behind that command, and the `doctor` that installs the authoring skills.
+`@montflow/skills` is the Effect-first home for [skill](./skills.md) descriptors, the `mf-skills` CLI (also `/mf-skills` in the OpenCode host), the /mf-skills interactive menu, and the `doctor` that installs the authoring skills.
 
 ## Use it
 
@@ -34,17 +34,19 @@ const program = Effect.gen(function* () {
 4. `verifySkillFile(dirName, markdown)` — ownership-aware shape check
    (`mf-skills verify`): `montflow-*` skills must satisfy the full standard
    (`verifyStandardSkillFile`); generic and vendored skills only have to exist.
-5. `mf-skills` (binary) / `/mf-skills` (OpenCode host) — `doctor`, `list`,
-   `show`, `verify`, `create`, `modify`, `delete` over `.agents/skills/`.
-6. `/mf-skills` with no arguments — the shared TUI picker: browse, then insert
-   a skill name; create, show, modify, delete, and re-verify stay on the
-   headless verbs.
+5. `mf-skills` (binary) / `/mf-skills` (OpenCode) — `doctor`, `list`, `show`,
+   `verify`, `create`, `modify`, `delete` over `.agents/skills/`.
+6. /mf-skills — the interactive menu: browse, list, manual or agentic
+   create, show, modify, delete, re-verify.
+   Agentic sessions dispatch through the adapter's `SessionDispatchPort`;
+   `doctor` installs the
+   `montflow-create-skills` / `montflow-modify-skills` authoring skills.
 
 Storage paths and file shape are documented separately — see [storage](./storage.md) and [format](./format.md).
 
 ## Status
 
-Private `0.0.1`, source-only — the host loads `.ts` directly. `bun install` from root, then `turbo test` / `ts:check` cover it.
+Private `0.0.1`, source-only — OpenCode loads `.ts` directly. `bun install` from root, then `turbo test` / `ts:check` cover it.
 
 ## See also
 

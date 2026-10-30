@@ -3,8 +3,16 @@ import { Effect } from 'effect';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import type { SpecFileEntry } from '../../../modules/structure/index.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
-import { next, renderNext, renderState, state } from '../index.js';
-import { entry, memory, stubLayer } from './helpers.js';
+import {
+  VALIDATION_EXIT_CODE,
+  dispatchErrorText,
+  dispatchExitCode,
+  next,
+  renderNext,
+  renderState,
+  state,
+} from '../index.js';
+import { REPO_SIZING, SPEC_SIZING, entry, memory, stubLayer } from './helpers.js';
 
 const GATES = ['## Stage 0: Core', '', '- [ ] Tests pass', ''].join('\n');
 
@@ -38,19 +46,19 @@ const tree = (options: TreeOptions): ReadonlyArray<SpecFileEntry> => [
       ],
     }),
   ),
-  entry('A/A001-build/TASK.md', taskMarkdown({ id: 'A001', name: 'build', status: options.a001 })),
-  entry('A/A001-build/MEMORY.md', memory),
-  ...(options.gatesA001 === true ? [entry('A/A001-build/GATES.md', GATES)] : []),
+  entry('A001-build/TASK.md', taskMarkdown({ id: 'A001', name: 'build', status: options.a001 })),
+  entry('A001-build/MEMORY.md', memory),
+  ...(options.gatesA001 === true ? [entry('A001-build/GATES.md', GATES)] : []),
   entry(
-    'A/A002-wire/TASK.md',
+    'A002-wire/TASK.md',
     taskMarkdown({ id: 'A002', name: 'wire', dependsOn: 'A001', status: options.a002 }),
   ),
-  entry('A/A002-wire/MEMORY.md', memory),
+  entry('A002-wire/MEMORY.md', memory),
   entry(
-    'A/A099-review-phase/TASK.md',
+    'A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: options.a099 }),
   ),
-  entry('A/A099-review-phase/MEMORY.md', memory),
+  entry('A099-review-phase/MEMORY.md', memory),
 ];
 
 const layer = (files: ReadonlyArray<SpecFileEntry>) => stubLayer(new Map([['ship-spec', files]]));
@@ -68,8 +76,47 @@ Vitest.describe('Cli.state runtime', () => {
       Vitest.expect(report.state).toBe('pending');
       Vitest.expect(report.phase).toBe('A');
       Vitest.expect(report.lockedPhases).toStrictEqual([]);
+      Vitest.expect(report.blocked).toBe(false);
+      Vitest.expect(report.blockers).toStrictEqual([]);
       Vitest.expect(renderState(report)).toBe(
         'ship-spec · in-progress · state pending · phase A · locked none',
+      );
+    }),
+  );
+
+  Vitest.it.effect('names the blocking code and the next command, never a clean line', () =>
+    Effect.gen(function* () {
+      const report = yield* state('.agents/@montflow/specs', 'ship-spec').pipe(
+        Effect.provide(
+          stubLayer(
+            new Map([['ship-spec', tree({ a001: 'pending', a002: 'pending', a099: 'pending' })]]),
+            new Map(),
+            // Four rounds attributed to phase A whose budget is 3 (its largest
+            // task size): the same `review.budget-exceeded` `check` reports.
+            {
+              reviews: [
+                {
+                  name: 'ship-spec',
+                  rounds: [
+                    { round: '001', phase: 'A' },
+                    { round: '002', phase: 'A' },
+                    { round: '003', phase: 'A' },
+                    { round: '004', phase: 'A' },
+                  ],
+                },
+              ],
+            },
+          ),
+        ),
+      );
+      Vitest.expect(report.blocked).toBe(true);
+      Vitest.expect(report.blockers).toStrictEqual(['review.budget-exceeded']);
+      // The exit code and the printed line agree: one reason, one repair.
+      Vitest.expect(renderState(report)).toBe(
+        [
+          'ship-spec · in-progress · state pending · phase A · locked none · blocked review.budget-exceeded',
+          'next mf-specs status --name ship-spec',
+        ].join('\n'),
       );
     }),
   );
@@ -122,6 +169,182 @@ Vitest.describe('Cli.next runtime', () => {
       Vitest.expect(report.state).toBe('complete');
       Vitest.expect(report.ready).toStrictEqual([]);
       Vitest.expect(renderNext(report)).toBe('state complete\nready none');
+    }),
+  );
+});
+
+/** Sizing knobs for the ready-set cases. */
+interface SizedNextOptions {
+  readonly repo?: string;
+  readonly specSizing?: string;
+  readonly a001: string;
+  readonly a002: string;
+  readonly a099: string;
+}
+
+/** Build the two-execution-task phase A with declared sizes. */
+const sizedTree = (options: SizedNextOptions): ReadonlyArray<SpecFileEntry> => [
+  entry(
+    'SPEC.md',
+    specMarkdown({
+      name: 'ship-spec',
+      rows: [
+        { id: 'A001', name: 'build', type: 'execution', status: options.a001, gates: 'No' },
+        { id: 'A002', name: 'wire', type: 'execution', status: options.a002, gates: 'No' },
+        { id: 'A099', name: 'review-phase', type: 'review', status: options.a099, gates: 'No' },
+      ],
+    }),
+  ),
+  ...(options.specSizing === undefined ? [] : [entry('sizing.json', options.specSizing)]),
+  entry(
+    'A001-build/TASK.md',
+    taskMarkdown({ id: 'A001', name: 'build', size: 'tiny', status: options.a001 }),
+  ),
+  entry('A001-build/MEMORY.md', memory),
+  entry(
+    'A002-wire/TASK.md',
+    taskMarkdown({
+      id: 'A002',
+      name: 'wire',
+      size: 'small',
+      dependsOn: 'A001',
+      status: options.a002,
+    }),
+  ),
+  entry('A002-wire/MEMORY.md', memory),
+  entry(
+    'A099-review-phase/TASK.md',
+    taskMarkdown({
+      id: 'A099',
+      name: 'review-phase',
+      type: 'review',
+      size: 'medium',
+      status: options.a099,
+    }),
+  ),
+  entry('A099-review-phase/MEMORY.md', memory),
+];
+
+const runSizedNext = (options: SizedNextOptions) =>
+  next('.agents/@montflow/specs', 'ship-spec').pipe(
+    Effect.provide(
+      stubLayer(
+        new Map([['ship-spec', sizedTree(options)]]),
+        options.repo === undefined ? new Map() : new Map([['sizing.json', options.repo]]),
+      ),
+    ),
+  );
+
+Vitest.describe('Cli.next sizing runtime', () => {
+  Vitest.it.effect('carries the phase budget and the ready task target', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizedNext({
+        repo: REPO_SIZING,
+        specSizing: SPEC_SIZING,
+        a001: 'pending',
+        a002: 'pending',
+        a099: 'pending',
+      });
+      const text = renderNext(report);
+      Vitest.expect(report.budget).toBe(2);
+      Vitest.expect(text.split('\n')[0]).toBe('state pending · phase A · budget 2');
+      Vitest.expect(text).toContain(
+        'A001  execution  build  tiny  fixture/phase-model#high  phase',
+      );
+    }),
+  );
+
+  Vitest.it.effect('resolves the spec layer for the unblocked task', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizedNext({
+        repo: REPO_SIZING,
+        specSizing: SPEC_SIZING,
+        a001: 'complete',
+        a002: 'pending',
+        a099: 'pending',
+      });
+      const text = renderNext(report);
+      Vitest.expect(text).toContain('A002  execution  wire  small  fixture/spec-model  spec');
+    }),
+  );
+
+  Vitest.it.effect('lets the review task inherit', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizedNext({
+        a001: 'complete',
+        a002: 'complete',
+        a099: 'pending',
+      });
+      Vitest.expect(renderNext(report)).toContain('A099  review  review-phase  medium  inherit');
+    }),
+  );
+
+  Vitest.it.effect('names the repo layer when only the repo config exists', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizedNext({
+        repo: REPO_SIZING,
+        a001: 'pending',
+        a002: 'pending',
+        a099: 'pending',
+      });
+      Vitest.expect(renderNext(report)).toContain(
+        'A001  execution  build  tiny  fixture/repo-model#low  repo',
+      );
+    }),
+  );
+
+  Vitest.it.effect('omits targets when the config is invalid', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizedNext({
+        specSizing: '{ not json',
+        a001: 'pending',
+        a002: 'pending',
+        a099: 'pending',
+      });
+      Vitest.expect(renderNext(report)).toBe(
+        'state pending · phase A · budget 2\nA001  execution  build',
+      );
+    }),
+  );
+
+  Vitest.it.effect('omits targets when a tree-only error blocks dispatch', () =>
+    Effect.gen(function* () {
+      const files = [
+        ...sizedTree({
+          repo: REPO_SIZING,
+          specSizing: SPEC_SIZING,
+          a001: 'pending',
+          a002: 'pending',
+          a099: 'pending',
+        }),
+        // A stray file at the spec root: a tree error with no config finding.
+        entry('notes.txt', 'stray\n'),
+      ];
+      const report = yield* next('.agents/@montflow/specs', 'ship-spec').pipe(
+        Effect.provide(
+          stubLayer(new Map([['ship-spec', files]]), new Map([['sizing.json', REPO_SIZING]])),
+        ),
+      );
+      Vitest.expect(dispatchExitCode(report.sizing, report.verify, report.name)).toBe(
+        VALIDATION_EXIT_CODE,
+      );
+      Vitest.expect(renderNext(report)).toBe(
+        'state pending · phase A · budget 2\nA001  execution  build',
+      );
+    }),
+  );
+
+  Vitest.it.effect('prints a spec-level config error exactly once', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizedNext({
+        specSizing: '{ not json',
+        a001: 'pending',
+        a002: 'pending',
+        a099: 'pending',
+      });
+      const blockers = dispatchErrorText(report.sizing, report.verify, report.name);
+      Vitest.expect(blockers.match(/sizing\.malformed-json/g) ?? []).toHaveLength(1);
+      Vitest.expect(blockers.match(/path\s+ship-spec\/sizing\.json/g) ?? []).toHaveLength(1);
     }),
   );
 });

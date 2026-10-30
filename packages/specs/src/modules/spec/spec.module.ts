@@ -233,7 +233,7 @@ export const verifySpecFile = (dirName: string, markdown: string): Result => {
   return { valid: noErrors(issues), issues };
 };
 
-// ─── Slug helpers ─────────────────────────────────────────────────────
+// ─── Identifier helpers ───────────────────────────────────────────────
 
 /**
  * True when `name` is a valid spec slug (lowercase, hyphen-separated).
@@ -241,6 +241,13 @@ export const verifySpecFile = (dirName: string, markdown: string): Result => {
  * @returns true for valid slugs
  */
 export const isValidName = (name: string): boolean => SLUG_PATTERN.test(name);
+
+/**
+ * True when `phase` is a valid phase id (one or two uppercase letters).
+ * @param phase - candidate phase id
+ * @returns true for valid phase ids
+ */
+export const isValidPhase = (phase: string): boolean => PHASE_PATTERN.test(phase);
 
 /**
  * Lowercases and converts any run of non-alphanumeric characters into a

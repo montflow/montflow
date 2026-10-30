@@ -48,29 +48,6 @@ export interface PortsContext
     ToolContext {}
 
 /**
- * The host TUI renderer slice plugins read: the focused editor insertion
- * writes through, plus the render poke.
- */
-export interface TuiRendererContext {
-  readonly currentFocusedEditor: {
-    insertText(text: string): void;
-    gotoBufferEnd?(): void;
-  } | null;
-  requestRender?(): void;
-}
-
-/** The host TUI client slice plugins read: session command forwarding. */
-export interface TuiClientContext {
-  readonly session: {
-    command(input: {
-      readonly sessionID: string;
-      readonly name: string;
-      readonly text: string;
-    }): Promise<void>;
-  };
-}
-
-/**
  * The host TUI context fields the client-local ports read. `ui` and `data` are
  * intersections because one host object serves every TUI port: a narrow `ui`
  * per port would make the merged context unassignable.
@@ -84,8 +61,6 @@ export interface TuiPortsContext extends PortsContext {
   readonly attention?: NonNullable<InteractionContext['attention']> | undefined;
   readonly keymap?: NonNullable<GridPageContext['keymap']> | undefined;
   readonly storage?: NonNullable<StorageContext['storage']> | undefined;
-  readonly renderer: TuiRendererContext;
-  readonly client: TuiClientContext;
 }
 
 /**

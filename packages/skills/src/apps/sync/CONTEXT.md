@@ -6,9 +6,8 @@ this engine; neither front end owns a domain rule.
 
 ## Belongs here
 
-- `runSync({ from, dir, check, force, invocation })` — copies
-  `<from>/.agents/skills/` into `<dir>/.agents/skills/`, returning per-skill
-  outcomes and drift as data, and writing the sync manifest
+- `runSync({ from, dir, check, invocation })` — copies `<from>/.agents/skills/`
+  into `<dir>/.agents/skills/`, returning per-skill outcomes as data
 - `isInternalSkill(markdown)` — the public/internal classification, read from
   the nested `metadata.internal` frontmatter key
 - `checkoutRoot(path)` / `skillsStoreDir(path, root)` — the default checkout
@@ -19,9 +18,8 @@ this engine; neither front end owns a domain rule.
 ## Rules
 
 - **Outcomes are per skill** — `added`, `updated`, `unchanged`, `skipped`
-  (internal), `refused` (diverged without `--force`) — each carrying `name`,
-  `source`, `target`, per-file status, and `drift` (`current`/`stale`/
-  `diverged`/`unmanaged`) plus differing files and manifest commit.
+  (internal) — each carrying `name`, `source`, `target`, and a per-file status
+  list for a `--verbose` renderer.
 - **Only bytes that differ are written.** A current skill is never rewritten,
   which is what makes sync idempotent.
 - **One skill is all or nothing.** Every changed file is staged as a sibling
@@ -43,19 +41,10 @@ this engine; neither front end owns a domain rule.
 - **A source store with no skill is a refusal.** Directories without a
   `SKILL.md` are not skills, so filtering happens before "empty" is decided —
   an internal-only store still has `skipped` outcomes and is not empty.
-- **Managed skills track the source.** A file the source deleted is pruned from
-  a managed skill during a normal sync, so an update cannot stay diverged.
-  Unrelated target skills and files outside the managed skill set survive.
-- **`check` mode writes nothing.** It computes the same outcomes and drift and
-  reports `drifted`; the front end turns that into exit code `1` for stale,
-  diverged, or an unmanaged byte difference.
-- **Diverged is never overwritten by default.** A local edit refuses the skill
-  (`refused`); `--force` replaces it. A refused run does not rewrite the
-  manifest.
-- **The manifest records what landed.** `syncedAt`, source facts, and per-file
-  hashes are written only for a run that actually applied its skills.
-- **A corrupt, unreadable, or unsupported manifest fails the run** instead of
-  being treated as unmanaged, so local edits are not overwritten blindly.
+- **Nothing is ever deleted.** Target skills and target files absent from the
+  source survive; sync only adds and overwrites.
+- **`check` mode writes nothing.** It computes the same outcomes and reports
+  `drifted`; the front end turns that into exit code `1`.
 - **Public means no `metadata.internal: true`.** The nested mapping is parsed
   directly because `Skill.parseSkillFile` flattens indented keys, so a
   top-level `internal` is not the same flag.

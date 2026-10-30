@@ -1,21 +1,12 @@
 import { Console, Effect, Option } from 'effect';
 import { Argument, Command, Flag } from 'effect/cli';
-import { Cli } from '@montflow/version';
-import type { BuildInfo } from '@montflow/version';
-import manifest from '../../../package.json' with { type: 'json' };
 import * as Doctor from '../doctor/index.js';
 import * as Sync from '../sync/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
-
-/** This package's root: three levels up from `src/apps/cli`. */
-export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
-
-/** Identity embedded from this package's manifest, so a compiled binary keeps it. */
-export const PACKAGE_IDENTITY = {
-  name: manifest.name,
-  version: manifest.version,
-} satisfies BuildInfo.GeneratedIdentity;
+import { Cli } from '@montflow/version';
+import type { BuildInfo } from '@montflow/version';
+import manifest from '../../../package.json' with { type: 'json' };
 
 /**
  * The `mf-skills` binary's command tree, built with `effect/cli`.
@@ -261,10 +252,6 @@ const syncCommand = Command.make(
       'check',
       'Report only; never write. Non-zero when the target is behind.',
     ),
-    force: optionalBoolean(
-      'force',
-      'Overwrite a skill whose files were edited since the last sync.',
-    ),
     verbose: verboseFlag,
     from: fromFlag,
     dir: targetAliasFlag,
@@ -275,7 +262,6 @@ const syncCommand = Command.make(
         from: firstGiven(opt(config.source), opt(config.from)),
         dir: firstGiven(opt(config.target), opt(config.dir)) ?? process.cwd(),
         check: config.check,
-        force: config.force,
         cwd: process.cwd(),
         invocation: 'mf-skills sync',
       });
@@ -284,16 +270,20 @@ const syncCommand = Command.make(
         yield* Console.log(Renderers.syncRefusal(result));
         yield* exitFailed;
       }
-      if (result.refused.length > 0) {
-        yield* Console.log(Renderers.forceRefusal(result));
-        yield* exitFailed;
-      }
       return yield* Effect.void;
     }).pipe(Effect.catch((message) => Console.log(message).pipe(Effect.andThen(exitFailed)))),
 ).pipe(
   Command.withDescription('Copy a checkout public skills into a workspace .agents/skills store.'),
 );
 
+/** This package's root: three levels up from src/apps/cli. */
+export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
+
+/** Identity embedded from this package's manifest. */
+export const PACKAGE_IDENTITY = {
+  name: manifest.name,
+  version: manifest.version,
+} satisfies BuildInfo.GeneratedIdentity;
 /** The root command the binary runs. */
 export const rootCommand = Command.make('mf-skills').pipe(
   Command.withDescription('Inspect, verify, and manage workspace skills in .agents/skills.'),
@@ -309,3 +299,6 @@ export const rootCommand = Command.make('mf-skills').pipe(
     Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
 );
+
+/** Version reported by `--version`. Mirrors the package version. */
+export const VERSION = '0.0.1';

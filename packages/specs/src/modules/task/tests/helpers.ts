@@ -9,18 +9,25 @@ export interface TaskFixture {
   readonly relatedTasks?: string;
   readonly reviewerProfiles?: string;
   readonly findingRef?: string;
+  readonly size?: string;
+  /** Omit the `size` line entirely, to exercise the missing-size rules. */
+  readonly withoutSize?: boolean;
   readonly status?: string;
+  /** Replaces the `## Completion` checklist body (default: one box, checked when complete). */
+  readonly completion?: string;
 }
 
 /** Build a TASK.md body with valid defaults and optional overrides. */
 export const taskMarkdown = (fixture: TaskFixture): string => {
   const type = fixture.type ?? 'execution';
+  const status = fixture.status ?? 'pending';
   const front = [
     '---',
     `id: ${fixture.id}`,
     `name: ${fixture.name}`,
     `type: ${type}`,
     `originator: ${fixture.originator ?? 'user'}`,
+    ...(fixture.withoutSize === true ? [] : [`size: ${fixture.size ?? 'medium'}`]),
     `depends-on: ${fixture.dependsOn ?? ''}`,
     `related-tasks: ${fixture.relatedTasks ?? ''}`,
   ];
@@ -28,7 +35,7 @@ export const taskMarkdown = (fixture: TaskFixture): string => {
     front.push(`reviewer-profiles: ${fixture.reviewerProfiles}`);
   }
   if (fixture.findingRef !== undefined) front.push(`finding-ref: ${fixture.findingRef}`);
-  front.push(`status: ${fixture.status ?? 'pending'}`, '---');
+  front.push(`status: ${status}`, '---');
   return [
     ...front,
     '',
@@ -46,7 +53,7 @@ export const taskMarkdown = (fixture: TaskFixture): string => {
     '',
     '## Completion',
     '',
-    '- [ ] Done',
+    fixture.completion ?? (status === 'complete' ? '- [x] Done' : '- [ ] Done'),
     '',
   ].join('\n');
 };

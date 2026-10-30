@@ -4,7 +4,14 @@ import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import { SpecStore } from '../../../services/index.js';
 import { warning } from '../../../modules/verify/index.js';
-import { LIST_STATUSES, type ListReport, list, renderList, resolveListOptions } from '../index.js';
+import {
+  LIST_STATUSES,
+  type ListReport,
+  NO_SIZING,
+  list,
+  renderList,
+  resolveListOptions,
+} from '../index.js';
 import { entry, memory, stubLayer } from './helpers.js';
 
 const root = '.agents/@montflow/specs';
@@ -29,15 +36,15 @@ const specTree = (
     }),
   ),
   entry(
-    'A/A001-do-thing/TASK.md',
+    'A001-do-thing/TASK.md',
     taskMarkdown({ id: 'A001', name: 'do-thing', status: taskStatus }),
   ),
-  entry('A/A001-do-thing/MEMORY.md', memory),
+  entry('A001-do-thing/MEMORY.md', memory),
   entry(
-    'A/A099-review-phase/TASK.md',
+    'A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: taskStatus }),
   ),
-  entry('A/A099-review-phase/MEMORY.md', memory),
+  entry('A099-review-phase/MEMORY.md', memory),
 ];
 
 const specs = new Map([
@@ -101,11 +108,12 @@ Vitest.describe('Cli.list runtime', () => {
               names: () => Effect.succeed([]),
               hasRoot: () => Effect.succeed(false),
               exists: () => Effect.succeed(false),
+              hasFile: () => Effect.succeed(false),
               snapshot: () =>
                 Effect.fail(new SpecStore.StoreError({ operation: 'unused', reason: 'unused' })),
+              reviewSeries: () => Effect.succeed([]),
+              readRootFile: () => Effect.succeed(undefined),
               write: () => Effect.void,
-              move: () => Effect.void,
-              removeDirectory: () => Effect.void,
             }),
           ),
         ),
@@ -135,6 +143,42 @@ Vitest.describe('Cli.renderList runtime', () => {
     }),
   );
 
+  Vitest.it.effect('degrades one unreadable review store instead of aborting the listing', () =>
+    Effect.gen(function* () {
+      const failure = new SpecStore.StoreError({
+        operation: 'SpecStore.reviewSeries',
+        reason: "Cannot read the review store entry 'alpha': EACCES",
+        path: '/machine/.agents/@montflow/reviews/alpha',
+        origin: 'reviews',
+        cause: new Error('EACCES: permission denied, scandir alpha'),
+      });
+      const report = yield* list(root, {}).pipe(
+        Effect.provide(stubLayer(specs, new Map(), { reviewFailure: failure })),
+      );
+      // Every spec still lists; the broken one carries the failure as an error.
+      Vitest.expect(report.total).toBe(4);
+      Vitest.expect(report.specs.map((spec) => spec.name)).toStrictEqual([
+        'alpha',
+        'beta',
+        'delta',
+        'gamma',
+      ]);
+      for (const spec of report.specs) {
+        Vitest.expect(spec.verify.valid).toBe(false);
+        Vitest.expect(spec.verify.issues[0]).toMatchObject({
+          code: 'store.error',
+          // Nested so the renderer prefixes the spec name to the one canonical
+          // locator `<spec>/review-series`.
+          field: 'review-series: review-series',
+          expected: 'a readable review store',
+        });
+      }
+      Vitest.expect(renderList(report, false)).toContain(
+        '\u25cb alpha  in-progress \u00b7 pending \u00b7 2 pending \u00b7 \u2717 1',
+      );
+    }),
+  );
+
   Vitest.it('marks warnings apart from issues', () => {
     const report: ListReport = {
       root,
@@ -148,6 +192,7 @@ Vitest.describe('Cli.renderList runtime', () => {
             valid: true,
             issues: [warning('metrics', 'No metrics recorded.')],
           },
+          sizing: NO_SIZING,
         },
       ],
       total: 1,

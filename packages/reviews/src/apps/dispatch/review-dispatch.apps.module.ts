@@ -1,5 +1,4 @@
-import { ProfileStore } from '@montflow/profiles/services';
-import { Profiles } from '@montflow/profiles/modules';
+import { Profiles, ProfileStore } from '@montflow/profiles';
 import type { ModelPort, SessionDispatchPort } from '@montflow/opencode';
 import { Clock, Effect } from 'effect';
 import * as Review from '../../modules/review/index.js';

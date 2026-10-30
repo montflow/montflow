@@ -31,7 +31,7 @@ const withTempDir = (
 ): Effect.Effect<void, string> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem;
-    const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-' });
+    const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-cli-' });
     return yield* fn(dir).pipe(Effect.provide(TestLive));
   }).pipe(
     Effect.provide(NodeLive),

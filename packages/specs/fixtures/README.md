@@ -1,10 +1,9 @@
 # Fixtures
 
-Repo-tracked sample specs for exercising the CLI and the OpenCode plugin
+Repo-tracked sample specs for exercising the CLI and the OpenCode extension
 without touching a real workspace. They live under a realistic root so the
 default `.agents/@montflow/specs` path works when you `cd` into this
-directory. Every fixture uses the phase-directory layout
-(`<spec>/<PHASE>/<PHASE><NNN>-<name>/`).
+directory.
 
 - `mock-ok` — a fully valid, **pending** phase: execution task with
   `GATES.md`, exploratory task depending on it, and a phase-end `review`
@@ -14,26 +13,43 @@ directory. Every fixture uses the phase-directory layout
 - `mock-stale` — a bookkeeping contradiction: all tasks complete and phase
   A locked, but `status: in-progress`. Fails with 1 issue; derived state
   `inconsistent`.
+- `mock-history` — an untouched historical record: every task complete, every
+  completion box and gate item checked, and `.agents/@montflow/reviews/mock-history/`
+  holding exactly the one round phase A's `tiny` tasks buy. Passes with 0
+  issues and 0 warnings.
+- `mock-over-budget` — the mechanical review budget: a valid complete spec whose
+  `mock-over-budget` series holds four rounds attributed to phase `A`, whose
+  `tiny` tasks buy one. Fails with one `review.budget-exceeded` error naming the
+  series, phase, budget, and count. Its four round files exist only to prove the
+  check.
 - `mock-bad` — deliberately broken. Surfaces 10 issues across the failure
   classes: unknown task type, missing `MEMORY.md`, table/status drift, a
   forward-phase dependency, a `Gates` column with no `GATES.md`, a
   `MEMORY.md` missing a section, a placeholder `GATES.md`, a table row
   with no task directory, and a phase with no `review` task.
-- `mock-stray` — a valid phase tree plus one stray file in a phase
-  directory and one unexpected directory inside a task directory. Fails
-  with 3 issues (the stray file, the directory, and the deep path).
+- `sizing.json` at this root — a repo-only sizing config (`tiny`, `small`)
+  proving the repo file is a root config and never a spec.
+- `mock-ok/sizing.json` — the spec layer plus a phase A override, so the
+  fixtures prove repo < spec < phase precedence, whole-entry replacement,
+  and `inherit` fallback. Its task sizes exercise every source: `A001` is
+  `tiny` (phase override), `A002` is `small` (spec layer), the review task
+  is `medium` (`inherit`).
+- `mock-complete` has no spec config and its `A001` is `small`, so the repo
+  layer is the winning source there.
 
 ## Standalone binary
 
 ```bash
 bun run --cwd packages/specs build:cli
 cd packages/specs/fixtures
-../dist/mf-specs check            # exits 1: mock-bad, mock-stale, mock-stray
+../dist/mf-specs check            # exits 1: mock-bad, mock-stale, mock-over-budget
 ../dist/mf-specs check --verbose  # also lists the passing specs
-../dist/mf-specs status --name mock-ok        # state pending
-../dist/mf-specs status --name mock-complete  # state complete
+../dist/mf-specs status --name mock-ok        # state pending, sizing sources
+../dist/mf-specs status --name mock-complete  # state complete, repo-only source
 ../dist/mf-specs status --name mock-stale     # state inconsistent, exit 1
-../dist/mf-specs migrate --name mock-ok --dry-run  # already migrated: prints a no-op
+../dist/mf-specs next --name mock-ok          # ready set with target and budget
+../dist/mf-specs resolve --name mock-ok --task A001   # fixture/phase-model#high
+../dist/mf-specs sizing --name mock-ok --task A001 --human  # provenance matrix
 ```
 
 ## From source

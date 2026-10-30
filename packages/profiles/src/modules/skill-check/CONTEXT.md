@@ -18,7 +18,7 @@ full standard; generic and vendored skills only have to exist.
 ## Does not belong here
 
 - Profile shape verification and parsing — those live in
-  [`../profile/`](../profile/CONTEXT.md)
+  [`../profiles/`](../profiles/CONTEXT.md)
 - The skills engine itself — that lives in `@montflow/skills`
 - Reading skill file contents — the skills engine owns them; this module only
   asks whether the store exists and lists its directory names

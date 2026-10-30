@@ -1,6 +1,6 @@
 import { Changes } from '@montflow/opencode';
 import { Context, Effect, FileSystem, Layer, Path, Schema, Stream } from 'effect';
-import * as Profiles from '../../modules/profile/index.js';
+import * as Profiles from '../../modules/profiles/index.js';
 
 /** Failure when a profile file cannot be read or written. */
 export class StoreError extends Schema.TaggedError<StoreError>()('ProfileStore.StoreError', {
@@ -219,7 +219,7 @@ const make = Effect.gen(function* () {
 
   /**
    * Watch the profiles directory for changes. Shared across hosts: the
-   * workspace subscribes and patches its cache; the OpenCode plugin may too.
+   * workspace subscribes and patches its cache; the OpenCode extension may too.
    * A missing store yields an empty stream rather than failing.
    */
   const watch = (cwd: string): Stream.Stream<Changes.Change<Profiles.Profile>, never> =>

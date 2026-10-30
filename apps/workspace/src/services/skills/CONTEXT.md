@@ -26,8 +26,16 @@ whether to retry, reinstall, or just retry.
 - `toSkill` / `fromSkill` bridges between dashboard rows and `@montflow/skills`
   `Skill` (validated one way, total the other)
 - `panelInstalled` checks and `installHint` copy per panel
-- The live model label comes from `ModelPort.default()` in `grid-page.tsx`;
-  the retired catalogue/settings decoders were removed in phase E.
+- `parseModelsStore` / `parseDefaultModel` — pure decoders for the retired
+  model files; malformed input reads as empty, never as a
+  failure. No production code calls them: only their file-reading wrappers
+  `listModelLabels` / `listDefaultModel` and the unit tests in
+  `tests/skill-write.test.ts` do. Those two wrappers read
+  the legacy settings paths on each call
+  and have no caller at all — no production code calls them and no test
+  references them (the tests exercise the parsers directly) — so they remain
+  `@deprecated` candidates for removal. The live model label comes from
+  `ModelPort.default()` in `grid-page.tsx`, not from this module.
 
 ## Does not belong here
 

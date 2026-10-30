@@ -1,26 +1,17 @@
 import { Console, Effect, Option } from 'effect';
 import { Argument, Command, Flag } from 'effect/cli';
-import { Cli } from '@montflow/version';
-import type { BuildInfo } from '@montflow/version';
-import manifest from '../../../package.json' with { type: 'json' };
 import { ProfileStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
-
-/** This package's root: three levels up from `src/apps/cli`. */
-export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
-
-/** Identity embedded from this package's manifest, so a compiled binary keeps it. */
-export const PACKAGE_IDENTITY = {
-  name: manifest.name,
-  version: manifest.version,
-} satisfies BuildInfo.GeneratedIdentity;
+import { Cli } from '@montflow/version';
+import type { BuildInfo } from '@montflow/version';
+import manifest from '../../../package.json' with { type: 'json' };
 
 /**
  * The `mf-profiles` binary's command tree, built with `effect/cli`.
  *
  * Every handler is a one-liner over `Engines` plus a `Renderers` function, so
- * the binary and the `/mf-profiles` slash command cannot disagree about
+ * the binary and the `/mf-profiles-cli` slash command cannot disagree about
  * behaviour. `--dir` is the workspace root; stores derive from it.
  */
 
@@ -204,6 +195,14 @@ const deleteCommand = Command.make('delete', { dir: dirFlag, name: nameArg }, (c
   ),
 ).pipe(Command.withDescription('Delete a profile directory.'));
 
+/** This package's root: three levels up from src/apps/cli. */
+export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
+
+/** Identity embedded from this package's manifest. */
+export const PACKAGE_IDENTITY = {
+  name: manifest.name,
+  version: manifest.version,
+} satisfies BuildInfo.GeneratedIdentity;
 /** The root command the binary runs. */
 export const rootCommand = Command.make('mf-profiles').pipe(
   Command.withDescription(
@@ -220,3 +219,6 @@ export const rootCommand = Command.make('mf-profiles').pipe(
   ]),
   Command.provide(ProfileStore.Default),
 );
+
+/** Version reported by `--version`. Mirrors the package version. */
+export const VERSION = '0.0.1';

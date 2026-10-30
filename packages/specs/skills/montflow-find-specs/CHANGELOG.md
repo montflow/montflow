@@ -1,10 +1,21 @@
 # Changelog
 
-## [1.4.0] - 2026-10-28
+## [1.5.0] - 2026-10-26
+
+### Added
+
+- Branch resolution with `mf-specs which` / `/specs which`: the `<prefix>/<feature-name>` grammar, exact-then-prefix matching, and the ask-the-user rule on a miss
+- Begin-or-resume handoff through `mf-specs execute` / `/specs execute` and the `spec-execute` prompt, including `guided` (default) and `autonomous`
 
 ### Changed
 
-- Spec layout is `SPEC.md` plus one directory per phase, each holding its task directories
+- The reference names the shipped `spec-execute` prompt and the `which` / `execute` engines instead of only the listing path
+
+## [1.4.0] - 2026-10-26
+
+### Changed
+
+- Renamed from `montflow-find-pi-specs` to `montflow-find-specs`; the creation cross-reference names `montflow-create-specs`
 
 ## [1.3.0] - 2026-10-25
 

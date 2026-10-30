@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 // eslint-disable-next-line montflow/no-node-platform-imports -- the skills store is a platform boundary; the skills store owns its files, this only asks whether it exists.
 import { stat } from 'node:fs/promises';
-import * as Profiles from '../profile/index.js';
+import * as Profiles from '../profiles/index.js';
 
 /**
  * Check the skills a profile declares by delegating to the skills

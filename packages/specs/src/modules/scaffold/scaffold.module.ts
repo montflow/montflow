@@ -1,4 +1,4 @@
-import { PHASE_PATTERN } from '../spec/index.js';
+import { DEFAULT_SIZE, type Size, isSize } from '../sizing/index.js';
 import type { SpecFileEntry } from '../structure/index.js';
 
 /**
@@ -29,6 +29,8 @@ export interface ScaffoldTask {
   readonly type: ScaffoldTaskType;
   /** Emit a per-task `GATES.md` when true. */
   readonly gates?: boolean | undefined;
+  /** Declared task size; {@link DEFAULT_SIZE} when omitted. */
+  readonly size?: Size | undefined;
   /** Task ids this task depends on (`A001`), rendered comma-separated. */
   readonly dependsOn?: ReadonlyArray<string> | undefined;
   /** Replaces the placeholder `## Description` body. */
@@ -36,6 +38,9 @@ export interface ScaffoldTask {
   /** Replaces the placeholder `## Requirements` bullets. */
   readonly requirements?: ReadonlyArray<string> | undefined;
 }
+
+/** True when `value` is a size a scaffold may emit. */
+export const isScaffoldTaskSize = (value: string): value is Size => isSize(value);
 
 /** Inputs for {@link renderSpecScaffold}. */
 export interface ScaffoldSpecInput {
@@ -139,6 +144,7 @@ const renderTask = (id: string, task: ScaffoldTask): string =>
     `name: ${task.name}`,
     `type: ${task.type}`,
     'originator: user',
+    `size: ${task.size ?? DEFAULT_SIZE}`,
     `depends-on: ${(task.dependsOn ?? []).join(', ')}`,
     'related-tasks:',
     'status: pending',
@@ -176,6 +182,7 @@ const renderReview = (phase: string, id: string, reviewerProfiles: ReadonlyArray
     'name: review-phase',
     'type: review',
     'originator: user',
+    `size: ${DEFAULT_SIZE}`,
     'depends-on:',
     'related-tasks:',
     reviewerProfiles.length > 0
@@ -229,32 +236,30 @@ const renderMemory = (): string =>
     '',
   ].join('\n');
 
-/** Render a default `GATES.md` when a task requests gates. */
+/**
+ * Render a default `GATES.md` when a task requests gates. The single item is a
+ * replacement marker, not a generic suite: a gate proves *this* task, so the
+ * author (and the review) replaces it with the task's own commands.
+ */
 const renderGates = (): string =>
   [
     '## Stage 0: Verification',
     '',
-    '- [ ] formatting passes',
-    '- [ ] linting passes',
-    '- [ ] typecheck passes',
-    '- [ ] tests pass',
+    "- [ ] REPLACE with this task's own verification commands",
     '',
   ].join('\n');
 
 /**
  * Render a complete, mechanically valid spec tree from a small task list:
- * `SPEC.md`, one `<PHASE>/<PHASE><NNN>-<name>/` per task with `TASK.md` +
+ * `SPEC.md`, one `<PHASE><NNN>-<name>/` per task with `TASK.md` +
  * `MEMORY.md` (+ `GATES.md` when gated), and the phase's single
  * `review` task. Pure — the caller owns writing the files and choosing
- * the `created` date. An invalid phase is a programming error and throws.
+ * the `created` date.
  * @param input - spec metadata, phase, and tasks
  * @returns the files plus the phase and task ids they carry
  */
 export const renderSpecScaffold = (input: ScaffoldSpecInput): ScaffoldResult => {
   const phase = input.phase ?? 'A';
-  if (!PHASE_PATTERN.test(phase)) {
-    throw new Error(`Invalid scaffold phase '${phase}' — use one or two capital letters.`);
-  }
   const numbered = input.tasks.map((task, index) => ({ id: taskId(phase, index + 1), task }));
   const reviewId = taskId(phase, REVIEW_NUMBER);
   const rows: Array<TableRow> = numbered.map(({ id, task }) => ({
@@ -267,12 +272,12 @@ export const renderSpecScaffold = (input: ScaffoldSpecInput): ScaffoldResult => 
 
   const files: Array<SpecFileEntry> = [{ path: 'SPEC.md', content: renderSpec(input, rows) }];
   for (const { id, task } of numbered) {
-    const dir = `${phase}/${dirName(id, task.name)}`;
+    const dir = dirName(id, task.name);
     files.push({ path: `${dir}/TASK.md`, content: renderTask(id, task) });
     files.push({ path: `${dir}/MEMORY.md`, content: renderMemory() });
     if (task.gates === true) files.push({ path: `${dir}/GATES.md`, content: renderGates() });
   }
-  const reviewDir = `${phase}/${dirName(reviewId, 'review-phase')}`;
+  const reviewDir = dirName(reviewId, 'review-phase');
   files.push({
     path: `${reviewDir}/TASK.md`,
     content: renderReview(phase, reviewId, input.reviewerProfiles ?? []),

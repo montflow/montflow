@@ -10,7 +10,7 @@ Start inspecting workspace skills in 2 minutes — pick the page you need.
 - [Skills](./skills.md) — reusable instruction packs; what they hold, what they never do.
 - [Storage](./storage.md) — disk layout, slug rules.
 - [Format](./format.md) — frontmatter + body contract with a copy-paste example.
-- [Package](./package.md) — Effect primitives, the `mf-skills` CLI, the shared TUI picker behind `/mf-skills`, and `doctor`.
+- [Package](./package.md) — Effect primitives, the `mf-skills` CLI, `/mf-skills`, and `doctor`.
 
 ## See also
 

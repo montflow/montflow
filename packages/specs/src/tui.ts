@@ -1,10 +1,10 @@
-// oxlint-disable-next-line montflow/no-node-platform-imports -- TUI plugin runs in host context
+// oxlint-disable-next-line montflow/no-node-platform-imports -- this TUI entry is the composition root for its plugin store.
 import { readdir } from 'node:fs/promises';
-// oxlint-disable-next-line montflow/no-node-platform-imports -- path needed for store location resolution
+// oxlint-disable-next-line montflow/no-node-platform-imports -- the TUI entry resolves its store path during host setup.
 import path from 'node:path';
-import type { TuiPlugin, TuiPluginContext } from '@montflow/opencode';
+import type { TuiPlugin } from '@montflow/opencode';
 import { registerPicker } from '@montflow/opencode/tui';
-import { ID, COMMAND_NAME } from './ids.js';
+import { ID, COMMAND_NAME } from './server.js';
 
 /** Specs directory segments. */
 const SPECS_DIR = ['.agents', '@montflow', 'specs'] as const;
@@ -24,8 +24,8 @@ const loadSpecs = async (directory: string): Promise<ReadonlyArray<string>> => {
 
 export default {
   id: ID,
-  setup: (context: TuiPluginContext) => {
-    const cleanup = registerPicker(context, {
+  setup: (context: any) => {
+    registerPicker(context, {
       commandName: COMMAND_NAME,
       title: 'Specs',
       description: 'Pick a spec',
@@ -37,7 +37,29 @@ export default {
       }),
       getInsertText: (spec: string) => spec,
       forwardNonListToServer: true,
+      prepareForward: async (args, pickerContext) => {
+        if (!/^execute(?:\s|$)/u.test(args) || /(?:^|\s)--mode(?:\s|=|$)/u.test(args)) {
+          return args;
+        }
+        const mode = await pickerContext.ui.dialog.select({
+          title: 'Execution mode',
+          placeholder: 'How should the orchestrator act?',
+          options: [
+            {
+              title: 'Guided',
+              value: 'guided',
+              description: 'Ask whenever a decision benefits from the human.',
+            },
+            {
+              title: 'Autonomous',
+              value: 'autonomous',
+              description: 'Ask only for destructive, dangerous, or undecidable calls.',
+            },
+          ],
+        });
+        return mode === undefined ? undefined : `${args} --mode ${mode}`;
+      },
     });
-    return cleanup;
+    return () => {};
   },
 } satisfies TuiPlugin;

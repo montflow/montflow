@@ -13,6 +13,34 @@ Vitest.describe('Task.parseTaskFile runtime', () => {
     Vitest.expect(task?.dependsOn).toStrictEqual([]);
     Vitest.expect(task?.reviewerProfiles).toStrictEqual([]);
     Vitest.expect(task?.findingRef).toBeUndefined();
+    Vitest.expect(task?.size).toBe('medium');
+  });
+
+  Vitest.it('parses a declared size', () => {
+    const task = Task.parseTaskFile(
+      taskMarkdown({ id: 'A001', name: 'implement-login', size: 'large' }),
+    );
+    Vitest.expect(task?.size).toBe('large');
+  });
+
+  Vitest.it('leaves size absent when the file omits it', () => {
+    const task = Task.parseTaskFile(
+      taskMarkdown({ id: 'A001', name: 'implement-login', withoutSize: true }),
+    );
+    Vitest.expect(task?.size).toBeUndefined();
+  });
+
+  Vitest.it('parses an unknown size without dropping the task', () => {
+    const task = Task.parseTaskFile(taskMarkdown({ id: 'A001', name: 'x', size: 'huge' }));
+    Vitest.expect(task?.size).toBe('huge');
+    Vitest.expect(task === undefined ? undefined : Task.sizeOf(task)).toBeUndefined();
+  });
+
+  Vitest.it('narrows a known size through sizeOf', () => {
+    const task = Task.parseTaskFile(
+      taskMarkdown({ id: 'A001', name: 'implement-login', size: 'tiny' }),
+    );
+    Vitest.expect(task === undefined ? undefined : Task.sizeOf(task)).toBe('tiny');
   });
 
   Vitest.it('splits a comma-separated reviewer-profiles scalar', () => {
@@ -21,10 +49,10 @@ Vitest.describe('Task.parseTaskFile runtime', () => {
         id: 'A004',
         name: 'review-later',
         type: 'review',
-        reviewerProfiles: 'effect-reviewer, generic-reviewer',
+        reviewerProfiles: 'example-reviewer, generic-reviewer',
       }),
     );
-    Vitest.expect(task?.reviewerProfiles).toStrictEqual(['effect-reviewer', 'generic-reviewer']);
+    Vitest.expect(task?.reviewerProfiles).toStrictEqual(['example-reviewer', 'generic-reviewer']);
   });
 
   Vitest.it('parses an empty reviewer-profiles value as an empty list', () => {
@@ -45,14 +73,14 @@ Vitest.describe('Task.parseTaskFile runtime', () => {
         'depends-on:',
         'related-tasks:',
         'reviewer-profiles:',
-        '  - effect-reviewer',
+        '  - example-reviewer',
         '  - generic-reviewer',
         'status: pending',
         '---',
         '',
       ].join('\n'),
     );
-    Vitest.expect(task?.reviewerProfiles).toStrictEqual(['effect-reviewer', 'generic-reviewer']);
+    Vitest.expect(task?.reviewerProfiles).toStrictEqual(['example-reviewer', 'generic-reviewer']);
   });
 
   Vitest.it('splits comma-separated depends-on and related-tasks', () => {

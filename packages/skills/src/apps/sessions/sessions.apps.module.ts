@@ -2,7 +2,7 @@ import type { ModelPort, SessionDispatchPort } from '@montflow/opencode';
 import { Effect, type Scope } from 'effect';
 import * as SkillStore from '../../modules/skill-store/index.js';
 import { Skill } from '../../modules/index.js';
-import * as Interactive from '../interactive/index.js';
+import { Interactive } from '../index.js';
 
 /**
  * Agentic flows for `/mf-skills` dispatch sessions instead of running a child

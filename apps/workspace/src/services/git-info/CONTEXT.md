@@ -12,5 +12,5 @@ outside a repo the branch reads `unknown` and the tree reads clean.
 
 ## Does not belong here
 
-- Workspace identity shapes — those live in the workspace package
+- Workspace identity shapes — those live in the workspace module (`src/modules/workspace`)
 - Rendering — components read the resolved `Info`

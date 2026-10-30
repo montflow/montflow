@@ -29,7 +29,7 @@ const withStore = <A, E>(
   use: (root: string) => Effect.Effect<A, E>,
 ): Effect.Effect<A, E> =>
   Effect.acquireUseRelease(
-    Effect.promise(() => mkdtemp(join(tmpdir(), 'mf-skills-store-'))).pipe(
+    Effect.promise(() => mkdtemp(join(tmpdir(), 'skills-store-'))).pipe(
       Effect.flatMap((root) =>
         Effect.promise(() =>
           Promise.all(

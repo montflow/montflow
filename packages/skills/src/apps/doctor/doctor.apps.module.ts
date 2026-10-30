@@ -1,7 +1,5 @@
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import * as NodePath from '@effect/platform-node/NodePath';
+import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Effect, FileSystem, Layer, Path } from 'effect';
-import { Store } from '@montflow/version';
 import { EMBEDDED_SKILL_PAYLOAD } from './embedded-payload.generated.js';
 
 /**
@@ -74,15 +72,6 @@ export interface DoctorResult {
   readonly skills: ReadonlyArray<SkillStatus>;
   /** One-line summary, and the whole explanation when unhealthy. */
   readonly message: string;
-  /** Manifest facts, present only when the workspace has a managed store. */
-  readonly store?:
-    | {
-        readonly state: 'managed' | 'corrupt' | 'unreadable' | 'unsupported';
-        readonly version?: string | undefined;
-        readonly commit?: string | undefined;
-        readonly syncedAt?: string | undefined;
-      }
-    | undefined;
 }
 
 /** How to run: repair what can be repaired, or only report. */
@@ -282,20 +271,6 @@ export const runDoctor = (
       });
 
     const skills = yield* Effect.forEach(SKILL_NAMES, installSkill);
-    const storeState = yield* Store.read(root);
-    const store =
-      storeState.status === 'managed'
-        ? {
-            state: 'managed' as const,
-            version: storeState.manifest.source.version,
-            commit: storeState.manifest.source.commit,
-            syncedAt: storeState.manifest.syncedAt,
-          }
-        : storeState.status === 'corrupt' ||
-            storeState.status === 'unreadable' ||
-            storeState.status === 'unsupported'
-          ? { state: storeState.status }
-          : undefined;
     const unhealthy = skills.filter((skill) => !usable(skill.status));
     const changed = skills.some((skill) => skill.status !== 'ok' && usable(skill.status));
     const status: DoctorResult['status'] =
@@ -305,8 +280,7 @@ export const runDoctor = (
       status,
       healthy,
       skills,
-      store,
-      message: doctorMessageFor({ status, healthy, skills, store }, invocation),
+      message: doctorMessageFor({ status, healthy, skills }, invocation),
     };
   }).pipe(Effect.provide(NodeLive));
 
@@ -320,7 +294,6 @@ const doctorMessageFor = (
     readonly status: DoctorResult['status'];
     readonly healthy: boolean;
     readonly skills: ReadonlyArray<SkillStatus>;
-    readonly store?: DoctorResult['store'];
   },
   invocation: string,
 ): string => {
@@ -336,13 +309,6 @@ const doctorMessageFor = (
             : skill.detail;
     return `${mark} ${skill.name}: ${note} \u2192 ${skill.target}`;
   });
-  if (result.store !== undefined) {
-    lines.push(
-      result.store.state === 'managed'
-        ? `store     ${result.store.version ?? 'unknown'}${result.store.commit === undefined ? '' : ` @ ${result.store.commit}`}`
-        : `store     ${result.store.state} manifest`,
-    );
-  }
   if (result.status === 'ok') {
     return ['\u2713 skills are installed and up to date.', ...lines].join('\n');
   }

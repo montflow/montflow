@@ -5,8 +5,8 @@ Two front ends over one set of engines: the `mf-skills` binary (Bun +
 parser for the slash form, a `Command` tree for the binary, and nothing shared
 below the parser.
 
-The interactive module is used by dispatch sessions, not a command:
-`../interactive/`. The TUI picker behind `/mf-skills` browses the store.
+The interactive menu is a different command: `/mf-skills`,
+`../interactive/`.
 
 ## Belongs here
 
@@ -71,7 +71,7 @@ The interactive module is used by dispatch sessions, not a command:
 ```bash
 # from source (Bun required)
 bun run --cwd packages/skills cli list
-bun run --cwd packages/skills cli verify <name> --dir $PWD
+bun run --cwd packages/skills cli verify <name>
 
 # standalone binary — Bun runtime embedded, no install, no node
 bun run --cwd packages/skills build:cli

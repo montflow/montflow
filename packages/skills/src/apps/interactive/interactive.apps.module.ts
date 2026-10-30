@@ -1,9 +1,16 @@
 import { Effect } from 'effect';
 import * as Skill from '../../modules/skill/index.js';
 
+/** Slash-command name registered by {@link register} (invoke as `/mf-skills`). */
+export const COMMAND_NAME = 'mf-skills';
+
+/** Help text shown for the command and the `help` action. */
+export const COMMAND_DESCRIPTION =
+  'Interactive menu: browse, create (manually or with an agent), show, modify (manually or with an agent), and delete workspace skills.';
+
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  'mf-skills [browse | list | create [name] | show <name> | modify [name] | delete [name] | help]';
+  '/mf-skills [browse | list | create [name] | show <name> | modify [name] | delete [name] | help]';
 
 /** Failure value when the user cancels a dialog. Notified as info, not an error. */
 export const CANCELLED = 'Cancelled.';
@@ -93,7 +100,7 @@ export const TRANSFORM_POSTPROMPT =
   'When done, reply with one short line: the skill name and what was fixed.';
 
 /**
- * Minimal UI surface the flows need. Mirrors the host's own narrowing for dialogs,
+ * Minimal UI surface the flows need. Mirrors OpenCode's own narrowing for dialogs,
  * so any real `ctx.ui` is assignable and fakes stay tiny.
  */
 export interface InteractiveUi {
@@ -139,13 +146,13 @@ export interface ModifyInput {
 
 export type SkillModifier = (input: ModifyInput) => Effect.Effect<Skill.Skill, string>;
 
-/** Minimal model reference carried from the host context (provider + id only). */
+/** Minimal model reference carried from the OpenCode context (provider + id only). */
 export interface ModelRef {
   readonly provider: string;
   readonly id: string;
 }
 
-/** Minimal model catalogue carried from the host context. */
+/** Minimal model catalogue carried from the OpenCode context. */
 export interface ModelCatalog {
   readonly getAvailable: () => ReadonlyArray<ModelRef>;
 }
@@ -252,7 +259,7 @@ export const parseAction = (args: string): Action => {
 
 /**
  * Notify the skill list, or a hint when empty.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param skills - skills to list
  * @returns Effect completing once notified
  */
@@ -271,7 +278,7 @@ export const listSkills = (
 /**
  * Notify a skill's description and body, failing on unknown names.
  * Matches by directory id first, then frontmatter name.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param skills - skills to search
  * @param name - skill id or name
  * @returns Effect completing once notified, failing on unknown names
@@ -295,7 +302,7 @@ export const showSkill = (
 /**
  * Manual create flow: name (when missing) then description via dialogs.
  * The directory id is slugified from the name.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param name - initial name, if already given
  * @returns Effect resolving to the new descriptor, failing on cancel or blank input
  */
@@ -333,7 +340,7 @@ export const createManual = (
 /**
  * Resolve the modify target: use the named skill when given, else pick
  * from the list via dialog.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param skills - skills to search
  * @param name - skill id or name, if already given
  * @returns Effect resolving to the target skill, failing on cancel or unknown names
@@ -369,7 +376,7 @@ export const resolveModifyTarget = (
  * session model pinned first, single-keystroke keep), else the
  * menu-driven `pickModel`. Notifies the chosen runtime, unless the
  * loading modal is showing it instead.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param models - picker options from {@link resolveModelOptions}
  * @param modelPicker - TUI widget port, if available
  * @param verb - progress verb for the notify line (Generating/Modifying)
@@ -426,7 +433,7 @@ export const MENU_INSTALL = 'Install required skills';
 
 /**
  * TUI main-menu port the consuming extension injects (heading, info
- * panel, then options). Absent outside the TUI (falls back to host-native
+ * panel, then options). Absent outside the TUI (falls back to OpenCode-native
  * `select`).
  */
 export type MenuFn = (
@@ -468,7 +475,7 @@ export const requirementRow = (status: Skill.RequirementStatus, selected: boolea
  * (checked = will inject, toggle by picking), installing the missing
  * ones on request. Present skills start checked; the check itself is the
  * pure {@link Skill.checkRequirements} — this flow only presents it.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param store - injected persistence port
  * @param installer - injected skill installer port
  * @param required - required skill names (from `Skill.*_REQUIREMENTS`)
@@ -528,7 +535,7 @@ export const ensureRequirements = (
  * Manual modify flow: pick the skill (when unnamed) then enter a new
  * description. Persists nothing itself — the caller saves the returned
  * descriptor.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param skills - skills to search
  * @param name - skill id or name, if already given
  * @returns Effect resolving to the updated descriptor, failing on cancel or unknown names
@@ -556,7 +563,7 @@ export const modifyManual = (
  * injected modifier behind the loading modal when available. Uses the
  * injected TUI widget when provided, else the menu-driven `pickModel` —
  * same picker as {@link createAgentic}.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param skills - skills to search
  * @param name - skill id or name, if already given
  * @param models - picker options from {@link modelOptions}
@@ -606,7 +613,7 @@ export const modifyAgentic = (
 /**
  * Modify flow entry: manual vs agentic choice, then the chosen flow.
  * Persists nothing itself — the caller saves the returned descriptor.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param skills - skills to search
  * @param name - skill id or name, if already given
  * @param models - picker options from {@link modelOptions}
@@ -673,7 +680,7 @@ export const modelOptions = (
  * Resolve picker options from the command source: scoped models when the
  * session scopes them, otherwise the live catalogue (models with usable
  * auth). Pure and total — catalogue reads are sync snapshots.
- * @param source - model source from the host context
+ * @param source - model source from the OpenCode context
  * @returns picker options, possibly empty
  */
 export const resolveModelOptions = (source: ModelSource): ReadonlyArray<ModelOption> => {
@@ -735,7 +742,7 @@ const modelLabelFor = (
  * `Pick another model…` entry. The filter step uses the live
  * search dialog when provided, else input-then-select.
  * Non-TUI path — the TUI uses the injected `ModelPickerFn` widget instead.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param models - picker options from {@link resolveModelOptions}
  * @returns Effect resolving to the picked label, failing on cancel or no match
  */
@@ -773,7 +780,7 @@ export const pickModel = (
  * (current session model first), then run the injected generator behind
  * the loading modal when available. Uses the injected TUI widget when
  * provided, else the menu-driven `pickModel`.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param models - picker options from {@link modelOptions}
  * @param generate - injected agentic generation port
  * @param modelPicker - TUI widget port, if available
@@ -811,7 +818,7 @@ export const createAgentic = (
 
 /**
  * Create flow entry: manual vs agentic choice, then the chosen flow.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param models - picker options from {@link modelOptions}
  * @param generate - injected agentic generation port
  * @param name - initial manual name, if already given
@@ -843,7 +850,7 @@ export const createSkill = (
  * Finish a create: announce the saved file, then land on the new skill's
  * detail menu (Show / Modify / Re-verify / Delete / Back, plus
  * Transform when unverified) so it can be inspected right away.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param store - injected persistence port
  * @param skill - the saved skill
  * @param models - picker options from {@link resolveModelOptions}
@@ -888,7 +895,7 @@ export const completeCreate = (
 /**
  * Delete flow: pick the skill (when unnamed), confirm, then delete.
  * Returns nothing itself — the caller notifies.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param skills - skills to search
  * @param store - injected persistence port
  * @param name - skill id or name, if already given
@@ -929,7 +936,7 @@ export const deleteSkill = (
  * Browse loop: pick a skill, then loop its detail menu until Back or Delete.
  * The list refreshes after every mutation. An empty list fails on entry
  * (hint to create) but exits quietly once deletions drain it.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param store - injected persistence port
  * @param models - picker options from {@link resolveModelOptions}
  * @param modify - injected agentic modification port
@@ -987,7 +994,7 @@ export const verifySkill = (
 
 /**
  * Notify a verify outcome: one line when valid, the issue list otherwise.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param id - verified skill id
  * @param result - result from {@link verifySkill}
  * @returns Effect completing once notified
@@ -1022,7 +1029,7 @@ export const TRANSFORM_INSTRUCTION =
  * model, then run the injected transformer behind the loading modal when
  * available. The instruction is fixed ({@link TRANSFORM_INSTRUCTION}) —
  * no free-text prompt needed.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param skill - skill to fix
  * @param models - picker options from {@link modelOptions}
  * @param transform - injected agentic format-transform port
@@ -1068,7 +1075,7 @@ export const transformAgentic = (
  * cancel. The heading carries a `Batch.box` info panel with the verify
  * status between the title and the options; Show, Modify, Re-verify, and
  * Transform return to this menu; Delete and Back return to the browse list.
- * @param ui - host dialogs
+ * @param ui - OpenCode ui dialogs
  * @param store - injected persistence port
  * @param id - picked skill id
  * @param models - picker options from {@link resolveModelOptions}

@@ -49,9 +49,7 @@ const stubLayer: Layer.Layer<PromptStore.PromptStore> = Layer.succeed(
         ? Effect.fail(new PromptStore.StoreError({ message: `Unknown prompt '${name}'.` }))
         : Effect.succeed(entry.raw);
     },
-    write: () => Effect.fail(new PromptStore.StoreError({ message: 'unused' })),
-    readAllRaw: () =>
-      Effect.succeed(entries.map((entry: any) => ({ name: entry.name, contents: entry.raw }))),
+    readAllRaw: () => Effect.succeed(entries.map(({ name, raw }) => ({ name, raw }))),
   }),
 );
 
