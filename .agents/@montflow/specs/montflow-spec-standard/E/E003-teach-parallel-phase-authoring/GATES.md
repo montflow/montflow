@@ -20,3 +20,8 @@
 - [ ] Package, workspace, and doctor payload copies agree and `doctor --check` is silent
 - [ ] A test fails when the parallel or scheduler guidance is removed
 - [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf:check` pass
+
+## Stage 3: Package proof (mechanical)
+command: bun run --cwd packages/specs test
+
+- [ ] the scoped package suite for this task passes

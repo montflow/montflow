@@ -48,6 +48,10 @@ instead of something an agent has to rediscover.
   guidance is removed from the prompt and skill.
 - The change adds no new `mf-specs check` finding to any spec.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] The authoring skill and prompt require a parallel ready set, declared write scopes, and real dependencies only

@@ -6,7 +6,7 @@ originator: planner:B004
 size: medium
 depends-on: C001
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task C002: implement gate kinds and execution
@@ -31,7 +31,7 @@ which is the gap this closes.
 
 ## Completion
 
-- [ ] A mechanical gate runs a real command and records its result, and a subjective gate cannot be auto-passed, shown by runs rather than claimed
-- [ ] A phase with an unproven required gate fails verification naming it, and passes once recorded
-- [ ] Existing specs gate files verify unchanged
-- [ ] Tests cover command-failure, unrecorded, and subjective paths, plus the no-`--stage` default (stops at first failure) and `--all` (continues and records every stage)
+- [x] A mechanical gate runs a real command and records its result, and a subjective gate cannot be auto-passed, shown by runs rather than claimed
+- [x] A phase with an unproven required gate fails verification naming it, and passes once recorded
+- [x] Existing specs gate files verify unchanged
+- [x] Tests cover command-failure, unrecorded, and subjective paths, plus the no-`--stage` default (stops at first failure) and `--all` (continues and records every stage)

@@ -40,6 +40,10 @@ agentic prompt author would never produce one.
   rules and the packaged skill both mention the condition field and the
   earlier-controller rule.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] Saving and reopening a conditional prompt preserves the condition byte-for-byte

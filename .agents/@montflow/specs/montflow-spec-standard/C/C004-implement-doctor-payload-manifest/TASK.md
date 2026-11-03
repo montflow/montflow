@@ -6,7 +6,7 @@ originator: planner:B005
 size: medium
 depends-on: B005, A002, A003
 related-tasks: C006
-status: pending
+status: complete
 ---
 
 # Task C004: implement doctor payload manifest
@@ -32,7 +32,7 @@ diagnose-and-repair and report-only become explicit so verification never writes
 
 ## Completion
 
-- [ ] `bun run mf:check` passes and writes nothing during the run, proven by a clean `git status` afterward
-- [ ] A clean workspace gains every payload kind C004 ships (`skill`, `profile`, `prompt`) from one repair command and then re-reports healthy; the `tier` kind is proven by a fixture, with its three real files deferred to C006
-- [ ] The compiled binary of every package with a manifest reports healthy payload status (no `mf-sessions` target)
-- [ ] Tests cover stale, missing, mismatched, and never-writes-in-report-only
+- [x] `bun run mf:check` passes and writes nothing during the run, proven by a clean `git status` afterward
+- [x] A clean workspace gains every payload kind C004 ships (`skill`, `profile`, `prompt`) from one repair command and then re-reports healthy; the `tier` kind is proven by a fixture, with its three real files deferred to C006
+- [x] The compiled binary of every package with a manifest reports healthy payload status (no `mf-sessions` target)
+- [x] Tests cover stale, missing, mismatched, and never-writes-in-report-only

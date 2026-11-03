@@ -43,6 +43,10 @@ form, host tool, skill, and docs agree on the same report?
 - Run `bun run mf:check` and the scoped package suites; every spec and prompt
   must remain clean.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] Review written to `.agents/@montflow/reviews/montflow-spec-standard/I.md`

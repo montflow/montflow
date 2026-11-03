@@ -170,3 +170,258 @@ in ~1.9 s. No `mf-sessions` target.
   "fresh workspace" use.
 - **No status, lock, SPEC.md, or other task's file was edited.** Only this
   `MEMORY.md` was written under the task directory.
+
+## Verification re-run — 2026-11-03
+
+This run treated the record above as a claim to verify, not proof. The C004
+implementation was already present in the committed working tree at
+`122411b4` (`feat/spec-standard`). No implementation change was needed: every
+gate and completion item below was re-run and passed. This run wrote only this
+`MEMORY.md`.
+
+`GATES.md` names checklist items, not commands. The commands below are the
+mechanical checks used for those items and for `TASK.md` `## Completion`.
+
+### Working-tree baseline
+
+At the start of the run:
+
+```
+$ git status --porcelain | wc -l
+0
+```
+
+The `mf:check` write-free proof used the exact file before and after:
+
+```
+$ git status --porcelain > /tmp/opencode/c004-git-before.txt
+$ sha256sum /tmp/opencode/c004-git-before.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  /tmp/opencode/c004-git-before.txt
+$ bun run mf:check
+EXIT=0
+$ git status --porcelain > /tmp/opencode/c004-git-after.txt
+$ sha256sum /tmp/opencode/c004-git-after.txt
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  /tmp/opencode/c004-git-after.txt
+$ diff -u ...before.txt ...after.txt
+(no output)
+GIT_STATUS_IDENTICAL
+```
+
+Key `mf:check` output (verbatim):
+
+```
+release guard: 6 CLIs at 0.0.2, one fixed group, tags on
+46 skills · 0 issues
+✓ skills are installed and up to date.
+5 prompts · 0 issues · 0 warnings
+✓ prompts skills are installed and up to date.
+14 specs · 0 failed · 0 issues · 14 warnings
+✓ spec skills and prompts are installed and up to date.
+12 profiles · 0 issues · 0 warnings
+✓ profiles are installed and up to date.
+✓ prompt templates are installed and up to date.
+2 files · 0 issues
+✓ review skills are installed and up to date.
+summary entries=14 issues=0 warnings=0
+summary checks=8 failed=0 repaired=0
+```
+
+### Stage 0 — static
+
+```
+$ for p in skills prompts specs profiles reviews references model-fallback; do
+    grep -q "from '@montflow/payload'" packages/$p/scripts/generate-embedded-payload.ts &&
+    grep -q 'generateEmbeddedPayload(' packages/$p/scripts/generate-embedded-payload.ts; done
+skills           OK
+prompts          OK
+specs            OK
+profiles         OK
+reviews          OK
+references       OK
+model-fallback   OK
+EXIT=0
+```
+
+```
+$ find packages -not -path '*/node_modules/*' -type f \
+    \( -name 'generate-embedded-skills.ts' -o -name 'generate-embedded-prompts.ts' \
+       -o -name 'generate-embedded-payload.ts' \)
+(no output: the six old per-package generators are gone; only the seven
+thin scripts/generate-embedded-payload.ts callers remain)
+```
+
+```
+$ for p in ...; do grep -q "loadManifest(manifestJson" <doctor module>; done
+skills           OK (packages/skills/src/apps/doctor/doctor.apps.module.ts)
+prompts          OK (packages/prompts/src/apps/doctor/doctor.apps.module.ts)
+specs            OK (packages/specs/src/modules/doctor/doctor.module.ts)
+profiles         OK (packages/profiles/src/apps/doctor/doctor.apps.module.ts)
+reviews          OK (packages/reviews/src/apps/doctor/doctor.apps.module.ts)
+references       OK (packages/references/src/apps/doctor/doctor.apps.module.ts)
+model-fallback   OK (packages/model-fallback/src/apps/doctor/doctor.apps.module.ts)
+EXIT=0
+```
+
+```
+$ grep -rnE '"(montflow-[a-z-]+|spec-(create|execute|sizing|appraiser|bookkeeper|worker|...))"' \
+    packages/*/src/apps/doctor/*.ts packages/specs/src/modules/doctor/*.ts \
+    | grep -v embedded-payload.generated
+NONE
+```
+
+The exported `*_NAMES` constants are built from the loaded manifest
+(`nameAt`/`namesOf`); no literal payload-name list drives a doctor. The only
+literal name arrays left are non-payload checks (`references`'
+`RETIRED_SKILL_NAMES` and `CHECK_NAMES`), which B005 keeps constant.
+
+### Stage 1 — behaviour
+
+```
+$ bun run --cwd packages/payload test
+EXIT=0
+ Test Files  10 passed (10)
+      Tests  50 passed (50)
+Type Errors  no errors
+```
+
+This suite covers the shared engine, the shared generator, the root-script
+parity test, and the compiled-binary test. `install.test.ts` cases:
+`check reports every kind missing and writes nothing at all`,
+`reports stale for changed bytes and repairs them`,
+`reports mismatched for a partial install and restores the missing file`,
+`check leaves a broken tree byte-identical`, plus symlink/blocked/manifest
+cases.
+
+```
+$ bun run --cwd packages/payload test src/modules/install/tests/compiled-binary.test.ts
+EXIT=0
+ Test Files  2 passed (2)
+      Tests  2 passed (2)
+Type Errors  no errors
+```
+
+The compiled test builds one binary for each of `skills`, `prompts`, `specs`,
+`profiles`, `reviews`, `references`, `model-fallback`, runs repair and
+`--check` in a fresh temp workspace, and asserts exit 0 with no `not usable`
+line. No `mf-sessions` target exists or is tested.
+
+Package suites:
+
+| Package | Exit | Test Files | Tests |
+| --- | --- | --- | --- |
+| skills | 0 | 46 passed | 417 passed |
+| prompts | 0 | 50 passed | 599 passed |
+| specs | 0 | 102 passed | 1451 passed |
+| profiles | 0 | 40 passed | 192 passed |
+| reviews | 0 | 24 passed | 160 passed |
+| model-fallback | 0 | 66 passed | 361 passed, 1 skipped |
+| references | 1 | 1 failed, 27 passed | 389 passed, 1 failed |
+
+The one references failure is the same unrelated git-lifecycle case recorded
+above (`GitLifecycle sync > repairs a stale origin/HEAD after an upstream
+default-branch rename`: `expected 'present' to be 'ref-mismatch'` at
+`src/modules/git/tests/lifecycle.test.ts:822`). It touches
+`packages/references/src/modules/git/`, which C004 did not change. The C004
+references surface passes on its own:
+
+```
+$ bun run --cwd packages/references test src/apps/doctor/tests src/apps/cli/tests/binary.test.ts
+EXIT=0
+ Test Files  6 passed (6)
+      Tests  88 passed (88)
+Type Errors  no errors
+```
+
+Fast gate (the pre-push gate, without the full test suite):
+
+```
+$ bun run mf:gate:fast
+EXIT=0
+ Tasks:    17 successful, 17 total   (lint:check)
+ Tasks:    17 successful, 17 total   (format:check)
+ Tasks:    17 successful, 17 total   (ts:check)
+summary checks=8 failed=0 repaired=0
+```
+
+### Clean-workspace repair
+
+Copied the working tree to `/tmp/opencode/c004-clean/repo` (no `.git`), removed
+`.agents/skills`, `.agents/@montflow/prompts`, and
+`.agents/@montflow/profiles`, then ran one repair command:
+
+```
+$ bun run mf:doctor
+REPAIR_EXIT=0
++ skills installed or repaired.
++ prompts skills installed or repaired.
++ spec skills and prompts installed or repaired.
++ profiles installed or repaired.
++ review skills installed or repaired.
+doctor: installed
++ prompt templates installed or repaired.
+```
+
+Report-only re-check of every package:
+
+```
+skills           CHECK=0  ✓ skills are installed and up to date.
+prompts          CHECK=0  ✓ prompts skills are installed and up to date.
+specs            CHECK=0  ✓ spec skills and prompts are installed and up to date.
+profiles         CHECK=0  ✓ profiles are installed and up to date.
+reviews          CHECK=0  ✓ review skills are installed and up to date.
+references       CHECK=0  summary checks=8 failed=0 repaired=0
+model-fallback   CHECK=0  ✓ prompt templates are installed and up to date.
+```
+
+Byte comparison of every C004 manifest target against this checkout:
+
+```
+$ diff -r <checkout target> <clean-copy target>   # for every skill/profile/prompt entry
+identical=20 different=0 missing=0 total=20
+```
+
+No `tier` entries were installed or expected; `packages/specs/payload.json`
+still has none, and `packages/specs/tiers/` does not exist. The tier kind is
+covered by fixtures in `manifest.test.ts`, `embed.test.ts`, and `install.test.ts`.
+
+### Files touched by this verification run
+
+- `.agents/@montflow/specs/montflow-spec-standard/C/C004-implement-doctor-payload-manifest/MEMORY.md`
+  (this section only)
+
+After the final package test, `git status --porcelain` showed
+` M .agents/@montflow/specs/montflow-spec-standard/C/C001-implement-version-and-structure/MEMORY.md`.
+That file belongs to C001 and was changed concurrently by another process
+during this run; this worker did not read or write it. The `mf:check`
+before/after proof above was captured before that concurrent change and was
+byte-identical.
+
+## Orchestrator Verification (2026-11-03)
+
+Independent gate run from the repo root after the worker receipt:
+
+```
+$ bun run --cwd packages/payload test src/modules/install/tests/compiled-binary.test.ts
+ Test Files  2 passed (2)
+      Tests  2 passed (2)
+Type Errors  no errors
+EXIT=0
+
+$ bun run mf:gate:fast   # includes mf:check in report-only mode
+ Tasks:    17 successful, 17 total   (lint)
+ Tasks:    17 successful, 17 total   (format)
+ Tasks:    17 successful, 17 total   (ts)
+summary entries=14 issues=0 warnings=0
+summary checks=8 failed=0 repaired=0
+EXIT=0
+
+git status --porcelain sha256 before/after mf:gate:fast:
+612645c7f53decd3fd6ddaf6b9edf650c70f612f2277610046051f7a1797d17b
+612645c7f53decd3fd6ddaf6b9edf650c70f612f2277610046051f7a1797d17b
+
+static: all seven packages' generate-embedded-payload.ts import the shared
+generateEmbeddedPayload; no payload.json contains a "tier" entry (C006 owns it).
+```
+
+All completion items are supported by the evidence above; task recorded complete
+by the orchestrator.

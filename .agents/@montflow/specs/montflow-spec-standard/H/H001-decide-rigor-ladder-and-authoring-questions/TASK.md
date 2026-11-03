@@ -73,6 +73,10 @@ expressed; this task decides what is asked and what each answer buys.
   supersession list in `MEMORY.md`, sufficient for H002–H004 to implement
   without asking anything.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] Five level names, their order, and the full per-level matrix are in `MEMORY.md`

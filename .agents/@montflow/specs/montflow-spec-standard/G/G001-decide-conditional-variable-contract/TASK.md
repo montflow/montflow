@@ -70,6 +70,10 @@ CLI, and the workspace editor all implement the same rule.
   `worktree-name` (text, required, visible when `isolated` is `yes`). Show the
   full JSON and the matching template guards.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] `MEMORY.md` carries the exact JSON shape for every variable kind and every condition form

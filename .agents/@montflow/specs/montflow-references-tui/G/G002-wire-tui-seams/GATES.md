@@ -11,3 +11,8 @@
 - [ ] workspace README documents the panel and its states
 - [ ] one slash spelling is used across binary, slash, and keybind
 - [ ] `bun run --cwd apps/workspace test`, `turbo test:tui`, and `bun run --cwd packages/references test` pass
+
+## Stage 2: Package proof (mechanical)
+command: bun run --cwd packages/references test
+
+- [ ] the references package suite passes

@@ -38,6 +38,10 @@ ever launch the same heavy verification twice.
 - Confirm the execution prompt and profiles dispatch the full ready set
   concurrently and run shared verification once.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] Review written to `.agents/@montflow/reviews/montflow-spec-standard/E.md` and read by the human

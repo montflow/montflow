@@ -53,6 +53,10 @@ copying the prompt or re-deriving the spec name.
   that no surface writes spec state, changes a lock, or dispatches a worker.
 - Run the scoped specs CLI, prompt, and host-tool suites.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] Every surface I001 names loads the installed `spec-status` prompt and renders the same text

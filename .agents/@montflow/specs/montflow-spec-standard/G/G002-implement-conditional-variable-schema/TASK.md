@@ -43,6 +43,10 @@ hidden branch produces empty substitutions instead of stale answers.
   effective-value rule, hidden required, hidden rendering, and the old-prompt
   compatibility fixture.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] The condition field round-trips and a prompt without one is byte-identical on encode

@@ -41,6 +41,10 @@ behaviour identical to the `/mf-prompts` fill.
   refusal, `spec_author` parity, and slash-command parity. The `/mf-prompts`
   path needs no new flags and must render the same text for the same answers.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] Every new flag reaches the rendered prompt with the same value the fill flow would use

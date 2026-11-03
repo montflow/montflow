@@ -27,6 +27,10 @@ self-consistent end to end.
 - Confirm the end-to-end claim by running the repo-wide gate and the clean-clone install rather than reading the changelog.
 - Confirm every migrated spec still reads and still verifies, and the TUI never offers a phase directory as a spec.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] Review written as a round under `.agents/@montflow/reviews/montflow-spec-standard/<NNN>/REVIEW.md` (not a flat `C.md`) with `- Phase: C` in `## Metadata`, and the series ledger `.agents/@montflow/reviews/montflow-spec-standard/REVIEW.md` indexes the round

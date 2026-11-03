@@ -13,3 +13,8 @@
 - [ ] `origin: other` renders the freeform branch and no other origin path does
 - [ ] the profile, skill, and prompt agree on the five rigor names
 - [ ] the doctor payload matches the packaged prompt bytes
+
+## Stage 2: Package proof (mechanical)
+command: bun run --cwd packages/specs test
+
+- [ ] the scoped package suite for this task passes

@@ -70,6 +70,10 @@ twice.
   board/mailbox grammar; it does not define a second scheduler or a second
   channel.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] `MEMORY.md` carries the phase-shape rule, write-scope rule, key grammar, lane defaults, reuse and invalidation rule, lease recovery, channel protocol, and output fields

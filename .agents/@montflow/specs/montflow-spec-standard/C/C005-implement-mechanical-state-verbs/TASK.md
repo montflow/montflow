@@ -6,7 +6,7 @@ originator: planner:B005
 size: large
 depends-on: B003, C001, C004, C003
 related-tasks: C002
-status: pending
+status: complete
 ---
 
 # Task C005: implement mechanical state verbs
@@ -31,10 +31,10 @@ rather than writing a second pair.
 
 ## Completion
 
-- [ ] `init`, `next`, `claim`, `lock`, `state`, `new-phase`, `new-task`, `stamp`, `waiver`, and `tier` are each exercised by an actual run with output recorded in MEMORY.md
-- [ ] `init` rejects the invalid tier plans (`full` without exploration, `micro` exploration/prose-only gate, `standard` waived with code, waived phase given a review task, `standard` with two exploratory tasks or one outside the first phase), each shown by a run
-- [ ] `claim --start`/`--block`/`--close` rewrites the task `status:`, the `SPEC.md` row, and the `PHASE.md` mirror atomically, and a forced write failure rolls all three back (shown by a test); the full graph `pending → start → block → release → start` and the `blocked → release → pending` return path are shown by runs; a worker's own bind/release is allowed and changes no status, and the default `micro` tree derives a lock
-- [ ] `migrate` converts a flat v1 fixture tree to the v2 tree and the result verifies against v2 rules; `migrate --include-complete` upgrades a frozen fixture
-- [ ] `mf-specs migrate --all` runs over `.agents/@montflow/specs` and the per-spec result is recorded for C007 (frozen complete specs listed separately)
-- [ ] A second `claim` of a taken task, a worker calling `claim --start`/`claim --block`/`claim --close`/`gate run`/`mail`, and a premature `lock` all fail with actionable messages
-- [ ] Tests cover id collisions, empty phases, dependency ordering, claim atomicity/rollback, claim authority, `task.review-waived`, the `micro` lock, and refusal paths
+- [x] `init`, `next`, `claim`, `lock`, `state`, `new-phase`, `new-task`, `stamp`, `waiver`, and `tier` are each exercised by an actual run with output recorded in MEMORY.md
+- [x] `init` rejects the invalid tier plans (`full` without exploration, `micro` exploration/prose-only gate, `standard` waived with code, waived phase given a review task, `standard` with two exploratory tasks or one outside the first phase), each shown by a run
+- [x] `claim --start`/`--block`/`--close` rewrites the task `status:`, the `SPEC.md` row, and the `PHASE.md` mirror atomically, and a forced write failure rolls all three back (shown by a test); the full graph `pending → start → block → release → start` and the `blocked → release → pending` return path are shown by runs; a worker's own bind/release is allowed and changes no status, and the default `micro` tree derives a lock
+- [x] `migrate` converts a flat v1 fixture tree to the v2 tree and the result verifies against v2 rules; `migrate --include-complete` upgrades a frozen fixture
+- [x] `mf-specs migrate --all` runs over `.agents/@montflow/specs` and the per-spec result is recorded for C007 (frozen complete specs listed separately)
+- [x] A second `claim` of a taken task, a worker calling `claim --start`/`claim --block`/`claim --close`/`gate run`/`mail`, and a premature `lock` all fail with actionable messages
+- [x] Tests cover id collisions, empty phases, dependency ordering, claim atomicity/rollback, claim authority, `task.review-waived`, the `micro` lock, and refusal paths

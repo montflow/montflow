@@ -35,6 +35,10 @@ workspace editor agree on one visibility rule?
 - Confirm the authoring rules and the packaged create-prompts skill both teach
   the condition field and the guard rule, and that the drift test covers them.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] Review written to `.agents/@montflow/reviews/montflow-spec-standard/G.md`

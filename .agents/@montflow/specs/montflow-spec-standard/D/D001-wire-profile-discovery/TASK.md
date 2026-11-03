@@ -50,6 +50,10 @@ small, fully gated phase may stop at its gates.
   `spec-create` prompt or the skill's `reviewer-profiles` rule.
 - The change adds no new `mf-specs check` finding to any spec.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] A rendered `spec-create` prompt tells the author to run `mf-profiles list` before choosing `reviewer-profiles`

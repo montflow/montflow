@@ -42,6 +42,10 @@ rule and the declared variable kinds.
   answers, a required hidden variable that is not missing, a select default, and
   CLI `render`/`execute` parity with the interactive answers.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] A select is offered as a list, not a free-text line

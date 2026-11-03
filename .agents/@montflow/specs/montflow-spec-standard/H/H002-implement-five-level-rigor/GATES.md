@@ -12,3 +12,8 @@
 - [ ] every drift leg fails by name when its file, field, sentence, or row is missing
 - [ ] no tier file names a size, model, effort, or review-cycle count
 - [ ] every spec and installed prompt still checks clean
+
+## Stage 2: Package proof (mechanical)
+command: bun run --cwd packages/specs test
+
+- [ ] the scoped package suite for this task passes

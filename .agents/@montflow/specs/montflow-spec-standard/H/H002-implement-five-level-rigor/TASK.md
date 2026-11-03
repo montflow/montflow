@@ -47,6 +47,10 @@ the payload manifest or the doctor.
 - Tests cover every enum value, the unknown value, the split value, each drift
   leg, the payload manifest entries, and the installed/packaged byte equality.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] Five values exist in code and in `packages/specs/tiers/`, with no extra file and no missing one

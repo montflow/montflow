@@ -6,7 +6,7 @@ originator: planner:B005
 size: small
 depends-on: C006, C008, C009
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task C007: align docs and artifact ledger
@@ -28,8 +28,8 @@ own docs stop contradicting the store and the CLI/TUI surfaces it now ships.
 
 ## Completion
 
-- [ ] No document still describes a phase as a task-id prefix or a hand-written lock list
-- [ ] Every spec under `.agents/@montflow/specs` reads `spec-version: 2` (or is listed as frozen with its reason) after C005's `migrate --all` run, and the ledger records the run's per-spec result
-- [ ] The skills, profiles, and prompts verifiers all pass against the updated artifacts
-- [ ] Changelog entries exist for every package whose behavior changed
-- [ ] `bun run mf:check` passes end to end
+- [x] No document still describes a phase as a task-id prefix or a hand-written lock list
+- [x] Every spec under `.agents/@montflow/specs` reads `spec-version: 2` (or is listed as frozen with its reason) after C005's `migrate --all` run, and the ledger records the run's per-spec result
+- [x] The skills, profiles, and prompts verifiers all pass against the updated artifacts
+- [x] Changelog entries exist for every package whose behavior changed
+- [x] `bun run mf:check` passes end to end

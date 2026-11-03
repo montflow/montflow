@@ -53,6 +53,10 @@ manual inspection for what the CLI cannot judge.
   the manual rule alone; the test asserts the command name, not a prose phrase.
 - No new `mf-specs check` finding is added to any spec.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] `montflow-create-prompts` names `mf-skills list` and `mf-prompts verify <name>` on create and modify

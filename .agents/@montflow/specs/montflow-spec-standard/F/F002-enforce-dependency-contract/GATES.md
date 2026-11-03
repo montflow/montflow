@@ -12,3 +12,8 @@
 
 - [ ] `bun run --cwd packages/specs cli check --dir "$PWD" --name montflow-spec-standard` reports zero issues
 - [ ] `bun run --cwd packages/specs cli check --dir "$PWD"` reports zero issues for every spec in the store
+
+## Stage 3: Package proof (mechanical)
+command: bun run --cwd packages/specs test -- src/modules/structure/tests/verify-spec-tree.test.ts
+
+- [ ] the scoped package suite for this task passes

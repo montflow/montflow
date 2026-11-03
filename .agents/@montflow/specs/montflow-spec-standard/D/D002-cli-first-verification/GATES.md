@@ -18,3 +18,8 @@
 - [ ] The prompts, skills, and reviews doctor payloads match the package bytes; `doctor --check` is silent
 - [ ] A test fails when any CLI-first step is removed from these skills
 - [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf:check` pass
+
+## Stage 3: Package proof (mechanical)
+command: bun run --cwd packages/specs test
+
+- [ ] the scoped package suite for this task passes

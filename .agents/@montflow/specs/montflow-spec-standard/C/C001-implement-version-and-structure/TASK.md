@@ -6,7 +6,7 @@ originator: planner:B004
 size: medium
 depends-on: B004
 related-tasks: B001, A003
-status: pending
+status: complete
 ---
 
 # Task C001: implement version and structure
@@ -31,9 +31,9 @@ the current and previous standard so nothing is stranded.
 
 ## Completion
 
-- [ ] A v1 fixture and a v2 fixture both verify; the v1 fixture warns about its version and a future-version fixture errors
-- [ ] `migrate` converts a flat v1 fixture to the v2 tree and the result verifies; the live store is left to C005's `migrate --all` run
-- [ ] `mf-specs create` emits no reserved `*099` task and a review task appears only when `--tasks` requests `name:review`
-- [ ] `bun run --cwd packages/specs test` passes including new phase-module tests
-- [ ] `bun run mf-specs:check` reports zero issues for every spec in the store, with version warnings only
-- [ ] `ts:check`, `lint:check`, and `fmt:check` pass
+- [x] A v1 fixture and a v2 fixture both verify; the v1 fixture warns about its version and a future-version fixture errors
+- [x] `migrate` converts a flat v1 fixture to the v2 tree and the result verifies; the live store is left to C005's `migrate --all` run
+- [x] `mf-specs create` emits no reserved `*099` task and a review task appears only when `--tasks` requests `name:review`
+- [x] `bun run --cwd packages/specs test` passes including new phase-module tests
+- [x] `bun run mf-specs:check` reports zero issues for every spec in the store, with version warnings only
+- [x] `ts:check`, `lint:check`, and `fmt:check` pass

@@ -193,18 +193,21 @@ pi-prompts ts:check       $ tsc --noEmit   (no errors)
   dependency and touching `bun.lock`; it reads the store directory directly
   instead. If a shared resolver is wanted later, that dependency decision belongs
   to a task that owns the lockfile.
-- The `pi-profiles` engine no longer surfaces `SKILLS_ENGINE_WARNING` when the
-  skills runtime is unavailable, because `resolveSkills` returns `undefined` and
-  the standard check short-circuits. Behaviour is still "no crash, no false
-  issue"; whether to keep the advisory warning is parked.
+- `pi-profiles` surfaces `SKILLS_ENGINE_WARNING` when the skills runtime is
+  unavailable and a profile declares a skill: `skillsEngineWarning` returns the
+  advisory for that branch, and `verifyAll` places it in `warnings`.
+  `pi-prompts` has no skills engine and stays silent when resolution is
+  unavailable; its resolver now also requires `<name>/SKILL.md`, matching the
+  profiles surface (round 003 F1).
 
 ## Handoff
 
 - Severity is package-local (`severity?: 'error' | 'warning'`, absent = error,
   `valid` = no errors) per the task's "no shared type with pi-specs". A003's
   `pi-specs` severity channel is untouched.
-- `--strict` (binary `verify` only; slash parsers do not accept it) promotes an
-  unresolved skill from warning to error.
+- `--strict` promotes an unresolved skill from warning to error on every
+  surface: the binary `verify` and the slash `verify` in both `pi-profiles` and
+  `pi-prompts` accept it (round 003 F2).
 - Non-strict resolution is informational: warnings do not change `valid`, so
   `list --status valid` membership is unchanged without wiring a resolution in.
 - Throwaway fixtures live at `/tmp/opencode/a004-exp` and

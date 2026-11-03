@@ -44,6 +44,10 @@ finding is coded, actionable, and covered by a fixture.
 - No existing spec in the store gains a finding; the baseline scan F001 records
   is the proof.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] A non-review task reaching its own phase's review fails with a coded

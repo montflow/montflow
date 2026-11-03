@@ -6,7 +6,7 @@ originator: planner:B005
 size: medium
 depends-on: C001, C005
 related-tasks: C002, C003
-status: pending
+status: complete
 ---
 
 # Task C008: align CLI and TUI surfaces
@@ -31,7 +31,7 @@ flat task-id prefix or a stored lock list.
 
 ## Completion
 
-- [ ] Every command above is exercised against this spec and reports the same phase and lock state as `check`
-- [ ] The TUI test proves phase and task directories are never offered as specs
-- [ ] The host slash and tool forms match the binary on one spec, phase, and failure case
-- [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf-specs:check` pass
+- [x] Every command above is exercised against this spec and reports the same phase and lock state as `check`
+- [x] The TUI test proves phase and task directories are never offered as specs
+- [x] The host slash and tool forms match the binary on one spec, phase, and failure case
+- [x] `ts:check`, `lint:check`, `fmt:check`, and `mf-specs:check` pass

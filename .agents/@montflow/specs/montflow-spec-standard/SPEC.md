@@ -4,6 +4,7 @@ status: in-progress
 workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-07
+spec-version: 2
 ---
 
 # Montflow spec standard overhaul
@@ -133,7 +134,7 @@ resolution as `execute`.
 - A complete task may declare `size: none` instead of a real size. `none` is a record opt-out, never a dispatch target; an unfinished task that declares it is an error.
 - An unchecked completion item or an all-unchecked gate on a `complete` task is an error; an unfinished task may carry unchecked completion and gate items.
 - The retrofit proves every completed record before the checks harden, so the tightened errors never need a mass exemption.
-- A gate stage declares `kind: mechanical` or `kind: subjective`; mechanical stages are executed by the CLI with the result recorded, subjective stages are consumed by a reviewer role.
+- A gate stage declares `kind: mechanical` or `kind: subjective`; an unfinished v2 task's `GATES.md` carries at least one classified stage so `gate run` has a command to execute, while a complete or legacy record keeps its shape. Mechanical stages are executed by the CLI with the result recorded, subjective stages are consumed by a reviewer role.
 - `SPEC.md` carries a spec-version read as 1 when absent, warning below the current standard, erroring above it, and accepting current and previous so a spec is never stranded mid-migration.
 - `migrate` transforms a v1 tree into the v2 shape; relabeling the version field without transforming the structure is rejected.
 - `BOARD.md` is the phase broadcast and `MAILBOX.md` the per-task targeted channel, both append-only with an entry grammar the verifier parses; delivery to a live task session goes through steering the bound session.
@@ -163,6 +164,7 @@ resolution as `execute`.
 - The status prompt reports only derived truth. It consumes `mf-specs status`, `state`, `next`, `check`, and the review series; it never recomputes readiness, locks, budgets, ids, or timestamps itself.
 - The rendered report names the declared status, derived state, active phase, locked phases, ready set, phase review budget, verification result and blockers, and the exact next command. `inconsistent`, blocked, complete, and no-active-phase specs each get an explicit terminal line rather than a guessed action.
 - The status prompt is read-only: it writes no `SPEC.md`, `TASK.md`, `MEMORY.md`, or review record, changes no status or lock, and dispatches no worker. When work remains it hands off to `spec-execute`.
+- Execution is context-bounded: every v2 in-progress phase carries an `## Execution Brief`; a worker reads only the brief, its task, and scoped source, runs each gate once with repo-wide gates at phase boundaries, keeps its `MEMORY.md` under 80 lines with full logs in `/tmp`, and batches review rework into one fixer attempt and one re-review. `check` warns with `phase.execution-brief-missing` when a phase brief is absent.
 - The prompt ships through `packages/specs/payload.json` and the doctor, passes `mf-prompts verify`, and the installed copy matches the packaged bytes. Every binary, slash, and host entry point renders the same text for the same inputs.
 - With no explicit name, the status entry point resolves the spec through the shared `which` rule. A detached HEAD, missing candidate, or ambiguous match fails with the candidates and asks the user; it never picks one.
 
@@ -181,18 +183,20 @@ resolution as `execute`.
 | B004 | decide-spec-standard-v2             | planning    | complete | No   |
 | B005 | decide-tooling-contract             | planning    | complete | No   |
 | B099 | review-phase                        | review      | complete | No   |
-| C001 | implement-version-and-structure    | execution   | pending | Yes   |
-| C002 | implement-gate-kinds-and-execution  | execution   | pending | Yes   |
-| C003 | implement-board-and-mailboxes       | execution   | pending | Yes   |
-| C004 | implement-doctor-payload-manifest   | execution   | pending | Yes   |
-| C005 | implement-mechanical-state-verbs    | execution   | pending | Yes   |
-| C006 | ship-spec-artifact-payloads         | execution   | pending | Yes   |
-| C007 | align-docs-and-artifact-ledger      | execution   | pending | No    |
-| C008 | align-cli-and-tui-surfaces          | execution   | pending | Yes   |
-| C009 | implement-review-cycle-policy       | execution   | pending | Yes   |
+| C001 | implement-version-and-structure    | execution   | complete | Yes   |
+| C002 | implement-gate-kinds-and-execution  | execution   | complete | Yes   |
+| C003 | implement-board-and-mailboxes       | execution   | complete | Yes   |
+| C004 | implement-doctor-payload-manifest   | execution   | complete | Yes   |
+| C005 | implement-mechanical-state-verbs    | execution   | complete | Yes   |
+| C006 | ship-spec-artifact-payloads         | execution   | complete | Yes   |
+| C007 | align-docs-and-artifact-ledger      | execution   | complete | No    |
+| C008 | align-cli-and-tui-surfaces          | execution   | complete | Yes   |
+| C009 | implement-review-cycle-policy       | execution   | complete | Yes   |
 | C099 | review-phase                        | review      | pending | No    |
 | D001 | wire-profile-discovery              | execution   | pending | Yes   |
 | D002 | cli-first-verification              | execution   | pending | Yes   |
+| D003 | implement-lean-execution-contract      | execution   | pending | Yes   |
+| D004 | review-phase                         | review      | pending | No    |
 | E001 | decide-parallel-execution-contract  | planning    | pending | No    |
 | E002 | implement-verification-scheduler    | execution   | pending | Yes   |
 | E003 | teach-parallel-phase-authoring      | execution   | pending | Yes   |

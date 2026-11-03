@@ -59,6 +59,10 @@ moves the spec forward. It writes nothing.
 - Run the scoped prompt, doctor, and spec suites; every installed prompt and
   every spec in the store stays clean.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] `packages/specs/prompts/spec-status.json` exists, verifies, and declares the I001 variables in order

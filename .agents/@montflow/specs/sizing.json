@@ -1,0 +1,8 @@
+{
+  "sizes": {
+    "tiny": { "model": "opencode-go/deepseek-v4.1-flash" },
+    "small": { "model": "opencode-go/muse-spark-1.3-contributor" },
+    "medium": { "model": "opencode-go/deepseek-v4.1-flash" },
+    "large": { "model": "opencode-go/deepseek-v4.1-flash" }
+  }
+}

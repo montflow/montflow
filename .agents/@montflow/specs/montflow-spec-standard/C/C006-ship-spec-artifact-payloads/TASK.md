@@ -6,7 +6,7 @@ originator: planner:B005
 size: medium
 depends-on: A004, C004, C005
 related-tasks: B003
-status: pending
+status: complete
 ---
 
 # Task C006: ship spec artifact payloads
@@ -31,8 +31,8 @@ skill to the v2 vocabulary the earlier tasks created.
 
 ## Completion
 
-- [ ] A clean workspace gains all artifacts via the repair command, and report-only mode then stays silent with zero issues
-- [ ] Exactly six spec-role profiles are installed (the five spec roles plus `spec-sizing-orchestrator`), and every `skills:` reference in every profile and prompt resolves
-- [ ] Authoring and execution skills reference only verbs that exist, verified by grepping each command named
-- [ ] The shipped prompts name `claim --start`/`--block`/`--close` and the orchestrator `--release` reset, `gate run`, and `mail` as orchestrator-only, and present `questions n/budget` as self-reported/advisory
-- [ ] `bun run mf-specs:check` passes and changelog entries exist where behavior changed
+- [x] A clean workspace gains all artifacts via the repair command, and report-only mode then stays silent with zero issues
+- [x] Exactly six spec-role profiles are installed (the five spec roles plus `spec-sizing-orchestrator`), and every `skills:` reference in every profile and prompt resolves
+- [x] Authoring and execution skills reference only verbs that exist, verified by grepping each command named
+- [x] The shipped prompts name `claim --start`/`--block`/`--close` and the orchestrator `--release` reset, `gate run`, and `mail` as orchestrator-only, and present `questions n/budget` as self-reported/advisory
+- [x] `bun run mf-specs:check` passes and changelog entries exist where behavior changed

@@ -14,3 +14,8 @@
 - [ ] binary, slash, and host tool render identical text for identical values, model default included
 - [ ] unknown spec, malformed name, and missing root carry the coded diagnostic and exact rerun
 - [ ] no surface changes `SPEC.md`, a `TASK.md`, a `MEMORY.md`, a review file, or a lock
+
+## Stage 2: Package proof (mechanical)
+command: bun run --cwd packages/specs test
+
+- [ ] the scoped package suite for this task passes

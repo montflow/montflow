@@ -19,3 +19,8 @@
 - [ ] `check` rejects a green whose fingerprint no longer matches, naming the key
 - [ ] `next`, `status`, and `gate run` print the key, lane state, and reused source
 - [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf-specs:check` pass
+
+## Stage 3: Package proof (mechanical)
+command: bun run --cwd packages/specs test
+
+- [ ] the scoped package suite for this task passes

@@ -6,7 +6,7 @@ originator: planner:B004
 size: medium
 depends-on: C001
 related-tasks: C005
-status: pending
+status: complete
 ---
 
 # Task C003: implement board and mailboxes
@@ -29,6 +29,6 @@ convention.
 
 ## Completion
 
-- [ ] A malformed or unknown-addressee entry is rejected by `check` with the offending line named, proven by an actual run
-- [ ] Delivery to a live session and queueing to a non-live task both demonstrated, with commands and outputs recorded in MEMORY.md
-- [ ] `ts:check`, `lint:check`, and `fmt:check` pass with tests for both paths
+- [x] A malformed or unknown-addressee entry is rejected by `check` with the offending line named, proven by an actual run
+- [x] Delivery to a live session and queueing to a non-live task both demonstrated, with commands and outputs recorded in MEMORY.md
+- [x] `ts:check`, `lint:check`, and `fmt:check` pass with tests for both paths

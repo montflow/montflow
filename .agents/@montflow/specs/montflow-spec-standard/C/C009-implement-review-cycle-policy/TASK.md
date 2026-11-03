@@ -6,7 +6,7 @@ originator: user
 size: medium
 depends-on: C001, C005, C006
 related-tasks: C002, C007, C099
-status: pending
+status: complete
 ---
 
 # Task C009: implement review-cycle policy
@@ -81,10 +81,10 @@ hand-counting rounds.
 
 ## Completion
 
-- [ ] `mf-specs review decide` exists, is read-only, and prints `decision`, `rounds`, `open`, `reason` (and JSON) for this spec
-- [ ] Every matrix row is table-tested, including both modes and the profile-series strictest-wins rule
-- [ ] `minor-deferred` closes a Minor/Nit-only round and a deferred Critical/Major is refused with `review.deferred-severity`
-- [ ] Autonomous allows exactly one overflow, then `review.overflow-exhausted`; guided asks and accepts a user-authorized overflow
-- [ ] `structure` and `next` no longer hard-error an authorized overflow, and still error an unauthorized one
-- [ ] The shipped prompt and orchestrator profile call the verb instead of hand-counting
-- [ ] `ts:check`, `lint:check`, `fmt:check`, `mf-specs:check`, and `mf-reviews:check` pass
+- [x] `mf-specs review decide` exists, is read-only, and prints `decision`, `rounds`, `open`, `reason` (and JSON) for this spec
+- [x] Every matrix row is table-tested, including both modes and the profile-series strictest-wins rule
+- [x] `minor-deferred` closes a Minor/Nit-only round and a deferred Critical/Major is refused with `review.deferred-severity`
+- [x] Autonomous allows exactly one overflow, then `review.overflow-exhausted`; guided asks and accepts a user-authorized overflow
+- [x] `structure` and `next` no longer hard-error an authorized overflow, and still error an unauthorized one
+- [x] The shipped prompt and orchestrator profile call the verb instead of hand-counting
+- [x] `ts:check`, `lint:check`, `fmt:check`, `mf-specs:check`, and `mf-reviews:check` pass

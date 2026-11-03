@@ -32,6 +32,10 @@ runnable? Does the complete-before-dependency rule ever flag legitimate work?
 - Confirm the module contexts describe the rules and the tests would fail if a
   rule were removed.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] Review written to `.agents/@montflow/reviews/montflow-spec-standard/F.md`

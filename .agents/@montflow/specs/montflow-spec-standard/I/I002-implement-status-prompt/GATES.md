@@ -14,3 +14,8 @@
 - [ ] an `inconsistent` or blocked spec renders its code and repair command; a complete spec claims no pending work
 - [ ] the picker preselects the branch guess and orders pending specs before complete ones
 - [ ] every installed prompt and every spec in the store still checks clean
+
+## Stage 2: Package proof (mechanical)
+command: bun run --cwd packages/specs test
+
+- [ ] the scoped package suite for this task passes

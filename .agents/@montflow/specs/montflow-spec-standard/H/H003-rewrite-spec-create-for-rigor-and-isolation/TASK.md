@@ -55,6 +55,10 @@ skill the same flow; the appraiser recommends, the user's rigor wins.
 - A drift test fails when the prompt, the skill, the profile, or the tier table
   disagree about the five rigor names or the question flow.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] The rendered prompt with `isolated: no` contains no origin or worktree token

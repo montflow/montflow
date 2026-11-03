@@ -64,6 +64,10 @@ expose it without re-deciding what it says.
   terminal lines, entry-point table, and ambiguity rule in `MEMORY.md`,
   sufficient for I002 and I003 to implement without asking anything.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] The report contract lists every section, its source command, and its order

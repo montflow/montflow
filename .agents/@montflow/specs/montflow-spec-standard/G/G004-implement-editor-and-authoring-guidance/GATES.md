@@ -11,3 +11,8 @@
 - [ ] the editor refuses an invalid controller or value
 - [ ] the packaged skill contains one conditional example
 - [ ] the drift test fails when either guidance loses the field
+
+## Stage 2: Package proof (mechanical)
+command: bun run --cwd apps/workspace test
+
+- [ ] the scoped package suite for this task passes

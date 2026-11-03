@@ -17,3 +17,8 @@
 - [ ] The discovery test fails when the instruction is removed from the prompt or the skill rule
 - [ ] `mf-specs check` adds no new finding to any spec
 - [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf-specs:check` pass
+
+## Stage 3: Package proof (mechanical)
+command: bun run --cwd packages/specs test
+
+- [ ] the scoped package suite for this task passes

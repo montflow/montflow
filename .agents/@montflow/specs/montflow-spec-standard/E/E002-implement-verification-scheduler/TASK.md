@@ -46,6 +46,10 @@ over C002's recorder, not a second gate system.
 - The CLI help, README, and error codes describe the new flags and states; no
   prompt or skill prose is changed here (E003 owns the guidance).
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] Two concurrent requesters for one key produce one real execution and two consumers, proven by a run

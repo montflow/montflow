@@ -45,6 +45,10 @@ module that owns it, so the implementation is mechanical.
 - Record the scan of the current store: none of the stores' specs may already
   violate a rule that is about to become an error.
 
+## Execution
+
+Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that brief, and the scoped source; run each gate once; keep this task's `MEMORY.md` under 80 lines; batch review findings into one fixer attempt.
+
 ## Completion
 
 - [ ] Each contradiction has a rule, a severity, a stable code, and a fix string

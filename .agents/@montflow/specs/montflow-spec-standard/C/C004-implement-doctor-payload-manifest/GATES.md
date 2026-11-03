@@ -2,11 +2,11 @@
 
 ## Stage 0: Static
 
-- [ ] one shared generator produces every embedded payload
-- [ ] every package reads a manifest rather than a hardcoded name array
+- [x] one shared generator produces every embedded payload
+- [x] every package reads a manifest rather than a hardcoded name array
 
 ## Stage 1: Behaviour
 
-- [ ] report-only mode writes nothing anywhere
-- [ ] `mf:check` passes with the run-mode scripts unchanged
-- [ ] a compiled binary doctor reports healthy, not missing payload
+- [x] report-only mode writes nothing anywhere
+- [x] `mf:check` passes with the run-mode scripts unchanged
+- [x] a compiled binary doctor reports healthy, not missing payload

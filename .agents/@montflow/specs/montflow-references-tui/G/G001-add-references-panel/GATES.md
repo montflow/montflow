@@ -12,3 +12,8 @@
 - [ ] `/references` or `/workspace` focuses the panel
 - [ ] `bun run --cwd apps/workspace test` passes, including the new `.test.tsx`
 - [ ] `turbo test:tui` passes
+
+## Stage 2: Package proof (mechanical)
+command: bun run --cwd apps/workspace test
+
+- [ ] the workspace suite, including the references panel tests, passes
