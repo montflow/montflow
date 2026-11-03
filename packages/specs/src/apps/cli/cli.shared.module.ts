@@ -697,6 +697,62 @@ export const csv = (value: string | undefined): ReadonlyArray<string> =>
         .map((part) => part.trim())
         .filter((part) => part !== '');
 
+/** Result of splitting a `--tasks` value: the entries, or one ambiguity refusal. */
+export type ScaffoldTaskSplit =
+  | { readonly ok: true; readonly specs: ReadonlyArray<string> }
+  | { readonly ok: false; readonly problem: string };
+
+/**
+ * Split a `--tasks` value into task specs. `;` always starts a new task. A
+ * comma starts a new task when the current entry has no `scope=` field (or the
+ * next fragment carries a `:`), so `first:execution,second:execution` is two
+ * tasks. Inside a `scope=` field a comma belongs to that scope, so
+ * `first:execution:scope=app,lib` is one task. A colon-less fragment after a
+ * `scope=` field that is followed by another fragment is ambiguous — it could
+ * be a dropped task before the next entry — and is refused with the `;` form
+ * named, never silently merged. `init`'s repeated `--task` flag is unaffected.
+ * @param value - raw `--tasks` value
+ * @returns one raw task spec per entry, or the ambiguity diagnostic
+ */
+export const scaffoldTaskSpecs = (value: string | undefined): ScaffoldTaskSplit => {
+  if (value === undefined || value.trim() === '') return { ok: true, specs: [] };
+  const specs: Array<string> = [];
+  const segments = value
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part !== '');
+  for (const segment of segments) {
+    const fragments = segment
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part !== '');
+    let current = '';
+    let inScope = false;
+    for (const [index, fragment] of fragments.entries()) {
+      if (current === '') {
+        current = fragment;
+        inScope = fragment.includes('scope=');
+        continue;
+      }
+      if (!inScope || fragment.includes(':')) {
+        specs.push(current);
+        current = fragment;
+        inScope = fragment.includes('scope=');
+        continue;
+      }
+      if (index < fragments.length - 1) {
+        return {
+          ok: false,
+          problem: `'${current},${fragment}' is ambiguous: after a scope= field, '${fragment}' could be another scope path or a new task. Separate tasks with ';' — '${current};${fragment}' — so a scope list cannot swallow one.`,
+        };
+      }
+      current = `${current},${fragment}`;
+    }
+    if (current !== '') specs.push(current);
+  }
+  return { ok: true, specs };
+};
+
 /** Render a caught `Cause` as a failed slash report. */
 export const doctorMark = (payload: PayloadInstall): string =>
   Match.value(payload.status).pipe(

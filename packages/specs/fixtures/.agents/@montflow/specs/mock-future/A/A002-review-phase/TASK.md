@@ -4,6 +4,7 @@ name: review-phase
 type: review
 originator: user
 size: medium
+write-scope: none
 depends-on: A001
 related-tasks:
 reviewer-profiles:

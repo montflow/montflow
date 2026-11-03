@@ -4,6 +4,7 @@ name: implement-thing
 type: execution
 originator: user
 size: medium
+write-scope: .
 depends-on: B001
 related-tasks:
 status: pending

@@ -748,6 +748,27 @@ Vitest.describe('Cli.runSlash v2 surfaces', () => {
     }),
   );
 
+  Vitest.it.effect('init accepts the documented scope= short form and refuses another token', () =>
+    Effect.gen(function* () {
+      const created = new Map(specs);
+      const layer = stubLayer(created);
+      const report = yield* runSlash(
+        'init --name demo --tier micro --task A:first:execution:medium:scope=app',
+        root,
+      ).pipe(Effect.provide(layer));
+      Vitest.expect(report.ok).toBe(true);
+      const task = (created.get('demo') ?? []).find((file) => file.path === 'A/A001-first/TASK.md');
+      Vitest.expect(task?.content).toContain('write-scope: app');
+
+      const refused = yield* runSlash(
+        'init --name other --tier micro --task A:first:execution:medium:typo=1',
+        root,
+      ).pipe(Effect.provide(layer));
+      Vitest.expect(refused.ok).toBe(false);
+      Vitest.expect(refused.output).toContain("'typo=1' is not a known task token");
+    }),
+  );
+
   Vitest.it.effect('new-phase and new-task allocate phase-tree directories', () =>
     Effect.gen(function* () {
       const created = new Map(specs);

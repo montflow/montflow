@@ -35,6 +35,9 @@ interface MechanicalOverrides {
   readonly command?: string;
   readonly exit?: number;
   readonly verdict?: 'pass' | 'fail';
+  readonly scope?: ReadonlyArray<string>;
+  readonly key?: string;
+  readonly fingerprint?: string;
 }
 
 const mechanicalResult = (overrides: MechanicalOverrides = {}) =>
@@ -385,10 +388,131 @@ Vitest.describe('Gates.verifyGateResults runtime', () => {
       Gates.verifyGateResults(input({ gates: goodGates, complete: true })).issues,
     ).toStrictEqual([]);
   });
+
+  const scopedGates = [
+    '## Stage 0: Static (mechanical)',
+    'command: bun run ts:check',
+    'scope: packages/specs',
+    '',
+    '- [ ] `tsc --noEmit` exits 0.',
+    '',
+  ].join('\n');
+
+  Vitest.it('rejects a mechanical result with no scope on a scoped stage', () => {
+    const result = Gates.verifyGateResults(
+      input({ gates: scopedGates, results: `${mechanicalResult()}\n` }),
+    );
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.results-malformed' }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+  });
+
+  Vitest.it('accepts a result whose scope covers the declared scope', () => {
+    Vitest.expect(
+      Gates.verifyGateResults(
+        input({
+          gates: scopedGates,
+          results: `${mechanicalResult({ scope: ['packages/specs', 'packages/core'] })}\n`,
+        }),
+      ).issues,
+    ).toStrictEqual([]);
+  });
 });
 
 Vitest.describe('Gates.instant runtime', () => {
   Vitest.it('formats a UTC instant to seconds with a Z suffix', () => {
     Vitest.expect(Gates.instant(Date.UTC(2026, 10, 3, 12, 0, 0))).toBe('2026-11-03T12:00:00Z');
+  });
+});
+
+/** Parse one mechanical record line into a result record. */
+const records = (line: string) => Gates.parseGateResults(`${line}\n`).records;
+
+Vitest.describe('Gates.verifyResultFreshness runtime', () => {
+  Vitest.it('rejects a pass recorded under a scope the stage no longer declares', () => {
+    const result = Gates.verifyResultFreshness({
+      records: records(
+        mechanicalResult({ scope: ['packages/core'], key: 'gate-v1:core', fingerprint: 'fp' }),
+      ),
+      owner: "Task 'A001'",
+      complete: true,
+      declaredScope: () => ['packages/specs'],
+      recompute: () => 'gate-v1:core',
+    });
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.stale-result' }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+  });
+
+  Vitest.it('reports a pass whose scope disappeared instead of accepting it', () => {
+    const result = Gates.verifyResultFreshness({
+      records: records(
+        mechanicalResult({ scope: ['gone'], key: 'gate-v1:gone', fingerprint: 'fp' }),
+      ),
+      owner: "Task 'A001'",
+      complete: true,
+      declaredScope: () => ['gone'],
+      missingScope: () => true,
+      recompute: () => undefined,
+    });
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.scope-missing' }),
+    );
+  });
+
+  Vitest.it('requires a key on a complete owner whose stage declares a scope', () => {
+    const unkeyed = records(mechanicalResult({ scope: ['packages/specs'] }));
+    const required = Gates.verifyResultFreshness({
+      records: unkeyed,
+      owner: "Task 'A001'",
+      complete: true,
+      declaredScope: () => ['packages/specs'],
+      recompute: () => undefined,
+    });
+    Vitest.expect(required.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.result-unkeyed' }),
+    );
+    Vitest.expect(required.valid).toBe(false);
+
+    const legacy = Gates.verifyResultFreshness({
+      records: unkeyed,
+      owner: "Task 'A001'",
+      complete: true,
+      recompute: () => undefined,
+    });
+    Vitest.expect(legacy.issues).toStrictEqual([]);
+  });
+
+  Vitest.it('rejects a keyed pass with no scope instead of skipping freshness', () => {
+    const result = Gates.verifyResultFreshness({
+      records: records(mechanicalResult({ key: 'gate-v1:deadbeef' })),
+      owner: "Task 'A001'",
+      complete: true,
+      declaredScope: () => ['packages/specs'],
+      recompute: () => 'gate-v1:deadbeef',
+    });
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.results-malformed' }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+  });
+
+  Vitest.it('accepts a pass whose scope covers the declared scope', () => {
+    const result = Gates.verifyResultFreshness({
+      records: records(
+        mechanicalResult({
+          scope: ['packages/specs', 'packages/core'],
+          key: 'gate-v1:wide',
+          fingerprint: 'fp',
+        }),
+      ),
+      owner: "Task 'A001'",
+      complete: true,
+      declaredScope: () => ['packages/specs'],
+      recompute: () => 'gate-v1:wide',
+    });
+    Vitest.expect(result.issues).toStrictEqual([]);
   });
 });

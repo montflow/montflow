@@ -265,6 +265,17 @@ export const slashCreate = (context: SlashContext): SlashEffect => {
       }),
     );
   }
+  if (parsed.taskError !== undefined) {
+    const found = diagnostic({
+      code: SURFACE_CODES.invalidArgument,
+      path: name,
+      field: '--tasks',
+      problem: parsed.taskError,
+      fix: 'Separate tasks with a semicolon (`first:execution:scope=app;build`), not a comma after a scope= field.',
+      rerun: `mf-specs create --name ${name}`,
+    });
+    return Effect.succeed({ output: renderDiagnostic(found), ok: false });
+  }
   return slashOutcome(
     guardFailure('SpecCreate', guardSpecName(name, GUARD_RERUN.create)).pipe(
       Effect.andThen(

@@ -1,3 +1,4 @@
+import { renderTaskMemory } from '../memory/index.js';
 import { PHASE_PATTERN, SPEC_STANDARD_VERSION } from '../spec/index.js';
 import {
   PHASE_FILE,
@@ -38,6 +39,8 @@ export interface ScaffoldTask {
   readonly gates?: boolean | undefined;
   /** Declared task size; {@link DEFAULT_SIZE} when omitted. */
   readonly size?: Size | undefined;
+  /** Declared `write-scope:`; defaults by task type when omitted. */
+  readonly writeScope?: string | undefined;
   /** Task ids this task depends on (`A001`), rendered comma-separated. */
   readonly dependsOn?: ReadonlyArray<string> | undefined;
   /** Replaces the placeholder `## Description` body. */
@@ -48,6 +51,15 @@ export interface ScaffoldTask {
 
 /** True when `value` is a size a scaffold may emit. */
 export const isScaffoldTaskSize = (value: string): value is Size => isSize(value);
+
+/**
+ * The scaffold's write scope when the author does not name one. Execution work
+ * has no knowable default: `.` would make two independent tasks collide, so the
+ * field stays empty and `check` reports `task.write-scope-missing` until the
+ * author declares a real scope.
+ */
+export const defaultScaffoldWriteScope = (type: ScaffoldTaskType): string =>
+  type === 'execution' || type === 'defect' || type === 'interruptor' ? '' : 'none';
 
 /** Inputs for {@link renderSpecScaffold}. */
 export interface ScaffoldSpecInput {
@@ -154,6 +166,9 @@ const renderTask = (
     'originator: user',
     `size: ${task.size ?? DEFAULT_SIZE}`,
     `depends-on: ${(task.dependsOn ?? []).join(', ')}`,
+    (task.writeScope ?? defaultScaffoldWriteScope(task.type)) === ''
+      ? 'write-scope:'
+      : `write-scope: ${task.writeScope ?? defaultScaffoldWriteScope(task.type)}`,
     'related-tasks:',
     ...(task.type === 'review' ? [`reviewer-profiles: ${reviewerProfiles.join(', ')}`] : []),
     'status: pending',
@@ -179,33 +194,6 @@ const renderTask = (
 
 /** Task types whose tier contract requires a `GATES.md`. */
 const GATED_TASK_TYPES = new Set(['execution', 'defect', 'interruptor']);
-
-/** Render the `MEMORY.md` template every task directory carries. */
-const renderMemory = (): string =>
-  [
-    '# Memory',
-    '',
-    '## Context',
-    '',
-    'None yet.',
-    '',
-    '## Progress',
-    '',
-    '- pending',
-    '',
-    '## Open Questions',
-    '',
-    '- None.',
-    '',
-    '## Handoff',
-    '',
-    '- See TASK.md.',
-    '',
-    '## Deviations',
-    '',
-    '- None.',
-    '',
-  ].join('\n');
 
 /**
  * Render a default `GATES.md` when a task requests gates. The single item is a
@@ -273,7 +261,7 @@ export const renderSpecScaffold = (input: ScaffoldSpecInput): ScaffoldResult => 
       path: `${dir}/TASK.md`,
       content: renderTask(id, { ...task, dependsOn }, reviewerProfiles),
     });
-    files.push({ path: `${dir}/MEMORY.md`, content: renderMemory() });
+    files.push({ path: `${dir}/MEMORY.md`, content: renderTaskMemory() });
     if (gated(task)) files.push({ path: `${dir}/GATES.md`, content: renderGates() });
   }
 

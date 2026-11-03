@@ -1,4 +1,4 @@
-import { Console, Effect } from 'effect';
+import { Clock, Console, Effect, FileSystem, Option } from 'effect';
 import { Command } from 'effect/cli';
 
 import { type Spec, parseSpecFile, readSpecVersion } from '../../modules/spec/index.js';
@@ -17,8 +17,23 @@ import {
   verifySpecTree,
 } from '../../modules/structure/index.js';
 import type { SeriesSnapshot } from '../../modules/review-link/index.js';
-import { Task, parseTaskDirName, phaseOf, phaseRank, sortKey } from '../../modules/task/index.js';
+import {
+  Task,
+  parseTaskDirName,
+  phaseOf,
+  phaseRank,
+  sortKey,
+  writeScopeTokens,
+} from '../../modules/task/index.js';
 import { type PhaseStatus, parsePhaseFile, phaseEvidence } from '../../modules/phase/index.js';
+import { parseGates } from '../../modules/gates/index.js';
+import {
+  GATE_CONFIG_FILE,
+  type RunSummary,
+  lastAttempt,
+  parseGateConfig,
+  runSummary,
+} from '../../modules/scheduler/index.js';
 import { type Result, errorCount, isWarning, warningCount } from '../../modules/verify/index.js';
 import { renderDiagnostic } from '../../modules/diagnostic/index.js';
 
@@ -40,6 +55,7 @@ import {
   verboseFlag,
   dirFlag,
   nameFlag,
+  workspaceOf,
 } from './cli.shared.module.js';
 import {
   tasksOf,
@@ -101,8 +117,12 @@ export interface StatusReport {
   readonly sizing: SizingLoad;
   /** Task ids carrying a `GATES.md`, derived from the snapshot. */
   readonly gatedTaskIds?: ReadonlySet<string>;
+  /** Phase id → its `GATES.md` contents, for the boundary gate annotation. */
+  readonly phaseGates?: ReadonlyMap<string, string>;
   /** Per-phase `PHASE.md` decision and derived lock/gate state. */
   readonly phases?: ReadonlyArray<PhaseView>;
+  /** Workspace run states, read by `status` and `next`. */
+  readonly runs?: RunSummary;
 }
 
 /**
@@ -177,6 +197,17 @@ export const gatedTaskIds = (snapshot: SpecSnapshot): ReadonlySet<string> => {
   return ids;
 };
 
+/** Phase id → the contents of its `GATES.md`, when it has one. */
+export const phaseGateFiles = (snapshot: SpecSnapshot): ReadonlyMap<string, string> => {
+  const gates = new Map<string, string>();
+  for (const file of snapshot.files) {
+    if ((file.kind ?? 'file') !== 'file') continue;
+    const match = /^([A-Z]{1,2})\/GATES\.md$/.exec(file.path);
+    if (match !== null && match[1] !== undefined) gates.set(match[1], file.content);
+  }
+  return gates;
+};
+
 /**
  * Reduce one spec snapshot to a {@link StatusReport}. Pure over the
  * snapshot and the review series, so `status`, `next`, and `list` share the
@@ -222,6 +253,7 @@ export const summarize = (
     verify: verifySpecTree(snapshot, reviewInput),
     sizing,
     gatedTaskIds: gatedTaskIds(snapshot),
+    phaseGates: phaseGateFiles(snapshot),
     phases: phaseViews(snapshot, evidence, state),
   };
 };
@@ -236,7 +268,11 @@ export const summarize = (
 export const status = (
   root: string,
   name: string,
-): Effect.Effect<StatusReport, SurfaceError | SpecStore.StoreError, SpecStore.SpecStore> =>
+): Effect.Effect<
+  StatusReport,
+  SurfaceError | SpecStore.StoreError,
+  SpecStore.SpecStore | FileSystem.FileSystem
+> =>
   Effect.gen(function* () {
     yield* guardFailure('SpecStatus', guardSpecName(name, GUARD_RERUN.status));
     const store = yield* SpecStore.SpecStore;
@@ -259,7 +295,16 @@ export const status = (
     // undispatchable everywhere instead of only failing the gate.
     const review = yield* store.reviewSeries(root, name);
     const sizing = yield* loadSizing(root, name, snapshot);
-    return summarize(name, snapshot, review, sizing);
+    const summary = summarize(name, snapshot, review, sizing);
+    const workspace = workspaceOf(root);
+    const fs = yield* FileSystem.FileSystem;
+    const configText = yield* fs
+      .readFileString(`${workspace.replace(/\/+$/, '')}/${GATE_CONFIG_FILE}`)
+      .pipe(Effect.option);
+    const lanes = parseGateConfig(Option.isNone(configText) ? undefined : configText.value).config
+      .heavy.lanes;
+    const runs = yield* runSummary(workspace, yield* Clock.currentTimeMillis, lanes);
+    return { ...summary, runs };
   });
 
 /** Per-status display mark, kept terse for token efficiency. */
@@ -279,6 +324,32 @@ export const statusCounts = (tasks: ReadonlyArray<Task>): string =>
     .filter((entry) => entry.count > 0)
     .map((entry) => `${entry.count} ${entry.status}`)
     .join(' \u00b7 ');
+
+/** Elapsed whole seconds since an instant, or 0 when it is unparsable. */
+const elapsedSeconds = (at: string | undefined, now: number): number => {
+  if (at === undefined) return 0;
+  const parsed = Date.parse(at);
+  return Number.isNaN(parsed) ? 0 : Math.max(0, Math.round((now - parsed) / 1000));
+};
+
+/**
+ * Render the workspace run panel: one summary line, then one line per run with
+ * its key, lane occupancy, owner task, state, and elapsed time.
+ * @param runs - summary read from the workspace runtime tree
+ * @returns the display lines
+ */
+export const renderRuns = (runs: RunSummary): ReadonlyArray<string> => {
+  const lines: Array<string> = [
+    `runs ${runs.inFlight} in-flight \u00b7 ${runs.queued} queued \u00b7 ${runs.stale} stale`,
+  ];
+  for (const run of runs.runs) {
+    const attempt = lastAttempt(run);
+    lines.push(
+      `run ${run.key} ${run.lane} ${runs.inFlight}/${runs.lanes} ${attempt?.owner.task ?? 'phase'} ${run.state} ${elapsedSeconds(attempt?.startedAt, runs.at)}s`,
+    );
+  }
+  return lines;
+};
 
 /**
  * Render a human-readable status panel for one spec.
@@ -337,6 +408,7 @@ export const renderStatus = (report: StatusReport): string => {
       ? configFilesLine(report.sizing)
       : `sizing \u2717 ${sizingErrors} issue${sizingErrors === 1 ? '' : 's'}`,
   );
+  if (report.runs !== undefined) lines.push(...renderRuns(report.runs));
 
   const tasksByPhase = new Map<string, Array<Task>>();
   for (const task of report.tasks) {
@@ -450,7 +522,7 @@ export const stateWithReport = (
 ): Effect.Effect<
   { readonly report: StatusReport; readonly state: StateReport },
   SurfaceError | SpecStore.StoreError,
-  SpecStore.SpecStore
+  SpecStore.SpecStore | FileSystem.FileSystem
 > =>
   Effect.gen(function* () {
     yield* guardFailure('SpecState', guardSpecName(name, GUARD_RERUN.state));
@@ -469,8 +541,11 @@ export const stateWithReport = (
 export const state = (
   root: string,
   name: string,
-): Effect.Effect<StateReport, SurfaceError | SpecStore.StoreError, SpecStore.SpecStore> =>
-  stateWithReport(root, name).pipe(Effect.map((found) => found.state));
+): Effect.Effect<
+  StateReport,
+  SurfaceError | SpecStore.StoreError,
+  SpecStore.SpecStore | FileSystem.FileSystem
+> => stateWithReport(root, name).pipe(Effect.map((found) => found.state));
 
 /** The active phase from a status report: first unlocked phase with unfinished work. */
 export const activePhaseOf = (report: StatusReport): string | undefined =>
@@ -510,6 +585,8 @@ export interface ReadyTask {
   readonly type: string;
   /** True when the task carries a per-task `GATES.md` that must pass first. */
   readonly gates: boolean;
+  /** Declared `write-scope` tokens, or undefined when the task declares none. */
+  readonly writeScope?: ReadonlyArray<string> | undefined;
   /** Declared size, resolved target, and winning layer. */
   readonly sizing: TaskTarget;
 }
@@ -529,6 +606,10 @@ export interface NextReport {
   readonly sizing: SizingLoad;
   /** Per-phase `PHASE.md` decision and derived lock/gate state. */
   readonly phases?: ReadonlyArray<PhaseView>;
+  /** Phase id → its `GATES.md` contents. */
+  readonly phaseGates?: ReadonlyMap<string, string>;
+  /** Workspace run states, read for the run panel. */
+  readonly runs?: RunSummary;
 }
 
 /**
@@ -541,17 +622,23 @@ export interface NextReport {
 export const nextOf = (report: StatusReport): NextReport => {
   const derived = report.state?.state ?? 'inconsistent';
   const phase = activePhaseOf(report);
+  const base = {
+    name: report.name,
+    state: derived,
+    verify: report.verify,
+    sizing: report.sizing,
+    phases: report.phases ?? [],
+    phaseGates: report.phaseGates ?? new Map(),
+  };
+  const runs = report.runs;
   if (derived === 'inconsistent' || derived === 'complete' || phase === undefined) {
-    return {
-      name: report.name,
-      state: derived,
+    const empty: NextReport = {
+      ...base,
       phase: undefined,
       budget: undefined,
       ready: [],
-      verify: report.verify,
-      sizing: report.sizing,
-      phases: report.phases ?? [],
     };
+    return runs === undefined ? empty : { ...empty, runs };
   }
   const byId = new Map(report.tasks.map((task) => [task.id, task]));
   const gates = report.gatedTaskIds ?? new Set<string>();
@@ -564,6 +651,7 @@ export const nextOf = (report: StatusReport): NextReport => {
       name: task.name,
       type: task.type,
       gates: gates.has(task.id),
+      writeScope: writeScopeTokens(task),
       sizing: taskTarget(report.sizing, task),
     };
     if (task.type === 'review') {
@@ -574,16 +662,13 @@ export const nextOf = (report: StatusReport): NextReport => {
     if (task.dependsOn.every((dep) => byId.get(dep)?.status === 'complete')) ready.push(entry);
   }
   ready.sort((a, b) => sortKey(a.id) - sortKey(b.id));
-  return {
-    name: report.name,
-    state: derived,
+  const filled: NextReport = {
+    ...base,
     phase,
     budget: phaseReviewBudget(inPhase.map(budgetInput)),
     ready,
-    verify: report.verify,
-    sizing: report.sizing,
-    phases: report.phases ?? [],
   };
+  return runs === undefined ? filled : { ...filled, runs };
 };
 
 /**
@@ -599,7 +684,11 @@ export const nextOf = (report: StatusReport): NextReport => {
 export const next = (
   root: string,
   name: string,
-): Effect.Effect<NextReport, SurfaceError | SpecStore.StoreError, SpecStore.SpecStore> =>
+): Effect.Effect<
+  NextReport,
+  SurfaceError | SpecStore.StoreError,
+  SpecStore.SpecStore | FileSystem.FileSystem
+> =>
   Effect.gen(function* () {
     yield* guardFailure('SpecNext', guardSpecName(name, GUARD_RERUN.next));
     const store = yield* SpecStore.SpecStore;
@@ -620,7 +709,8 @@ export const next = (
     const review = yield* store.reviewSeries(root, name);
     const sizing = yield* loadSizing(root, name, snapshot);
     const report = summarize(name, snapshot, review, sizing);
-    return nextOf(report);
+    const runs = yield* runSummary(workspaceOf(root), yield* Clock.currentTimeMillis);
+    return { ...nextOf(report), runs };
   });
 
 /**
@@ -642,7 +732,22 @@ export const renderNext = (report: NextReport): string => {
     view === undefined || view.review === undefined
       ? ''
       : ` · review ${view.phase}:${view.review} · ${phaseGateText(view)}`;
-  const head = `state ${report.state}${report.phase === undefined ? '' : ` · phase ${report.phase}`}${budget}${decision}`;
+  const phaseGateTextOf =
+    report.phase === undefined
+      ? ''
+      : ((text) => {
+          if (text === undefined) return '';
+          const kinds = [
+            ...new Set(
+              parseGates(text)
+                .map((stage) => stage.kind)
+                .filter((kind): kind is NonNullable<typeof kind> => kind !== undefined),
+            ),
+          ].toSorted((left, right) => left.localeCompare(right));
+          const kind = kinds.length === 0 ? 'unclassified' : kinds.join('+');
+          return ` · phase-gate ${kind} repo · shared once at boundary`;
+        })((report.phaseGates ?? new Map()).get(report.phase));
+  const head = `state ${report.state}${report.phase === undefined ? '' : ` · phase ${report.phase}`}${budget}${decision}${phaseGateTextOf}`;
   if (report.ready.length === 0) return `${head}\nready none`;
   // The same predicate the command exits on: a tree `check` calls invalid never
   // prints a dispatchable target, whatever kind of error blocks it.
@@ -653,7 +758,9 @@ export const renderNext = (report: NextReport): string => {
       // A ready task with a missing or unknown size gets no target; its
       // siblings still carry theirs, and the command prints the diagnostic.
       const sized = !blocked && task.sizing.size !== undefined;
-      return `${task.id}  ${task.gates ? 'gated  ' : ''}${task.type}  ${task.name}${sized ? targetColumns(task.sizing) : ''}`;
+      const scope = task.writeScope === undefined ? 'none' : task.writeScope.join(',');
+      const gate = task.gates ? ` · gate task-local ${scope}` : '';
+      return `${task.id}  ${task.gates ? 'gated  ' : ''}${task.type}  ${task.name}${gate}${sized ? targetColumns(task.sizing) : ''}`;
     }),
   ].join('\n');
 };

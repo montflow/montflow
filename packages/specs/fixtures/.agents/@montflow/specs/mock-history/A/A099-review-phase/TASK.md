@@ -4,6 +4,7 @@ name: review-phase
 type: review
 originator: user
 size: tiny
+write-scope: none
 depends-on:
 related-tasks:
 status: complete

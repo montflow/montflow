@@ -5,7 +5,16 @@ import { Effect, FileSystem, Layer, Path } from 'effect';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import { SpecStore } from '../../../services/index.js';
-import { init, lockPhase, newTask, readTier, setWaiver, stampValue } from '../index.js';
+import {
+  check,
+  claim,
+  init,
+  lockPhase,
+  newTask,
+  readTier,
+  setWaiver,
+  stampValue,
+} from '../index.js';
 import { entry, memory, stubLayer } from './helpers.js';
 
 const Platform = Layer.merge(NodeFileSystem.layer, NodePath.layer);
@@ -83,6 +92,56 @@ Vitest.describe('Cli.lock/waiver runtime', () => {
       const lock = yield* lockPhase({ root: storeRoot, name: 'demo', phase: 'A' });
       Vitest.expect(lock.locked).toBe(false);
       Vitest.expect(lock.blockers).toContain('task.pending');
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('refuses a started phase whose memory has no valid execution brief', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const workspace = yield* fs.makeTempDirectoryScoped();
+      const storeRoot = `${workspace}/${root}`;
+      yield* init({ root: storeRoot, name: 'demo', tier: 'micro' });
+      const phaseMemory = `${storeRoot}/demo/A/MEMORY.md`;
+      const scaffolded = yield* fs.readFileString(phaseMemory);
+
+      const fresh = yield* check(storeRoot, { name: 'demo' });
+      Vitest.expect(fresh.failed).toBe(0);
+
+      yield* fs.writeFileString(
+        phaseMemory,
+        scaffolded.replace(/\n## Execution Brief\s*[\s\S]*$/, '\n'),
+      );
+      yield* claim({
+        root: storeRoot,
+        workspace,
+        name: 'demo',
+        orchestrator: true,
+        session: 'sess-orch',
+      });
+      yield* claim({
+        root: storeRoot,
+        workspace,
+        name: 'demo',
+        task: 'A001',
+        start: true,
+        session: 'sess-orch',
+      });
+
+      const refused = yield* lockPhase({ root: storeRoot, name: 'demo', phase: 'A' }).pipe(
+        Effect.result,
+      );
+      Vitest.expect('failure' in refused).toBe(true);
+      if ('failure' in refused) {
+        const first = 'diagnostics' in refused.failure ? refused.failure.diagnostics[0] : undefined;
+        Vitest.expect(first?.code).toBe('phase.execution-brief-missing');
+        Vitest.expect(first?.fix).toBeTruthy();
+      }
+
+      yield* fs.writeFileString(phaseMemory, scaffolded);
+      const restored = yield* lockPhase({ root: storeRoot, name: 'demo', phase: 'A' }).pipe(
+        Effect.result,
+      );
+      Vitest.expect('success' in restored).toBe(true);
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(Platform)),
   );
 

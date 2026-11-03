@@ -4,6 +4,7 @@ name: bad-kind
 type: chore
 originator: user
 size: medium
+write-scope: none
 depends-on:
 related-tasks:
 status: pending

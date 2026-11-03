@@ -1,4 +1,5 @@
 import { renderCreationSection } from '../creation/index.js';
+import { renderTaskMemory } from '../memory/index.js';
 import {
   PHASE_FILE,
   PHASE_MEMORY_FILE,
@@ -43,7 +44,18 @@ export interface InitTaskPlan {
   readonly size: Size;
   /** Work-task names this task depends on (`after=`). */
   readonly after: ReadonlyArray<string>;
+  /** Declared `write-scope:`; defaults by task type when omitted. */
+  readonly writeScope?: string | undefined;
 }
+
+/**
+ * The scaffold's write scope when the author does not name one. Execution work
+ * has no knowable default: `.` would make two independent tasks collide, so the
+ * field stays empty and `check` reports `task.write-scope-missing` until the
+ * author declares a real scope.
+ */
+export const defaultWriteScope = (type: TaskType): string =>
+  type === 'execution' || type === 'defect' || type === 'interruptor' ? '' : 'none';
 
 /** One phase in an `init` plan, before ids are allocated. */
 export interface InitPhasePlan {
@@ -143,6 +155,7 @@ interface AllocatedTask {
   readonly type: TaskType;
   readonly size: Size;
   readonly dependsOn: ReadonlyArray<string>;
+  readonly writeScope: string;
   readonly generatedReview: boolean;
 }
 
@@ -170,6 +183,7 @@ const allocate = (plan: InitPlan): AllocatedPlan => {
       type: task.type,
       size: task.size,
       dependsOn: [],
+      writeScope: task.writeScope ?? defaultWriteScope(task.type),
       generatedReview: false,
     }));
     for (const task of work) {
@@ -187,6 +201,7 @@ const allocate = (plan: InitPlan): AllocatedPlan => {
         type: 'review',
         size: 'medium',
         dependsOn: work.map((task) => task.id),
+        writeScope: 'none',
         generatedReview: true,
       };
       tasks.push(review);
@@ -675,6 +690,7 @@ export const renderInitTask = (task: AllocatedTask, description?: string | undef
     'originator: user',
     `size: ${task.size}`,
     `depends-on: ${task.dependsOn.join(', ')}`,
+    task.writeScope === '' ? 'write-scope:' : `write-scope: ${task.writeScope}`,
     'related-tasks:',
     ...(task.type === 'review' ? ['reviewer-profiles:'] : []),
     'status: pending',
@@ -797,7 +813,7 @@ export const renderInitTree = (plan: InitPlan): ReadonlyArray<SpecFileEntry> => 
     for (const task of phase.tasks) {
       const dir = `${phase.id}/${task.id}-${task.name}`;
       files.push({ path: `${dir}/TASK.md`, content: renderInitTask(task) });
-      files.push({ path: `${dir}/MEMORY.md`, content: renderPhaseMemory() });
+      files.push({ path: `${dir}/MEMORY.md`, content: renderTaskMemory() });
       if (!task.generatedReview) {
         files.push({ path: `${dir}/GATES.md`, content: gateTemplateFor(task.type, task.name) });
       }

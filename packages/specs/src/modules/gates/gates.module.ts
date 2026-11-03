@@ -1,4 +1,12 @@
 import { Option, Schema } from 'effect';
+import {
+  type GateLane,
+  isGateLane,
+  isScopeList,
+  normalizeScopeList,
+  normalizeScopes,
+  scopeContains,
+} from '../scheduler/scope.module.js';
 import { ISO_INSTANT_PATTERN } from '../stamp/index.js';
 import { SLUG_PATTERN } from '../task/index.js';
 import { type Issue, type Result, finding, issue, noErrors } from '../verify/index.js';
@@ -43,6 +51,26 @@ export const GATE_CODES = {
   noMechanicalStages: 'gate.no-mechanical-stages',
   ownerMissing: 'gate.owner-missing',
   writeFailed: 'gate.write-failed',
+  /** A recorded pass whose recomputed run key differs from the stored one. */
+  staleResult: 'gate.stale-result',
+  /** A pass on an unfinished owner carrying no run key. */
+  resultUnkeyed: 'gate.result-unkeyed',
+  /** A requester waited past its wait cap without running. */
+  waitTimeout: 'gate.wait-timeout',
+  /** `gate.json` or a lane/in-flight override is malformed or below 1. */
+  invalidConfig: 'gate.invalid-config',
+  /** A `--scope` or stage `scope:` token outside the C2 grammar. */
+  invalidScope: 'gate.invalid-scope',
+  /** A mechanical stage with no resolvable scope. */
+  scopeMissing: 'gate.scope-missing',
+  /** A check that belongs in the phase gate copied into a task gate. */
+  sharedCheckInTask: 'gate.shared-check-in-task',
+  /** The same command with overlapping scope in two gates of one spec. */
+  duplicateCommand: 'gate.duplicate-command',
+  /** A `--lane` or stage `lane:` value that is not heavy or light. */
+  invalidLane: 'gate.invalid-lane',
+  /** The run-state lock could not be acquired. */
+  schedulerLock: 'gate.scheduler-lock',
 } as const;
 
 /** One metadata line between a stage heading and its first checkbox. */
@@ -99,6 +127,24 @@ export interface GateResult {
   readonly at: string;
   readonly output?: string | undefined;
   readonly note?: string | undefined;
+  /** Workspace-relative scopes the run covered; absent on a legacy record. */
+  readonly scope?: ReadonlyArray<string> | undefined;
+  /** Run key: `gate-v1:` plus the fingerprint-backed digest. */
+  readonly key?: string | undefined;
+  /** Fingerprint the key was computed from. */
+  readonly fingerprint?: string | undefined;
+  /** Session that requested the run. */
+  readonly owner?: string | undefined;
+  /** Command duration in milliseconds. */
+  readonly durationMs?: number | undefined;
+  /** Lane the requester used. */
+  readonly lane?: 'heavy' | 'light' | undefined;
+  /** How long the requester waited before it ran or consumed. */
+  readonly waitedMs?: number | undefined;
+  /** True when this record consumed an earlier run instead of executing. */
+  readonly reused?: boolean | undefined;
+  /** Instant of the original run a reused record points at. */
+  readonly source?: string | undefined;
 }
 
 /** A parsed results file: valid records plus any malformed-line findings. */
@@ -133,7 +179,7 @@ export const isPlaceholderCommand = (command: string): boolean =>
 const PLACEHOLDER = /[<>]/;
 
 /** Metadata keys a stage may carry. */
-const METADATA_KEYS = new Set(['command', 'judge']);
+const METADATA_KEYS = new Set(['command', 'judge', 'scope', 'lane']);
 
 /** Strip one surrounding backtick pair from a metadata value. */
 const unquote = (value: string): string =>
@@ -227,6 +273,31 @@ export const parseGates = (markdown: string): ReadonlyArray<GateStage> => {
 /** Metadata entries of one key on a stage. */
 const metadataOf = (stage: GateStage, key: string): ReadonlyArray<GateMetadata> =>
   stage.metadata.filter((entry) => entry.key === key);
+
+/**
+ * The resolved scope of one stage: its `scope:` metadata, normalized. Absent or
+ * malformed leaves the owner's fallback scope to the caller.
+ * @param stage - parsed stage
+ * @returns the scope tokens, or undefined when the stage declares none
+ */
+export const stageScope = (stage: GateStage): ReadonlyArray<string> | undefined => {
+  const entries = metadataOf(stage, 'scope');
+  if (entries.length !== 1) return undefined;
+  const value = entries[0]?.value ?? '';
+  return value.trim() === '' ? undefined : normalizeScopes(value);
+};
+
+/**
+ * The lane one stage declares, when it names a valid one.
+ * @param stage - parsed stage
+ * @returns the lane, or undefined when the stage declares none
+ */
+export const stageLane = (stage: GateStage): GateLane | undefined => {
+  const entries = metadataOf(stage, 'lane');
+  if (entries.length !== 1) return undefined;
+  const value = entries[0]?.value ?? '';
+  return isGateLane(value) ? value : undefined;
+};
 
 /** Options for {@link verifyGatesFile}. */
 export interface VerifyGatesOptions {
@@ -323,7 +394,7 @@ const verifyStageMetadata = (stage: GateStage): ReadonlyArray<Issue> => {
           code: GATE_CODES.malformedMetadata,
           field: stage.heading,
           message: `Stage metadata '${entry.key}:' is not recognized.`,
-          expected: '`command:` or `judge:` before the first checklist item',
+          expected: '`command:`, `judge:`, `scope:`, or `lane:` before the first checklist item',
           actual: `${entry.key}: ${entry.value}`,
           line: entry.line,
           fix: 'Remove the line, or use `command:` on a mechanical stage and `judge:` on a subjective one.',
@@ -331,6 +402,8 @@ const verifyStageMetadata = (stage: GateStage): ReadonlyArray<Issue> => {
       );
     }
   }
+  issues.push(...verifyScopeMetadata(stage));
+  issues.push(...verifyLaneMetadata(stage));
   const commands = metadataOf(stage, 'command');
   const judges = metadataOf(stage, 'judge');
   if (stage.kind === undefined) {
@@ -412,6 +485,76 @@ const verifyStageMetadata = (stage: GateStage): ReadonlyArray<Issue> => {
     );
   }
   return issues;
+};
+
+/** Verify one stage's `scope:` metadata: exactly one, and inside the C2 grammar. */
+const verifyScopeMetadata = (stage: GateStage): ReadonlyArray<Issue> => {
+  const entries = metadataOf(stage, 'scope');
+  if (entries.length === 0) return [];
+  if (entries.length > 1) {
+    return [
+      finding({
+        code: GATE_CODES.malformedMetadata,
+        field: stage.heading,
+        message: `A stage may declare at most one \`scope:\` line; found ${entries.length}.`,
+        expected: 'one `scope: <token[,token…]>` line',
+        actual: `${entries.length} scope lines`,
+        line: stage.line,
+        fix: 'Merge the scopes into one comma-separated `scope:` line.',
+      }),
+    ];
+  }
+  const entry = entries[0];
+  const value = entry?.value ?? '';
+  if (value.trim() === '' || !isScopeList(value)) {
+    return [
+      finding({
+        code: GATE_CODES.invalidScope,
+        field: stage.heading,
+        message: `Stage scope '${value}' is not a workspace-relative path, a comma-separated list, or 'repo'.`,
+        expected: 'comma-separated workspace-relative paths, optionally ending in /, or `repo`',
+        actual: value,
+        line: entry?.line ?? stage.line,
+        fix: 'Name the paths the command reads (e.g. `packages/specs`) or `repo` for the whole workspace.',
+      }),
+    ];
+  }
+  return [];
+};
+
+/** Verify one stage's `lane:` metadata. */
+const verifyLaneMetadata = (stage: GateStage): ReadonlyArray<Issue> => {
+  const entries = metadataOf(stage, 'lane');
+  if (entries.length === 0) return [];
+  if (entries.length > 1) {
+    return [
+      finding({
+        code: GATE_CODES.malformedMetadata,
+        field: stage.heading,
+        message: `A stage may declare at most one \`lane:\` line; found ${entries.length}.`,
+        expected: 'one `lane: heavy|light` line',
+        actual: `${entries.length} lane lines`,
+        line: stage.line,
+        fix: 'Keep exactly one lane line.',
+      }),
+    ];
+  }
+  const entry = entries[0];
+  const value = entry?.value ?? '';
+  if (!isGateLane(value)) {
+    return [
+      finding({
+        code: GATE_CODES.invalidLane,
+        field: stage.heading,
+        message: `Stage lane '${value}' is not 'heavy' or 'light'.`,
+        expected: 'heavy or light',
+        actual: value,
+        line: entry?.line ?? stage.line,
+        fix: 'Use `lane: heavy` for a suite/build/typecheck/lint and `lane: light` for a narrow check.',
+      }),
+    ];
+  }
+  return [];
 };
 
 /** A finding for metadata that the stage's kind forbids. */
@@ -544,7 +687,7 @@ const ExitCode = Schema.Int.check(
 /** A recorded instant. */
 const RecordedInstant = Schema.String.check(Schema.isPattern(INSTANT));
 
-/** One mechanical record, exactly B004's keys. */
+/** One mechanical record, exactly B004's keys plus the scheduler's optional ones. */
 const MechanicalRecord = Schema.Struct({
   stage: StageNumber,
   title: Schema.String,
@@ -554,6 +697,15 @@ const MechanicalRecord = Schema.Struct({
   verdict: Schema.Literals(GATE_VERDICTS),
   at: RecordedInstant,
   output: Schema.String,
+  scope: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)),
+  key: Schema.optionalKey(Schema.NonEmptyString),
+  fingerprint: Schema.optionalKey(Schema.NonEmptyString),
+  owner: Schema.optionalKey(Schema.String),
+  durationMs: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+  lane: Schema.optionalKey(Schema.Literals(['heavy', 'light'])),
+  waitedMs: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
+  reused: Schema.optionalKey(Schema.Boolean),
+  source: Schema.optionalKey(RecordedInstant),
 });
 
 /** One subjective record, exactly B004's keys. */
@@ -713,6 +865,32 @@ export const verifyGateResults = (input: GateResultsInput): Result => {
           fix: 'Re-run the stage with the verb that matches its kind.',
         }),
       );
+    }
+    const declared = stageScope(stage);
+    if (declared !== undefined && record.kind === 'mechanical') {
+      if (record.scope === undefined) {
+        issues.push(
+          finding({
+            code: GATE_CODES.resultsMalformed,
+            field: GATE_RESULTS_FILE,
+            message: `Stage ${record.stage} declares scope '${declared.join(',')}' but its result records no scope.`,
+            expected: `a result covering the declared scope (${declared.join(',')})`,
+            actual: 'no scope',
+            fix: `Re-run mf-specs gate run --stage ${record.stage} so the result carries the scope it covered.`,
+          }),
+        );
+      } else if (!scopeContains(normalizeScopeList(record.scope), normalizeScopeList(declared))) {
+        issues.push(
+          finding({
+            code: GATE_CODES.staleResult,
+            field: GATE_RESULTS_FILE,
+            message: `Stage ${record.stage} declares scope '${declared.join(',')}' but its result covers '${record.scope.join(',')}'.`,
+            expected: `a result covering the declared scope (${declared.join(',')})`,
+            actual: `scope ${record.scope.join(',')}`,
+            fix: `Re-run mf-specs gate run --stage ${record.stage} so the result covers the declared scope.`,
+          }),
+        );
+      }
     }
   }
 

@@ -264,6 +264,14 @@ export const renderPhaseMemory = (): string =>
     '',
     '- None.',
     '',
+    '## Execution Brief',
+    '',
+    '- Read: <this brief, the task TASK.md/GATES.md, and only the scoped source paths; no broad grep over generated payloads, lockfiles, or other tasks.>',
+    '- Write scope: <the task directory plus only the files TASK.md names; record writes go to the task MEMORY.md.>',
+    '- Gate: <point at the task or phase GATES.md; the worker runs scoped checks, and the orchestrator runs each gate once.>',
+    '- Record: <keep the worker MEMORY.md at or under 80 lines; full logs go to /tmp/<task-id>.log.>',
+    '- Review: <batch every open finding into one fixer attempt and one re-review after review decide.>',
+    '',
   ].join('\n');
 
 /** Render a phase record. */

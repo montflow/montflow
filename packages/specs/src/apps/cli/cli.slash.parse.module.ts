@@ -1,4 +1,10 @@
-import { SURFACE_CODES, type SizingDiagnostic, csv, diagnostic } from './cli.apps.module.js';
+import {
+  SURFACE_CODES,
+  type SizingDiagnostic,
+  csv,
+  diagnostic,
+  scaffoldTaskSpecs,
+} from './cli.apps.module.js';
 
 // ─── Slash-command form ───────────────────────────────────────────────
 
@@ -255,6 +261,8 @@ export interface SlashArgs {
   readonly author: string | undefined;
   readonly workspaceType: string | undefined;
   readonly tasks: ReadonlyArray<string>;
+  /** Ambiguity refusal from the last `--tasks` value, when it had one. */
+  readonly taskError: string | undefined;
   readonly reviewerProfiles: ReadonlyArray<string>;
   readonly request: string | undefined;
   readonly notes: string | undefined;
@@ -340,13 +348,17 @@ export const parseSlashArgs = (args: string): SlashArgs => {
   const multi: Record<string, Array<string>> = {};
   const switches = new Set<string>();
   const positionals: Array<string> = [];
+  let taskError: string | undefined;
   const assign = (key: string, value: string): void => {
     values[key] = value;
     const seen = multi[key] ?? [];
     seen.push(value);
     multi[key] = seen;
-    if (key === 'tasks') tasks = csv(value);
-    else if (key === 'reviewer-profiles') reviewerProfiles = csv(value);
+    if (key === 'tasks') {
+      const split = scaffoldTaskSpecs(value);
+      if (split.ok) tasks = split.specs;
+      else taskError = split.problem;
+    } else if (key === 'reviewer-profiles') reviewerProfiles = csv(value);
   };
   for (let index = 0; index < rest.length; index++) {
     const token = rest[index] ?? '';
@@ -466,6 +478,7 @@ export const parseSlashArgs = (args: string): SlashArgs => {
     author: values.author,
     workspaceType: values['workspace-type'],
     tasks,
+    taskError,
     reviewerProfiles,
     request: values.request,
     notes: values.notes,

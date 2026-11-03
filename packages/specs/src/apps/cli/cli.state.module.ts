@@ -6,6 +6,7 @@ import { parseMarkdown } from '../../modules/frontmatter/index.js';
 import {
   PHASE_FILE,
   PHASE_GATES_FILE,
+  PHASE_MEMORY_FILE,
   isReviewReason,
   parsePhaseFile,
   parsePhaseGateStages,
@@ -19,7 +20,11 @@ import { readSpecVersion } from '../../modules/spec/index.js';
 import { instant } from '../../modules/stamp/index.js';
 import { type Task, parseTaskFile, phaseOf, sizeOf, sortKey } from '../../modules/task/index.js';
 import { type Tier, CODES, TIER_HINT, isTier, waiverAllowed } from '../../modules/tier/index.js';
-import type { SpecSnapshot } from '../../modules/structure/index.js';
+import {
+  EXECUTION_BRIEF_MISSING_CODE,
+  executionBriefStatus,
+  type SpecSnapshot,
+} from '../../modules/structure/index.js';
 import { installedTierFile, shippedTierFile } from '../../modules/doctor/doctor.paths.module.js';
 import { SpecStore } from '../../services/index.js';
 
@@ -261,15 +266,27 @@ const tasksInPhase = (snapshot: SpecSnapshot, phase: string): ReadonlyArray<Task
   return tasks.toSorted((a, b) => sortKey(a.id) - sortKey(b.id));
 };
 
+/** Options for {@link lockPhase}. */
+export interface LockCheckOptions {
+  /**
+   * Refuse a started v2 phase whose `MEMORY.md` has no valid execution brief.
+   * The `lock` verb sets it; internal callers that only ask whether a phase is
+   * already locked (waiver, new-task) leave it off so they never fail early.
+   */
+  readonly requireBrief?: boolean | undefined;
+}
+
 /**
  * Derive whether one phase is locked. This verb only confirms: it writes
  * nothing, not even a stale status mirror. Launching conditions are one code
  * each, so a caller sees every reason the phase is not lockable.
  * @param options - spec store root, name, and phase
+ * @param check - whether the brief gate applies (the `lock` verb does)
  * @returns the derived lock and its blockers
  */
 export const lockPhase = (
   options: PhaseVerbOptions,
+  check: LockCheckOptions = {},
 ): Effect.Effect<LockReport, SurfaceError | SpecStore.StoreError, SpecStore.SpecStore> =>
   Effect.gen(function* () {
     const { snapshot, specText } = yield* snapshotOf(options);
@@ -306,6 +323,33 @@ export const lockPhase = (
     const review = yield* store.reviewSeries(options.root, options.name);
     const evidence = phaseEvidence(snapshot);
     const tasks = tasksInPhase(snapshot, options.phase);
+    if (currentVersion && phase !== undefined && (check.requireBrief ?? true)) {
+      const started =
+        phase.status === 'in-progress' || tasks.some((task) => task.status === 'in-progress');
+      const complete = tasks.length > 0 && tasks.every((task) => task.status === 'complete');
+      if (started && !complete) {
+        const memory = snapshot.files.find(
+          (entry) =>
+            entry.path === `${options.phase}/${PHASE_MEMORY_FILE}` &&
+            (entry.kind ?? 'file') === 'file',
+        )?.content;
+        const brief = executionBriefStatus(memory ?? '');
+        if (!brief.valid) {
+          return yield* Effect.fail(
+            phaseFailure(
+              EXECUTION_BRIEF_MISSING_CODE,
+              `${options.name}/${options.phase}/${PHASE_MEMORY_FILE}`,
+              PHASE_MEMORY_FILE,
+              brief.present
+                ? `Phase '${options.phase}' has started but its execution brief does not name: ${brief.missing.join(', ')}.`
+                : `Phase '${options.phase}' has started but its MEMORY.md has no execution brief.`,
+              `mf-specs lock --name ${options.name} --phase ${options.phase}`,
+              `Write the phase execution brief with the five labelled bullets (Read, Write scope, Gate, Record, Review), then confirm the lock.`,
+            ),
+          );
+        }
+      }
+    }
     const blockers = new Set<string>(evidence.issues.map((found) => found.code ?? 'phase.issue'));
     for (const task of tasks) {
       if (task.status !== 'complete') blockers.add(`task.${task.status}`);
@@ -433,7 +477,7 @@ export const setWaiver = (
       );
     }
     const tasks = tasksInPhase(snapshot, options.phase);
-    const lock = yield* lockPhase(options);
+    const lock = yield* lockPhase(options, { requireBrief: false });
     if (lock.locked) {
       return yield* Effect.fail(
         phaseFailure(

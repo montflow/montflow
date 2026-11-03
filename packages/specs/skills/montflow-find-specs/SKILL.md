@@ -3,7 +3,7 @@ name: montflow-find-specs
 description: Finds and filters montflow specs under .agents/@montflow/specs/ with the `mf-specs list` CLI (or `/specs list` in the OpenCode host), reporting each spec's derived lifecycle state. Use when an agent must answer "what is pending?", pick a spec to resume, or list specs by state.
 id: f21093485cea4b44
 author: Daniel Montilla
-version: 1.5.1
+version: 1.6.0
 license: MIT
 dependencies:
   - executing-skills
@@ -112,7 +112,24 @@ cannot make from the spec; every other decision is recorded in `MEMORY.md`. The
 mode changes interaction only — dispatch, gates, review, locking, and
 verification are identical in both.
 
-## 7. Do Not Guess
+## 7. Read the Execution Channels and Scheduler
+
+A phase has two channels and the orchestrator is the only writer:
+`BOARD.md` is broadcast (`mail --to all`) and carries phase boundaries, shared
+checks that ran or were reused, closed dependencies, and lane config;
+`MAILBOX.md` is targeted (`mail --to <task-id>`) to one task. A worker reads both
+at start and again before its receipt, and a channel never substitutes for a
+`depends-on` edge.
+
+`gate run` is scheduled: each attempt is keyed by `gate-v1:` over the normalized
+command, its scopes, and a fingerprint of the files those scopes cover. One
+attempt per key runs at a time, a matching pass is reused, and a failed,
+timed-out, or cancelled result reruns. The heavy lane defaults to one run at a
+time while light checks never wait behind it; both count toward the in-flight cap
+in `.agents/@montflow/gate.json`. A phase-shared check therefore runs once for
+the phase instead of once per worker.
+
+## 8. Do Not Guess
 
 The listing reflects the spec files on disk. If `list` reports no specs,
 none exist under the root — do not invent one. To author a new spec use
@@ -126,6 +143,15 @@ dispatch `subagent` sessions from the orchestrator.
   phase (`PHASE.md`, `MEMORY.md`, `BOARD.md`, optional `GATES.md`), each holding
   one directory per task (`TASK.md`, `MEMORY.md`, optional `GATES.md`,
   `MAILBOX.md`).
+- **Channels**: `BOARD.md` is broadcast and `MAILBOX.md` is targeted; the
+  orchestrator writes with `mail`, and a worker reads both at start and before
+  its receipt.
+- **Scheduler**: `gate run` keys an attempt by command, scope, and file
+  fingerprint, runs one attempt per key, reuses an unchanged pass, reruns a
+  failure, and bounds the heavy lane and in-flight count through
+  `.agents/@montflow/gate.json`.
+- **Parallel phase**: a phase is the widest ready set; `depends-on` carries only
+  a real dependency and every task declares `write-scope:`.
 - **Commands**: `mf-specs list` (or `/specs list`), `mf-specs which [--branch <name>]`
   (or `/specs which`), and `mf-specs execute [--name <spec>] [--mode guided|autonomous]`
   (or `/specs execute`) which loads the `spec-execute` prompt. `state` and

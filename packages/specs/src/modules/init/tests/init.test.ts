@@ -55,15 +55,51 @@ Vitest.describe('Init.tiers runtime', () => {
     Vitest.expect(verifySpecTree({ name: 'ship-login', files }, NO_REVIEW).valid).toBe(true);
   });
 
+  Vitest.it('writes the task memory section set and keeps the brief phase-only', () => {
+    const files = renderInitTree(plan('micro', defaultInitPhases('micro')));
+    const taskMemory = files.find((file) => file.path === 'A/A001-implement/MEMORY.md')?.content;
+    const phaseMemory = files.find((file) => file.path === 'A/MEMORY.md')?.content;
+    for (const section of [
+      'Context',
+      'Progress',
+      'Findings',
+      'Gates',
+      'Open Questions',
+      'Handoff',
+      'Deviations',
+    ]) {
+      Vitest.expect(taskMemory).toContain(`## ${section}`);
+    }
+    Vitest.expect(taskMemory).not.toContain('## Execution Brief');
+    Vitest.expect(phaseMemory).toContain('## Execution Brief');
+  });
+
   Vitest.it('renders standard and full trees that verify clean immediately', () => {
     for (const tier of ['standard', 'full'] as const) {
       const files = renderInitTree(plan(tier, defaultInitPhases(tier)));
       Vitest.expect(files.some((file) => file.path.endsWith('review-phase/TASK.md'))).toBe(true);
       Vitest.expect(files.some((file) => file.path.endsWith('BOARD.md'))).toBe(true);
-      Vitest.expect(verifySpecTree({ name: 'ship-login', files }, NO_REVIEW).issues).toStrictEqual(
-        [],
-      );
+      const issues = verifySpecTree({ name: 'ship-login', files }, NO_REVIEW).issues;
+      // Execution tasks keep an empty `write-scope:` and warn, so a single-task
+      // default tree has no collision error.
+      Vitest.expect(issues.filter((issue) => issue.severity === 'error')).toStrictEqual([]);
     }
+    // Two independent execution tasks in one phase must not be born colliding.
+    const twin = renderInitTree(
+      plan('standard', [
+        {
+          objective: 'One',
+          review: 'required',
+          tasks: [work('first', 'execution'), work('second', 'execution')],
+        },
+      ]),
+    );
+    const twinIssues = verifySpecTree({ name: 'ship-login', files: twin }, NO_REVIEW).issues;
+    Vitest.expect(twinIssues.filter((issue) => issue.severity === 'error')).toStrictEqual([]);
+    Vitest.expect(codes(twinIssues)).not.toContain('phase.write-scope-overlap');
+    Vitest.expect(
+      codes(twinIssues).filter((code) => code === 'task.write-scope-missing'),
+    ).toHaveLength(2);
   });
 
   Vitest.it('allocates ids per phase from plan order, never caller arithmetic', () => {

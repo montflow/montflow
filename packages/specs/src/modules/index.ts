@@ -5,6 +5,7 @@ export * as Tier from './tier/index.js';
 export * as Creation from './creation/index.js';
 export * as Init from './init/index.js';
 export * as Gates from './gates/index.js';
+export * as Scheduler from './scheduler/index.js';
 export * as Channel from './channel/index.js';
 export * as Stamp from './stamp/index.js';
 export * as Claim from './claim/index.js';

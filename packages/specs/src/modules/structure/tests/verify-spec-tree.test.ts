@@ -3,7 +3,7 @@ import * as Structure from '../index.js';
 import { specMarkdown } from '../../spec/tests/helpers.js';
 import { taskMarkdown } from '../../task/tests/helpers.js';
 import { phaseMarkdown } from '../../phase/tests/helpers.js';
-import { dirEntry, entry, memory, snapshot } from './helpers.js';
+import { briefedMemory, dirEntry, entry, memory, snapshot } from './helpers.js';
 
 const validTree = () =>
   snapshot([
@@ -23,6 +23,44 @@ const verifyTree = (
   tree: Structure.SpecSnapshot,
   review: Structure.ReviewInput = Structure.NO_REVIEW,
 ) => Structure.verifySpecTree(tree, review);
+
+/** A v2 tree whose phase status, task status, and phase memory vary. */
+const briefTree = (input: {
+  readonly phaseStatus: string;
+  readonly taskStatus: string;
+  readonly version: string;
+  readonly phaseMemory: string;
+}) =>
+  snapshot([
+    entry(
+      'SPEC.md',
+      specMarkdown({
+        version: input.version,
+        rows: [
+          {
+            id: 'A001',
+            name: 'implement-login',
+            type: 'execution',
+            status: input.taskStatus,
+            gates: 'No',
+          },
+          { id: 'A099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
+        ],
+      }),
+    ),
+    entry('A/PHASE.md', phaseMarkdown({ status: input.phaseStatus })),
+    entry('A/MEMORY.md', input.phaseMemory),
+    entry(
+      'A/A001-implement-login/TASK.md',
+      taskMarkdown({ id: 'A001', name: 'implement-login', status: input.taskStatus }),
+    ),
+    entry('A/A001-implement-login/MEMORY.md', memory),
+    entry(
+      'A/A099-review-phase/TASK.md',
+      taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
+    ),
+    entry('A/A099-review-phase/MEMORY.md', memory),
+  ]);
 
 Vitest.describe('Structure.verifySpecTree runtime', () => {
   Vitest.it('accepts a structurally valid spec', () => {
@@ -74,6 +112,86 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
     const complete = verifyTree(tree('complete', '- [x] Pass.'));
     Vitest.expect(complete.issues).not.toContainEqual(
       Vitest.expect.objectContaining({ code: 'gate.no-mechanical-stages' }),
+    );
+  });
+
+  Vitest.it('warns when a v2 in-progress phase memory lacks the execution brief', () => {
+    const warned = verifyTree(
+      briefTree({
+        phaseStatus: 'in-progress',
+        taskStatus: 'in-progress',
+        version: '2',
+        phaseMemory: memory,
+      }),
+    );
+    Vitest.expect(warned.issues).toContainEqual(
+      Vitest.expect.objectContaining({
+        code: 'phase.execution-brief-missing',
+        severity: 'warning',
+        field: 'A/MEMORY.md',
+      }),
+    );
+    Vitest.expect(warned.valid).toBe(true);
+
+    const complete = verifyTree(
+      briefTree({
+        phaseStatus: 'complete',
+        taskStatus: 'complete',
+        version: '2',
+        phaseMemory: memory,
+      }),
+    );
+    Vitest.expect(complete.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'phase.execution-brief-missing' }),
+    );
+
+    const frozen = verifyTree(
+      briefTree({
+        phaseStatus: 'in-progress',
+        taskStatus: 'in-progress',
+        version: '1',
+        phaseMemory: memory,
+      }),
+    );
+    Vitest.expect(frozen.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'phase.execution-brief-missing' }),
+    );
+  });
+
+  Vitest.it('requires the five brief elements, not just the heading or a stub', () => {
+    const missingBrief = (phaseMemory: string) =>
+      verifyTree(
+        briefTree({
+          phaseStatus: 'in-progress',
+          taskStatus: 'in-progress',
+          version: '2',
+          phaseMemory,
+        }),
+      );
+    const headingOnly = `${memory}\n## Execution Brief\n`;
+    const stub = `${memory}\n## Execution Brief\n\n- TODO.\n`;
+    const partial = `${memory}\n## Execution Brief\n\n- Read: the brief.\n- Gate: point at GATES.md.\n`;
+
+    for (const phaseMemory of [headingOnly, stub, partial]) {
+      const result = missingBrief(phaseMemory);
+      Vitest.expect(result.issues).toContainEqual(
+        Vitest.expect.objectContaining({
+          code: 'phase.execution-brief-missing',
+          severity: 'warning',
+          field: 'A/MEMORY.md',
+        }),
+      );
+      Vitest.expect(result.valid).toBe(true);
+    }
+
+    const partialResult = missingBrief(partial);
+    Vitest.expect(
+      partialResult.issues.find((found) => found.code === 'phase.execution-brief-missing')?.message,
+    ).toContain('Write scope');
+
+    const complete = missingBrief(briefedMemory);
+    Vitest.expect(complete.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'phase.execution-brief-missing' }),
     );
   });
 
@@ -586,7 +704,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
         }),
       ),
       entry('A/PHASE.md', phaseMarkdown({ status: 'in-progress' })),
-      entry('A/MEMORY.md', memory),
+      entry('A/MEMORY.md', briefedMemory),
       entry(
         'A/A001-implement-login/TASK.md',
         taskMarkdown({ id: 'A001', name: 'implement-login' }),
@@ -637,7 +755,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
         }),
       ),
       entry('A/PHASE.md', phaseMarkdown({ status: 'in-progress' })),
-      entry('A/MEMORY.md', memory),
+      entry('A/MEMORY.md', briefedMemory),
       entry(
         'A/A001-implement-login/TASK.md',
         taskMarkdown({ id: 'A001', name: 'implement-login' }),
@@ -686,7 +804,7 @@ const reviewTree = () =>
       }),
     ),
     entry('A/PHASE.md', phaseMarkdown({ status: 'in-progress' })),
-    entry('A/MEMORY.md', memory),
+    entry('A/MEMORY.md', briefedMemory),
     entry(
       'A/A001-implement-login/TASK.md',
       taskMarkdown({ id: 'A001', name: 'implement-login', size: 'tiny' }),
@@ -824,6 +942,181 @@ Vitest.describe('Structure.verifySpecTree review overflow and closure', () => {
     });
     Vitest.expect(refused.issues).toContainEqual(
       Vitest.expect.objectContaining({ code: 'review.deferred-severity' }),
+    );
+  });
+});
+
+const row = (id: string, name: string, type: string) => ({
+  id,
+  name,
+  type,
+  status: 'pending',
+  gates: 'No',
+});
+const task = (
+  id: string,
+  name: string,
+  options: {
+    readonly type?: string;
+    readonly writeScope?: string;
+    readonly withoutWriteScope?: boolean;
+    readonly dependsOn?: string;
+  } = {},
+) => entry(`A/${id}-${name}/TASK.md`, taskMarkdown({ id, name, type: 'planning', ...options }));
+const taskMemory = (id: string, name: string) => entry(`A/${id}-${name}/MEMORY.md`, memory);
+
+/** A mechanical stage with one declared scope. */
+const gatesFor = (scope: string) =>
+  [
+    '## Stage 0: Proof (mechanical)',
+    'command: bun run test',
+    `scope: ${scope}`,
+    '',
+    '- [ ] Pass.',
+    '',
+  ].join('\n');
+
+Vitest.describe('Structure.verifySpecTree parallel authoring', () => {
+  Vitest.it('reports two overlapping scopes with no dependency edge', () => {
+    const result = verifyTree(
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            version: '2',
+            rows: [row('A001', 'first', 'planning'), row('A002', 'second', 'planning')],
+          }),
+        ),
+        entry('A/PHASE.md', phaseMarkdown()),
+        entry('A/MEMORY.md', memory),
+        task('A001', 'first', { writeScope: 'app' }),
+        taskMemory('A001', 'first'),
+        task('A002', 'second', { writeScope: 'app/sub' }),
+        taskMemory('A002', 'second'),
+      ]),
+    );
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'phase.write-scope-overlap' }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+  });
+
+  Vitest.it('accepts overlapping scopes joined by a dependency edge', () => {
+    const result = verifyTree(
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            version: '2',
+            rows: [row('A001', 'first', 'planning'), row('A002', 'second', 'planning')],
+          }),
+        ),
+        entry('A/PHASE.md', phaseMarkdown()),
+        entry('A/MEMORY.md', memory),
+        task('A001', 'first', { writeScope: 'app' }),
+        taskMemory('A001', 'first'),
+        task('A002', 'second', { writeScope: 'app', dependsOn: 'A001' }),
+        taskMemory('A002', 'second'),
+      ]),
+    );
+    Vitest.expect(result.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'phase.write-scope-overlap' }),
+    );
+  });
+
+  Vitest.it(
+    'warns on a pending task with no write scope and on an unexplained serial chain',
+    () => {
+      const result = verifyTree(
+        snapshot([
+          entry(
+            'SPEC.md',
+            specMarkdown({
+              version: '2',
+              rows: [
+                row('A001', 'first', 'planning'),
+                row('A002', 'second', 'planning'),
+                row('A003', 'third', 'planning'),
+              ],
+            }),
+          ),
+          entry('A/PHASE.md', phaseMarkdown()),
+          entry('A/MEMORY.md', memory),
+          task('A001', 'first', { withoutWriteScope: true }),
+          taskMemory('A001', 'first'),
+          task('A002', 'second', { dependsOn: 'A001' }),
+          taskMemory('A002', 'second'),
+          task('A003', 'third', { dependsOn: 'A002' }),
+          taskMemory('A003', 'third'),
+        ]),
+      );
+      Vitest.expect(result.issues).toContainEqual(
+        Vitest.expect.objectContaining({ code: 'task.write-scope-missing', severity: 'warning' }),
+      );
+      Vitest.expect(result.issues).toContainEqual(
+        Vitest.expect.objectContaining({
+          code: 'phase.serial-chain-unexplained',
+          severity: 'warning',
+        }),
+      );
+    },
+  );
+
+  Vitest.it('reports a gate scope outside the write scope and a duplicated command', () => {
+    const result = verifyTree(
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            version: '2',
+            rows: [
+              { ...row('A001', 'first', 'execution'), gates: 'Yes' },
+              { ...row('A002', 'second', 'execution'), gates: 'Yes' },
+            ],
+          }),
+        ),
+        entry('A/PHASE.md', phaseMarkdown()),
+        entry('A/MEMORY.md', memory),
+        task('A001', 'first', { type: 'execution', writeScope: 'app' }),
+        taskMemory('A001', 'first'),
+        entry('A/A001-first/GATES.md', gatesFor('repo')),
+        task('A002', 'second', { type: 'execution', writeScope: 'packages/specs' }),
+        taskMemory('A002', 'second'),
+        entry('A/A002-second/GATES.md', gatesFor('packages/specs')),
+      ]),
+    );
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.shared-check-in-task' }),
+    );
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.duplicate-command' }),
+    );
+  });
+
+  Vitest.it('reports a mechanical stage with no resolvable scope', () => {
+    const result = verifyTree(
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            version: '2',
+            rows: [{ ...row('A001', 'first', 'execution'), gates: 'Yes' }],
+          }),
+        ),
+        entry('A/PHASE.md', phaseMarkdown()),
+        entry('A/MEMORY.md', memory),
+        task('A001', 'first', { type: 'execution', withoutWriteScope: true }),
+        taskMemory('A001', 'first'),
+        entry(
+          'A/A001-first/GATES.md',
+          ['## Stage 0: Proof (mechanical)', 'command: bun run test', '', '- [ ] Pass.', ''].join(
+            '\n',
+          ),
+        ),
+      ]),
+    );
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.scope-missing' }),
     );
   });
 });

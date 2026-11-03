@@ -1,6 +1,7 @@
 import { Schema } from 'effect';
 import { fieldList, fieldString, parseMarkdown } from '../frontmatter/index.js';
 import type { FieldValue } from '../frontmatter/index.js';
+import { isScopeToken, normalizeScopeList } from '../scheduler/scope.module.js';
 import { CODES, NONE_SIZE, SIZES, SIZE_HINT, Size, isSize } from '../sizing/index.js';
 import { type Issue, type Result, finding, issue, noErrors } from '../verify/index.js';
 
@@ -23,6 +24,9 @@ export const FINDING_REF_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*\/\d{3}\/F\d+$/;
 
 /** Task frontmatter key listing a `review` task's ordered reviewer profile slugs. */
 export const REVIEWER_PROFILES_FIELD = 'reviewer-profiles';
+
+/** Task frontmatter key declaring the paths a task may write. */
+export const WRITE_SCOPE_FIELD = 'write-scope';
 
 /** Stable code for a complete task whose completion checklist is not checked off. */
 export const COMPLETION_UNCHECKED_CODE = 'task.completion-unchecked';
@@ -103,6 +107,11 @@ export class Task extends Schema.Class<Task>('SpecTask')({
   /** Adversarial-review finding this task addresses (`<series>/<round>/F<n>`), if any. */
   findingRef: Schema.optionalKey(Schema.String.check(Schema.isPattern(FINDING_REF_PATTERN))),
   /**
+   * Declared write scope: comma-separated repo-root-relative paths, `.` for the
+   * whole repo, or `none`. Absent on a historical task.
+   */
+  writeScope: Schema.optionalKey(Schema.String),
+  /**
    * Declared task size, as written; absent only on historical completed tasks.
    * Decoding deliberately keeps a non-enum value so an unknown size stays a
    * `task.unknown-size` finding instead of deleting the task from every
@@ -130,11 +139,13 @@ interface TaskInput {
   readonly status: string;
   readonly findingRef?: string;
   readonly size?: string;
+  readonly writeScope?: string;
 }
 
 const taskInput = (fields: Record<string, FieldValue>): TaskInput => {
   const findingRef = fieldString(fields, 'finding-ref');
   const size = fieldString(fields, 'size');
+  const writeScope = fieldString(fields, WRITE_SCOPE_FIELD);
   const base: TaskInput = {
     id: fieldString(fields, 'id') ?? '',
     name: fieldString(fields, 'name') ?? '',
@@ -146,7 +157,8 @@ const taskInput = (fields: Record<string, FieldValue>): TaskInput => {
     status: fieldString(fields, 'status') ?? '',
   };
   const withRef = findingRef === undefined || findingRef === '' ? base : { ...base, findingRef };
-  return size === undefined || size === '' ? withRef : { ...withRef, size };
+  const withSize = size === undefined || size === '' ? withRef : { ...withRef, size };
+  return writeScope === undefined || writeScope === '' ? withSize : { ...withSize, writeScope };
 };
 
 /**
@@ -172,6 +184,24 @@ export const parseTaskFile = (markdown: string): Task | undefined => {
  */
 export const sizeOf = (task: Task): Size | undefined =>
   task.size === undefined || !isSize(task.size) ? undefined : task.size;
+
+/**
+ * A task's declared write scope, normalized. `.` becomes `repo`; `none` stays a
+ * single `none` token; absent leaves the scope unresolved.
+ * @param task - parsed task
+ * @returns the scope tokens, or undefined when the task declares none
+ */
+export const writeScopeTokens = (task: Task): ReadonlyArray<string> | undefined => {
+  if (task.writeScope === undefined || task.writeScope.trim() === '') return undefined;
+  const tokens = task.writeScope
+    .split(',')
+    .map((token) => token.trim())
+    .filter((token) => token !== '');
+  if (tokens.length === 0) return undefined;
+  const none = tokens.filter((token) => token === 'none');
+  if (none.length > 0) return ['none'];
+  return normalizeScopeList(tokens);
+};
 
 // ─── Directory name ───────────────────────────────────────────────────
 
@@ -448,6 +478,23 @@ export const verifyTaskFile = (dirName: string, markdown: string): Result => {
   const findingRef = fieldString(fields, 'finding-ref');
   if (findingRef !== undefined && findingRef !== '' && !FINDING_REF_PATTERN.test(findingRef)) {
     issues.push(issue('finding-ref', "Must be a finding reference like '<series>/<round>/F1'."));
+  }
+
+  const writeScope = fieldString(fields, WRITE_SCOPE_FIELD);
+  if (writeScope !== undefined && writeScope.trim() !== '') {
+    const tokens = writeScope.split(',').map((token) => token.trim());
+    if (tokens.some((token) => token === '')) {
+      issues.push(issue(WRITE_SCOPE_FIELD, 'Has an empty path between commas.'));
+    } else if (tokens.length > 1 && tokens.some((token) => token === 'none')) {
+      issues.push(issue(WRITE_SCOPE_FIELD, "'none' cannot be combined with a path."));
+    } else if (tokens.some((token) => token !== 'none' && !isScopeToken(token))) {
+      issues.push(
+        issue(
+          WRITE_SCOPE_FIELD,
+          "Must be comma-separated repo-root-relative paths, '.' for the whole repo, or 'none'; no leading '/', '..', glob, or whitespace.",
+        ),
+      );
+    }
   }
 
   const status = fieldString(fields, 'status');

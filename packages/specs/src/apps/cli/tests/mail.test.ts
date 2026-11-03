@@ -459,14 +459,15 @@ Vitest.describe('Cli.mail default steer route', () => {
 });
 
 Vitest.describe('spec-execute channel guidance', () => {
-  Vitest.it('names the board, the mailbox, mail, and the dependency rule', () => {
+  Vitest.it('names the board broadcast, the targeted mailbox, and the dependency rule', () => {
     const file = resolve(import.meta.dirname, '../../../../prompts/spec-execute.json');
     // SAFETY: `spec-execute.json` is this package's own prompt file; its
     // `template` is a required string in the prompt schema verified by the
     // package's prompt tests, so the read is checked at this boundary.
     const template = (JSON.parse(readFileSync(file, 'utf8')) as { template: string }).template;
-    Vitest.expect(template).toContain('BOARD.md');
-    Vitest.expect(template).toContain('MAILBOX.md');
+    Vitest.expect(template).toContain('BOARD.md` is the phase broadcast channel');
+    Vitest.expect(template).toContain('MAILBOX.md` is a targeted task channel');
+    Vitest.expect(template).toContain('Read the board and mailbox at the start');
     Vitest.expect(template).toContain('mf-specs mail --name');
     Vitest.expect(template).toContain('depends-on');
   });

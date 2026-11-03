@@ -84,13 +84,23 @@ explicit `migrate --name <spec> --include-complete` upgrades it. Relabeling
 - `create --name <spec>` — deterministic, model-free scaffold: writes
   `SPEC.md` with `spec-version: 2`, one `<PHASE>/PHASE.md` + `MEMORY.md` per
   phase, and one `<PHASE>/<PHASE><NNN>-<name>/` task directory per `--tasks`
-  entry (each `name[:type[:gates[:size]]]`, with `size` defaulting to `medium`
-  when the token is absent or blank). A fifth token is an error rather than
-  silently ignored. It emits a review task only when `--tasks` requests
-  `name:review`; nothing is reserved or auto-appended. Refuses to overwrite an
-  existing spec. Optional `--description`, `--author`,
-  `--workspace-type in-place|worktree`.
-  The generated tree passes `check`; edit it to carry the real work.
+  entry (each `name[:type[:gates[:size]]][:scope=path,path]`, with `size`
+  defaulting to `medium` when the token is absent or blank). Separate tasks with
+  `;` (`first:execution;build`), or with a comma when the current entry has no
+  `scope=` field (`first:execution,second:execution`); a comma inside `scope=`
+  stays in that task's scope list (`first:execution:scope=app,lib`). Because a
+  colon-less fragment after `scope=` could otherwise be a silently swallowed
+  task name, an entry that continues a scope list and then has another fragment
+  is refused with the ambiguity named — write `first:execution:scope=app;build`
+  instead. A sixth token is an error rather than silently ignored. Every
+  generated `TASK.md` carries a `write-scope:`: `none` for a review,
+  exploratory, or planning task and `.` for execution work, overridden by
+  `scope=`. It emits a review task only when `--tasks` requests `name:review`;
+  nothing is reserved or auto-appended. Refuses to overwrite an existing spec.
+  Optional `--description`, `--author`, `--workspace-type in-place|worktree`.
+  A scaffold with two execution tasks must declare distinct `scope=` values (or
+  add a real `depends-on` edge); otherwise `check` reports
+  `phase.write-scope-overlap`, exactly as it would for hand-authored work.
 - `init --name <spec> --tier <micro|standard|full>` — the tier-aware scaffold.
   Validates the phase range, exploration rule, work-task ceiling, gate kind,
   waiver policy, review decision, and dependency graph, then writes the whole v2
@@ -102,7 +112,9 @@ explicit `migrate --name <spec> --include-complete` upgrades it. Relabeling
   write its `PHASE.md`, `MEMORY.md`, and optional `BOARD.md`/`GATES.md`.
 - `new-task --name <spec> --phase <id> --task <kebab-name> --type <type>` —
   allocate the next task number in that phase, write its `TASK.md`/`MEMORY.md`
-  (and `GATES.md` with `--gates`), and append its sorted `SPEC.md` row.
+  (and `GATES.md` with `--gates`), and append its sorted `SPEC.md` row. It writes
+  a `write-scope:` (`none` for review/exploratory/planning, `.` for execution,
+  defect, or interruptor work) unless `--write-scope <paths|none>` overrides it.
 - `stamp [--format instant|date]` — print one UTC timestamp from the system
   clock. Writes nothing; never type a timestamp by hand.
 - `claim --name <spec> --task <id>` — bind a session to a task. The orchestrator
@@ -131,10 +143,16 @@ explicit `migrate --name <spec> --include-complete` upgrades it. Relabeling
   failed move or failed post-move verification rolls every applied move back so
   the store is never half-migrated. A `status: complete` spec is `frozen` and
   skipped unless `--include-complete` is passed.
-- `gate run --name <spec> --phase <id> [--task <id>] [--stage <n>] [--all]` —
-  execute mechanical stages from the workspace root and append the command,
-  exit status, timestamp, and captured output to the owner's
-  `GATE-RESULTS.jsonl`. Stops at the first failure unless `--all`.
+- `gate run --name <spec> --phase <id> [--task <id>] [--stage <n>] [--all]
+[--scope <token[,token]>|repo] [--lane heavy|light] [--no-reuse]
+[--lanes <n>] [--in-flight <n>] [--wait-timeout <s>] [--timeout <s>]` —
+  execute mechanical stages from the workspace root through the verification
+  scheduler (see [Verification scheduler](#verification-scheduler)) and append
+  the key, scope, lane, wait, reuse source, duration, exit status, timestamp,
+  and captured output to the owner's `GATE-RESULTS.jsonl`. A second requester
+  for an in-flight key waits and consumes the first result; a matching pass is
+  reused unless `--no-reuse` forces a run. Stops at the first failure unless
+  `--all`.
 - `gate record --name <spec> --phase <id> [--task <id>] --stage <n> --judge
 <slug> --verdict pass|fail --note <text>` — record one subjective verdict.
   The CLI never marks a subjective stage passing on its own.
@@ -341,6 +359,129 @@ live in [`fixtures/`](fixtures/README.md): `mock-ok` (pending),
 untouched record at its review budget), `mock-over-budget` (one review-budget
 error), and `mock-bad`
 (10 issues across every failure class).
+
+## Phase shape and channels
+
+A phase is authored as the **widest ready set**, not a queue: list the tasks that
+can run at once and dispatch them together. `depends-on` carries only a real data
+or ordering dependency; "same area" is not one, and a serial chain is a stated
+decision (`serial-reason: <one line>` in `PHASE.md`) rather than a default.
+
+Every task declares `write-scope:` in `TASK.md` frontmatter: a comma-separated
+list of repo-root-relative POSIX paths, an optional trailing `/` for a subtree,
+`.` for the whole repo, or `none`; the task directory is implicit. `init`,
+`new-task`, and `create` write the field. A pending non-review task without it is
+`task.write-scope-missing` (warning). Two unfinished tasks in one phase whose
+scopes overlap without a `depends-on` edge are `phase.write-scope-overlap`
+(error), fixed by adding the real edge or splitting the phase. A v2 phase whose
+non-review tasks chain one after another with no other edges is
+`phase.serial-chain-unexplained` (warning) until `PHASE.md` states
+`serial-reason: <one line>`. `next` returns the ready set — pending tasks whose
+`depends-on` targets are complete — and readiness is the only dispatch signal.
+
+A spec has two gate layers. A task `GATES.md` holds commands scoped to that task
+and proof of that task alone. Phase-shared and repo-wide checks live once in the
+phase `GATES.md`, with `scope:` (a path token or `repo`) and `lane:
+heavy|light`; the orchestrator runs that gate once at the phase boundary and the
+scheduler reuses the pass. `check` reports `gate.shared-check-in-task` when a
+task stage's scope is not contained in the task's `write-scope:` (including
+`repo`), `gate.duplicate-command` when the same normalized command with
+overlapping scope appears in two gates of one spec, and `gate.scope-missing`
+(warning) when an unfinished v2 mechanical stage has no resolvable scope.
+
+The phase directory carries the two channels. `BOARD.md` is broadcast (`mail --to
+all`): phase boundaries, a shared gate that ran or was reused, a closed
+dependency, lane config. `MAILBOX.md` is targeted (`mail --to <task-id>`) to one
+task. The orchestrator is the sole writer; a worker reads the board and its
+mailbox at start and again before its receipt, and a channel never substitutes
+for a `depends-on` edge.
+
+## Verification scheduler
+
+`gate run` is scheduled, not merely executed. One run is keyed by its normalized
+command, its scopes, and a fingerprint of the files those scopes cover:
+
+```text
+key = gate-v1: sha256( normCommand + "\n" + scopes.join(",") + "\n" + fingerprint )
+fingerprint = sha256 over "path\0sha256hex(bytes)\n" for every file in scope
+```
+
+`normCommand` trims and collapses whitespace; `scopes` are sorted unique tokens
+(`repo` or a repo-root-relative path, `.` normalizing to `repo`); a symlink
+contributes its target string. Task, phase, stage, and session ids never enter
+the key, so the same proof shared by two owners is one key. `.git/`,
+`node_modules/`, `.turbo/`, `dist/`, `build/`, `coverage/`, the runtime tree, and
+every `GATE-RESULTS.jsonl` are skipped, so recording a result never invalidates
+the key that produced it.
+
+A stage's scope resolves as `--scope` → the stage's `scope:` line → the owner's
+scope (a task's `write-scope:`, or `repo` for the phase gate). A `--scope`
+override must cover every selected stage's declared scope; it may widen but not
+narrow, and a narrower override is `gate.invalid-scope`, refused before any stage
+runs because it cannot prove the stage. A task gate with no
+resolvable scope is `gate.scope-missing`. A stage may declare
+`lane: heavy|light`; an absent lane classifies a suite, typecheck, build, lint,
+format, or repo/package-wide check as heavy and a narrow check as light.
+
+Single flight: at most one attempt per key is `running`. A second requester
+registers as a waiter, prints `waiting key <key> · lane <lane> · position <n> ·
+owner <task>`, and consumes the owner's recorded result; it never spawns. A
+`passed` key is reused while its fingerprint matches and prints `reused <key>
+from <source>`; any input change yields a new key, so an old pass cannot be
+consumed. A `failed`, `timeout`, or `cancelled` result is never reused as a pass:
+a later requester reruns it and waiters of the same attempt consume its failure.
+`--no-reuse` forces a run.
+
+Bounds come from `<workspace>/.agents/@montflow/gate.json`, every key optional:
+
+```json
+{
+  "heavy": { "lanes": 1, "inFlight": 2 },
+  "leaseSeconds": 60,
+  "heartbeatSeconds": 10,
+  "waitTimeoutSeconds": 900
+}
+```
+
+The heavy lane defaults to one run at a time; light checks never wait behind it
+but count toward the global in-flight cap. `--lanes`, `--in-flight`, and
+`--wait-timeout` override the file for one invocation, and any bound below `1`
+is `gate.invalid-config`. `heartbeatSeconds` must be strictly less than
+`leaseSeconds`, or `gate.invalid-config` refuses a lease that would expire before
+its first renewal. A waiter past its cap exits non-zero with
+`gate.wait-timeout` and runs nothing.
+
+Run state lives only at `.agents/@montflow/.runtime/runs/<sha256(key)>.json`
+(`version`, `key`, `command`, `scope`, `fingerprint`, `state`, `lane`,
+`attempts`, `waiters`, `resultPath`, `resultIndex`), guarded by one `runs.lock`
+and written temp-then-rename. A failed claim or terminal write is
+`gate.write-failed`, never a silent run. Terminal states are pruned past a
+one-day TTL while the newest 50 are kept, and `status` renders live runs plus the
+20 most recent terminal ones, so an edit history cannot grow the panel without
+bound. An owner heartbeats its lease; a requester that
+finds a lease past `leaseExpiresAt` or a dead `pid` marks the attempt `expired`,
+appends no result, starts attempt n+1, and prints `reclaimed <key> attempt <n>`.
+A timeout records `state: timeout`, `verdict: fail`, `exit: 124`; an interrupted
+run records `cancelled`, `exit: 130`. Neither is ever a pass.
+
+Visibility: `gate run` prints `key <key> · scope <scope> · lane <lane>
+<inflight>/<lanes> · waited <ms> · ran|reused <source> · fingerprint <fp>`;
+`status` prints `runs <n> in-flight · <n> queued · <n> stale` and one
+`run <key> <lane> <inflight>/<lanes> <task> <state> <elapsed>` line per run;
+`next` marks a gated task `gate task-local <scope>` and the phase head
+`phase-gate <kind> repo · shared once at boundary`.
+
+Truthfulness: `check` recomputes every keyed pass against the stage's declared
+scope and the current files, and reports `gate.stale-result` (error) with the
+owner, stage, stored key, and current key when the inputs moved or a record's
+scope does not cover the stage's declared scope. A pass on an unfinished owner with
+no key is `gate.result-unkeyed` (warning); on a complete owner it is an error
+when the stage declares a `scope:`, and exempt only for a legacy stage with no
+declared scope. A pass whose own scope no longer exists is `gate.scope-missing`
+(warning), not a silent green, and a pass whose verdict and exit disagree is
+already `gate.result-inconsistent`. The scheduler's own refusals are
+`gate.scope-missing`, `gate.invalid-scope`, `gate.invalid-lane`,
+`gate.invalid-config`, `gate.wait-timeout`, and `gate.scheduler-lock`.
 
 ## Artifact payload
 
@@ -749,7 +890,9 @@ itself is not a completed task:
   parsing, and delivery targets behind `mf-specs mail`.
 - **`Stamp`** — the one UTC clock behind `mf-specs stamp`.
 - **`Task`** — `Task` Schema Class, `TaskId`, `TaskType`, `TaskStatus`,
-  the optional `size` field, `parseTaskDirName`, `parseTaskFile`,
+  the optional `size` field, the optional `write-scope` list
+  (`WRITE_SCOPE_FIELD`, `writeScopeTokens`), `parseTaskDirName`,
+  `parseTaskFile`,
   `verifyTaskFile`, `verifyTaskSize`, `verifyTaskCompletion` (a complete task
   with unchecked `## Completion` items is `task.completion-unchecked`), the
   optional
@@ -757,10 +900,17 @@ itself is not a completed task:
   `finding-ref` locator pattern (`FINDING_REF_PATTERN`), plus the task-id /
   directory / originator patterns.
 - **`Gates`** — `parseGates`, `verifyGatesFile` (stages classified
-  `mechanical`/`subjective` + checklist items, no placeholders),
-  `verifyGateProgress` (a complete task with no checked gate item is
-  `gate.unchecked`), and the `GATE-RESULTS.jsonl` reader/writer behind
-  `gate run` / `gate record`.
+  `mechanical`/`subjective` + checklist items, no placeholders), stage
+  `scope:`/`lane:` metadata, `verifyGateProgress` (a complete task with no
+  checked gate item is `gate.unchecked`), `verifyResultFreshness`
+  (`gate.stale-result` / `gate.result-unkeyed`), and the `GATE-RESULTS.jsonl`
+  reader/writer behind `gate run` / `gate record`.
+- **`Scheduler`** — the verification scheduler behind `gate run`: `gateKey`
+  (`gate-v1:` over normalized command, scopes, and fingerprint),
+  `fingerprintScopes` (scope walk with the result/runtime exclusions),
+  `parseGateConfig` (`gate.json` bounds and lease), `laneOf`, `scheduleRun`
+  (single flight, waiters, reuse, lane and in-flight bounds, lease reclaim,
+  timeout/cancellation), and the run-state reader/summary behind `status`.
 - **`Memory`** — `verifyMemoryFile`, `MEMORY_SECTIONS` (title + template
   sections).
 - **`Lifecycle`** — `analyze` / `verify`: derives `pending` /
@@ -877,6 +1027,15 @@ in this package recommends one.
    loop has taken it, the phase writes the next round free in every series. No
    empty or fabricated round is ever seeded, and a `pending` review task
    requires no round at all.
+
+**Discovering profiles.** Before choosing `reviewer-profiles`, run
+`mf-profiles list` (`/mf-profiles list` in the OpenCode host): the list pairs
+every profile name with its description, which is the signal a reviewer choice
+needs — never guess the store's contents. When a description does not settle
+the choice, `mf-profiles show <name>` reports that profile's instructions and
+review checklist. An empty `reviewer-profiles` list is the default on every
+phase; each declared profile adds one review round per cycle without changing
+the phase budget.
 
 ## Status
 

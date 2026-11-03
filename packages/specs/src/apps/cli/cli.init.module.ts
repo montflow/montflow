@@ -12,7 +12,7 @@ import {
   renderInitTree,
   validateInitPlan,
 } from '../../modules/init/index.js';
-import { DEFAULT_SIZE, SIZES, isSize } from '../../modules/sizing/index.js';
+import { DEFAULT_SIZE, type Size, SIZES, isSize } from '../../modules/sizing/index.js';
 import { isValidName, isValidPhase } from '../../modules/spec/index.js';
 import {
   type TaskType,
@@ -21,6 +21,7 @@ import {
   isTaskType,
   phaseRank,
 } from '../../modules/task/index.js';
+import { isScopeList } from '../../modules/scheduler/index.js';
 import { type Tier, isTier } from '../../modules/tier/index.js';
 import { SpecStore } from '../../services/index.js';
 
@@ -50,7 +51,9 @@ export interface ParsedInitTask {
 }
 
 /**
- * Parse one `--task <PHASE>:<name>:<type>[:<size>][:after=<a,b>]` value.
+ * Parse one `--task <PHASE>:<name>:<type>[:<size>][:after=<a,b>][:scope=<paths>]`
+ * value. A `scope=` token is recognized by prefix anywhere after the type; any
+ * other trailing token must be a size or an `after=` list.
  * @param raw - one raw value
  * @returns the parsed task, or a diagnostic describing the token error
  */
@@ -60,32 +63,62 @@ export const parseInitTaskFlag = (
   | { readonly ok: true; readonly value: ParsedInitTask }
   | { readonly ok: false; readonly error: string } => {
   const tokens = raw.split(':');
-  if (tokens.length < 3 || tokens.length > 5) {
-    return { ok: false, error: `'${raw}' must be PHASE:name:type[:size][:after=name,name]` };
+  if (tokens.length < 3) {
+    return {
+      ok: false,
+      error: `'${raw}' must be PHASE:name:type[:size][:after=name,name][:scope=path,path]`,
+    };
   }
-  const [phase = '', name = '', type = '', size = '', after = ''] = tokens;
+  const [phase = '', name = '', type = '', ...rest] = tokens;
+  const scopeTokens = rest.filter((token) => token.startsWith('scope='));
+  if (scopeTokens.length > 1) {
+    return { ok: false, error: `'${raw}' declares scope= more than once.` };
+  }
+  const declaredScope = scopeTokens[0]?.slice('scope='.length) ?? '';
+  let declaredSize: Size | undefined;
+  let afterNames: Array<string> | undefined;
+  for (const token of rest.filter((entry) => !entry.startsWith('scope='))) {
+    if (token === '') continue;
+    if (token.startsWith('after=')) {
+      if (afterNames !== undefined) {
+        return { ok: false, error: `'${raw}' declares after= more than once.` };
+      }
+      afterNames = token
+        .slice('after='.length)
+        .split(',')
+        .map((part) => part.trim())
+        .filter((part) => part !== '');
+      continue;
+    }
+    if (!isSize(token)) {
+      return {
+        ok: false,
+        error: `'${token}' is not a known task token — use a size (${SIZES.join(', ')}), after=<name,name>, or scope=<path[,path]>.`,
+      };
+    }
+    if (declaredSize !== undefined) {
+      return { ok: false, error: `'${raw}' declares a size more than once.` };
+    }
+    declaredSize = token;
+  }
   if (!isValidPhase(phase)) return { ok: false, error: `'${phase}' is not a phase id.` };
   if (!isValidName(name)) return { ok: false, error: `'${name}' is not a kebab-case task name.` };
   if (!isTaskType(type)) {
     return { ok: false, error: `'${type}' is not one of: ${TASK_TYPES.join(', ')}.` };
   }
-  const declaredSize = size === '' ? DEFAULT_SIZE : size;
-  if (!isSize(declaredSize)) {
-    return { ok: false, error: `'${declaredSize}' is not one of: ${SIZES.join(', ')}.` };
+  const size = declaredSize === undefined ? DEFAULT_SIZE : declaredSize;
+  if (declaredScope !== '' && !isScopeList(declaredScope) && declaredScope !== 'none') {
+    return {
+      ok: false,
+      error: `'${declaredScope}' must be comma-separated repo-root-relative paths or 'none'.`,
+    };
   }
-  const afterNames = after
-    .replace(/^after=/, '')
-    .split(',')
-    .map((part) => part.trim())
-    .filter((part) => part !== '');
-  if (after !== '' && !after.startsWith('after=')) {
-    return { ok: false, error: `'${after}' must read after=<name,name>.` };
-  }
+  const base = { name, type, size, after: afterNames ?? [] };
   return {
     ok: true,
     value: {
       phase,
-      task: { name, type, size: declaredSize, after: afterNames },
+      task: declaredScope === '' ? base : { ...base, writeScope: declaredScope },
     },
   };
 };
@@ -410,7 +443,10 @@ export const initCommand = Command.make(
     description: Flag.optional(Flag.String('description')),
     workspaceType: Flag.optional(Flag.String('workspace-type')),
     phase: repeated('phase', 'One ordered phase objective. Repeat for A, B, C.'),
-    task: repeated('task', 'One task as PHASE:name:type[:size][:after=name,name].'),
+    task: repeated(
+      'task',
+      'One task as PHASE:name:type[:size][:after=name,name][:scope=path,path].',
+    ),
     review: repeated('review', 'One phase decision as PHASE:required|waived.'),
     reviewReason: repeated('review-reason', 'One phase reason as PHASE:<one line>.'),
     reviewerProfiles: Flag.optional(Flag.String('reviewer-profiles')),

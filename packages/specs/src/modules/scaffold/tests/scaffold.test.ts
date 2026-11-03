@@ -13,7 +13,7 @@ Vitest.describe('renderSpecScaffold', () => {
   Vitest.it('renders a valid single-task tree without a reserved review task', () => {
     const result = renderSpecScaffold({
       ...base,
-      tasks: [{ name: 'implement', type: 'execution' }],
+      tasks: [{ name: 'implement', type: 'execution', writeScope: 'app' }],
     });
     Vitest.expect(result.phase).toBe('A');
     Vitest.expect(result.taskCount).toBe(1);
@@ -30,6 +30,21 @@ Vitest.describe('renderSpecScaffold', () => {
     Vitest.expect(verify.issues.map((found) => found.code)).toStrictEqual([
       'phase.review-task-missing',
     ]);
+  });
+
+  Vitest.it('does not default two execution tasks to a colliding scope', () => {
+    const result = renderSpecScaffold({
+      ...base,
+      tasks: [
+        { name: 'first', type: 'execution' },
+        { name: 'second', type: 'execution' },
+      ],
+    });
+    const codes = verifySpecTree({ name: base.name, files: result.files }, NO_REVIEW).issues.map(
+      (found) => found.code,
+    );
+    Vitest.expect(codes).not.toContain('phase.write-scope-overlap');
+    Vitest.expect(codes.filter((code) => code === 'task.write-scope-missing')).toHaveLength(2);
   });
 
   Vitest.it('appends no review task unless the caller requests one', () => {
@@ -52,6 +67,33 @@ Vitest.describe('renderSpecScaffold', () => {
     Vitest.expect(
       verifySpecTree({ name: base.name, files: withReview.files }, NO_REVIEW).valid,
     ).toBe(true);
+  });
+
+  Vitest.it('scaffolds a five-bullet brief and the full task memory section set', () => {
+    const result = renderSpecScaffold({
+      ...base,
+      tasks: [{ name: 'implement', type: 'execution' }],
+    });
+    const phaseMemory = result.files.find((file) => file.path === 'A/MEMORY.md')?.content ?? '';
+    for (const label of ['Read', 'Write scope', 'Gate', 'Record', 'Review']) {
+      Vitest.expect(phaseMemory).toContain(`- ${label}:`);
+    }
+    const taskMemory =
+      result.files.find((file) => file.path === 'A/A001-implement/MEMORY.md')?.content ?? '';
+    for (const section of [
+      'Context',
+      'Progress',
+      'Findings',
+      'Gates',
+      'Open Questions',
+      'Handoff',
+      'Deviations',
+    ]) {
+      Vitest.expect(taskMemory).toContain(`## ${section}`);
+    }
+    Vitest.expect(verifySpecTree({ name: base.name, files: result.files }, NO_REVIEW).valid).toBe(
+      true,
+    );
   });
 
   Vitest.it('emits GATES.md only for gated tasks', () => {

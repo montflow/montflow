@@ -8,14 +8,26 @@ import {
   SPEC_VERSION_CODES,
   SPEC_VERSION_FIELD,
 } from '../spec/index.js';
-import { parseMarkdown } from '../frontmatter/index.js';
+import { fieldString, parseMarkdown } from '../frontmatter/index.js';
 import { tierOfSpec } from '../creation/index.js';
 import {
+  GATE_CODES,
   GATE_RESULTS_FILE,
   verifyGateProgress,
   verifyGateResults,
   verifyGatesFile,
+  parseGates,
+  stageScope,
 } from '../gates/index.js';
+import {
+  type GateStageEntry,
+  isNoneScope,
+  scopeContains,
+  unfinished,
+  verifyGateStageDuplicates,
+  verifyPhaseParallelism,
+  verifyTaskWriteScopes,
+} from './structure.parallel.module.js';
 import { verify as verifyLifecycle } from '../lifecycle/index.js';
 import { verifyMemoryFile } from '../memory/index.js';
 import { MAILBOX_FILE, type ChannelKind, verifyChannel } from '../channel/index.js';
@@ -55,7 +67,9 @@ import {
   phaseRank,
   sizeOf,
   verifyTaskFile,
+  writeScopeTokens,
 } from '../task/index.js';
+import { REPO_SCOPE } from '../scheduler/index.js';
 import {
   CODES,
   CONFIG_FILE,
@@ -367,8 +381,34 @@ export const reviewedPhasesOf = (
     : passedPhases(review.series);
 };
 
+import {
+  EXECUTION_BRIEF_ELEMENTS,
+  EXECUTION_BRIEF_MISSING_CODE,
+  EXECUTION_BRIEF_SECTION,
+  executionBriefStatus,
+} from './structure.brief.module.js';
+
+export {
+  EXECUTION_BRIEF_ELEMENTS,
+  EXECUTION_BRIEF_MISSING_CODE,
+  EXECUTION_BRIEF_SECTION,
+  executionBriefStatus,
+  type ExecutionBriefStatus,
+} from './structure.brief.module.js';
+
 /** Stable code for a v2 task type that must carry `GATES.md` but does not. */
 export const TASK_GATES_REQUIRED_CODE = 'task.gates-required';
+
+export {
+  PHASE_SERIAL_CHAIN_UNEXPLAINED_CODE,
+  PHASE_WRITE_SCOPE_OVERLAP_CODE,
+  TASK_WRITE_SCOPE_MISSING_CODE,
+  scopeContains,
+  verifyGateStageDuplicates,
+  verifyPhaseParallelism,
+  verifyTaskWriteScopes,
+  type GateStageEntry,
+} from './structure.parallel.module.js';
 
 /** Stable code for a surviving v2 `locked-phases` field. */
 export const LOCKED_PHASES_PRESENT_CODE = 'spec.locked-phases';
@@ -483,6 +523,8 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
   // ── Tasks ── one reader per task directory.
   const tasks = new Map<string, Task>();
   const gates = new Map<string, boolean>();
+  /** Mechanical stages collected across every gate file of this spec. */
+  const gateStages: Array<GateStageEntry> = [];
   /** Channel files await the complete task id set before they are verified. */
   const channels: Array<{
     readonly kind: ChannelKind;
@@ -545,6 +587,54 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
           }),
         ),
       );
+      const v2 = version !== undefined && version.version >= 2;
+      const writeScope = parsedTask === undefined ? undefined : writeScopeTokens(parsedTask);
+      for (const stage of parseGates(gatesFile.content)) {
+        if (stage.kind !== 'mechanical' || stage.command === undefined) continue;
+        const declared = stageScope(stage);
+        const ownerScopes =
+          writeScope !== undefined && !isNoneScope(writeScope) ? writeScope : undefined;
+        const scopes = declared ?? ownerScopes;
+        if (v2 && parsedTask !== undefined && unfinished(parsedTask) && scopes === undefined) {
+          issues.push(
+            finding({
+              code: GATE_CODES.scopeMissing,
+              severity: 'warning',
+              field: `${dir}/GATES.md`,
+              message: `Task '${parsedTask.id}' stage ${stage.stage ?? '?'} has no resolvable scope.`,
+              expected: 'a `scope:` line, or a task `write-scope:`',
+              actual: 'no scope',
+              line: stage.line,
+              fix: 'Declare `scope: <path[,path]>` on the stage, or give the task a `write-scope:` field.',
+            }),
+          );
+        }
+        if (
+          declared !== undefined &&
+          writeScope !== undefined &&
+          !scopeContains(writeScope, declared)
+        ) {
+          issues.push(
+            finding({
+              code: GATE_CODES.sharedCheckInTask,
+              field: `${dir}/GATES.md`,
+              message: `Task '${parsedTask?.id ?? leaf}' stage ${stage.stage ?? '?'} covers '${declared.join(',')}', outside its write-scope '${writeScope.join(',')}'.`,
+              expected: 'a task stage scoped inside the task `write-scope:`',
+              actual: `scope ${declared.join(',')}`,
+              line: stage.line,
+              fix: 'Move a phase-shared or repo-wide check to the phase GATES.md, or narrow the stage scope.',
+            }),
+          );
+        }
+        if (scopes !== undefined) {
+          gateStages.push({
+            path: `${dir}/GATES.md`,
+            stage: stage.stage ?? 0,
+            command: stage.command,
+            scopes,
+          });
+        }
+      }
     }
     const memoryFile = dirFiles.find((file) => file.path === `${dir}/MEMORY.md`);
     if (memoryFile !== undefined) {
@@ -650,7 +740,32 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
           }),
         ),
       );
+      for (const stage of parseGates(gateFile.content)) {
+        if (stage.kind !== 'mechanical' || stage.command === undefined) continue;
+        gateStages.push({
+          path: `${phase}/${PHASE_GATES_FILE}`,
+          stage: stage.stage ?? 0,
+          command: stage.command,
+          scopes: stageScope(stage) ?? [REPO_SCOPE],
+        });
+      }
     }
+    // C1/C2: a v2 phase is a ready set. A serial chain is a stated decision,
+    // and two overlapping write scopes must be separated by a real edge.
+    const phaseTasks = [...tasks.values()].filter((task) => phaseOf(task.id) === phase);
+    const phaseFields =
+      phaseFile === undefined ? undefined : parseMarkdown(phaseFile.content)?.fields;
+    const reason =
+      phaseFields === undefined ? undefined : fieldString(phaseFields, 'serial-reason');
+    issues.push(
+      ...verifyPhaseParallelism({
+        phase,
+        v2: (version?.version ?? 1) >= 2,
+        tasks: phaseTasks,
+        allTasks: tasks,
+        serialReason: reason?.trim() ?? undefined,
+      }),
+    );
     if (memoryFile === undefined) {
       if ((version?.version ?? 1) >= 2) {
         issues.push(
@@ -666,8 +781,30 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
       }
     } else {
       issues.push(...nest(`${phase}/${PHASE_MEMORY_FILE}`, verifyMemoryFile(memoryFile.content)));
+      const phaseStatus =
+        phaseFile === undefined ? undefined : parsePhaseFile(phaseFile.content)?.status;
+      const brief = executionBriefStatus(memoryFile.content);
+      if ((version?.version ?? 1) >= 2 && phaseStatus === 'in-progress' && !brief.valid) {
+        issues.push(
+          finding({
+            code: EXECUTION_BRIEF_MISSING_CODE,
+            severity: 'warning',
+            field: `${phase}/${PHASE_MEMORY_FILE}`,
+            message: brief.present
+              ? `Phase '${phase}' is in progress but its '## ${EXECUTION_BRIEF_SECTION}' section does not name: ${brief.missing.join(', ')}.`
+              : `Phase '${phase}' is in progress but its MEMORY.md has no '## ${EXECUTION_BRIEF_SECTION}' section.`,
+            expected: `## ${EXECUTION_BRIEF_SECTION} naming the five elements: ${EXECUTION_BRIEF_ELEMENTS.join(', ')}`,
+            actual: brief.present ? `missing ${brief.missing.join(', ')}` : 'missing',
+            fix: 'Write the phase execution brief with the five labelled bullets; every new phase gets one from the montflow-create-specs skill, and a complete phase is exempt.',
+          }),
+        );
+      }
     }
   }
+
+  issues.push(...verifyTaskWriteScopes(tasks.values()));
+
+  issues.push(...verifyGateStageDuplicates(gateStages));
 
   const taskIds = new Set(tasks.keys());
   for (const channel of channels) {

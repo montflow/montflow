@@ -87,7 +87,7 @@ const seedSpec = (work: Work, options: { readonly gates: string; readonly status
     yield* write(
       work,
       `${storeDirOf('.')}/${name}/A/A001-implement/TASK.md`,
-      taskMarkdown({ id: 'A001', name: 'implement', status: options.status }),
+      taskMarkdown({ id: 'A001', name: 'implement', status: options.status, writeScope: '.' }),
     );
     yield* write(work, `${storeDirOf('.')}/${name}/A/A001-implement/MEMORY.md`, memoryMarkdown());
     yield* write(work, `${storeDirOf('.')}/${name}/A/A001-implement/GATES.md`, options.gates);

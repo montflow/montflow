@@ -15,3 +15,6 @@ export const snapshot = (
 
 /** MEMORY.md contents with the template's sections. */
 export const memory = memoryMarkdown();
+
+/** MEMORY.md contents that also carry a valid phase execution brief. */
+export const briefedMemory = `${memory}\n## Execution Brief\n\n- Read: this brief, TASK.md, GATES.md, and the scoped source.\n- Write scope: this task's directory and the files TASK.md names.\n- Gate: point at GATES.md; the orchestrator runs the task gate once per task, at completion.\n- Record: keep MEMORY.md at or under 80 lines; logs in /tmp.\n- Review: one fixer attempt and one re-review after review decide.\n`;

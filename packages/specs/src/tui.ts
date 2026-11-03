@@ -17,7 +17,7 @@ const SPECS_DIR = ['.agents', '@montflow', 'specs'] as const;
 const Platform = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 
 /** The live store, with its platform dependencies hidden. */
-const Live = Layer.provide(SpecStore.Default, Platform);
+const Live = Layer.merge(Layer.provide(SpecStore.Default, Platform), NodeFileSystem.layer);
 
 /** One pickable spec and the derived state the picker previews. */
 export interface SpecEntry {

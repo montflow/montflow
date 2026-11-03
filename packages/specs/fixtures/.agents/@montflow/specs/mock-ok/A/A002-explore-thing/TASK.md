@@ -4,6 +4,7 @@ name: explore-thing
 type: exploratory
 originator: user
 size: small
+write-scope: none
 depends-on: A001
 related-tasks:
 status: pending

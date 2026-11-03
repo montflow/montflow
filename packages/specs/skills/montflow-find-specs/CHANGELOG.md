@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.0] - 2026-11-03
+
+### Added
+
+- The execution channels: `BOARD.md` broadcast, `MAILBOX.md` targeted, orchestrator-only writes, and the worker read points at start and before a receipt
+- The verification scheduler: the `gate-v1:` run key over command, scopes, and file fingerprint; single flight, pass reuse, rerun on failure, and the heavy-lane and in-flight bounds in `gate.json`
+- The parallel phase rule in the reference: the widest ready set, real `depends-on` edges only, and a declared `write-scope:`
+
 ## [1.5.1] - 2026-11-03
 
 ### Changed

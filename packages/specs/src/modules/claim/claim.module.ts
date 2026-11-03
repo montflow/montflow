@@ -64,21 +64,24 @@ export class ClaimLockError extends Data.TaggedError('@montflow/ClaimLockError')
 }> {}
 
 /**
- * Run one registry read-modify-write under an exclusive-create lock. The lock is
- * created with `wx` (fails when present), retried for {@link
- * CLAIMS_LOCK_TIMEOUT_MS}, and always removed afterwards, so a failed claim never
- * leaves a stale lock behind.
+ * Run one read-modify-write under an exclusive-create lock. The lock is created
+ * with `wx` (fails when present), retried for {@link CLAIMS_LOCK_TIMEOUT_MS}, and
+ * always removed afterwards, so a failed writer never leaves a stale lock
+ * behind. The claim registry and the gate run-state directory share this one
+ * primitive with different lock files.
  * @param workspace - workspace root that owns `.agents/`
- * @param body - the registry operation to run while the lock is held
+ * @param file - lock file name under `.agents/@montflow/.runtime`
+ * @param body - the operation to run while the lock is held
  * @returns the body's result, or {@link ClaimLockError} on timeout
  */
-export const withClaimsLock = <A, E, R>(
+export const withRuntimeLock = <A, E, R>(
   workspace: string,
+  file: string,
   body: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | ClaimLockError, R | FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const lock = claimsLockPath(workspace);
+    const lock = `${workspace.replace(/\/+$/, '')}/${RUNTIME_DIR}/${file}`;
     const lockDir = lock.slice(0, lock.lastIndexOf('/'));
     yield* fs
       .makeDirectory(lockDir, { recursive: true })
@@ -101,6 +104,18 @@ export const withClaimsLock = <A, E, R>(
       Effect.ensuring(fs.remove(lock).pipe(Effect.orElseSucceed(() => undefined))),
     );
   });
+
+/**
+ * Run one registry read-modify-write under the claims lock.
+ * @param workspace - workspace root that owns `.agents/`
+ * @param body - the registry operation to run while the lock is held
+ * @returns the body's result, or {@link ClaimLockError} on timeout
+ */
+export const withClaimsLock = <A, E, R>(
+  workspace: string,
+  body: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | ClaimLockError, R | FileSystem.FileSystem> =>
+  withRuntimeLock(workspace, CLAIMS_LOCK_FILE, body);
 
 /**
  * Parse a claim registry. The canonical document is

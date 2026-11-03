@@ -1,7 +1,7 @@
 import { Console, Effect } from 'effect';
 import { Command, Flag } from 'effect/cli';
 
-import { gateTemplateFor } from '../../modules/init/index.js';
+import { defaultWriteScope, gateTemplateFor } from '../../modules/init/index.js';
 import {
   PHASE_FILE,
   parsePhaseFile,
@@ -21,6 +21,7 @@ import {
   phaseRank,
   sortKey,
 } from '../../modules/task/index.js';
+import { isScopeList } from '../../modules/scheduler/index.js';
 import { waiverAllowed } from '../../modules/tier/index.js';
 import type { SpecSnapshot } from '../../modules/structure/index.js';
 import { SpecStore } from '../../services/index.js';
@@ -52,6 +53,8 @@ export interface NewTaskOptions {
   readonly type: string;
   readonly size?: string | undefined;
   readonly gates?: boolean | undefined;
+  /** Declared `write-scope:`; defaults by task type when omitted. */
+  readonly writeScope?: string | undefined;
   readonly dependsOn?: ReadonlyArray<string> | undefined;
   readonly relatedTasks?: ReadonlyArray<string> | undefined;
   readonly originator?: string | undefined;
@@ -74,8 +77,10 @@ const renderTaskFile = (
   id: string,
   options: NewTaskOptions,
   dependsOn: ReadonlyArray<string>,
-): string =>
-  [
+): string => {
+  const writeScope =
+    options.writeScope ?? defaultWriteScope(isTaskType(options.type) ? options.type : 'execution');
+  return [
     '---',
     `id: ${id}`,
     `name: ${options.task}`,
@@ -83,6 +88,7 @@ const renderTaskFile = (
     `originator: ${options.originator ?? 'user'}`,
     `size: ${options.size ?? DEFAULT_SIZE}`,
     `depends-on: ${dependsOn.join(', ')}`,
+    writeScope === '' ? 'write-scope:' : `write-scope: ${writeScope}`,
     `related-tasks: ${(options.relatedTasks ?? []).join(', ')}`,
     ...(options.type === 'review'
       ? [`reviewer-profiles: ${(options.reviewerProfiles ?? []).join(', ')}`]
@@ -110,6 +116,7 @@ const renderTaskFile = (
     '- [ ] Done.',
     '',
   ].join('\n');
+};
 
 /** Task types whose tier contract requires a `GATES.md`. */
 const GATED_TASK_TYPES = new Set(['execution', 'defect', 'interruptor']);
@@ -303,6 +310,23 @@ export const newTask = (
         }),
       );
     }
+    if (
+      options.writeScope !== undefined &&
+      options.writeScope !== 'none' &&
+      !isScopeList(options.writeScope)
+    ) {
+      return yield* Effect.fail(
+        authoringFailure(operation, {
+          code: 'task.write-scope-invalid',
+          path: '--write-scope',
+          field: '--write-scope',
+          problem: `'${options.writeScope}' is not a write scope.`,
+          rerun: `mf-specs new-task --name ${options.name} --phase ${options.phase} --task <name> --type <type>`,
+          expected: 'comma-separated repo-root-relative paths, `.`, or `none`',
+          actual: options.writeScope,
+        }),
+      );
+    }
     const { snapshot, specText, tier } = yield* readSpec(options.root, options.name, operation);
     if (!phaseIds(snapshot).includes(options.phase)) {
       return yield* Effect.fail(
@@ -332,11 +356,14 @@ export const newTask = (
       );
     }
     const existing = tasksIn(snapshot, options.phase);
-    const lock = yield* lockPhase({
-      root: options.root,
-      name: options.name,
-      phase: options.phase,
-    });
+    const lock = yield* lockPhase(
+      {
+        root: options.root,
+        name: options.name,
+        phase: options.phase,
+      },
+      { requireBrief: false },
+    );
     if (lock.locked) {
       return yield* Effect.fail(
         authoringFailure(operation, {
@@ -596,6 +623,7 @@ export const newTaskCommand = Command.make(
     type: Flag.String('type'),
     size: Flag.optional(Flag.String('size')),
     gates: Flag.Boolean('gates').pipe(Flag.withDefault(false)),
+    writeScope: Flag.optional(Flag.String('write-scope')),
     dependsOn: Flag.optional(Flag.String('depends-on')),
     relatedTasks: Flag.optional(Flag.String('related-tasks')),
     originator: Flag.optional(Flag.String('originator')),
@@ -615,6 +643,7 @@ export const newTaskCommand = Command.make(
           type: config.type,
           size: opt(config.size),
           gates: config.gates,
+          writeScope: opt(config.writeScope),
           dependsOn: csv(opt(config.dependsOn)),
           relatedTasks: csv(opt(config.relatedTasks)),
           originator: opt(config.originator),

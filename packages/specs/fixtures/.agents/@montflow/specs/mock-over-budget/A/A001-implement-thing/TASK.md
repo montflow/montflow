@@ -4,6 +4,7 @@ name: implement-thing
 type: execution
 originator: user
 size: tiny
+write-scope: .
 depends-on:
 related-tasks:
 status: complete

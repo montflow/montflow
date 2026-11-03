@@ -14,6 +14,7 @@ import { DEFAULT_SIZE, LAYERS, SIZES } from '../../modules/sizing/index.js';
 
 import type { SeriesSnapshot } from '../../modules/review-link/index.js';
 import { SLUG_PATTERN } from '../../modules/task/index.js';
+import { isScopeList } from '../../modules/scheduler/index.js';
 import { type Issue, errorCount, warningCount } from '../../modules/verify/index.js';
 
 import { SpecStore } from '../../services/index.js';
@@ -29,6 +30,7 @@ import {
   guardSpecName,
   guardFailure,
   runDiagnosed,
+  scaffoldTaskSpecs,
   verboseFlag,
 } from './cli.shared.module.js';
 import {
@@ -245,7 +247,7 @@ export interface ScaffoldOptions {
   readonly description?: string | undefined;
   /** `in-place` (default) or `worktree`. */
   readonly workspaceType?: string | undefined;
-  /** Raw tasks, each `name[:type[:gates[:size]]]`; defaults to one `implement` task. */
+  /** Raw tasks, each `name[:type[:gates[:size]]][:scope=path,path]`; defaults to one `implement` task. */
   readonly taskSpecs?: ReadonlyArray<string> | undefined;
   /** Ordered reviewer profile slugs emitted on each requested review task. */
   readonly reviewerProfiles?: ReadonlyArray<string> | undefined;
@@ -267,27 +269,32 @@ export type ScaffoldTaskParse =
   | { readonly ok: true; readonly task: ScaffoldTask }
   | { readonly ok: false; readonly error: string };
 
-/** Most tokens a task spec accepts: `name[:type[:gates[:size]]]`. */
-export const SCAFFOLD_TASK_TOKENS = 4;
+/** Most tokens a task spec accepts: `name[:type[:gates[:size]]][:scope=path,path]`. */
+export const SCAFFOLD_TASK_TOKENS = 5;
 
 /**
- * Parse one `name[:type[:gates[:size]]]` task spec. The type defaults to
- * `execution`, the gates token is `gates` or `true` to request a `GATES.md`,
- * and the size defaults to `medium` — including when the size token is present
- * but blank, so a trailing colon means "no size here". A fifth token is
- * rejected rather than dropped.
+ * Parse one `name[:type[:gates[:size]]][:scope=path,path]` task spec. The type
+ * defaults to `execution`, the gates token is `gates` or `true` to request a
+ * `GATES.md`, the size defaults to `medium`, and a `scope=` token declares the
+ * task's `write-scope:` wherever it appears after the name. Any other unknown
+ * token is rejected rather than dropped.
  * @param raw - one raw task spec
  * @returns the task, or a user-facing error
  */
 export const parseScaffoldTask = (raw: string): ScaffoldTaskParse => {
   const tokens = raw.split(':');
-  if (tokens.length > SCAFFOLD_TASK_TOKENS) {
+  const scopeTokens = tokens.filter((token) => token.startsWith('scope='));
+  if (scopeTokens.length > 1) {
+    return { ok: false, error: `'${raw}' declares scope= more than once.` };
+  }
+  const positional = tokens.filter((token) => !token.startsWith('scope='));
+  if (positional.length > SCAFFOLD_TASK_TOKENS - 1) {
     return {
       ok: false,
-      error: `'${raw}' has ${tokens.length} fields — use name[:type[:gates[:size]]] with at most ${SCAFFOLD_TASK_TOKENS}.`,
+      error: `'${raw}' has ${tokens.length} fields — use name[:type[:gates[:size]]][:scope=path,path] with at most ${SCAFFOLD_TASK_TOKENS}.`,
     };
   }
-  const [name = '', type = 'execution', gates = '', declaredSize] = tokens;
+  const [name = '', type = 'execution', gates = '', declaredSize] = positional;
   const size = declaredSize === undefined || declaredSize === '' ? DEFAULT_SIZE : declaredSize;
   if (!isValidName(name)) {
     return {
@@ -307,9 +314,23 @@ export const parseScaffoldTask = (raw: string): ScaffoldTaskParse => {
       error: `Unknown task size '${size}' — use one of: ${SIZES.join(', ')}.`,
     };
   }
+  if (gates !== '' && gates !== 'gates' && gates !== 'true') {
+    return {
+      ok: false,
+      error: `'${gates}' is not a gates token — use 'gates', 'true', or leave the field empty.`,
+    };
+  }
+  const declaredScope = scopeTokens[0]?.slice('scope='.length) ?? '';
+  if (declaredScope !== '' && declaredScope !== 'none' && !isScopeList(declaredScope)) {
+    return {
+      ok: false,
+      error: `'${declaredScope}' must be comma-separated repo-root-relative paths or 'none'.`,
+    };
+  }
+  const task = { name, type, gates: gates === 'gates' || gates === 'true', size };
   return {
     ok: true,
-    task: { name, type, gates: gates === 'gates' || gates === 'true', size },
+    task: declaredScope === '' ? task : { ...task, writeScope: declaredScope },
   };
 };
 
@@ -470,7 +491,7 @@ export const createCommand = Command.make(
     ),
     tasks: Flag.String('tasks').pipe(
       Flag.withDescription(
-        'Comma-separated tasks, each name[:type[:gates[:size]]]. Default: implement.',
+        'Tasks separated by `;`, each name[:type[:gates[:size]]][:scope=path,path]. A comma separates tasks only when the entry has no scope= field; inside scope= it stays in that scope. Use `;` before a following bare-name task (e.g. `first:execution:scope=app;build`). Default: implement.',
       ),
       Flag.optional,
     ),
@@ -487,7 +508,25 @@ export const createCommand = Command.make(
         // first diagnostic instead of a task error about a spec that cannot
         // exist at that path.
         yield* guardFailure('SpecsCreate', guardSpecName(config.name, GUARD_RERUN.create));
-        const taskSpecs = csv(opt(config.tasks));
+        const split = scaffoldTaskSpecs(opt(config.tasks));
+        if (!split.ok) {
+          return yield* Effect.fail(
+            new SurfaceError({
+              operation: 'SpecsCreate',
+              diagnostics: [
+                diagnostic({
+                  code: SURFACE_CODES.invalidArgument,
+                  path: config.name,
+                  field: '--tasks',
+                  problem: split.problem,
+                  fix: 'Separate tasks with a semicolon (`first:execution:scope=app;build`), not a comma after a scope= field.',
+                  rerun: `mf-specs create --name ${config.name}`,
+                }),
+              ],
+            }),
+          );
+        }
+        const taskSpecs = split.specs;
         for (const raw of taskSpecs) {
           const parsed = parseScaffoldTask(raw);
           if (!parsed.ok) {
@@ -500,7 +539,7 @@ export const createCommand = Command.make(
                     path: config.name,
                     field: '--tasks',
                     problem: parsed.error,
-                    fix: 'Pass each task as name[:type[:gates[:size]]].',
+                    fix: 'Pass each task as name[:type[:gates[:size]]][:scope=path,path].',
                     rerun: `mf-specs create --name ${config.name}`,
                   }),
                 ],
