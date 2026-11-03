@@ -6,7 +6,7 @@ originator: user
 size: medium
 depends-on: E001, E002, E003
 related-tasks:
-status: in-progress
+status: complete
 ---
 
 # Task E099: review the parallel execution phase
@@ -44,6 +44,6 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] Review written to `.agents/@montflow/reviews/montflow-spec-standard/E.md` and read by the human
-- [ ] Every finding about a duplicate run, a stale green, or a dependency smuggled into a channel has a disposition
-- [ ] `bun run mf:check` green with the scheduler tests in place
+- [x] Review written to the `montflow-spec-standard` series, rounds 005–012, and read by the human
+- [x] Every finding about a duplicate run, a stale green, or a dependency smuggled into a channel has a disposition
+- [x] `bun run mf:check` green with the scheduler tests in place

@@ -200,7 +200,7 @@ resolution as `execute`.
 | E001 | decide-parallel-execution-contract | planning | complete | No |
 | E002 | implement-verification-scheduler | execution | complete | Yes |
 | E003 | teach-parallel-phase-authoring | execution | complete | Yes |
-| E099 | review-phase | review | in-progress | No |
+| E099 | review-phase | review | complete | No |
 | F001 | decide-dependency-contract          | planning    | pending | No    |
 | F002 | enforce-dependency-contract         | execution   | pending | Yes   |
 | F099 | review-phase                        | review      | pending | No    |

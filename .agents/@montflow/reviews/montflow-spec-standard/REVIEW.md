@@ -2,8 +2,8 @@
 
 ## Metadata
 - Target: montflow-spec-standard
-- Status: open
-- Rounds: 10
+- Status: closed
+- Rounds: 12
 - Created: 2026-11-03
 
 ## Rounds
@@ -19,7 +19,9 @@
 | 007 | open | 0 | 4 | 7 | 0 | 0 |
 | 008 | open | 0 | 3 | 4 | 0 | 0 |
 | 009 | open | 0 | 3 | 3 | 0 | 0 |
-| 010 | open | 2 | 0 | 2 | 0 | 0 |
+| 010 | open | 0 | 2 | 2 | 0 | 0 |
+| 011 | open | 0 | 1 | 2 | 0 | 0 |
+| 012 | closed | 0 | 0 | 1 | 0 | 0 |
 
 ## Findings
 
@@ -120,7 +122,11 @@
 | 009 | F23 | Major | In Review | A resumed owner still appends an authoritative failure record after the newer attempt's pass, so `check` reports the stage unproven |
 | 009 | F24 | Major | In Review | The pre-pass fingerprints every selected stage before any stage runs, so an earlier stage's writes make a later stage's recorded key stale |
 | 009 | F25 | Minor | In Review | `create --tasks` absorbs a later bare-name task into the preceding `scope=` list |
-| 010 | F23 | Major | Open | A resumed owner still appends an authoritative failure record after the newer attempt's pass, so `check` reports the stage unproven |
+| 010 | F23 | Major | In Review | A resumed owner still appends an authoritative failure record after the newer attempt's pass, so `check` reports the stage unproven |
 | 010 | F24 | Major | Resolved | The pre-pass fingerprints every selected stage before any stage runs, so an earlier stage's writes make a later stage's recorded key stale |
 | 010 | F25 | Minor | Resolved | `create --tasks` absorbs a later bare-name task into the preceding `scope=` list |
-| 010 | F26 | Minor | Open | `create --tasks` refuses a three-path scope, and its diagnostic names the wrong fragment |
+| 010 | F26 | Minor | In Review | `create --tasks` refuses a three-path scope, and its diagnostic names the wrong fragment |
+| 011 | F23 | Major | Resolved | A resumed owner still appends an authoritative failure record after the newer attempt's pass, so `check` reports the stage unproven |
+| 011 | F26 | Minor | Resolved | `create --tasks` refuses a three-path scope, and its diagnostic names the wrong fragment |
+| 011 | F27 | Major | In Review | A waiter's reused record is appended outside the run lock, so it can land after a newer attempt's record and decide `check` against the run state |
+| 012 | F27 | Major | Resolved | A waiter's reused record is appended outside the run lock, so it can land after a newer attempt's record and decide `check` against the run state |
