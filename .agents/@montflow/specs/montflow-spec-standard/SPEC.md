@@ -70,6 +70,7 @@ contradict its own record.
 - A phase is a directory with its own `PHASE.md` (objective, status, review decision, gate kind), gate file, memory, and broadcast board; tasks live under it and numbering restarts per phase.
 - Phase locks are derived from completed tasks, a recorded gate result, and a review round attributed to the phase; the hand-written lock list and the bookkeeping-contradiction state it existed to catch are gone.
 - Review is a per-phase decision, `required` or `waived` with a reason, set by the appraiser and recorded in the phase; the reserved `<PHASE>099` task id and its structure check are deleted in B001, and a waiver's record is decided in B004.
+- Every `mf-specs` command and the TUI specs picker read the phase tree and the derived state; a phase or task directory is never offered as a spec, and no surface reads `locked-phases`.
 - A complete task may declare `size: none` instead of a real size. `none` is a record opt-out, never a dispatch target; an unfinished task that declares it is an error.
 - An unchecked completion item or an all-unchecked gate on a `complete` task is an error; an unfinished task may carry unchecked completion and gate items.
 - The retrofit proves every completed record before the checks harden, so the tightened errors never need a mass exemption.
@@ -107,4 +108,5 @@ contradict its own record.
 | C005 | implement-mechanical-state-verbs    | execution   | pending | Yes   |
 | C006 | ship-spec-artifact-payloads         | execution   | pending | Yes   |
 | C007 | align-docs-and-artifact-ledger      | execution   | pending | No    |
+| C008 | align-cli-and-tui-surfaces          | execution   | pending | Yes   |
 | C099 | review-phase                        | review      | pending | No    |
