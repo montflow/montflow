@@ -2,7 +2,7 @@
 id: C002
 name: implement-gate-kinds-and-execution
 type: execution
-originator: planner:B002
+originator: planner:B004
 size: medium
 depends-on: C001
 related-tasks:
@@ -26,6 +26,7 @@ which is the gap this closes.
 - A task or phase cannot reach complete while a required mechanical gate has no recorded passing result, and `check` names the unproven gate instead of staying silent.
 - Subjective stages are consumed by a reviewer role and record who judged them; the CLI never marks them passing on its own.
 - Existing gate-shape checks still pass unchanged on old files, so no gate file must be rewritten to stay valid.
+- The shipped `spec-execute` prompt stops saying `mf-specs` ships no gate runner and instead names `gate run` as the mechanical proof.
 
 ## Completion
 

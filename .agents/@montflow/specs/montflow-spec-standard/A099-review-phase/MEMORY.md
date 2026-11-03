@@ -57,7 +57,7 @@ Phase A maps to round `001` (per `review-link` / `skills/executing-spec.ts`).
 
 ## Handoff
 
-- Phase B (B001–B003 plan, B099 review) may proceed. B099 should write round
+- Phase B (B001–B005 plan, B099 review) may proceed. B099 should write round
   `002` of this same series (`montflow-spec-standard`), not a new series.
 
 ## Deviations

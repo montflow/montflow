@@ -2,7 +2,7 @@
 id: C003
 name: implement-board-and-mailboxes
 type: execution
-originator: planner:B002
+originator: planner:B004
 size: medium
 depends-on: C001
 related-tasks: C005
@@ -21,7 +21,7 @@ convention.
 
 ## Requirements
 
-- `BOARD.md` per phase and `MAILBOX.md` per task, both append-only; the parse rules from B002 are enforced by the verifier, which rejects a malformed entry and an unknown addressee by name.
+- `BOARD.md` per phase and `MAILBOX.md` per task, both append-only; the parse rules from B004 are enforced by the verifier, which rejects a malformed entry and an unknown addressee by name.
 - `mail` writes an addressed entry and delivers to a live target by steering the bound session; when the target is not live the entry waits and is read at that task start.
 - `claim` records the session binding `mail` needs to find a live target.
 - The rule that a mid-flight sibling need belongs in `depends-on` rather than in the channel is stated in the execution skill, and enforced wherever it can be mechanically enforced.

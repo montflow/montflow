@@ -8,5 +8,5 @@
 ## Stage 1: Behaviour
 
 - [ ] report-only mode writes nothing anywhere
-- [ ] verify:montflow:extensions passes with the run-mode scripts unchanged
+- [ ] `mf:check` passes with the run-mode scripts unchanged
 - [ ] a compiled binary doctor reports healthy, not missing payload

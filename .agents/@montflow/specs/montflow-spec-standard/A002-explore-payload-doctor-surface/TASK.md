@@ -15,7 +15,7 @@ status: complete
 ## Description
 
 Map exactly what each extension package ships and what each `doctor` does with it, so
-the payload-manifest decision in B003 rests on real state rather than documented
+the payload-manifest decision in B005 rests on real state rather than documented
 intent. Read-only.
 
 ## Requirements

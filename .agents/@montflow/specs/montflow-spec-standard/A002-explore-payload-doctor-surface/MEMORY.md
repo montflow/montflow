@@ -4,7 +4,7 @@
 
 Read-only inventory of the payload + `doctor` surface across the five extension
 packages named by A002 (`pi-skills`, `pi-prompts`, `pi-specs`, `pi-sessions`,
-`pi-profiles`), so B003's payload-manifest decision rests on measured state.
+`pi-profiles`), so B005's payload-manifest decision rests on measured state.
 Every package ships its payload as a `skills/` directory (no `payload/` dir
 exists anywhere). `pi-profiles` ships nothing and has no `doctor`. `pi-reviews`
 was not in A002's list but surfaced as the third copy of the embedded generator.
@@ -123,13 +123,13 @@ total, which is why a shared parameterised generator is the obvious target.
 - Does the intended fix make `verify:montflow:sessions` report-only by passing
   `--check` (and accept that it then *fails* on a missing skill, per
   `commands.apps.module.ts:387-391`), or is the payload installed elsewhere so
-  verify never needs to write? B003's call.
+  verify never needs to write? B005's call.
 - `pi-specs` has no `--check` flag on `doctor` at all (`cli.apps.module.ts:908`);
   a report-only CI contract needs one added, not just a flag pass-through.
 
 ## Handoff
 
-- B003 payload-manifest inputs: one shared embedded-payload generator (three
+- B005 payload-manifest inputs: one shared embedded-payload generator (three
   copies already, two more would be needed); an embedded copy for `pi-specs` and
   `pi-sessions`; `--check` added to `pi-specs doctor`; `--check` passed by
   `verify:montflow:sessions`.
