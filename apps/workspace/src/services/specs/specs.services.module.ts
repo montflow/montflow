@@ -277,6 +277,7 @@ const phaseOf = (id: string): string => id.replace(/\d+$/, '');
 const reviewInput = (series: ReadonlyArray<ReviewSeries>): Structure.ReviewInput => ({
   series,
   requireRounds: true,
+  available: true,
 });
 
 /** Parsed pieces shared by the summary and the detail builders. */
@@ -299,7 +300,7 @@ const inspect = (
       ? undefined
       : libs.Lifecycle.analyze({
           status: spec.status,
-          reviewedPhases: libs.ReviewLink.passedPhases(review.series),
+          reviewedPhases: libs.Structure.reviewedPhasesOf({ name: id, files }, review),
           waivedPhases: evidence.waived,
           provenPhases: evidence.proven,
           tasks: tasks.map((task) => ({ id: task.id, status: task.status })),
