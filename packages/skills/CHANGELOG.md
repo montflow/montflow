@@ -20,3 +20,9 @@ Releases: this package is versioned and tagged by changesets but never published
 - `--check` reports the same outcomes without writing and exits `1` on drift; `--verbose` also reports per-file outcomes.
 - One shared sync engine behind both the `mf-skills sync` binary and the `/mf-skills sync` slash command — no domain rule lives in a front end, and refusals name the typeable form for that surface.
 - Sync reports a `Synced`/`Checked <source> → <target>` header, groups skills as `Created`, `Updated`, `Unchanged`, and `Skipped`, omits empty groups, and ends with a compact count line plus a `✓ current.` or `✗ drift` verdict for `--check`. A `SKILL.md` with `metadata.internal: true` is skipped, reported with its reason, and never copied, while unrelated existing skills are left untouched.
+
+### Changed
+
+- **Breaking:** `mf-skills doctor` is manifest-driven (`payload.json`) and uses the shared `@montflow/payload` engine; a locally edited packaged skill is `stale` and repair overwrites it, while an unlisted skill is user data
+- Doctor statuses are one vocabulary across packages: `ok`/`missing`/`stale`/`mismatched`/`blocked` in check mode and `present`/`installed`/`repaired`/`blocked` in repair mode
+- `syncing-skills` is marked internal and is skipped by both doctor and sync, never installed into a workspace
