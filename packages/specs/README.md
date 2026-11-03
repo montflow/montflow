@@ -249,7 +249,7 @@ ship is left in place, and extra files alone do not make a skill stale.
 per file with its source and target paths, so `mf-specs:check` fails on drift
 with `Run: mf-specs doctor` as the fix. A condition repair refuses is `blocked`
 with its own coded fix, so the hint is never printed for work doctor cannot do.
-Any other prompt in that directory — `commit.json`, `effect-review.json`, or a
+Any other prompt in that directory — `commit.json`, `model-fallback.json`, or a
 user prompt — is never read, rewritten, or deleted by doctor.
 
 Both payloads are embedded in the `mf-specs` binary at build time

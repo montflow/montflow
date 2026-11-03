@@ -52,7 +52,7 @@ author and discover specs, plus the shipped `spec-create`, `spec-execute`, and
   `description` and `template`) before install. An invalid package prompt is
   `blocked` in both modes — invalid bytes are never installed.
 - Doctor owns exactly `SPEC_PROMPT_NAMES`. It never reads, rewrites, or deletes
-  `commit.json`, `effect-review.json`, or any other prompt in the same
+  `commit.json`, `model-fallback.json`, or any other prompt in the same
   directory.
 - Doctor owns exactly `SPEC_SKILL_NAMES`. Every other skill a shipped prompt
   declares is external: doctor never installs or rewrites it, and the prompt
