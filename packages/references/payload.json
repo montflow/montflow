@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "package": "@montflow/references",
+  "payloads": [
+    {
+      "kind": "skill",
+      "name": "montflow-add-reference",
+      "source": "skills/montflow-add-reference",
+      "target": ".agents/skills/montflow-add-reference"
+    },
+    {
+      "kind": "skill",
+      "name": "montflow-find-reference",
+      "source": "skills/montflow-find-reference",
+      "target": ".agents/skills/montflow-find-reference"
+    }
+  ]
+}

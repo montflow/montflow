@@ -325,7 +325,7 @@ Vitest.describe('Cli.run execute', () => {
         recordingExecutor(seen),
       ).pipe(Effect.provide(stubLayer({ 'commit-message': promptRaw })), Effect.flip);
       Vitest.expect(seen).toStrictEqual([]);
-      Vitest.expect(error).toContain('differs from the packaged version');
+      Vitest.expect(error).toContain('differs from the package');
       yield* cleanup(root);
     }),
   );

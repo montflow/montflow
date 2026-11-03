@@ -14,8 +14,9 @@ import {
   type SpecSnapshot,
   verifySpecTree,
 } from '../../modules/structure/index.js';
-import type { SeriesSnapshot } from '../../modules/review-link/index.js';
+import { type SeriesSnapshot, passedPhases } from '../../modules/review-link/index.js';
 import { Task, parseTaskDirName, phaseOf } from '../../modules/task/index.js';
+import { phaseEvidence } from '../../modules/phase/index.js';
 import { type Result, errorCount, isWarning, warningCount } from '../../modules/verify/index.js';
 import { renderDiagnostic } from '../../modules/diagnostic/index.js';
 
@@ -69,15 +70,13 @@ export interface StatusReport {
   readonly gatedTaskIds?: ReadonlySet<string>;
 }
 
-/** Task ids carrying a `GATES.md`, read from the snapshot. */
+/** Task ids carrying a `GATES.md`, read from the nested task directory. */
 export const gatedTaskIds = (snapshot: SpecSnapshot): ReadonlySet<string> => {
   const ids = new Set<string>();
   for (const file of snapshot.files) {
-    const slash = file.path.indexOf('/');
-    if (slash === -1) continue;
-    const dir = file.path.slice(0, slash);
-    if (file.path !== `${dir}/GATES.md`) continue;
-    const parsed = parseTaskDirName(dir);
+    const segments = file.path.split('/');
+    if (segments.length !== 3 || segments[2] !== 'GATES.md') continue;
+    const parsed = parseTaskDirName(segments[1] ?? '');
     if (parsed !== undefined) ids.add(parsed.id);
   }
   return ids;
@@ -104,6 +103,7 @@ export const summarize = (
   const spec = specFile === undefined ? undefined : parseSpecFile(specFile.content);
   const ordered = tasksOf(snapshot);
   const reviewInput: ReviewInput = { series: review, requireRounds: false };
+  const evidence = phaseEvidence(snapshot);
   return {
     name,
     spec,
@@ -113,7 +113,9 @@ export const summarize = (
         ? undefined
         : analyzeLifecycle({
             status: spec.status,
-            lockedPhases: spec.lockedPhases,
+            reviewedPhases: passedPhases(review),
+            waivedPhases: evidence.waived,
+            provenPhases: evidence.proven,
             tasks: ordered.map((task) => ({ id: task.id, status: task.status })),
           }),
     verify: verifySpecTree(snapshot, reviewInput),
@@ -189,8 +191,10 @@ export const renderStatus = (report: StatusReport): string => {
   } else {
     lines.push(`${spec.name} \u00b7 ${spec.status} \u00b7 ${spec.workspaceType}`);
     if (report.state !== undefined) lines.push(`state ${report.state.state}`);
-    const locked =
-      spec.lockedPhases.length > 0 ? ` \u00b7 locked ${spec.lockedPhases.join(',')}` : '';
+    const lockedPhases = (report.state?.phases ?? [])
+      .filter((phase) => phase.locked)
+      .map((phase) => phase.phase);
+    const locked = lockedPhases.length > 0 ? ` \u00b7 locked ${lockedPhases.join(',')}` : '';
     lines.push(`author ${spec.author} \u00b7 created ${spec.created}${locked}`);
   }
   lines.push(
@@ -273,6 +277,7 @@ export interface StateReport {
   readonly state: State;
   /** Active phase: the first unlocked phase with unfinished work, if any. */
   readonly phase: string | undefined;
+  /** Derived locks: complete phases with a passed review round. */
   readonly lockedPhases: ReadonlyArray<string>;
   /** True when an error `check` reports blocks dispatch of this spec. */
   readonly blocked: boolean;
@@ -299,7 +304,9 @@ export const stateOf = (report: StatusReport): StateReport => ({
   declared: report.spec?.status ?? 'unreadable',
   state: report.state?.state ?? 'inconsistent',
   phase: activePhaseOf(report),
-  lockedPhases: report.spec?.lockedPhases ?? [],
+  lockedPhases: (report.state?.phases ?? [])
+    .filter((phase) => phase.locked)
+    .map((phase) => phase.phase),
   blocked: dispatchBlocked(report.sizing, report.verify, report.name),
   blockers: [
     ...new Set(

@@ -29,6 +29,8 @@ export interface SeriesRoundSnapshot {
   readonly round: string;
   /** The phase the round reviews, from its `- Phase:` metadata, when set. */
   readonly phase?: string | undefined;
+  /** True when the round's `- Status: closed` metadata marks it as passed. */
+  readonly passed?: boolean | undefined;
 }
 
 /** The review series a spec is linked to, as the review store sees it. */
@@ -89,6 +91,48 @@ const ROUND_SECTION_HEADING = /^##\s+\S/;
 
 /** A round's `- Phase: <phase>` metadata line. */
 const PHASE_LINE = /^-\s+Phase:\s*(\S+)\s*$/;
+
+/** A round's `- Status: open|closed` metadata line. */
+const STATUS_LINE = /^-\s+Status:\s*(\S+)\s*$/;
+
+/**
+ * True when a round's `## Metadata` marks it closed — the one mechanical
+ * evidence that the phase review passed. A round with no status, or any value
+ * other than `closed`, does not lock its phase.
+ * @param markdown - raw round `REVIEW.md` contents
+ * @returns true when the round is closed
+ */
+export const roundPassed = (markdown: string): boolean => {
+  let inside = false;
+  for (const line of markdown.split(/\r?\n/)) {
+    if (METADATA_HEADING.test(line.trim())) {
+      inside = true;
+      continue;
+    }
+    if (!inside) continue;
+    if (ROUND_SECTION_HEADING.test(line)) return false;
+    const match = STATUS_LINE.exec(line.trim());
+    if (match !== null) return (match[1] ?? '').toLowerCase() === 'closed';
+  }
+  return false;
+};
+
+/**
+ * The phases with at least one passed (`Status: closed`) round attributed to
+ * them across the supplied review series. This is the only source of phase
+ * locks: a complete phase with no passed round stays unlocked.
+ * @param series - the linked review series snapshots
+ * @returns the derived locked phases, in phase-rank order
+ */
+export const passedPhases = (series: ReadonlyArray<SeriesSnapshot>): ReadonlyArray<string> => {
+  const phases = new Set<string>();
+  for (const snapshot of series) {
+    for (const round of snapshot.rounds) {
+      if (round.phase !== undefined && round.passed === true) phases.add(round.phase);
+    }
+  }
+  return [...phases].toSorted((a, b) => phaseRank(a) - phaseRank(b));
+};
 
 /**
  * The phase a review round reviews, read from its `## Metadata` section. A

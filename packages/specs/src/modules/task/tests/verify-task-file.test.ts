@@ -64,9 +64,9 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
         field: 'size',
         message:
           "Required frontmatter field is missing; a declared size is required for 'pending' tasks.",
-        expected: 'tiny, small, medium, large',
+        expected: "tiny, small, medium, large; or 'none' on a complete task",
         actual: 'missing',
-        fix: 'Add `size: medium` to TASK.md frontmatter (tiny, small, medium, large).',
+        fix: 'Add `size: none` (record-only, complete tasks) or a real size: tiny, small, medium, large.',
       },
     ]);
     Vitest.expect(result.valid).toBe(false);
@@ -88,9 +88,9 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
         field: 'size',
         message: 'Completed task declares no size; sizing is advisory for historical work.',
         severity: 'warning',
-        expected: 'tiny, small, medium, large',
+        expected: "tiny, small, medium, large; or 'none' on a complete task",
         actual: 'missing',
-        fix: 'Add `size: medium` to TASK.md frontmatter (tiny, small, medium, large).',
+        fix: 'Add `size: none` (record-only, complete tasks) or a real size: tiny, small, medium, large.',
       },
     ]);
     Vitest.expect(result.valid).toBe(true);
@@ -106,11 +106,56 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
         code: 'task.unknown-size',
         field: 'size',
         message: "Unknown size 'huge'.",
-        expected: 'tiny, small, medium, large',
+        expected: "tiny, small, medium, large; or 'none' on a complete task",
         actual: 'huge',
-        fix: 'Change `size: huge` to one of tiny, small, medium, large.',
+        fix: "Change `size: huge` to one of tiny, small, medium, large, or 'none' on a complete task.",
       },
     ]);
+  });
+
+  Vitest.it('accepts size none on a complete task', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({
+        id: 'A001',
+        name: 'implement-login',
+        status: 'complete',
+        size: 'none',
+      }),
+    );
+    Vitest.expect(result.issues).toStrictEqual([]);
+    Vitest.expect(result.valid).toBe(true);
+    Vitest.expect(
+      Task.sizeOf(
+        Task.parseTaskFile(
+          taskMarkdown({
+            id: 'A001',
+            name: 'implement-login',
+            status: 'complete',
+            size: 'none',
+          }),
+        )!,
+      ),
+    ).toBeUndefined();
+  });
+
+  Vitest.it('rejects size none on an unfinished task', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({ id: 'A001', name: 'implement-login', size: 'none' }),
+    );
+    Vitest.expect(result.issues).toStrictEqual([
+      {
+        code: 'task.size-none-unfinished',
+        field: 'size',
+        message:
+          "Size 'none' is a record opt-out for a complete task; 'pending' work must declare a real size.",
+        expected: "tiny, small, medium, large; or 'none' on a complete task",
+        actual: 'none',
+        fix: 'Change `size: none` to one of tiny, small, medium, large, or finish the task before opting out.',
+      },
+    ]);
+    Vitest.expect(result.valid).toBe(false);
   });
 
   Vitest.it('flags a malformed originator, dependency, and finding ref', () => {
@@ -227,7 +272,7 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
     ]);
   });
 
-  Vitest.it('warns for a complete task with an unchecked completion item', () => {
+  Vitest.it('errors when a complete task has an unchecked completion item', () => {
     const result = Task.verifyTaskFile(
       'A001-implement-login',
       taskMarkdown({
@@ -237,12 +282,11 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
         completion: ['- [x] One', '- [ ] Two', '- [ ] Three'].join('\n'),
       }),
     );
-    Vitest.expect(result.valid).toBe(true);
+    Vitest.expect(result.valid).toBe(false);
     Vitest.expect(result.issues).toStrictEqual([
       {
         code: 'task.completion-unchecked',
         field: 'completion',
-        severity: 'warning',
         message:
           'Completed task has 2 unchecked completion items; the status claims work its checklist does not confirm.',
         expected: 'all 3 completion items checked `- [x]`',
@@ -252,12 +296,20 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
     ]);
   });
 
-  Vitest.it('does not warn for a pending task or a fully checked completion list', () => {
-    const pending = Task.verifyTaskFile(
-      'A001-implement-login',
-      taskMarkdown({ id: 'A001', name: 'implement-login' }),
-    );
-    Vitest.expect(pending.issues).toStrictEqual([]);
+  Vitest.it('stays quiet for an unfinished task or a fully checked completion list', () => {
+    for (const status of ['pending', 'in-progress', 'blocked']) {
+      const unfinished = Task.verifyTaskFile(
+        'A001-implement-login',
+        taskMarkdown({
+          id: 'A001',
+          name: 'implement-login',
+          status,
+          completion: ['- [ ] One', '- [ ] Two'].join('\n'),
+        }),
+      );
+      Vitest.expect(unfinished.issues).toStrictEqual([]);
+      Vitest.expect(unfinished.valid).toBe(true);
+    }
     const checked = Task.verifyTaskFile(
       'A001-implement-login',
       taskMarkdown({ id: 'A001', name: 'implement-login', status: 'complete' }),

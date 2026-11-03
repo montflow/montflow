@@ -1,7 +1,7 @@
 import { Schema } from 'effect';
 import { fieldList, fieldString, parseMarkdown } from '../frontmatter/index.js';
 import type { FieldValue } from '../frontmatter/index.js';
-import { CODES, SIZES, SIZE_HINT, Size, isSize } from '../sizing/index.js';
+import { CODES, NONE_SIZE, SIZES, SIZE_HINT, Size, isSize } from '../sizing/index.js';
 import { type Issue, type Result, finding, issue, noErrors } from '../verify/index.js';
 
 // ─── Patterns ─────────────────────────────────────────────────────────
@@ -165,8 +165,8 @@ export const parseTaskFile = (markdown: string): Task | undefined => {
 };
 
 /**
- * A parsed task's declared size, or undefined when it declares none or its
- * value is not one of the four sizes.
+ * A parsed task's dispatchable size, or undefined when it declares none, opts
+ * out with `none`, or its value is not one of the four sizes.
  * @param task - parsed task
  * @returns the size every resolver can act on
  */
@@ -222,6 +222,21 @@ export const verifyTaskSize = (
   size: string | undefined,
   status: string | undefined,
 ): ReadonlyArray<Issue> => {
+  const expected = `${SIZE_HINT}; or '${NONE_SIZE}' on a complete task`;
+  const fix = `Add \`size: ${NONE_SIZE}\` (record-only, complete tasks) or a real size: ${SIZE_HINT}.`;
+  if (size !== undefined && size.trim() === NONE_SIZE) {
+    if (status === 'complete') return [];
+    return [
+      finding({
+        code: CODES.noneSizeUnfinished,
+        field: 'size',
+        message: `Size '${NONE_SIZE}' is a record opt-out for a complete task; '${status ?? 'unknown'}' work must declare a real size.`,
+        expected,
+        actual: size,
+        fix: `Change \`size: ${NONE_SIZE}\` to one of ${SIZE_HINT}, or finish the task before opting out.`,
+      }),
+    ];
+  }
   if (size === undefined || size.trim() === '') {
     if (status === 'complete') {
       return [
@@ -230,9 +245,9 @@ export const verifyTaskSize = (
           severity: 'warning',
           field: 'size',
           message: 'Completed task declares no size; sizing is advisory for historical work.',
-          expected: SIZE_HINT,
+          expected,
           actual: 'missing',
-          fix: `Add \`size: medium\` to TASK.md frontmatter (${SIZE_HINT}).`,
+          fix,
         }),
       ];
     }
@@ -241,9 +256,9 @@ export const verifyTaskSize = (
         code: CODES.missingSize,
         field: 'size',
         message: `Required frontmatter field is missing; a declared size is required for '${status ?? 'unknown'}' tasks.`,
-        expected: SIZE_HINT,
+        expected,
         actual: 'missing',
-        fix: `Add \`size: medium\` to TASK.md frontmatter (${SIZE_HINT}).`,
+        fix,
       }),
     ];
   }
@@ -253,9 +268,9 @@ export const verifyTaskSize = (
       code: CODES.unknownTaskSize,
       field: 'size',
       message: `Unknown size '${size}'.`,
-      expected: SIZE_HINT,
+      expected,
       actual: size,
-      fix: `Change \`size: ${size}\` to one of ${SIZES.join(', ')}.`,
+      fix: `Change \`size: ${size}\` to one of ${SIZES.join(', ')}, or '${NONE_SIZE}' on a complete task.`,
     }),
   ];
 };
@@ -312,7 +327,8 @@ const censusChecklist = (body: string, heading: string): ChecklistCensus => {
  * The completion rule on its own: a task that claims `complete` must show a
  * checked `## Completion` checklist. An unchecked box is a record contradiction
  * — the status says the work is done and the checklist says it is not — so it
- * is a warning, never an error: historical records keep completing unchanged.
+ * is an error. An unfinished task may carry an unchecked list with no finding;
+ * the checklist is only a contradiction once the status claims completion.
  * @param status - declared status, as written
  * @param body - markdown body (frontmatter already stripped)
  * @returns the findings, in reporting order
@@ -328,7 +344,6 @@ export const verifyTaskCompletion = (
   return [
     finding({
       code: COMPLETION_UNCHECKED_CODE,
-      severity: 'warning',
       field: 'completion',
       message: `Completed task has ${unchecked} unchecked completion ${noun}; the status claims work its checklist does not confirm.`,
       expected: `all ${total} completion ${total === 1 ? 'item' : 'items'} checked \`- [x]\``,

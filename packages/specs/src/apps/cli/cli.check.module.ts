@@ -260,10 +260,11 @@ export const withSpecLayers = (found: Issue): Issue => {
   return found;
 };
 
-/** Phase of the task a nested `TASK.md` field belongs to, e.g. `A001-build`. */
+/** Phase of the task a nested `TASK.md` field belongs to, e.g. `A/A001-build`. */
 export const taskPhaseInField = (field: string): string | undefined => {
-  const slash = field.indexOf('/');
-  return slash === -1 ? undefined : parseTaskDirName(field.slice(0, slash))?.phase;
+  const segments = field.split('/');
+  if (segments.length < 2) return undefined;
+  return parseTaskDirName(segments[1] ?? '')?.phase;
 };
 
 /**

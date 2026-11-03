@@ -80,6 +80,36 @@ export const stubLayer = (
             ? Effect.succeed({ name, files })
             : Effect.fail(options.snapshotFailure);
         },
+        move: (_root, name, from, to) =>
+          Effect.sync(() => {
+            const files = specs.get(name) ?? [];
+            specs.set(
+              name,
+              files.map((file) =>
+                file.path === from || file.path.startsWith(`${from}/`)
+                  ? { ...file, path: `${to}${file.path.slice(from.length)}` }
+                  : file,
+              ),
+            );
+          }),
+        removeDirectory: (_root, name, relative) =>
+          Effect.sync(() => {
+            const files = specs.get(name) ?? [];
+            specs.set(
+              name,
+              files.filter(
+                (file) => file.path !== relative && !file.path.startsWith(`${relative}/`),
+              ),
+            );
+          }),
+        removeFile: (_root, name, relative) =>
+          Effect.sync(() => {
+            const files = specs.get(name) ?? [];
+            specs.set(
+              name,
+              files.filter((file) => file.path !== relative),
+            );
+          }),
         reviewSeries: (_root, name) =>
           options.reviewFailure === undefined
             ? Effect.succeed(
@@ -94,7 +124,10 @@ export const stubLayer = (
             : Effect.fail(options.rootFileFailure),
         write: (_root, name, files) =>
           Effect.sync(() => {
-            specs.set(name, files);
+            const existing = specs.get(name) ?? [];
+            const byPath = new Map(existing.map((file) => [file.path, file]));
+            for (const file of files) byPath.set(file.path, file);
+            specs.set(name, [...byPath.values()]);
           }),
       }),
     ),

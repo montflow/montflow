@@ -1,4 +1,5 @@
 import * as Profiles from '../../modules/profiles/index.js';
+import type * as Doctor from '../doctor/index.js';
 import type { ProfileListEntry, ProfileVerifyReport } from './engines.apps.module.js';
 
 /**
@@ -48,6 +49,9 @@ export const saved = (profile: Profiles.Profile): string => `Saved profile '${pr
 
 /** Render a delete confirmation. */
 export const deleted = (name: string): string => `Deleted profile '${name}'.`;
+
+/** Render a doctor run: one line per packaged profile, plus the repair hint. */
+export const doctor = (result: Doctor.DoctorResult): string => result.message;
 
 /** Render one profile's verification outcome: a line when clean, findings otherwise. */
 export const verify = (name: string, result: Profiles.VerifyResult): string => {

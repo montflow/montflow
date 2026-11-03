@@ -233,7 +233,7 @@ export interface ScaffoldOptions {
   readonly workspaceType?: string | undefined;
   /** Raw tasks, each `name[:type[:gates[:size]]]`; defaults to one `implement` task. */
   readonly taskSpecs?: ReadonlyArray<string> | undefined;
-  /** Ordered reviewer profile slugs emitted on the phase's review task. */
+  /** Ordered reviewer profile slugs emitted on each requested review task. */
   readonly reviewerProfiles?: ReadonlyArray<string> | undefined;
 }
 
@@ -300,12 +300,12 @@ export const parseScaffoldTask = (raw: string): ScaffoldTaskParse => {
 };
 
 /**
- * Scaffold a mechanically valid spec tree under `root/<name>`: `SPEC.md`,
- * one task directory per task, and the phase's review task. Deterministic
- * and model-free — the mechanical half of `mf-specs create`. A malformed name is
- * refused through the shared usage guard, so the diagnostic names `--name` and
- * the slug rule instead of a store path. Refuses to touch an existing spec
- * directory.
+ * Scaffold a mechanically valid spec tree under `root/<name>`: `SPEC.md` and
+ * one task directory per task. A review task appears only when requested.
+ * Deterministic and model-free — the mechanical half of `mf-specs create`. A
+ * malformed name is refused through the shared usage guard, so the diagnostic
+ * names `--name` and the slug rule instead of a store path. Refuses to touch an
+ * existing spec directory.
  * @param root - spec root directory
  * @param options - spec name, metadata, and task specs
  * @returns what was written, failing with a displayable reason
@@ -349,6 +349,14 @@ export const scaffold = (
       const parsed = parseScaffoldTask(raw);
       if (!parsed.ok) return yield* refuse(parsed.error);
       tasks.push(parsed.task);
+    }
+    if (
+      (options.reviewerProfiles ?? []).length > 0 &&
+      !tasks.some((task) => task.type === 'review')
+    ) {
+      return yield* refuse(
+        '--reviewer-profiles needs a review task: add a `name:review` entry to --tasks.',
+      );
     }
     const now = yield* Clock.currentTimeMillis;
     const created = new Date(now).toISOString().slice(0, 10);
@@ -453,7 +461,7 @@ export const createCommand = Command.make(
       Flag.optional,
     ),
     reviewerProfiles: Flag.String('reviewer-profiles').pipe(
-      Flag.withDescription('Comma-separated reviewer profiles for the phase review task.'),
+      Flag.withDescription('Comma-separated reviewer profiles for a requested review task.'),
       Flag.optional,
     ),
     verbose: verboseFlag,
@@ -503,9 +511,7 @@ export const createCommand = Command.make(
       }),
     ),
 ).pipe(
-  Command.withDescription(
-    'Scaffold a spec tree: SPEC.md, task directories, and the phase review task. Model-free.',
-  ),
+  Command.withDescription('Scaffold a spec tree: SPEC.md and one directory per task. Model-free.'),
   Command.provide(SpecStore.Default),
 );
 

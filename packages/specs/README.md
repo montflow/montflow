@@ -26,7 +26,8 @@ bun run --cwd packages/specs cli check
   list, and verification verdict. Exits non-zero when the spec fails
   verification, including the review budget read from the review store.
 - `state --name <spec>` — compact derived state, active phase, and
-  locked phases, for an orchestrator to read before acting. Exits non-zero on
+  derived locked phases (complete phases with a closed review round), for an
+  orchestrator to read before acting. Exits non-zero on
   the same dispatch errors `status` reports, and names them: a blocked spec
   appends `· blocked <codes>` and `next mf-specs status --name <spec>` to the
   one-line state, with `--verbose` expanding the full blocker blocks.
@@ -36,14 +37,19 @@ bun run --cwd packages/specs cli check
   `check` reports — config, task size, tree, or review budget — so `status`,
   `next`, and `check` agree.
 - `create --name <spec>` — deterministic, model-free scaffold: writes
-  `SPEC.md`, one task directory per `--tasks` entry (each
-  `name[:type[:gates[:size]]]`, with `size` defaulting to `medium` when the
-  token is absent or blank), and the
-  phase's `<PHASE>099-review-phase` review task. A fifth token is an error
-  rather than silently ignored. Refuses to overwrite an
+  `SPEC.md` and one `<PHASE>/<PHASE><NNN>-<name>/` task directory per `--tasks`
+  entry (each `name[:type[:gates[:size]]]`, with `size` defaulting to `medium`
+  when the token is absent or blank). A fifth token is an error rather than
+  silently ignored. It emits a review task only when `--tasks` requests
+  `name:review`; nothing is reserved or auto-appended. Refuses to overwrite an
   existing spec. Optional `--description`, `--author`,
   `--workspace-type in-place|worktree`.
   The generated tree passes `check`; edit it to carry the real work.
+- `migrate [--name <spec> | --all] [--dry-run]` — move flat task directories
+  under their `<PHASE>/` directory without editing a file. A mixed tree is
+  refused, an already-migrated tree is a verified no-op, and a failed move or
+  failed post-move verification rolls every applied move back so the store is
+  never half-migrated.
 - `author --request <text> [--notes <text>]` — loads the `spec-create` prompt
   (gated on `mf-specs doctor`), renders it with the request, and prints it and
   nothing else. Model-free: the binary never dispatches a session.
@@ -262,9 +268,12 @@ fails if the embed drifts from the package.
 
 Every task declares `size` in `TASK.md` frontmatter: `tiny`, `small`, `medium`,
 or `large`. A missing size is an error for a `pending`, `in-progress`, or
-`blocked` task and only a warning for a `complete` one. The size maps to a
-dispatch target through optional `sizing.json` config; no config at all, or an
-undefined size, resolves to `inherit`.
+`blocked` task. A completed task may instead declare `size: none` as a
+record-only opt-out; `none` is never a dispatch target, contributes no model,
+and contributes zero review budget. An unfinished task that declares `none`
+fails with `task.size-none-unfinished`. The size maps to a dispatch target
+through optional `sizing.json` config; no config at all, or an undefined size,
+resolves to `inherit`.
 
 ### Review budget
 
@@ -510,12 +519,17 @@ stay advisory there: `check --strict` promotes them for the gate, and that
 promotion is a `check` decision, not dispatch truth, so `status`, `next`, and
 `state` never block on a warning.
 
-The record checks are warnings, so historical specs keep passing unchanged:
+The record checks are errors, because a completed task whose record contradicts
+itself is not a completed task:
 
 - `task.completion-unchecked` — a `complete` task whose `## Completion`
   checklist still holds unchecked items; the message names the task file and the
-  unchecked count.
-- `gate.unchecked` — a `complete` task whose `GATES.md` has no checked item.
+  unchecked count. An unfinished task may carry an unchecked checklist with no
+  finding.
+- `gate.unchecked` — a `complete` task whose `GATES.md` has no checked item. An
+  unfinished task may carry an all-unchecked gate with no finding.
+- `task.missing-size` — an unfinished task with no `size`, or a `complete` task
+  with neither a real size nor `size: none`.
 - `review.phase-unattributed` — a round in a linked review series with no
   parsable `- Phase:` attribution, so it counts toward no phase budget. A
   warning, promoted by `--strict`, so a dropped or decorated line is never a
@@ -550,14 +564,15 @@ The record checks are warnings, so historical specs keep passing unchanged:
 - **`Lifecycle`** — `analyze` / `verify`: derives `pending` /
   `in-progress` / `blocked` / `complete` / `inconsistent` and rejects
   invalid states (e.g. `complete` with pending tasks, all-done but
-  `in-progress`, locked phases that are not finished or not a prefix).
+  `in-progress`). Locks are derived: a phase is complete when every task under
+  it is complete, and locked when it also holds a passed review round.
   `analyze` takes an optional `active` flag (a live session is bound) to
   split idle `pending` from active `in-progress`.
 - **`Structure`** — `verifySpecTree` over an in-memory
   `SpecSnapshot`: required files, task-directory naming and placement,
   id/name agreement, task-table agreement (name/type/status/gates), the
-  record checks, dependency validity (existence, phase order, cycles), one
-  `review` task per phase, and `locked-phases` sanity. Its review input is
+  record checks, dependency validity (existence, phase order, cycles), the
+  strict `<PHASE>/<task>/<file>` allowlist, and the review budget. Its review input is
   required (`NO_REVIEW` when the caller has no store), so every surface that
   verifies a tree also fails a series holding more rounds for a phase than that
   phase's budget.

@@ -1,15 +1,22 @@
+import { PHASE_PATTERN, SPEC_STANDARD_VERSION } from '../spec/index.js';
+import {
+  PHASE_FILE,
+  PHASE_MEMORY_FILE,
+  renderPhaseFile,
+  renderPhaseMemory,
+} from '../phase/index.js';
 import { DEFAULT_SIZE, type Size, isSize } from '../sizing/index.js';
 import type { SpecFileEntry } from '../structure/index.js';
 
 /**
- * Task types a scaffolded phase may contain. A `review` task is never
- * requested — {@link renderSpecScaffold} always appends the phase's single
- * review task so the tree verifies.
+ * Task types a scaffolded phase may contain. A `review` task is requested
+ * explicitly like any other task; the scaffold never appends one on its own.
  */
 export const SCAFFOLD_TASK_TYPES = [
   'exploratory',
   'execution',
   'planning',
+  'review',
   'interruptor',
   'defect',
 ] as const;
@@ -25,7 +32,7 @@ export const isScaffoldTaskType = (value: string): value is ScaffoldTaskType =>
 export interface ScaffoldTask {
   /** Kebab-case task name, also the directory suffix (`A001-<name>`). */
   readonly name: string;
-  /** Executor behavior; never `review` (that task is appended). */
+  /** Executor behavior; a `review` task is requested explicitly. */
   readonly type: ScaffoldTaskType;
   /** Emit a per-task `GATES.md` when true. */
   readonly gates?: boolean | undefined;
@@ -55,7 +62,7 @@ export interface ScaffoldSpecInput {
   readonly workspaceType?: 'in-place' | 'worktree' | undefined;
   /** Phase letter; defaults to `A`. */
   readonly phase?: string | undefined;
-  /** Ordered reviewer profile slugs emitted on the phase's review task. */
+  /** Ordered reviewer profile slugs emitted on each `review` task. */
   readonly reviewerProfiles?: ReadonlyArray<string> | undefined;
   readonly tasks: ReadonlyArray<ScaffoldTask>;
 }
@@ -65,14 +72,9 @@ export interface ScaffoldResult {
   /** Files relative to the spec directory, ready for the store to write. */
   readonly files: ReadonlyArray<SpecFileEntry>;
   readonly phase: string;
-  /** The appended review task's id. */
-  readonly reviewId: string;
-  /** Number of tasks in the generated table, including the review task. */
+  /** Number of tasks in the generated tree. */
   readonly taskCount: number;
 }
-
-/** Review task number within a phase; execution tasks are numbered below it. */
-const REVIEW_NUMBER = 99;
 
 /** `A` + a zero-padded sequence, e.g. `A001`. */
 const taskId = (phase: string, index: number): string =>
@@ -107,7 +109,7 @@ const renderSpec = (input: ScaffoldSpecInput, rows: ReadonlyArray<TableRow>): st
     `workspace-type: ${input.workspaceType ?? 'in-place'}`,
     `author: ${input.author}`,
     `created: ${input.created}`,
-    'locked-phases:',
+    `spec-version: ${SPEC_STANDARD_VERSION}`,
     '---',
     '',
     `# ${input.name}`,
@@ -132,12 +134,18 @@ const renderSpec = (input: ScaffoldSpecInput, rows: ReadonlyArray<TableRow>): st
 
 /**
  * Render one `TASK.md` against the task contract: full frontmatter plus
- * `## Type:`, `## Description`, `## Requirements`, `## Completion`.
+ * `## Type:`, `## Description`, `## Requirements`, `## Completion`. A `review`
+ * task carries the supplied ordered `reviewer-profiles` list.
  * @param id - the task id
  * @param task - the task inputs
+ * @param reviewerProfiles - ordered reviewer profile slugs for a review task
  * @returns the file contents
  */
-const renderTask = (id: string, task: ScaffoldTask): string =>
+const renderTask = (
+  id: string,
+  task: ScaffoldTask,
+  reviewerProfiles: ReadonlyArray<string>,
+): string =>
   [
     '---',
     `id: ${id}`,
@@ -147,6 +155,7 @@ const renderTask = (id: string, task: ScaffoldTask): string =>
     `size: ${task.size ?? DEFAULT_SIZE}`,
     `depends-on: ${(task.dependsOn ?? []).join(', ')}`,
     'related-tasks:',
+    ...(task.type === 'review' ? [`reviewer-profiles: ${reviewerProfiles.join(', ')}`] : []),
     'status: pending',
     '---',
     '',
@@ -165,47 +174,6 @@ const renderTask = (id: string, task: ScaffoldTask): string =>
     '## Completion',
     '',
     '- [ ] Done.',
-    '',
-  ].join('\n');
-
-/**
- * Render the auto-appended phase review task.
- * @param phase - the phase letter
- * @param id - the review task id
- * @param reviewerProfiles - ordered reviewer profile slugs; empty by default
- * @returns the file contents
- */
-const renderReview = (phase: string, id: string, reviewerProfiles: ReadonlyArray<string>): string =>
-  [
-    '---',
-    `id: ${id}`,
-    'name: review-phase',
-    'type: review',
-    'originator: user',
-    `size: ${DEFAULT_SIZE}`,
-    'depends-on:',
-    'related-tasks:',
-    reviewerProfiles.length > 0
-      ? `reviewer-profiles: ${reviewerProfiles.join(', ')}`
-      : 'reviewer-profiles:',
-    'status: pending',
-    '---',
-    '',
-    `# Task ${id}: Review phase`,
-    '',
-    '## Type: review',
-    '',
-    '## Description',
-    '',
-    `Run an independent adversarial review over phase ${phase}.`,
-    '',
-    '## Requirements',
-    '',
-    '- Findings written to the phase review round.',
-    '',
-    '## Completion',
-    '',
-    '- [ ] Findings written and reviewed.',
     '',
   ].join('\n');
 
@@ -251,38 +219,48 @@ const renderGates = (): string =>
 
 /**
  * Render a complete, mechanically valid spec tree from a small task list:
- * `SPEC.md`, one `<PHASE><NNN>-<name>/` per task with `TASK.md` +
- * `MEMORY.md` (+ `GATES.md` when gated), and the phase's single
- * `review` task. Pure — the caller owns writing the files and choosing
- * the `created` date.
+ * `SPEC.md` and one `<PHASE>/<PHASE><NNN>-<name>/` per task with `TASK.md` +
+ * `MEMORY.md` (+ `GATES.md` when gated). A review task is emitted only when the
+ * caller requests `type: review`; nothing is reserved or auto-appended. Pure —
+ * the caller owns writing the files and choosing the `created` date. An invalid
+ * phase is a programming error and throws.
  * @param input - spec metadata, phase, and tasks
  * @returns the files plus the phase and task ids they carry
  */
 export const renderSpecScaffold = (input: ScaffoldSpecInput): ScaffoldResult => {
   const phase = input.phase ?? 'A';
+  if (!PHASE_PATTERN.test(phase)) {
+    throw new Error(`Invalid scaffold phase '${phase}' — use one or two capital letters.`);
+  }
+  const reviewerProfiles = input.reviewerProfiles ?? [];
   const numbered = input.tasks.map((task, index) => ({ id: taskId(phase, index + 1), task }));
-  const reviewId = taskId(phase, REVIEW_NUMBER);
   const rows: Array<TableRow> = numbered.map(({ id, task }) => ({
     id,
     name: task.name,
     type: task.type,
     gates: task.gates === true,
   }));
-  rows.push({ id: reviewId, name: 'review-phase', type: 'review', gates: false });
 
-  const files: Array<SpecFileEntry> = [{ path: 'SPEC.md', content: renderSpec(input, rows) }];
+  const files: Array<SpecFileEntry> = [
+    { path: 'SPEC.md', content: renderSpec(input, rows) },
+    {
+      path: `${phase}/${PHASE_FILE}`,
+      content: renderPhaseFile({
+        id: phase,
+        objective: `TODO: state what phase ${phase} must achieve.`,
+        status: 'pending',
+        review: 'required',
+        gate: 'none',
+      }),
+    },
+    { path: `${phase}/${PHASE_MEMORY_FILE}`, content: renderPhaseMemory() },
+  ];
   for (const { id, task } of numbered) {
-    const dir = dirName(id, task.name);
-    files.push({ path: `${dir}/TASK.md`, content: renderTask(id, task) });
+    const dir = `${phase}/${dirName(id, task.name)}`;
+    files.push({ path: `${dir}/TASK.md`, content: renderTask(id, task, reviewerProfiles) });
     files.push({ path: `${dir}/MEMORY.md`, content: renderMemory() });
     if (task.gates === true) files.push({ path: `${dir}/GATES.md`, content: renderGates() });
   }
-  const reviewDir = dirName(reviewId, 'review-phase');
-  files.push({
-    path: `${reviewDir}/TASK.md`,
-    content: renderReview(phase, reviewId, input.reviewerProfiles ?? []),
-  });
-  files.push({ path: `${reviewDir}/MEMORY.md`, content: renderMemory() });
 
-  return { files, phase, reviewId, taskCount: numbered.length + 1 };
+  return { files, phase, taskCount: numbered.length };
 };

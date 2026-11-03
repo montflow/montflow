@@ -69,10 +69,11 @@ const loadReviews = async (): Promise<ReviewsLib> => {
   return cachedReviews;
 };
 
-/** One file inside a spec directory, POSIX-relative to the spec root. */
+/** One entry inside a spec directory, POSIX-relative to the spec root. */
 export interface SnapshotFile {
   readonly path: string;
   readonly content: string;
+  readonly kind?: 'file' | 'directory';
 }
 
 /**
@@ -92,6 +93,8 @@ export interface ReviewSeriesRound {
   readonly round: string;
   /** The phase the round reviews (its `- Phase:` metadata), when set. */
   readonly phase?: string | undefined;
+  /** True when the round's status is `closed` — the derived lock evidence. */
+  readonly passed?: boolean | undefined;
 }
 
 /** A spec's linked review series, as the review store lays it out. */
@@ -142,7 +145,10 @@ export const readReviewSeries = async (
               () => undefined,
             );
             const phase = raw === undefined ? undefined : libs.ReviewLink.roundPhase(raw);
-            return phase === undefined || phase === '' ? { round } : { round, phase };
+            const passed = raw === undefined ? false : libs.ReviewLink.roundPassed(raw);
+            return phase === undefined || phase === ''
+              ? { round, passed }
+              : { round, phase, passed };
           }),
       );
       return { name: series, rounds };
@@ -164,7 +170,7 @@ export const specsInstalled = (root: string): Effect.Effect<boolean, never> =>
     ),
   );
 
-/** Read every file under one spec directory as POSIX-relative paths. */
+/** Read every file and directory under one spec directory. */
 const readSnapshot = async (root: string, name: string): Promise<ReadonlyArray<SnapshotFile>> => {
   const dir = join(specsDir(root), name);
   const entries = await readdir(dir, { recursive: true });
@@ -172,11 +178,10 @@ const readSnapshot = async (root: string, name: string): Promise<ReadonlyArray<S
     entries.map(async (entry): Promise<SnapshotFile | undefined> => {
       const absolute = join(dir, entry);
       const info = await stat(absolute);
+      const path = entry.split('\\').join('/');
+      if (info.isDirectory()) return { path, content: '', kind: 'directory' };
       if (!info.isFile()) return undefined;
-      return {
-        path: entry.split('\\').join('/'),
-        content: await readFile(absolute, 'utf8'),
-      };
+      return { path, content: await readFile(absolute, 'utf8'), kind: 'file' };
     }),
   );
   return files.filter((file): file is SnapshotFile => file !== undefined);
@@ -288,12 +293,15 @@ const inspect = (
     .map((file) => libs.Task.parseTaskFile(file.content))
     .filter((task) => task !== undefined);
   const verify = libs.Structure.verifySpecTree({ name: id, files }, review);
+  const evidence = libs.Phase.phaseEvidence({ name: id, files });
   const analysis =
     spec === undefined
       ? undefined
       : libs.Lifecycle.analyze({
           status: spec.status,
-          lockedPhases: spec.lockedPhases,
+          reviewedPhases: libs.ReviewLink.passedPhases(review.series),
+          waivedPhases: evidence.waived,
+          provenPhases: evidence.proven,
           tasks: tasks.map((task) => ({ id: task.id, status: task.status })),
           active: false,
         });
@@ -330,6 +338,11 @@ const readSpecs = async (root: string, libs: SpecsLib): Promise<ReadonlyArray<Sp
     names.map(async (name): Promise<SpecSummary | undefined> => {
       const info = await stat(join(dir, name));
       if (!info.isDirectory()) return undefined;
+      const hasSpec = await stat(join(dir, name, 'SPEC.md')).then(
+        (marker) => marker.isFile(),
+        () => false,
+      );
+      if (!hasSpec) return undefined;
       const files = await readSnapshot(root, name);
       const review = await readReviewSeries(root, name, libs, files);
       return summarize(libs, name, files, reviewInput(review));
@@ -401,7 +414,9 @@ export const loadSpec = (root: string, id: string): Effect.Effect<SpecDetail, st
                     workspaceType: spec.workspaceType,
                     author: spec.author,
                     created: spec.created,
-                    lockedPhases: spec.lockedPhases,
+                    lockedPhases: (analysis?.phases ?? [])
+                      .filter((phase) => phase.locked)
+                      .map((phase) => phase.phase),
                     description: descriptionOf(specFile?.content ?? ''),
                   },
             state: analysis?.state ?? 'inconsistent',

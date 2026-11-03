@@ -23,8 +23,16 @@ export interface TaskEntry {
 export interface Input {
   /** SPEC.md `status`. */
   readonly status: SpecStatus;
-  /** SPEC.md `locked-phases`. */
-  readonly lockedPhases: ReadonlyArray<string>;
+  /**
+   * Phases with a passed review round attributed to them, as the review store
+   * supplies them. Locks are derived from this plus full task completion; there
+   * is no stored lock list.
+   */
+  readonly reviewedPhases: ReadonlyArray<string>;
+  /** Phases with an effective `PHASE.md` waiver. */
+  readonly waivedPhases: ReadonlyArray<string>;
+  /** Phases whose classified mechanical gate stages all have a latest pass. */
+  readonly provenPhases: ReadonlyArray<string>;
   /** Parsed tasks (tasks whose TASK.md failed to parse are excluded). */
   readonly tasks: ReadonlyArray<TaskEntry>;
   /**
@@ -65,35 +73,44 @@ const countByStatus = (tasks: ReadonlyArray<TaskEntry>) => {
   return counts;
 };
 
+/**
+ * A phase is complete when every task under it is complete. It is locked when
+ * it is complete, every classified mechanical gate stage is proven, and it has
+ * either a passed review round or an effective waiver. The conjunction is the
+ * whole lock model — a locked phase can never hold open work or unproven gates.
+ */
 const phaseSummaries = (
   tasks: ReadonlyArray<TaskEntry>,
-  locked: ReadonlySet<string>,
+  reviewed: ReadonlySet<string>,
+  waived: ReadonlySet<string>,
+  proven: ReadonlySet<string>,
 ): ReadonlyArray<PhaseSummary> =>
   distinctPhases(tasks).map((phase) => {
     const inPhase = tasks.filter((task) => phaseOf(task.id) === phase);
+    const complete = inPhase.filter((task) => task.status === 'complete').length;
     return {
       phase,
-      locked: locked.has(phase),
+      locked:
+        complete === inPhase.length &&
+        proven.has(phase) &&
+        (reviewed.has(phase) || waived.has(phase)),
       total: inPhase.length,
-      complete: inPhase.filter((task) => task.status === 'complete').length,
+      complete,
     };
   });
 
 /**
- * Verify the spec lifecycle holds together: `complete` requires every
- * task complete and every phase locked; all-complete + all-locked requires
- * `complete`; locked phases must be fully complete; and locked phases must
- * form a prefix (no forward locking). Pure — no IO.
+ * Verify the spec lifecycle holds together: `complete` requires every task
+ * complete, and an all-complete spec must declare `complete`. Locks are derived
+ * (complete plus a passed round) and a locked phase cannot hold open work by
+ * construction, so there is no stored lock list to contradict. Pure — no IO.
  * @param input - spec header plus parsed tasks
  * @returns the result; `valid` is true only with zero issues
  */
 export const verify = (input: Input): Result => {
   const issues: Array<Issue> = [];
-  const phases = distinctPhases(input.tasks);
-  const locked = new Set(input.lockedPhases);
   const allComplete =
     input.tasks.length > 0 && input.tasks.every((task) => task.status === 'complete');
-  const allPhasesLocked = phases.length > 0 && phases.every((phase) => locked.has(phase));
 
   if (input.status === 'complete') {
     const open = input.tasks.filter((task) => task.status !== 'complete');
@@ -105,50 +122,8 @@ export const verify = (input: Input): Result => {
         ),
       );
     }
-    const unlocked = phases.filter((phase) => !locked.has(phase));
-    if (unlocked.length > 0) {
-      issues.push(
-        issue(
-          'locked-phases',
-          `Spec status is 'complete' but ${plural(unlocked.length, 'phase', 'phases')} ${unlocked.join(', ')} ${plural(unlocked.length, 'is', 'are')} not locked.`,
-        ),
-      );
-    }
-  } else if (allComplete && allPhasesLocked) {
-    issues.push(
-      issue(
-        'status',
-        "All tasks are complete and all phases are locked, but spec status is 'in-progress'.",
-      ),
-    );
-  }
-
-  for (const phase of phases) {
-    if (!locked.has(phase)) continue;
-    const open = input.tasks.filter(
-      (task) => phaseOf(task.id) === phase && task.status !== 'complete',
-    );
-    if (open.length > 0) {
-      issues.push(
-        issue(
-          'locked-phases',
-          `Phase '${phase}' is locked but ${plural(open.length, 'task', 'tasks')} ${open.map((task) => `${task.id} (${task.status})`).join(', ')} ${plural(open.length, 'is', 'are')} not complete.`,
-        ),
-      );
-    }
-  }
-
-  let sawUnlocked = false;
-  for (const phase of phases) {
-    if (locked.has(phase)) {
-      if (sawUnlocked) {
-        issues.push(
-          issue('locked-phases', `Phase '${phase}' is locked but an earlier phase is not.`),
-        );
-      }
-    } else {
-      sawUnlocked = true;
-    }
+  } else if (allComplete) {
+    issues.push(issue('status', "All tasks are complete, but spec status is 'in-progress'."));
   }
 
   return { valid: noErrors(issues), issues };
@@ -165,18 +140,19 @@ export const verify = (input: Input): Result => {
 export const analyze = (input: Input): Analysis => {
   const result = verify(input);
   const counts = countByStatus(input.tasks);
-  const locked = new Set(input.lockedPhases);
-  const phases = phaseSummaries(input.tasks, locked);
+  const reviewed = new Set(input.reviewedPhases);
+  const waived = new Set(input.waivedPhases);
+  const proven = new Set(input.provenPhases);
+  const phases = phaseSummaries(input.tasks, reviewed, waived, proven);
   const allComplete =
     input.tasks.length > 0 && input.tasks.every((task) => task.status === 'complete');
-  const allPhasesLocked = phases.length > 0 && phases.every((phase) => phase.locked);
   const anyInProgress = input.tasks.some((task) => task.status === 'in-progress');
   const anyBlocked = input.tasks.some((task) => task.status === 'blocked');
   const active = input.active === true;
 
   const state: State = !result.valid
     ? 'inconsistent'
-    : input.status === 'complete' && allComplete && allPhasesLocked
+    : input.status === 'complete' && allComplete
       ? 'complete'
       : active
         ? 'in-progress'

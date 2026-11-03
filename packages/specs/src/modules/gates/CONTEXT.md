@@ -12,7 +12,8 @@ checked item.
 - `parseGates`, `GateStage`, `GateItem` (text plus checked state)
 - `verifyGatesFile` — the shape of the file
 - `verifyGateProgress` — the completion rule; an all-unchecked gate on a
-  complete task is `gate.unchecked`, a warning that never fails the check
+  complete task is an error, `gate.unchecked`; an unfinished task may carry an
+  all-unchecked gate with no finding
 - `GATE_UNCHECKED_CODE`
 
 ## Does not belong here

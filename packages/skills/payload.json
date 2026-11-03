@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "package": "@montflow/skills",
+  "payloads": [
+    {
+      "kind": "skill",
+      "name": "montflow-create-skills",
+      "source": "skills/montflow-create-skills",
+      "target": ".agents/skills/montflow-create-skills"
+    },
+    {
+      "kind": "skill",
+      "name": "montflow-modify-skills",
+      "source": "skills/montflow-modify-skills",
+      "target": ".agents/skills/montflow-modify-skills"
+    }
+  ]
+}

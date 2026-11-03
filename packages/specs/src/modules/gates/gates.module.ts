@@ -3,6 +3,9 @@ import { type Issue, type Result, finding, issue, noErrors } from '../verify/ind
 /** Stable code for a complete task whose gate holds no checked item. */
 export const GATE_UNCHECKED_CODE = 'gate.unchecked';
 
+/** Generated gate-result ledger: one JSON record per line, append-only. */
+export const GATE_RESULTS_FILE = 'GATE-RESULTS.jsonl';
+
 /** One parsed GATES.md checklist item. */
 export interface GateItem {
   /** Item label after `- [ ]` / `- [x]`. */
@@ -92,8 +95,10 @@ export const verifyGatesFile = (markdown: string): Result => {
  * The gate-progress rule on its own: a task that claims `complete` must show at
  * least one checked gate item. An all-unchecked `GATES.md` is a record
  * contradiction — the task says its verification ran and the gate records no
- * result — so it is a warning, never an error. A task with no `GATES.md`, or a
- * `GATES.md` with no items, is `verifyGatesFile`'s concern, not this rule's.
+ * result — so it is an error. An unfinished task may carry an all-unchecked
+ * gate with no finding; the gate only contradicts a completed task. A task with
+ * no `GATES.md`, or a `GATES.md` with no items, is `verifyGatesFile`'s concern,
+ * not this rule's.
  * @param markdown - raw GATES.md contents
  * @param complete - true when the task declares `status: complete`
  * @returns the findings, in reporting order
@@ -105,11 +110,10 @@ export const verifyGateProgress = (markdown: string, complete: boolean): Result 
     return { valid: true, issues: [] };
   }
   return {
-    valid: true,
+    valid: false,
     issues: [
       finding({
         code: GATE_UNCHECKED_CODE,
-        severity: 'warning',
         field: 'gate',
         message: `Completed task has ${items.length} gate ${items.length === 1 ? 'item' : 'items'} and none checked; the gate records no verification result.`,
         expected: 'at least one checked gate item (`- [x]`)',

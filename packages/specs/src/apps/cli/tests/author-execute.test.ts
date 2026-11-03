@@ -103,15 +103,15 @@ const phaseA = (
 ): ReadonlyArray<readonly [string, string]> => [
   ['SPEC.md', specMarkdown({ name: spec })],
   [
-    'A001-implement-login/TASK.md',
+    'A/A001-implement-login/TASK.md',
     taskMarkdown({ id: 'A001', name: 'implement-login', size, status }),
   ],
-  ['A001-implement-login/MEMORY.md', memoryMarkdown()],
+  ['A/A001-implement-login/MEMORY.md', memoryMarkdown()],
   [
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: 'pending' }),
   ],
-  ['A099-review-phase/MEMORY.md', memoryMarkdown()],
+  ['A/A099-review-phase/MEMORY.md', memoryMarkdown()],
 ];
 
 /** Write `count` review rounds attributed to `phase` for `series`. */
@@ -123,7 +123,7 @@ const seedRounds = (work: Work, series: string, count: number, phase = 'A') =>
       yield* work.fs.makeDirectory(dir, { recursive: true });
       yield* work.fs.writeFileString(
         work.path.join(dir, 'REVIEW.md'),
-        `# Review: ${series} / ${round}\n\n## Metadata\n\n- Round: ${round}\n- Phase: ${phase}\n\n## Findings\n\nNone.\n`,
+        `# Review: ${series} / ${round}\n\n## Metadata\n\n- Round: ${round}\n- Phase: ${phase}\n- Status: closed\n\n## Findings\n\nNone.\n`,
       );
     }
   });
@@ -134,7 +134,6 @@ const multiPhase = (spec: string): ReadonlyArray<readonly [string, string]> => [
     'SPEC.md',
     specMarkdown({
       name: spec,
-      lockedPhases: 'A',
       rows: [
         { id: 'A001', name: 'old-work', type: 'execution', status: 'complete', gates: 'No' },
         { id: 'A099', name: 'review-phase', type: 'review', status: 'complete', gates: 'No' },
@@ -146,7 +145,7 @@ const multiPhase = (spec: string): ReadonlyArray<readonly [string, string]> => [
     }),
   ],
   [
-    'A001-old-work/TASK.md',
+    'A/A001-old-work/TASK.md',
     taskMarkdown({
       id: 'A001',
       name: 'old-work',
@@ -154,20 +153,26 @@ const multiPhase = (spec: string): ReadonlyArray<readonly [string, string]> => [
       status: 'complete',
     }),
   ],
-  ['A001-old-work/MEMORY.md', memoryMarkdown()],
+  ['A/A001-old-work/MEMORY.md', memoryMarkdown()],
   [
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: 'complete' }),
   ],
-  ['A099-review-phase/MEMORY.md', memoryMarkdown()],
-  ['B001-work-now/TASK.md', taskMarkdown({ id: 'B001', name: 'work-now', size: 'small' })],
-  ['B001-work-now/MEMORY.md', memoryMarkdown()],
-  ['B099-review-phase/TASK.md', taskMarkdown({ id: 'B099', name: 'review-phase', type: 'review' })],
-  ['B099-review-phase/MEMORY.md', memoryMarkdown()],
-  ['C001-work-later/TASK.md', taskMarkdown({ id: 'C001', name: 'work-later', size: 'small' })],
-  ['C001-work-later/MEMORY.md', memoryMarkdown()],
-  ['C099-review-phase/TASK.md', taskMarkdown({ id: 'C099', name: 'review-phase', type: 'review' })],
-  ['C099-review-phase/MEMORY.md', memoryMarkdown()],
+  ['A/A099-review-phase/MEMORY.md', memoryMarkdown()],
+  ['B/B001-work-now/TASK.md', taskMarkdown({ id: 'B001', name: 'work-now', size: 'small' })],
+  ['B/B001-work-now/MEMORY.md', memoryMarkdown()],
+  [
+    'B/B099-review-phase/TASK.md',
+    taskMarkdown({ id: 'B099', name: 'review-phase', type: 'review' }),
+  ],
+  ['B/B099-review-phase/MEMORY.md', memoryMarkdown()],
+  ['C/C001-work-later/TASK.md', taskMarkdown({ id: 'C001', name: 'work-later', size: 'small' })],
+  ['C/C001-work-later/MEMORY.md', memoryMarkdown()],
+  [
+    'C/C099-review-phase/TASK.md',
+    taskMarkdown({ id: 'C099', name: 'review-phase', type: 'review' }),
+  ],
+  ['C/C099-review-phase/MEMORY.md', memoryMarkdown()],
 ];
 
 /**
@@ -180,7 +185,6 @@ const completeSpec = (spec: string): ReadonlyArray<readonly [string, string]> =>
     specMarkdown({
       name: spec,
       status: 'complete',
-      lockedPhases: 'A',
       rows: [
         { id: 'A001', name: 'implement-login', type: 'execution', status: 'complete', gates: 'No' },
         { id: 'A099', name: 'review-phase', type: 'review', status: 'complete', gates: 'No' },
@@ -188,7 +192,7 @@ const completeSpec = (spec: string): ReadonlyArray<readonly [string, string]> =>
     }),
   ],
   [
-    'A001-implement-login/TASK.md',
+    'A/A001-implement-login/TASK.md',
     taskMarkdown({
       id: 'A001',
       name: 'implement-login',
@@ -196,12 +200,12 @@ const completeSpec = (spec: string): ReadonlyArray<readonly [string, string]> =>
       status: 'complete',
     }),
   ],
-  ['A001-implement-login/MEMORY.md', memoryMarkdown()],
+  ['A/A001-implement-login/MEMORY.md', memoryMarkdown()],
   [
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: 'complete' }),
   ],
-  ['A099-review-phase/MEMORY.md', memoryMarkdown()],
+  ['A/A099-review-phase/MEMORY.md', memoryMarkdown()],
 ];
 
 /** A `check`-clean phase whose only non-review task is complete without a size. */
@@ -217,7 +221,7 @@ const completeUnsizedPhase = (spec: string): ReadonlyArray<readonly [string, str
     }),
   ],
   [
-    'A001-historical-work/TASK.md',
+    'A/A001-historical-work/TASK.md',
     taskMarkdown({
       id: 'A001',
       name: 'historical-work',
@@ -225,9 +229,12 @@ const completeUnsizedPhase = (spec: string): ReadonlyArray<readonly [string, str
       withoutSize: true,
     }),
   ],
-  ['A001-historical-work/MEMORY.md', memoryMarkdown()],
-  ['A099-review-phase/TASK.md', taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' })],
-  ['A099-review-phase/MEMORY.md', memoryMarkdown()],
+  ['A/A001-historical-work/MEMORY.md', memoryMarkdown()],
+  [
+    'A/A099-review-phase/TASK.md',
+    taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
+  ],
+  ['A/A099-review-phase/MEMORY.md', memoryMarkdown()],
 ];
 
 /** The two review skills the execution prompt declares but doctor does not own. */
@@ -423,7 +430,7 @@ Vitest.describe('Cli.execute runtime', () => {
           }),
         ],
         [
-          'A001-implement-login/TASK.md',
+          'A/A001-implement-login/TASK.md',
           taskMarkdown({
             id: 'A001',
             name: 'implement-login',
@@ -431,17 +438,17 @@ Vitest.describe('Cli.execute runtime', () => {
             status: 'complete',
           }),
         ],
-        ['A001-implement-login/MEMORY.md', memoryMarkdown()],
+        ['A/A001-implement-login/MEMORY.md', memoryMarkdown()],
         [
-          'A002-wire-session/TASK.md',
+          'A/A002-wire-session/TASK.md',
           taskMarkdown({ id: 'A002', name: 'wire-session', size: 'small' }),
         ],
-        ['A002-wire-session/MEMORY.md', memoryMarkdown()],
+        ['A/A002-wire-session/MEMORY.md', memoryMarkdown()],
         [
-          'A099-review-phase/TASK.md',
+          'A/A099-review-phase/TASK.md',
           taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: 'pending' }),
         ],
-        ['A099-review-phase/MEMORY.md', memoryMarkdown()],
+        ['A/A099-review-phase/MEMORY.md', memoryMarkdown()],
       ]);
       yield* preparePrompts(work);
 
@@ -539,6 +546,7 @@ Vitest.describe('Cli.execute runtime', () => {
     Effect.gen(function* () {
       const work = yield* prepare;
       yield* seed(work, 'ship-login', multiPhase('ship-login'));
+      yield* seedRounds(work, 'ship-login', 1, 'A');
       yield* preparePrompts(work);
 
       const error = yield* runExecute(work, { name: 'ship-login', phase: 'A' }).pipe(Effect.flip);
@@ -762,7 +770,7 @@ Vitest.describe('Cli.execute runtime', () => {
       yield* seed(work, 'ship-login', [
         ['SPEC.md', specMarkdown({ name: 'ship-login' })],
         [
-          'A001-implement-login/TASK.md',
+          'A/A001-implement-login/TASK.md',
           taskMarkdown({ id: 'A001', name: 'implement-login', size: 'small' }),
         ],
       ]);
@@ -850,7 +858,7 @@ Vitest.describe('Cli.execute runtime', () => {
       yield* seed(work, 'ship-login', [
         ['SPEC.md', specMarkdown({ name: 'ship-login' })],
         [
-          'A001-implement-login/TASK.md',
+          'A/A001-implement-login/TASK.md',
           taskMarkdown({ id: 'A001', name: 'implement-login', size: 'small' }),
         ],
       ]);
@@ -858,7 +866,7 @@ Vitest.describe('Cli.execute runtime', () => {
 
       const error = yield* runExecute(work, { name: 'ship-login' }).pipe(Effect.flip);
       const text = diagnose(error);
-      Vitest.expect(text).toContain('A001-implement-login/MEMORY.md');
+      Vitest.expect(text).toContain('A/A001-implement-login/MEMORY.md');
       Vitest.expect(text).toContain('Required file is missing');
     }).pipe(Effect.provide(StoreLive)),
   );

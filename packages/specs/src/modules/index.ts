@@ -1,4 +1,5 @@
 export * as Spec from './spec/index.js';
+export * as Phase from './phase/index.js';
 export * as Task from './task/index.js';
 export * as Gates from './gates/index.js';
 export * as Memory from './memory/index.js';

@@ -60,9 +60,14 @@ import {
   renderCheck,
   checkExitCode,
   createCommand,
+  migrateCommand,
   renderScaffold,
   status,
   state,
+  migrate,
+  renderMigrate,
+  migrateFailed,
+  migrateSelectorDiagnostic,
 } from './cli.apps.module.js';
 import * as Cli from '@montflow/version/cli';
 import type { BuildInfo } from '@montflow/version';
@@ -90,6 +95,7 @@ export const rootCommand = Command.make('mf-specs').pipe(
     whichCommand,
     listCommand,
     createCommand,
+    migrateCommand,
     authorCommand,
     executeCommand,
     sizingConfigCommand,
@@ -122,6 +128,7 @@ export const SLASH_COMMANDS = [
   'which',
   'list',
   'create',
+  'migrate',
   'author',
   'execute',
   'sizing-config',
@@ -144,6 +151,8 @@ export const SLASH_FLAG_KINDS = {
   dir: 'value',
   verbose: 'switch',
   name: 'value',
+  all: 'switch',
+  'dry-run': 'switch',
   strict: 'switch',
   task: 'value',
   human: 'switch',
@@ -196,6 +205,7 @@ export const SLASH_COMMAND_FLAGS = {
   which: ['branch'],
   list: ['status', 'pending'],
   create: ['name', 'description', 'author', 'workspace-type', 'tasks', 'reviewer-profiles'],
+  migrate: ['name', 'all', 'dry-run'],
   author: ['request', 'notes'],
   execute: ['name', 'phase', 'focus', 'mode'],
   'sizing-config': ['scope', 'name', 'phase', 'focus', 'mode'],
@@ -243,6 +253,8 @@ export interface SlashArgs {
   readonly verify: boolean;
   readonly statusFilter: string | undefined;
   readonly pending: boolean;
+  readonly all: boolean;
+  readonly dryRun: boolean;
   readonly description: string | undefined;
   readonly author: string | undefined;
   readonly workspaceType: string | undefined;
@@ -294,6 +306,8 @@ export const parseSlashArgs = (args: string): SlashArgs => {
   let verbose = false;
   let human = false;
   let pending = false;
+  let all = false;
+  let dryRun = false;
   let strict = false;
   let json = false;
   let verify = false;
@@ -329,6 +343,16 @@ export const parseSlashArgs = (args: string): SlashArgs => {
     if (token === '--pending') {
       pending = true;
       record('pending', undefined, 'switch');
+      continue;
+    }
+    if (token === '--all') {
+      all = true;
+      record('all', undefined, 'switch');
+      continue;
+    }
+    if (token === '--dry-run') {
+      dryRun = true;
+      record('dry-run', undefined, 'switch');
       continue;
     }
     if (token === '--strict') {
@@ -406,6 +430,8 @@ export const parseSlashArgs = (args: string): SlashArgs => {
     verify,
     statusFilter: values.status,
     pending,
+    all,
+    dryRun,
     description: values.description,
     author: values.author,
     workspaceType: values['workspace-type'],
@@ -693,6 +719,24 @@ export const slashCreate = (context: SlashContext): SlashEffect => {
   );
 };
 
+/** `/specs migrate --name <spec>|--all [--dry-run]`. */
+export const slashMigrate = (context: SlashContext): SlashEffect => {
+  const { parsed, dir } = context;
+  if (parsed.name === undefined && !parsed.all) {
+    return Effect.fail(
+      new SurfaceError({
+        operation: 'SpecMigrate',
+        diagnostics: [migrateSelectorDiagnostic()],
+      }),
+    );
+  }
+  return slashOutcome(
+    migrate(dir, { name: parsed.name, all: parsed.all, dryRun: parsed.dryRun }),
+    (report): SlashReport => ({ output: renderMigrate(report), ok: !migrateFailed(report) }),
+    { path: dir, rerun: 'mf-specs migrate --all', verbose: parsed.verbose },
+  );
+};
+
 /** `/specs status --name <spec>`. */
 export const slashStatus = (context: SlashContext): SlashEffect => {
   const { parsed, dir } = context;
@@ -913,6 +957,7 @@ export const runSlash = (
       Match.when('sizing-config', () => slashSizingConfig(context)),
       Match.when('which', () => slashWhich(context)),
       Match.when('create', () => slashCreate(context)),
+      Match.when('migrate', () => slashMigrate(context)),
       Match.when('status', () => slashStatus(context)),
       Match.when('state', () => slashState(context)),
       Match.when('next', () => slashNext(context)),

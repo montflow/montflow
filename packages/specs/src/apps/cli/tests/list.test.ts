@@ -17,18 +17,12 @@ import { entry, memory, stubLayer } from './helpers.js';
 const root = '.agents/@montflow/specs';
 
 /** One spec tree whose derived state follows from the task statuses. */
-const specTree = (
-  name: string,
-  taskStatus: string,
-  specStatus = 'in-progress',
-  lockedPhases = '',
-) => [
+const specTree = (name: string, taskStatus: string, specStatus = 'in-progress') => [
   entry(
     'SPEC.md',
     specMarkdown({
       name,
       status: specStatus,
-      lockedPhases,
       rows: [
         { id: 'A001', name: 'do-thing', type: 'execution', status: taskStatus, gates: 'No' },
         { id: 'A099', name: 'review-phase', type: 'review', status: taskStatus, gates: 'No' },
@@ -36,22 +30,22 @@ const specTree = (
     }),
   ),
   entry(
-    'A001-do-thing/TASK.md',
+    'A/A001-do-thing/TASK.md',
     taskMarkdown({ id: 'A001', name: 'do-thing', status: taskStatus }),
   ),
-  entry('A001-do-thing/MEMORY.md', memory),
+  entry('A/A001-do-thing/MEMORY.md', memory),
   entry(
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: taskStatus }),
   ),
-  entry('A099-review-phase/MEMORY.md', memory),
+  entry('A/A099-review-phase/MEMORY.md', memory),
 ];
 
 const specs = new Map([
   ['alpha', specTree('alpha', 'pending')],
   ['beta', specTree('beta', 'blocked')],
-  ['delta', specTree('delta', 'pending', 'complete', 'A')],
-  ['gamma', specTree('gamma', 'complete', 'complete', 'A')],
+  ['delta', specTree('delta', 'pending', 'complete')],
+  ['gamma', specTree('gamma', 'complete', 'complete')],
 ]);
 
 const runList = (options = {}) => list(root, options).pipe(Effect.provide(stubLayer(specs)));
@@ -111,6 +105,9 @@ Vitest.describe('Cli.list runtime', () => {
               hasFile: () => Effect.succeed(false),
               snapshot: () =>
                 Effect.fail(new SpecStore.StoreError({ operation: 'unused', reason: 'unused' })),
+              move: () => Effect.void,
+              removeDirectory: () => Effect.void,
+              removeFile: () => Effect.void,
               reviewSeries: () => Effect.succeed([]),
               readRootFile: () => Effect.succeed(undefined),
               write: () => Effect.void,

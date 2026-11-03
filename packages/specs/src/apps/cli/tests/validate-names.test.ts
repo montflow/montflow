@@ -85,6 +85,10 @@ const sealedStore = Layer.succeed(
     exists: (_root, name) => Effect.die(`store.exists was read for '${name}'`),
     hasFile: (_root, name) => Effect.die(`store.hasFile was read for '${name}'`),
     snapshot: (_root, name) => Effect.die(`store.snapshot was read for '${name}'`),
+    move: (_root, name) => Effect.die(`store.move was read for '${name}'`),
+    removeDirectory: (_root, name) => Effect.die(`store.removeDirectory was read for '${name}'`),
+    removeFile: (_root, name, relative) =>
+      Effect.die(`store.removeFile was read for '${name}/${relative}'`),
     reviewSeries: (_root, name) => Effect.die(`store.reviewSeries was read for '${name}'`),
     readRootFile: () => Effect.die('store.readRootFile was read'),
     write: () => Effect.die('store.write was read'),
@@ -495,10 +499,10 @@ Vitest.describe('Cli well-formed unknown identifiers keep D003 behavior', () => 
       [
         entry('SPEC.md', specMarkdown({ name: 'ship-spec' })),
         entry(
-          'A001-implement-login/TASK.md',
+          'A/A001-implement-login/TASK.md',
           taskMarkdown({ id: 'A001', name: 'implement-login' }),
         ),
-        entry('A001-implement-login/MEMORY.md', memory),
+        entry('A/A001-implement-login/MEMORY.md', memory),
       ],
     ],
   ]);

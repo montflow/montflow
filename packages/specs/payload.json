@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "package": "@montflow/specs",
+  "payloads": [
+    {
+      "kind": "skill",
+      "name": "montflow-create-specs",
+      "source": "skills/montflow-create-specs",
+      "target": ".agents/skills/montflow-create-specs"
+    },
+    {
+      "kind": "skill",
+      "name": "montflow-find-specs",
+      "source": "skills/montflow-find-specs",
+      "target": ".agents/skills/montflow-find-specs"
+    },
+    {
+      "kind": "prompt",
+      "name": "spec-create",
+      "source": "prompts/spec-create.json",
+      "target": ".agents/@montflow/prompts/spec-create.json"
+    },
+    {
+      "kind": "prompt",
+      "name": "spec-execute",
+      "source": "prompts/spec-execute.json",
+      "target": ".agents/@montflow/prompts/spec-execute.json"
+    },
+    {
+      "kind": "prompt",
+      "name": "spec-sizing",
+      "source": "prompts/spec-sizing.json",
+      "target": ".agents/@montflow/prompts/spec-sizing.json"
+    }
+  ]
+}

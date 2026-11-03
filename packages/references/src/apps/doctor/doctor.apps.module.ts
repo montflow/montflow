@@ -1,9 +1,19 @@
 import { Effect, FileSystem, Path } from 'effect';
+import {
+  type LoadedManifest,
+  type PayloadEntry,
+  type PayloadFiles,
+  loadManifest,
+  nameAt,
+  resolvePayload as resolveSharedPayload,
+  runPayloadDoctor,
+} from '@montflow/payload';
 import * as Git from '../../modules/git/index.js';
 import * as Reference from '../../modules/reference/index.js';
 import * as Verifier from '../../modules/verifier/index.js';
 import { ReferenceStore } from '../../services/index.js';
-import { EMBEDDED_SKILL_PAYLOAD } from './embedded-payload.generated.js';
+import { EMBEDDED_PAYLOAD } from './embedded-payload.generated.js';
+import manifestJson from '../../../payload.json' with { type: 'json' };
 
 /**
  * `mf-references doctor` — the binary, and the `/mf-references` slash command of
@@ -22,8 +32,11 @@ import { EMBEDDED_SKILL_PAYLOAD } from './embedded-payload.generated.js';
  * scaffolding it genuinely lacks.
  */
 
+/** The validated manifest this package ships. */
+export const MANIFEST: LoadedManifest = loadManifest(manifestJson, '@montflow/references');
+
 /** Skills this package ships and `doctor` installs into `.agents/skills/`. */
-export const SKILL_NAMES = ['montflow-add-reference', 'montflow-find-reference'] as const;
+export const SKILL_NAMES = [nameAt(MANIFEST, 'skill', 0), nameAt(MANIFEST, 'skill', 1)] as const;
 
 /** The checks, in the order they run and print. */
 export const CHECK_NAMES = [
@@ -84,7 +97,7 @@ export type DoctorDeps =
   | ReferenceStore.ReferenceStore;
 
 /** A skill's packaged files, as filename → contents. */
-export type SkillPayload = Readonly<Record<string, string>>;
+export type SkillPayload = PayloadFiles;
 
 /** Where a resolved payload came from. */
 export type PayloadOrigin = 'package' | 'embedded';
@@ -119,12 +132,7 @@ const readIfPresent = (
 ): Effect.Effect<string | undefined> =>
   fs.readFileString(file).pipe(Effect.orElseSucceed(() => undefined));
 
-/** Sorted file names directly under a directory; empty when it cannot be read. */
-const listFiles = (fs: FileSystem.FileSystem, dir: string): Effect.Effect<ReadonlyArray<string>> =>
-  fs.readDirectory(dir).pipe(Effect.orElseSucceed((): ReadonlyArray<string> => []));
-
-/**
- * Outcome of reading one packaged skill's own files: a payload, or the reason
+/** Outcome of reading one packaged skill's own files: a payload, or the reason
  * it cannot be one. A skill payload is a flat name→text map, so a directory
  * (or any non-regular entry) beside `SKILL.md` is not carryable.
  */
@@ -181,68 +189,18 @@ export const readPayload = (
   name: string,
   shippedDir: string,
 ): Effect.Effect<ResolvedPayload | undefined> =>
-  readFromPackage(fs, path, path.join(shippedDir, name)).pipe(
-    Effect.map((fromDisk) => {
-      if (fromDisk.kind === 'files') {
-        return {
-          files: fromDisk.files,
-          origin: 'package',
-          source: path.join(shippedDir, name),
-        } satisfies ResolvedPayload;
-      }
-      const embedded = EMBEDDED_SKILL_PAYLOAD[name];
-      return embedded === undefined
-        ? undefined
-        : ({
-            files: embedded,
-            origin: 'embedded',
-            source: 'embedded in this build',
-          } satisfies ResolvedPayload);
-    }),
+  resolveSharedPayload(
+    fs,
+    path,
+    path.dirname(shippedDir),
+    {
+      kind: 'skill',
+      name,
+      source: `skills/${name}`,
+      target: `.agents/skills/${name}`,
+    } satisfies PayloadEntry,
+    EMBEDDED_PAYLOAD,
   );
-
-/** Write a payload's files into the target directory. */
-const writePayload = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  target: string,
-  files: SkillPayload,
-): Effect.Effect<void, string> =>
-  Effect.gen(function* () {
-    yield* fs
-      .makeDirectory(target, { recursive: true })
-      .pipe(
-        Effect.mapError(
-          (cause) => `failed: doctor could not create '${target}': ${reasonOf(cause)}`,
-        ),
-      );
-    for (const [name, text] of Object.entries(files)) {
-      const to = path.join(target, name);
-      yield* fs
-        .writeFileString(to, text)
-        .pipe(
-          Effect.mapError((cause) => `failed: doctor could not write '${to}': ${reasonOf(cause)}`),
-        );
-    }
-  });
-
-/** Describe the first file whose installed contents differ from the payload. */
-const firstDifference = (
-  fs: FileSystem.FileSystem,
-  path: Path.Path,
-  target: string,
-  files: SkillPayload,
-): Effect.Effect<string | undefined> =>
-  Effect.gen(function* () {
-    for (const [name, shipped] of Object.entries(files)) {
-      const installed = yield* readIfPresent(fs, path.join(target, name));
-      if (installed === shipped) continue;
-      return installed === undefined
-        ? `${name} is missing from the installed copy`
-        : `${name} differs from the packaged version`;
-    }
-    return undefined;
-  }).pipe(Effect.orDie);
 
 /** The skills extension runtime, resolved lazily. */
 type SkillsLib = typeof import('@montflow/skills');
@@ -380,7 +338,7 @@ export const verifyPackagedSkills = (
           }
         }
         if (options.skillsDir === undefined) {
-          const embedded = EMBEDDED_SKILL_PAYLOAD[name];
+          const embedded = EMBEDDED_PAYLOAD.skill?.[name];
           if (embedded !== undefined && !samePayload(embedded, files)) {
             issues.push(
               Verifier.issue(
@@ -554,101 +512,75 @@ export const runDoctor = (
       checks.push(check('gitignore', 'repaired', `appended ${Reference.CLONE_DIR}`));
     }
 
-    // Resolve both payloads once; skills-installed and skills-current share them.
-    const shipped = shippedSkillsDir(path);
-    const payloads = new Map<string, ResolvedPayload | undefined>();
-    for (const name of SKILL_NAMES) {
-      payloads.set(name, yield* readPayload(fs, path, name, shipped));
-    }
+    // 6-7. skills — the shared engine installs and compares every manifest entry.
+    const payloadResult = yield* runPayloadDoctor(root, MANIFEST, {
+      check: reportOnly,
+      packageRoot: `${import.meta.dirname}/../../..`,
+      embedded: EMBEDDED_PAYLOAD,
+      invocation,
+      subject: 'reference skills',
+    });
+    const payloads = payloadResult.skills;
     const origins = [
       ...new Set(
-        [...payloads.values()]
-          .map((payload) => payload?.origin)
-          .filter((origin): origin is PayloadOrigin => origin !== undefined),
+        payloads.map((payload) =>
+          payload.source === 'embedded in this build' ? 'embedded' : 'package',
+        ),
       ),
     ];
     const originDetail = origins.length === 0 ? '' : ` origin=${origins.join('+')}`;
 
-    // 6. skills-installed — presence only; freshness is the next check.
-    const missingSkills: Array<string> = [];
-    for (const name of SKILL_NAMES) {
-      const names = (yield* listFiles(fs, installedSkillDir(path, root, name)))
-        .filter((file) => !file.startsWith('.'))
-        .toSorted();
-      if (!names.includes('SKILL.md')) missingSkills.push(name);
-    }
-    if (missingSkills.length === 0) {
-      checks.push(
-        check('skills-installed', 'ok', `installed=${SKILL_NAMES.length}${originDetail}`),
-      );
-    } else if (reportOnly) {
-      checks.push(check('skills-installed', 'drifted', `missing ${missingSkills.join(', ')}`));
-    } else {
-      for (const name of missingSkills) {
-        const payload = payloads.get(name);
-        if (payload === undefined) {
-          return yield* Effect.fail(
-            `failed: packaged skill '${name}' is not available on disk at '${path.join(shipped, name)}' and is not embedded in this build — reinstall @montflow/references`,
-          );
-        }
-        yield* writePayload(fs, path, installedSkillDir(path, root, name), payload.files);
-      }
+    // 6. skills-installed — presence; repair mode names what it wrote.
+    const installedNow = payloads.filter((payload) => payload.status === 'installed');
+    const missingNow = payloads.filter((payload) => payload.status === 'missing');
+    if (installedNow.length > 0) {
       checks.push(
         check(
           'skills-installed',
           'repaired',
-          `installed ${missingSkills.join(', ')}${originDetail}`,
+          `installed ${installedNow.map((payload) => payload.name).join(', ')}${originDetail}`,
         ),
       );
+    } else if (missingNow.length > 0) {
+      checks.push(
+        check(
+          'skills-installed',
+          'drifted',
+          `missing ${missingNow.map((payload) => payload.name).join(', ')}`,
+        ),
+      );
+    } else {
+      checks.push(check('skills-installed', 'ok', `installed=${payloads.length}${originDetail}`));
     }
 
-    // 7. skills-current — byte freshness, file-set mismatches, and the standard.
+    // 7. skills-current — freshness, file-set mismatches, and the standard.
+    const currentProblems = payloads.flatMap((payload) => {
+      if (payload.status === 'missing') return [`missing ${payload.name}`];
+      if (payload.status === 'stale') {
+        return [`stale ${payload.name}: ${payload.detail ?? 'content differs'}`];
+      }
+      if (payload.status === 'mismatched') {
+        return [`mismatched ${payload.name}: ${payload.detail ?? 'file set differs'}`];
+      }
+      if (payload.status === 'blocked') {
+        return [
+          `blocked ${payload.name}: ${payload.failure?.problem ?? payload.detail ?? 'cannot repair'}`,
+        ];
+      }
+      return [];
+    });
+    const extraNotes = payloads.flatMap((payload) =>
+      (payload.extras ?? []).length === 0
+        ? []
+        : [`extra file(s): ${(payload.extras ?? []).join(', ')} in ${payload.name}`],
+    );
     const libs = yield* loadSkills();
-    const currentProblems: Array<string> = [];
-    const currentNotes: Array<string> = [];
-    let rewrote = false;
     for (const name of SKILL_NAMES) {
-      const target = installedSkillDir(path, root, name);
-      const payload = payloads.get(name);
-      if (payload === undefined) {
-        currentProblems.push(`payload unavailable for ${name}`);
-        continue;
-      }
-      const installedNames = (yield* listFiles(fs, target))
-        .filter((file) => !file.startsWith('.'))
-        .toSorted();
-      if (!installedNames.includes('SKILL.md')) {
-        currentProblems.push(`missing ${name}`);
-        continue;
-      }
-      const payloadNames = Object.keys(payload.files).toSorted();
-      const extras = installedNames.filter((file) => !payloadNames.includes(file));
-      const absent = payloadNames.filter((file) => !installedNames.includes(file));
-      const difference =
-        absent.length === 0 ? yield* firstDifference(fs, path, target, payload.files) : undefined;
-
-      if (absent.length > 0 || difference !== undefined) {
-        if (reportOnly) {
-          currentProblems.push(
-            absent.length > 0
-              ? `mismatched ${name}: missing ${absent.join(', ')}`
-              : `stale ${name}: ${difference ?? 'content differs'}`,
-          );
-        } else {
-          yield* writePayload(fs, path, target, payload.files);
-          rewrote = true;
-          currentNotes.push(`rewrote ${name}`);
-        }
-      }
-      if (extras.length > 0) {
-        currentNotes.push(`extra file(s): ${extras.join(', ')} in ${name}`);
-      }
-
-      const installed = yield* readIfPresent(fs, path.join(target, 'SKILL.md'));
-      if (installed === undefined) {
-        currentProblems.push(`missing ${name}`);
-        continue;
-      }
+      const installed = yield* readIfPresent(
+        fs,
+        path.join(installedSkillDir(path, root, name), 'SKILL.md'),
+      );
+      if (installed === undefined) continue;
       if (libs === undefined) {
         currentProblems.push(`could not load @montflow/skills to verify ${name}`);
         continue;
@@ -656,14 +588,16 @@ export const runDoctor = (
       const invalid = standardIssue(libs, name, installed);
       if (invalid !== undefined) currentProblems.push(`invalid ${name}: ${invalid}`);
     }
+    const repairedNow = payloads.filter((payload) => payload.status === 'repaired');
     const currentDetail = [
-      `skills=${SKILL_NAMES.length}`,
-      ...currentNotes,
+      `skills=${payloads.length}`,
+      ...repairedNow.map((payload) => `rewrote ${payload.name}`),
+      ...extraNotes,
       ...(origins.length === 0 ? [] : [`origin=${origins.join('+')}`]),
     ].join(' ');
     if (currentProblems.length > 0) {
       checks.push(check('skills-current', 'drifted', currentProblems.join('; ')));
-    } else if (rewrote) {
+    } else if (repairedNow.length > 0) {
       checks.push(check('skills-current', 'repaired', currentDetail));
     } else {
       checks.push(check('skills-current', 'ok', currentDetail));

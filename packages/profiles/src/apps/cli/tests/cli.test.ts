@@ -87,6 +87,25 @@ Vitest.describe('Cli.parseCliArgs', () => {
       names: ['alpha', 'beta'],
     });
   });
+
+  Vitest.it('parses doctor in repair and report-only modes', () => {
+    Vitest.expect(Cli.parseCliArgs('doctor')).toStrictEqual({
+      kind: 'Doctor',
+      check: false,
+      dir: undefined,
+    });
+    Vitest.expect(Cli.parseCliArgs('doctor --check')).toStrictEqual({
+      kind: 'Doctor',
+      check: true,
+      dir: undefined,
+    });
+    Vitest.expect(Cli.parseCliArgs('doctor --check --dir /tmp/ws')).toStrictEqual({
+      kind: 'Doctor',
+      check: true,
+      dir: '/tmp/ws',
+    });
+    Vitest.expect(Cli.parseCliArgs('doctor --bogus')).toStrictEqual({ kind: 'Help' });
+  });
 });
 
 Vitest.describe('Cli.run', () => {

@@ -1,8 +1,8 @@
 # Spec module
 
 Schema + verification for the top-level `SPEC.md`: the spec
-descriptor (name, status, workspace-type, author, created,
-locked-phases), the body shape, and the task table.
+descriptor (name, status, workspace-type, author, created), the body
+shape, and the task table. A legacy lock field is ignored, not read.
 
 Singular name per the TypeScript modules skill (`spec` → `Spec`).
 

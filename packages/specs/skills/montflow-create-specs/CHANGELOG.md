@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.12.0] - 2026-11-03
+
+### Changed
+
+- `mf-specs create` no longer appends a reserved `<PHASE>099` review task; a review task is emitted only when `--tasks` requests `name:review`, and `--reviewer-profiles` applies to the requested review task
+
+## [2.11.0] - 2026-11-02
+
+### Changed
+
+- `task.completion-unchecked` and `gate.unchecked` are errors on a `complete` task, not warnings; an unfinished task may still carry an unchecked checklist or an all-unchecked gate with no finding
+- The phase directory is the container for every task, and no phase requires a reserved review task; a lock is derived from a closed review round
+
+### Added
+
+- `size: none` as the completed-record opt-out: it is accepted only on a `complete` task, is never a dispatch target, and contributes no review budget
+
 ## [2.10.0] - 2026-10-28
 
 ### Added

@@ -702,7 +702,7 @@ export const doctorMark = (payload: PayloadInstall): string =>
   Match.value(payload.status).pipe(
     Match.whenOr('ok', 'present', () => '\u2713'),
     Match.whenOr('installed', 'repaired', () => '+'),
-    Match.whenOr('missing', 'stale', 'blocked', () => '\u2717'),
+    Match.whenOr('missing', 'stale', 'mismatched', 'blocked', () => '\u2717'),
     Match.exhaustive,
   );
 
@@ -720,6 +720,7 @@ export const doctorNote = (payload: PayloadInstall): string =>
     Match.when('repaired', () => `repaired (${payload.detail ?? 'rewritten from the package'})`),
     Match.when('missing', () => payload.detail ?? 'not installed'),
     Match.when('stale', () => payload.detail ?? 'differs from the package'),
+    Match.when('mismatched', () => payload.detail ?? 'installed file set differs from the package'),
     Match.when('blocked', () => {
       const code = payload.failure?.code ?? 'doctor.blocked';
       return `blocked [${code}]: ${payload.failure?.problem ?? payload.detail ?? 'cannot repair'}`;
@@ -775,15 +776,34 @@ export const renderDoctor = (result: DoctorResult): string => {
     Match.when('drifted', () => '\u2717 spec skills and prompts are not current.'),
     Match.exhaustive,
   );
-  const payloads = [...result.skills, ...result.prompts];
+  const payloads = result.payloads;
   const lines = payloads.map((payload) => doctorLine(payload));
-  const failures = payloads.flatMap((payload) => {
-    const found = diagnosticOfDoctorFailure(payload);
-    return found === undefined ? [] : [found];
-  });
+  const manifestFailure = result.manifestFailure;
+  const failures = [
+    ...(manifestFailure === undefined
+      ? []
+      : [
+          diagnostic({
+            code: manifestFailure.code,
+            path: manifestFailure.path,
+            field: manifestFailure.operation,
+            problem: manifestFailure.problem,
+            rerun: 'mf-specs doctor',
+            fix: manifestFailure.fix,
+            cause: manifestFailure.cause,
+          }),
+        ]),
+    ...payloads.flatMap((payload) => {
+      const found = diagnosticOfDoctorFailure(payload);
+      return found === undefined ? [] : [found];
+    }),
+  ];
   const repairable = payloads.some((payload) => repairableStatus(payload.status));
   return [
     head,
+    ...(manifestFailure === undefined
+      ? []
+      : [`\u2717 payload manifest: blocked [${manifestFailure.code}]: ${manifestFailure.problem}`]),
     ...lines,
     ...(failures.length === 0 ? [] : ['', renderDiagnostics(failures)]),
     ...(repairable ? ['Run: mf-specs doctor'] : []),

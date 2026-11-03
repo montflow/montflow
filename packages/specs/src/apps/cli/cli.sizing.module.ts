@@ -238,9 +238,10 @@ export const tasksOf = (snapshot: SpecSnapshot): ReadonlyArray<Task> => {
 /** The task directory a snapshot holds for `id`, when one parses. */
 export const taskDirOf = (snapshot: SpecSnapshot, id: string): string | undefined => {
   for (const file of snapshot.files) {
-    if (!file.path.endsWith('/TASK.md')) continue;
-    const dir = file.path.slice(0, file.path.indexOf('/'));
-    if (parseTaskDirName(dir)?.id === id) return dir;
+    const segments = file.path.split('/');
+    if (segments.length !== 3 || segments[2] !== 'TASK.md') continue;
+    const leaf = segments[1] ?? '';
+    if (parseTaskDirName(leaf)?.id === id) return `${segments[0]}/${leaf}`;
   }
   return undefined;
 };

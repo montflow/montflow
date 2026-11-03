@@ -293,7 +293,7 @@ const gateFailure = (
       code: CODES.missing,
       problem: `Prompt '${name}' is not installed.`,
     })),
-    Match.when('stale', (): GateOutcome => ({
+    Match.whenOr('stale', 'mismatched', (): GateOutcome => ({
       code: CODES.stale,
       problem: `Prompt '${name}' is not current: ${entry.failure?.problem ?? entry.detail ?? entry.status}.`,
     })),
@@ -361,7 +361,7 @@ const ownedSkillFailure = (
         cause: entry.failure?.cause,
       }),
     ),
-    Match.when('stale', () =>
+    Match.whenOr('stale', 'mismatched', () =>
       promptError({
         code: CODES.skillStale,
         path: entry.target,

@@ -33,7 +33,7 @@ state.**
 5. **Run the phase review through the reviews extension.** Start it with
    `mf-reviews start <name>` — or `/mf-reviews start <name>` in the OpenCode host — where `<name>` is a
    kebab-case series name for the spec and phase (e.g. `ship-spec-a`); `mf-reviews resume
-   <name>` picks up a stopped review (`mf-reviews --help` has the exact verbs). The extension
+<name>` picks up a stopped review (`mf-reviews --help` has the exact verbs). The extension
    spawns the isolated reviewer and drives the findings → fix → re-review loop to a verdict.
    Record the series on the phase's `review` task (`review: <name>`) so `mf-specs check` can
    re-verify it. Never run a reviewer yourself and never touch the review artifact — the

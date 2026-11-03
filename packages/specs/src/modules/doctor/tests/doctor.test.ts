@@ -358,7 +358,7 @@ Vitest.describe('runDoctor', () => {
       Fs.rmSync(changelog);
 
       const checked = yield* runDoctor(root, { check: true });
-      Vitest.expect(checked.skills[0]?.status).toBe('stale');
+      Vitest.expect(checked.skills[0]?.status).toBe('mismatched');
       Vitest.expect(checked.skills[0]?.detail).toBe('installed copy is missing: CHANGELOG.md');
 
       const repaired = yield* runDoctor(root);

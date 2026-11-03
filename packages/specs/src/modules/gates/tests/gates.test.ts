@@ -69,14 +69,13 @@ Vitest.describe('Gates.verifyGatesFile runtime', () => {
 });
 
 Vitest.describe('Gates.verifyGateProgress runtime', () => {
-  Vitest.it('warns when a complete task has no checked gate item', () => {
+  Vitest.it('errors when a complete task has no checked gate item', () => {
     Vitest.expect(Gates.verifyGateProgress(goodGates, true)).toStrictEqual({
-      valid: true,
+      valid: false,
       issues: [
         {
           code: 'gate.unchecked',
           field: 'gate',
-          severity: 'warning',
           message:
             'Completed task has 4 gate items and none checked; the gate records no verification result.',
           expected: 'at least one checked gate item (`- [x]`)',
@@ -87,7 +86,7 @@ Vitest.describe('Gates.verifyGateProgress runtime', () => {
     });
   });
 
-  Vitest.it('stays quiet for a pending task, a checked gate, and an itemless gate', () => {
+  Vitest.it('stays quiet for an unfinished task, a checked gate, and an itemless gate', () => {
     Vitest.expect(Gates.verifyGateProgress(goodGates, false)).toStrictEqual({
       valid: true,
       issues: [],

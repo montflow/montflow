@@ -22,11 +22,34 @@ Vitest.describe('Cli.scaffold engine', () => {
       Vitest.expect(report.name).toBe('ship-login');
       Vitest.expect(report.dir).toBe(`${root}/ship-login`);
       Vitest.expect(report.phase).toBe('A');
-      Vitest.expect(report.taskCount).toBe(2);
+      Vitest.expect(report.taskCount).toBe(1);
       Vitest.expect(report.files).toContain('SPEC.md');
-      Vitest.expect(report.files).toContain('A001-implement/TASK.md');
-      Vitest.expect(report.files).toContain('A099-review-phase/TASK.md');
+      Vitest.expect(report.files).toContain('A/PHASE.md');
+      Vitest.expect(report.files).toContain('A/MEMORY.md');
+      Vitest.expect(report.files).toContain('A/A001-implement/TASK.md');
+      Vitest.expect(report.files.some((file) => /\/A\d*099-/.test(file))).toBe(false);
       Vitest.expect(specs.has('ship-login')).toBe(true);
+      const spec = specs.get('ship-login')?.find((file) => file.path === 'SPEC.md')?.content ?? '';
+      Vitest.expect(spec).toContain('spec-version: 2');
+      Vitest.expect(spec).not.toContain(['locked', 'phases'].join('-'));
+    }),
+  );
+
+  Vitest.it.effect('emits no reserved review task unless one is requested', () =>
+    Effect.gen(function* () {
+      const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
+      yield* scaffold(root, { name: 'ship-login', author: 'Tester' }).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      const files = specs.get('ship-login') ?? [];
+      Vitest.expect(files.some((file) => file.path.includes('099-review-phase'))).toBe(false);
+      Vitest.expect(files.some((file) => file.path.includes('/review-phase/'))).toBe(false);
+      const table = files.find((file) => file.path === 'SPEC.md')?.content ?? '';
+      Vitest.expect(table).not.toContain('| A099 |');
+      const checked = yield* runSlash('check --name ship-login', root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(checked.ok).toBe(true);
     }),
   );
 
@@ -38,9 +61,9 @@ Vitest.describe('Cli.scaffold engine', () => {
         taskSpecs: ['build:execution:gates:large', 'explore:exploratory::tiny'],
       }).pipe(Effect.provide(stubLayer(specs)));
       const files = specs.get('ship-login') ?? [];
-      const build = files.find((file) => file.path === 'A001-build/TASK.md')?.content ?? '';
+      const build = files.find((file) => file.path === 'A/A001-build/TASK.md')?.content ?? '';
       Vitest.expect(build).toContain('size: large');
-      const explore = files.find((file) => file.path === 'A002-explore/TASK.md')?.content ?? '';
+      const explore = files.find((file) => file.path === 'A/A002-explore/TASK.md')?.content ?? '';
       Vitest.expect(explore).toContain('size: tiny');
       const checked = yield* runSlash('check --name ship-login', root).pipe(
         Effect.provide(stubLayer(specs)),
@@ -100,16 +123,18 @@ Vitest.describe('Cli.scaffold engine', () => {
     }),
   );
 
-  Vitest.it.effect('emits reviewer-profiles on the review task when supplied', () =>
+  Vitest.it.effect('emits reviewer-profiles on a requested review task', () =>
     Effect.gen(function* () {
       const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
       yield* scaffold(root, {
         name: 'ship-login',
         author: 'Tester',
+        taskSpecs: ['implement', 'review-phase:review'],
         reviewerProfiles: ['example-reviewer'],
       }).pipe(Effect.provide(stubLayer(specs)));
       const files = specs.get('ship-login') ?? [];
-      const review = files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
+      const review =
+        files.find((file) => file.path === 'A/A002-review-phase/TASK.md')?.content ?? '';
       Vitest.expect(review).toContain('reviewer-profiles: example-reviewer');
       const checked = yield* runSlash('check --name ship-login', root).pipe(
         Effect.provide(stubLayer(specs)),
@@ -118,14 +143,30 @@ Vitest.describe('Cli.scaffold engine', () => {
     }),
   );
 
-  Vitest.it.effect('emits an empty reviewer-profiles line by default', () =>
+  Vitest.it.effect('emits an empty reviewer-profiles line on an explicit review task', () =>
     Effect.gen(function* () {
       const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
-      yield* scaffold(root, { name: 'ship-login' }).pipe(Effect.provide(stubLayer(specs)));
+      yield* scaffold(root, {
+        name: 'ship-login',
+        taskSpecs: ['implement', 'review-phase:review'],
+      }).pipe(Effect.provide(stubLayer(specs)));
       const files = specs.get('ship-login') ?? [];
-      const review = files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
+      const review =
+        files.find((file) => file.path === 'A/A002-review-phase/TASK.md')?.content ?? '';
       Vitest.expect(review).toContain('reviewer-profiles:');
       Vitest.expect(review).not.toContain('reviewer-profiles: example-reviewer');
+    }),
+  );
+
+  Vitest.it.effect('refuses reviewer profiles without a review task', () =>
+    Effect.gen(function* () {
+      const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
+      const error = yield* scaffold(root, {
+        name: 'ship-login',
+        reviewerProfiles: ['example-reviewer'],
+      }).pipe(Effect.provide(stubLayer(specs)), Effect.flip);
+      Vitest.expect(slashProblem(error)).toContain('needs a review task');
+      Vitest.expect(specs.has('ship-login')).toBe(false);
     }),
   );
 
@@ -148,7 +189,7 @@ Vitest.describe('Cli.scaffold engine', () => {
         taskSpecs: ['build:execution:gates:'],
       }).pipe(Effect.provide(stubLayer(specs)));
       const files = specs.get('ship-login') ?? [];
-      const build = files.find((file) => file.path === 'A001-build/TASK.md')?.content ?? '';
+      const build = files.find((file) => file.path === 'A/A001-build/TASK.md')?.content ?? '';
       Vitest.expect(build).toContain('size: medium');
     }),
   );
@@ -253,16 +294,17 @@ Vitest.describe('Cli.runSlash create', () => {
     }),
   );
 
-  Vitest.it.effect('threads --reviewer-profiles into the review task', () =>
+  Vitest.it.effect('threads --reviewer-profiles into the requested review task', () =>
     Effect.gen(function* () {
       const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
       const created = yield* runSlash(
-        'create --name ship-login --reviewer-profiles example-reviewer',
+        'create --name ship-login --tasks implement,review-phase:review --reviewer-profiles example-reviewer',
         root,
       ).pipe(Effect.provide(stubLayer(specs)));
       Vitest.expect(created.ok).toBe(true);
       const files = specs.get('ship-login') ?? [];
-      const review = files.find((file) => file.path === 'A099-review-phase/TASK.md')?.content ?? '';
+      const review =
+        files.find((file) => file.path === 'A/A002-review-phase/TASK.md')?.content ?? '';
       Vitest.expect(review).toContain('reviewer-profiles: example-reviewer');
       const checked = yield* runSlash('check --name ship-login', root).pipe(
         Effect.provide(stubLayer(specs)),

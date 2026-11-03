@@ -1,5 +1,5 @@
 // oxlint-disable-next-line montflow/no-node-platform-imports -- this TUI entry is the composition root for its plugin store.
-import { readdir } from 'node:fs/promises';
+import { access, readdir } from 'node:fs/promises';
 // oxlint-disable-next-line montflow/no-node-platform-imports -- the TUI entry resolves its store path during host setup.
 import path from 'node:path';
 import type { TuiPlugin } from '@montflow/opencode';
@@ -9,17 +9,30 @@ import { ID, COMMAND_NAME } from './server.js';
 /** Specs directory segments. */
 const SPECS_DIR = ['.agents', '@montflow', 'specs'] as const;
 
-const loadSpecs = async (directory: string): Promise<ReadonlyArray<string>> => {
+/**
+ * List the spec directories under `<workspace>/.agents/@montflow/specs`.
+ * A spec is exactly a directory holding `SPEC.md`; phase and task directories
+ * never qualify, so the picker can never offer one as a spec. The selected
+ * name is forwarded unchanged.
+ * @param directory - workspace root
+ * @returns spec slugs, sorted
+ */
+export const loadSpecs = async (directory: string): Promise<ReadonlyArray<string>> => {
   const root = path.join(directory, ...SPECS_DIR);
   const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
-  const specs: string[] = [];
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      // Skip phase/review dirs, look for spec dirs (typically contain SPEC.md)
-      specs.push(entry.name);
-    }
-  }
-  return specs.toSorted();
+  const checked = await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map(async (entry) => {
+        const marker = path.join(root, entry.name, 'SPEC.md');
+        const present = await access(marker).then(
+          () => true,
+          () => false,
+        );
+        return present ? entry.name : undefined;
+      }),
+  );
+  return checked.filter((name): name is string => name !== undefined).toSorted();
 };
 
 export default {

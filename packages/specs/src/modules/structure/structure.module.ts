@@ -3,16 +3,30 @@ import {
   type TaskRow,
   parseSpecFile,
   parseTaskTable,
+  readSpecVersion,
   verifySpecFile,
+  SPEC_VERSION_CODES,
+  SPEC_VERSION_FIELD,
 } from '../spec/index.js';
 import { parseMarkdown } from '../frontmatter/index.js';
-import { verifyGateProgress, verifyGatesFile } from '../gates/index.js';
+import { GATE_RESULTS_FILE, verifyGateProgress, verifyGatesFile } from '../gates/index.js';
 import { verify as verifyLifecycle } from '../lifecycle/index.js';
 import { verifyMemoryFile } from '../memory/index.js';
+import {
+  PHASE_CODES,
+  PHASE_DIR_FILES,
+  PHASE_FILE,
+  PHASE_GATES_FILE,
+  PHASE_MEMORY_FILE,
+  phaseEvidence,
+  parsePhaseFile,
+  verifyPhaseFile,
+} from '../phase/index.js';
 import {
   type PhaseBudget,
   type ReviewTaskEntry,
   type SeriesSnapshot,
+  passedPhases,
   seriesNames,
   verify as verifyReviewLink,
   verifyBudgets as verifyReviewBudgets,
@@ -33,30 +47,41 @@ import {
   phaseReviewBudget,
   verifyText,
 } from '../sizing/index.js';
-import { type Issue, type Result, issue, noErrors } from '../verify/index.js';
+import { type Issue, type Result, finding, issue, noErrors } from '../verify/index.js';
 
 /**
- * One file inside a spec directory, as seen by the verifier.
- * `path` is POSIX-relative to the spec root (e.g. `A001-explore/TASK.md`).
+ * One entry inside a spec directory, as seen by the verifier.
+ * `path` is POSIX-relative to the spec root (e.g. `A/A001-explore/TASK.md`).
  * The verifier never touches disk — the caller supplies the snapshot.
  */
 export interface SpecFileEntry {
   /** POSIX-relative path from the spec root. */
   readonly path: string;
-  /** Raw file contents. */
+  /** Raw file contents. Empty for directories. */
   readonly content: string;
+  /**
+   * Whether the entry is a file or a directory. Optional so a caller may
+   * supply a file-only listing; a missing kind means `file`.
+   */
+  readonly kind?: 'file' | 'directory';
 }
 
 /** In-memory listing of a spec directory, supplied by the caller. */
 export interface SpecSnapshot {
   /** Spec directory slug (matches SPEC.md `name`). */
   readonly name: string;
-  /** Every file under the spec root. */
+  /** Every file and, optionally, directory under the spec root. */
   readonly files: ReadonlyArray<SpecFileEntry>;
 }
 
 /** Files a task directory may contain. */
-const TASK_DIR_FILES = new Set(['TASK.md', 'MEMORY.md', 'GATES.md']);
+const TASK_DIR_FILES = new Set([
+  'TASK.md',
+  'MEMORY.md',
+  'GATES.md',
+  'MAILBOX.md',
+  GATE_RESULTS_FILE,
+]);
 
 /** Files every task directory must contain. */
 const TASK_DIR_REQUIRED = ['TASK.md', 'MEMORY.md'] as const;
@@ -66,13 +91,57 @@ const SPEC_ROOT_FILES = new Set(['SPEC.md', CONFIG_FILE]);
 
 /** Helpful placement hints for files that belong inside a task directory. */
 const ROOT_STRAY_HINT = new Map<string, string>([
-  ['TASK.md', 'TASK.md must live inside a task directory: A001-<kebab-name>/TASK.md.'],
-  ['MEMORY.md', 'MEMORY.md must live inside a task directory: A001-<kebab-name>/MEMORY.md.'],
-  ['GATES.md', 'GATES.md must live inside a task directory: A001-<kebab-name>/GATES.md.'],
+  ['TASK.md', 'TASK.md must live inside a task directory: <phase>/A001-<kebab-name>/TASK.md.'],
+  [
+    'MEMORY.md',
+    'MEMORY.md must live inside a task directory: <phase>/A001-<kebab-name>/MEMORY.md.',
+  ],
+  ['GATES.md', 'GATES.md must live inside a task directory: <phase>/A001-<kebab-name>/GATES.md.'],
 ]);
 
 /** A leading task id with no `-<name>` yet, e.g. `A001`. */
 const TASK_ID_PREFIX = /^[A-Z]{1,2}\d{3}/;
+
+/** Normalize an entry's kind, treating a missing kind as a file. */
+const kindOf = (entry: SpecFileEntry): 'file' | 'directory' => entry.kind ?? 'file';
+
+/** Parent directory path, or `''` for a top-level entry. */
+const parentOf = (path: string): string => {
+  const slash = path.lastIndexOf('/');
+  return slash === -1 ? '' : path.slice(0, slash);
+};
+
+/** Final path segment. */
+const baseOf = (path: string): string => {
+  const slash = path.lastIndexOf('/');
+  return slash === -1 ? path : path.slice(slash + 1);
+};
+
+/**
+ * Every directory path implied by the snapshot: the declared directory entries
+ * plus the parents of every file path. The union lets a file-only snapshot keep
+ * verifying while a declared empty directory stays observable.
+ */
+const directoryPaths = (entries: ReadonlyArray<SpecFileEntry>): Set<string> => {
+  const dirs = new Set<string>();
+  for (const entry of entries) {
+    if (kindOf(entry) !== 'directory') continue;
+    let declared = entry.path;
+    while (declared !== '') {
+      dirs.add(declared);
+      declared = parentOf(declared);
+    }
+  }
+  for (const entry of entries) {
+    if (kindOf(entry) !== 'file') continue;
+    let parent = parentOf(entry.path);
+    while (parent !== '') {
+      dirs.add(parent);
+      parent = parentOf(parent);
+    }
+  }
+  return dirs;
+};
 
 /**
  * Find the first `depends-on` cycle, if any. Returns the offending ids in
@@ -157,22 +226,81 @@ export interface ReviewInput {
  */
 export const NO_REVIEW: ReviewInput = { series: [], requireRounds: false };
 
+/** Result of the v2-transformation predicate. */
+export interface TransformResult {
+  /** True when the tree is the v2 shape. */
+  readonly ok: boolean;
+  /** First failing reason, when `ok` is false. */
+  readonly reason?: string;
+}
+
 /**
- * Mechanically verify the whole on-disk structure of a spec:
- * required files, task-directory naming and placement, id/name agreement,
- * unique ids, task-table agreement (type/status/gates), `TASK.md` /
- * `GATES.md` / `MEMORY.md` content, the record checks (a complete task's
- * completion checklist and gate progress), an optional spec-root `sizing.json`,
- * dependency existence + phase ordering + cycles, a `review` task per phase,
- * and `locked-phases` pointing at real phases. Pure — no IO.
+ * The version-independent v2 tree predicate. True iff every phase directory
+ * holds a `PHASE.md` whose id equals the directory, no task directory sits at
+ * the spec root, and every file in a phase or task directory is on its v2
+ * allowlist. The declared `spec-version` is checked separately; a record cannot
+ * relabel itself v2 while keeping the v1 shape.
+ * @param snapshot - the spec directory listing
+ * @returns whether the tree is transformed, and the first reason it is not
+ */
+export const isV2Transformed = (snapshot: SpecSnapshot): TransformResult => {
+  const files = snapshot.files.filter((entry) => kindOf(entry) === 'file');
+  const dirs = directoryPaths(snapshot.files);
+  const childrenOf = (dir: string): ReadonlyArray<string> =>
+    [...dirs].filter((path) => parentOf(path) === dir);
+
+  for (const dir of childrenOf('')) {
+    if (parseTaskDirName(dir) !== undefined) {
+      return { ok: false, reason: `task directory '${dir}' sits at the spec root` };
+    }
+  }
+
+  for (const phase of childrenOf('').filter((dir) => PHASE_PATTERN.test(dir))) {
+    const phaseFile = files.find((file) => file.path === `${phase}/${PHASE_FILE}`);
+    if (phaseFile === undefined) {
+      return { ok: false, reason: `phase '${phase}' has no PHASE.md` };
+    }
+    const parsed = parsePhaseFile(phaseFile.content);
+    if (parsed === undefined) {
+      return { ok: false, reason: `phase '${phase}' has an unreadable PHASE.md` };
+    }
+    if (parsed.id !== phase) {
+      return { ok: false, reason: `phase '${phase}' PHASE.md id is '${parsed.id}'` };
+    }
+    for (const file of files) {
+      if (parentOf(file.path) !== phase) continue;
+      const name = baseOf(file.path);
+      if (!PHASE_DIR_FILES.has(name)) {
+        return { ok: false, reason: `phase '${phase}' holds unexpected file '${name}'` };
+      }
+    }
+    for (const taskDir of childrenOf(phase)) {
+      for (const file of files) {
+        if (parentOf(file.path) !== taskDir) continue;
+        if (!TASK_DIR_FILES.has(baseOf(file.path))) {
+          return { ok: false, reason: `task directory '${taskDir}' holds an unexpected file` };
+        }
+      }
+    }
+  }
+
+  return { ok: true };
+};
+
+/**
+ * Mechanically verify the whole on-disk structure of a spec: the
+ * phase-directory layout (`SPEC.md` plus one directory per phase, one directory
+ * per task) with a strict allowlist at every level, plus task-directory naming
+ * and id/name agreement, unique ids, task-table agreement (type/status/gates),
+ * `TASK.md` / `GATES.md` / `MEMORY.md` content, the record checks (a complete
+ * task's completion checklist and gate progress are errors when unchecked and
+ * silent while the task is unfinished), an optional spec-root
+ * `sizing.json`, dependency existence + phase ordering + cycles, the review
+ * budget, and the review link when the caller supplies series. Pure — no IO.
  *
- * The tree's review tasks are additionally checked against the convention link
- * (`ReviewLink`): each expected series may hold no more rounds attributed to a
- * phase than that phase's size-derived review budget, and — only when
- * `review.requireRounds` is set — each complete `review` task must have a round
- * attributed to its phase in every expected series. Every caller supplies the
- * input, so one snapshot yields one verdict for `check`, `status`, `next`, and
- * `execute`; a caller with no review store passes {@link NO_REVIEW}.
+ * There is no stored lock list and no required review task: a phase is complete
+ * when every task under it is complete, and its lock is derived from a passed
+ * review round attributed to it (see {@link passedPhases}).
  * @param snapshot - the spec directory listing
  * @param review - the linked review series and round-presence rule
  * @returns the result; `valid` is true only with zero issues
@@ -180,14 +308,25 @@ export const NO_REVIEW: ReviewInput = { series: [], requireRounds: false };
 export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Result => {
   const issues: Array<Issue> = [];
 
-  for (const file of snapshot.files) {
-    if (file.path.includes('/') || SPEC_ROOT_FILES.has(file.path)) continue;
+  const files = snapshot.files.filter((entry) => kindOf(entry) === 'file');
+  const dirs = directoryPaths(snapshot.files);
+  const childrenOf = (dir: string): ReadonlyArray<string> =>
+    [...dirs].filter((path) => parentOf(path) === dir);
+
+  // ── Root ── only SPEC.md, sizing.json, and phase directories may live here.
+  for (const file of files) {
+    if (parentOf(file.path) !== '' || SPEC_ROOT_FILES.has(file.path)) continue;
     issues.push(
       issue(file.path, ROOT_STRAY_HINT.get(file.path) ?? 'Unexpected file at the spec root.'),
     );
   }
+  for (const file of files) {
+    if (file.path.split('/').length > 3) {
+      issues.push(issue(file.path, 'Path is deeper than <phase>/<task>/<file>.'));
+    }
+  }
 
-  const specFile = snapshot.files.find((file) => file.path === 'SPEC.md');
+  const specFile = files.find((file) => file.path === 'SPEC.md');
   if (specFile === undefined) {
     issues.push(issue('SPEC.md', 'Required file is missing.'));
     return { valid: false, issues };
@@ -197,40 +336,52 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
   const parsedSpec = parseMarkdown(specFile.content);
   const spec = parseSpecFile(specFile.content);
   const rows: ReadonlyArray<TaskRow> = parsedSpec === null ? [] : parseTaskTable(parsedSpec.body);
-
-  const dirs = new Map<string, Array<SpecFileEntry>>();
-  for (const file of snapshot.files) {
-    const slash = file.path.indexOf('/');
-    if (slash === -1) continue;
-    const dir = file.path.slice(0, slash);
-    const rest = file.path.slice(slash + 1);
-    if (rest.includes('/')) {
+  const version = parsedSpec === null ? undefined : readSpecVersion(parsedSpec.fields);
+  if (version !== undefined && version.version >= 2) {
+    const transformed = isV2Transformed(snapshot);
+    if (!transformed.ok) {
       issues.push(
-        issue(file.path, 'Nested path inside a task directory — task files are one level deep.'),
+        finding({
+          code: SPEC_VERSION_CODES.untransformed,
+          field: `SPEC.md: ${SPEC_VERSION_FIELD}`,
+          message: `Spec declares standard version ${version.version} but its tree is not v2: ${transformed.reason ?? 'unknown reason'}.`,
+          expected: 'every phase holds PHASE.md and every file is on the v2 allowlist',
+          actual: transformed.reason ?? 'untransformed tree',
+          fix: 'Run mf-specs migrate --name <spec>; a version bump must land with its transformation.',
+        }),
       );
-      continue;
     }
-    const bucket = dirs.get(dir) ?? [];
-    bucket.push(file);
-    dirs.set(dir, bucket);
   }
 
-  const tasks = new Map<string, Task>();
-  const gates = new Map<string, boolean>();
-  for (const [dir, files] of dirs) {
-    const dirName = parseTaskDirName(dir);
-    if (dirName === undefined) {
+  // ── Phases ── every root directory is a phase directory or a finding.
+  const phaseDirs: Array<string> = [];
+  for (const dir of childrenOf('')) {
+    if (PHASE_PATTERN.test(dir)) {
+      phaseDirs.push(dir);
+      continue;
+    }
+    const taskDir = parseTaskDirName(dir);
+    if (taskDir !== undefined) {
+      const target = `${taskDir.phase}/${dir}`;
       issues.push(
         issue(
           dir,
-          TASK_ID_PREFIX.test(dir)
-            ? `Task directory '${dir}' is missing its kebab name; expected <PHASE_LETTERS><NNN>-<kebab-name>.`
-            : 'Task directory must match <PHASE_LETTERS><NNN>-<kebab-name>.',
+          `Task directory '${dir}' must live inside a phase directory: ${target}/.`,
+          `Move it to ${target}/.`,
         ),
       );
       continue;
     }
-    const names = new Set(files.map((file) => file.path.slice(dir.length + 1)));
+    issues.push(issue(dir, 'Unexpected directory at the spec root.'));
+  }
+  phaseDirs.sort((a, b) => phaseRank(a) - phaseRank(b));
+
+  // ── Tasks ── one reader per task directory.
+  const tasks = new Map<string, Task>();
+  const gates = new Map<string, boolean>();
+  const readTaskDir = (dir: string, leaf: string): void => {
+    const dirFiles = files.filter((file) => parentOf(file.path) === dir);
+    const names = new Set(dirFiles.map((file) => baseOf(file.path)));
     for (const required of TASK_DIR_REQUIRED) {
       if (!names.has(required))
         issues.push(issue(`${dir}/${required}`, 'Required file is missing.'));
@@ -240,12 +391,16 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
         issues.push(issue(`${dir}/${name}`, 'Unexpected file in a task directory.'));
       }
     }
-    gates.set(dirName.id, names.has('GATES.md'));
+    for (const sub of childrenOf(dir)) {
+      issues.push(issue(sub, 'Unexpected directory inside a task directory.'));
+    }
+    const dirName = parseTaskDirName(leaf);
+    if (dirName !== undefined) gates.set(dirName.id, names.has('GATES.md'));
 
-    const taskFile = files.find((file) => file.path === `${dir}/TASK.md`);
+    const taskFile = dirFiles.find((file) => file.path === `${dir}/TASK.md`);
     const parsedTask = taskFile === undefined ? undefined : parseTaskFile(taskFile.content);
     if (taskFile !== undefined) {
-      issues.push(...nest(`${dir}/TASK.md`, verifyTaskFile(dir, taskFile.content)));
+      issues.push(...nest(`${dir}/TASK.md`, verifyTaskFile(leaf, taskFile.content)));
       if (parsedTask !== undefined) {
         if (tasks.has(parsedTask.id))
           issues.push(issue(`${dir}/TASK.md`, `Duplicate task id '${parsedTask.id}'.`));
@@ -253,7 +408,7 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
       }
     }
 
-    const gatesFile = files.find((file) => file.path === `${dir}/GATES.md`);
+    const gatesFile = dirFiles.find((file) => file.path === `${dir}/GATES.md`);
     if (gatesFile !== undefined) {
       issues.push(...nest(`${dir}/GATES.md`, verifyGatesFile(gatesFile.content)));
       issues.push(
@@ -263,9 +418,98 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
         ),
       );
     }
-    const memoryFile = files.find((file) => file.path === `${dir}/MEMORY.md`);
+    const memoryFile = dirFiles.find((file) => file.path === `${dir}/MEMORY.md`);
     if (memoryFile !== undefined) {
       issues.push(...nest(`${dir}/MEMORY.md`, verifyMemoryFile(memoryFile.content)));
+    }
+  };
+
+  for (const phase of phaseDirs) {
+    const taskDirs = childrenOf(phase);
+    if (taskDirs.length === 0) {
+      issues.push(issue(phase, 'Phase directory has no task directories.'));
+    }
+    const phaseFiles = files.filter((file) => parentOf(file.path) === phase);
+    for (const file of phaseFiles) {
+      if (PHASE_DIR_FILES.has(baseOf(file.path))) continue;
+      issues.push(
+        issue(
+          file.path,
+          ROOT_STRAY_HINT.get(baseOf(file.path)) ??
+            'Unexpected file in a phase directory; a phase holds PHASE.md, MEMORY.md, GATES.md, GATE-RESULTS.jsonl, and BOARD.md.',
+        ),
+      );
+    }
+
+    for (const dir of taskDirs) {
+      const leaf = baseOf(dir);
+      const dirName = parseTaskDirName(leaf);
+      if (dirName === undefined) {
+        issues.push(
+          issue(
+            dir,
+            TASK_ID_PREFIX.test(leaf)
+              ? `Task directory '${leaf}' is missing its kebab name; expected <PHASE_LETTERS><NNN>-<kebab-name>.`
+              : 'Unexpected directory in a phase directory; a phase holds task directories only.',
+          ),
+        );
+        continue;
+      }
+      if (dirName.phase !== phase) {
+        issues.push(
+          issue(
+            dir,
+            `Task id '${dirName.id}' belongs to phase '${dirName.phase}', but lives under '${phase}/'.`,
+          ),
+        );
+      }
+      readTaskDir(dir, leaf);
+    }
+
+    const phaseFile = phaseFiles.find((file) => file.path === `${phase}/${PHASE_FILE}`);
+    const memoryFile = phaseFiles.find((file) => file.path === `${phase}/${PHASE_MEMORY_FILE}`);
+    const gateFile = phaseFiles.find((file) => file.path === `${phase}/${PHASE_GATES_FILE}`);
+    if (phaseFile === undefined) {
+      if ((version?.version ?? 1) >= 2) {
+        issues.push(
+          finding({
+            code: PHASE_CODES.missing,
+            field: `${phase}/${PHASE_FILE}`,
+            message: `Phase '${phase}' has no PHASE.md; the v2 standard requires one.`,
+            expected: `${phase}/${PHASE_FILE}`,
+            actual: 'missing',
+            fix: 'Run mf-specs migrate --name <spec>, or author the phase record.',
+          }),
+        );
+      }
+    } else {
+      const inPhase = [...tasks.values()].filter((task) => phaseOf(task.id) === phase);
+      issues.push(
+        ...nest(
+          `${phase}/${PHASE_FILE}`,
+          verifyPhaseFile(phase, phaseFile.content, {
+            taskStatuses: inPhase.map((task) => task.status),
+            taskTypes: inPhase.map((task) => task.type),
+            gateText: gateFile?.content,
+          }),
+        ),
+      );
+    }
+    if (memoryFile === undefined) {
+      if ((version?.version ?? 1) >= 2) {
+        issues.push(
+          finding({
+            code: PHASE_CODES.memoryMissing,
+            field: `${phase}/${PHASE_MEMORY_FILE}`,
+            message: `Phase '${phase}' has no MEMORY.md; the v2 standard requires one.`,
+            expected: `${phase}/${PHASE_MEMORY_FILE}`,
+            actual: 'missing',
+            fix: 'Run mf-specs migrate --name <spec>, or author the phase memory.',
+          }),
+        );
+      }
+    } else {
+      issues.push(...nest(`${phase}/${PHASE_MEMORY_FILE}`, verifyMemoryFile(memoryFile.content)));
     }
   }
 
@@ -357,25 +601,20 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
       ...nest(CONFIG_FILE, verifySpecConfig(snapshot.name, [...phases], configFile.content)),
     );
   }
-  for (const phase of phases) {
-    const hasReview = Array.from(tasks.values()).some(
-      (task) => phaseOf(task.id) === phase && task.type === 'review',
-    );
-    if (!hasReview) issues.push(issue(`phase ${phase}`, 'Phase has no `review` task.'));
-  }
+
+  const evidence = phaseEvidence(snapshot);
+  issues.push(...evidence.issues);
 
   if (spec !== undefined) {
     issues.push(
       ...verifyLifecycle({
         status: spec.status,
-        lockedPhases: spec.lockedPhases,
+        reviewedPhases: passedPhases(review.series),
+        waivedPhases: evidence.waived,
+        provenPhases: evidence.proven,
         tasks: Array.from(tasks.values()).map((task) => ({ id: task.id, status: task.status })),
       }).issues,
     );
-    for (const phase of spec.lockedPhases) {
-      if (!phases.has(phase))
-        issues.push(issue('locked-phases', `Locked phase '${phase}' has no tasks.`));
-    }
   }
 
   const reviewTasks: ReadonlyArray<ReviewTaskEntry> = Array.from(tasks.values())

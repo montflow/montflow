@@ -2,6 +2,7 @@ import * as Vitest from '@effect/vitest';
 import { Effect, FileSystem, Path } from 'effect';
 import { runDoctor } from '../../../modules/doctor/index.js';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
+import { phaseMarkdown } from '../../../modules/phase/tests/helpers.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import * as Catalogue from '../../../modules/catalogue/index.js';
 import { DEFAULT_ROOT, SurfaceError, runSlash, sizingConfig } from '../index.js';
@@ -11,18 +12,20 @@ const specs = new Map([
   [
     'ok',
     [
-      entry('SPEC.md', specMarkdown({ name: 'ok' })),
+      entry('SPEC.md', specMarkdown({ name: 'ok', version: '2' })),
+      entry('A/PHASE.md', phaseMarkdown()),
+      entry('A/MEMORY.md', memory),
       entry('sizing.json', SPEC_SIZING),
       entry(
-        'A001-implement-login/TASK.md',
+        'A/A001-implement-login/TASK.md',
         taskMarkdown({ id: 'A001', name: 'implement-login', size: 'tiny' }),
       ),
-      entry('A001-implement-login/MEMORY.md', memory),
+      entry('A/A001-implement-login/MEMORY.md', memory),
       entry(
-        'A099-review-phase/TASK.md',
+        'A/A099-review-phase/TASK.md',
         taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
       ),
-      entry('A099-review-phase/MEMORY.md', memory),
+      entry('A/A099-review-phase/MEMORY.md', memory),
     ],
   ],
   ['bad', [entry('SPEC.md', specMarkdown({ name: 'bad' }))]],

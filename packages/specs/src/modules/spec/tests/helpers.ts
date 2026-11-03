@@ -14,7 +14,8 @@ export interface SpecFixture {
   readonly workspaceType?: string;
   readonly author?: string;
   readonly created?: string;
-  readonly lockedPhases?: string;
+  /** `spec-version` value; omitted and `null` both leave the field out (v1). */
+  readonly version?: string | null;
   readonly rows?: ReadonlyArray<TaskRowFixture>;
 }
 
@@ -26,6 +27,7 @@ const DEFAULT_ROWS: ReadonlyArray<TaskRowFixture> = [
 /** Build a SPEC.md body with valid defaults and optional overrides. */
 export const specMarkdown = (fixture: SpecFixture = {}): string => {
   const rows = fixture.rows ?? DEFAULT_ROWS;
+  const version = fixture.version === undefined ? null : fixture.version;
   return [
     '---',
     `name: ${fixture.name ?? 'ship-spec'}`,
@@ -33,7 +35,7 @@ export const specMarkdown = (fixture: SpecFixture = {}): string => {
     `workspace-type: ${fixture.workspaceType ?? 'in-place'}`,
     `author: ${fixture.author ?? 'Tester'}`,
     `created: ${fixture.created ?? '2026-01-01'}`,
-    `locked-phases: ${fixture.lockedPhases ?? ''}`,
+    ...(version === null ? [] : [`spec-version: ${version}`]),
     '---',
     '',
     '# Ship Spec',

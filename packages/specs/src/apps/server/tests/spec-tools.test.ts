@@ -65,15 +65,15 @@ const seed = (work: Work, name: string, files: ReadonlyArray<readonly [string, s
 const phaseA = (spec: string): ReadonlyArray<readonly [string, string]> => [
   ['SPEC.md', specMarkdown({ name: spec })],
   [
-    'A001-implement-login/TASK.md',
+    'A/A001-implement-login/TASK.md',
     taskMarkdown({ id: 'A001', name: 'implement-login', size: 'tiny' }),
   ],
-  ['A001-implement-login/MEMORY.md', memoryMarkdown()],
+  ['A/A001-implement-login/MEMORY.md', memoryMarkdown()],
   [
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: 'pending' }),
   ],
-  ['A099-review-phase/MEMORY.md', memoryMarkdown()],
+  ['A/A099-review-phase/MEMORY.md', memoryMarkdown()],
 ];
 
 const branch = (work: Work, name: string) =>

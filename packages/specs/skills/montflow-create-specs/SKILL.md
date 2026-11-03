@@ -3,7 +3,7 @@ name: montflow-create-specs
 description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per task (TASK.md, MEMORY.md, GATES.md) — by scaffolding with `mf-specs create` then filling in the rules below. Use when an agent must create a spec directly, without dispatching a session.
 id: 6ebf45d24cb3d3a1
 author: Daniel Montilla
-version: 2.10.0
+version: 2.12.0
 license: MIT
 dependencies:
   - executing-skills
@@ -67,14 +67,15 @@ bun run --cwd packages/specs cli create --name <kebab-name> \
 
 - `<kebab-name>` is required and must be the final directory name.
 - Each `--tasks` entry is `name[:type[:gates[:size]]]`. `type` defaults to
-  `execution` (one of exploratory | execution | planning | interruptor | defect);
+  `execution` (one of exploratory | execution | planning | review | interruptor | defect);
   the third token `gates` (or `true`) emits a `GATES.md`; the fourth token
   `size` defaults to `medium` — see step 5.
 - With no `--tasks`, it creates one `implement` execution task.
-- It always appends the phase's `<PHASE>099-review-phase` review task, refuses
-  to overwrite an existing spec, and prints the files it wrote.
-- `--reviewer-profiles` seeds the review task's `reviewer-profiles` list
-  (comma-separated, ordered).
+- It places every task under its `<PHASE>/` directory, refuses to overwrite an
+  existing spec, and prints the files it wrote. It never appends a review task:
+  request one with `name:review` when the phase reviews.
+- `--reviewer-profiles` seeds the `reviewer-profiles` list on each requested
+  `review` task (comma-separated, ordered).
 - Inside the OpenCode host the same engine is
   `/specs create --name <kebab-name> …`.
 
@@ -84,18 +85,18 @@ requirements. If you write the files by hand instead, follow steps 3–6 exactly
 ## 3. Write `SPEC.md`
 
 Frontmatter: `name` (kebab-case, equals the directory), `status: in-progress`,
-`workspace-type: in-place`, `author`, `created` (YYYY-MM-DD), `locked-phases:`
-(empty).
+`workspace-type: in-place`, `author`, `created` (YYYY-MM-DD). There is no lock field.
 
 Body sections: `## Description`, `## Requirements`, `## Tasks`.
 
 `## Tasks` is a table `| ID | Name | Type | Status | Gates |` with `Gates`
 either `Yes` or `No`.
 
-## 4. Write One Directory per Task
+## 4. Write the Phase and Task Directories
 
-`<PHASE_LETTERS><NNN>-<kebab-name>/` containing `TASK.md` and `MEMORY.md`, plus
-`GATES.md` when the task's `Gates` is `Yes`.
+Every task lives at `<PHASE>/<PHASE_LETTERS><NNN>-<kebab-name>/` containing
+`TASK.md` and `MEMORY.md`, plus `GATES.md` when the task's `Gates` is `Yes`.
+The phase directory is a pure container: task directories only, no files.
 
 `TASK.md` frontmatter: `id` (`<LETTERS><NNN>`, matches the directory), `name`
 (matches the directory name after the id), `type`, `originator`, `size`,
@@ -128,8 +129,10 @@ real commands and check each box you actually ran. The review removes the
 replacement marker; it never deletes the gate.
 
 The `## Completion` checklist and the gate are records, not decoration: a
-`complete` task with unchecked completion items warns `task.completion-unchecked`,
-and a `complete` task whose gate has no checked item warns `gate.unchecked`.
+`complete` task with unchecked completion items fails `task.completion-unchecked`,
+and a `complete` task whose gate has no checked item fails `gate.unchecked`. An
+unfinished task may carry either an unchecked checklist or an all-unchecked gate
+with no finding; the contradiction is the completed status, not the empty box.
 `mf-specs check` also verifies the phase review budget from the review series —
 more rounds attributed to a phase (`- Phase:` in a round's `## Metadata`) than
 the phase budget is an error, not a prose rule.
@@ -139,7 +142,9 @@ the phase budget is an error, not a prose rule.
 Every task declares `size` in `TASK.md` frontmatter: `tiny`, `small`, `medium`,
 or `large`. `mf-specs create` writes `medium`; replace that default with the
 size you judge. A missing size fails `mf-specs check` for a `pending`,
-`in-progress`, or `blocked` task; only a `complete` task may omit it.
+`in-progress`, or `blocked` task. A complete task may declare `size: none`
+instead: a record-only opt-out that is never a dispatch target and contributes no
+model or review budget. `none` is an error on an unfinished task.
 
 Size buys the phase's review-cycle budget:
 
@@ -213,9 +218,11 @@ Prove a generated config in this order, scoped to what was touched:
 
 ## 6. Follow the Phase Rules
 
-A phase is the leading letters of a task id (`A001` is phase `A`). End every
-phase with exactly one `review` task named `<PHASE>099-review-phase`. Leave
-`locked-phases:` empty and the spec `status: in-progress`.
+A phase is a directory named `<PHASE>/`; every task directory lives inside its
+phase directory. The scaffold emits a review task only when the phase requests
+one (`name:review`), and no phase requires one: a phase lock is derived from a
+closed review round, never hand-written. Keep the spec `status: in-progress`;
+authoring never locks a phase.
 
 ## 7. Ask Only When the Decision Is the User's
 
@@ -230,10 +237,11 @@ hand; a fresh `create` output already verifies.
 
 - Every task directory matches a row in `## Tasks`, and every row has a directory.
 - Each `TASK.md` `id` equals its directory id, and `name` equals the directory name after the id.
-- Each phase ends with exactly one `<PHASE>099-review-phase` review task.
+- Every task directory lives under its phase directory (`<PHASE>/<task>/`).
 - `depends-on` references stay in the same phase or an earlier phase.
-- Every task declares a size: `tiny`, `small`, `medium`, or `large`.
-- `locked-phases:` is empty and the spec is `status: in-progress`.
+- Every unfinished task declares a size: `tiny`, `small`, `medium`, or `large`.
+  A complete task may declare `size: none` as a record opt-out.
+- The spec is `status: in-progress`; no lock list is written.
 - Nothing outside `.agents/@montflow/specs/` was touched.
 - `mf-specs check --name <kebab-name>` reports zero issues
   (run `bun run --cwd packages/specs cli check --name <kebab-name>`).
