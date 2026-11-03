@@ -252,7 +252,8 @@ $RECYCLE.BIN/
 
 # End of https://www.toptal.com/developers/gitignore/api/node,macos,svelte,windows,obsidian,visualstudiocode,turbo
 # --- montflow skills workspace ---
-.agents/@montflow/reviews
+.agents/@montflow/reviews/*
+!.agents/@montflow/reviews/montflow-spec-standard/
 .agents/@montflow/workspace.json
 .agents/references
 
@@ -263,6 +264,9 @@ tmp/
 
 # --- montflow loop runtime state ---
 .agents/@montflow/loops
+
+# --- montflow claim registry (runtime only; never a spec file) ---
+.agents/@montflow/.runtime/
 
 # --- machine-local plugin configuration ---
 # A worktree's own model-fallback chain names providers/models only this
