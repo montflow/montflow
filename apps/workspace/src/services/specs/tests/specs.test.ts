@@ -103,6 +103,20 @@ const MEMORY = [
   '',
 ].join('\n');
 
+/** A phase memory: the task fixture plus the five-element execution brief. */
+const PHASE_MEMORY = [
+  MEMORY,
+  '',
+  '## Execution Brief',
+  '',
+  '- Read: this brief, the task TASK.md/GATES.md, and the scoped source.',
+  '- Write scope: the phase directory and the files its tasks name.',
+  '- Gate: the task GATES.md command lines, run once by the orchestrator.',
+  '- Record: MEMORY.md at or under 80 lines; logs in /tmp.',
+  '- Review: one fixer attempt and one re-review, keyed off review decide.',
+  '',
+].join('\n');
+
 /** Write one review round carrying a phase attribution, in the review store's format. */
 const writeRound = (root: string, series: string, phase: string): void => {
   const dir = join(root, '.agents', '@montflow', 'reviews', series, '001');
@@ -175,7 +189,7 @@ const makeRoot = (reviewed = false): string => {
       '',
     ].join('\n'),
   );
-  writeFileSync(join(dir, 'A', 'MEMORY.md'), MEMORY);
+  writeFileSync(join(dir, 'A', 'MEMORY.md'), PHASE_MEMORY);
   writeFileSync(
     join(dir, 'A', 'A001-implement-thing', 'TASK.md'),
     task('A001', 'implement-thing', 'execution'),

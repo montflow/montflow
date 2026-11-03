@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.1.0] - 2026-11-03
+
+### Changed
+
+- Skill discovery runs through `mf-skills list` (with descriptions) and `mf-skills show`, and `mf-prompts verify <name>` is the mandatory self-check for both create and modify; the seven rules remain as the explanation of what verify checks
+
 ## [3.0.1] - 2026-10-22
 
 ### Changed

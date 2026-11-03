@@ -1,9 +1,9 @@
 ---
 name: montflow-create-prompts
-description: Creates and modifies reusable prompt templates for the @montflow/prompts plugin, stored as JSON under .agents/@montflow/prompts/. Use when an agent must author a new prompt, or change an existing one, directly from the rules below instead of shelling out.
+description: Creates and modifies reusable prompt templates for the @montflow/prompts plugin, stored as JSON under .agents/@montflow/prompts/. Use when an agent must author a new prompt, or change an existing one, from the rules below and verify it with the CLI.
 id: 1f2ac0720ecc0742
 author: Daniel Montilla
-version: 3.0.1
+version: 3.1.0
 license: MIT
 dependencies:
   - executing-skills
@@ -16,7 +16,8 @@ groups:
 Use when an agent must create or change a reusable prompt template for
 `@montflow/prompts`: a parameterized instruction stored as JSON under
 `.agents/@montflow/prompts/`. The agent authors the file itself from the
-rules below — it does not call a CLI, and it does not dispatch a session.
+rules below, discovers skills and runs `mf-prompts verify <name>` through the
+CLI, and does not dispatch a session.
 
 > **Prerequisite**: Load the [executing-skills](../executing-skills/SKILL.md) skill before running this pipeline. It governs how skills are loaded, executed, and verified.
 
@@ -110,12 +111,41 @@ never be blank, so `required` would be a lie.
 
 ## 6. Reference Only Skills That Exist
 
-List `.agents/skills/` and read each `SKILL.md` frontmatter `name:` before
-listing a skill — reference existing skills only, otherwise leave `skills`
-empty. Set `model` to `provider/model-id` to pin one, or `""` to make it a
-per-run choice.
+Discover the installed skills with the CLI — `list` prints every name with its
+description, so there is no reason to scan the store by hand:
 
-## 7. Self-Check Before You Stop
+```
+mf-skills list
+```
+
+When a name needs its full contract, read it with `mf-skills show <skill>`
+instead of opening the file manually. Reference existing skills only, otherwise
+leave `skills` empty. Where the binary is not on `PATH`, use the in-repo form:
+
+```
+bun run --cwd packages/skills cli list --dir "$PWD"
+bun run --cwd packages/skills cli show <skill> --dir "$PWD"
+```
+
+Set `model` to `provider/model-id` to pin one, or `""` to make it a per-run
+choice.
+
+## 7. Verify with the CLI
+
+`mf-prompts verify <name>` is the mandatory self-check for both create and
+modify. Run it and fix every issue before you stop.
+
+```
+mf-prompts verify <name>
+```
+
+Where the binary is not on `PATH`:
+
+```
+bun run --cwd packages/prompts cli verify <name> --dir "$PWD"
+```
+
+The seven rules it measures:
 
 1. valid JSON decoding to a `Prompt`
 2. a slug `name` matching the file name
@@ -130,6 +160,15 @@ per-run choice.
 Read the file, apply the change, and keep the JSON valid and the rules above
 satisfied. Change only what the request asks for, and keep the file name and the
 `name` field unchanged. Delete the file to remove the prompt.
+
+Finish with the same mandatory gate as creation:
+
+```
+mf-prompts verify <name>
+```
+
+(or `bun run --cwd packages/prompts cli verify <name> --dir "$PWD"` when the
+binary is not on `PATH`).
 
 # Reference
 

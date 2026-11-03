@@ -24,8 +24,9 @@ handoffs.
    the user can answer: scope, naming, acceptance, real ambiguity. Do not ask
    about facts a read in the repository can settle.
 2. **Appraise before you author.** Dispatch a `spec-appraiser` subagent and wait
-   for its verdict: the tier, the phase plan, the per-phase review decision, the
-   gates, and the evidence it glanced at. Never pick the tier yourself.
+   for its verdict: the tier, the phase plan with each phase's independent tasks,
+   the shared checks, the per-phase review decision, the gates, and the evidence
+   it glanced at. Never pick the tier yourself.
 3. **Stop on a split.** A `split` verdict is not a tier. Report
    `split · count <n> · cut <seam>` and author nothing; each part is its own
    authoring run that names the parent cut.
@@ -41,18 +42,17 @@ handoffs.
    `mf-specs new-task`. The generator allocates every phase id, task id, status,
    timestamp, and scaffold. Generate a waiver with
    `mf-specs waiver --name <spec> --phase <id> --waived --reason <line>` or
-   `--required`; never write a review decision by hand.
-6. **Record the creation run.** `init` writes a `## Creation` section with
+   `--required`; never write a review decision by hand.6. **Record the creation run.** `init` writes a `## Creation` section with
    `tier: <value>`, `questions 0/<budget>`, and `unresolved: none`. Before you
    stop, update the count to `questions <n>/<budget>` and name any user-owned
    decision the run stopped on, or `none`. There is no harness counter: the
    count is self-reported and the budget is advisory beyond the tier file, this
    instruction, and the phase review. At the cap, stop and report instead of
    guessing.
-7. **Hand the records to the bookkeeper.** Dispatch `spec-bookkeeper` to run the
+6. **Hand the records to the bookkeeper.** Dispatch `spec-bookkeeper` to run the
    spec verifier and repair bookkeeping. Apply only fixes it reports as prose or
    structure problems you own.
-8. **Report and stop.** One line: spec name, tier, phase plan, verifier result.
+7. **Report and stop.** One line: spec name, tier, phase plan, verifier result.
 
 ### You write prose, the CLI writes mechanics
 
@@ -62,6 +62,18 @@ or frontmatter scaffold. Request the mechanical verbs from the spec CLI —
 is missing, **stop and report the gap** as a defect against the spec tooling. Do
 not improvise a file into a shape that merely looks right; that is how drift
 enters the store.
+
+### Plan the widest ready set
+
+Carry the appraiser's independent task names into `init`/`new-task`, adding
+`after=<name>` only for a real data or ordering dependency; "same area" is not an
+edge. Declare every task's `write-scope:` — a comma-separated list of
+repo-root-relative POSIX paths, `none`, or `.` — as authored intent, and split a
+phase whose tasks would collide instead of serializing it. When the appraiser
+names a genuinely serial phase, write `serial-reason: <one line>` in its
+`PHASE.md`. Give each task gate only task-local commands, and name the
+phase-shared and repo-wide checks once in the phase `GATES.md`, with `scope:` and
+`lane: heavy|light`; never copy a repo-wide suite into a task gate.
 
 ### No reserved review task
 
@@ -91,6 +103,8 @@ effective waiver; authoring never writes a lock.
 
 - [ ] An appraiser verdict exists before any spec artifact was written
 - [ ] The tier file was loaded exactly once with `mf-specs tier <tier>`, and no other tier was read
+- [ ] The plan names each phase's independent tasks and shared checks, uses `depends-on` only for a real dependency, and states `serial-reason:` for a serial phase
+- [ ] Every task declares `write-scope:`, and each task gate carries only task-local commands
 - [ ] The spec's shape matches its tier exactly — no phases, tasks, reviews, or gates the tier did not ask for
 - [ ] `## Creation` records the tier, the self-reported `questions <n>/<budget>`, and the unresolved decisions
 - [ ] Every id, timestamp, status, and scaffold came from a CLI verb, never typed by hand

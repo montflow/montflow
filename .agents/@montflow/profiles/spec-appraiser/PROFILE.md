@@ -36,16 +36,25 @@ Report exactly these fields, no narrative padding:
    contract in `montflow-create-specs`. State the enum value verbatim. You do
    not load the tier file; the creation orchestrator loads it with
    `mf-specs tier <tier>`.
-2. **Phase plan** — how many phases, each with a one-line objective, and which
-   phases carry exploratory work. The tier sets the phase range, the exploration
-   rule, and the work-task ceiling; a plan outside them is invalid.
+2. **Phase plan** — how many phases, each with a one-line objective, the
+   **independent tasks** that can run at once in that phase (names only, in plan
+   order), and which phases carry exploratory work. A task that consumes a
+   sibling's output is named as a `depends-on` edge, not as a parallel task. The
+   tier sets the phase range, the exploration rule, and the work-task ceiling; a
+   plan outside them is invalid.
 3. **Review decision per phase** — `required`, or `waived` with a one-clause
    reason. The tier sets the default and the waiver policy; never restate a
    question budget, a review-round count, or a dispatch target.
 4. **Gates per phase** — `mechanical` (a command proves it), `subjective` (a
-   reviewer judges it), or none. Name the command when mechanical. The tier sets
-   the minimum.
-5. **Parallelism** — which phases may hold concurrent tasks, and why.
+   reviewer judges it), or none. Name the **shared checks** that prove more than
+   one task at phase level, and the task-local check each task owns; a repo-wide
+   suite is a shared check, never a task gate. The tier sets the minimum.
+5. **Parallelism** — the independent tasks each phase may dispatch at once,
+   grouped into **waves** (wave 1 runs together, wave 2 waits only on wave 1),
+   with the wave count and the heaviest task named as the critical path. State
+   `why a phase is serial` when it is one wave per task: a serial phase is a
+   stated decision, never a fallback. A phase that could be one wave and is
+   authored as a chain is the defect this field exists to catch.
 6. **Evidence** — the reads and listings behind the call, and the one or two
    facts that drove the tier.
 7. **Escalate** — if the request is too unclear to tier without deep work, say
@@ -85,8 +94,8 @@ The creation orchestrator authors nothing on a split verdict. It reports
 
 ### Avoid
 
-- No implementing, no proposing solutions, no task decomposition beyond phase
-  level.
+- No implementing, no proposing solutions, no task decomposition beyond the
+  independent-task names that make a phase's ready set explicit.
 - No re-reading the same file, no "to be thorough" passes.
 - No hedging. Pick a tier; a wrong-but-fast tier is recoverable, an undecided
   spec is not.
@@ -97,7 +106,9 @@ The creation orchestrator authors nothing on a split verdict. It reports
 ## Review Checklist
 
 - [ ] The verdict names one of `micro`, `standard`, or `full` verbatim, or `split` with every split field
+- [ ] Every phase names its independent tasks and states why a phase is serial, if it is
 - [ ] Every phase carries a review decision (`required` or `waived` + reason) and a gate kind
+- [ ] Each phase names its shared checks separately from the task-local checks
 - [ ] Reads stayed within the 10-file, structure-only budget and are listed as evidence
 - [ ] No writes, commands, tests, web lookups, or dispatched sessions appear in your transcript
-- [ ] No implementation detail, task decomposition, or restated question budget leaked into the verdict
+- [ ] No implementation detail, task requirements, or restated question budget leaked into the verdict

@@ -3,7 +3,7 @@ name: montflow-create-specs
 description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per phase (PHASE.md, MEMORY.md, BOARD.md) and one directory per task (TASK.md, MEMORY.md, GATES.md, MAILBOX.md) — by scaffolding with `mf-specs init` or `create` then filling in the rules below. Use when an agent must create a spec directly, without dispatching a session.
 id: 6ebf45d24cb3d3a1
 author: Daniel Montilla
-version: 2.13.1
+version: 2.17.0
 license: MIT
 dependencies:
   - executing-skills
@@ -168,6 +168,72 @@ and channels live there beside the task directories.
 (`none|mechanical|subjective`). Write it with `init`/`new-phase`/`waiver`, not
 by hand.
 
+### Author the Widest Ready Set
+
+Plan every phase as a **ready set, not a queue**: list the tasks that can run at
+once, and give each one a declared `write-scope:`. For the contract, every
+unfinished task declares `write-scope:` or `none`, and two tasks whose scopes
+overlap are joined by a `depends-on` edge or split into different phases.
+
+- `depends-on` carries only a **real** data or ordering dependency — a task that
+  consumes another's output, or an order the work must follow. "Same area" or
+  "feels sequential" is not a dependency; the default phase shape is every
+  non-review task independent of its siblings.
+- A serial chain is a **stated decision**, not a fallback. When a phase really
+  is sequential, say why in `PHASE.md` with `serial-reason: <one line>`;
+  otherwise it is a serial chain with no reason, which the contract reports as
+  `phase.serial-chain-unexplained` and the review rejects.
+- Name the **waves** while planning. Wave 1 runs together, wave 2 waits only on
+  wave 1, and the phase costs roughly the longest wave, not the sum of its
+  tasks. A phase authored as one task per wave pays every dispatch serially; if
+  a task only needs an earlier artifact at its end, start it in the earlier
+  wave and let it finish against that artifact.
+- `write-scope:` is a comma-separated list of repo-root-relative POSIX paths:
+  an optional trailing `/` names a subtree, `.` names the whole repo, and `none`
+  names no files. The task directory is implicit and never declared. Overlapping
+  scopes with no `depends-on` edge between the tasks are the contract's
+  `phase.write-scope-overlap` error; fix it by adding the real edge or by
+  **splitting the phase** so the colliding tasks run in different phases.
+  Overlap that paths cannot express is the author's and the reviewer's judgment.
+- `depends-on` may reference only a task in the same phase or an earlier one, so
+  the widest ready set lives inside the phase and a true prerequisite becomes an
+  edge, never a channel message.
+
+### Every New Phase Gets an Execution Brief
+
+Write a `## Execution Brief` section in each new phase's `MEMORY.md` while
+authoring. It is the phase's whole context packet, and every worker dispatch
+reads it instead of reconstructing context:
+
+- **Read**: the phase `MEMORY.md` `## Execution Brief`, the task's
+  `TASK.md`/`GATES.md`, and only the source paths the brief names — never a
+  broad grep over generated payloads, lockfiles, or other tasks' records.
+- **Write scope**: the task's directory and only the files its `TASK.md` names;
+  record writes go to the task `MEMORY.md`.
+- **Gate**: point at the task or phase `GATES.md`. `GATES.md` is the sole owner
+  of executable commands: a command appears exactly once, on a `command:` line
+  of the gate that runs it, and the brief never carries a runnable command. A
+  task gate names the task's own commands; a phase-shared or repo-wide check is
+  named once in the phase gate and never copied into a task. The worker runs
+  scoped checks; the orchestrator runs each gate once, and the scheduler reuses
+  an unchanged pass.
+- **Record**: the worker `MEMORY.md` stays at or under 80 lines with the fixed
+  section set (Context, Progress, Findings, Gates, Open Questions, Handoff,
+  Deviations); full logs go to `/tmp/<task-id>.log` and are referenced, never
+  pasted.
+- **Review**: batch every open finding into one fixer attempt and one re-review,
+  keyed off `mf-specs review decide`.
+
+`mf-specs check` reports `phase.execution-brief-missing` as a warning for a v2
+`in-progress` phase whose `MEMORY.md` lacks the section or whose section does
+not name the five elements (Read, Write scope, Gate, Record, Review): a heading
+alone or a stub is not a brief. `mf-specs lock` refuses a started phase without
+a valid brief, with the same code and a fix line. A complete or frozen phase is
+exempt, so a phase that was already underway when the contract landed does not
+need a retroactive brief. Give every pending task a short `## Execution` section
+that points at the phase brief instead of repeating it, and keep the brief one
+line per bullet.
+
 `TASK.md` frontmatter: `id` (`<LETTERS><NNN>`, matches the directory), `name`
 (matches the directory name after the id), `type`, `originator`, `size`,
 `depends-on`, `related-tasks`, `reviewer-profiles`, `status`.
@@ -183,29 +249,83 @@ by hand.
   profile slugs (`reviewer-profiles: example-reviewer, generic-reviewer`). Empty
   or absent keeps the single general reviewer; each entry adds a
   `<kebab-name>-<profile>` review series that the phase's review round is also
-  written to. Read the profiles the repo declares under
-  `.agents/@montflow/profiles/` and declare one only when its focus matches the
-  phase's work; an empty list is the default and is valid on every phase, and
-  each declared profile adds one review round per cycle in that phase, and the phase budget is unchanged by the declaration.
+  written to. Before choosing, run `mf-profiles list` and read each profile's
+  description — never guess the store's contents; when a description does not
+  settle the choice, run `mf-profiles show <name>` for that profile's
+  instructions and review checklist. Declare a profile only when its focus
+  matches the phase's work; an empty list is the default and is valid on every
+  phase, and each declared profile adds one review round per cycle in that
+  phase, and the phase budget is unchanged by the declaration. A phase is not
+  required to carry a review task: a small phase whose tasks are fully gated
+  may end at its gates, and the waiver reason is recorded (B004 decides the
+  file and field that carry it).
 
 ### A Gate Names the Task's Own Commands
 
 `GATES.md` is this task's proof, never a copy of the repo-wide suite: every item
 names a command, or a named subjective check, that proves **this** task, so
-whoever runs the gate gets a verdict about this task and nothing else.
-`mf-specs create` writes one placeholder item,
+whoever runs the gate gets a verdict about this task and nothing else. A task
+gate names this task's own commands; an infrastructure task whose subject _is_
+the repo-wide gate may name it, and it still runs once, at the orchestrator's
+task gate. `mf-specs create` writes one placeholder item,
 `- [ ] REPLACE with this task's own verification commands`; replace it with the
 real commands and check each box you actually ran. The review removes the
-replacement marker; it never deletes the gate.
+replacement marker; it never deletes the gate. A command appears exactly once,
+in a `command:` line of the gate that runs it, so the same suite is not re-run
+to rebuild the same evidence; the phase `## Execution Brief` never carries a
+runnable command and only points at the gate.
 
 The `## Completion` checklist and the gate are records, not decoration: a
 `complete` task with unchecked completion items fails `task.completion-unchecked`,
 and a `complete` task whose gate has no checked item fails `gate.unchecked`. An
 unfinished task may carry either an unchecked checklist or an all-unchecked gate
 with no finding; the contradiction is the completed status, not the empty box.
-`mf-specs check` also verifies the phase review budget from the review series —
-more rounds attributed to a phase (`- Phase:` in a round's `## Metadata`) than
-the phase budget is an error, not a prose rule.
+A completion item names only what this task's own gate proves. Never put a
+repo-wide suite in a task checklist: it belongs to the phase gate, runs once at
+the phase boundary, and a task item demanding it forces a second heavyweight run
+mid-phase. `mf-specs check` also verifies the phase review budget from the review
+series — more rounds attributed to a phase (`- Phase:` in a round's `## Metadata`)
+than the phase budget is an error, not a prose rule.
+
+### Two Gate Layers
+
+A spec has exactly two gate layers, and every check belongs to one of them:
+
+- **Task layer** — `<task>/GATES.md`: commands scoped to that task's
+  `write-scope:` and proof of that task alone. A task gate never names a
+  repo-wide suite or a check another task also needs.
+- **Phase layer** — `<PHASE>/GATES.md`: the phase-shared and repo-wide checks
+  that prove several tasks at once. Name each once, with `scope:` (a
+  repo-root-relative path list or `repo`) and `lane: heavy|light` when the
+  default classification is wrong. The orchestrator runs the phase gate once at
+  the phase boundary; `gate run` keys the run by command, scope, and file
+  fingerprint, so a later requester reuses an unchanged pass.
+
+A check that would appear in two task gates is phase-shared: move it to the
+phase gate and let each task point at that one entry. A phase-shared or
+repo-wide check is named once, in the phase `GATES.md`, never copied into a task
+gate. `check` reports `gate.shared-check-in-task` when a task stage's scope is not
+contained in the task's `write-scope:`, `gate.duplicate-command` when one command
+with overlapping scope appears in two gates, and `gate.scope-missing` when an
+unfinished v2 mechanical stage has no resolvable scope.
+
+### Channels and the Scheduler
+
+`BOARD.md` is the phase broadcast channel (`mail --to all`): phase boundaries, a
+shared check that ran or was reused, a closed dependency, lane config.
+`MAILBOX.md` is a targeted task channel (`mail --to <task-id>`): one task
+addressee. The orchestrator is the sole channel writer. A worker reads the phase
+`BOARD.md` and its own `MAILBOX.md` at the start and again before its receipt,
+and a channel never substitutes for a `depends-on` edge.
+
+`gate run` is scheduled, not merely executed. Its key is `gate-v1:` over the
+normalized command, the sorted scopes, and a fingerprint of every file those
+scopes cover. One attempt per key runs at a time; a matching pass is reused
+(`--no-reuse` forces a run), and a failed, timed-out, or cancelled result is
+never reused as a pass. The heavy lane defaults to one run at a time and light
+checks never wait behind it, while both count toward the in-flight cap in
+`.agents/@montflow/gate.json`. That is why one phase-shared check costs one run
+for the whole phase instead of one per worker.
 
 ## 5. Size Every Task
 
@@ -320,10 +440,20 @@ Only edit files if you skipped the scaffold or changed the tree by hand; a fresh
 - Every task directory matches a row in `## Tasks`, and every row has a directory.
 - Each `TASK.md` `id` equals its directory id, and `name` equals the directory name after the id.
 - Every task directory lives under its phase directory (`<PHASE>/<task>/`).
-- `depends-on` references stay in the same phase or an earlier phase.
+- `depends-on` references stay in the same phase or an earlier phase, and every
+  edge names a real data or ordering dependency.
+- Every task declares `write-scope:` (or `none`), and no two unfinished tasks in
+  a phase overlap without an edge; a serial phase states `serial-reason: <one
+line>` in its `PHASE.md`.
+- Each task gate names only task-local commands; every phase-shared or repo-wide
+  check appears once, in the phase `GATES.md`, with its `scope:` and `lane:`.
 - Every unfinished task declares a size: `tiny`, `small`, `medium`, or `large`.
   A complete task may declare `size: none` as a record opt-out.
 - The spec is `status: in-progress`; no lock list is written.
+- Every in-progress phase `MEMORY.md` carries a `## Execution Brief` naming
+  Read, Write scope, Gate, Record, and Review, and every pending task carries
+  the `## Execution` pointer to it; `mf-specs check` warns
+  `phase.execution-brief-missing` when the brief is absent or incomplete.
 - Nothing outside `.agents/@montflow/specs/` was touched.
 - `mf-specs check --name <kebab-name>` reports zero issues
   (run `bun run --cwd packages/specs cli check --name <kebab-name>`).
@@ -340,7 +470,21 @@ Only edit files if you skipped the scaffold or changed the tree by hand; a fresh
 - **Generator verbs**: `init`, `new-phase`, `new-task`, `stamp`, `claim`,
   `waiver`, `tier`, `gate run`, `gate record`, `mail`, and `lock` (confirmation
   only). Every verifier-checked record has one of these as its writer.
+- **Write scope**: `TASK.md` frontmatter `write-scope:` — comma-separated
+  repo-root-relative POSIX paths, optional trailing `/` for a subtree, `.` for
+  the whole repo, or `none`; the task directory is implicit.
+- **Gate layers**: task `GATES.md` for task-local commands; phase `GATES.md` for
+  phase-shared and repo-wide checks, each named once with optional `scope:` and
+  `lane: heavy|light`.
+- **Channels**: `BOARD.md` broadcast (`mail --to all`) and `MAILBOX.md` targeted
+  (`mail --to <task-id>`); the orchestrator is the sole writer and a worker reads
+  both at start and before its receipt.
+- **Scheduler**: `gate run` keys one attempt by command, scope, and file
+  fingerprint; it runs one attempt per key, reuses an unchanged pass, reruns a
+  failure, and bounds the heavy lane and in-flight count through
+  `.agents/@montflow/gate.json`.
 - **Tier CLI**: `mf-specs tier <micro|standard|full>` prints exactly one installed tier file from `.agents/@montflow/tiers/<tier>.md`; there is no default, no listing, and no second tier. The files are `packages/specs/tiers/*.md`, installed by `mf-specs doctor`.
+- **Profiles CLI**: `mf-profiles list` (`/mf-profiles list` in the OpenCode host) pairs every profile name with its description — run it before choosing `reviewer-profiles`, never reading the store directory directly. `mf-profiles show <name>` (`/mf-profiles show <name>` in the host) reports that profile's instructions and review checklist when a description does not settle the choice.
 - **Scaffold CLI**: `mf-specs init --name <spec> --tier <tier>` is the tier-aware entry; `mf-specs create` (or `/specs create` in the OpenCode host) remains the tier-agnostic scaffold — flags `--name`, `--description`, `--author`, `--workspace-type`, `--tasks` (each `name[:type[:gates[:size]]]`, size defaulting to `medium`), `--reviewer-profiles`.
 - **Sizing config**: `<specs-root>/sizing.json` (repo layer) and `<spec>/sizing.json` (spec layer, with `phases.<PHASE>.sizes`); absent size entry means `inherit`.
 - **Sizing CLI**: `mf-specs sizing --name <spec> --task <id> [--verbose|--human]` — compact by default (id, size, target, source); `--verbose` / `--human` add the task and phase budgets and the provenance matrix. `mf-specs resolve --name <spec> --task <id>` prints the bare dispatch target; `mf-specs status` / `next` show per-task size, target, and source.

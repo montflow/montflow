@@ -3,7 +3,7 @@ name: montflow-adversarial-review
 description: Performs a hostile, bug-hunting code review that assumes the author made mistakes. Surfaces possible bugs, edge cases, security holes, missed refactors, missing tests, and documentation gaps, and writes each round to a review series under `.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md`. Use when reviewing code, PRs, or diffs before merge. Pair with montflow-addressing-adversarial-review to resolve findings across fix→re-review loops.
 id: 714e99f0430c9637
 author: Daniel Montilla
-version: 5.1.1
+version: 5.2.0
 license: MIT
 dependencies:
   - executing-skills
@@ -41,7 +41,7 @@ Isolation is a _structural_ property of the orchestration, not a self-attested c
 
 A reviewer that already saw the author's intent (e.g. from an earlier conversation turn) cannot self-certify forgetting it; treat such a session as non-isolated and mark it so in the report's Review Metadata.
 
-> **File output restriction**: Every round is ALWAYS written to `.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md` (see Step 0). When picking the next round number you may list directory entries (`ls`, `glob`), but you must NOT read the _contents_ of any round other than the one being iterated on (see Step 9). The series ledger `.agents/@montflow/reviews/<name>/REVIEW.md` is the one file you read and rewrite to index the rounds — never to gather findings.
+> **File output restriction**: Every round is ALWAYS written to `.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md` (see Step 0). Take the round number from `mf-reviews` (`create` / `resume`), never by listing directories and incrementing; you must NOT read the _contents_ of any round other than the one being iterated on (see Step 9). The series ledger `.agents/@montflow/reviews/<name>/REVIEW.md` is the one file you read and rewrite to index the rounds — never to gather findings.
 
 ### Discussion Channel vs. Evidence
 
@@ -62,20 +62,34 @@ A review lives in a **series** at `.agents/@montflow/reviews/<name>/`:
 
 There is no in-place review mode — the round file is the shared artifact that lets the reviewer and the fixer ([montflow-addressing-adversarial-review](../montflow-addressing-adversarial-review/SKILL.md)) coordinate via the per-finding `#### Discussion` thread.
 
-Start the series through the CLI: `mf-reviews create <name>` for a fresh review, or `mf-reviews resume <name>` to continue an existing one.
+Start and continue the series through the CLI — never by listing directories and computing a round number by hand:
+
+- **Discovery**: `mf-reviews list --verbose` prints every series with its rounds and open counts.
+- **Fresh review**: `mf-reviews create <name>` creates the series and its first round; the CLI picks the round number.
+- **Re-review**: `mf-reviews resume <name>` prints where the series left off — its status, round count, open-finding count, and the latest round file to read.
+- **Next round**: `mf-reviews create <name>` scaffolds the next free round by default and never overwrites an existing round.
+- **Explicit round**: pass `--round <NNN>` to `create` when the dispatch names one.
+
+Where the binary is not on `PATH`, use the in-repo form:
+
+```
+bun run --cwd packages/reviews cli create <name> --dir "$PWD"
+bun run --cwd packages/reviews cli resume <name> --dir "$PWD"
+bun run --cwd packages/reviews cli list --verbose --dir "$PWD"
+```
 
 When an orchestrator dispatches this review (e.g. closing a spec phase), its context names the series and, when the review is bound to a spec phase, also the round, the phase, and the reviewer profile (`- Series:`, `- Round:`, `- Phase:`, `- Profile:`). A spec phase may be backed by **more than one series**, one per declared reviewer profile — the spec's own series (the general reviewer) plus one `<spec>-<profile>` series per profile. Each is a separate reviewer session writing its own series; this skill's job is identical in every one.
 
-- **An explicit round is authoritative.** When the dispatch names `- Round: <NNN>`, write that exact round in that series — do not compute "highest existing + 1". If the series already holds an _empty_ scaffold at that round, populate it in place; never create a higher round instead, and never overwrite a round that already holds findings.
-- **With no explicit round**, compute it as described below.
+- **An explicit round is authoritative.** When the dispatch names `- Round: <NNN>`, write that exact round in that series. If the round does not exist, scaffold it with `mf-reviews create <name> --round <NNN>`. If the series already holds an _empty_ scaffold at that round, populate it in place; never create a higher round instead, and never overwrite a round that already holds findings. Do not compute "highest existing + 1".
+- **With no explicit round**, let `mf-reviews create <name>` choose the next free round (its default).
 - **When the dispatch names `- Phase: <phase>`** (a spec-phase review), record it as `- Phase:` in the round's `## Metadata`.
 
 Before reviewing, determine the two path parameters (directory entries only — reading _another_ round's contents is forbidden by the isolation requirement):
 
 1. **`<name>`**: A short identifier for the feature, project, or thing being reviewed (infer from the user's request or the target context). Reuse the same `<name>` across passes so the series stays together.
-2. **`<NNN>`**: The round number. When the dispatch names an explicit round it is authoritative (above). Otherwise: if `.agents/@montflow/reviews/<name>/` does not exist, this is a **fresh review** and the round is `001`; if it exists, this is a **re-review**: list the existing round directory names (`001`, `002`, …), and the new round is the highest existing number + 1.
+2. **`<NNN>`**: The round the CLI created. `mf-reviews create` prints it; when the dispatch named an explicit round, pass `--round <NNN>` and use exactly that. Never derive it from a directory listing.
 
-The reviewer always writes a **new round** and never edits an existing one, _except_ to populate an explicitly named empty scaffold in place; the fixer edits the latest round in place. Create `.agents/@montflow/reviews/<name>/` if missing. Proceed through the pipeline; the round file and the ledger are written in Step 8.
+The reviewer fills the round the CLI scaffolded and never edits an existing one, _except_ to populate an explicitly named empty scaffold in place; the fixer edits the latest round in place. Proceed through the pipeline; the round file and the ledger are written in Step 8.
 
 ## 1. Map the Change
 
@@ -296,9 +310,9 @@ Series ledger (`<name>/REVIEW.md`) — regenerate its tables from every round on
 
 ## 9. Re-Review (when the series already has rounds)
 
-A re-review runs when `.agents/@montflow/reviews/<name>/` already has one or more round directories and the user (or the orchestrator) asks for another pass. The reviewer **does not start over and never edits a prior round** — it reads the latest round and writes the next one.
+A re-review runs when `mf-reviews list --verbose` (or `mf-reviews resume <name>`) shows the series already has one or more rounds and the user (or the orchestrator) asks for another pass. Run `mf-reviews resume <name>` to locate the latest round and its open-finding count, then `mf-reviews create <name>` to scaffold the next free round. The reviewer **does not start over and never edits a prior round** — it reads the latest round and fills the new one.
 
-1. **Read the latest round only.** Read `.agents/@montflow/reviews/<name>/<latest>/REVIEW.md` plus the series ledger `<name>/REVIEW.md`. Do not read any older round's contents; the latest round already carries every non-terminal finding forward.
+1. **Read the latest round only.** Read the round `mf-reviews resume <name>` named on its `latest:` line (`.agents/@montflow/reviews/<name>/<latest>/REVIEW.md`) plus the series ledger `<name>/REVIEW.md`. Do not read any older round's contents; the latest round already carries every non-terminal finding forward.
 2. **Carry forward non-terminal findings.** Copy each finding whose `Status` is not terminal into the new round, preserving its `ID`, `Severity`, `Location`, `Problem`, `Impact`, `Suggestion`, `First Seen`, `Attempts`, and every `#### Discussion` turn verbatim. Terminal statuses are `Resolved` and `Won't Fix` (unless the user explicitly asks to reopen) — drop those; they remain recorded in the prior round.
 3. **Re-evaluate the carried findings.**
    - For each `In Review` finding: read the actual code at the cited `Location` and verify the fix **from the code, not from the `[Fixer]` Discussion entry**. If the defect is gone, set `Status: Resolved` and append a short `[Reviewer]` turn confirming it. If it persists or a new defect was introduced, set `Status: Open` and append a `[Reviewer]` turn showing the still-failing path.

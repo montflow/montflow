@@ -38,6 +38,9 @@ const SKILL_NAMES = ['montflow-create-skills', 'montflow-modify-skills'] as cons
 const read = (dir: string, name: string, file: string): string =>
   readFileSync(resolve(dir, name, file), 'utf8');
 
+/** Workspace-only discovery skills: no package payload ships them. */
+const WORKSPACE_DISCOVERY_SKILLS = ['finding-skills', 'executing-skills'] as const;
+
 Vitest.describe('packaged skills', () => {
   Vitest.it('ships exactly the skills doctor installs', () => {
     Vitest.expect(readdirSync(PACKAGE_SKILLS_DIR).toSorted()).toStrictEqual([...SKILL_NAMES]);
@@ -64,5 +67,23 @@ Vitest.describe('packaged skills', () => {
     const changelog = read(PACKAGE_SKILLS_DIR, name, 'CHANGELOG.md');
     const newest = /^## \[(\S+)\]/mu.exec(changelog)?.[1];
     Vitest.expect(version).toBe(newest);
+  });
+});
+
+Vitest.describe('workspace discovery skills', () => {
+  // These skills have no package payload, but they are the entry point every
+  // other skill relies on. They must ask the CLI first and name the Glob/Grep
+  // fallback explicitly, so a missing binary is a stated degradation rather
+  // than a silent return to a hand scan.
+  Vitest.it.each(WORKSPACE_DISCOVERY_SKILLS)('%s: tries mf-skills list first', (name) => {
+    const markdown = read(INSTALLED_SKILLS_DIR, name, 'SKILL.md');
+    Vitest.expect(markdown).toContain('mf-skills list');
+    Vitest.expect(markdown).toContain('bun run --cwd packages/skills cli list');
+  });
+
+  Vitest.it.each(WORKSPACE_DISCOVERY_SKILLS)('%s: states the Glob/Grep fallback', (name) => {
+    const markdown = read(INSTALLED_SKILLS_DIR, name, 'SKILL.md');
+    Vitest.expect(markdown).toMatch(/fallback/iu);
+    Vitest.expect(markdown).toMatch(/Glob\/Grep|Glob and Grep/u);
   });
 });

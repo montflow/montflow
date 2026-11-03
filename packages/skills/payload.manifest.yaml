@@ -1,0 +1,9 @@
+package: '@montflow/skills'
+kinds:
+  - kind: skills
+    sourceDir: 'skills/'
+    targetDir: '.agents/skills/'
+    naming: 'by-directory'
+    compare: contents
+    installPolicy: repair
+    required: true
