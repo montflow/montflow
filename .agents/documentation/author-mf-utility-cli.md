@@ -14,11 +14,11 @@ Not for `core`, `format`, `linting`, `stlx` — no CLI, different rules.
 
 | Package | Binary | Subcommands |
 |---|---|---|
-| `profiles` | `mf-profiles` | `list`, `show`, `verify`, `create`, `modify`, `delete` |
+| `profiles` | `mf-profiles` | `doctor`, `list`, `show`, `verify`, `create`, `modify`, `delete` |
 | `prompts` | `mf-prompts` | `doctor`, `list`, `inspect`, `execute`, `show`, `verify`, `render`, `create`, `modify`, `delete` |
 | `reviews` | `mf-reviews` | `doctor`, `list`, `show`, `verify`, `new` |
 | `skills` | `mf-skills` | `doctor`, `list`, `show`, `verify`, `create`, `modify`, `delete`, `sync` |
-| `specs` | `mf-specs` | `doctor`, `check`, `status`, `state`, `next`, `list`, `create`, `author`, `execute`, `which`, `models`, `resolve`, `sizing`, `sizing-config` |
+| `specs` | `mf-specs` | `doctor`, `check`, `status`, `state`, `next`, `list`, `create`, `migrate`, `init`, `new-phase`, `new-task`, `stamp`, `tier`, `claim`, `lock`, `waiver`, `gate`, `mail`, `review`, `author`, `execute`, `which`, `models`, `resolve`, `sizing`, `sizing-config` |
 
 `opencode` (the adapter) and `workflows` are libraries. No CLI.
 
@@ -40,20 +40,20 @@ Conform every `mf-*` binary to this contract.
 
 | Verb | Meaning | Exit |
 |---|---|---|
-| `doctor [--check]` | install/verify packaged skills; idempotent; `--check` report-only, no write | 1 when unhealthy |
+| `doctor [--check]` | install/verify the package `payload.json` (`skill`, `profile`, `prompt`, `tier`); idempotent; `--check` report-only, no write | 1 when unhealthy |
 | `list [--status ...]` | enumerate store entries | 0 |
 | `show <name>` / `status <id>` | one entry: raw file, ledger, or detail panel | 0 |
 | `verify [<name>] [--all]` (`mf-specs` calls it `check`) | mechanical validation of file shape/structure | 1 when any fails |
 | `create` / `modify` / `delete` (`mf-reviews` uses `new`) | CRUD over store files | 1 on refusal |
 | `help` / `--help` | usage | 0 |
 
-Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`;
-`mf-skills`: `sync`).
+Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`/
+`claim`/`gate`/`mail`; `mf-skills`: `sync`).
 
 ### Flags
 
 - `--dir <path>` = **workspace root**. Every store derives from it: `<root>/.agents/@montflow/<domain>`, skills at `<root>/.agents/skills`. Default `process.cwd()`. Domain exceptions must say so in their section.
-- `doctor` reads the same root and installs/verifies `<root>/.agents/skills/`.
+- `doctor` reads the same root and installs/verifies every entry in the package `payload.json`; `--check` writes nothing, while repair installs or rewrites.
 - `--verbose` adds per-item detail; never hides failures. Default token-lean.
 - `--human` renders readable tables and prose for a person; the default stays agent-first. `--human` and `--verbose` compose.
 - `--status valid|invalid` on `list` for file stores; lifecycle states on `list` for `mf-specs`.
@@ -92,7 +92,7 @@ Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`;
 3. Write renderers: pure `data -> text`, token-lean default, `--verbose` additive.
 4. Write `binary.apps.module.ts` `rootCommand` with the applicable canonical verbs; add `main.ts` entry.
 5. Write `slash.apps.module.ts` hand-rolled parser + `run` + `register`; reuse engines/renderers; register it on the server plugin entry (`src/server.ts`).
-6. If the package ships skills: add `doctor` (install/verify into `<root>/.agents/skills/`); when skills are bundled, `build:cli` prepends `generate:payload`.
+6. If the package ships artifacts: add `payload.json` (kinds `skill`, `profile`, `prompt`, `tier`), a `doctor` over the shared `@montflow/payload` engine, and the `generate:payload` script wired into `build:cli`.
 7. Add `mf-<domain>:check` root script; add it to `mf:check`.
 
 ## Verify

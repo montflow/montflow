@@ -59,6 +59,36 @@ aliases for frozen records.
   - typecheck (`ts:check`) is whole-project by nature (`tsc -p`) — scope it to
     the affected package(s) via `--filter`, not the entire repo.
 
+## Specs (v2)
+
+- Store: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus one directory per
+  phase. A phase is a directory, never the leading letters of a task id.
+- `spec-version: 2` is current. A spec with no `spec-version` reads as v1: the
+  phase tree without `PHASE.md`. It verifies with a `spec.version-outdated`
+  warning, never an error, and no surface infers v2 from file presence. Upgrade
+  with `mf-specs migrate --name <name>`; a `status: complete` spec stays frozen
+  at v1 unless the owner passes `--include-complete`.
+- Phase directory: `PHASE.md` (objective, status, review decision, gate kind),
+  `MEMORY.md`, `BOARD.md`, optional `GATES.md` and `GATE-RESULTS.jsonl`, and the
+  task directories. Task directory: `TASK.md`, `MEMORY.md`, optional `GATES.md`,
+  `MAILBOX.md`, and `GATE-RESULTS.jsonl`.
+- Ids, statuses, timestamps, locks, and gate results are generated:
+  `init`, `new-phase`, `new-task`, `stamp`, `claim`, `lock`, `waiver`, `tier`,
+  `gate run`, `gate record`, `mail`, and `review decide`. A lock is derived from
+  completion, gate proof, and a closed review round or effective waiver;
+  `mf-specs lock` only confirms it and stores nothing. No surface reads a
+  stored lock list, and no phase reserves a `*099` review task.
+- Every surface reads the same phase tree: the `mf-specs` binary, `/specs` in
+  the OpenCode host, the `spec_author` / `spec_execute` / `spec_sizing` /
+  `spec_tier` / `spec_models` tools, and the TUI picker. The TUI offers only
+  directories holding `SPEC.md`, never a phase or task directory.
+- Shipped artifacts are package payload declared in each package's
+  `payload.json` (`skill`, `profile`, `prompt`, `tier`). `mf-<cli> doctor
+  --check` reports without writing; `mf-<cli> doctor` repairs; `bun run mf:doctor`
+  repairs every payload package. A manifest-owned file edited locally is
+  `stale` and repair overwrites it; an unlisted file in the same store is user
+  data and is never deleted.
+
 ## Verification gate
 
 - `bun run mf:gate` is the repo-wide gate: `lint:check`, `fmt:check`,
@@ -74,12 +104,16 @@ aliases for frozen records.
   `bun run hooks:install`, bypass with `git push --no-verify` or `LEFTHOOK=0`.
 - Utility verifies, each runnable alone: `mf-release:check`,
   `mf-skills:check`, `mf-prompts:check`, `mf-specs:check`,
-  `mf-profiles:check`, `mf-reviews:check`, `mf-references:check`. They verify
+  `mf-profiles:check`, `mf-model-fallback:check`, `mf-reviews:check`,
+  `mf-references:check`. They verify
   release metadata (CLI versions, fixed group, tags, changelogs) and this
   repo's own artifacts (`.agents/skills`, `.agents/@montflow/prompts`,
   `.agents/@montflow/specs`, `.agents/@montflow/profiles`,
-  `.agents/@montflow/reviews`, `.agents/@montflow/references`) plus
-  packaged-skill freshness.
+  `.agents/@montflow/reviews`, `.agents/@montflow/references`,
+  `.agents/@montflow/tiers`) plus the `payload.json` manifest of every package
+  that ships one. Each artifact family runs its `doctor --check` (report-only)
+  and fails on drift; `bun run mf:doctor` is the repair path for every payload
+  package.
 - `release.yml` is separate: it gates publishing, not pushes, and keeps its own
   per-package conditions.
 
