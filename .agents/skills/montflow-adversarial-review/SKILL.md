@@ -179,6 +179,34 @@ Lead with the highest-severity, highest-likelihood bugs. Distinguish confirmed d
 
 **No findings**: If the review finds nothing actionable, do not pad the report. Put a single line in the `## Findings` section — `No defects found.` plus the coverage areas re-checked (e.g. "Re-verified: off-by-one in `parseRange`, null guards on `fetchUser`, race on `cache.set`, encoding edge cases on filename input"). The coverage list evidences that the search was performed; the section must not be left empty, because an empty section reads as a shallow review — itself a defect of the review.
 
+### Cycle policy: never count rounds or severities yourself
+
+The reviewer writes the round; the orchestrator runs the decision verb. Never compute the phase budget, the rounds used, or the open-severity tally by hand — not in prose, not in a receipt, not as a recommendation. For a spec-phase review, after every round the orchestrator runs:
+
+```
+mf-specs review decide --name <spec> --phase <id> --mode guided|autonomous [--json]
+```
+
+It prints `decision`, `rounds <used>/<budget>`, `open <n> (critical a, major b, minor c, nit d)`, `reason <code>`, and the per-series breakdown, and it never writes. Obey its decision (`start | pass | fix-and-stop | rework | overflow | escalate | waived`).
+
+**Deferred closure.** A round whose only open findings are Minor/Nit may close without another full cycle. Add both lines to its `## Metadata`:
+
+```markdown
+- Disposition: minor-deferred
+- Deferred: F1, F3
+```
+
+Every id in `Deferred` must exist in the round and be Minor or Nit, and must carry a terminal disposition (`Won't Fix`, or `Resolved` when it was fixed). A deferred Critical/Major is `review.deferred-severity` and never passes. Deferral is a closure, not a waiver: the findings keep their terminal dispositions in the round, and the orchestrator records the evidence for each deferred fix in the phase `MEMORY.md` and opens a defect task for anything not fixed.
+
+**Intentional overflow.** A round past the phase budget is legal only when it is authorized in its `## Metadata`:
+
+```markdown
+- Overflow: <one-line reason>
+- Overflow-authorized: autonomous | user
+```
+
+Autonomous permits exactly one overflow per phase per series (`budget + 1` rounds). Guided has no fixed cap but requires `- Overflow-authorized: user` on every overflow, because the user authorizes each round. `structure` and `next` accept an authorized overflow; a missing or broken authorization is `review.overflow-exhausted`, and a round past the budget with no overflow declaration is `review.budget-exceeded`.
+
 ### Standard File Structure
 
 Round file (`<name>/<NNN>/REVIEW.md`):
@@ -195,6 +223,10 @@ Round file (`<name>/<NNN>/REVIEW.md`):
 - Isolation: isolated | non-isolated (<reason>)
 - Max Attempts: 3
 - Status: open | closed
+- Disposition: minor-deferred # optional; closes a Minor/Nit-only round
+- Deferred: F1, F3 # required with Disposition; ids only, Minor/Nit
+- Overflow: <reason> # optional; an intentional round past the budget
+- Overflow-authorized: autonomous | user # required with Overflow
 - Created: <YYYY-MM-DD>
 
 ## Findings
