@@ -6,7 +6,7 @@ originator: user
 size: medium
 depends-on: C007, C009, D001, D002
 related-tasks: D001, D002
-status: pending
+status: complete
 ---
 
 # Task D003: implement-lean-execution-contract
@@ -59,9 +59,9 @@ under 80 lines; batch review findings into one fixer attempt.
 
 ## Completion
 
-- [ ] Every v2 in-progress phase `MEMORY.md` (C-I) carries `## Execution Brief`; `mf-specs check` is green, and the new `phase.execution-brief-missing` warning fires on a fixture without it.
-- [ ] The canonical and installed `spec-worker`/`spec-execution-orchestrator` profiles and `spec-execute` prompt carry the lean markers; a drift test fails when one marker is removed in a temp copy.
-- [ ] The authoring skill generates the brief for new phases, and the existing pending task records carry the `## Execution` pointer.
-- [ ] The prompt and profile state one fixer attempt per review round and one re-review, keyed off `mf-specs review decide`.
-- [ ] `bun run mf-specs:check`, `bun run mf-profiles:check`, `bun run mf-prompts:check`, `bun run mf:check`, and the touched package tests pass; `ts:check`, `lint:check`, and `fmt:check` pass.
-- [ ] Changelog entries exist for every package whose shipped payload or skill text changed.
+- [x] Every v2 in-progress phase `MEMORY.md` (C-I) carries `## Execution Brief`; `mf-specs check` is green, and the new `phase.execution-brief-missing` warning fires on a fixture without it.
+- [x] The canonical and installed `spec-worker`/`spec-execution-orchestrator` profiles and `spec-execute` prompt carry the lean markers; a drift test fails when one marker is removed in a temp copy.
+- [x] The authoring skill generates the brief for new phases, and the existing pending task records carry the `## Execution` pointer.
+- [x] The prompt and profile state one fixer attempt per review round and one re-review, keyed off `mf-specs review decide`.
+- [x] `bun run mf-specs:check`, `bun run mf-profiles:check`, `bun run mf-prompts:check`, `bun run mf:check`, and the touched package tests pass; `ts:check`, `lint:check`, and `fmt:check` pass.
+- [x] Changelog entries exist for every package whose shipped payload or skill text changed.

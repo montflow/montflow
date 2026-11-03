@@ -7,7 +7,7 @@ size: medium
 depends-on: D001, D002, D003
 related-tasks:
 reviewer-profiles:
-status: pending
+status: complete
 ---
 
 # Task D004: review-phase
@@ -44,8 +44,8 @@ under 80 lines; batch review findings into one fixer attempt.
 
 ## Completion
 
-- [ ] The round is written under `.agents/@montflow/reviews/montflow-spec-standard/<NNN>/REVIEW.md` with `- Phase: D`, and the series ledger indexes it.
-- [ ] The review proves the lean markers in the canonical and installed profiles/prompt and that removing one fails the drift test.
-- [ ] The review proves `phase.execution-brief-missing` fires on a fixture and is silent on this spec.
-- [ ] Findings are opened as defect tasks with dispositions recorded and accepted fixes applied.
-- [ ] `bun run mf:check` and `bun run mf-specs:check` pass.
+- [x] The round is written under `.agents/@montflow/reviews/montflow-spec-standard/<NNN>/REVIEW.md` with `- Phase: D`, and the series ledger indexes it.
+- [x] The review proves the lean markers in the canonical and installed profiles/prompt and that removing one fails the drift test.
+- [x] The review proves `phase.execution-brief-missing` fires on a fixture and is silent on this spec.
+- [x] Findings are opened as defect tasks with dispositions recorded and accepted fixes applied.
+- [x] `bun run mf:check` and `bun run mf-specs:check` pass.

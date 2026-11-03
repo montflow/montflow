@@ -1,7 +1,7 @@
 ---
 id: E
 objective: Make parallel execution the default and add the single-flight verification scheduler.
-status: pending
+status: in-progress
 review: required
 gate: none
 ---

@@ -6,7 +6,8 @@ originator: planner:E001
 size: large
 depends-on: E001, C002, C005
 related-tasks: E003
-status: pending
+status: complete
+write-scope: packages/specs
 ---
 
 # Task E002: implement the verification scheduler
@@ -52,10 +53,10 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] Two concurrent requesters for one key produce one real execution and two consumers, proven by a run
-- [ ] A matching pass is reused, a changed fingerprint reruns, and a failure never returns as a pass
-- [ ] The heavy lane admits one run by default and a config override is honored
-- [ ] An expired lease is reclaimed and a cancelled run records no pass
-- [ ] `check` fails a green whose fingerprint is stale, with a coded diagnostic
-- [ ] `next`, `status`, and `gate run` expose the key, lane, and reused source
-- [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf-specs:check` pass
+- [x] Two concurrent requesters for one key produce one real execution and two consumers, proven by a run
+- [x] A matching pass is reused, a changed fingerprint reruns, and a failure never returns as a pass
+- [x] The heavy lane admits one run by default and a config override is honored
+- [x] An expired lease is reclaimed and a cancelled run records no pass
+- [x] `check` fails a green whose fingerprint is stale, with a coded diagnostic
+- [x] `next`, `status`, and `gate run` expose the key, lane, and reused source
+- [x] `ts:check`, `lint:check`, `fmt:check`, and `mf-specs:check` pass

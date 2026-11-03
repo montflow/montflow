@@ -6,7 +6,8 @@ originator: planner:E001
 size: medium
 depends-on: E001, E002, D001, C007
 related-tasks:
-status: pending
+status: complete
+write-scope: packages/specs
 ---
 
 # Task E003: teach parallel phase authoring
@@ -54,10 +55,10 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] The authoring skill and prompt require a parallel ready set, declared write scopes, and real dependencies only
-- [ ] The authoring skill and prompt split task-local gates from phase-shared checks
-- [ ] The execution prompt and both orchestrator/worker profiles use the board, mailbox, and scheduler correctly
-- [ ] A serial phase is explained by the appraiser instead of being the default
-- [ ] README documents the phase shape, channel protocol, and run key/lane/reuse behavior
-- [ ] A test covers the authoring and execution guidance and fails when it is removed
-- [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf:check` pass
+- [x] The authoring skill and prompt require a parallel ready set, declared write scopes, and real dependencies only
+- [x] The authoring skill and prompt split task-local gates from phase-shared checks
+- [x] The execution prompt and both orchestrator/worker profiles use the board, mailbox, and scheduler correctly
+- [x] A serial phase is explained by the appraiser instead of being the default
+- [x] README documents the phase shape, channel protocol, and run key/lane/reuse behavior
+- [x] A test covers the authoring and execution guidance and fails when it is removed
+- [x] `ts:check`, `lint:check`, `fmt:check`, and `mf:check` pass

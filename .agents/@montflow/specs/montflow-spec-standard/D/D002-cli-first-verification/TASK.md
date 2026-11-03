@@ -6,7 +6,7 @@ originator: user
 size: medium
 depends-on: C006, C007
 related-tasks: D001
-status: pending
+status: complete
 ---
 
 # Task D002: make CLI verification first
@@ -59,10 +59,10 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] `montflow-create-prompts` names `mf-skills list` and `mf-prompts verify <name>` on create and modify
-- [ ] Both profile skills name `mf-skills list` and `mf-profiles verify <name>`
-- [ ] The review skill takes its round from `mf-reviews` and keeps explicit rounds authoritative
-- [ ] The two discovery skills use `mf-skills list` first, with a stated fallback
-- [ ] Package, workspace, and doctor payload copies agree and `doctor --check` is silent
-- [ ] A test covers each CLI-first instruction and fails when it is removed
-- [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf:check` pass
+- [x] `montflow-create-prompts` names `mf-skills list` and `mf-prompts verify <name>` on create and modify
+- [x] Both profile skills name `mf-skills list` and `mf-profiles verify <name>`
+- [x] The review skill takes its round from `mf-reviews` and keeps explicit rounds authoritative
+- [x] The two discovery skills use `mf-skills list` first, with a stated fallback
+- [x] Package, workspace, and doctor payload copies agree and `doctor --check` is silent
+- [x] A test covers each CLI-first instruction and fails when it is removed
+- [x] `ts:check`, `lint:check`, `fmt:check`, and `mf:check` pass

@@ -6,7 +6,7 @@ originator: user
 size: medium
 depends-on: E001, E002, E003
 related-tasks:
-status: pending
+status: in-progress
 ---
 
 # Task E099: review the parallel execution phase

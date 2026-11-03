@@ -6,7 +6,7 @@ originator: user
 size: medium
 depends-on: B003, B004, C002, C003
 related-tasks: E002, E003
-status: pending
+status: complete
 ---
 
 # Task E001: decide the parallel execution contract
@@ -76,7 +76,7 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] `MEMORY.md` carries the phase-shape rule, write-scope rule, key grammar, lane defaults, reuse and invalidation rule, lease recovery, channel protocol, and output fields
-- [ ] Every rule names where it is enforced (`check`, `gate run`, `next`, or the authoring skill) or is explicitly judgment
-- [ ] The task-local versus phase-shared gate split is unambiguous enough to test directly
-- [ ] The contract names C002's `gate run` and C003's channels as the only mechanisms, with no duplicate
+- [x] `MEMORY.md` carries the phase-shape rule, write-scope rule, key grammar, lane defaults, reuse and invalidation rule, lease recovery, channel protocol, and output fields
+- [x] Every rule names where it is enforced (`check`, `gate run`, `next`, or the authoring skill) or is explicitly judgment
+- [x] The task-local versus phase-shared gate split is unambiguous enough to test directly
+- [x] The contract names C002's `gate run` and C003's channels as the only mechanisms, with no duplicate

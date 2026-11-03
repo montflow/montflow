@@ -8,7 +8,7 @@
 - Type: standalone
 - Isolation: isolated
 - Max Attempts: 3
-- Status: open
+- Status: closed
 - Created: 2026-11-03
 
 ## Findings

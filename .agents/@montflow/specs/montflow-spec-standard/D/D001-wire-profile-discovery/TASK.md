@@ -6,7 +6,7 @@ originator: user
 size: small
 depends-on: C006, C007
 related-tasks: B004
-status: pending
+status: complete
 ---
 
 # Task D001: wire profile discovery into spec authoring
@@ -56,9 +56,9 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] A rendered `spec-create` prompt tells the author to run `mf-profiles list` before choosing `reviewer-profiles`
-- [ ] The skill's `reviewer-profiles` rule and Reference name `mf-profiles list` and the `show` fallback
-- [ ] The README documents profile discovery and the empty-list default
-- [ ] The package skill, workspace mirror, and embedded payload agree, and `mf-specs doctor --check` is silent
-- [ ] A test covers the prompt and skill discovery text
-- [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf-specs:check` pass
+- [x] A rendered `spec-create` prompt tells the author to run `mf-profiles list` before choosing `reviewer-profiles`
+- [x] The skill's `reviewer-profiles` rule and Reference name `mf-profiles list` and the `show` fallback
+- [x] The README documents profile discovery and the empty-list default
+- [x] The package skill, workspace mirror, and embedded payload agree, and `mf-specs doctor --check` is silent
+- [x] A test covers the prompt and skill discovery text
+- [x] `ts:check`, `lint:check`, `fmt:check`, and `mf-specs:check` pass

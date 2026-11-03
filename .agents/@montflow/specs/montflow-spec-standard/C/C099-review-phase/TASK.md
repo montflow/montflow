@@ -6,7 +6,7 @@ originator: user
 size: medium
 depends-on: C006, C007, C008, C009
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Review Phase C: review phase
@@ -33,6 +33,6 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] Review written as a round under `.agents/@montflow/reviews/montflow-spec-standard/<NNN>/REVIEW.md` (not a flat `C.md`) with `- Phase: C` in `## Metadata`, and the series ledger `.agents/@montflow/reviews/montflow-spec-standard/REVIEW.md` indexes the round
-- [ ] Accepted findings opened as defect tasks with dispositions recorded
-- [ ] `bun run mf:check` green and a clean clone gains every payload kind
+- [x] Review written as a round under `.agents/@montflow/reviews/montflow-spec-standard/<NNN>/REVIEW.md` (not a flat `C.md`) with `- Phase: C` in `## Metadata`, and the series ledger `.agents/@montflow/reviews/montflow-spec-standard/REVIEW.md` indexes the round
+- [x] Accepted findings opened as defect tasks with dispositions recorded
+- [x] `bun run mf:check` green and a clean clone gains every payload kind

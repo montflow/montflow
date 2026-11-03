@@ -1,7 +1,7 @@
 ---
 id: C
 objective: Implement the v2 structure, gates, channels, payloads, verbs, surfaces, docs, and review policy.
-status: in-progress
+status: complete
 review: required
 gate: none
 ---

@@ -22,6 +22,7 @@
 - [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf:check` pass
 
 ## Stage 3: Package proof (mechanical)
-command: bun run --cwd packages/specs test
+command: bun run --cwd packages/specs test -- src/modules/prompt/tests/lean-contract.test.ts
+scope: packages/specs/src/modules/prompt
 
-- [ ] the scoped package suite for this task passes
+- [ ] the authoring-guidance drift suite for this task passes

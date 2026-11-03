@@ -1,7 +1,7 @@
 ---
 id: D
 objective: Close profile discovery and encode the lean execution contract that bounds context, gates, and records.
-status: pending
+status: complete
 review: required
 gate: none
 ---
