@@ -36,7 +36,7 @@ export const COMMAND_DESCRIPTION =
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-profiles-cli list [--status valid|invalid] | show <name> | verify [<name>...] | doctor [--check] [--dir path] | create <name> --description "text" [--model p/m] [--skills a,b] [--instructions "text"] [--checklist "item 1; item 2"] | modify <name> [--description ...] [--model ...] [--skills ...] [--instructions ...] [--checklist ...] | delete <name> | help';
+  '/mf-profiles-cli list [--status valid|invalid] | show <name> | verify [<name>...] [--strict] | doctor [--check] [--dir path] | create <name> --description "text" [--model p/m] [--skills a,b] [--instructions "text"] [--checklist "item 1; item 2"] | modify <name> [--description ...] [--model ...] [--skills ...] [--instructions ...] [--checklist ...] | delete <name> | help';
 
 /** Fields for `create` / `modify`, re-exported under the historical name. */
 export type CliFields = ProfileFields;
@@ -46,7 +46,7 @@ export type CliAction =
   | { readonly kind: 'Help' }
   | { readonly kind: 'List'; readonly status: string | undefined }
   | { readonly kind: 'Show'; readonly name: string }
-  | { readonly kind: 'Verify'; readonly names: ReadonlyArray<string> }
+  | { readonly kind: 'Verify'; readonly names: ReadonlyArray<string>; readonly strict: boolean }
   | { readonly kind: 'Doctor'; readonly check: boolean; readonly dir: string | undefined }
   | { readonly kind: 'Create'; readonly name: string; readonly fields: ProfileFields }
   | { readonly kind: 'Modify'; readonly name: string; readonly fields: ProfileFields }
@@ -159,8 +159,19 @@ export const parseCliArgs = (args: string): CliAction => {
     }
     case 'show':
       return tokens[1] === undefined ? { kind: 'Help' } : { kind: 'Show', name: tokens[1] };
-    case 'verify':
-      return { kind: 'Verify', names: tokens.slice(1).filter((token) => token !== '') };
+    case 'verify': {
+      const strict = tokens.includes('--strict');
+      const split = splitTokens(
+        tokens.slice(1).filter((token) => token !== '--strict'),
+        new Set(),
+      );
+      if (split.unknown.length > 0) return { kind: 'Help' };
+      return {
+        kind: 'Verify',
+        names: split.positionals.filter((token) => token !== ''),
+        strict,
+      };
+    }
     case 'doctor': {
       const split = splitTokens(tokens.slice(1), KNOWN_DOCTOR_FLAGS);
       if (split.unknown.length > 0 || split.positionals.length > 0) return { kind: 'Help' };
@@ -226,7 +237,9 @@ export const run = (
         return yield* say(Renderers.show(profile));
       }
       case 'Verify': {
-        const report = yield* verifyAll(cwd, action.names.length > 0 ? action.names : undefined);
+        const report = yield* verifyAll(cwd, action.names.length > 0 ? action.names : undefined, {
+          strict: action.strict,
+        });
         for (const entry of report.entries) {
           yield* say(Renderers.verify(entry.name, entry.result));
         }

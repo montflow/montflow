@@ -37,8 +37,9 @@ Know every store, its expected layout, its verifier, and its repair skill. Load 
 | -------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------ | ---------------------------------------------------------------- |
 | Skills         | `.agents/skills/<name>/SKILL.md`                | frontmatter (`name`, `description`, `id`, `author`, `version`, `license`, `dependencies`, `groups`) + `# When To Use` / `# Pipeline` / `# Reference` | `bun run mf-skills:check`     | `montflow-create-skills`, `montflow-modify-skills`         |
 | Prompts        | `.agents/@montflow/prompts/<name>.json`      | JSON with `name`, `description`, `template`, `variables`, `skills`, `model`                                  | `bun run mf-prompts:check`    | `montflow-create-prompts`                                     |
-| Specs          | `.agents/@montflow/specs/<name>/`               | `SPEC.md` + one directory per phase, each holding its task directories (`TASK.md`, `MEMORY.md`, `GATES.md`)                                      | `bun run mf-specs:check`      | `montflow-create-specs`, `montflow-find-specs`             |
+| Specs          | `.agents/@montflow/specs/<name>/`               | `SPEC.md` + `spec-version` + one directory per phase (`PHASE.md`, `MEMORY.md`, `BOARD.md`, optional `GATES.md`/`GATE-RESULTS.jsonl`), each holding task directories (`TASK.md`, `MEMORY.md`, optional `GATES.md`/`MAILBOX.md`/`GATE-RESULTS.jsonl`) | `bun run mf-specs:check`      | `montflow-create-specs`, `montflow-find-specs`             |
 | Profiles       | `.agents/@montflow/profiles/<name>/PROFILE.md`  | frontmatter (`name`, `description`, `model`, `skills`) + `# Title` / `## Instructions` / `## Review Checklist` | `bun run mf-profiles:check`   | `montflow-create-profiles`, `montflow-modify-profiles`     |
+| Tiers          | `.agents/@montflow/tiers/<name>.md`             | frontmatter (`tier`, `phases-min`, `phases-max`, `tasks-max`, `tasks-per-phase-max`, `exploration`, `gate`, `review`, `waiver`, `interaction`, `grilling`, `artifacts`, `conditional-artifacts`) + `# Tier: <name>` and the question-budget sentence | `bun run mf-specs:check`      | `montflow-create-specs`                                          |
 | Agent docs     | `.agents/documentation/<verb>-<object>.md`      | title + `## When` / `## Steps` / `## Verify`                                                                 | manual structure check               | `contribute-to-agentic-docs`                                     |
 | Wiki           | `wiki/<page>.md`                                | value-statement opener + `See also`; no plans or decision logs                                               | manual structure check               | `contributing-to-wiki`                                           |
 | Changelogs     | `CHANGELOG.md` per package                      | Keep a Changelog + SemVer, unreleased-first                                                                  | manual structure check               | `adding-to-changelog`                                            |
@@ -46,9 +47,67 @@ Know every store, its expected layout, its verifier, and its repair skill. Load 
 | References     | `.agents/@montflow/references/<slug>/REFERENCE.md` | committed entry (`name`, `url`, `purpose`, `added`, optional `ref`) + `# Notes`; the clone lives in the gitignored `.agents/references/<slug>` | `bun run mf-references:check`   | `montflow-add-reference`, `montflow-find-reference`              |
 | Agent rules    | `AGENTS.md`                                     | minimal contract: language, package manager, commands, verification                                            | manual structure check               | `authoring-rules`                                                |
 
+### Payload kinds and the two doctor modes
+
+A package that ships artifacts declares them in `payload.json`. Four kinds
+exist; the manifest is the only name list, never a hand-written array:
+
+| Kind      | Owners                                             | Installed target                         |
+| --------- | -------------------------------------------------- | ---------------------------------------- |
+| `skill`   | skills, prompts, specs, reviews, references        | `.agents/skills/<name>/`                 |
+| `profile` | profiles                                           | `.agents/@montflow/profiles/<name>/`     |
+| `prompt`  | specs, model-fallback                              | `.agents/@montflow/prompts/<name>.json`  |
+| `tier`    | specs                                              | `.agents/@montflow/tiers/<name>.md`      |
+
+- `mf-<tool> doctor --check` is **report-only**: no writes and no directory
+  creation; statuses are `ok` / `missing` / `stale` / `mismatched` / `blocked`,
+  and the `mf-<tool>:check` scripts use this mode.
+- `mf-<tool> doctor` is **repair**: it installs, rewrites, or reports
+  `present` / `installed` / `repaired` / `blocked`; `bun run mf:doctor` repairs
+  every payload package.
+- A manifest-owned file edited locally is `stale` and repair overwrites it.
+  A file the manifest does not name, in the same store, is user data: never
+  read, rewritten, or deleted by doctor.
+
+### Spec store migration record (2026-11-03)
+
+`mf-specs migrate --all` over `.agents/@montflow/specs` reported
+`14 specs · 0 migrated · 2 upgraded · 0 planned · 12 frozen · 0 failed`.
+Read a spec with no `spec-version` as v1 with a `spec.version-outdated` warning;
+never infer v2 from file presence, and never edit a frozen record.
+
+| Spec                            | Result            | Version after |
+| ------------------------------- | ----------------- | ------------- |
+| `cli-version-awareness`         | frozen (complete) | 1             |
+| `installation-guide`            | frozen (complete) | 1             |
+| `model-fallback-alignment`      | frozen (complete) | 1             |
+| `montflow-ci-verification`      | frozen (complete) | 1             |
+| `montflow-multi-reviewer`       | frozen (complete) | 1             |
+| `montflow-opencode-migration`   | frozen (complete) | 1             |
+| `montflow-phase-directories`    | frozen (complete) | 1             |
+| `montflow-project-structure`    | frozen (complete) | 1             |
+| `montflow-references-plugin`    | frozen (complete) | 1             |
+| `montflow-references-tui`       | upgraded          | 2             |
+| `montflow-spec-completion-gate` | frozen (complete) | 1             |
+| `montflow-spec-standard`        | upgraded          | 2             |
+| `plugin-host-integration`      | frozen (complete) | 1             |
+| `spec-optimizations`            | frozen (complete) | 1             |
+
+### Spec v2 surfaces
+
+The ledger covers the same store from four surfaces: the `mf-specs` binary,
+`/specs` in the OpenCode host (the command verbs; `review decide`, `doctor`,
+and `version` are binary-only), the
+`spec_author` / `spec_execute` / `spec_sizing` / `spec_tier` / `spec_models`
+tools, and the TUI picker (which offers only directories holding `SPEC.md`).
+Readers are `check`, `status`, `state`, `next`, `list`, `resolve`, `sizing`,
+`models`, and `which`; writers are `init`, `new-phase`, `new-task`, `stamp`,
+`claim`, `waiver`, `gate run`, `gate record`, `mail`, and `migrate`; `lock` and
+`review decide` write nothing.
+
 ### Verify mechanically, never by eye
 
-- **Run the verifier, don't guess.** For the artifact being changed, run the owning package's single-artifact `cli` command with `--dir $PWD`; `bun run mf-<family>:check` is the whole-family gate (CI, cross-scope changes, or an explicit request). To check all six extension families at once, run `bun run mf:check`.
+- **Run the verifier, don't guess.** For the artifact being changed, run the owning package's single-artifact `cli` command with `--dir $PWD`; `bun run mf-<family>:check` is the whole-family gate (CI, cross-scope changes, or an explicit request). To check every artifact family and payload package at once, run `bun run mf:check`; to repair every payload package, run `bun run mf:doctor`.
 - **Only package.json scripts.** Per `AGENTS.md`, never invoke a tool binary directly (`node_modules/.bin/*`, `bunx`, `npx`). The `mf-<family>:check` scripts and the owning package's `cli` script are the sanctioned entrypoints.
 - **Scope to the artifact.** A single artifact is checked through its owning package's `cli` script, e.g. `bun run --cwd packages/skills cli verify <name> --dir $PWD`, `bun run --cwd packages/prompts cli verify <name> --dir $PWD`, `bun run --cwd packages/specs cli check --dir $PWD --name <name>`. Never run the repo-wide gate when one family changed.
 - **Read the failure verbatim.** Capture the artifact path, the failing field or section, and the verifier's exact message. A finding you cannot quote from the verifier's output is not a finding.
