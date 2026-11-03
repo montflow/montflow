@@ -20,6 +20,8 @@ Run an independent adversarial review over phase C.
 ## Requirements
 
 - Findings written to the phase review round.
+- Two cycles maximum: the initial round plus one re-review round.
+- Cap each finding at `Max Attempts: 2`; escalate rather than loop.
 
 ## Completion
 

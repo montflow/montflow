@@ -20,6 +20,8 @@ Run an independent adversarial review over phase A.
 ## Requirements
 
 - Findings written to the phase review round.
+- One review round only — no re-review round; the phase is exploration, not code.
+- Cap each finding at `Max Attempts: 2`; escalate rather than loop.
 
 ## Completion
 
