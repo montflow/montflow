@@ -31,6 +31,52 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
     Vitest.expect(result.valid).toBe(true);
   });
 
+  Vitest.it('requires a classified gate on an unfinished v2 task, not on a complete one', () => {
+    const prose = ['# GATES', '', '## Stage 0: Static', '', '- [ ] Pass.', ''].join('\n');
+    const tree = (status: string, mark: string) =>
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            version: '2',
+            rows: [
+              {
+                id: 'A001',
+                name: 'implement-login',
+                type: 'execution',
+                status,
+                gates: 'Yes',
+              },
+              { id: 'A099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
+            ],
+          }),
+        ),
+        entry('A/PHASE.md', phaseMarkdown()),
+        entry('A/MEMORY.md', memory),
+        entry(
+          'A/A001-implement-login/TASK.md',
+          taskMarkdown({ id: 'A001', name: 'implement-login', status }),
+        ),
+        entry('A/A001-implement-login/MEMORY.md', memory),
+        entry('A/A001-implement-login/GATES.md', prose.replace('- [ ] Pass.', mark)),
+        entry(
+          'A/A099-review-phase/TASK.md',
+          taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
+        ),
+        entry('A/A099-review-phase/MEMORY.md', memory),
+      ]);
+
+    const pending = verifyTree(tree('pending', '- [ ] Pass.'));
+    Vitest.expect(pending.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.no-mechanical-stages' }),
+    );
+
+    const complete = verifyTree(tree('complete', '- [x] Pass.'));
+    Vitest.expect(complete.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.no-mechanical-stages' }),
+    );
+  });
+
   Vitest.it('accepts a valid spec that also lists its directories', () => {
     const tree = validTree();
     const result = verifyTree(
@@ -560,8 +606,11 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
     ]);
     const result = verifyTree(tree, {
       series: [
-        { name: 'ship-spec', rounds: [{ round: '001', phase: 'A' }] },
-        { name: 'ship-spec-effect-reviewer', rounds: [{ round: '001', phase: 'A' }] },
+        { name: 'ship-spec', rounds: [{ round: '001', phase: 'A', passed: true }] },
+        {
+          name: 'ship-spec-effect-reviewer',
+          rounds: [{ round: '001', phase: 'A', passed: true }],
+        },
       ],
       requireRounds: true,
     });
@@ -615,5 +664,166 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
       message:
         "Phase 'A' has a review task but review series 'ship-spec-effect-reviewer' does not exist.",
     });
+  });
+});
+
+const reviewTree = () =>
+  snapshot([
+    entry(
+      'SPEC.md',
+      specMarkdown({
+        version: '2',
+        rows: [
+          {
+            id: 'A001',
+            name: 'implement-login',
+            type: 'execution',
+            status: 'pending',
+            gates: 'No',
+          },
+          { id: 'A099', name: 'review-phase', type: 'review', status: 'complete', gates: 'No' },
+        ],
+      }),
+    ),
+    entry('A/PHASE.md', phaseMarkdown({ status: 'in-progress' })),
+    entry('A/MEMORY.md', memory),
+    entry(
+      'A/A001-implement-login/TASK.md',
+      taskMarkdown({ id: 'A001', name: 'implement-login', size: 'tiny' }),
+    ),
+    entry('A/A001-implement-login/MEMORY.md', memory),
+    entry(
+      'A/A099-review-phase/TASK.md',
+      taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: 'complete' }),
+    ),
+    entry('A/A099-review-phase/MEMORY.md', memory),
+  ]);
+
+Vitest.describe('Structure.verifySpecTree review overflow and closure', () => {
+  Vitest.it('accepts an autonomous-authorized overflow past the budget', () => {
+    const result = verifyTree(reviewTree(), {
+      series: [
+        {
+          name: 'ship-spec',
+          rounds: [
+            { round: '001', phase: 'A', passed: true },
+            {
+              round: '002',
+              phase: 'A',
+              passed: true,
+              overflow: {
+                reason: 'the user asked for one more',
+                authorized: 'autonomous',
+                rawAuthorized: 'autonomous',
+              },
+            },
+          ],
+        },
+      ],
+      requireRounds: true,
+    });
+    Vitest.expect(result.issues).toStrictEqual([]);
+    Vitest.expect(result.valid).toBe(true);
+  });
+
+  Vitest.it('still errors a round past the budget with no overflow declaration', () => {
+    const result = verifyTree(reviewTree(), {
+      series: [
+        {
+          name: 'ship-spec',
+          rounds: [
+            { round: '001', phase: 'A' },
+            { round: '002', phase: 'A' },
+          ],
+        },
+      ],
+      requireRounds: true,
+    });
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'review.budget-exceeded' }),
+    );
+  });
+
+  Vitest.it('errors the second autonomous overflow as exhausted', () => {
+    const result = verifyTree(reviewTree(), {
+      series: [
+        {
+          name: 'ship-spec',
+          rounds: [
+            { round: '001', phase: 'A' },
+            {
+              round: '002',
+              phase: 'A',
+              overflow: { reason: 'first', authorized: 'autonomous', rawAuthorized: 'autonomous' },
+            },
+            {
+              round: '003',
+              phase: 'A',
+              overflow: { reason: 'second', authorized: 'autonomous', rawAuthorized: 'autonomous' },
+            },
+          ],
+        },
+      ],
+      requireRounds: true,
+    });
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'review.overflow-exhausted' }),
+    );
+  });
+
+  Vitest.it('accepts a minor-deferred closure and refuses a deferred Critical/Major', () => {
+    const accepted = verifyTree(reviewTree(), {
+      series: [
+        {
+          name: 'ship-spec',
+          rounds: [
+            {
+              round: '001',
+              phase: 'A',
+              passed: true,
+              deferral: {
+                disposition: 'minor-deferred',
+                deferred: ['F1'],
+                missing: [],
+                severities: ['Minor'],
+                invalidIds: [],
+                severityInvalid: false,
+                valid: true,
+              },
+            },
+          ],
+        },
+      ],
+      requireRounds: true,
+    });
+    Vitest.expect(accepted.issues).toStrictEqual([]);
+
+    const refused = verifyTree(reviewTree(), {
+      series: [
+        {
+          name: 'ship-spec',
+          rounds: [
+            {
+              round: '001',
+              phase: 'A',
+              passed: false,
+              deferral: {
+                disposition: 'minor-deferred',
+                deferred: ['F1'],
+                missing: [],
+                severities: ['Major'],
+                invalidIds: ['F1'],
+                severityInvalid: true,
+                valid: false,
+              },
+            },
+          ],
+        },
+      ],
+      requireRounds: true,
+    });
+    Vitest.expect(refused.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'review.deferred-severity' }),
+    );
   });
 });

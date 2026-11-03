@@ -1,7 +1,8 @@
-import { Option, Schema } from 'effect';
+import { Schema } from 'effect';
+import { tierOfSpec } from '../creation/index.js';
 import { fieldList, fieldString, parseMarkdown } from '../frontmatter/index.js';
 import type { FieldValue } from '../frontmatter/index.js';
-import { GATE_RESULTS_FILE } from '../gates/index.js';
+import { GATE_RESULTS_FILE, latestResults, parseGateResults } from '../gates/index.js';
 import { PHASE_PATTERN, type PhaseId } from '../spec/index.js';
 import {
   type Task,
@@ -11,6 +12,7 @@ import {
   phaseOf,
 } from '../task/index.js';
 import { type Issue, type Result, finding, issue, noErrors } from '../verify/index.js';
+import { waiverAllowed } from '../tier/index.js';
 import type { SpecSnapshot } from '../structure/index.js';
 
 /** Per-phase record file, beside the task directories. */
@@ -169,6 +171,23 @@ export const isReviewReason = (value: string | undefined): boolean => {
   return !PLACEHOLDER_REASONS.has(trimmed.toLowerCase());
 };
 
+/** First word of an objective, lowercased, so `TODO: x` reads as `todo`. */
+const objectiveHead = (value: string): string =>
+  /^[a-z/]+/i.exec(value.trim())?.[0]?.toLowerCase() ?? '';
+
+/**
+ * True when `value` is a real phase objective rather than a placeholder. A
+ * blank value, angle-bracket template, or a `TODO` / `TBD` / `N/A` token
+ * (case-insensitive, with or without trailing prose) is not an objective.
+ */
+export const isPhaseObjective = (value: string | undefined): boolean => {
+  if (value === undefined) return false;
+  const trimmed = value.trim();
+  if (trimmed === '' || trimmed.includes('<') || trimmed.includes('>')) return false;
+  if (trimmed === '-') return false;
+  return !PLACEHOLDER_REASONS.has(objectiveHead(trimmed));
+};
+
 /** A classified stage parsed from a phase `GATES.md`. */
 export interface ClassifiedStage {
   /** Stage number as written. */
@@ -281,8 +300,46 @@ export const renderPhaseFile = (input: {
     '',
   ].join('\n');
 
-/** The required `# Phase <id>` title, with its captured id. */
-const phaseTitle = (body: string): string | undefined => {
+/** One review decision written into a `PHASE.md` frontmatter block. */
+export interface PhaseReviewWrite {
+  readonly review: PhaseReview;
+  readonly reason?: string | undefined;
+  readonly evidence?: ReadonlyArray<string> | undefined;
+}
+
+/**
+ * Rewrite only the review fields of a `PHASE.md`, preserving every other byte.
+ * `--required` removes the reason and evidence; `--waived` writes both after the
+ * decision line, so a hand-written notes section and all other fields survive.
+ * @param markdown - raw `PHASE.md` contents
+ * @param write - the review decision and its evidence
+ * @returns the rewritten document
+ */
+export const renderPhaseReview = (markdown: string, write: PhaseReviewWrite): string => {
+  const newline = markdown.includes('\r\n') ? '\r\n' : '\n';
+  const lines = markdown.split(newline);
+  if ((lines[0] ?? '').trim() !== '---') return markdown;
+  const closing = lines.findIndex((line, index) => index > 0 && line.trim() === '---');
+  if (closing === -1) return markdown;
+  const kept = lines
+    .slice(1, closing)
+    .filter((line) => !/^review(?:\s*:|-reason\s*:|-evidence\s*:)/.test(line.trim()));
+  const index = kept.findIndex((line) => /^review\s*:/.test(line.trim()));
+  const reviewLines = [`review: ${write.review}`];
+  if (write.review === 'waived' && write.reason !== undefined) {
+    reviewLines.push(`review-reason: ${write.reason}`);
+    if ((write.evidence ?? []).length > 0) {
+      reviewLines.push(`review-evidence: ${(write.evidence ?? []).join(', ')}`);
+    }
+  }
+  if (index === -1) kept.push(...reviewLines);
+  else kept.splice(index, 1, ...reviewLines);
+  return [lines[0] ?? '---', ...kept, ...lines.slice(closing)].join(newline);
+};
+
+/** The required `# Phase <id>` title, with its captured id. */ const phaseTitle = (
+  body: string,
+): string | undefined => {
   const match = /^#\s+Phase\s+([A-Z]{1,2})\s*$/m.exec(body);
   return match === null ? undefined : (match[1] ?? '');
 };
@@ -338,7 +395,7 @@ export const verifyPhaseFile = (
   }
 
   const objective = fieldString(fields, 'objective');
-  if (objective === undefined || objective.trim() === '' || objective.includes('<')) {
+  if (!isPhaseObjective(objective)) {
     issues.push(
       finding({
         code: PHASE_CODES.objectiveMissing,
@@ -567,33 +624,6 @@ export const verifyPhaseFile = (
   return { valid: noErrors(issues), issues };
 };
 
-/** One parsed gate result record, reduced to the fields phase evidence needs. */
-const ResultRecord = Schema.Struct({
-  stage: Schema.Number,
-  verdict: Schema.String,
-});
-
-/** Parse a `GATE-RESULTS.jsonl` file, returning the last record per stage. */
-const latestResults = (content: string) => {
-  const latest = new Map<number, { readonly stage: number; readonly verdict: string }>();
-  let malformed = false;
-  for (const line of content.split(/\r?\n/)) {
-    if (line.trim() === '') continue;
-    try {
-      const parsed: unknown = JSON.parse(line);
-      const decoded = Schema.decodeUnknownOption(ResultRecord)(parsed);
-      if (Option.isNone(decoded)) {
-        malformed = true;
-        continue;
-      }
-      latest.set(decoded.value.stage, decoded.value);
-    } catch {
-      malformed = true;
-    }
-  }
-  return { latest, malformed };
-};
-
 /** Evidence derived from the phase records, its gates, and its results. */
 export interface PhaseEvidence {
   /** Phases with a valid, fully proven waiver. */
@@ -641,6 +671,8 @@ export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
   const waived: Array<string> = [];
   const proven: Array<string> = [];
   const issues: Array<Issue> = [];
+  const specText = fileAt('SPEC.md');
+  const tier = specText === undefined ? undefined : tierOfSpec(specText);
 
   for (const phase of childrenOf('')
     .filter((dir) => PHASE_PATTERN.test(dir))
@@ -662,24 +694,16 @@ export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
       const gates = fileAt(gatesPath);
       if (gates === undefined) return;
       const resultsFile = fileAt(resultsPath);
-      const parsedResults = resultsFile === undefined ? undefined : latestResults(resultsFile);
-      if (parsedResults?.malformed === true) {
-        issues.push(
-          finding({
-            code: 'gate.results-malformed',
-            field: `${resultsPath}: results`,
-            message: 'GATE-RESULTS.jsonl holds a line that is not a result record.',
-            expected: 'one JSON object per line, with stage and verdict',
-            actual: 'malformed line',
-            fix: 'Fix or remove the malformed line; only the gate verbs write this file.',
-          }),
-        );
-      }
+      const parsedResults = resultsFile === undefined ? undefined : parseGateResults(resultsFile);
+      const latest = parsedResults === undefined ? undefined : latestResults(parsedResults.records);
       for (const stage of parsePhaseGateStages(gates)) {
         if (stage.kind === undefined) continue;
         const ref = `${owner}:${stage.stage}`;
-        const latest = parsedResults?.latest.get(stage.stage);
-        refs.set(ref, { kind: stage.kind, pass: latest?.verdict === 'pass' });
+        const result = latest?.get(stage.stage);
+        refs.set(ref, {
+          kind: stage.kind,
+          pass: result?.kind === stage.kind && result.verdict === 'pass',
+        });
       }
     };
     collect('phase', `${phase}/${PHASE_GATES_FILE}`, `${phase}/${GATE_RESULTS_FILE}`);
@@ -721,6 +745,8 @@ export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
         isReviewReason(parsed.reviewReason) &&
         !taskTypes.includes('review') &&
         complete &&
+        tier !== undefined &&
+        waiverAllowed(tier, taskTypes) &&
         coverage;
       if (waiver) waived.push(phase);
       if (parsed.review === 'waived' && complete && !waiver) {

@@ -256,6 +256,103 @@ Vitest.describe('ReviewLink.roundPhase', () => {
 Vitest.describe('ReviewLink.verifyBudgets', () => {
   const tinyPhase = [{ phase: 'A', budget: 1 }];
 
+  Vitest.it('accepts an autonomous-authorized overflow past the budget', () => {
+    const result = ReviewLink.verifyBudgets(['ship-login'], tinyPhase, [
+      {
+        name: 'ship-login',
+        rounds: [
+          { round: '001', phase: 'A' },
+          {
+            round: '002',
+            phase: 'A',
+            overflow: {
+              reason: 'the user asked for one more',
+              authorized: 'autonomous',
+              rawAuthorized: 'autonomous',
+            },
+          },
+        ],
+      },
+    ]);
+    Vitest.expect(result).toStrictEqual({ valid: true, issues: [] });
+  });
+
+  Vitest.it('fails the second autonomous overflow with review.overflow-exhausted', () => {
+    const result = ReviewLink.verifyBudgets(['ship-login'], tinyPhase, [
+      {
+        name: 'ship-login',
+        rounds: [
+          { round: '001', phase: 'A' },
+          {
+            round: '002',
+            phase: 'A',
+            overflow: { reason: 'first', authorized: 'autonomous', rawAuthorized: 'autonomous' },
+          },
+          {
+            round: '003',
+            phase: 'A',
+            overflow: { reason: 'second', authorized: 'autonomous', rawAuthorized: 'autonomous' },
+          },
+        ],
+      },
+    ]);
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues).toHaveLength(1);
+    Vitest.expect(result.issues[0]?.code).toBe('review.overflow-exhausted');
+  });
+
+  Vitest.it('accepts a user-authorized overflow for every guided round past the budget', () => {
+    const result = ReviewLink.verifyBudgets(['ship-login'], tinyPhase, [
+      {
+        name: 'ship-login',
+        rounds: [
+          { round: '001', phase: 'A' },
+          {
+            round: '002',
+            phase: 'A',
+            overflow: { reason: 'user round one', authorized: 'user', rawAuthorized: 'user' },
+          },
+          {
+            round: '003',
+            phase: 'A',
+            overflow: { reason: 'user round two', authorized: 'user', rawAuthorized: 'user' },
+          },
+        ],
+      },
+    ]);
+    Vitest.expect(result).toStrictEqual({ valid: true, issues: [] });
+  });
+
+  Vitest.it('keeps review.budget-exceeded for a round with no overflow declaration', () => {
+    const result = ReviewLink.verifyBudgets(['ship-login'], tinyPhase, [
+      {
+        name: 'ship-login',
+        rounds: [
+          { round: '001', phase: 'A' },
+          { round: '002', phase: 'A' },
+        ],
+      },
+    ]);
+    Vitest.expect(result.issues[0]?.code).toBe('review.budget-exceeded');
+  });
+
+  Vitest.it('fails an overflow declaration without an authorization as exhausted', () => {
+    const result = ReviewLink.verifyBudgets(['ship-login'], tinyPhase, [
+      {
+        name: 'ship-login',
+        rounds: [
+          { round: '001', phase: 'A' },
+          {
+            round: '002',
+            phase: 'A',
+            overflow: { reason: 'unapproved', rawAuthorized: '' },
+          },
+        ],
+      },
+    ]);
+    Vitest.expect(result.issues[0]?.code).toBe('review.overflow-exhausted');
+  });
+
   Vitest.it('accepts a series exactly at the phase budget', () => {
     Vitest.expect(
       ReviewLink.verifyBudgets(['ship-login'], tinyPhase, [series('ship-login', [['001', 'A']])]),
@@ -383,5 +480,122 @@ Vitest.describe('ReviewLink.verifyBudgets', () => {
     Vitest.expect(
       ReviewLink.verifyBudgets(['ship-login'], [], [series('ship-login', [['001', 'A']])]),
     ).toStrictEqual({ valid: true, issues: [] });
+  });
+});
+
+/** A round document with the given metadata and findings. */
+const roundDocument = (
+  metadata: ReadonlyArray<string>,
+  findings: ReadonlyArray<{ id: string; severity: string; status: string }>,
+): string =>
+  [
+    '# Review: ship-login / 001',
+    '',
+    '## Metadata',
+    '',
+    '- Round: 001',
+    '- Phase: A',
+    ...metadata,
+    '',
+    '## Findings',
+    '',
+    ...findings.flatMap((finding) => [
+      `### ${finding.id} — title`,
+      '',
+      `- Severity: ${finding.severity}`,
+      `- Status: ${finding.status}`,
+      '',
+    ]),
+    '## Summary',
+    '',
+  ].join('\n');
+
+Vitest.describe('ReviewLink.roundPassed closures', () => {
+  Vitest.it('passes a round whose Status is closed', () => {
+    Vitest.expect(ReviewLink.roundPassed(roundDocument(['- Status: closed'], []))).toBe(true);
+  });
+
+  Vitest.it('passes a valid minor-deferred closure with only Minor/Nit findings', () => {
+    const markdown = roundDocument(
+      ['- Status: open', '- Disposition: minor-deferred', '- Deferred: F1, F2'],
+      [
+        { id: 'F1', severity: 'Minor', status: "Won't Fix" },
+        { id: 'F2', severity: 'Nit', status: 'Resolved' },
+      ],
+    );
+    Vitest.expect(ReviewLink.roundPassed(markdown)).toBe(true);
+    const deferral = ReviewLink.roundDeferral(markdown);
+    Vitest.expect(deferral?.valid).toBe(true);
+    Vitest.expect(deferral?.severityInvalid).toBe(false);
+  });
+
+  Vitest.it('refuses a minor-deferred closure that defers a Critical or Major', () => {
+    const markdown = roundDocument(
+      ['- Status: open', '- Disposition: minor-deferred', '- Deferred: F1'],
+      [{ id: 'F1', severity: 'Major', status: "Won't Fix" }],
+    );
+    Vitest.expect(ReviewLink.roundPassed(markdown)).toBe(false);
+    const deferral = ReviewLink.roundDeferral(markdown);
+    Vitest.expect(deferral?.severityInvalid).toBe(true);
+    Vitest.expect(deferral?.invalidIds).toStrictEqual(['F1']);
+  });
+
+  Vitest.it('refuses a deferral that names no finding or an unknown finding', () => {
+    const empty = roundDocument(
+      ['- Status: open', '- Disposition: minor-deferred', '- Deferred:'],
+      [{ id: 'F1', severity: 'Minor', status: "Won't Fix" }],
+    );
+    Vitest.expect(ReviewLink.roundPassed(empty)).toBe(false);
+    const unknown = roundDocument(
+      ['- Status: open', '- Disposition: minor-deferred', '- Deferred: F9'],
+      [{ id: 'F1', severity: 'Minor', status: "Won't Fix" }],
+    );
+    Vitest.expect(ReviewLink.roundDeferral(unknown)?.missing).toStrictEqual(['F9']);
+    Vitest.expect(ReviewLink.roundPassed(unknown)).toBe(false);
+  });
+});
+
+Vitest.describe('ReviewLink.verify deferred closures', () => {
+  const deferredMajor: ReviewLink.RoundDeferral = {
+    disposition: 'minor-deferred',
+    deferred: ['F1'],
+    missing: [],
+    severities: ['Major'],
+    invalidIds: ['F1'],
+    severityInvalid: true,
+    valid: false,
+  };
+
+  Vitest.it('reports review.deferred-severity for a deferred Critical/Major', () => {
+    const result = ReviewLink.verifyDeferrals(
+      'ship-login',
+      [reviewTask('A099')],
+      [
+        {
+          name: 'ship-login',
+          rounds: [{ round: '001', phase: 'A', passed: false, deferral: deferredMajor }],
+        },
+      ],
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.code).toBe('review.deferred-severity');
+  });
+
+  Vitest.it('accepts a valid minor-deferred closure as the attributed round', () => {
+    const deferral: ReviewLink.RoundDeferral = {
+      disposition: 'minor-deferred',
+      deferred: ['F1'],
+      missing: [],
+      severities: ['Minor'],
+      invalidIds: [],
+      severityInvalid: false,
+      valid: true,
+    };
+    const result = ReviewLink.verify(
+      'ship-login',
+      [reviewTask('A099')],
+      [{ name: 'ship-login', rounds: [{ round: '001', phase: 'A', passed: true, deferral }] }],
+    );
+    Vitest.expect(result).toStrictEqual({ valid: true, issues: [] });
   });
 });

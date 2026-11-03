@@ -9,10 +9,18 @@ import {
   SPEC_VERSION_FIELD,
 } from '../spec/index.js';
 import { parseMarkdown } from '../frontmatter/index.js';
-import { GATE_RESULTS_FILE, verifyGateProgress, verifyGatesFile } from '../gates/index.js';
+import { tierOfSpec } from '../creation/index.js';
+import {
+  GATE_RESULTS_FILE,
+  verifyGateProgress,
+  verifyGateResults,
+  verifyGatesFile,
+} from '../gates/index.js';
 import { verify as verifyLifecycle } from '../lifecycle/index.js';
 import { verifyMemoryFile } from '../memory/index.js';
+import { MAILBOX_FILE, type ChannelKind, verifyChannel } from '../channel/index.js';
 import {
+  PHASE_BOARD_FILE,
   PHASE_CODES,
   PHASE_DIR_FILES,
   PHASE_FILE,
@@ -30,7 +38,15 @@ import {
   seriesNames,
   verify as verifyReviewLink,
   verifyBudgets as verifyReviewBudgets,
+  verifyDeferrals as verifyReviewDeferrals,
 } from '../review-link/index.js';
+import {
+  type PhaseReviewInput,
+  REVIEW_NOT_PASSED_CODE,
+  REVIEW_REASONS,
+  passedReviewPhases,
+  reviewVerdict,
+} from '../review-policy/index.js';
 import {
   type Task,
   parseTaskDirName,
@@ -211,11 +227,19 @@ export interface ReviewInput {
   readonly series: ReadonlyArray<SeriesSnapshot>;
   /**
    * True when every complete `review` task must have a round attributed to its
-   * phase in every expected series. A disk-driven `check` passes false: a
-   * historical spec may predate the review store, and its absence must not turn
-   * `check` red. The budget check still applies to every series that exists.
+   * phase in every expected series, regardless of the spec version. A v2 tree
+   * already requires this whenever the review store is available; the flag is
+   * for a caller (the workspace dashboard) that wants the rule even where the
+   * version check would not apply. The budget check still applies to every
+   * series that exists.
    */
   readonly requireRounds: boolean;
+  /**
+   * True when the caller actually consulted the review store. A caller with no
+   * review store (`NO_REVIEW`) leaves this false, so a v2 tree is not required
+   * to carry rounds it was never asked to read.
+   */
+  readonly available?: boolean | undefined;
 }
 
 /**
@@ -224,7 +248,7 @@ export interface ReviewInput {
  * no review directory pass this explicitly, so omitting the review input can
  * never silently disable the budget check.
  */
-export const NO_REVIEW: ReviewInput = { series: [], requireRounds: false };
+export const NO_REVIEW: ReviewInput = { series: [], requireRounds: false, available: false };
 
 /** Result of the v2-transformation predicate. */
 export interface TransformResult {
@@ -288,11 +312,77 @@ export const isV2Transformed = (snapshot: SpecSnapshot): TransformResult => {
 };
 
 /**
+ * Every phase's inputs to the shared review-pass predicate, derived from a
+ * snapshot: the profiles its review task declares, its own task-derived
+ * budget, and whether its waiver is effective. A phase with no task is not a
+ * phase the lifecycle rolls up, so it contributes nothing.
+ * @param snapshot - the spec directory listing
+ * @returns one entry per phase that holds a task, in phase order
+ */
+export const phaseReviewInputs = (snapshot: SpecSnapshot): ReadonlyArray<PhaseReviewInput> => {
+  const tasks: Array<Task> = [];
+  for (const entry of snapshot.files) {
+    if ((entry.kind ?? 'file') !== 'file' || !entry.path.endsWith('/TASK.md')) continue;
+    const task = parseTaskFile(entry.content);
+    if (task !== undefined) tasks.push(task);
+  }
+  const evidence = phaseEvidence(snapshot);
+  const phases = [...new Set(tasks.map((task) => phaseOf(task.id)))].toSorted(
+    (a, b) => phaseRank(a) - phaseRank(b),
+  );
+  return phases.map((phase) => {
+    const inPhase = tasks.filter((task) => phaseOf(task.id) === phase);
+    return {
+      phase,
+      profiles: [
+        ...new Set(
+          inPhase.filter((task) => task.type === 'review').flatMap((task) => task.reviewerProfiles),
+        ),
+      ],
+      budget: phaseReviewBudget(inPhase.map((task) => ({ type: task.type, size: sizeOf(task) }))),
+      waived: evidence.waived.includes(phase),
+    };
+  });
+};
+
+/**
+ * The phases a spec's review has passed, version-aware. A v2 record reads the
+ * shared `review decide` predicate every lock surface uses; a frozen v1 record
+ * keeps the closed-round rule it shipped with.
+ * @param snapshot - the spec directory listing
+ * @param review - the linked review series and round-presence rule
+ * @returns the phases that may lock on their review, in phase order
+ */
+export const reviewedPhasesOf = (
+  snapshot: SpecSnapshot,
+  review: ReviewInput,
+): ReadonlyArray<string> => {
+  const specFile = snapshot.files.find(
+    (entry) => entry.path === 'SPEC.md' && (entry.kind ?? 'file') === 'file',
+  );
+  const parsed = specFile === undefined ? null : parseMarkdown(specFile.content);
+  const version = parsed === null ? undefined : readSpecVersion(parsed.fields);
+  return version !== undefined && version.version >= 2 && review.available !== false
+    ? passedReviewPhases(snapshot.name, phaseReviewInputs(snapshot), review.series)
+    : passedPhases(review.series);
+};
+
+/** Stable code for a v2 task type that must carry `GATES.md` but does not. */
+export const TASK_GATES_REQUIRED_CODE = 'task.gates-required';
+
+/** Stable code for a surviving v2 `locked-phases` field. */
+export const LOCKED_PHASES_PRESENT_CODE = 'spec.locked-phases';
+
+/** Task types whose tier contract requires a mechanical proof file. */
+const GATED_TASK_TYPES = new Set(['execution', 'defect', 'interruptor']);
+
+/**
  * Mechanically verify the whole on-disk structure of a spec: the
  * phase-directory layout (`SPEC.md` plus one directory per phase, one directory
  * per task) with a strict allowlist at every level, plus task-directory naming
  * and id/name agreement, unique ids, task-table agreement (type/status/gates),
- * `TASK.md` / `GATES.md` / `MEMORY.md` content, the record checks (a complete
+ * `TASK.md` / `GATES.md` / `MEMORY.md` content, the channel grammar for every
+ * phase `BOARD.md` and task `MAILBOX.md`, the record checks (a complete
  * task's completion checklist and gate progress are errors when unchecked and
  * silent while the task is unfinished), an optional spec-root
  * `sizing.json`, dependency existence + phase ordering + cycles, the review
@@ -337,6 +427,7 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
   const spec = parseSpecFile(specFile.content);
   const rows: ReadonlyArray<TaskRow> = parsedSpec === null ? [] : parseTaskTable(parsedSpec.body);
   const version = parsedSpec === null ? undefined : readSpecVersion(parsedSpec.fields);
+  const tier = tierOfSpec(specFile.content);
   if (version !== undefined && version.version >= 2) {
     const transformed = isV2Transformed(snapshot);
     if (!transformed.ok) {
@@ -348,6 +439,19 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
           expected: 'every phase holds PHASE.md and every file is on the v2 allowlist',
           actual: transformed.reason ?? 'untransformed tree',
           fix: 'Run mf-specs migrate --name <spec>; a version bump must land with its transformation.',
+        }),
+      );
+    }
+    if (parsedSpec !== null && parsedSpec.fields['locked-phases'] !== undefined) {
+      issues.push(
+        finding({
+          code: LOCKED_PHASES_PRESENT_CODE,
+          severity: 'warning',
+          field: 'SPEC.md: locked-phases',
+          message: `Spec declares standard version ${version.version} but still carries the deleted 'locked-phases' field.`,
+          expected: 'no stored lock list; v2 derives the lock from the review round',
+          actual: 'locked-phases present',
+          fix: 'Remove the `locked-phases` line; `mf-specs lock` derives the lock.',
         }),
       );
     }
@@ -379,6 +483,13 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
   // ── Tasks ── one reader per task directory.
   const tasks = new Map<string, Task>();
   const gates = new Map<string, boolean>();
+  /** Channel files await the complete task id set before they are verified. */
+  const channels: Array<{
+    readonly kind: ChannelKind;
+    readonly path: string;
+    readonly content: string;
+    readonly owner?: string | undefined;
+  }> = [];
   const readTaskDir = (dir: string, leaf: string): void => {
     const dirFiles = files.filter((file) => parentOf(file.path) === dir);
     const names = new Set(dirFiles.map((file) => baseOf(file.path)));
@@ -410,17 +521,43 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
 
     const gatesFile = dirFiles.find((file) => file.path === `${dir}/GATES.md`);
     if (gatesFile !== undefined) {
-      issues.push(...nest(`${dir}/GATES.md`, verifyGatesFile(gatesFile.content)));
+      const resultsFile = dirFiles.find((file) => file.path === `${dir}/${GATE_RESULTS_FILE}`);
+      const complete = parsedTask?.status === 'complete';
+      const requireClassified =
+        version !== undefined && version.version >= 2 && parsedTask?.status !== 'complete';
+      issues.push(
+        ...nest(`${dir}/GATES.md`, verifyGatesFile(gatesFile.content, { requireClassified })),
+      );
       issues.push(
         ...nest(
           `${dir}/GATES.md`,
-          verifyGateProgress(gatesFile.content, parsedTask?.status === 'complete'),
+          verifyGateProgress(gatesFile.content, complete, resultsFile?.content),
+        ),
+      );
+      issues.push(
+        ...nest(
+          dir,
+          verifyGateResults({
+            gates: gatesFile.content,
+            results: resultsFile?.content,
+            complete,
+            owner: `Task '${parsedTask?.id ?? leaf}'`,
+          }),
         ),
       );
     }
     const memoryFile = dirFiles.find((file) => file.path === `${dir}/MEMORY.md`);
     if (memoryFile !== undefined) {
       issues.push(...nest(`${dir}/MEMORY.md`, verifyMemoryFile(memoryFile.content)));
+    }
+    const mailboxFile = dirFiles.find((file) => file.path === `${dir}/${MAILBOX_FILE}`);
+    if (mailboxFile !== undefined) {
+      channels.push({
+        kind: 'mailbox',
+        path: mailboxFile.path,
+        content: mailboxFile.content,
+        owner: dirName?.id,
+      });
     }
   };
 
@@ -469,6 +606,10 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
     const phaseFile = phaseFiles.find((file) => file.path === `${phase}/${PHASE_FILE}`);
     const memoryFile = phaseFiles.find((file) => file.path === `${phase}/${PHASE_MEMORY_FILE}`);
     const gateFile = phaseFiles.find((file) => file.path === `${phase}/${PHASE_GATES_FILE}`);
+    const boardFile = phaseFiles.find((file) => file.path === `${phase}/${PHASE_BOARD_FILE}`);
+    if (boardFile !== undefined) {
+      channels.push({ kind: 'board', path: boardFile.path, content: boardFile.content });
+    }
     if (phaseFile === undefined) {
       if ((version?.version ?? 1) >= 2) {
         issues.push(
@@ -495,6 +636,21 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
         ),
       );
     }
+    if (gateFile !== undefined) {
+      const resultsFile = phaseFiles.find((file) => file.path === `${phase}/${GATE_RESULTS_FILE}`);
+      const inPhase = [...tasks.values()].filter((task) => phaseOf(task.id) === phase);
+      issues.push(
+        ...nest(
+          phase,
+          verifyGateResults({
+            gates: gateFile.content,
+            results: resultsFile?.content,
+            complete: inPhase.length > 0 && inPhase.every((task) => task.status === 'complete'),
+            owner: `Phase '${phase}'`,
+          }),
+        ),
+      );
+    }
     if (memoryFile === undefined) {
       if ((version?.version ?? 1) >= 2) {
         issues.push(
@@ -511,6 +667,16 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
     } else {
       issues.push(...nest(`${phase}/${PHASE_MEMORY_FILE}`, verifyMemoryFile(memoryFile.content)));
     }
+  }
+
+  const taskIds = new Set(tasks.keys());
+  for (const channel of channels) {
+    issues.push(
+      ...nest(
+        channel.path,
+        verifyChannel(channel.kind, channel.content, { taskIds, owner: channel.owner }),
+      ),
+    );
   }
 
   const rowById = new Map<string, TaskRow>();
@@ -562,6 +728,21 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
     if (!rowById.has(id))
       issues.push(issue('SPEC.md', `Task '${id}' is missing from the task table.`));
   }
+  if (version !== undefined && version.version >= 2 && tier !== undefined) {
+    for (const [id, task] of tasks) {
+      if (!GATED_TASK_TYPES.has(task.type) || gates.get(id) === true) continue;
+      issues.push(
+        finding({
+          code: TASK_GATES_REQUIRED_CODE,
+          field: `task ${id}`,
+          message: `Task '${id}' is '${task.type}' but has no GATES.md; a v2 execution, defect, or interruptor task carries its own proof.`,
+          expected: 'a GATES.md with at least one classified stage',
+          actual: 'no GATES.md',
+          fix: `Add a GATES.md to the task's directory, or create the task with mf-specs new-task --gates.`,
+        }),
+      );
+    }
+  }
 
   for (const [id, task] of tasks) {
     for (const dep of task.dependsOn) {
@@ -605,14 +786,36 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
   const evidence = phaseEvidence(snapshot);
   issues.push(...evidence.issues);
 
+  const current = version !== undefined && version.version >= 2;
+  const reviewAware = current && review.available !== false;
+  const reviewInputs: ReadonlyArray<PhaseReviewInput> = phaseBudgets.map(({ phase, budget }) => ({
+    phase,
+    budget,
+    profiles: [
+      ...new Set(
+        Array.from(tasks.values())
+          .filter((task) => task.type === 'review' && phaseOf(task.id) === phase)
+          .flatMap((task) => task.reviewerProfiles),
+      ),
+    ],
+    waived: evidence.waived.includes(phase),
+  }));
+  const reviewedPhases = reviewAware
+    ? passedReviewPhases(snapshot.name, reviewInputs, review.series)
+    : passedPhases(review.series);
+
   if (spec !== undefined) {
     issues.push(
       ...verifyLifecycle({
         status: spec.status,
-        reviewedPhases: passedPhases(review.series),
+        reviewedPhases,
         waivedPhases: evidence.waived,
         provenPhases: evidence.proven,
         tasks: Array.from(tasks.values()).map((task) => ({ id: task.id, status: task.status })),
+        // Every v2 record completes through a lock, including a v1 record
+        // migrated without a `## Creation` tier. A frozen v1 record keeps the
+        // status-only rule it shipped with.
+        requireLocks: reviewAware,
       }).issues,
     );
   }
@@ -624,9 +827,27 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
       profiles: task.reviewerProfiles,
       complete: task.status === 'complete',
     }));
-  if (review.requireRounds) {
+  if (review.requireRounds || reviewAware) {
     issues.push(...verifyReviewLink(snapshot.name, reviewTasks, review.series).issues);
   }
+  for (const task of reviewTasks) {
+    if (!reviewAware || !task.complete) continue;
+    const entry = reviewInputs.find((candidate) => candidate.phase === task.phase);
+    if (entry === undefined) continue;
+    const verdict = reviewVerdict(snapshot.name, entry, review.series);
+    if (verdict.passed || verdict.reason === REVIEW_REASONS.roundMissing) continue;
+    issues.push(
+      finding({
+        code: REVIEW_NOT_PASSED_CODE,
+        field: `task ${task.phase}`,
+        message: `Phase '${task.phase}' review task is complete but its review has not passed (decision '${verdict.decision}', reason '${verdict.reason}').`,
+        expected: 'a passing review round in every expected series',
+        actual: `decision ${verdict.decision}`,
+        fix: `Run mf-specs review decide --name ${snapshot.name} --phase ${task.phase} and follow it; close the review task only after the decision is 'pass'.`,
+      }),
+    );
+  }
+  issues.push(...verifyReviewDeferrals(snapshot.name, reviewTasks, review.series).issues);
   const expectedSeries = [
     ...new Set(reviewTasks.flatMap((task) => seriesNames(snapshot.name, task.profiles))),
   ];

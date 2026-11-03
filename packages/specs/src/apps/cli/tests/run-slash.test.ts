@@ -593,7 +593,7 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
       );
       Vitest.expect(report.ok).toBe(true);
       Vitest.expect(report.output).toContain('ok');
-      Vitest.expect(report.output).toContain('budget is 1');
+      Vitest.expect(report.output).toContain('is the budget of the phase this session starts on');
       Vitest.expect(report.output).toContain('A001');
     }).pipe(Effect.provide(stubLayer(specs))),
   );
@@ -670,6 +670,119 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
       Vitest.expect(report.ok).toBe(false);
       Vitest.expect(report.output).toContain('code     models.unavailable');
       Vitest.expect(report.output).toContain('--catalog');
+    }),
+  );
+});
+
+Vitest.describe('Cli.runSlash v2 surfaces', () => {
+  Vitest.it.effect('status and state show the derived lock and PHASE.md review decision', () =>
+    Effect.gen(function* () {
+      const layer = stubLayer(specs);
+      const statusReport = yield* runSlash('status --name ok', root).pipe(Effect.provide(layer));
+      Vitest.expect(statusReport.ok).toBe(true);
+      Vitest.expect(statusReport.output).toContain('Phase A');
+      Vitest.expect(statusReport.output).toContain('review required');
+      Vitest.expect(statusReport.output).toContain('gate none');
+      Vitest.expect(statusReport.output).not.toContain('locked-phases');
+
+      const stateReport = yield* runSlash('state --name ok', root).pipe(Effect.provide(layer));
+      Vitest.expect(stateReport.ok).toBe(true);
+      Vitest.expect(stateReport.output).toContain('locked none');
+      Vitest.expect(stateReport.output).toContain('review A:required');
+      Vitest.expect(stateReport.output).toContain('gate none');
+      Vitest.expect(stateReport.output).not.toContain('locked-phases');
+    }),
+  );
+
+  Vitest.it.effect('next shows the active phase review decision and gate state', () =>
+    Effect.gen(function* () {
+      const report = yield* runSlash('next --name ok', root).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(report.ok).toBe(true);
+      Vitest.expect(report.output).toContain('phase A');
+      Vitest.expect(report.output).toContain('review A:required');
+      Vitest.expect(report.output).toContain('gate none');
+    }),
+  );
+
+  Vitest.it.effect('lock derives from the phase tree and never writes a list', () =>
+    Effect.gen(function* () {
+      const report = yield* runSlash('lock --name ok --phase A', root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).toContain('not locked A');
+      Vitest.expect(report.output).toContain('phase.review-missing');
+      Vitest.expect(report.output).toContain('task.pending');
+    }),
+  );
+
+  Vitest.it.effect('stamp prints the one clock in either format', () =>
+    Effect.gen(function* () {
+      const instant = yield* runSlash('stamp', root).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(instant.output).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+      const date = yield* runSlash('stamp --format date', root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(date.output).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }),
+  );
+
+  Vitest.it.effect('init writes phase directories and list reads the derived lifecycle', () =>
+    Effect.gen(function* () {
+      const created = new Map(specs);
+      const layer = stubLayer(created);
+      const report = yield* runSlash('init --name demo --tier micro', root).pipe(
+        Effect.provide(layer),
+      );
+      Vitest.expect(report.ok).toBe(true);
+      Vitest.expect(report.output).toContain("created 'demo'");
+      const files = created.get('demo') ?? [];
+      Vitest.expect(files.some((file) => file.path === 'SPEC.md')).toBe(true);
+      Vitest.expect(files.some((file) => file.path === 'A/PHASE.md')).toBe(true);
+      Vitest.expect(files.some((file) => /^A\/A\d{3}-/.test(file.path))).toBe(true);
+
+      const listed = yield* runSlash('list', root).pipe(Effect.provide(layer));
+      Vitest.expect(listed.ok).toBe(true);
+      Vitest.expect(listed.output).toContain('demo');
+      Vitest.expect(listed.output).not.toContain('locked-phases');
+    }),
+  );
+
+  Vitest.it.effect('new-phase and new-task allocate phase-tree directories', () =>
+    Effect.gen(function* () {
+      const created = new Map(specs);
+      const layer = stubLayer(created);
+      yield* runSlash('init --name grow --tier standard', root).pipe(Effect.provide(layer));
+      const phase = yield* runSlash(
+        'new-phase --name grow --objective Ship the second slice --review required',
+        root,
+      ).pipe(Effect.provide(layer));
+      Vitest.expect(phase.ok).toBe(true);
+      Vitest.expect(phase.output).toContain('added phase B');
+
+      const task = yield* runSlash(
+        'new-task --name grow --phase B --task ship --type execution',
+        root,
+      ).pipe(Effect.provide(layer));
+      Vitest.expect(task.ok).toBe(true);
+      Vitest.expect(task.output).toContain('added B001');
+      const files = created.get('grow') ?? [];
+      Vitest.expect(files.some((file) => file.path === 'B/B001-ship/TASK.md')).toBe(true);
+    }),
+  );
+
+  Vitest.it.effect('tier refuses an unknown value and gate needs its subcommand', () =>
+    Effect.gen(function* () {
+      const tier = yield* runSlash('tier split', root).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(tier.ok).toBe(false);
+      Vitest.expect(tier.output).toContain('code     tier.unknown');
+
+      const gate = yield* runSlash('gate --name ok --phase A', root).pipe(
+        Effect.provide(stubLayer(specs)),
+        Effect.flip,
+      );
+      Vitest.expect(gate).toBeInstanceOf(SurfaceError);
+      Vitest.expect(slashProblem(gate)).toContain('gate requires `run` or `record`');
     }),
   );
 });

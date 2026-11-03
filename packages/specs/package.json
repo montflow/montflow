@@ -25,6 +25,7 @@
     "payload.json",
     "skills",
     "prompts",
+    "tiers",
     "src",
     "dist"
   ],

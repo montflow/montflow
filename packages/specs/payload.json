@@ -31,6 +31,24 @@
       "name": "spec-sizing",
       "source": "prompts/spec-sizing.json",
       "target": ".agents/@montflow/prompts/spec-sizing.json"
+    },
+    {
+      "kind": "tier",
+      "name": "micro",
+      "source": "tiers/micro.md",
+      "target": ".agents/@montflow/tiers/micro.md"
+    },
+    {
+      "kind": "tier",
+      "name": "standard",
+      "source": "tiers/standard.md",
+      "target": ".agents/@montflow/tiers/standard.md"
+    },
+    {
+      "kind": "tier",
+      "name": "full",
+      "source": "tiers/full.md",
+      "target": ".agents/@montflow/tiers/full.md"
     }
   ]
 }

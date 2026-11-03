@@ -196,6 +196,18 @@ export const phaseRank = (phase: string): number => {
 };
 
 /**
+ * The one arithmetic ordering token for a task id across one- and two-letter
+ * phases: `A002` → 1002, `B001` → 2001, `AA001` → 27001. Every ordering that
+ * spans phases uses this, never a string sort.
+ * @param id - a task id
+ * @returns the sortable rank
+ */
+export const sortKey = (id: string): number => {
+  const phase = phaseOf(id);
+  return phaseRank(phase) * 1000 + Number(id.slice(phase.length));
+};
+
+/**
  * Parse a task directory name of the form `<PHASE_LETTERS><NNN>-<name>`.
  * @param dir - directory name relative to the spec root
  * @returns the parsed parts, or undefined when malformed

@@ -397,7 +397,11 @@ export const check = (
       Effect.gen(function* () {
         const snapshot = yield* store.snapshot(root, name);
         const review = yield* store.reviewSeries(root, name);
-        const result = verifySpecTree(snapshot, { series: review, requireRounds: false });
+        const result = verifySpecTree(snapshot, {
+          series: review,
+          requireRounds: false,
+          available: true,
+        });
         const issues: Array<Issue> = result.issues.map(withSpecLayers);
         if (options.requireComplete === true) {
           const specFile = snapshot.files.find((entry) => entry.path === 'SPEC.md');

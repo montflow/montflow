@@ -1,9 +1,9 @@
 ---
 name: montflow-create-specs
-description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per task (TASK.md, MEMORY.md, GATES.md) — by scaffolding with `mf-specs create` then filling in the rules below. Use when an agent must create a spec directly, without dispatching a session.
+description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per phase (PHASE.md, MEMORY.md, BOARD.md) and one directory per task (TASK.md, MEMORY.md, GATES.md, MAILBOX.md) — by scaffolding with `mf-specs init` or `create` then filling in the rules below. Use when an agent must create a spec directly, without dispatching a session.
 id: 6ebf45d24cb3d3a1
 author: Daniel Montilla
-version: 2.12.0
+version: 2.13.1
 license: MIT
 dependencies:
   - executing-skills
@@ -52,10 +52,34 @@ Point at the prompt; never copy its text into another artifact.
 frontmatter. Create exactly one spec, then stop. Author the spec; do not
 execute it.
 
-## 2. Scaffold the Tree with `mf-specs create`
+## 2. Scaffold the Tree
 
-The mechanical skeleton is one deterministic, model-free command that already
-writes a tree passing `mf-specs check`:
+The tier-aware scaffold is one deterministic, model-free command that reads the
+tier contract and writes a tree that already passes `mf-specs check`:
+
+```bash
+bun run --cwd packages/specs cli init --name <kebab-name> --tier <tier> \
+  [--description "<one line>"] [--author "<name>"] \
+  [--workspace-type in-place|worktree] \
+  [--phase "<one-line objective>"]... \
+  [--task "<PHASE>:<name>:<type>[:<size>][:after=<name,name>]"]... \
+  [--review "<PHASE>:required|waived"]... \
+  [--review-reason "<PHASE>:<one line>"]... \
+  [--reviewer-profiles "<a>,<b>"]
+```
+
+`init` refuses a plan that violates the tier's phase range, task ceiling,
+exploration rule, gate kind, waiver policy, or review task decision. It writes
+the `## Creation` section (`tier`, `questions 0/<budget>`, `unresolved: none`)
+and generates a review task exactly for a non-waived phase. Grow the spec with
+`mf-specs new-phase --name <spec> --objective <line>` and
+`mf-specs new-task --name <spec> --phase <id> --task <kebab-name> --type <type>`;
+both allocate the next id from disk. Record a review decision with
+`mf-specs waiver --name <spec> --phase <id> --waived --reason <line>` or
+`--required`.
+
+`mf-specs create` remains the tier-agnostic mechanical scaffold for a tree that
+does not need a tier plan. It writes a tree passing `mf-specs check`:
 
 ```bash
 bun run --cwd packages/specs cli create --name <kebab-name> \
@@ -79,13 +103,49 @@ bun run --cwd packages/specs cli create --name <kebab-name> \
 - Inside the OpenCode host the same engine is
   `/specs create --name <kebab-name> …`.
 
-Then edit the rendered `SPEC.md` and `TASK.md` files so they carry the real
-requirements. If you write the files by hand instead, follow steps 3–6 exactly.
+Then edit the rendered `SPEC.md` and `TASK.md` prose so it carries the real
+requirements. The generator owns the verifier-checked fields — task and phase
+ids, `status`, `created`, and every timestamp — so never type one by hand.
+Grow an existing spec with `mf-specs new-phase` and `mf-specs new-task`; both
+allocate the next id from disk. Transition status only with `mf-specs claim`.
+
+## Tier Selection and Loading
+
+The appraiser chooses exactly one tier. The authoring run loads exactly that
+tier with `mf-specs tier <tier>` — one positional value, no default, no
+directory listing, and no second tier. The table below is the enum summary; the
+loaded file is the only place the artifact matrix and the interaction budget are
+stated.
+
+| Tier     | Phases | Exploration | Tasks | Review   | Questions |
+| -------- | ------ | ----------- | ----- | -------- | --------- |
+| micro    | 1      | forbidden   | 2     | waived   | 0         |
+| standard | 1–2    | optional    | 6     | required | 2         |
+| full     | 2–4    | required    | 12    | required | 8         |
+
+- `Phases` is the inclusive phase range; `Tasks` is the maximum number of work
+  tasks, excluding a generated review task.
+- `Exploration` is `forbidden` for `micro`, `optional` (at most one exploratory
+  task, in the first phase) for `standard`, and `required` as a dedicated phase
+  `A` for `full`.
+- `Review` is the default decision; the waiver policy is `permitted` for
+  `micro`, `records-only` for `standard`, and `forbidden` for `full`.
+- `Questions` is the maximum number of `ask_user` calls in one creation run. It
+  is recorded in `SPEC.md` as `questions <n>/<budget>`, self-reported and
+  advisory; there is no harness counter.
+- Anything above `full` is the `split` verdict, not a tier. It carries
+  `verdict`, `cut`, `count`, `specs`, `slug`, `tier`, `scope`, and `evidence`,
+  and authors nothing.
+
+A plan outside the phase range, the task ceiling, or the exploration rule is
+invalid: re-appraise, then split only when the work holds independent concerns.
 
 ## 3. Write `SPEC.md`
 
-Frontmatter: `name` (kebab-case, equals the directory), `status: in-progress`,
-`workspace-type: in-place`, `author`, `created` (YYYY-MM-DD). There is no lock field.
+The generator writes the frontmatter and the task table; edit only the prose.
+`name` is the kebab-case directory name, `status: in-progress`,
+`workspace-type: in-place`, `author`, and `created` (YYYY-MM-DD) are scaffold
+outputs, and there is no lock field.
 
 Body sections: `## Description`, `## Requirements`, `## Tasks`.
 
@@ -94,9 +154,19 @@ either `Yes` or `No`.
 
 ## 4. Write the Phase and Task Directories
 
-Every task lives at `<PHASE>/<PHASE_LETTERS><NNN>-<kebab-name>/` containing
-`TASK.md` and `MEMORY.md`, plus `GATES.md` when the task's `Gates` is `Yes`.
-The phase directory is a pure container: task directories only, no files.
+Every phase is a directory `<PHASE>/` holding `PHASE.md` (objective, status,
+review decision, gate kind), `MEMORY.md`, `BOARD.md`, and optionally `GATES.md`
+and `GATE-RESULTS.jsonl`. Every task lives at
+`<PHASE>/<PHASE_LETTERS><NNN>-<kebab-name>/` containing `TASK.md` and
+`MEMORY.md`, plus `GATES.md`, `MAILBOX.md`, and `GATE-RESULTS.jsonl` when the
+task needs them. The phase directory is not a pure container: the phase record
+and channels live there beside the task directories.
+
+`PHASE.md` frontmatter: `id` (equals the directory), `objective`, `status`
+(derived from its tasks), `review` (`required|waived`), optional
+`review-reason`/`review-evidence` when waived, and `gate`
+(`none|mechanical|subjective`). Write it with `init`/`new-phase`/`waiver`, not
+by hand.
 
 `TASK.md` frontmatter: `id` (`<LETTERS><NNN>`, matches the directory), `name`
 (matches the directory name after the id), `type`, `originator`, `size`,
@@ -219,22 +289,34 @@ Prove a generated config in this order, scoped to what was touched:
 ## 6. Follow the Phase Rules
 
 A phase is a directory named `<PHASE>/`; every task directory lives inside its
-phase directory. The scaffold emits a review task only when the phase requests
-one (`name:review`), and no phase requires one: a phase lock is derived from a
-closed review round, never hand-written. Keep the spec `status: in-progress`;
-authoring never locks a phase.
+phase directory, and the phase's own files (`PHASE.md`, `MEMORY.md`,
+`BOARD.md`, optional `GATES.md`/`GATE-RESULTS.jsonl`) sit beside them. A phase
+either reviews or waives, and the tier sets the default and the waiver policy.
+A generated review task exists exactly for a non-waived phase: there is no
+reserved review task, so never add one to a waived phase and never require one
+where the tier allows a waiver. A phase lock is derived from every task being
+complete, every classified mechanical gate being proven, and a closed review
+round or an effective waiver; never hand-write a lock or a lock list. Confirm
+one with `mf-specs lock --name <spec> --phase <id>` — it writes nothing. Keep
+the spec `status: in-progress`; authoring never locks a phase.
 
 ## 7. Ask Only When the Decision Is the User's
 
 Ask with `ask_user` only when the decision is theirs — scope, naming, or real
-ambiguity; otherwise decide and proceed. Use `notify_user` for progress the user
-should see. Do not invent extra context.
+ambiguity; otherwise decide and proceed. The tier's question budget is advisory
+and self-reported in `## Creation`; it is never a licence to ask a fact the
+repository can answer, and `micro` asks nothing. Use `notify_user` for progress
+the user should see. Do not invent extra context.
 
 ## 8. Self-Check Before You Stop
 
-Only edit files if you skipped the `create` scaffold or changed the tree by
-hand; a fresh `create` output already verifies.
+Only edit files if you skipped the scaffold or changed the tree by hand; a fresh
+`init` or `create` output already verifies.
 
+- The appraiser named `micro`, `standard`, or `full`, or emitted `split`; the
+  authoring run loaded exactly that tier with `mf-specs tier <tier>`.
+- `SPEC.md` carries `## Creation` with `tier`, self-reported
+  `questions <n>/<budget>`, and unresolved decisions or `none`.
 - Every task directory matches a row in `## Tasks`, and every row has a directory.
 - Each `TASK.md` `id` equals its directory id, and `name` equals the directory name after the id.
 - Every task directory lives under its phase directory (`<PHASE>/<task>/`).
@@ -251,11 +333,18 @@ hand; a fresh `create` output already verifies.
 
 # Reference
 
-- **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`).
-- **Scaffold CLI**: `mf-specs create` (or `/specs create` in the OpenCode host) — flags `--name`, `--description`, `--author`, `--workspace-type`, `--tasks` (each `name[:type[:gates[:size]]]`, size defaulting to `medium`), `--reviewer-profiles`.
+- **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md`, optional
+  `sizing.json`, and one directory per phase (`PHASE.md`, `MEMORY.md`,
+  `BOARD.md`, optional `GATES.md`/`GATE-RESULTS.jsonl`) holding one directory per
+  task (`TASK.md`, `MEMORY.md`, optional `GATES.md`/`MAILBOX.md`/`GATE-RESULTS.jsonl`).
+- **Generator verbs**: `init`, `new-phase`, `new-task`, `stamp`, `claim`,
+  `waiver`, `tier`, `gate run`, `gate record`, `mail`, and `lock` (confirmation
+  only). Every verifier-checked record has one of these as its writer.
+- **Tier CLI**: `mf-specs tier <micro|standard|full>` prints exactly one installed tier file from `.agents/@montflow/tiers/<tier>.md`; there is no default, no listing, and no second tier. The files are `packages/specs/tiers/*.md`, installed by `mf-specs doctor`.
+- **Scaffold CLI**: `mf-specs init --name <spec> --tier <tier>` is the tier-aware entry; `mf-specs create` (or `/specs create` in the OpenCode host) remains the tier-agnostic scaffold — flags `--name`, `--description`, `--author`, `--workspace-type`, `--tasks` (each `name[:type[:gates[:size]]]`, size defaulting to `medium`), `--reviewer-profiles`.
 - **Sizing config**: `<specs-root>/sizing.json` (repo layer) and `<spec>/sizing.json` (spec layer, with `phases.<PHASE>.sizes`); absent size entry means `inherit`.
 - **Sizing CLI**: `mf-specs sizing --name <spec> --task <id> [--verbose|--human]` — compact by default (id, size, target, source); `--verbose` / `--human` add the task and phase budgets and the provenance matrix. `mf-specs resolve --name <spec> --task <id>` prints the bare dispatch target; `mf-specs status` / `next` show per-task size, target, and source.
 - **Catalogue CLI**: `mf-specs models [--provider <id>] [--json] [--catalog <path>]` lists the models this harness can dispatch and their effort variants (`variants unknown` vs `variants none`); outside the host pass `--catalog <path>` to either form, or use the `spec_models` tool in the host. `mf-specs models --verify [--name <spec>]` cross-checks every config entry, warns `models.unknown-model` / `models.unknown-effort`, and states the entries checked and skipped split by layer and provider.
 - **Prompt**: `packages/specs/prompts/spec-create.json` (`spec-create`), doctor-installed into `.agents/@montflow/prompts/`; render it with `mf-specs author --request <text>` or `/specs author` in the host.
 - **Sizing prompt**: `packages/specs/prompts/spec-sizing.json` (`spec-sizing`), the wizard the `spec-sizing-orchestrator` role runs; render it with `mf-specs sizing-config` or `/specs sizing-config` / the `spec_sizing` tool. It generates one config layer from the live catalogue and writes nothing before confirmation.
-- **Contract source**: `modules/scaffold`, `modules/lifecycle`, `modules/structure`, `modules/sizing`, and the shipped `spec-create` prompt.
+- **Contract source**: `modules/tier`, `modules/init`, `modules/scaffold`, `modules/lifecycle`, `modules/structure`, `modules/sizing`, `packages/specs/tiers/`, and the shipped `spec-create` prompt.

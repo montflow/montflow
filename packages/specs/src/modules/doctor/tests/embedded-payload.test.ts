@@ -3,6 +3,7 @@ import * as NodePath from 'node:path';
 import * as Vitest from '@effect/vitest';
 import { EMBEDDED_PAYLOAD } from '../embedded-payload.generated.js';
 import { SPEC_PROMPT_NAMES, SPEC_SKILL_NAMES } from '../index.js';
+import { SPEC_TIER_NAMES } from '../doctor.paths.module.js';
 
 /**
  * The embedded payload exists so a `--compile`d `mf-specs` can install and
@@ -15,6 +16,10 @@ import { SPEC_PROMPT_NAMES, SPEC_SKILL_NAMES } from '../index.js';
 const PACKAGE_ROOT = NodePath.resolve(import.meta.dirname, '..', '..', '..', '..');
 const SKILLS_DIR = NodePath.join(PACKAGE_ROOT, 'skills');
 const PROMPTS_DIR = NodePath.join(PACKAGE_ROOT, 'prompts');
+const TIERS_DIR = NodePath.join(PACKAGE_ROOT, 'tiers');
+
+/** Every shipped tier instruction by name, from the embedded payload. */
+const EMBEDDED_TIER_PAYLOAD = EMBEDDED_PAYLOAD.tier ?? {};
 
 /** Every non-dot file in a packaged skill directory, keyed by name. */
 const packageSkill = (name: string) => {
@@ -38,12 +43,21 @@ Vitest.describe('embedded payload', () => {
     );
   });
 
+  Vitest.it.each(SPEC_TIER_NAMES)('%s.md: the embed matches the packaged tier file', (name) => {
+    Vitest.expect(EMBEDDED_TIER_PAYLOAD[name]?.[`${name}.md`]).toBe(
+      Fs.readFileSync(NodePath.join(TIERS_DIR, `${name}.md`), 'utf-8'),
+    );
+  });
+
   Vitest.it('embeds every payload name the doctor installs', () => {
     Vitest.expect(Object.keys(EMBEDDED_PAYLOAD.skill ?? {}).toSorted()).toStrictEqual(
       [...SPEC_SKILL_NAMES].toSorted(),
     );
     Vitest.expect(Object.keys(EMBEDDED_PAYLOAD.prompt ?? {}).toSorted()).toStrictEqual(
       [...SPEC_PROMPT_NAMES].toSorted(),
+    );
+    Vitest.expect(Object.keys(EMBEDDED_TIER_PAYLOAD).toSorted()).toStrictEqual(
+      [...SPEC_TIER_NAMES].toSorted(),
     );
   });
 

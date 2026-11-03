@@ -6,7 +6,7 @@ import { NO_REVIEW, type SpecFileEntry, verifySpecTree } from '../../../modules/
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import { phaseMarkdown } from '../../../modules/phase/tests/helpers.js';
 import { SpecStore } from '../../../services/index.js';
-import { migrate, planMigration, renderMigrate, runSlash } from '../index.js';
+import { check, migrate, planMigration, renderMigrate, runSlash, state } from '../index.js';
 import { entry, memory, stubLayer } from './helpers.js';
 
 const root = '.agents/@montflow/specs';
@@ -40,6 +40,41 @@ const phaseTree = (name = 'ship-login'): ReadonlyArray<SpecFileEntry> =>
     ...file,
     path: file.path === 'SPEC.md' ? file.path : `A/${file.path}`,
   }));
+
+/** The phase tree with every task complete, for the frozen-upgrade tests. */
+const completePhaseTree = (name = 'ship-login'): ReadonlyArray<SpecFileEntry> =>
+  phaseTree(name).map((file) =>
+    file.path === 'SPEC.md'
+      ? entry(
+          'SPEC.md',
+          specMarkdown({
+            name,
+            status: 'complete',
+            rows: [
+              {
+                id: 'A001',
+                name: 'implement-login',
+                type: 'execution',
+                status: 'complete',
+                gates: 'No',
+              },
+              {
+                id: 'A002',
+                name: 'review-phase',
+                type: 'review',
+                status: 'complete',
+                gates: 'No',
+              },
+            ],
+          }),
+        )
+      : {
+          ...file,
+          content: file.content
+            .replace('status: pending', 'status: complete')
+            .replace('- [ ]', '- [x]'),
+        },
+  );
 
 /** A v2 tree: the phase record is present and the version is current. */
 const v2Tree = (name = 'ship-login'): ReadonlyArray<SpecFileEntry> => [
@@ -228,6 +263,27 @@ Vitest.describe('Cli.migrate engine', () => {
     }),
   );
 
+  Vitest.it.effect('deletes the hand-written locked-phases field on the v2 upgrade', () =>
+    Effect.gen(function* () {
+      const tree = phaseTree().map((file) =>
+        file.path === 'SPEC.md'
+          ? {
+              ...file,
+              content: file.content.replace(
+                'created: 2026-01-01',
+                'created: 2026-01-01\nlocked-phases: A',
+              ),
+            }
+          : file,
+      );
+      const specs = new Map<string, ReadonlyArray<SpecFileEntry>>([['ship-login', tree]]);
+      yield* migrate(root, { name: 'ship-login' }).pipe(Effect.provide(stubLayer(specs)));
+      const spec = specs.get('ship-login')?.find((file) => file.path === 'SPEC.md')?.content ?? '';
+      Vitest.expect(spec).toContain('spec-version: 2');
+      Vitest.expect(spec).not.toContain('locked-phases');
+    }),
+  );
+
   Vitest.it.effect('is a no-op on an already-upgraded spec', () =>
     Effect.gen(function* () {
       const files = v2Tree();
@@ -408,6 +464,113 @@ Vitest.describe('Cli.migrate engine', () => {
       const again = yield* migrate(dir, { name: 'ship-login' });
       Vitest.expect(again.specs[0]?.status).toBe('already');
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
+  );
+
+  Vitest.it('re-ids a colliding flat task id and rewrites its references', () => {
+    const files = [
+      entry(
+        'SPEC.md',
+        specMarkdown({
+          name: 'ship-login',
+          version: null,
+          rows: [
+            { id: 'A001', name: 'one', type: 'execution', status: 'pending', gates: 'No' },
+            { id: 'A001', name: 'two', type: 'execution', status: 'pending', gates: 'No' },
+          ],
+        }),
+      ),
+      entry('A001-one/TASK.md', taskMarkdown({ id: 'A001', name: 'one' })),
+      entry('A001-one/MEMORY.md', memory),
+      entry('A001-two/TASK.md', taskMarkdown({ id: 'A001', name: 'two', dependsOn: 'A001' })),
+      entry('A001-two/MEMORY.md', memory),
+    ];
+    const plan = planMigration({ name: 'ship-login', files });
+    Vitest.expect(plan.kind).toBe('migrate');
+    if (plan.kind !== 'migrate') return;
+    Vitest.expect(plan.moves[1]?.oldId).toBe('A001');
+    Vitest.expect(plan.moves[1]?.newId).toBe('A002');
+    Vitest.expect(plan.moves[1]?.to).toBe('A/A002-two');
+  });
+
+  Vitest.it.effect('writes the renumbered id into TASK.md and the SPEC.md rows', () =>
+    Effect.gen(function* () {
+      const files = [
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            name: 'ship-login',
+            version: null,
+            rows: [
+              { id: 'A001', name: 'one', type: 'execution', status: 'pending', gates: 'No' },
+              { id: 'A001', name: 'two', type: 'execution', status: 'pending', gates: 'No' },
+            ],
+          }),
+        ),
+        entry('A001-one/TASK.md', taskMarkdown({ id: 'A001', name: 'one' })),
+        entry('A001-one/MEMORY.md', memory),
+        entry('A001-two/TASK.md', taskMarkdown({ id: 'A001', name: 'two', dependsOn: 'A001' })),
+        entry('A001-two/MEMORY.md', memory),
+      ];
+      const specs = new Map<string, ReadonlyArray<SpecFileEntry>>([['ship-login', files]]);
+      const report = yield* migrate(root, { name: 'ship-login' }).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.specs[0]?.status).toBe('migrated');
+      Vitest.expect(report.specs[0]?.issues).toStrictEqual([]);
+      const after = specs.get('ship-login') ?? [];
+      const two = after.find((file) => file.path === 'A/A002-two/TASK.md')?.content ?? '';
+      Vitest.expect(two).toContain('id: A002');
+      Vitest.expect(two).toContain('depends-on: A001');
+      Vitest.expect(verifySpecTree({ name: 'ship-login', files: after }, NO_REVIEW).valid).toBe(
+        true,
+      );
+    }),
+  );
+
+  Vitest.it.effect('upgrades a complete fixture only with includeComplete', () =>
+    Effect.gen(function* () {
+      const files = completePhaseTree();
+      const frozen = new Map<string, ReadonlyArray<SpecFileEntry>>([['ship-login', files]]);
+      const skipped = yield* migrate(root, { name: 'ship-login' }).pipe(
+        Effect.provide(stubLayer(frozen)),
+      );
+      Vitest.expect(skipped.specs[0]?.status).toBe('frozen');
+      Vitest.expect(frozen.get('ship-login')).toBe(files);
+
+      const upgraded = new Map<string, ReadonlyArray<SpecFileEntry>>([['ship-login', files]]);
+      const report = yield* migrate(root, { name: 'ship-login', includeComplete: true }).pipe(
+        Effect.provide(stubLayer(upgraded)),
+      );
+      Vitest.expect(report.specs[0]?.issues.map((found) => found.message)).toStrictEqual([]);
+      Vitest.expect(report.specs[0]?.status).toBe('upgraded');
+      Vitest.expect(upgraded.get('ship-login')?.map((file) => file.path)).toContain('A/PHASE.md');
+    }),
+  );
+
+  Vitest.it.effect('flags a complete v1 record migrated to v2 with no review round', () =>
+    Effect.gen(function* () {
+      const specs = new Map<string, ReadonlyArray<SpecFileEntry>>([
+        ['ship-login', completePhaseTree()],
+      ]);
+      yield* migrate(root, { name: 'ship-login', includeComplete: true }).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      const migrated = specs.get('ship-login') ?? [];
+      const specText = migrated.find((file) => file.path === 'SPEC.md')?.content ?? '';
+      Vitest.expect(specText).not.toContain('## Creation');
+
+      const report = yield* check(root, { name: 'ship-login' }).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.failed).toBe(1);
+      Vitest.expect(
+        report.specs[0]?.issues.some((issueFound) => issueFound.field === 'review-series'),
+      ).toBe(true);
+
+      const derived = yield* state(root, 'ship-login').pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(derived.state).toBe('inconsistent');
+      Vitest.expect(derived.blocked).toBe(true);
+    }),
   );
 
   Vitest.it.effect('runs through the slash form', () =>

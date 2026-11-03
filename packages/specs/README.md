@@ -1,9 +1,11 @@
 # @montflow/specs
 
-Spec primitives and a CLI for montflow — schema-backed parsing,
-mechanical verification, a status panel, and the shipped authoring, execution,
-and sizing prompts that `mf-specs author`, `execute`, `sizing-config`, and
-`which` render and resolve.
+Spec primitives and a CLI for montflow — the v2 phase tree (`SPEC.md` + one
+directory per phase + one directory per task), schema-backed parsing, mechanical
+verification, derived state, the generator verbs that write every verifiable
+record, and the shipped authoring, execution, sizing, and tier payloads that
+`mf-specs author`, `execute`, `sizing-config`, `tier`, and `which` render and
+resolve.
 
 ## CLI
 
@@ -16,28 +18,72 @@ npx mf-specs check --name ship-spec
 bun run --cwd packages/specs cli check
 ```
 
+### Spec layout (v2)
+
+A spec is `SPEC.md` plus one directory per phase; a phase is a directory with
+its own record, never a task-id prefix.
+
+```text
+.agents/@montflow/specs/<name>/
+  SPEC.md                  # name, status, workspace-type, spec-version: 2
+  sizing.json              # optional dispatch config
+  <PHASE>/                 # A, B, … — one directory per phase
+    PHASE.md               # objective, status, review, review-reason, gate
+    MEMORY.md              # phase memory
+    BOARD.md               # phase broadcast channel
+    GATES.md               # optional phase gate, stages classified by kind
+    GATE-RESULTS.jsonl     # optional recorded gate results
+    <PHASE><NNN>-<name>/   # one directory per task
+      TASK.md
+      MEMORY.md
+      GATES.md             # optional task gate
+      MAILBOX.md           # optional task channel
+      GATE-RESULTS.jsonl   # optional recorded gate results
+```
+
+The spec root holds only `SPEC.md`, optional `sizing.json`, and phase
+directories. A phase holds only the files above plus task directories. No lock
+file exists: a phase lock is derived, and `mf-specs lock` only confirms it.
+
+**Versions and the v1 read rule.** `spec-version: 2` is current. A spec with no
+`spec-version` reads as **v1**: the B001 phase tree without `PHASE.md`. V1 is
+accepted with one `spec.version-outdated` warning and exits 0; `PHASE.md` and a
+phase `MEMORY.md` are optional at v1 and required at v2. No surface infers v2
+from file presence, no surface requires `PHASE.md` at v1, and no surface offers
+a frozen spec for dispatch. A flat tree (task directories at the spec root) is
+not v1 — it is an error, and `mf-specs migrate` is the fix. A complete spec is
+**frozen** at its current version and is skipped by `migrate --all`; only an
+explicit `migrate --name <spec> --include-complete` upgrades it. Relabeling
+`spec-version: 2` without the phase tree fails
+`spec.version-untransformed`.
+
 - `check` — verifies the whole spec root (default
   `.agents/@montflow/specs`) or one `--name`. Token-lean by default
   (failures + summary), with every coded warning for a spec on one grouped
   line; `--verbose` also lists passing specs and the
   root, and adds the cause chain and layer trace for sizing findings.
   Exits non-zero when any spec fails.
-- `status --name <spec>` — lifecycle, task counts, per-phase task
-  list, and verification verdict. Exits non-zero when the spec fails
-  verification, including the review budget read from the review store.
-- `state --name <spec>` — compact derived state, active phase, and
-  derived locked phases (complete phases with a closed review round), for an
-  orchestrator to read before acting. Exits non-zero on
-  the same dispatch errors `status` reports, and names them: a blocked spec
-  appends `· blocked <codes>` and `next mf-specs status --name <spec>` to the
-  one-line state, with `--verbose` expanding the full blocker blocks.
+- `status --name <spec>` — lifecycle, task counts, a per-phase line with the
+  review decision, gate kind, proof, and derived lock, and the verification
+  verdict. Exits non-zero when the spec fails verification, including the
+  review budget read from the review store.
+- `state --name <spec>` — compact derived state: status, lifecycle state,
+  active phase, derived locked phases, and the active phase's review decision
+  and gate proof. A phase is locked when every task under it is complete, every
+  classified mechanical gate is proven, and a review round is closed or the
+  waiver is effective. Exits non-zero on the same dispatch errors `status`
+  reports, and names them: a blocked spec appends `· blocked <codes>` and
+  `next mf-specs status --name <spec>` to the one-line state, with `--verbose`
+  expanding the full blocker blocks.
 - `next --name <spec>` — the ready task set for the active phase
   (pending tasks whose `depends-on` targets are complete, review last;
-  `gated` marks a task with a `GATES.md`). Exits non-zero on every error
-  `check` reports — config, task size, tree, or review budget — so `status`,
-  `next`, and `check` agree.
+  `gated` marks a task with a `GATES.md`). The head carries the phase budget,
+  review decision, and gate proof. Exits non-zero on every error `check`
+  reports — config, task size, tree, or review budget — so `status`, `next`,
+  and `check` agree.
 - `create --name <spec>` — deterministic, model-free scaffold: writes
-  `SPEC.md` and one `<PHASE>/<PHASE><NNN>-<name>/` task directory per `--tasks`
+  `SPEC.md` with `spec-version: 2`, one `<PHASE>/PHASE.md` + `MEMORY.md` per
+  phase, and one `<PHASE>/<PHASE><NNN>-<name>/` task directory per `--tasks`
   entry (each `name[:type[:gates[:size]]]`, with `size` defaulting to `medium`
   when the token is absent or blank). A fifth token is an error rather than
   silently ignored. It emits a review task only when `--tasks` requests
@@ -45,11 +91,59 @@ bun run --cwd packages/specs cli check
   existing spec. Optional `--description`, `--author`,
   `--workspace-type in-place|worktree`.
   The generated tree passes `check`; edit it to carry the real work.
-- `migrate [--name <spec> | --all] [--dry-run]` — move flat task directories
-  under their `<PHASE>/` directory without editing a file. A mixed tree is
-  refused, an already-migrated tree is a verified no-op, and a failed move or
-  failed post-move verification rolls every applied move back so the store is
-  never half-migrated.
+- `init --name <spec> --tier <micro|standard|full>` — the tier-aware scaffold.
+  Validates the phase range, exploration rule, work-task ceiling, gate kind,
+  waiver policy, review decision, and dependency graph, then writes the whole v2
+  tree: `SPEC.md` with `## Creation`, every `PHASE.md`/phase `MEMORY.md`, each
+  `TASK.md`/`MEMORY.md`/`GATES.md`, the channels, and `## Tasks`. Phase and task
+  ids are allocated from plan order, never from argv. Repetition flags carry the
+  plan; a violation is a coded refusal and writes nothing.
+- `new-phase --name <spec> --objective <line>` — allocate the next phase id and
+  write its `PHASE.md`, `MEMORY.md`, and optional `BOARD.md`/`GATES.md`.
+- `new-task --name <spec> --phase <id> --task <kebab-name> --type <type>` —
+  allocate the next task number in that phase, write its `TASK.md`/`MEMORY.md`
+  (and `GATES.md` with `--gates`), and append its sorted `SPEC.md` row.
+- `stamp [--format instant|date]` — print one UTC timestamp from the system
+  clock. Writes nothing; never type a timestamp by hand.
+- `claim --name <spec> --task <id>` — bind a session to a task. The orchestrator
+  forms are `--orchestrator`, `--start`, `--block --reason`, `--close`, and the
+  resetting `--release`; a worker may bind and release only itself. A status
+  transition writes `TASK.md`, the `SPEC.md` row, and the `PHASE.md` mirror in
+  one temp-then-rename transaction under a registry lock, and rolls every record
+  back on failure. `--close` validates the completion checklist and every
+  required mechanical gate and derives the spec status, so the last close writes
+  `status: complete`.
+- `lock --name <spec> --phase <id>` — confirm the derived lock. Writes nothing;
+  prints `locked <phase>` at exit 0 or one blocker code per line at exit 1.
+  A phase is locked only when every task is complete, every classified
+  mechanical gate is proven, and a review round is closed or the waiver is
+  effective. It is not a lock list and owns no field.
+- `waiver --name <spec> --phase <id> (--waived --reason <line> | --required)` —
+  write or clear the phase review decision and recompute the gate evidence that
+  stands in for a round. A waived phase cannot hold a review task.
+- `tier <micro|standard|full>` — print the installed tier file verbatim and
+  nothing else. A missing file is `tier.missing`; a packaged copy that differs
+  is `tier.stale`. Never list the tier directory or load two tiers.
+- `migrate [--name <spec> | --all] [--dry-run] [--include-complete]` — move flat
+  task directories under their `<PHASE>/` directory, then upgrade a v1 phase
+  tree by writing the missing `PHASE.md`/phase `MEMORY.md` and `spec-version: 2`.
+  A mixed tree is refused, an already-migrated tree is a verified no-op, and a
+  failed move or failed post-move verification rolls every applied move back so
+  the store is never half-migrated. A `status: complete` spec is `frozen` and
+  skipped unless `--include-complete` is passed.
+- `gate run --name <spec> --phase <id> [--task <id>] [--stage <n>] [--all]` —
+  execute mechanical stages from the workspace root and append the command,
+  exit status, timestamp, and captured output to the owner's
+  `GATE-RESULTS.jsonl`. Stops at the first failure unless `--all`.
+- `gate record --name <spec> --phase <id> [--task <id>] --stage <n> --judge
+<slug> --verdict pass|fail --note <text>` — record one subjective verdict.
+  The CLI never marks a subjective stage passing on its own.
+- `mail --name <spec> --to <task-id|all> --text <text> [--phase <id>]` — append
+  one board (or mailbox) entry; the sender comes from the orchestrator binding,
+  and a live target is steered while an absent one queues.
+- `review decide --name <spec> --phase <id> [--mode guided|autonomous] [--json]`
+  — compute the review-cycle decision from the store. Read-only; see
+  [Review cycle decisions](#review-cycle-decisions).
 - `author --request <text> [--notes <text>]` — loads the `spec-create` prompt
   (gated on `mf-specs doctor`), renders it with the request, and prints it and
   nothing else. Model-free: the binary never dispatches a session.
@@ -103,26 +197,28 @@ bun run --cwd packages/specs cli check
   target, and winning layer. `--verbose` and `--human` are the same detailed
   mode: budgets plus a size-by-layer provenance matrix.
 - `list [--pending | --status <states>] [--verbose]` — lists every
-  spec with its derived lifecycle state and task counts. `--pending`
-  keeps every unfinished spec; `--status` takes a comma-separated list
-  of `pending`, `in-progress`, `blocked`, `complete`, `inconsistent`
-  (`completed` is accepted as an alias for `complete`).
-- `doctor` — checks `<root>/.agents/skills/` and
-  `<root>/.agents/@montflow/prompts/`, installs the packaged
-  `montflow-create-specs` and `montflow-find-specs` skills when
-  missing, rewrites them when stale or partial, and installs or refreshes
-  `spec-create.json`, `spec-execute.json`, and `spec-sizing.json`. `--check`
-  writes nothing and
-  reports `ok` / `missing` / `stale` / `blocked` per payload. Repair mode
-  distinguishes `installed` (created) from `repaired` (rewrote) and reports a
+  spec with its derived lifecycle state and task counts. A v2 spec appends its
+  derived locked phases and per-phase review decisions; a v1/frozen spec keeps
+  the original line. `--pending` keeps every unfinished spec; `--status` takes
+  a comma-separated list of `pending`, `in-progress`, `blocked`, `complete`,
+  `inconsistent` (`completed` is accepted as an alias for `complete`). The TUI
+  picker reads the same engine, so it previews derived state and offers only
+  directories holding `SPEC.md`.
+- `doctor [--check]` — reads this package's `payload.json` and checks or repairs
+  every declared artifact: the `montflow-create-specs` and `montflow-find-specs`
+  skills, `spec-create.json`, `spec-execute.json`, `spec-sizing.json`, and the
+  `micro`/`standard`/`full` tier files. `--check` writes nothing and reports
+  `ok` / `missing` / `stale` / `mismatched` / `blocked` per payload. Repair mode
+  distinguishes `present` / `installed` / `repaired` / `blocked` and reports a
   `blocked` payload with a coded failure instead of aborting the run. Skill
   repair rewrites only the files the package ships and leaves any other file in
   the directory in place. Idempotent; resolves the repo root from the working
-  directory. It never touches any prompt or skill it does not own. The other
-  skills the shipped prompts declare are external prerequisites, not doctor
-  payloads: see [Prerequisite skills and advisories](#prerequisite-skills-and-advisories).
+  directory. It never touches any prompt, skill, or tier it does not own. The
+  other skills the shipped prompts declare are external prerequisites, not
+  doctor payloads: see
+  [Prerequisite skills and advisories](#prerequisite-skills-and-advisories).
 
-### Authoring, execution, and sizing prompts
+### Authoring, execution, sizing, and surfaces
 
 `author`, `execute`, and `sizing-config` render; they do not dispatch. The
 binary loads the shipped prompt, gates it on `mf-specs doctor`, renders it from
@@ -131,6 +227,17 @@ the spec or flag state, and prints it. Inside the OpenCode host, `/specs author`
 `spec_execute` / `spec_sizing` tools dispatch the same rendered text
 through `@montflow/prompts`' executor. A missing or stale prompt fails before
 anything renders, with the file, the problem, and the `mf-specs doctor` fix.
+
+Every generator verb is on the `/specs` surface with the same arguments and
+engines as the binary: `check`, `status`, `state`, `next`, `resolve`, `sizing`,
+`models`, `which`, `list`, `create`, `migrate`, `init`, `new-phase`, `new-task`,
+`stamp`, `tier`, `claim`, `lock`, `waiver`, `gate`, `mail`, `author`, `execute`,
+and `sizing-config`. `review decide`, `doctor`, and `version` are binary-only.
+The host tools are
+`spec_author`, `spec_execute`, `spec_sizing`, `spec_tier`, and `spec_models`;
+`spec_tier` returns the installed tier verbatim, with the same refusal codes as
+`mf-specs tier`. The TUI picker previews derived state and never offers a phase
+or task directory as a spec. No surface reads or writes a lock file.
 
 The `/specs` form validates flags per command. Every verb accepts `--dir` and
 `--verbose`, plus the flags its binary counterpart implements; a flag the verb
@@ -235,34 +342,104 @@ untouched record at its review budget), `mock-over-budget` (one review-budget
 error), and `mock-bad`
 (10 issues across every failure class).
 
-## Prompt sync
+## Artifact payload
 
-The spec prompts live in two places with one owner:
+The skill, prompt, and tier files this package ships are declared in
+[`payload.json`](payload.json) and copied into the workspace by `doctor`:
 
-| Location                                | Role                             |
-| --------------------------------------- | -------------------------------- |
-| `packages/specs/prompts/<name>.json`    | canonical source, edited by hand |
-| `.agents/@montflow/prompts/<name>.json` | installed artifact, never edited |
+| Kind     | Source                | Installed target                        |
+| -------- | --------------------- | --------------------------------------- |
+| `skill`  | `skills/<name>/`      | `.agents/skills/<name>/`                |
+| `prompt` | `prompts/<name>.json` | `.agents/@montflow/prompts/<name>.json` |
+| `tier`   | `tiers/<name>.md`     | `.agents/@montflow/tiers/<name>.md`     |
 
-Edit the package file, then run `mf-specs doctor`; do not hand-edit the
-workspace copy. Doctor owns exactly `spec-create.json`, `spec-execute.json`, and
-`spec-sizing.json`.
-Repair mode installs a missing prompt and overwrites a stale one with the
-package bytes; it also rewrites a stale or partial skill, so the fix line
-converges. A file inside an installed skill directory that the package does not
-ship is left in place, and extra files alone do not make a skill stale.
-`--check` writes nothing and reports `ok` / `missing` / `stale` / `blocked`
-per file with its source and target paths, so `mf-specs:check` fails on drift
-with `Run: mf-specs doctor` as the fix. A condition repair refuses is `blocked`
-with its own coded fix, so the hint is never printed for work doctor cannot do.
-Any other prompt in that directory — `commit.json`, `model-fallback.json`, or a
-user prompt — is never read, rewritten, or deleted by doctor.
+The manifest is the only name list: `SPEC_SKILL_NAMES`, `SPEC_PROMPT_NAMES`, and
+`SPEC_TIER_NAMES` are derived from it. `@montflow/payload` owns the one
+compare/install engine and the embedded-payload generator every payload package
+uses.
 
-Both payloads are embedded in the `mf-specs` binary at build time
-(`bun run generate:payload` from `skills/` and `prompts/`), so `doctor` works
-from the standalone binary with no package checkout beside it. The package
-directory still wins when present, and `src/modules/doctor/tests/embedded-payload.test.ts`
-fails if the embed drifts from the package.
+**Two modes, one engine.** `mf-specs doctor --check` is report-only: it writes
+nothing, performs no directory creation, and reports `ok` / `missing` / `stale`
+/ `mismatched` / `blocked` per payload with its source and target. Every
+`mf-<cli>:check` script uses this mode, so `bun run mf:check` is write-free.
+`mf-specs doctor` is the repair mode: it installs a missing artifact, rewrites a
+stale or mismatched one from the package bytes, and reports `present` /
+`installed` / `repaired` / `blocked`. A payload it cannot repair is `blocked`
+with its own coded fix; one blocked payload never aborts the rest of the run.
+`bun run mf:doctor` runs repair for every payload package.
+
+A manifest-owned file edited locally is `stale`; repair overwrites it with the
+package bytes, so edit `packages/specs/` and reinstall — never the workspace
+copy. A file the manifest does not name, inside the same store, is user data:
+doctor never reads, rewrites, or deletes it, and an extra file alone does not
+make a skill stale.
+
+The payload is embedded in the `mf-specs` binary at build time
+(`bun run generate:payload` from `skills/`, `prompts/`, and `tiers/`), so
+`doctor` works from the standalone binary with no package checkout beside it.
+The package directory still wins when present, and
+`src/modules/doctor/tests/embedded-payload.test.ts` fails if the embed drifts
+from the package.
+
+## Review cycle decisions
+
+`mf-specs review decide --name <spec> --phase <id> [--mode guided|autonomous]
+[--json]` is the only authority on review rounds. It reads every expected series
+(`<spec>` plus one `<spec>-<profile>` per declared reviewer profile), the phase's
+derived budget and effective waiver, and the latest round's findings, then
+prints `decision`, `rounds <used>/<budget>`, `open <n> (critical a, major b,
+minor c, nit d)`, `reason <code>`, and the per-series breakdown. It writes
+nothing and exits 2 on an invalid invocation. An omitted `--mode` takes the
+conservative `guided` branch.
+
+The decision order is: effective waiver → `waived`; no attributed round in an
+expected series → `start`; an unattributed round → `escalate`; zero open
+findings → `pass`; only Minor/Nit open → `fix-and-stop`; Critical/Major with
+rounds remaining → `rework`; at the cap, `guided` → `escalate`, and `autonomous`
+→ one `overflow` round, then `escalate`. Across series the strictest decision
+wins.
+
+A round whose only open findings are Minor/Nit may close with
+`- Disposition: minor-deferred` and `- Deferred: F1, F3` in its `## Metadata`;
+every deferred finding must be Minor/Nit and terminal, or the closure is
+`review.deferred-severity`. A round past the budget is legal only with
+`- Overflow: <reason>` and `- Overflow-authorized: autonomous|user`; a missing
+or broken authorization is `review.overflow-exhausted`, and no declaration is
+`review.budget-exceeded`.
+
+## Migration: v1 to v2
+
+`mf-specs migrate --all` walks the store once, moves flat task directories under
+their phase, and upgrades every in-progress v1 phase tree. The live store's
+2026-11-03 run reported:
+
+```text
+14 specs · 0 migrated · 2 upgraded · 0 planned · 12 frozen · 0 failed
+```
+
+| Spec                            | Result            | Version after | Phases      |
+| ------------------------------- | ----------------- | ------------- | ----------- |
+| `cli-version-awareness`         | frozen (complete) | 1             | 0           |
+| `installation-guide`            | frozen (complete) | 1             | 0           |
+| `model-fallback-alignment`      | frozen (complete) | 1             | 0           |
+| `montflow-ci-verification`      | frozen (complete) | 1             | 0           |
+| `montflow-multi-reviewer`       | frozen (complete) | 1             | 0           |
+| `montflow-opencode-migration`   | frozen (complete) | 1             | 0           |
+| `montflow-phase-directories`    | frozen (complete) | 1             | 0           |
+| `montflow-project-structure`    | frozen (complete) | 1             | 0           |
+| `montflow-references-plugin`    | frozen (complete) | 1             | 0           |
+| `montflow-references-tui`       | upgraded          | 2             | 1 (`G`)     |
+| `montflow-spec-completion-gate` | frozen (complete) | 1             | 0           |
+| `montflow-spec-standard`        | upgraded          | 2             | 9 (`A`–`I`) |
+| `plugin-host-integration`       | frozen (complete) | 1             | 0           |
+| `spec-optimizations`            | frozen (complete) | 1             | 0           |
+
+A frozen spec stays v1 and keeps its historical tree, `*099` review tasks, and
+`spec.version-outdated` warning. It is never offered for dispatch and is never
+edited by a later migration. Upgrade one deliberately with
+`mf-specs migrate --name <spec> --include-complete`; after that it is v2 and the
+normal rules apply. The same table is recorded in the bookkeeper's artifact
+ledger.
 
 ## Sizing
 
@@ -293,7 +470,10 @@ tasks, capped at 3 —
 a phase of only `tiny` tasks gets exactly one review cycle, and the phase's own
 `review` task never raises its budget. A non-empty phase always gets at least
 one cycle, so a phase holding only its review task (or only completed tasks
-without sizes) can still be reviewed. `status` and `next` print the phase
+without sizes) can still be reviewed. Rounds past the budget are legal only as
+an authorized overflow (`budget + 1`): one in autonomous mode, user-authorized
+in guided mode, and otherwise `review.budget-exceeded` /
+`review.overflow-exhausted`. `status` and `next` print the phase
 budget. Compact `sizing --task` omits it: the default line carries only the task
 id, declared size, effective target, and winning layer. `--verbose` or `--human`
 prints the labelled budget line — `size budget <task> · contributes <cycles> ·
@@ -546,8 +726,28 @@ itself is not a completed task:
 ## Library surface
 
 - **`Spec`** — `Spec` Schema Class, `SpecStatus`,
-  `WorkspaceType`, `parseSpecFile`, `verifySpecFile`, and the task
-  table (`TaskRow`, `parseTaskTable`).
+  `WorkspaceType`, `parseSpecFile`, `verifySpecFile`, the task
+  table (`TaskRow`, `parseTaskTable`), and the version contract
+  (`SPEC_VERSION_FIELD`, `SPEC_STANDARD_VERSION`, `readSpecVersion`).
+- **`Phase`** — the `PHASE.md` record: `parsePhaseFile`, `verifyPhaseFile`,
+  `derivePhaseStatus`, `parsePhaseGateStages`, `phaseEvidence`,
+  `renderPhaseFile`, `renderPhaseMemory`, `PHASE_DIR_FILES`, and `PHASE_CODES`.
+  `phaseEvidence` resolves gate evidence refs, the effective waiver, and the
+  proven set a lock reads.
+- **`Tier`** — the `micro`/`standard`/`full` enum (`TIERS`, `isTier`), the
+  artifact contract, the waiver predicate, the `split` shape, and `readTier`
+  (installed file first, packaged file second, `tier.missing` / `tier.stale`).
+- **`Creation`** — `## Creation` read/render (`readCreation`, `renderCreation`)
+  for the tier and the self-reported question count.
+- **`Init`** — the tier-aware tree generator: plan validation (`INIT_CODES`),
+  phase/task allocation, the default plans, and the render path behind
+  `mf-specs init`.
+- **`Claim`** — the atomic status transaction (`claim`, `commitTransaction`):
+  task status, `SPEC.md` row, `PHASE.md` mirror, and the registry binding under
+  a lock, with rollback and the `CLAIM_CODES` refusals.
+- **`Channel`** — the append-only `BOARD.md` / `MAILBOX.md` grammar, entry
+  parsing, and delivery targets behind `mf-specs mail`.
+- **`Stamp`** — the one UTC clock behind `mf-specs stamp`.
 - **`Task`** — `Task` Schema Class, `TaskId`, `TaskType`, `TaskStatus`,
   the optional `size` field, `parseTaskDirName`, `parseTaskFile`,
   `verifyTaskFile`, `verifyTaskSize`, `verifyTaskCompletion` (a complete task
@@ -556,32 +756,40 @@ itself is not a completed task:
   `reviewer-profiles` list (`REVIEWER_PROFILES_FIELD`) on a review task, the
   `finding-ref` locator pattern (`FINDING_REF_PATTERN`), plus the task-id /
   directory / originator patterns.
-- **`Gates`** — `parseGates`, `verifyGatesFile` (stages + checklist
-  items, no placeholders), and `verifyGateProgress` (a complete task with no
-  checked gate item is `gate.unchecked`).
+- **`Gates`** — `parseGates`, `verifyGatesFile` (stages classified
+  `mechanical`/`subjective` + checklist items, no placeholders),
+  `verifyGateProgress` (a complete task with no checked gate item is
+  `gate.unchecked`), and the `GATE-RESULTS.jsonl` reader/writer behind
+  `gate run` / `gate record`.
 - **`Memory`** — `verifyMemoryFile`, `MEMORY_SECTIONS` (title + template
   sections).
 - **`Lifecycle`** — `analyze` / `verify`: derives `pending` /
   `in-progress` / `blocked` / `complete` / `inconsistent` and rejects
   invalid states (e.g. `complete` with pending tasks, all-done but
   `in-progress`). Locks are derived: a phase is complete when every task under
-  it is complete, and locked when it also holds a passed review round.
-  `analyze` takes an optional `active` flag (a live session is bound) to
-  split idle `pending` from active `in-progress`.
+  it is complete, and locked when it is also gate-proven and holds a closed
+  review round or an effective waiver. `analyze` takes an optional `active`
+  flag (a live session is bound) to split idle `pending` from active
+  `in-progress`.
 - **`Structure`** — `verifySpecTree` over an in-memory
-  `SpecSnapshot`: required files, task-directory naming and placement,
-  id/name agreement, task-table agreement (name/type/status/gates), the
+  `SpecSnapshot`: required files, phase-directory placement, task-directory
+  naming, id/name agreement, task-table agreement (name/type/status/gates), the
   record checks, dependency validity (existence, phase order, cycles), the
-  strict `<PHASE>/<task>/<file>` allowlist, and the review budget. Its review input is
-  required (`NO_REVIEW` when the caller has no store), so every surface that
-  verifies a tree also fails a series holding more rounds for a phase than that
-  phase's budget.
+  strict `<PHASE>/<task>/<file>` allowlist, the version/untransformed check,
+  channel grammar, and the review budget. Its review input is required
+  (`NO_REVIEW` when the caller has no store), so every surface that verifies a
+  tree also fails a series holding more rounds for a phase than that phase's
+  budget.
 - **`ReviewLink`** — the review-series convention: `seriesName`,
   `profileSeriesName`, `seriesNames`, `roundForPhase`, `roundPhase`,
-  `reviewPhases`, `verify` (a complete review has its round), and
+  `reviewPhases`, `verify` (a complete review has its round),
   `verifyBudgets` (a series at or under its phase budget; over is
   `review.budget-exceeded`, and a round with no parsable attribution is the
-  `review.phase-unattributed` warning).
+  `review.phase-unattributed` warning), and `verifyDeferrals` (the
+  `minor-deferred` closure and `review.deferred-severity`).
+- **`ReviewPolicy`** — `decide` plus the text/JSON renderers behind
+  `mf-specs review decide`: the ordered matrix, strictest-wins across series,
+  the `minor-deferred` closure, and the bounded overflow.
 - **`Prompt`** — `load(root, name, values)`: gate the shipped template on
   `mf-specs doctor`, read and verify it through `@montflow/prompts`, render it
   with the caller's values, and return the text plus the installed skills, the
@@ -622,11 +830,12 @@ itself is not a completed task:
   `renderNext`, `renderList`, `renderSizing`, `renderSizingReport`,
   `renderModelFindings`, `renderWhich`), and the `effect/cli` commands.
   `renderDiagnostic` is `Diagnostic`'s, re-exported here.
-- **`Doctor`** — `runDoctor(root)` / `runDoctorAt(startDir)` install the
-  packaged spec skills into `.agents/skills/` and the packaged spec prompts
-  into `.agents/@montflow/prompts/`, reporting one outcome per skill and prompt
-  (`SPEC_SKILL_NAMES`, `SPEC_PROMPT_NAMES`). Repair mode refreshes a stale
-  prompt from the package bytes; `--check` writes nothing.
+- **`Doctor`** — `runDoctor(root)` / `runDoctorAt(startDir)` read the packaged
+  `payload.json` and install or verify the spec skills, prompts, and tiers,
+  reporting one outcome per artifact (`SPEC_SKILL_NAMES`, `SPEC_PROMPT_NAMES`,
+  `SPEC_TIER_NAMES`). Repair mode refreshes a stale or mismatched artifact from
+  the package bytes; `--check` writes nothing and performs no directory
+  creation.
 
 All verification is pure and non-throwing: it returns a `Result` with an
 issue list, so callers can render or repair.
@@ -640,9 +849,9 @@ in this package recommends one.
 
 1. **No declared profiles is unchanged.** A review task with no
    `reviewer-profiles` (absent, blank, or `[]`) dispatches one general reviewer
-   into its existing series, exactly as before. `mf-specs:check` never
-   reads review series, so a series-free repo gate keeps passing; the per-series
-   link is enforced only by the workspace caller.
+   into its existing series, exactly as before. A spec with no review series is
+   skipped by the budget check, so a store that predates the review extension
+   keeps verifying; the per-series link is enforced whenever a series exists.
 2. **`reviewer-profiles: <a>, <b>` is additive.** Each declared profile adds a
    series named `<spec>-<profile>`, and the general reviewer always runs the
    default `<spec>` series alongside it — a profile joins, it never replaces the
@@ -671,5 +880,6 @@ in this package recommends one.
 
 ## Status
 
-Early (`0.0.1`, private). Targets the spec contract inherited from the retired toolchain.
+Early (`0.0.1`, private). Targets the v2 spec standard: the phase tree, derived
+locks, tier-aware authoring, gate execution, and the review-cycle policy.
 Source-only — no build step: the OpenCode host loads the `.ts` files directly.

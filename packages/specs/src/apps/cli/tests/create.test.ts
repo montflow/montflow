@@ -72,6 +72,20 @@ Vitest.describe('Cli.scaffold engine', () => {
     }),
   );
 
+  Vitest.it.effect('wires the review task to every non-review task in its phase', () =>
+    Effect.gen(function* () {
+      const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
+      yield* scaffold(root, {
+        name: 'ship-login',
+        taskSpecs: ['work:execution:gates', 'gate-review:review'],
+      }).pipe(Effect.provide(stubLayer(specs)));
+      const files = specs.get('ship-login') ?? [];
+      const review =
+        files.find((file) => file.path === 'A/A002-gate-review/TASK.md')?.content ?? '';
+      Vitest.expect(review).toContain('depends-on: A001');
+    }),
+  );
+
   Vitest.it.effect('refuses an existing spec', () =>
     Effect.gen(function* () {
       const specs = new Map<string, ReadonlyArray<SpecFileEntry>>([

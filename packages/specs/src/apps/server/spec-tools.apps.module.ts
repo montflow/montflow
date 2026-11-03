@@ -11,6 +11,8 @@ import {
   listModels,
   listNameDiagnostic,
   modelsVerifyCommand,
+  diagnostic,
+  readTier,
   renderDiagnostic,
   sizingConfig,
   storeDirOf,
@@ -199,6 +201,56 @@ export const SpecSizingInput = Schema.Struct({
 
 /** Decoded `spec_sizing` input. */
 export type SpecSizingInput = typeof SpecSizingInput.Type;
+
+/** Input for `spec_tier`: the one tier instruction to read. */
+export const SpecTierInput = Schema.Struct({
+  tier: Schema.String,
+});
+
+/** Decoded `spec_tier` input. */
+export type SpecTierInput = typeof SpecTierInput.Type;
+
+/** What `spec_tier` needs: the workspace that owns the installed tier files. */
+export interface TierToolOptions {
+  /** Workspace root the plugin runs in; owns `.agents/`. */
+  readonly cwd: string;
+}
+
+/**
+ * The `spec_tier` tool: return the installed `<tier>.md` verbatim, exactly as
+ * `mf-specs tier <tier>` prints it. The package copy is compared byte for byte,
+ * so a stale or missing file is the same coded refusal the binary reports and
+ * the tool never falls back to another tier.
+ */
+export const specTierTool = (options: TierToolOptions): ToolDefinition<SpecTierInput> => ({
+  name: 'spec_tier',
+  description:
+    'Print one installed tier instruction file verbatim (micro, standard, or full). This is the same one read path as `mf-specs tier <tier>`: it validates the enum, compares the installed bytes with the packaged copy, and refuses a missing or stale file with the same code and repair. It never selects a default tier.',
+  input: SpecTierInput,
+  execute: (input) =>
+    readTier({ tier: input.tier, workspace: options.cwd }).pipe(
+      Effect.provide(Live),
+      Effect.catchTag('@montflow/TierLoadError', (error) =>
+        Effect.fail(
+          renderDiagnostic(
+            diagnostic({
+              code: error.code,
+              path: error.path,
+              field: 'tier',
+              problem: error.problem,
+              rerun: `mf-specs tier ${input.tier}`,
+              expected: error.expected,
+              actual: error.actual,
+              fix: error.fix,
+            }),
+          ),
+        ),
+      ),
+      Effect.catchCause((cause) =>
+        Effect.fail(failureText(cause, options.cwd, `mf-specs tier ${input.tier}`)),
+      ),
+    ),
+});
 
 /** Input for `spec_models`: read the catalogue or verify a spec's config. */
 export const SpecModelsInput = Schema.Struct({

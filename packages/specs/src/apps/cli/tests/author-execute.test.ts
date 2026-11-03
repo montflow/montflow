@@ -298,7 +298,7 @@ Vitest.describe('Cli.author runtime', () => {
       const loaded = yield* runAuthor(work, { request: 'Ship login' });
       Vitest.expect(loaded.name).toBe('spec-create');
       Vitest.expect(loaded.text).toContain('Ship login');
-      Vitest.expect(loaded.text).toContain('## 4. Size every task');
+      Vitest.expect(loaded.text).toContain('## 2. Appraise the complexity');
       Vitest.expect(loaded.skills).toStrictEqual(['montflow-create-specs']);
     }).pipe(Effect.provide(StoreLive)),
   );
@@ -366,7 +366,9 @@ Vitest.describe('Cli.execute runtime', () => {
         Vitest.expect(report.next).toContain('A001');
         Vitest.expect(report.prompt.text).toContain('ship-login');
         Vitest.expect(report.prompt.text).toContain('phase A');
-        Vitest.expect(report.prompt.text).toContain('budget is 1');
+        Vitest.expect(report.prompt.text).toContain(
+          'is the budget of the phase this session starts on',
+        );
         Vitest.expect(report.prompt.text).toContain('Guided run (the default)');
         Vitest.expect(report.prompt.text).toContain('Re-derive them when the session starts');
         Vitest.expect(report.prompt.text).not.toContain('Work only phase');
@@ -456,7 +458,9 @@ Vitest.describe('Cli.execute runtime', () => {
       Vitest.expect(report.budget).toBe(2);
       Vitest.expect(report.next).toContain('A002');
       Vitest.expect(report.next).not.toContain('A001');
-      Vitest.expect(report.prompt.text).toContain('budget is 2');
+      Vitest.expect(report.prompt.text).toContain(
+        'is the budget of the phase this session starts on',
+      );
       Vitest.expect(report.prompt.text).toContain('A002');
     }).pipe(Effect.provide(StoreLive)),
   );
@@ -632,7 +636,9 @@ Vitest.describe('Cli.execute runtime', () => {
       Vitest.expect(report.budget).toBe(1);
       Vitest.expect(report.next).toContain('budget 1');
       Vitest.expect(report.next).toContain('A099');
-      Vitest.expect(report.prompt.text).toContain('budget is 1');
+      Vitest.expect(report.prompt.text).toContain(
+        'is the budget of the phase this session starts on',
+      );
       Vitest.expect(report.prompt.text).not.toContain('below 0');
     }).pipe(Effect.provide(StoreLive)),
   );

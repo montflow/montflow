@@ -169,8 +169,22 @@ export const renderList = (report: ListReport, verbose: boolean): string => {
     if (errors > 0) parts.push(`\u2717 ${errors}`);
     if (warnings > 0) parts.push(`! ${warnings} warning${warnings === 1 ? '' : 's'}`);
     const verdict = parts.length === 0 ? '' : ` \u00b7 ${parts.join(' \u00b7 ')}`;
+    // A v2 phase record names a review decision; render the derived lock beside
+    // the lifecycle so a reader never mistakes a phase for locked or reviewed
+    // without the record saying so. A v1 store has no phase records and keeps
+    // the original line shape.
+    const recorded = (spec.phases ?? []).filter((phase) => phase.review !== undefined);
+    const locked = (spec.state?.phases ?? [])
+      .filter((phase) => phase.locked)
+      .map((phase) => phase.phase);
+    const lifecycle =
+      recorded.length === 0
+        ? ''
+        : ` \u00b7 locked ${locked.length === 0 ? 'none' : locked.join(',')} \u00b7 review ${recorded
+            .map((phase) => `${phase.phase}:${phase.review}`)
+            .join(',')}`;
     lines.push(
-      `${mark} ${spec.name}  ${declared} \u00b7 ${derived ?? 'unreadable'} \u00b7 ${counts}${verdict}`,
+      `${mark} ${spec.name}  ${declared} \u00b7 ${derived ?? 'unreadable'} \u00b7 ${counts}${lifecycle}${verdict}`,
     );
   }
   if (lines.length > 0) lines.push('');

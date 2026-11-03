@@ -6,7 +6,7 @@ checked as a whole against the `<PHASE>/<task>/<file>` layout.
 
 Pure — the caller supplies file paths and contents; this module never
 touches disk. Composes the per-file verifiers from `spec`, `task`,
-`gates`, `memory`, and `sizing`.
+`gates`, `memory`, `channel`, and `sizing`.
 
 ## Belongs here
 
@@ -27,6 +27,9 @@ touches disk. Composes the per-file verifiers from `spec`, `task`,
   failing a series that holds more rounds attributed to a phase than that
   budget, plus warning for a round with no phase attribution
 - Nesting the per-file issues under their path
+- Verifying every phase `BOARD.md` and task `MAILBOX.md` once all task ids are
+  known, so an addressee is judged against the whole spec (`channel` owns the
+  grammar and the `board.*`/`mail.*` codes)
 - Locks are derived by `lifecycle`: structure reports task completeness and the
   passed review rounds it receives, never a stored lock list
 

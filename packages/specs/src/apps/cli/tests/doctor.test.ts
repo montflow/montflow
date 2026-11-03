@@ -6,8 +6,10 @@ import { Effect } from 'effect';
 import {
   CREATE_SPEC_SKILL_NAME,
   SPEC_PROMPT_NAMES,
+  SPEC_SKILL_NAMES,
   runDoctor,
 } from '../../../modules/doctor/index.js';
+import { SPEC_TIER_NAMES } from '../../../modules/doctor/doctor.paths.module.js';
 import { doctorExitCode, renderDoctor, runDoctorRun } from '../index.js';
 
 /**
@@ -66,7 +68,9 @@ Vitest.describe('Cli.doctor runtime', () => {
       Vitest.expect(report).toContain('\u2717 spec skills and prompts are not current.');
       Vitest.expect(report).toContain('Run: mf-specs doctor');
       const lines = payloadLines(report);
-      Vitest.expect(lines).toHaveLength(5);
+      Vitest.expect(lines).toHaveLength(
+        SPEC_SKILL_NAMES.length + SPEC_PROMPT_NAMES.length + SPEC_TIER_NAMES.length,
+      );
       Vitest.expect(lines.every((line) => line.startsWith('\u2717'))).toBe(true);
       Vitest.expect(lines.some((line) => line.includes(`${CREATE_SPEC_SKILL_NAME}: `))).toBe(true);
       Vitest.expect(lines.some((line) => line.includes(`${CREATE_PROMPT_NAME}: `))).toBe(true);

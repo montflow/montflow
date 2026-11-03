@@ -3,7 +3,7 @@ name: montflow-find-specs
 description: Finds and filters montflow specs under .agents/@montflow/specs/ with the `mf-specs list` CLI (or `/specs list` in the OpenCode host), reporting each spec's derived lifecycle state. Use when an agent must answer "what is pending?", pick a spec to resume, or list specs by state.
 id: f21093485cea4b44
 author: Daniel Montilla
-version: 1.5.0
+version: 1.5.1
 license: MIT
 dependencies:
   - executing-skills
@@ -26,7 +26,8 @@ edits, or executes them.
 
 Run `mf-specs doctor` (or `bun run --cwd packages/specs cli doctor`).
 It installs `montflow-find-specs` and `montflow-create-specs` into
-`<repo>/.agents/skills/`. Idempotent — a present skill is left untouched.
+`<repo>/.agents/skills/`. Idempotent — a current skill is left untouched;
+`doctor` reports and repairs a stale copy whose files differ from the package.
 
 ## 2. Run `list`
 
@@ -61,14 +62,16 @@ One line per matched spec, then a matched-of-total summary:
 
 ```
 • montflow-project-structure  in-progress · inconsistent · 9 complete
-1 spec · 1 matched
+○ ship-login  in-progress · pending · 3 complete · 4 pending · locked A · review A:required,B:required
+2 specs · 2 matched
 ```
 
 Each line is `<mark> <name>  <declared> · <derived> · <task counts>`, plus a
-`· ✗ <n>` suffix when the spec fails mechanical verification. Derived states:
-`pending` (idle), `in-progress` (work has started), `blocked`, `complete`, or
-`inconsistent` (the spec contradicts itself). Drill into one spec with
-`status --name <spec>`; verify the whole root with `check`.
+`· locked <phases>` and `· review <phase>:<decision>,…` suffix when the spec has
+`PHASE.md` records, and `· ✗ <n>` when it fails mechanical verification. Derived
+states: `pending` (idle), `in-progress` (work has started), `blocked`,
+`complete`, or `inconsistent` (the spec contradicts itself). Drill into one spec
+with `status --name <spec>`; verify the whole root with `check`.
 
 ## 5. Resolve the Spec the Branch Names
 
@@ -119,11 +122,15 @@ dispatch `subagent` sessions from the orchestrator.
 
 # Reference
 
-- **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus
-  one directory per task (`TASK.md`, `MEMORY.md`, `GATES.md`).
+- **Specs**: `.agents/@montflow/specs/<name>/` — `SPEC.md` plus one directory per
+  phase (`PHASE.md`, `MEMORY.md`, `BOARD.md`, optional `GATES.md`), each holding
+  one directory per task (`TASK.md`, `MEMORY.md`, optional `GATES.md`,
+  `MAILBOX.md`).
 - **Commands**: `mf-specs list` (or `/specs list`), `mf-specs which [--branch <name>]`
   (or `/specs which`), and `mf-specs execute [--name <spec>] [--mode guided|autonomous]`
-  (or `/specs execute`) which loads the `spec-execute` prompt.
+  (or `/specs execute`) which loads the `spec-execute` prompt. `state` and
+  `status` show the phase's derived lock and review decision; `lock` confirms a
+  derived lock and writes nothing.
 - **Prompt**: `packages/specs/prompts/spec-execute.json` (`spec-execute`),
   doctor-installed into `.agents/@montflow/prompts/`; it declares this skill
   plus the review skills.

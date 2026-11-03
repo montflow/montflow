@@ -189,6 +189,31 @@ Vitest.describe('Lifecycle.verify runtime', () => {
     Vitest.expect(result).toStrictEqual({ valid: true, issues: [] });
   });
 
+  Vitest.it('rejects a complete v2 spec with an unlocked phase', () => {
+    const result = Lifecycle.verify({
+      status: 'complete',
+      reviewedPhases: [],
+      waivedPhases: [],
+      provenPhases: ['A'],
+      requireLocks: true,
+      tasks: [done, reviewDone],
+    });
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.message).toContain('1 phase is not locked');
+  });
+
+  Vitest.it('accepts a complete v2 spec whose every phase is locked', () => {
+    const result = Lifecycle.verify({
+      status: 'complete',
+      reviewedPhases: ['A'],
+      waivedPhases: [],
+      provenPhases: ['A'],
+      requireLocks: true,
+      tasks: [done, reviewDone],
+    });
+    Vitest.expect(result).toStrictEqual({ valid: true, issues: [] });
+  });
+
   Vitest.it('does not require locks to be a prefix', () => {
     const result = Lifecycle.verify({
       status: 'in-progress',

@@ -54,12 +54,29 @@ Vitest.describe('Phase.verifyPhaseFile', () => {
   });
 
   Vitest.it('flags a missing or placeholder objective', () => {
-    for (const objective of ['', 'TODO: <what>']) {
+    for (const objective of [
+      '',
+      'TODO: <what>',
+      'TODO: something',
+      'TBD',
+      'TBD: later',
+      'n/a',
+      'N/A: not applicable',
+    ]) {
       const result = Phase.verifyPhaseFile('A', phaseMarkdown({ objective }), context());
       Vitest.expect(result.issues).toContainEqual(
         Vitest.expect.objectContaining({ code: Phase.PHASE_CODES.objectiveMissing }),
       );
     }
+  });
+
+  Vitest.it('accepts a real objective', () => {
+    const result = Phase.verifyPhaseFile(
+      'A',
+      phaseMarkdown({ objective: 'Ship the review cycle policy and its tests.' }),
+      context(),
+    );
+    Vitest.expect(result.issues).toStrictEqual([]);
   });
 
   Vitest.it('flags a status mirror that disagrees with the tasks', () => {
@@ -213,6 +230,12 @@ const evidenceTree = (withResults: boolean) =>
         '## Requirements',
         '',
         '- Works.',
+        '',
+        '## Creation',
+        '',
+        '- tier: micro',
+        '- questions 0/0',
+        '- unresolved: none',
         '',
         '## Tasks',
         '',

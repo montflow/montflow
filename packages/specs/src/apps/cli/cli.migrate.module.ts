@@ -30,6 +30,7 @@ import {
   parseTaskFile,
   phaseOf,
   phaseRank,
+  sortKey,
 } from '../../modules/task/index.js';
 import { type Issue, issue } from '../../modules/verify/index.js';
 
@@ -51,6 +52,10 @@ import {
 export interface MigrationMove {
   readonly from: string;
   readonly to: string;
+  /** Present only when a colliding flat id was renumbered during the move. */
+  readonly oldId?: string | undefined;
+  /** The id the moved task receives after renumbering. */
+  readonly newId?: string | undefined;
 }
 
 /** A migration plan for one spec. */
@@ -161,7 +166,7 @@ export const planUpgrade = (snapshot: SpecSnapshot): UpgradePlan => {
         path: phasePath,
         content: renderPhaseFile({
           id: phase,
-          objective: `TODO: state what phase ${phase} must achieve.`,
+          objective: `Deliver the ${phase} phase work recorded by its migrated tasks.`,
           status,
           review: 'required',
           gate,
@@ -264,11 +269,40 @@ export const planMigration = (
 
   const moves = flat
     .map((dir) => {
-      const phase = parseTaskDirName(dir)?.phase ?? '';
-      return { from: dir, to: `${phase}/${dir}`, phase };
+      const parsed = parseTaskDirName(dir);
+      return {
+        from: dir,
+        phase: parsed?.phase ?? '',
+        name: parsed?.name ?? '',
+        id: parsed?.id ?? '',
+      };
     })
-    .toSorted((a, b) => phaseRank(a.phase) - phaseRank(b.phase) || a.from.localeCompare(b.from))
-    .map(({ from, to }) => ({ from, to }));
+    .toSorted((a, b) => phaseRank(a.phase) - phaseRank(b.phase) || sortKey(a.id) - sortKey(b.id))
+    .reduce<Array<MigrationMove>>((acc, entry) => {
+      const used = new Set(
+        acc
+          .filter((move) => move.to.startsWith(`${entry.phase}/`))
+          .map((move) => {
+            const leaf = move.to.slice(entry.phase.length + 1);
+            return Number(parseTaskDirName(leaf)?.id.slice(entry.phase.length) ?? NaN);
+          }),
+      );
+      const suffix = Number(entry.id.slice(entry.phase.length));
+      if (!used.has(suffix)) {
+        acc.push({ from: entry.from, to: `${entry.phase}/${entry.id}-${entry.name}` });
+        return acc;
+      }
+      let next = 1;
+      while (used.has(next)) next++;
+      const newId = `${entry.phase}${String(next).padStart(3, '0')}`;
+      acc.push({
+        from: entry.from,
+        to: `${entry.phase}/${newId}-${entry.name}`,
+        oldId: entry.id,
+        newId,
+      });
+      return acc;
+    }, []);
   return { kind: 'migrate', moves };
 };
 
@@ -279,13 +313,123 @@ export const withSpecVersion = (markdown: string, version: number): string => {
   if ((lines[0] ?? '').trim() !== '---') return markdown;
   const closing = lines.findIndex((line, index) => index > 0 && line.trim() === '---');
   if (closing === -1) return markdown;
-  const frontmatter = lines.slice(1, closing);
+  // v2 has no stored lock list: a surviving `locked-phases` field would be a
+  // stale authority no surface reads, so the upgrade deletes it.
+  const frontmatter = lines
+    .slice(1, closing)
+    .filter((entry) => version < 2 || !/^locked-phases\s*:/.test(entry.trim()));
   const line = `${SPEC_VERSION_FIELD}: ${version}`;
   const index = frontmatter.findIndex((entry) => /^spec-version\s*:/.test(entry.trim()));
   if (index === -1) frontmatter.push(line);
   else frontmatter[index] = line;
   return [lines[0] ?? '---', ...frontmatter, ...lines.slice(closing)].join(newline);
 };
+
+/** Replace one task's own frontmatter `id:` line. */
+const rewriteTaskId = (markdown: string, id: string): string => {
+  const newline = markdown.includes('\r\n') ? '\r\n' : '\n';
+  const lines = markdown.split(newline);
+  const closing =
+    (lines[0] ?? '').trim() === '---'
+      ? lines.findIndex((line, index) => index > 0 && line.trim() === '---')
+      : -1;
+  if (closing === -1) return markdown;
+  return lines
+    .map((line, index) =>
+      index > 0 && index < closing && /^id\s*:/.test(line.trim()) ? `id: ${id}` : line,
+    )
+    .join(newline);
+};
+
+/** Rewrite the SPEC.md rows a renumbering move renamed, matching id and name. */
+const rewriteSpecRowIds = (
+  markdown: string,
+  renames: ReadonlyArray<{ readonly oldId: string; readonly newId: string; readonly name: string }>,
+): string => {
+  const newline = markdown.includes('\r\n') ? '\r\n' : '\n';
+  return markdown
+    .split(newline)
+    .map((line) => {
+      const row = /^\|\s*([A-Z]{1,2}\d{3})\s*\|\s*(.+?)\s*\|/.exec(line.trim());
+      if (row === null) return line;
+      const rename = renames.find(
+        (candidate) => candidate.oldId === row[1] && candidate.name === row[2]?.trim(),
+      );
+      return rename === undefined ? line : line.replace(rename.oldId, rename.newId);
+    })
+    .join(newline);
+};
+
+/**
+ * Apply the id rewrites a renumbering move implies: the moved task's own `id`
+ * and its matching `SPEC.md` row. References to an ambiguous old id are left
+ * alone rather than guessed; the post-write verifier reports any that remain
+ * wrong. Saves each original so a later failure can restore it.
+ */
+const applyReids = (
+  store: SpecStore.Service,
+  root: string,
+  name: string,
+  moves: ReadonlyArray<MigrationMove>,
+): Effect.Effect<
+  { readonly writes: ReadonlyArray<string>; readonly originals: ReadonlyMap<string, string> },
+  SpecStore.StoreError
+> =>
+  Effect.gen(function* () {
+    const renames = moves.flatMap((move) => {
+      if (move.oldId === undefined || move.newId === undefined) return [];
+      const leaf = move.to.slice(move.to.lastIndexOf('/') + 1);
+      const taskName = parseTaskDirName(leaf)?.name ?? '';
+      return [{ oldId: move.oldId, newId: move.newId, name: taskName }];
+    });
+    if (renames.length === 0) return { writes: [], originals: new Map() };
+    const snapshot = yield* store.snapshot(root, name);
+    const originals = new Map<string, string>();
+    const writes: Array<string> = [];
+    const movedByPath = new Map(
+      moves
+        .filter((move) => move.oldId !== undefined && move.newId !== undefined)
+        .map((move) => [`${move.to}/TASK.md`, move.newId ?? '']),
+    );
+    for (const entry of snapshot.files) {
+      if ((entry.kind ?? 'file') !== 'file') continue;
+      const newId = movedByPath.get(entry.path);
+      const next =
+        newId !== undefined
+          ? rewriteTaskId(entry.content, newId)
+          : entry.path === 'SPEC.md'
+            ? rewriteSpecRowIds(entry.content, renames)
+            : entry.content;
+      if (next === entry.content) continue;
+      originals.set(entry.path, entry.content);
+      yield* store.write(root, name, [{ path: entry.path, content: next }]);
+      writes.push(entry.path);
+    }
+    return { writes, originals };
+  });
+
+/** Restore the files {@link applyReids} changed. */
+const rollbackReids = (
+  store: SpecStore.Service,
+  root: string,
+  name: string,
+  originals: ReadonlyMap<string, string>,
+): Effect.Effect<boolean> =>
+  Effect.gen(function* () {
+    let failed = false;
+    for (const [path, content] of originals) {
+      yield* store.write(root, name, [{ path, content }]).pipe(
+        Effect.matchEffect({
+          onFailure: () => {
+            failed = true;
+            return Effect.void;
+          },
+          onSuccess: () => Effect.void,
+        }),
+      );
+    }
+    return failed;
+  });
 
 /** Outcome for one spec in a migration run. */
 export interface MigrateSpecResult {
@@ -492,9 +636,17 @@ export const migrate = (
         }
       }
 
+      const reid: {
+        readonly writes: ReadonlyArray<string>;
+        readonly originals: ReadonlyMap<string, string>;
+      } =
+        plan.kind === 'migrate'
+          ? yield* applyReids(store, root, name, plan.moves)
+          : { writes: [], originals: new Map() };
       const afterMoves = yield* store.snapshot(root, name);
       const upgrade = planUpgrade(afterMoves);
       if (upgrade.kind === 'refused') {
+        const reidRollbackFailed = yield* rollbackReids(store, root, name, reid.originals);
         const rollbackFailed = yield* rollbackMoves(store, root, name, applied);
         results.push({
           name,
@@ -508,7 +660,7 @@ export const migrate = (
               : [
                   issue(
                     name,
-                    rollbackFailed
+                    reidRollbackFailed || rollbackFailed
                       ? 'Rollback incomplete; inspect the tree before retrying.'
                       : 'Migration rolled back.',
                   ),
@@ -520,13 +672,29 @@ export const migrate = (
       if (upgrade.kind === 'already') {
         const verified = verifySpecTree(afterMoves, NO_REVIEW);
         if (!verified.valid) {
-          results.push({ name, status: 'failed', moves: [], writes: [], issues: verified.issues });
+          const reidRollbackFailed = yield* rollbackReids(store, root, name, reid.originals);
+          const rollbackFailed = yield* rollbackMoves(store, root, name, applied);
+          results.push({
+            name,
+            status: 'failed',
+            moves: [],
+            writes: [],
+            issues: [
+              ...verified.issues,
+              issue(
+                name,
+                reidRollbackFailed || rollbackFailed
+                  ? 'Rollback incomplete; inspect the tree before retrying.'
+                  : 'Migration rolled back.',
+              ),
+            ],
+          });
         } else {
           results.push({
             name,
             status: plan.kind === 'migrate' ? 'migrated' : 'already',
             moves: plan.kind === 'migrate' ? plan.moves : [],
-            writes: [],
+            writes: reid.writes,
             issues: [],
           });
         }
@@ -538,7 +706,7 @@ export const migrate = (
           name,
           status: 'planned',
           moves: plan.kind === 'migrate' ? plan.moves : [],
-          writes: upgrade.writes.map((write) => write.path),
+          writes: [...reid.writes, ...upgrade.writes.map((write) => write.path)],
           issues: [],
         });
         continue;
@@ -566,6 +734,7 @@ export const migrate = (
           created,
           specBefore,
         );
+        const reidRollbackFailed = yield* rollbackReids(store, root, name, reid.originals);
         const moveRollbackFailed = yield* rollbackMoves(store, root, name, applied);
         results.push({
           name,
@@ -576,7 +745,7 @@ export const migrate = (
             ...verified.issues,
             issue(
               name,
-              upgradeRollbackFailed || moveRollbackFailed
+              upgradeRollbackFailed || moveRollbackFailed || reidRollbackFailed
                 ? 'Rollback incomplete after the upgraded tree failed verification; inspect the tree before retrying.'
                 : 'Migration rolled back: the upgraded tree failed verification.',
             ),
@@ -589,7 +758,7 @@ export const migrate = (
         name,
         status: plan.kind === 'migrate' ? 'migrated' : 'upgraded',
         moves: plan.kind === 'migrate' ? plan.moves : [],
-        writes: upgrade.writes.map((write) => write.path),
+        writes: [...reid.writes, ...upgrade.writes.map((write) => write.path)],
         issues: [],
       });
     }
@@ -673,6 +842,12 @@ export const migrateCommand = Command.make(
       Flag.withDescription('Print the plan without writing anything.'),
       Flag.withDefault(false),
     ),
+    includeComplete: Flag.Boolean('include-complete').pipe(
+      Flag.withDescription(
+        'Also upgrade a complete (frozen) spec. Without it, a complete spec is skipped.',
+      ),
+      Flag.withDefault(false),
+    ),
     verbose: verboseFlag,
   },
   (config) =>
@@ -690,6 +865,7 @@ export const migrateCommand = Command.make(
           name: opt(config.name),
           all: config.all,
           dryRun: config.dryRun,
+          includeComplete: config.includeComplete,
         });
         yield* Console.log(renderMigrate(report));
         if (migrateFailed(report)) {

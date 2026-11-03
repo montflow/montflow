@@ -11,8 +11,10 @@ import { SpecStore } from '../../../services/index.js';
 import {
   DEFAULT_ROOT,
   diagnoseCause,
+  execute as executeEngine,
   listModels,
   models,
+  readTier,
   sizingConfig,
   verifyModels,
 } from '../../cli/index.js';
@@ -22,10 +24,12 @@ import {
   SpecExecuteInput,
   SpecModelsInput,
   SpecSizingInput,
+  SpecTierInput,
   specAuthorTool,
   specExecuteTool,
   specModelsTool,
   specSizingTool,
+  specTierTool,
   type SpecToolOptions,
 } from '../index.js';
 
@@ -178,7 +182,7 @@ Vitest.describe('spec_author tool', () => {
       Vitest.expect(run?.model).toBe('fixture/default');
       Vitest.expect(run?.cwd).toBe(work.dir);
       Vitest.expect(run?.text).toContain('Ship login');
-      Vitest.expect(run?.text).toContain('## 4. Size every task');
+      Vitest.expect(run?.text).toContain('## 2. Appraise the complexity');
       Vitest.expect(run?.skills).toStrictEqual(['montflow-create-specs']);
     }).pipe(Effect.provide(Platform)),
   );
@@ -237,7 +241,7 @@ Vitest.describe('spec_execute tool', () => {
       Vitest.expect(run?.model).toBe('fixture/default');
       Vitest.expect(run?.text).toContain('ship-login');
       Vitest.expect(run?.text).toContain('phase A');
-      Vitest.expect(run?.text).toContain('budget is 1');
+      Vitest.expect(run?.text).toContain('is the budget of the phase this session starts on');
       Vitest.expect(run?.text).toContain('Ask only for');
       Vitest.expect(run?.text).toContain('Keep it small');
       Vitest.expect(run?.skills).toStrictEqual([
@@ -245,6 +249,34 @@ Vitest.describe('spec_execute tool', () => {
         'montflow-adversarial-review',
         'montflow-addressing-adversarial-review',
       ]);
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('dispatches the same prompt text and derived phase as the binary engine', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login'));
+      yield* preparePrompts(work);
+      const fake = recorder();
+
+      const tool = specExecuteTool(options(work, { execute: fake.execute }));
+      yield* runTool(tool, { name: 'ship-login', phase: 'A', model: 'fixture/model' });
+
+      const engine = yield* executeEngine(work.path.join(work.dir, DEFAULT_ROOT), {
+        name: 'ship-login',
+        phase: 'A',
+        workspace: work.dir,
+      }).pipe(
+        Effect.provide(
+          Layer.merge(
+            Layer.provide(SpecStore.Default, Platform),
+            Layer.provide(PromptStore.Default, Platform),
+          ),
+        ),
+      );
+      Vitest.expect(fake.runs[0]?.text).toBe(engine.prompt.text);
+      Vitest.expect(engine.phase).toBe('A');
+      Vitest.expect(engine.state).toContain('phase A');
     }).pipe(Effect.provide(Platform)),
   );
 
@@ -654,6 +686,64 @@ Vitest.describe('spec_models tool', () => {
       // A blank name means "no name", exactly as on the CLI listing path.
       const blank = yield* runTool(tool, { action: 'list', name: '   ' });
       Vitest.expect(blank).toContain('"default": "fixture/known"');
+    }).pipe(Effect.provide(Platform)),
+  );
+});
+
+/** Copy one packaged tier into a throwaway workspace's installed path. */
+const installTier = (work: Work, tier: string) =>
+  Effect.gen(function* () {
+    const shipped = work.path.resolve(import.meta.dirname, '../../../../tiers', `${tier}.md`);
+    const bytes = yield* work.fs.readFileString(shipped);
+    const target = work.path.join(work.dir, '.agents', '@montflow', 'tiers', `${tier}.md`);
+    yield* work.fs.makeDirectory(work.path.dirname(target), { recursive: true });
+    yield* work.fs.writeFileString(target, bytes);
+  });
+
+Vitest.describe('spec_tier tool', () => {
+  Vitest.it.effect('decodes the tier input', () =>
+    Effect.gen(function* () {
+      const decoded = yield* Schema.decodeUnknownEffect(SpecTierInput)({ tier: 'micro' });
+      Vitest.expect(decoded.tier).toBe('micro');
+      const failure = yield* Schema.decodeUnknownEffect(SpecTierInput)({}).pipe(Effect.flip);
+      Vitest.expect(String(failure)).toContain('tier');
+    }),
+  );
+
+  Vitest.it.effect('returns the installed tier verbatim, byte-for-byte with the binary', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* installTier(work, 'micro');
+      const tool = specTierTool({ cwd: work.dir });
+      const reply = yield* runTool(tool, { tier: 'micro' });
+      const binary = yield* readTier({ tier: 'micro', workspace: work.dir }).pipe(
+        Effect.provide(Platform),
+      );
+      Vitest.expect(reply).toBe(binary);
+      Vitest.expect(reply).toContain('# Tier: micro');
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('refuses an unknown tier exactly as the binary does', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* installTier(work, 'micro');
+      const tool = specTierTool({ cwd: work.dir });
+      const failure = yield* runTool(tool, { tier: 'split' }).pipe(Effect.flip);
+      Vitest.expect(failure).toContain('code     tier.unknown');
+      Vitest.expect(failure).toContain('expected micro, standard, full');
+      Vitest.expect(failure).toContain('actual   split');
+      Vitest.expect(failure).toContain('next     mf-specs tier split');
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('refuses a missing installed file with the doctor repair', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      const tool = specTierTool({ cwd: work.dir });
+      const failure = yield* runTool(tool, { tier: 'standard' }).pipe(Effect.flip);
+      Vitest.expect(failure).toContain('code     tier.missing');
+      Vitest.expect(failure).toContain('Run mf-specs doctor');
     }).pipe(Effect.provide(Platform)),
   );
 });

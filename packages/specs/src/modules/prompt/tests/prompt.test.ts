@@ -85,11 +85,42 @@ Vitest.describe('Prompt.load runtime', () => {
       const loaded = yield* load(root, 'spec-create', { request: 'Ship login' });
       Vitest.expect(loaded.name).toBe('spec-create');
       Vitest.expect(loaded.text).toContain('Ship login');
-      Vitest.expect(loaded.text).toContain('## 4. Size every task');
-      Vitest.expect(loaded.text).not.toContain('complexity tier');
-      Vitest.expect(loaded.text).not.toContain('spec-appraiser');
+      Vitest.expect(loaded.text).toContain('## 2. Appraise the complexity');
+      Vitest.expect(loaded.text).toContain('spec-appraiser');
+      Vitest.expect(loaded.text).toContain('mf-specs tier <tier>');
+      Vitest.expect(loaded.text).toContain('## 6. Record the creation run');
+      Vitest.expect(loaded.text).toContain('questions <n>/<budget>');
+      Vitest.expect(loaded.text).toContain('self-reported');
       Vitest.expect(loaded.skills).toStrictEqual(['montflow-create-specs']);
       Vitest.expect(loaded.prompt.skills).toStrictEqual(['montflow-create-specs']);
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('names the orchestrator-only set and the advisory creation record', () =>
+    Effect.gen(function* () {
+      const root = yield* scopedRoot;
+      yield* doctor(root);
+
+      const create = yield* load(root, 'spec-create', { request: 'Ship login' });
+      Vitest.expect(create.text).toContain('self-reported');
+      Vitest.expect(create.text).toContain('questions <n>/<budget>');
+      Vitest.expect(create.text).toContain('unresolved');
+
+      const execute = yield* load(root, 'spec-execute', EXECUTE_VALUES);
+      for (const verb of [
+        'claim --start',
+        'claim --block',
+        'claim --close',
+        'claim --release',
+        'gate run',
+        'mail',
+      ]) {
+        Vitest.expect(execute.text).toContain(verb);
+      }
+      Vitest.expect(execute.text).toContain('orchestrator-only');
+      Vitest.expect(execute.text).toContain(
+        'resets an `in-progress` or `blocked` task to `pending`',
+      );
     }).pipe(Effect.provide(StoreLive)),
   );
 
@@ -119,7 +150,7 @@ Vitest.describe('Prompt.load runtime', () => {
       Vitest.expect(loaded.text).toContain('ship-login');
       Vitest.expect(loaded.text).toContain('state in-progress');
       Vitest.expect(loaded.text).toContain('A001-implement ready');
-      Vitest.expect(loaded.text).toContain('budget is 2');
+      Vitest.expect(loaded.text).toContain('is the budget of the phase this session starts on');
       Vitest.expect(loaded.text).toContain('Guided run (the default)');
       Vitest.expect(loaded.text).not.toContain('Autonomous run');
       Vitest.expect(loaded.text).not.toContain('Ask only for');
@@ -210,21 +241,24 @@ Vitest.describe('Prompt.load runtime', () => {
     }).pipe(Effect.provide(StoreLive)),
   );
 
-  Vitest.it.effect('refuses a fourth review round and names the budget', () =>
+  Vitest.it.effect('renders the review-cycle policy with the phase budget', () =>
     Effect.gen(function* () {
       const root = yield* scopedRoot;
       yield* doctor(root);
 
       const tiny = yield* load(root, 'spec-execute', { ...EXECUTE_VALUES, reviewBudget: '1' });
-      Vitest.expect(tiny.text).toContain('budget is 1');
-      Vitest.expect(tiny.text).toContain('A round past the budget is refused');
-      Vitest.expect(tiny.text).toContain('each series gets exactly one round');
-      Vitest.expect(tiny.text).toContain('- Phase: <PHASE>');
-      Vitest.expect(tiny.text).toContain('one cycle is one round in every series');
+      Vitest.expect(tiny.text).toContain('`1` is the budget of the phase this session starts on');
+      Vitest.expect(tiny.text).toContain('review decide');
+      Vitest.expect(tiny.text).toContain('Autonomous allows one overflow per phase per series');
+      Vitest.expect(tiny.text).toContain('fix-and-stop');
+      Vitest.expect(tiny.text).toContain('- Disposition: minor-deferred');
+      Vitest.expect(tiny.text).toContain(
+        'Never compute rounds, open counts, or severities by hand',
+      );
 
       const large = yield* load(root, 'spec-execute', { ...EXECUTE_VALUES, reviewBudget: '3' });
-      Vitest.expect(large.text).toContain('budget is 3');
-      Vitest.expect(large.text).toContain('exceeds the hard cap of 3');
+      Vitest.expect(large.text).toContain('`3` is the budget of the phase this session starts on');
+      Vitest.expect(large.text).toContain('`tiny` 1, `small` 2, `medium` 3, `large` 3');
     }).pipe(Effect.provide(StoreLive)),
   );
 

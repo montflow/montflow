@@ -36,6 +36,11 @@ export interface Input {
   /** Parsed tasks (tasks whose TASK.md failed to parse are excluded). */
   readonly tasks: ReadonlyArray<TaskEntry>;
   /**
+   * True when a v2 spec's `complete` status must agree with its derived locks.
+   * A frozen v1 record keeps the status-only rule it shipped with.
+   */
+  readonly requireLocks?: boolean | undefined;
+  /**
    * True when a live session is bound to this spec. Supplied by the caller
    * (the sessions store), never derived from the spec files. Drives the
    * `pending` vs `in-progress` distinction.
@@ -121,6 +126,23 @@ export const verify = (input: Input): Result => {
           `Spec status is 'complete' but ${open.length} ${plural(open.length, 'task is', 'tasks are')} not complete: ${open.map((task) => `${task.id} (${task.status})`).join(', ')}.`,
         ),
       );
+    }
+    if (input.requireLocks === true) {
+      const unlocked = phaseSummaries(
+        input.tasks,
+        new Set(input.reviewedPhases),
+        new Set(input.waivedPhases),
+        new Set(input.provenPhases),
+      ).filter((phase) => !phase.locked);
+      if (unlocked.length > 0) {
+        issues.push(
+          issue(
+            'status',
+            `Spec status is 'complete' but ${unlocked.length} ${plural(unlocked.length, 'phase is', 'phases are')} not locked: ${unlocked.map((phase) => `${phase.phase} (${phase.complete}/${phase.total} complete)`).join(', ')}.`,
+            "Finish the phase's gates and close its review round, or fix its waiver.",
+          ),
+        );
+      }
     }
   } else if (allComplete) {
     issues.push(issue('status', "All tasks are complete, but spec status is 'in-progress'."));

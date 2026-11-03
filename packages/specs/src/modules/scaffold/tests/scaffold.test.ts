@@ -18,6 +18,7 @@ Vitest.describe('renderSpecScaffold', () => {
     Vitest.expect(result.phase).toBe('A');
     Vitest.expect(result.taskCount).toBe(1);
     Vitest.expect(result.files.map((file) => file.path).toSorted()).toStrictEqual([
+      'A/A001-implement/GATES.md',
       'A/A001-implement/MEMORY.md',
       'A/A001-implement/TASK.md',
       'A/MEMORY.md',
@@ -74,7 +75,10 @@ Vitest.describe('renderSpecScaffold', () => {
       tasks: [{ name: 'build', type: 'execution', gates: true }],
     });
     const gates = result.files.find((file) => file.path === 'A/A001-build/GATES.md');
-    Vitest.expect(gates?.content).toContain("REPLACE with this task's own verification commands");
+    Vitest.expect(gates?.content).toContain(
+      "Replace the example command with this task's real verification command.",
+    );
+    Vitest.expect(gates?.content).toContain('(mechanical)');
     Vitest.expect(gates?.content).not.toContain('formatting passes');
     Vitest.expect(verifySpecTree({ name: base.name, files: result.files }, NO_REVIEW).valid).toBe(
       true,
@@ -90,8 +94,8 @@ Vitest.describe('renderSpecScaffold', () => {
       ],
     });
     const table = result.files.find((file) => file.path === 'SPEC.md')?.content ?? '';
-    Vitest.expect(table).toContain('| A001 | build | execution | pending | No |');
-    Vitest.expect(table).toContain('| A002 | verify | execution | pending | No |');
+    Vitest.expect(table).toContain('| A001 | build | execution | pending | Yes |');
+    Vitest.expect(table).toContain('| A002 | verify | execution | pending | Yes |');
     Vitest.expect(table).not.toContain('| A099 |');
     const task = result.files.find((file) => file.path === 'A/A002-verify/TASK.md')?.content ?? '';
     Vitest.expect(task).toContain('depends-on: A001');

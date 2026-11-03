@@ -177,6 +177,9 @@ const renderTask = (
     '',
   ].join('\n');
 
+/** Task types whose tier contract requires a `GATES.md`. */
+const GATED_TASK_TYPES = new Set(['execution', 'defect', 'interruptor']);
+
 /** Render the `MEMORY.md` template every task directory carries. */
 const renderMemory = (): string =>
   [
@@ -211,9 +214,10 @@ const renderMemory = (): string =>
  */
 const renderGates = (): string =>
   [
-    '## Stage 0: Verification',
+    '## Stage 0: Verification (mechanical)',
+    "command: echo 'replace with the command that proves this task'",
     '',
-    "- [ ] REPLACE with this task's own verification commands",
+    "- [ ] Replace the example command with this task's real verification command.",
     '',
   ].join('\n');
 
@@ -234,11 +238,13 @@ export const renderSpecScaffold = (input: ScaffoldSpecInput): ScaffoldResult => 
   }
   const reviewerProfiles = input.reviewerProfiles ?? [];
   const numbered = input.tasks.map((task, index) => ({ id: taskId(phase, index + 1), task }));
+  const gated = (task: ScaffoldTask): boolean =>
+    task.gates === true || GATED_TASK_TYPES.has(task.type);
   const rows: Array<TableRow> = numbered.map(({ id, task }) => ({
     id,
     name: task.name,
     type: task.type,
-    gates: task.gates === true,
+    gates: gated(task),
   }));
 
   const files: Array<SpecFileEntry> = [
@@ -247,7 +253,7 @@ export const renderSpecScaffold = (input: ScaffoldSpecInput): ScaffoldResult => 
       path: `${phase}/${PHASE_FILE}`,
       content: renderPhaseFile({
         id: phase,
-        objective: `TODO: state what phase ${phase} must achieve.`,
+        objective: `Deliver the ${phase} phase work described by its tasks.`,
         status: 'pending',
         review: 'required',
         gate: 'none',
@@ -255,11 +261,20 @@ export const renderSpecScaffold = (input: ScaffoldSpecInput): ScaffoldResult => 
     },
     { path: `${phase}/${PHASE_MEMORY_FILE}`, content: renderPhaseMemory() },
   ];
+  const workIds = numbered.filter(({ task }) => task.type !== 'review').map(({ id }) => id);
   for (const { id, task } of numbered) {
     const dir = `${phase}/${dirName(id, task.name)}`;
-    files.push({ path: `${dir}/TASK.md`, content: renderTask(id, task, reviewerProfiles) });
+    // The review waits on every non-review task in the phase.
+    const dependsOn =
+      task.type === 'review'
+        ? [...new Set([...(task.dependsOn ?? []), ...workIds])]
+        : task.dependsOn;
+    files.push({
+      path: `${dir}/TASK.md`,
+      content: renderTask(id, { ...task, dependsOn }, reviewerProfiles),
+    });
     files.push({ path: `${dir}/MEMORY.md`, content: renderMemory() });
-    if (task.gates === true) files.push({ path: `${dir}/GATES.md`, content: renderGates() });
+    if (gated(task)) files.push({ path: `${dir}/GATES.md`, content: renderGates() });
   }
 
   return { files, phase, taskCount: numbered.length };

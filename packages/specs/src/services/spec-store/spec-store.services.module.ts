@@ -1,7 +1,13 @@
 import { Context, Data, Effect, FileSystem, Layer, Path, Predicate } from 'effect';
 import {
+  type RoundDeferral,
+  type RoundFinding,
+  type RoundOverflow,
   type SeriesRoundSnapshot,
   type SeriesSnapshot,
+  roundDeferral,
+  roundFindings,
+  roundOverflow,
   roundPassed,
   roundPhase,
 } from '../../modules/review-link/index.js';
@@ -22,6 +28,16 @@ export class StoreError extends Data.TaggedError('@montflow/SpecStoreError')<{
   /** The original platform failure, preserved for the CLI's cause chain. */
   readonly cause?: unknown;
 }> {}
+
+/** A round snapshot being assembled with only the fields it actually carries. */
+interface MutableRoundSnapshot {
+  round: string;
+  passed: boolean;
+  phase?: string;
+  findings?: ReadonlyArray<RoundFinding>;
+  deferral?: RoundDeferral;
+  overflow?: RoundOverflow;
+}
 
 /** Filesystem surface the CLI needs: list specs, snapshot one spec, write a new tree. */
 export interface Impl {
@@ -358,7 +374,15 @@ const make = Effect.gen(function* () {
           const text = yield* fs.readFileString(target).pipe(Effect.mapError(fail(target)));
           const phase = roundPhase(text);
           const passed = roundPassed(text);
-          rounds.push(phase === undefined ? { round, passed } : { round, phase, passed });
+          const findings = roundFindings(text);
+          const deferral = roundDeferral(text);
+          const overflow = roundOverflow(text);
+          const roundSnapshot: MutableRoundSnapshot = { round, passed };
+          if (phase !== undefined) roundSnapshot.phase = phase;
+          if (findings.length > 0) roundSnapshot.findings = findings;
+          if (deferral !== undefined) roundSnapshot.deferral = deferral;
+          if (overflow !== undefined) roundSnapshot.overflow = overflow;
+          rounds.push(roundSnapshot);
         }
         series.push({ name: entry, rounds });
       }

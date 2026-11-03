@@ -8,6 +8,7 @@ import {
   specExecuteTool,
   specModelsTool,
   specSizingTool,
+  specTierTool,
 } from './apps/server/index.js';
 import { SpecStore } from './services/index.js';
 
@@ -19,7 +20,7 @@ export const COMMAND_NAME = 'specs';
 
 /** Help text shown for the slash command. */
 export const COMMAND_DESCRIPTION =
-  'Specs: check [--name <spec>] [--verbose] [--strict] | status --name <spec> | state --name <spec> | next --name <spec> | resolve --name <spec> --task <id> | sizing --name <spec> --task <id> [--verbose|--human] | models [--provider <id>] [--json] [--catalog <path>] [--verify [--name <spec>]] | which [--branch <name>] [--dir <path>] | list [--pending | --status <states>] [--verbose] | create --name <spec> [--description <text>] [--author <name>] [--workspace-type <in-place|worktree>] [--tasks <name[:type[:gates[:size]]],…>] | author --request <text> [--notes <text>] | execute [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous] | sizing-config [--scope repo|spec|phase] [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous] (no --scope asks which layer; --name implies spec and --name --phase implies phase).';
+  'Specs: check [--name <spec>] [--verbose] [--strict] | status --name <spec> | state --name <spec> | next --name <spec> | resolve --name <spec> --task <id> | sizing --name <spec> --task <id> [--verbose|--human] | models [--provider <id>] [--json] [--catalog <path>] [--verify [--name <spec>]] | which [--branch <name>] [--dir <path>] | list [--pending | --status <states>] [--verbose] | create --name <spec> [--description <text>] [--author <name>] [--workspace-type <in-place|worktree>] [--tasks <name[:type[:gates[:size]]],…>] | migrate --name <spec>|--all [--dry-run] [--include-complete] | init --name <spec> --tier <micro|standard|full> [--phase <objective>]… | new-phase --name <spec> --objective <line> | new-task --name <spec> --phase <id> --task <name> --type <type> | stamp [--format instant|date] | tier <micro|standard|full> | claim --name <spec> --task <id> | lock --name <spec> --phase <id> | waiver --name <spec> --phase <id> (--waived --reason <line> | --required) | gate run|record --name <spec> --phase <id> | mail --name <spec> --to <task-id|all> --text <text> | author --request <text> [--notes <text>] | execute [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous] | sizing-config [--scope repo|spec|phase] [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous] (no --scope asks which layer; --name implies spec and --name --phase implies phase).';
 
 /** Platform services the store, prompts, and git reads need. */
 const Platform = Layer.merge(NodeFileSystem.layer, NodePath.layer);
@@ -64,6 +65,7 @@ export default entry(ID, (ports) =>
     yield* ports.tool.add(defineTool(specExecuteTool(toolOptions)));
     yield* ports.tool.add(defineTool(specSizingTool(toolOptions)));
     yield* ports.tool.add(defineTool(specModelsTool({ cwd: ports.cwd, model: ports.model })));
+    yield* ports.tool.add(defineTool(specTierTool({ cwd: ports.cwd })));
     yield* ports.command.register({
       name: COMMAND_NAME,
       description: COMMAND_DESCRIPTION,

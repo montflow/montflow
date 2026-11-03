@@ -43,7 +43,13 @@ export const phaseMarkdown = (fixture: PhaseFixture = {}): string => {
 
 /** A classified phase gate with one mechanical stage. */
 export const mechanicalPhaseGate = (stage = 0): string =>
-  [`## Stage ${stage}: Verify the phase (mechanical)`, '', '- [ ] Suite passes.', ''].join('\n');
+  [
+    `## Stage ${stage}: Verify the phase (mechanical)`,
+    'command: bun run test',
+    '',
+    '- [ ] Suite passes.',
+    '',
+  ].join('\n');
 
 /** One passing result line for a stage. */
 export const passingResult = (stage = 0): string =>

@@ -1,5 +1,24 @@
 # Changelog
 
+## [2.13.1] - 2026-11-03
+
+### Changed
+
+- The layout section documents the v2 phase directory (`PHASE.md`, `MEMORY.md`, `BOARD.md`, optional `GATES.md`/`GATE-RESULTS.jsonl`) and the task files (`TASK.md`, `MEMORY.md`, optional `GATES.md`/`MAILBOX.md`/`GATE-RESULTS.jsonl`); a phase is no longer described as a pure task container
+- The phase rules name `mf-specs lock` as the confirmation verb that stores nothing
+
+## [2.13.0] - 2026-11-03
+
+### Added
+
+- The complexity tier contract: `micro`, `standard`, and `full` with the phase range, exploration rule, work-task ceiling, review default, waiver policy, and question budget; `mf-specs tier <tier>` loads exactly one shipped tier file
+- Tier-aware authoring with `mf-specs init --tier`, the `## Creation` record (`tier`, self-reported `questions <n>/<budget>`, unresolved decisions), and `mf-specs waiver` for the phase review decision
+
+### Changed
+
+- The scaffold step prefers `init`; `create` remains the tier-agnostic scaffold, and no phase has a reserved review task
+- The split verdict is the exact `verdict`/`cut`/`count`/`specs`/`slug`/`tier`/`scope`/`evidence` shape
+
 ## [2.12.0] - 2026-11-03
 
 ### Changed

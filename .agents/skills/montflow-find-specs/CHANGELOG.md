@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1] - 2026-11-03
+
+### Changed
+
+- The reference and output sections describe the v2 phase tree and the `locked` / `review` columns that a v2 spec appends to `list`
+- The reference names `state`/`status` and the confirmation-only `lock` verb
+
 ## [1.5.0] - 2026-10-26
 
 ### Added
