@@ -99,6 +99,20 @@ worktree and branch name) to the `spec-create` prompt. B003 remains the
 historical record; H001 supersedes its tier default without editing the frozen
 task.
 
+Phase I closes the read path. The standard ships prompts that create, execute,
+and size a spec, but none that tells a human or agent where the spec stands.
+`mf-specs status` prints a panel for a caller that already knows the name, and
+nothing turns that panel into a report, a diagnosis of what blocks dispatch, or
+a recommended next command. The `spec-status` prompt is the read-only
+counterpart to `spec-execute`: it takes one spec from the same `source: specs`
+picker (branch guess preselected, unfinished specs first), reads the derived
+state, ready set, review budget, and verification findings from the existing
+commands, and reports what is true, what blocks dispatch, and what to run next.
+It writes nothing and never dispatches a worker. I001 fixes the report
+contract, I002 ships the prompt through the doctor payload, and I003 exposes it
+on the binary, slash, and host tool surfaces with the same no-guess name
+resolution as `execute`.
+
 ## Requirements
 
 - `Issue` carries a severity with warnings defaulting to non-fatal, a `--strict` promotion, and a `fix` field on par with the prompts package's richer issue shape.
@@ -145,6 +159,12 @@ task.
 - A duplicated `depends-on` id is an error, never silently normalized, matching the duplicate `reviewer-profiles` rule.
 - A `related-tasks` entry must resolve to a task in the spec and must not name the task itself.
 - Every dependency finding carries a stable code, an actionable fix, and a fixture; no spec in the store gains a finding when the rules land.
+- The read path ships as the `spec-status` prompt: one required `name` variable with the shared `source: specs` picker, so the branch guess is preselected and unfinished specs sort before complete ones, plus one optional `focus`.
+- The status prompt reports only derived truth. It consumes `mf-specs status`, `state`, `next`, `check`, and the review series; it never recomputes readiness, locks, budgets, ids, or timestamps itself.
+- The rendered report names the declared status, derived state, active phase, locked phases, ready set, phase review budget, verification result and blockers, and the exact next command. `inconsistent`, blocked, complete, and no-active-phase specs each get an explicit terminal line rather than a guessed action.
+- The status prompt is read-only: it writes no `SPEC.md`, `TASK.md`, `MEMORY.md`, or review record, changes no status or lock, and dispatches no worker. When work remains it hands off to `spec-execute`.
+- The prompt ships through `packages/specs/payload.json` and the doctor, passes `mf-prompts verify`, and the installed copy matches the packaged bytes. Every binary, slash, and host entry point renders the same text for the same inputs.
+- With no explicit name, the status entry point resolves the spec through the shared `which` rule. A detached HEAD, missing candidate, or ambiguous match fails with the candidates and asks the user; it never picks one.
 
 ## Tasks
 
@@ -190,3 +210,7 @@ task.
 | H003 | rewrite-spec-create-for-rigor-and-isolation | execution | pending | Yes |
 | H004 | wire-author-entrypoints             | execution   | pending | Yes   |
 | H099 | review-phase                        | review      | pending | No    |
+| I001 | decide-status-prompt-contract       | planning    | pending | No    |
+| I002 | implement-status-prompt             | execution   | pending | Yes   |
+| I003 | wire-status-entrypoints             | execution   | pending | Yes   |
+| I099 | review-phase                        | review      | pending | No    |
