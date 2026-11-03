@@ -55,6 +55,7 @@ Vitest.describe('Cli.parseCliArgs runtime', () => {
       kind: 'Verify',
       name: 'commit',
       all: false,
+      strict: false,
       dir: undefined,
     });
   });
@@ -64,6 +65,17 @@ Vitest.describe('Cli.parseCliArgs runtime', () => {
       kind: 'Verify',
       name: undefined,
       all: true,
+      strict: false,
+      dir: undefined,
+    });
+  });
+
+  Vitest.it('parses verify --strict as an error-promoting run', () => {
+    Vitest.expect(Cli.parseCliArgs('verify commit --strict')).toStrictEqual({
+      kind: 'Verify',
+      name: 'commit',
+      all: false,
+      strict: true,
       dir: undefined,
     });
   });
@@ -73,6 +85,7 @@ Vitest.describe('Cli.parseCliArgs runtime', () => {
       kind: 'Verify',
       name: undefined,
       all: true,
+      strict: false,
       dir: undefined,
     });
   });

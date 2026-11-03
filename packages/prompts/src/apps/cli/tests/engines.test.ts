@@ -253,9 +253,11 @@ Vitest.describe('Engines over the store', () => {
       Vitest.expect(bare.issues).toStrictEqual([]);
 
       // Store exists with `effect` only: `missing-skill` is a named warning.
-      yield* Effect.promise(() =>
-        mkdir(join(root, '.agents', 'skills', 'effect'), { recursive: true }),
-      );
+      yield* Effect.promise(async () => {
+        const dir = join(root, '.agents', 'skills', 'effect');
+        await mkdir(dir, { recursive: true });
+        await writeFile(join(dir, 'SKILL.md'), '# effect\n', 'utf8');
+      });
       const warned = yield* Engines.verify({ cwd: root }, 'audit');
       Vitest.expect(warned.valid).toBe(true);
       const miss = warned.issues.find((issue) => issue.field === 'skills');
@@ -281,9 +283,11 @@ Vitest.describe('Engines over the store', () => {
         skills: ['effect', 'missing-skill'],
         model: '',
       });
-      yield* Effect.promise(() =>
-        mkdir(join(root, '.agents', 'skills', 'effect'), { recursive: true }),
-      );
+      yield* Effect.promise(async () => {
+        const dir = join(root, '.agents', 'skills', 'effect');
+        await mkdir(dir, { recursive: true });
+        await writeFile(join(dir, 'SKILL.md'), '# effect\n', 'utf8');
+      });
 
       const report = yield* Engines.verifyAll({ cwd: root });
       Vitest.expect(report.issueCount).toBe(0);
@@ -306,9 +310,11 @@ Vitest.describe('Engines over the store', () => {
         skills: ['effect', 'missing-skill'],
         model: '',
       });
-      yield* Effect.promise(() =>
-        mkdir(join(root, '.agents', 'skills', 'effect'), { recursive: true }),
-      );
+      yield* Effect.promise(async () => {
+        const dir = join(root, '.agents', 'skills', 'effect');
+        await mkdir(dir, { recursive: true });
+        await writeFile(join(dir, 'SKILL.md'), '# effect\n', 'utf8');
+      });
 
       const entries = yield* Engines.list({ cwd: root }, { status: 'valid' });
       Vitest.expect(entries.map((entry) => entry.prompt.name)).toStrictEqual(['audit']);
