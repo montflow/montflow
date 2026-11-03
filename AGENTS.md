@@ -74,14 +74,12 @@ aliases for frozen records.
   `bun run hooks:install`, bypass with `git push --no-verify` or `LEFTHOOK=0`.
 - Utility verifies, each runnable alone: `mf-release:check`,
   `mf-skills:check`, `mf-prompts:check`, `mf-specs:check`,
-  `mf-profiles:check`, `mf-reviews:check`, `mf-references:check`,
-  `mf-naming:check`. They verify release metadata (CLI versions, fixed
-  group, tags, changelogs) and this repo's own artifacts (`.agents/skills`,
-  `.agents/@montflow/prompts`, `.agents/@montflow/specs`,
-  `.agents/@montflow/profiles`, `.agents/@montflow/reviews`,
-  `.agents/@montflow/references`) plus packaged-skill freshness; `:naming` fails
-  when a live file carries a retired pre-OpenCode name (frozen history and the
-  migration constant excepted).
+  `mf-profiles:check`, `mf-reviews:check`, `mf-references:check`. They verify
+  release metadata (CLI versions, fixed group, tags, changelogs) and this
+  repo's own artifacts (`.agents/skills`, `.agents/@montflow/prompts`,
+  `.agents/@montflow/specs`, `.agents/@montflow/profiles`,
+  `.agents/@montflow/reviews`, `.agents/@montflow/references`) plus
+  packaged-skill freshness.
 - `release.yml` is separate: it gates publishing, not pushes, and keeps its own
   per-package conditions.
 
