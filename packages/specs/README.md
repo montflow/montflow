@@ -87,12 +87,14 @@ explicit `migrate --name <spec> --include-complete` upgrades it. Relabeling
   entry (each `name[:type[:gates[:size]]][:scope=path,path]`, with `size`
   defaulting to `medium` when the token is absent or blank). Separate tasks with
   `;` (`first:execution;build`), or with a comma when the current entry has no
-  `scope=` field (`first:execution,second:execution`); a comma inside `scope=`
-  stays in that task's scope list (`first:execution:scope=app,lib`). Because a
-  colon-less fragment after `scope=` could otherwise be a silently swallowed
-  task name, an entry that continues a scope list and then has another fragment
-  is refused with the ambiguity named — write `first:execution:scope=app;build`
-  instead. A sixth token is an error rather than silently ignored. Every
+  `scope=` field (`first:execution,second:execution`); everything after
+  `scope=` up to the next `;` is that task's scope list, so
+  `first:execution:scope=app,lib,docs` is one task with `write-scope: app,lib,docs`
+  — the same reading `init` and the scope verifier use. The one refused shape is
+  a comma fragment that itself carries a `:` after a scope list, because it is
+  task-shaped and could start a new task; the refusal names both readings — write
+  `first:execution:scope=app,build;second:execution` instead. A sixth token is an
+  error rather than silently ignored. Every
   generated `TASK.md` carries a `write-scope:`: `none` for a review,
   exploratory, or planning task and `.` for execution work, overridden by
   `scope=`. It emits a review task only when `--tasks` requests `name:review`;

@@ -52,6 +52,7 @@ const task = (
     'size: small',
     'depends-on:',
     'related-tasks:',
+    'write-scope: none',
     ...extra,
     `status: ${status}`,
     '---',

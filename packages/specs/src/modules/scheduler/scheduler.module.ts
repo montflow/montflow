@@ -12,6 +12,7 @@ import {
   type RunPhase,
   type RunState,
   SchedulerWriteError,
+  isTerminal,
   lastAttempt,
   leaseExpired,
   listRunStates,
@@ -307,6 +308,22 @@ const leaseOf = (owner: RunOwner, now: number, config: GateConfig): RunAttempt =
   };
 };
 
+/**
+ * True when two run states describe the same latest attempt in the same phase.
+ * Used by {@link scheduleRun}'s waiter path to revalidate, under the run lock,
+ * that the attempt it consumed is still the one a reused record would describe.
+ */
+const sameAttempt = (left: RunState, right: RunState): boolean => {
+  const leftLast = lastAttempt(left);
+  const rightLast = lastAttempt(right);
+  return (
+    left.state === right.state &&
+    left.attempts.length === right.attempts.length &&
+    leftLast?.startedAt === rightLast?.startedAt &&
+    leftLast?.owner.session === rightLast?.owner.session
+  );
+};
+
 /** What one bounded, locked transition tells the requester to do next. */
 type Step =
   | {
@@ -480,8 +497,9 @@ export const scheduleRun = <E, R, E2 = E, R2 = R>(
      * the pointer to its proof. Both writes hold {@link RUNS_LOCK_FILE}, so no
      * claim can land between the ownership check and the append: a finisher
      * whose attempt was reclaimed appends no record and moves no pointer, and a
-     * waiter always consumes the attempt it registered against. The lock covers
-     * one record line, never the command.
+     * waiter's reused record is only appended while the attempt it consumed is
+     * still the latest terminal one. The lock covers one record line, never the
+     * command.
      *
      * A failed append writes a truthful `failed` state with no pointer — never a
      * pass `check` cannot prove — and then fails the request with the append's
@@ -584,41 +602,74 @@ export const scheduleRun = <E, R, E2 = E, R2 = R>(
         return outcome;
       });
 
-    /** Consume the owner's recorded outcome (a pass is reused; a failure is not). */
+    /**
+     * Consume the terminal attempt's recorded outcome as a waiter. The state
+     * re-read, the reused record, and the waiter removal all happen under
+     * {@link RUNS_LOCK_FILE}: only the attempt a requester consumed may append,
+     * and only while it is still the latest terminal attempt. A newer claim that
+     * landed in the meantime therefore appends no stale reused record — the
+     * requester returns no outcome and re-enters the wait/consume path to take
+     * the current attempt's result instead.
+     */
     const consume = (
       state: RunState,
       inflight: number,
-    ): Effect.Effect<ScheduleOutcome, E2, FileSystem.FileSystem | R2> =>
-      Effect.gen(function* () {
-        // A terminal state left by an older scheduler, or the truthful `failed`
-        // state left by a failed append, carries no `resultIndex`. Fall back to
-        // the attempt's own exit fields so a waiter still gets the outcome
-        // instead of hanging.
-        const record =
-          state.resultIndex === undefined
-            ? undefined
-            : yield* readRecordAt(
-                request.workspace,
-                state.resultPath ?? request.resultPath,
-                state.resultIndex,
-              );
-        const attempt = lastAttempt(state);
-        const source = record?.at ?? attempt?.finishedAt;
-        const outcome = outcomeOf(yield* Clock.currentTimeMillis, {
-          state: terminal(state.state),
-          exit: record?.exit ?? attempt?.exit ?? 1,
-          output: record?.output ?? '',
-          at: instant(yield* Clock.currentTimeMillis),
-          durationMs: record?.durationMs ?? attempt?.durationMs ?? 0,
-          reused: true,
-          source,
-          attempt: state.attempts.length,
-          inflight,
-        });
-        yield* persist(outcome);
-        yield* dropWaiter(request);
-        return outcome;
-      });
+    ): Effect.Effect<
+      ScheduleOutcome | undefined,
+      E2 | SchedulerLockError,
+      FileSystem.FileSystem | R2
+    > =>
+      withRuntimeLock(
+        request.workspace,
+        RUNS_LOCK_FILE,
+        Effect.gen(function* () {
+          const current = yield* readRunState(request.workspace, request.key);
+          // A terminal state left by an older scheduler, or the truthful `failed`
+          // state left by a failed append, carries no `resultIndex`. Fall back to
+          // the attempt's own exit fields so a waiter still gets the outcome
+          // instead of hanging — but only while the consumed attempt is still the
+          // latest terminal one.
+          if (current === undefined || !isTerminal(current) || !sameAttempt(current, state)) {
+            return undefined;
+          }
+          const record =
+            current.resultIndex === undefined
+              ? undefined
+              : yield* readRecordAt(
+                  request.workspace,
+                  current.resultPath ?? request.resultPath,
+                  current.resultIndex,
+                );
+          const attempt = lastAttempt(current);
+          const source = record?.at ?? attempt?.finishedAt;
+          const now = yield* Clock.currentTimeMillis;
+          const outcome = outcomeOf(now, {
+            state: terminal(current.state),
+            exit: record?.exit ?? attempt?.exit ?? 1,
+            output: record?.output ?? '',
+            at: instant(now),
+            durationMs: record?.durationMs ?? attempt?.durationMs ?? 0,
+            reused: true,
+            source,
+            attempt: current.attempts.length,
+            inflight,
+          });
+          yield* persist(outcome);
+          // The append and the waiter removal share the critical section the
+          // owner used for its own record, so the line index `appendResult`
+          // computed cannot race a newer attempt's append either.
+          yield* writeRunState(request.workspace, {
+            ...current,
+            waiters: current.waiters.filter((session) => session !== request.owner.session),
+          });
+          return outcome;
+        }),
+      ).pipe(
+        Effect.catchIf(
+          (error): error is ClaimLockError => error instanceof ClaimLockError,
+          (error) => Effect.fail(new SchedulerLockError({ path: error.path })),
+        ),
+      );
 
     while (true) {
       const next = yield* step();
@@ -657,7 +708,9 @@ export const scheduleRun = <E, R, E2 = E, R2 = R>(
         );
       }
       if (next.kind === 'reuse') {
-        return yield* consume(next.state, next.inflight);
+        const consumed = yield* consume(next.state, next.inflight);
+        if (consumed !== undefined) return consumed;
+        continue;
       }
       waited = true;
       lastPhase = next.phase;
@@ -683,31 +736,15 @@ export const scheduleRun = <E, R, E2 = E, R2 = R>(
       const current = yield* readRunState(request.workspace, request.key);
       if (
         current !== undefined &&
-        current.state !== 'running' &&
-        current.state !== 'waiting' &&
+        isTerminal(current) &&
         current.waiters.includes(request.owner.session) &&
         (observedAttempt === undefined || current.attempts.length >= observedAttempt)
       ) {
-        return yield* consume(current, 0);
+        const consumed = yield* consume(current, 0);
+        if (consumed !== undefined) return consumed;
       }
     }
   });
-
-/** Remove one session from a run's waiter list. */
-const dropWaiter = (request: ScheduleRequest): Effect.Effect<void, never, FileSystem.FileSystem> =>
-  withRuntimeLock(
-    request.workspace,
-    RUNS_LOCK_FILE,
-    Effect.gen(function* () {
-      const state = yield* readRunState(request.workspace, request.key);
-      if (state === undefined) return;
-      if (!state.waiters.includes(request.owner.session)) return;
-      yield* writeRunState(request.workspace, {
-        ...state,
-        waiters: state.waiters.filter((session) => session !== request.owner.session),
-      });
-    }),
-  ).pipe(Effect.orElseSucceed(() => undefined));
 
 /** Keep one running attempt's lease fresh until it finishes. */
 const heartbeatLoop = (

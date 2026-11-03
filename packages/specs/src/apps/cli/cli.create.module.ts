@@ -491,7 +491,7 @@ export const createCommand = Command.make(
     ),
     tasks: Flag.String('tasks').pipe(
       Flag.withDescription(
-        'Tasks separated by `;`, each name[:type[:gates[:size]]][:scope=path,path]. A comma separates tasks only when the entry has no scope= field; inside scope= it stays in that scope. Use `;` before a following bare-name task (e.g. `first:execution:scope=app;build`). Default: implement.',
+        "Tasks separated by `;`, each name[:type[:gates[:size]]][:scope=path,path]. A comma separates tasks only when the entry has no scope= field; everything after scope= up to the next `;` is that task's scope list, so `scope=app,lib,docs` is one task. Use `;` before a following task-shaped entry (e.g. `first:execution:scope=app;build:execution`). Default: implement.",
       ),
       Flag.optional,
     ),
@@ -519,7 +519,7 @@ export const createCommand = Command.make(
                   path: config.name,
                   field: '--tasks',
                   problem: split.problem,
-                  fix: 'Separate tasks with a semicolon (`first:execution:scope=app;build`), not a comma after a scope= field.',
+                  fix: 'Separate a following task with a semicolon (`first:execution:scope=app,build;second:execution`), not a comma.',
                   rerun: `mf-specs create --name ${config.name}`,
                 }),
               ],

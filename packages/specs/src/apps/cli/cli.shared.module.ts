@@ -704,13 +704,14 @@ export type ScaffoldTaskSplit =
 
 /**
  * Split a `--tasks` value into task specs. `;` always starts a new task. A
- * comma starts a new task when the current entry has no `scope=` field (or the
- * next fragment carries a `:`), so `first:execution,second:execution` is two
- * tasks. Inside a `scope=` field a comma belongs to that scope, so
- * `first:execution:scope=app,lib` is one task. A colon-less fragment after a
- * `scope=` field that is followed by another fragment is ambiguous — it could
- * be a dropped task before the next entry — and is refused with the `;` form
- * named, never silently merged. `init`'s repeated `--task` flag is unaffected.
+ * comma starts a new task when the current entry has no `scope=` field, so
+ * `first:execution,second:execution` is two tasks. Everything after a `scope=`
+ * field up to the next `;` is that task's scope list, so any number of
+ * comma-separated paths stays in one task (`first:execution:scope=app,lib,docs`,
+ * the same reading `init` and the scope verifier use). The one refused shape is
+ * a comma fragment that carries a `:` — a task-shaped entry after a scope list,
+ * which could be read either way — and the diagnostic names both readings and
+ * the `;` form. `init`'s repeated `--task` flag is unaffected.
  * @param value - raw `--tasks` value
  * @returns one raw task spec per entry, or the ambiguity diagnostic
  */
@@ -728,22 +729,22 @@ export const scaffoldTaskSpecs = (value: string | undefined): ScaffoldTaskSplit 
       .filter((part) => part !== '');
     let current = '';
     let inScope = false;
-    for (const [index, fragment] of fragments.entries()) {
+    for (const fragment of fragments) {
       if (current === '') {
         current = fragment;
         inScope = fragment.includes('scope=');
         continue;
       }
-      if (!inScope || fragment.includes(':')) {
+      if (!inScope) {
         specs.push(current);
         current = fragment;
         inScope = fragment.includes('scope=');
         continue;
       }
-      if (index < fragments.length - 1) {
+      if (fragment.includes(':')) {
         return {
           ok: false,
-          problem: `'${current},${fragment}' is ambiguous: after a scope= field, '${fragment}' could be another scope path or a new task. Separate tasks with ';' — '${current};${fragment}' — so a scope list cannot swallow one.`,
+          problem: `'${current},${fragment}' is ambiguous: '${fragment}' is task-shaped but follows a scope= field, so it could start a new task or the scope list could end before it. Separate tasks with ';' — '${current};${fragment}' — so the boundary is explicit.`,
         };
       }
       current = `${current},${fragment}`;

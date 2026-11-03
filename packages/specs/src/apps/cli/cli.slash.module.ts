@@ -271,7 +271,7 @@ export const slashCreate = (context: SlashContext): SlashEffect => {
       path: name,
       field: '--tasks',
       problem: parsed.taskError,
-      fix: 'Separate tasks with a semicolon (`first:execution:scope=app;build`), not a comma after a scope= field.',
+      fix: 'Separate a following task with a semicolon (`first:execution:scope=app,build;second:execution`), not a comma.',
       rerun: `mf-specs create --name ${name}`,
     });
     return Effect.succeed({ output: renderDiagnostic(found), ok: false });

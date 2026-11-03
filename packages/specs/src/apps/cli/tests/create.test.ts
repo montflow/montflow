@@ -351,13 +351,26 @@ Vitest.describe('Cli.scaffoldTaskSpecs grammar', () => {
     });
   });
 
-  Vitest.it('refuses a colon-less fragment a scope list could have swallowed', () => {
+  Vitest.it('keeps a three-or-more-path scope list in one task, like init', () => {
+    Vitest.expect(scaffoldTaskSpecs('first:execution:scope=app,lib,docs')).toStrictEqual({
+      ok: true,
+      specs: ['first:execution:scope=app,lib,docs'],
+    });
+    Vitest.expect(
+      scaffoldTaskSpecs('first:execution:scope=app,lib,docs;second:execution'),
+    ).toStrictEqual({
+      ok: true,
+      specs: ['first:execution:scope=app,lib,docs', 'second:execution'],
+    });
+  });
+
+  Vitest.it('refuses a task-shaped fragment after a scope list and names the ; form', () => {
     const split = scaffoldTaskSpecs('first:execution:scope=app,build,second:execution');
     Vitest.expect(split.ok).toBe(false);
     if (!split.ok) {
       Vitest.expect(split.problem).toContain('ambiguous');
-      Vitest.expect(split.problem).toContain("after a scope= field, 'build'");
-      Vitest.expect(split.problem).toContain('first:execution:scope=app;build');
+      Vitest.expect(split.problem).toContain("'second:execution' is task-shaped");
+      Vitest.expect(split.problem).toContain('first:execution:scope=app,build;second:execution');
     }
   });
 });
@@ -367,7 +380,7 @@ Vitest.describe('Cli.runSlash create', () => {
     Effect.gen(function* () {
       const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
       const created = yield* runSlash(
-        'create --name ship-login --description "Ship it" --author Tester --tasks build:execution:gates::scope=app,explore:execution:gates::scope=lib',
+        'create --name ship-login --description "Ship it" --author Tester --tasks build:execution:gates::scope=app;explore:execution:gates::scope=lib',
         root,
       ).pipe(Effect.provide(stubLayer(specs)));
       Vitest.expect(created.ok).toBe(true);
@@ -414,7 +427,26 @@ Vitest.describe('Cli.runSlash create', () => {
     }),
   );
 
-  Vitest.it.effect('refuses an ambiguous fragment after a scope list and names the ; form', () =>
+  Vitest.it.effect('keeps a three-path comma-separated scope inside one --tasks entry', () =>
+    Effect.gen(function* () {
+      const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
+      const created = yield* runSlash(
+        'create --name scope-three --tasks first:execution:scope=app,lib,docs',
+        root,
+      ).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(created.ok).toBe(true);
+      const files = specs.get('scope-three') ?? [];
+      const tasks = files.filter((file) => file.path.endsWith('/TASK.md'));
+      Vitest.expect(tasks.map((file) => file.path)).toStrictEqual(['A/A001-first/TASK.md']);
+      Vitest.expect(tasks[0]?.content).toContain('write-scope: app,lib,docs');
+      const checked = yield* runSlash('check --name scope-three', root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(checked.ok).toBe(true);
+    }),
+  );
+
+  Vitest.it.effect('refuses a task-shaped fragment after a scope list and names the ; form', () =>
     Effect.gen(function* () {
       const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
       const created = yield* runSlash(
@@ -423,7 +455,8 @@ Vitest.describe('Cli.runSlash create', () => {
       ).pipe(Effect.provide(stubLayer(specs)));
       Vitest.expect(created.ok).toBe(false);
       Vitest.expect(created.output).toContain('ambiguous');
-      Vitest.expect(created.output).toContain('first:execution:scope=app;build');
+      Vitest.expect(created.output).toContain("'second:execution' is task-shaped");
+      Vitest.expect(created.output).toContain('first:execution:scope=app,build;second:execution');
       Vitest.expect(specs.has('ambiguous')).toBe(false);
     }),
   );
@@ -440,6 +473,21 @@ Vitest.describe('Cli.runSlash create', () => {
       const tasks = files.filter((file) => file.path.endsWith('/TASK.md'));
       Vitest.expect(tasks.map((file) => file.path)).toStrictEqual(['A/A001-first/TASK.md']);
       Vitest.expect(tasks[0]?.content).toContain('write-scope: app,lib');
+    }),
+  );
+
+  Vitest.it.effect('init and create agree on a three-path scope', () =>
+    Effect.gen(function* () {
+      const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
+      const created = yield* runSlash(
+        'init --name init-three --tier micro --task A:first:execution:medium:scope=app,lib,docs',
+        root,
+      ).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(created.ok).toBe(true);
+      const files = specs.get('init-three') ?? [];
+      const tasks = files.filter((file) => file.path.endsWith('/TASK.md'));
+      Vitest.expect(tasks.map((file) => file.path)).toStrictEqual(['A/A001-first/TASK.md']);
+      Vitest.expect(tasks[0]?.content).toContain('write-scope: app,lib,docs');
     }),
   );
 

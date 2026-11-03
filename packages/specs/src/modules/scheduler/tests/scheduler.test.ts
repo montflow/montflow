@@ -79,6 +79,7 @@ const request = (
     readonly session?: string;
     readonly reuse?: boolean;
     readonly waitTimeoutSeconds?: number;
+    readonly pollMs?: number;
     readonly resultPath?: string;
   } = {},
 ) => ({
@@ -92,7 +93,7 @@ const request = (
   owner: { session: overrides.session ?? 's1', task: 'A001', pid: process.pid },
   reuse: overrides.reuse ?? true,
   resultPath: overrides.resultPath ?? 'results.jsonl',
-  pollMs: 10,
+  pollMs: overrides.pollMs ?? 10,
   waitTimeoutSeconds: overrides.waitTimeoutSeconds,
 });
 
@@ -717,6 +718,217 @@ Vitest.describe('Scheduler truthfulness and durability', () => {
       Vitest.expect(third.reused).toBe(true);
       Vitest.expect(third.state).toBe('passed');
       Vitest.expect(third.output).toBe('b-ok');
+    }).pipe(Effect.provide(Live), Effect.scoped),
+  );
+
+  Vitest.it.live(
+    'a slow reused record cannot land after a newer attempt and unprove its pass',
+    () =>
+      Effect.gen(function* () {
+        const dir = yield* workspace;
+        const fs = yield* FileSystem.FileSystem;
+        const config: GateConfig = { ...DEFAULT_GATE_CONFIG, heavy: { lanes: 2, inFlight: 2 } };
+        const key = 'gate-v1:waiter-race';
+        const consuming = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        // A holds the key until the waiter is registered, so W always sees a
+        // live attempt regardless of scheduler load.
+        // A fails; W registers as a waiter while A still runs and consumes the
+        // terminal failure. Its append is slow, the same device the F23
+        // regression uses to model a paused or slow `persist`.
+        const ownerA = yield* scheduleRun(
+          request(dir, { key, config, session: 's1' }),
+          Deferred.await(release).pipe(Effect.as({ exit: 1, output: 'a-failed', timedOut: false })),
+          persistStage(dir, 's1'),
+        ).pipe(Effect.forkChild);
+        let claimed: RunState | undefined;
+        for (let tries = 0; tries < 100 && claimed === undefined; tries += 1) {
+          yield* Effect.sleep(10);
+          claimed = (yield* listRunStates(dir)).find(
+            (state) => state.key === key && state.state === 'running',
+          );
+        }
+        Vitest.expect(claimed?.attempts[0]?.owner.session).toBe('s1');
+        const waiter = yield* scheduleRun(
+          // A slow poll makes the ordering deterministic: A finishes inside W's
+          // post-registration sleep, so W's next poll observes the terminal
+          // failure and consumes it instead of claiming another attempt.
+          request(dir, { key, config, session: 's2', waitTimeoutSeconds: 5, pollMs: 1000 }),
+          ok('w-ok'),
+          (outcome: ScheduleOutcome) =>
+            outcome.reused
+              ? Deferred.succeed(consuming, undefined).pipe(
+                  Effect.andThen(Effect.sleep(300)),
+                  Effect.andThen(persistStage(dir, 's2')(outcome)),
+                )
+              : persistStage(dir, 's2')(outcome),
+        ).pipe(Effect.forkChild);
+        let registered: RunState | undefined;
+        for (let tries = 0; tries < 300 && registered === undefined; tries += 1) {
+          yield* Effect.sleep(10);
+          registered = (yield* listRunStates(dir)).find(
+            (state) => state.key === key && state.waiters.includes('s2'),
+          );
+        }
+        Vitest.expect(registered?.waiters).toContain('s2');
+        yield* Deferred.succeed(release, undefined);
+        // C starts once W's reused append is under way. The run lock must make C's
+        // claim wait for it, so W's line can never land after C's pass.
+        for (let tries = 0; tries < 300; tries += 1) {
+          if (yield* Deferred.isDone(consuming)) break;
+          yield* Effect.sleep(10);
+        }
+        Vitest.expect(yield* Deferred.isDone(consuming)).toBe(true);
+        const ownerC = yield* scheduleRun(
+          request(dir, { key, config, session: 's3' }),
+          ok('c-ok'),
+          persistStage(dir, 's3'),
+        ).pipe(Effect.forkChild);
+        const [first, second, third] = yield* Effect.all([
+          Fiber.join(ownerA),
+          Fiber.join(waiter),
+          Fiber.join(ownerC),
+        ]);
+        Vitest.expect(first.state).toBe('failed');
+        Vitest.expect(second.reused).toBe(true);
+        Vitest.expect(second.state).toBe('failed');
+        Vitest.expect(second.output).toBe('a-failed');
+        Vitest.expect(third.reused).toBe(false);
+        Vitest.expect(third.attempt).toBe(2);
+        Vitest.expect(third.state).toBe('passed');
+        const states = yield* listRunStates(dir);
+        Vitest.expect(states[0]?.state).toBe('passed');
+        Vitest.expect(states[0]?.attempts).toHaveLength(2);
+        const resultsText = yield* fs.readFileString(`${dir}/results.jsonl`);
+        const records = parseGateResults(resultsText);
+        Vitest.expect(records.issues).toStrictEqual([]);
+        const resultIndex = states[0]?.resultIndex;
+        Vitest.expect(resultIndex).toBe(2);
+        // The effective record is C's pass, the state says passed, the state
+        // points at the effective record, and the waiter's stale reused failure
+        // sits before C's line instead of deciding `check`.
+        const pointerRecord = records.records[resultIndex ?? -1];
+        const effective = latestResults(records.records).get(0);
+        Vitest.expect(pointerRecord?.owner).toBe('s3');
+        Vitest.expect(effective?.owner).toBe('s3');
+        Vitest.expect(effective?.verdict).toBe('pass');
+        Vitest.expect(effective?.output).toBe('c-ok');
+        Vitest.expect(effective).toStrictEqual(pointerRecord);
+        const proof = verifyGateResults({
+          gates: [
+            '## Stage 0: Static (mechanical)',
+            'command: printf ok',
+            'scope: repo',
+            '',
+            '- [ ] The proof passes.',
+            '',
+          ].join('\n'),
+          results: resultsText,
+          complete: true,
+          owner: 'A001',
+        });
+        Vitest.expect(proof.issues).toStrictEqual([]);
+        Vitest.expect(proof.valid).toBe(true);
+      }).pipe(Effect.provide(Live), Effect.scoped),
+  );
+
+  Vitest.it.live('a reused pass cannot land after a forced rerun and mask its failure', () =>
+    Effect.gen(function* () {
+      const dir = yield* workspace;
+      const fs = yield* FileSystem.FileSystem;
+      const config: GateConfig = { ...DEFAULT_GATE_CONFIG, heavy: { lanes: 2, inFlight: 2 } };
+      const key = 'gate-v1:waiter-mask';
+      const consuming = yield* Deferred.make<void>();
+      const release = yield* Deferred.make<void>();
+      const ownerA = yield* scheduleRun(
+        request(dir, { key, config, session: 's1' }),
+        Deferred.await(release).pipe(Effect.as({ exit: 0, output: 'a-ok', timedOut: false })),
+        persistStage(dir, 's1'),
+      ).pipe(Effect.forkChild);
+      let claimed: RunState | undefined;
+      for (let tries = 0; tries < 100 && claimed === undefined; tries += 1) {
+        yield* Effect.sleep(10);
+        claimed = (yield* listRunStates(dir)).find(
+          (state) => state.key === key && state.state === 'running',
+        );
+      }
+      Vitest.expect(claimed?.attempts[0]?.owner.session).toBe('s1');
+      const waiter = yield* scheduleRun(
+        request(dir, { key, config, session: 's2', waitTimeoutSeconds: 5 }),
+        ok('w-ok'),
+        (outcome: ScheduleOutcome) =>
+          outcome.reused
+            ? Deferred.succeed(consuming, undefined).pipe(
+                Effect.andThen(Effect.sleep(300)),
+                Effect.andThen(persistStage(dir, 's2')(outcome)),
+              )
+            : persistStage(dir, 's2')(outcome),
+      ).pipe(Effect.forkChild);
+      let registered: RunState | undefined;
+      for (let tries = 0; tries < 300 && registered === undefined; tries += 1) {
+        yield* Effect.sleep(10);
+        registered = (yield* listRunStates(dir)).find(
+          (state) => state.key === key && state.waiters.includes('s2'),
+        );
+      }
+      Vitest.expect(registered?.waiters).toContain('s2');
+      yield* Deferred.succeed(release, undefined);
+      for (let tries = 0; tries < 300; tries += 1) {
+        if (yield* Deferred.isDone(consuming)) break;
+        yield* Effect.sleep(10);
+      }
+      Vitest.expect(yield* Deferred.isDone(consuming)).toBe(true);
+      // C forces a fresh attempt with `--no-reuse` and fails. Its line must be
+      // the last one, so a reused pass cannot mask the failure in `check`.
+      const ownerC = yield* scheduleRun(
+        request(dir, { key, config, session: 's3', reuse: false }),
+        Effect.succeed({ exit: 9, output: 'c-failed', timedOut: false }),
+        persistStage(dir, 's3'),
+      ).pipe(Effect.forkChild);
+      const [first, second, third] = yield* Effect.all([
+        Fiber.join(ownerA),
+        Fiber.join(waiter),
+        Fiber.join(ownerC),
+      ]);
+      Vitest.expect(first.state).toBe('passed');
+      Vitest.expect(second.reused).toBe(true);
+      Vitest.expect(second.state).toBe('passed');
+      Vitest.expect(second.output).toBe('a-ok');
+      Vitest.expect(third.reused).toBe(false);
+      Vitest.expect(third.attempt).toBe(2);
+      Vitest.expect(third.state).toBe('failed');
+      const states = yield* listRunStates(dir);
+      Vitest.expect(states[0]?.state).toBe('failed');
+      Vitest.expect(states[0]?.attempts).toHaveLength(2);
+      const resultsText = yield* fs.readFileString(`${dir}/results.jsonl`);
+      const records = parseGateResults(resultsText);
+      Vitest.expect(records.issues).toStrictEqual([]);
+      const resultIndex = states[0]?.resultIndex;
+      Vitest.expect(resultIndex).toBe(2);
+      const pointerRecord = records.records[resultIndex ?? -1];
+      const effective = latestResults(records.records).get(0);
+      Vitest.expect(pointerRecord?.owner).toBe('s3');
+      Vitest.expect(effective?.owner).toBe('s3');
+      Vitest.expect(effective?.verdict).toBe('fail');
+      Vitest.expect(effective?.output).toBe('c-failed');
+      Vitest.expect(effective).toStrictEqual(pointerRecord);
+      // The state says failed and the ledger's effective record agrees, so no
+      // false green: a complete owner stays unproven until it actually passes.
+      const proof = verifyGateResults({
+        gates: [
+          '## Stage 0: Static (mechanical)',
+          'command: printf ok',
+          'scope: repo',
+          '',
+          '- [ ] The proof passes.',
+          '',
+        ].join('\n'),
+        results: resultsText,
+        complete: true,
+        owner: 'A001',
+      });
+      Vitest.expect(proof.valid).toBe(false);
+      Vitest.expect(proof.issues.map((issue) => issue.code)).toStrictEqual(['gate.unproven']);
     }).pipe(Effect.provide(Live), Effect.scoped),
   );
 
