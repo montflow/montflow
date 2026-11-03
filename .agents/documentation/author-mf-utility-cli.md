@@ -77,7 +77,7 @@ Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`;
 
 ### Verification gate
 
-- Each CLI backs `mf:check:<domain>` in root `package.json`.
+- Each CLI backs `mf-<domain>:check` in root `package.json`.
 - `mf:check` composes all scopes; `mf:gate:fast` and `mf:gate` run it.
 - Root scripts are named `[tool]:[action]:[scope]`; omit the scope to run every scope.
 
@@ -93,7 +93,7 @@ Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`;
 4. Write `binary.apps.module.ts` `rootCommand` with the applicable canonical verbs; add `main.ts` entry.
 5. Write `slash.apps.module.ts` hand-rolled parser + `run` + `register`; reuse engines/renderers; register it on the server plugin entry (`src/server.ts`).
 6. If the package ships skills: add `doctor` (install/verify into `<root>/.agents/skills/`); when skills are bundled, `build:cli` prepends `generate:payload`.
-7. Add `mf:check:<domain>` root script; add it to `mf:check`.
+7. Add `mf-<domain>:check` root script; add it to `mf:check`.
 
 ## Verify
 
@@ -102,13 +102,13 @@ Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`;
 - `bun run --cwd packages/<domain> cli doctor --check --dir $PWD` exits 0 healthy, 1 otherwise.
 - `bun run --cwd packages/<domain> cli verify --all` (or `check`) exits non-zero on invalid store.
 - `bun run --cwd packages/<domain> test` and `bun run --cwd packages/<domain> ts:check` pass.
-- `bun run mf:check:<domain>` passes.
+- `bun run mf-<domain>:check` passes.
 
 ## Scoped invocation
 
 Every `mf-*` CLI documents one single-artifact form, run from the workspace
 root with `--dir $PWD`. A check is scoped to the artifact you changed; the
-whole-store forms (`--all`, `mf:check:<domain>`, `mf:check`, `mf:gate`) belong
+whole-store forms (`--all`, `mf-<domain>:check`, `mf:check`, `mf:gate`) belong
 to CI, cross-scope changes, or an explicit request.
 
 | Package | Single artifact | Whole store |

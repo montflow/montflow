@@ -55,7 +55,7 @@ against the tree that ships, not the flat tree that main happens to hold today.
   tests cover a store that holds phase directories.
 - **Reconcile the plan and docs.** Update this spec's text and the B/C tasks for
   the merged repository: current package names (`packages/specs`, `profiles`,
-  `prompts`), current gate scripts (`mf:check:*`), and main's shipped verbs. The
+  `prompts`), current gate scripts (`mf-<tool>:check`), and main's shipped verbs. The
   conflict resolution and anything intentionally dropped from main are recorded
   in `MEMORY.md`.
 - **Accept `size: none` for completed records.** A `complete` task may declare `size: none` instead of a real size. `none` is a record opt-out, never a dispatch target: `status`, `next`, `resolve`, and `sizing` skip it without resolving a model. An unfinished task that declares `none` fails, and the complete-task missing-size fix points at `none`.
@@ -71,4 +71,4 @@ against the tree that ships, not the flat tree that main happens to hold today.
 - [ ] `mf-specs status`, `state`, `next`, `list`, and the TUI picker agree on the active phase and derived lock state for this spec
 - [ ] The TUI test covers a store with phase directories and never lists one as a spec
 - [ ] `MEMORY.md` records what was kept from `spec-optimizations`, what was overridden, and the migrated spec list
-- [ ] `ts:check`, `lint:check`, `format:check`, and `mf:check:specs` pass
+- [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf-specs:check` pass

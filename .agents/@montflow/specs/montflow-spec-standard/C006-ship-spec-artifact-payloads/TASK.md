@@ -34,4 +34,4 @@ skill to the v2 vocabulary the earlier tasks created.
 - [ ] A clean workspace gains all artifacts via the repair command, and report-only mode then stays silent with zero issues
 - [ ] Every `skills:` reference in every profile and prompt resolves; the checker reports none missing
 - [ ] Authoring and execution skills reference only verbs that exist, verified by grepping each command named
-- [ ] `bun run mf:check:specs` passes and changelog entries exist where behavior changed
+- [ ] `bun run mf-specs:check` passes and changelog entries exist where behavior changed

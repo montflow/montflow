@@ -27,11 +27,11 @@ flat task-id prefix or a stored lock list.
 - The OpenCode host tools and `/specs` slash forms keep parity with the binary: the same spec, phase, and derived state for the same invocation.
 - The TUI specs picker lists only directories that contain `SPEC.md`, never a phase or task directory, and forwards `author`, `execute`, and `sizing-config` unchanged.
 - Tests cover a v2 store with phase directories on the CLI and TUI paths, including a phase dir that must not appear as a spec.
-- `bun run mf:check:specs` reports zero issues for every spec in the store.
+- `bun run mf-specs:check` reports zero issues for every spec in the store.
 
 ## Completion
 
 - [ ] Every command above is exercised against this spec and reports the same phase and lock state as `check`
 - [ ] The TUI test proves phase and task directories are never offered as specs
 - [ ] The host slash and tool forms match the binary on one spec, phase, and failure case
-- [ ] `ts:check`, `lint:check`, `format:check`, and `mf:check:specs` pass
+- [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf-specs:check` pass

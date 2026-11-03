@@ -108,7 +108,7 @@ each row is now one `REFERENCE.md` under `.agents/@montflow/references/<slug>/`.
 Names, URLs, and clone locations are unchanged, so the `opencode` entry stays
 pinned at `cd9a14a6b688d4021bee381dfd39d2cef9c0f862` (tag `v2.0.18`) and every
 existing citation keeps resolving. The old manual table check is replaced by
-`bun run mf:check:references`, which runs the CI-safe verifier and
+`bun run mf-references:check`, which runs the CI-safe verifier and
 `doctor --check`.
 
 ## Status
@@ -116,5 +116,5 @@ existing citation keeps resolving. The old manual table check is replaced by
 Version `0.0.1`, private. Source-only — no build step: a local-path OpenCode
 install loads the `.ts` files directly. Run `bun install` from the repo root for
 dependencies, then `turbo` `test` / `ts:check` cover this package like the rest.
-`bun run mf:check:references` gates the committed registry and the installed
+`bun run mf-references:check` gates the committed registry and the installed
 skills; `bun run pack:plugins` picks the package up through `exports./server`.

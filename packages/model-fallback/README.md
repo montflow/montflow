@@ -108,7 +108,7 @@ order, writes the store, verifies it, and reports the result.
 
 `doctor --check` never writes and exits non-zero when the installed prompt is
 missing, stale, or invalid; the repo gate runs it with `status` as
-`mf:check:model-fallback`.
+`mf-model-fallback:check`.
 
 ## In-session
 

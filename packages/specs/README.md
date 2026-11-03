@@ -246,7 +246,7 @@ package bytes; it also rewrites a stale or partial skill, so the fix line
 converges. A file inside an installed skill directory that the package does not
 ship is left in place, and extra files alone do not make a skill stale.
 `--check` writes nothing and reports `ok` / `missing` / `stale` / `blocked`
-per file with its source and target paths, so `mf:check:specs` fails on drift
+per file with its source and target paths, so `mf-specs:check` fails on drift
 with `Run: mf-specs doctor` as the fix. A condition repair refuses is `blocked`
 with its own coded fix, so the hint is never printed for work doctor cannot do.
 Any other prompt in that directory — `commit.json`, `effect-review.json`, or a
@@ -625,7 +625,7 @@ in this package recommends one.
 
 1. **No declared profiles is unchanged.** A review task with no
    `reviewer-profiles` (absent, blank, or `[]`) dispatches one general reviewer
-   into its existing series, exactly as before. `mf:check:specs` never
+   into its existing series, exactly as before. `mf-specs:check` never
    reads review series, so a series-free repo gate keeps passing; the per-series
    link is enforced only by the workspace caller.
 2. **`reviewer-profiles: <a>, <b>` is additive.** Each declared profile adds a

@@ -31,4 +31,4 @@ convention.
 
 - [ ] A malformed or unknown-addressee entry is rejected by `check` with the offending line named, proven by an actual run
 - [ ] Delivery to a live session and queueing to a non-live task both demonstrated, with commands and outputs recorded in MEMORY.md
-- [ ] `ts:check`, `lint:check`, and `format:check` pass with tests for both paths
+- [ ] `ts:check`, `lint:check`, and `fmt:check` pass with tests for both paths

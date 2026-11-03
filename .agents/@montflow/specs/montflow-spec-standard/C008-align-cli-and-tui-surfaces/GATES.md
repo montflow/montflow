@@ -12,4 +12,4 @@
 
 ## Stage 2: Verification
 
-- [ ] `ts:check`, `lint:check`, `format:check`, and `mf:check:specs` pass
+- [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf-specs:check` pass

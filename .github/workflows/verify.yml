@@ -200,7 +200,7 @@ jobs:
           - target: lint
             script: lint:check
           - target: format
-            script: format:check
+            script: fmt:check
           - target: typecheck
             script: ts:check
           - target: test
@@ -210,19 +210,19 @@ jobs:
           - target: smoke
             script: smoke
           - target: skills
-            script: mf:check:release-and-skills
+            script: mf-release:check-and-skills
           - target: prompts
-            script: mf:check:prompts
+            script: mf-prompts:check
           - target: specs
-            script: mf:check:specs
+            script: mf-specs:check
           - target: profiles
-            script: mf:check:profiles
+            script: mf-profiles:check
           - target: reviews
-            script: mf:check:reviews
+            script: mf-reviews:check
           - target: naming
-            script: mf:check:naming
+            script: mf-naming:check
           - target: references
-            script: mf:check:references
+            script: mf-references:check
     steps:
       - uses: actions/checkout@v4
 

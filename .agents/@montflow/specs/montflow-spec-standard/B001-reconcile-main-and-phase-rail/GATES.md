@@ -16,4 +16,4 @@
 
 - [ ] `mf-specs check` passes for every migrated spec
 - [ ] The TUI picker lists only directories containing `SPEC.md`, proven by a test with phase directories present
-- [ ] `ts:check`, `lint:check`, `format:check`, and `mf:check:specs` pass
+- [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf-specs:check` pass

@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
  * Release guard: the five `mf-*` CLIs must share one version, stay in one
  * changesets fixed group, and keep their release-versus-checkout note.
  *
- * Run from the repo root (`mf:check:release`) or with `--root <dir>`. Exits 1
+ * Run from the repo root (`mf-release:check`) or with `--root <dir>`. Exits 1
  * with one line per drift so the failure names the file to fix.
  */
 

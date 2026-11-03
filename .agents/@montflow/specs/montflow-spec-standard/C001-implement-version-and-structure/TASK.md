@@ -32,5 +32,5 @@ the current and previous standard so nothing is stranded.
 
 - [ ] A v1 fixture and a v2 fixture both verify; the v1 fixture warns about its version and a future-version fixture errors
 - [ ] `bun run --cwd packages/specs test` passes including new phase-module tests
-- [ ] `bun run mf:check:specs` reports zero issues for every spec in the store, with version warnings only
-- [ ] `ts:check`, `lint:check`, and `format:check` pass
+- [ ] `bun run mf-specs:check` reports zero issues for every spec in the store, with version warnings only
+- [ ] `ts:check`, `lint:check`, and `fmt:check` pass

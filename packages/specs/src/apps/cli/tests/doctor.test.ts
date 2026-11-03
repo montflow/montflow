@@ -12,7 +12,7 @@ import { doctorExitCode, renderDoctor, runDoctorRun } from '../index.js';
 
 /**
  * The CLI layer turns a `DoctorResult` into the report an agent reads and the
- * exit code `mf:check:specs` depends on. These tests pin both, including the
+ * exit code `mf-specs:check` depends on. These tests pin both, including the
  * wording that distinguishes "doctor wrote it" from "it was already there".
  */
 

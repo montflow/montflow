@@ -17,4 +17,4 @@
 
 - [ ] `mf:check` reports zero `task.completion-unchecked`, `gate.unchecked`, and `task.missing-size` findings
 - [ ] The tests cover the complete-versus-unfinished split for both checks
-- [ ] `ts:check`, `lint:check`, `format:check`, and `mf:check` pass
+- [ ] `ts:check`, `lint:check`, `fmt:check`, and `mf:check` pass
