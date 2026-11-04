@@ -37,6 +37,12 @@ Script names follow `[tool]:[action]`: `mf-<tool>:check` runs one tool
 `mf:gate[:fast]` is the gate. The old `mf:check:<scope>` names remain as
 aliases for frozen records.
 
+## Tools
+
+| CLI | Description |
+| --- | --- |
+| `mf-specs` | Spec tree truth: `status`, `state`, `next`, `list`, `check`, and `doctor`. Ask it before reading spec files. |
+
 ## Verification
 
 - Always verify via package.json scripts. Never invoke tool binaries directly

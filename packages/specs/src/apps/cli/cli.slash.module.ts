@@ -21,6 +21,7 @@ import {
   guardFailure,
   doctorCommand,
 } from './cli.shared.module.js';
+import { toolsCommand } from './cli.tools.module.js';
 import {
   checkCommand,
   statusCommand,
@@ -134,6 +135,7 @@ export const rootCommand = Command.make('mf-specs').pipe(
     executeCommand,
     sizingConfigCommand,
     doctorCommand,
+    toolsCommand,
     Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
 );

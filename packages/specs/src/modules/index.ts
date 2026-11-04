@@ -23,3 +23,4 @@ export * as Sizing from './sizing/index.js';
 export * as Which from './which/index.js';
 export * as Catalogue from './catalogue/index.js';
 export * as Doctor from './doctor/index.js';
+export * as Tools from './tools/index.js';

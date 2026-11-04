@@ -15,5 +15,6 @@ export * from './cli.newphase.module.js';
 export * from './cli.newtask.module.js';
 export * from './cli.state.module.js';
 export * from './cli.review.module.js';
+export * from './cli.tools.module.js';
 export * from './cli.author.module.js';
 export * from './cli.slash.module.js';
