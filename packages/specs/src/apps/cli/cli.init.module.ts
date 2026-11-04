@@ -192,14 +192,14 @@ const buildPlan = (
   if (!reasons.ok) errors.push(reasons.error);
   if (errors.length > 0) return { ok: false, errors };
 
-  const reviewFor = (phase: string): 'required' | 'waived' => {
+  const reviewFor = (phase: string): 'required' | 'waived' | 'none' => {
     const raw = reviewOverrides.ok ? reviewOverrides.values.get(phase) : undefined;
     if (raw === undefined) return defaultReview(tier);
-    if (raw === 'required' || raw === 'waived') return raw;
-    errors.push(`--review ${phase} must be 'required' or 'waived'.`);
+    if (raw === 'required' || raw === 'waived' || raw === 'none') return raw;
+    errors.push(`--review ${phase} must be 'required', 'waived', or 'none'.`);
     return defaultReview(tier);
   };
-  const reasonFor = (review: 'required' | 'waived', phase: string): string | undefined => {
+  const reasonFor = (review: 'required' | 'waived' | 'none', phase: string): string | undefined => {
     const reason = reasons.ok ? reasons.values.get(phase) : undefined;
     if (reason !== undefined) return reason;
     return review === 'waived' && tier === 'micro' ? MICRO_WAIVER_REASON : undefined;
@@ -447,7 +447,7 @@ export const initCommand = Command.make(
       'task',
       'One task as PHASE:name:type[:size][:after=name,name][:scope=path,path].',
     ),
-    review: repeated('review', 'One phase decision as PHASE:required|waived.'),
+    review: repeated('review', 'One phase decision as PHASE:required|waived|none.'),
     reviewReason: repeated('review-reason', 'One phase reason as PHASE:<one line>.'),
     reviewerProfiles: Flag.optional(Flag.String('reviewer-profiles')),
   },

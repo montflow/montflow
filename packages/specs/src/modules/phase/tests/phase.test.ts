@@ -167,6 +167,27 @@ Vitest.describe('Phase.verifyPhaseFile', () => {
     );
   });
 
+  Vitest.it('accepts a review-free phase with no review task', () => {
+    const result = Phase.verifyPhaseFile(
+      'A',
+      phaseMarkdown({ review: 'none' }),
+      context({ taskTypes: ['execution'] }),
+    );
+    Vitest.expect(result.issues).toStrictEqual([]);
+    Vitest.expect(result.valid).toBe(true);
+  });
+
+  Vitest.it('errors when a review-free phase still holds a review task', () => {
+    const result = Phase.verifyPhaseFile(
+      'A',
+      phaseMarkdown({ review: 'none' }),
+      context({ taskTypes: ['execution', 'review'] }),
+    );
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: Phase.PHASE_CODES.reviewNoneWithTask }),
+    );
+  });
+
   Vitest.it('checks the gate kind against the phase gate file', () => {
     const missing = Phase.verifyPhaseFile('A', phaseMarkdown({ gate: 'mechanical' }), context());
     Vitest.expect(missing.issues).toContainEqual(
@@ -279,6 +300,49 @@ Vitest.describe('Phase.phaseEvidence', () => {
     Vitest.expect(evidence.issues).toContainEqual(
       Vitest.expect.objectContaining({ code: Phase.PHASE_CODES.waiverUnproven }),
     );
+  });
+
+  Vitest.it('derives a review-free phase and locks it without a waiver', () => {
+    const tree = snapshot([
+      entry('SPEC.md', ['---', 'name: ship-spec', 'status: in-progress', '---', ''].join('\n')),
+      entry('A/PHASE.md', phaseMarkdown({ review: 'none' })),
+      entry('A/MEMORY.md', memory),
+      entry(
+        'A/A001-implement/TASK.md',
+        taskMarkdown({ id: 'A001', name: 'implement', type: 'execution', status: 'complete' }),
+      ),
+      entry('A/A001-implement/MEMORY.md', memory),
+      entry('A/A001-implement/GATES.md', '## Stage 0: Verify (mechanical)\n\n- [x] Passes.\n'),
+      entry('A/A001-implement/GATE-RESULTS.jsonl', `${passingResult()}\n`),
+    ]);
+    const evidence = Phase.phaseEvidence(tree);
+    Vitest.expect(evidence.waived).toStrictEqual([]);
+    Vitest.expect(evidence.none).toStrictEqual(['A']);
+    Vitest.expect(evidence.proven).toStrictEqual(['A']);
+    Vitest.expect(evidence.issues).toStrictEqual([]);
+    const analysis = Lifecycle.analyze({
+      status: 'in-progress',
+      reviewedPhases: [],
+      waivedPhases: evidence.waived,
+      nonePhases: evidence.none,
+      provenPhases: evidence.proven,
+      tasks: [{ id: 'A001', status: 'complete' }],
+    });
+    Vitest.expect(
+      analysis.phases.filter((phase) => phase.locked).map((phase) => phase.phase),
+    ).toStrictEqual(['A']);
+  });
+
+  Vitest.it('does not lock a review-free phase whose gates are unproven', () => {
+    const analysis = Lifecycle.analyze({
+      status: 'in-progress',
+      reviewedPhases: [],
+      waivedPhases: [],
+      nonePhases: ['A'],
+      provenPhases: [],
+      tasks: [{ id: 'A001', status: 'complete' }],
+    });
+    Vitest.expect(analysis.phases.filter((phase) => phase.locked)).toStrictEqual([]);
   });
 
   Vitest.it('derives the same locks an explicit lock list would name', () => {

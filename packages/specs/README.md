@@ -130,11 +130,14 @@ explicit `migrate --name <spec> --include-complete` upgrades it. Relabeling
 - `lock --name <spec> --phase <id>` — confirm the derived lock. Writes nothing;
   prints `locked <phase>` at exit 0 or one blocker code per line at exit 1.
   A phase is locked only when every task is complete, every classified
-  mechanical gate is proven, and a review round is closed or the waiver is
-  effective. It is not a lock list and owns no field.
+  mechanical gate is proven, and a review round is closed, the waiver is
+  effective, or the phase declares `review: none`. It is not a lock list and
+  owns no field.
 - `waiver --name <spec> --phase <id> (--waived --reason <line> | --required)` —
   write or clear the phase review decision and recompute the gate evidence that
-  stands in for a round. A waived phase cannot hold a review task.
+  stands in for a round. A waived phase cannot hold a review task. A phase with
+  `review: none` holds no review task and needs no waiver: set it at authoring
+  time with `new-phase --review none` or `init --review <PHASE>:none`.
 - `tier <micro|standard|full>` — print the installed tier file verbatim and
   nothing else. A missing file is `tier.missing`; a packaged copy that differs
   is `tier.stale`. Never list the tier directory or load two tiers.

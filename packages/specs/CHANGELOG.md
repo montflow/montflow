@@ -14,6 +14,7 @@ Releases: this package is versioned and tagged by changesets but never published
 
 ### Added
 
+- A third phase review decision, `review: none`: a phase holds no review task and no waiver, and locks on task completion plus gate proof alone. `init` and `new-phase` accept `none`, `new-task` refuses a review task in such a phase, `status`/`next` print budget 0, and `waiver`/`review decide` leave the phase untouched
 - `init` and `create` scaffold a phase `MEMORY.md` with a five-bullet `## Execution Brief` skeleton (Read, Write scope, Gate, Record, Review), and a scaffolded task `MEMORY.md` carries the full fixed section set, so a fresh tree is clean
 - The v2 phase tree: `SPEC.md` with `spec-version: 2`, one directory per phase (`PHASE.md`, phase `MEMORY.md`, `BOARD.md`, optional `GATES.md`/`GATE-RESULTS.jsonl`), and one directory per task inside it
 - Generator verbs for every verifier-checked field: `init`, `new-phase`, `new-task`, `stamp`, `claim`, `lock`, `waiver`, `tier`, `gate run`, `gate record`, and `mail`

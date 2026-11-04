@@ -48,8 +48,8 @@ export const PhaseStatus = Schema.Literals(PHASE_STATUSES);
 /** Derived phase status. */
 export type PhaseStatus = typeof PhaseStatus.Type;
 
-/** Per-phase review decision. */
-export const PHASE_REVIEWS = ['required', 'waived'] as const;
+/** Per-phase review decision: a review task, a proven waiver, or no review. */
+export const PHASE_REVIEWS = ['required', 'waived', 'none'] as const;
 
 /** Per-phase review decision. */
 export const PhaseReview = Schema.Literals(PHASE_REVIEWS);
@@ -84,6 +84,7 @@ export const PHASE_CODES = {
   evidenceUnresolved: 'phase.evidence-unresolved',
   waiverUnproven: 'phase.waiver-unproven',
   waiverWithReviewTask: 'phase.waiver-with-review-task',
+  reviewNoneWithTask: 'phase.review-none-with-task',
   reviewTaskMissing: 'phase.review-task-missing',
   gateInvalid: 'phase.gate-invalid',
   gateFileMissing: 'phase.gate-file-missing',
@@ -453,10 +454,10 @@ export const verifyPhaseFile = (
       finding({
         code: PHASE_CODES.reviewInvalid,
         field: 'review',
-        message: `Phase review decision '${review ?? ''}' is not 'required' or 'waived'.`,
-        expected: 'required or waived',
+        message: `Phase review decision '${review ?? ''}' is not 'required', 'waived', or 'none'.`,
+        expected: 'required, waived, or none',
         actual: review ?? 'missing',
-        fix: 'Set `review: required` or `review: waived`.',
+        fix: 'Set `review: required`, `review: waived`, or `review: none`.',
       }),
     );
   }
@@ -476,7 +477,7 @@ export const verifyPhaseFile = (
         }),
       );
     }
-  } else if (review === 'required') {
+  } else if (review === 'required' || review === 'none') {
     if (reason !== undefined && reason.trim() !== '') {
       issues.push(
         finding({
@@ -541,6 +542,18 @@ export const verifyPhaseFile = (
       }),
     );
   }
+  if (review === 'none' && hasReviewTask) {
+    issues.push(
+      finding({
+        code: PHASE_CODES.reviewNoneWithTask,
+        field: 'review',
+        message: 'A phase with `review: none` must not hold a review task.',
+        expected: 'no review-type task in a review-free phase',
+        actual: 'review task present',
+        fix: 'Remove the review task, or set `review: required`.',
+      }),
+    );
+  }
   if (review === 'required' && !hasReviewTask) {
     issues.push(
       finding({
@@ -548,9 +561,9 @@ export const verifyPhaseFile = (
         severity: 'warning',
         field: 'review',
         message: 'A required phase holds no review task; the phase stays unlocked.',
-        expected: 'a review-type task, or `review: waived`',
+        expected: 'a review-type task, or `review: waived` or `review: none`',
         actual: 'no review task',
-        fix: 'Request a review task when the tier needs one, or waive the phase explicitly.',
+        fix: 'Request a review task when the tier needs one, or declare the phase review-free.',
       }),
     );
   }
@@ -636,6 +649,8 @@ export const verifyPhaseFile = (
 export interface PhaseEvidence {
   /** Phases with a valid, fully proven waiver. */
   readonly waived: ReadonlyArray<string>;
+  /** Phases that declare `review: none` and hold no review task. */
+  readonly none: ReadonlyArray<string>;
   /** Phases whose classified mechanical stages all have a latest pass. */
   readonly proven: ReadonlyArray<string>;
   /** Coverage findings that need the recorded results. */
@@ -677,6 +692,7 @@ export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
     );
 
   const waived: Array<string> = [];
+  const none: Array<string> = [];
   const proven: Array<string> = [];
   const issues: Array<Issue> = [];
   const specText = fileAt('SPEC.md');
@@ -757,6 +773,7 @@ export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
         waiverAllowed(tier, taskTypes) &&
         coverage;
       if (waiver) waived.push(phase);
+      if (parsed.review === 'none' && !taskTypes.includes('review')) none.push(phase);
       if (parsed.review === 'waived' && complete && !waiver) {
         issues.push(
           finding({
@@ -772,7 +789,7 @@ export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
     }
   }
 
-  return { waived, proven, issues };
+  return { waived, none, proven, issues };
 };
 
 /** Re-export the phase id brand for callers that only need the type. */

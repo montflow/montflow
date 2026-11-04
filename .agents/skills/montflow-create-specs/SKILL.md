@@ -63,7 +63,7 @@ bun run --cwd packages/specs cli init --name <kebab-name> --tier <tier> \
   [--workspace-type in-place|worktree] \
   [--phase "<one-line objective>"]... \
   [--task "<PHASE>:<name>:<type>[:<size>][:after=<name,name>]"]... \
-  [--review "<PHASE>:required|waived"]... \
+  [--review "<PHASE>:required|waived|none"]... \
   [--review-reason "<PHASE>:<one line>"]... \
   [--reviewer-profiles "<a>,<b>"]
 ```
@@ -71,12 +71,13 @@ bun run --cwd packages/specs cli init --name <kebab-name> --tier <tier> \
 `init` refuses a plan that violates the tier's phase range, task ceiling,
 exploration rule, gate kind, waiver policy, or review task decision. It writes
 the `## Creation` section (`tier`, `questions 0/<budget>`, `unresolved: none`)
-and generates a review task exactly for a non-waived phase. Grow the spec with
+and generates a review task exactly for a `review: required` phase; a phase may
+instead declare `review: none` and hold no review at all. Grow the spec with
 `mf-specs new-phase --name <spec> --objective <line>` and
 `mf-specs new-task --name <spec> --phase <id> --task <kebab-name> --type <type>`;
 both allocate the next id from disk. Record a review decision with
 `mf-specs waiver --name <spec> --phase <id> --waived --reason <line>` or
-`--required`.
+`--required`, or author `review: none` with `new-phase --review none`.
 
 `mf-specs create` remains the tier-agnostic mechanical scaffold for a tree that
 does not need a tier plan. It writes a tree passing `mf-specs check`:
@@ -163,10 +164,11 @@ task needs them. The phase directory is not a pure container: the phase record
 and channels live there beside the task directories.
 
 `PHASE.md` frontmatter: `id` (equals the directory), `objective`, `status`
-(derived from its tasks), `review` (`required|waived`), optional
+(derived from its tasks), `review` (`required|waived|none`), optional
 `review-reason`/`review-evidence` when waived, and `gate`
-(`none|mechanical|subjective`). Write it with `init`/`new-phase`/`waiver`, not
-by hand.
+(`none|mechanical|subjective`). A `review: none` phase holds no review task and
+locks on completion plus gate proof alone. Write it with `init`/`new-phase`/
+`waiver`, not by hand.
 
 ### Author the Widest Ready Set
 
@@ -411,14 +413,15 @@ Prove a generated config in this order, scoped to what was touched:
 A phase is a directory named `<PHASE>/`; every task directory lives inside its
 phase directory, and the phase's own files (`PHASE.md`, `MEMORY.md`,
 `BOARD.md`, optional `GATES.md`/`GATE-RESULTS.jsonl`) sit beside them. A phase
-either reviews or waives, and the tier sets the default and the waiver policy.
-A generated review task exists exactly for a non-waived phase: there is no
-reserved review task, so never add one to a waived phase and never require one
+reviews, waives, or holds no review at all; the tier sets the default and the
+waiver policy. A generated review task exists exactly for a `review: required`
+phase: never add one to a waived or `review: none` phase and never require one
 where the tier allows a waiver. A phase lock is derived from every task being
 complete, every classified mechanical gate being proven, and a closed review
-round or an effective waiver; never hand-write a lock or a lock list. Confirm
-one with `mf-specs lock --name <spec> --phase <id>` — it writes nothing. Keep
-the spec `status: in-progress`; authoring never locks a phase.
+round, an effective waiver, or a `review: none` decision; never hand-write a
+lock or a lock list. Confirm one with `mf-specs lock --name <spec> --phase <id>`
+— it writes nothing. Keep the spec `status: in-progress`; authoring never locks
+a phase.
 
 ## 7. Ask Only When the Decision Is the User's
 

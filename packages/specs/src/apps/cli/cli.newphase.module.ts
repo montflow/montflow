@@ -51,7 +51,7 @@ interface MutablePhaseRecord {
   id: string;
   objective: string;
   status: 'pending' | 'in-progress' | 'blocked' | 'complete';
-  review: 'required' | 'waived';
+  review: 'required' | 'waived' | 'none';
   gate: 'none' | 'mechanical' | 'subjective';
   reviewReason?: string;
   reviewEvidence?: ReadonlyArray<string>;
@@ -81,7 +81,7 @@ export const newPhase = (
     }
     const id = phaseIdAt(nextRank);
     const review = options.review ?? 'required';
-    if (review !== 'required' && review !== 'waived') {
+    if (review !== 'required' && review !== 'waived' && review !== 'none') {
       return yield* Effect.fail(
         authoringFailure(operation, {
           code: SURFACE_CODES.invalidArgument,
@@ -89,7 +89,7 @@ export const newPhase = (
           field: '--review',
           problem: `Unknown review decision '${review}'.`,
           rerun: `mf-specs new-phase --name ${options.name} --objective <line>`,
-          expected: 'required or waived',
+          expected: 'required, waived, or none',
           actual: review,
         }),
       );
@@ -106,13 +106,13 @@ export const newPhase = (
         }),
       );
     }
-    if (review === 'required' && (options.reviewReason ?? '').trim() !== '') {
+    if (review !== 'waived' && (options.reviewReason ?? '').trim() !== '') {
       return yield* Effect.fail(
         authoringFailure(operation, {
           code: 'phase.reason-unexpected',
           path: '--review-reason',
           field: '--review-reason',
-          problem: 'A required phase takes no review reason.',
+          problem: 'Only a waived phase takes a review reason.',
           rerun: `mf-specs new-phase --name ${options.name} --objective <line>`,
         }),
       );

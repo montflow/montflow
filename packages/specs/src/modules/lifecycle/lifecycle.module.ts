@@ -31,6 +31,8 @@ export interface Input {
   readonly reviewedPhases: ReadonlyArray<string>;
   /** Phases with an effective `PHASE.md` waiver. */
   readonly waivedPhases: ReadonlyArray<string>;
+  /** Phases that declare `review: none` and hold no review task. */
+  readonly nonePhases?: ReadonlyArray<string> | undefined;
   /** Phases whose classified mechanical gate stages all have a latest pass. */
   readonly provenPhases: ReadonlyArray<string>;
   /** Parsed tasks (tasks whose TASK.md failed to parse are excluded). */
@@ -81,13 +83,15 @@ const countByStatus = (tasks: ReadonlyArray<TaskEntry>) => {
 /**
  * A phase is complete when every task under it is complete. It is locked when
  * it is complete, every classified mechanical gate stage is proven, and it has
- * either a passed review round or an effective waiver. The conjunction is the
- * whole lock model — a locked phase can never hold open work or unproven gates.
+ * a passed review round, an effective waiver, or no review at all. The
+ * conjunction is the whole lock model — a locked phase can never hold open work
+ * or unproven gates.
  */
 const phaseSummaries = (
   tasks: ReadonlyArray<TaskEntry>,
   reviewed: ReadonlySet<string>,
   waived: ReadonlySet<string>,
+  none: ReadonlySet<string>,
   proven: ReadonlySet<string>,
 ): ReadonlyArray<PhaseSummary> =>
   distinctPhases(tasks).map((phase) => {
@@ -98,7 +102,7 @@ const phaseSummaries = (
       locked:
         complete === inPhase.length &&
         proven.has(phase) &&
-        (reviewed.has(phase) || waived.has(phase)),
+        (reviewed.has(phase) || waived.has(phase) || none.has(phase)),
       total: inPhase.length,
       complete,
     };
@@ -132,6 +136,7 @@ export const verify = (input: Input): Result => {
         input.tasks,
         new Set(input.reviewedPhases),
         new Set(input.waivedPhases),
+        new Set(input.nonePhases ?? []),
         new Set(input.provenPhases),
       ).filter((phase) => !phase.locked);
       if (unlocked.length > 0) {
@@ -164,8 +169,9 @@ export const analyze = (input: Input): Analysis => {
   const counts = countByStatus(input.tasks);
   const reviewed = new Set(input.reviewedPhases);
   const waived = new Set(input.waivedPhases);
+  const none = new Set(input.nonePhases ?? []);
   const proven = new Set(input.provenPhases);
-  const phases = phaseSummaries(input.tasks, reviewed, waived, proven);
+  const phases = phaseSummaries(input.tasks, reviewed, waived, none, proven);
   const allComplete =
     input.tasks.length > 0 && input.tasks.every((task) => task.status === 'complete');
   const anyInProgress = input.tasks.some((task) => task.status === 'in-progress');

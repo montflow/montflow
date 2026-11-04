@@ -1,7 +1,7 @@
 import { Data, Effect } from 'effect';
 import { Command, Flag } from 'effect/cli';
 
-import { phaseEvidence } from '../../modules/phase/index.js';
+import { parsePhaseFile, phaseEvidence } from '../../modules/phase/index.js';
 import {
   DEFAULT_REVIEW_MODE,
   type ReviewDecisionReport,
@@ -187,7 +187,22 @@ export const reviewDecide = (
       ),
     ];
     const series = yield* store.reviewSeries(options.root, name);
-    const waived = phaseEvidence(snapshot).waived.includes(phase);
+    const evidence = phaseEvidence(snapshot);
+    const waived = evidence.waived.includes(phase);
+    const phaseText = phaseFiles.find((entry) => entry.path.endsWith('/PHASE.md'))?.content;
+    const record = phaseText === undefined ? undefined : parsePhaseFile(phaseText);
+    if (record?.review === 'none' || evidence.none.includes(phase)) {
+      return yield* Effect.fail(
+        usage({
+          field: '--phase',
+          problem: `Phase '${phase}' declares \`review: none\`, so it has no review cycle to decide.`,
+          expected: 'a phase with a review task or a waiver',
+          actual: 'review: none',
+          fix: 'Set `review: required` and add a review task, or leave the phase review-free.',
+          rerun,
+        }),
+      );
+    }
 
     return decide({
       name,

@@ -28,18 +28,18 @@ A phase is a directory named `A`, `B`, … under the [spec](./specs.md). It hold
 | `id`              | equals the directory name                 |
 | `objective`       | one line saying what the phase achieves   |
 | `status`          | derived from the phase's tasks            |
-| `review`          | `required` or `waived`                    |
+| `review`          | `required`, `waived`, or `none`           |
 | `review-reason`   | required only when waived                 |
 | `review-evidence` | the gate evidence standing in for a round |
 | `gate`            | `none`, `mechanical`, or `subjective`     |
 
 The file is written by `init`, `new-phase`, and `waiver`. Do not hand-write a status or a review decision.
 
-## Review: required or waived
+## Review: required, waived, or none
 
-A phase either reviews or waives. A non-waived phase holds exactly one generated review task; a waived phase holds none and records the reason plus the evidence that replaces the round. A waived phase that holds a review task is an error.
+A phase reviews, waives, or holds no review at all. A `required` phase holds exactly one generated review task; a `waived` phase holds none and records the reason plus the evidence that replaces the round; a `review: none` phase holds no review task and needs no waiver. A waived or `review: none` phase that holds a review task is an error.
 
-The review decision is not re-derived from prose. After every reviewer round, `mf-specs review decide` reads the review store and the phase budget and returns `start`, `pass`, `fix-and-stop`, `rework`, `overflow`, `escalate`, or `waived`. The orchestrator obeys that verb instead of counting rounds.
+The review decision is not re-derived from prose. After every reviewer round, `mf-specs review decide` reads the review store and the phase budget and returns `start`, `pass`, `fix-and-stop`, `rework`, `overflow`, `escalate`, or `waived`. The orchestrator obeys that verb instead of counting rounds. A `review: none` phase has no cycle to decide and reports budget 0.
 
 ## Gates
 
@@ -56,7 +56,8 @@ Task gates prove the task's own scope. Phase or repo-wide checks are named once 
 A phase is **complete** when every task under it is complete. It is **locked** when it is also:
 
 1. gate-proven — every classified mechanical stage has a passing result, and
-2. reviewed — a review round for that phase is closed, or the waiver is effective.
+2. reviewed — a review round for that phase is closed, the waiver is effective,
+   or the phase declares `review: none`.
 
 `mf-specs lock --name <spec> --phase <id>` recomputes that conjunction. It prints `locked <phase>` at exit 0, or one blocker code per line at exit 1, and writes nothing. There is no lock file and no stored lock list; no surface reads one.
 

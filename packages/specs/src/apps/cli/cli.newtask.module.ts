@@ -402,13 +402,16 @@ export const newTask = (
       );
     }
     if (options.type === 'review') {
-      if (phase.review === 'waived') {
+      if (phase.review === 'waived' || phase.review === 'none') {
         return yield* Effect.fail(
           authoringFailure(operation, {
-            code: 'task.review-waived',
+            code: phase.review === 'none' ? 'task.review-none' : 'task.review-waived',
             path: `${options.name}/${phasePath}`,
             field: 'review',
-            problem: `Phase '${options.phase}' is waived, so it cannot hold a review task.`,
+            problem:
+              phase.review === 'none'
+                ? `Phase '${options.phase}' has no review, so it cannot hold a review task.`
+                : `Phase '${options.phase}' is waived, so it cannot hold a review task.`,
             rerun: `mf-specs waiver --name ${options.name} --phase ${options.phase} --required`,
             fix: 'Set the phase review to required first, or do not add a review task.',
           }),

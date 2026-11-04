@@ -390,6 +390,8 @@ export const lockPhase = (
     if (phase?.review === 'required') {
       if (!tasks.some((task) => task.type === 'review')) blockers.add('phase.review-missing');
       else if (!reviewed) blockers.add('phase.review-missing');
+    } else if (phase?.review === 'none') {
+      // A review-free phase locks on completion and gate proof alone.
     } else if (!evidence.waived.includes(options.phase)) {
       blockers.add('phase.waiver-unproven');
     }

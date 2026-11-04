@@ -947,6 +947,7 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
         status: spec.status,
         reviewedPhases,
         waivedPhases: evidence.waived,
+        nonePhases: evidence.none,
         provenPhases: evidence.proven,
         tasks: Array.from(tasks.values()).map((task) => ({ id: task.id, status: task.status })),
         // Every v2 record completes through a lock, including a v1 record

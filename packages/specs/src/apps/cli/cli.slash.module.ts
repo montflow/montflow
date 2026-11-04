@@ -21,8 +21,8 @@ import {
   guardFailure,
   doctorCommand,
 } from './cli.shared.module.js';
-import { toolsCommand } from './cli.tools.module.js';
 import {
+  toolsCommand,
   checkCommand,
   statusCommand,
   stateCommand,

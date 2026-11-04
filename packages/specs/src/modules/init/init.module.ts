@@ -60,7 +60,7 @@ export const defaultWriteScope = (type: TaskType): string =>
 /** One phase in an `init` plan, before ids are allocated. */
 export interface InitPhasePlan {
   readonly objective: string;
-  readonly review: 'required' | 'waived';
+  readonly review: 'required' | 'waived' | 'none';
   readonly reviewReason?: string | undefined;
   readonly tasks: ReadonlyArray<InitTaskPlan>;
 }
@@ -324,13 +324,17 @@ export const validateInitPlan = (plan: InitPlan): ReadonlyArray<Issue> => {
       }
       names.add(task.name);
       if (task.type === 'review') {
-        if (phase.review === 'waived') {
+        if (phase.review === 'waived' || phase.review === 'none') {
           issues.push(
             coded(
               INIT_CODES.reviewWaived,
               `phase ${id}`,
-              `Phase '${id}' is waived, so it cannot hold a review task; a phase either reviews or waives.`,
-              'no review-type task in a waived phase',
+              phase.review === 'none'
+                ? `Phase '${id}' has no review, so it cannot hold a review task.`
+                : `Phase '${id}' is waived, so it cannot hold a review task; a phase either reviews or waives.`,
+              phase.review === 'none'
+                ? 'no review-type task in a review-free phase'
+                : 'no review-type task in a waived phase',
               'review task requested',
               'Remove the review task, or set the phase review to required.',
             ),

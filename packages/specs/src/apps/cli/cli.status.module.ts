@@ -82,7 +82,7 @@ import {
  */
 export interface PhaseView {
   readonly phase: string;
-  readonly review: 'required' | 'waived' | undefined;
+  readonly review: 'required' | 'waived' | 'none' | undefined;
   readonly reviewReason?: string | undefined;
   readonly gate: 'none' | 'mechanical' | 'subjective' | undefined;
   readonly status: PhaseStatus | undefined;
@@ -138,7 +138,11 @@ export interface StatusReport {
  */
 export const phaseViews = (
   snapshot: SpecSnapshot,
-  evidence: { readonly waived: ReadonlyArray<string>; readonly proven: ReadonlyArray<string> },
+  evidence: {
+    readonly waived: ReadonlyArray<string>;
+    readonly none: ReadonlyArray<string>;
+    readonly proven: ReadonlyArray<string>;
+  },
   state: Analysis | undefined,
 ): ReadonlyArray<PhaseView> => {
   const found = new Map<string, string>();
@@ -239,6 +243,7 @@ export const summarize = (
           status: spec.status,
           reviewedPhases: reviewedPhasesOf(snapshot, reviewInput),
           waivedPhases: evidence.waived,
+          nonePhases: evidence.none,
           provenPhases: evidence.proven,
           tasks: ordered.map((task) => ({ id: task.id, status: task.status })),
           // A complete v2 record must agree with its derived locks; a frozen v1
@@ -432,9 +437,12 @@ export const renderStatus = (report: StatusReport): string => {
       view !== undefined && view.review !== undefined
         ? ` \u00b7 ${phaseReviewText(view)} \u00b7 ${phaseGateText(view)}`
         : '';
+    // A review-free phase holds no rounds, so its budget is 0 even though the
+    // task sizes would otherwise buy at least one.
+    const budget = view?.review === 'none' ? 0 : phaseReviewBudget(tasks.map(budgetInput));
     lines.push('');
     lines.push(
-      `Phase ${phase}${locked ? ' \u00b7 locked' : ''}${decision} \u00b7 budget ${phaseReviewBudget(tasks.map(budgetInput))}${sizes.length === 0 ? '' : ` \u00b7 sizes ${sizes.join(',')}`}`,
+      `Phase ${phase}${locked ? ' \u00b7 locked' : ''}${decision} \u00b7 budget ${budget}${sizes.length === 0 ? '' : ` \u00b7 sizes ${sizes.join(',')}`}`,
     );
     if (!blocked) {
       lines.push(
@@ -662,10 +670,11 @@ export const nextOf = (report: StatusReport): NextReport => {
     if (task.dependsOn.every((dep) => byId.get(dep)?.status === 'complete')) ready.push(entry);
   }
   ready.sort((a, b) => sortKey(a.id) - sortKey(b.id));
+  const reviewFree = (report.phases ?? []).find((view) => view.phase === phase)?.review === 'none';
   const filled: NextReport = {
     ...base,
     phase,
-    budget: phaseReviewBudget(inPhase.map(budgetInput)),
+    budget: reviewFree ? 0 : phaseReviewBudget(inPhase.map(budgetInput)),
     ready,
   };
   return runs === undefined ? filled : { ...filled, runs };
