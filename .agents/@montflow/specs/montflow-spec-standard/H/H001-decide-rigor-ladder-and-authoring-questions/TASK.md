@@ -3,10 +3,11 @@ id: H001
 name: decide-rigor-ladder-and-authoring-questions
 type: planning
 originator: user
-size: medium
+size: tiny
 depends-on: B003
 related-tasks: H002, H003, H004
 status: pending
+write-scope: none
 ---
 
 # Task H001: decide the rigor ladder and the authoring questions

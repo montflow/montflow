@@ -3,10 +3,11 @@ id: F002
 name: enforce-dependency-contract
 type: execution
 originator: planner:F001
-size: medium
+size: tiny
 depends-on: F001, C001
 related-tasks: E001
 status: pending
+write-scope: packages/specs
 ---
 
 # Task F002: enforce the dependency-integrity contract

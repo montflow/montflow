@@ -3,10 +3,11 @@ id: G004
 name: implement-editor-and-authoring-guidance
 type: execution
 originator: user
-size: medium
+size: tiny
 depends-on: G002
 related-tasks: G001, G003
 status: pending
+write-scope: apps/workspace, packages/prompts/src/modules/prompts, packages/prompts/skills/montflow-create-prompts, packages/prompts/README.md
 ---
 
 # Task G004: implement the editor and authoring guidance

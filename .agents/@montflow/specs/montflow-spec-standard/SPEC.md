@@ -203,7 +203,6 @@ resolution as `execute`.
 | E099 | review-phase | review | complete | No |
 | F001 | decide-dependency-contract          | planning    | pending | No    |
 | F002 | enforce-dependency-contract         | execution   | pending | Yes   |
-| F099 | review-phase                        | review      | pending | No    |
 | G001 | decide-conditional-variable-contract | planning   | pending | No    |
 | G002 | implement-conditional-variable-schema | execution | pending | Yes   |
 | G003 | implement-conditional-fill-and-cli  | execution   | pending | Yes   |

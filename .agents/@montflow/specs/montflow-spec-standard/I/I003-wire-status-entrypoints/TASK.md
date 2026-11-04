@@ -3,10 +3,11 @@ id: I003
 name: wire-status-entrypoints
 type: execution
 originator: user
-size: medium
+size: tiny
 depends-on: I002
 related-tasks: I099
 status: pending
+write-scope: packages/specs
 ---
 
 # Task I003: wire the status entry points

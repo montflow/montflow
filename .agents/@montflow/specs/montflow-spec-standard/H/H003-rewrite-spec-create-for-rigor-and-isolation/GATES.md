@@ -15,6 +15,6 @@
 - [ ] the doctor payload matches the packaged prompt bytes
 
 ## Stage 2: Package proof (mechanical)
-command: bun run --cwd packages/specs test
+command: bun run --cwd packages/specs test -- src/modules/prompt/tests/prompt.test.ts
 
 - [ ] the scoped package suite for this task passes

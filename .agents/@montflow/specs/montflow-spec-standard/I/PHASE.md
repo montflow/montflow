@@ -4,6 +4,7 @@ objective: Ship the read-only spec-status prompt and wire it across binary, slas
 status: pending
 review: required
 gate: none
+serial-reason: The status contract must be decided before its prompt is written, and the prompt must exist before the binary, slash, and host surfaces can load it.
 ---
 
 # Phase I

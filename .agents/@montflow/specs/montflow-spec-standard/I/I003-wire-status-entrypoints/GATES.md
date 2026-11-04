@@ -16,6 +16,6 @@
 - [ ] no surface changes `SPEC.md`, a `TASK.md`, a `MEMORY.md`, a review file, or a lock
 
 ## Stage 2: Package proof (mechanical)
-command: bun run --cwd packages/specs test
+command: bun run --cwd packages/specs test -- src/apps/cli/tests/status.test.ts src/apps/cli/tests/which.test.ts src/apps/cli/tests/run-slash.test.ts
 
 - [ ] the scoped package suite for this task passes

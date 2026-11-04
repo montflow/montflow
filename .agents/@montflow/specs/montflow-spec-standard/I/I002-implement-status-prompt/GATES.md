@@ -16,6 +16,6 @@
 - [ ] every installed prompt and every spec in the store still checks clean
 
 ## Stage 2: Package proof (mechanical)
-command: bun run --cwd packages/specs test
+command: bun run --cwd packages/specs test -- src/modules/prompt src/modules/doctor
 
 - [ ] the scoped package suite for this task passes

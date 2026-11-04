@@ -14,6 +14,6 @@
 - [ ] every spec and installed prompt still checks clean
 
 ## Stage 2: Package proof (mechanical)
-command: bun run --cwd packages/specs test
+command: bun run --cwd packages/specs test -- src/modules/tier
 
 - [ ] the scoped package suite for this task passes

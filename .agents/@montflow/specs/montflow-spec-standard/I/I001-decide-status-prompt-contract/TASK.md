@@ -3,10 +3,11 @@ id: I001
 name: decide-status-prompt-contract
 type: planning
 originator: user
-size: medium
+size: tiny
 depends-on:
 related-tasks: I002, I003, I099
 status: pending
+write-scope: none
 ---
 
 # Task I001: decide the status prompt contract

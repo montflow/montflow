@@ -3,10 +3,11 @@ id: H002
 name: implement-five-level-rigor
 type: execution
 originator: user
-size: large
+size: tiny
 depends-on: H001, C006
 related-tasks: H003
 status: pending
+write-scope: packages/specs, packages/profiles/profiles/spec-appraiser
 ---
 
 # Task H002: implement the five-level rigor ladder

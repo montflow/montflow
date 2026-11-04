@@ -3,10 +3,11 @@ id: G003
 name: implement-conditional-fill-and-cli
 type: execution
 originator: user
-size: medium
+size: tiny
 depends-on: G002
 related-tasks: G004
 status: pending
+write-scope: packages/prompts/src/apps/interactive, packages/prompts/src/apps/cli, packages/prompts/src/modules/prompt-execute
 ---
 
 # Task G003: implement conditional fill and the CLI surfaces

@@ -14,6 +14,6 @@
 - [ ] the same answers through `mf-prompts` render the same text
 
 ## Stage 2: Package proof (mechanical)
-command: bun run --cwd packages/specs test
+command: bun run --cwd packages/specs test -- src/apps/cli/tests/author-execute.test.ts
 
 - [ ] the scoped package suite for this task passes

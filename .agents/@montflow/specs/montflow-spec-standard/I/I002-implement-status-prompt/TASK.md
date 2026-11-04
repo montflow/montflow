@@ -3,10 +3,11 @@ id: I002
 name: implement-status-prompt
 type: execution
 originator: user
-size: medium
+size: tiny
 depends-on: I001
 related-tasks: I003, I099
 status: pending
+write-scope: packages/specs
 ---
 
 # Task I002: implement the status prompt

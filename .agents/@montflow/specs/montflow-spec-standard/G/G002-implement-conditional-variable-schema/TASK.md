@@ -3,10 +3,11 @@ id: G002
 name: implement-conditional-variable-schema
 type: execution
 originator: user
-size: medium
+size: tiny
 depends-on: G001
 related-tasks: G003, G004
 status: pending
+write-scope: packages/prompts/src/modules/prompts
 ---
 
 # Task G002: implement the conditional-variable schema

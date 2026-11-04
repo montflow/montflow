@@ -3,10 +3,11 @@ id: H004
 name: wire-author-entrypoints
 type: execution
 originator: user
-size: small
+size: tiny
 depends-on: H003
 related-tasks:
 status: pending
+write-scope: packages/specs
 ---
 
 # Task H004: wire the author entry points

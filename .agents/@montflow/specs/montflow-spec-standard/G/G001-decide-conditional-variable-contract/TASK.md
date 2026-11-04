@@ -3,10 +3,11 @@ id: G001
 name: decide-conditional-variable-contract
 type: planning
 originator: user
-size: small
+size: tiny
 depends-on:
 related-tasks: G002, G003, G004
 status: pending
+write-scope: none
 ---
 
 # Task G001: decide the conditional-variable contract

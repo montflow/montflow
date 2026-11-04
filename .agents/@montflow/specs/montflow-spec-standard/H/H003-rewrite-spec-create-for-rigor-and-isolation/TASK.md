@@ -3,10 +3,11 @@ id: H003
 name: rewrite-spec-create-for-rigor-and-isolation
 type: execution
 originator: user
-size: medium
+size: tiny
 depends-on: H002, G003, C006
 related-tasks: H004
 status: pending
+write-scope: packages/specs, packages/profiles/profiles/spec-creation-orchestrator
 ---
 
 # Task H003: rewrite spec-create for rigor and isolation

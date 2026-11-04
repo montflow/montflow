@@ -3,10 +3,11 @@ id: F001
 name: decide-dependency-contract
 type: planning
 originator: user
-size: small
+size: tiny
 depends-on:
 related-tasks: C001
 status: pending
+write-scope: none
 ---
 
 # Task F001: decide the dependency-integrity contract
