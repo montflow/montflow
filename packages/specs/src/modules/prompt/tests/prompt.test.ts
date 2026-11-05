@@ -2,8 +2,8 @@ import * as Fs from 'node:fs';
 import * as NodePath from 'node:path';
 import { NodeFileSystem, NodePath as PlatformPath } from '@effect/platform-node';
 import * as Vitest from '@effect/vitest';
-import { PromptStore } from '@montflow/prompts';
-import { Effect, FileSystem, Layer } from 'effect';
+import { PromptStore, Prompts } from '@montflow/prompts';
+import { Effect, FileSystem, Layer, Schema } from 'effect';
 import { runDoctor } from '../../doctor/index.js';
 import {
   CODES,
@@ -25,6 +25,25 @@ import {
 
 const Platform = Layer.mergeAll(NodeFileSystem.layer, PlatformPath.layer);
 const StoreLive = Layer.provideMerge(PromptStore.Default, Platform);
+
+const PACKAGE_ROOT = NodePath.resolve(import.meta.dirname, '..', '..', '..', '..');
+const CREATE_PROMPT_FILE = NodePath.join(PACKAGE_ROOT, 'prompts', 'spec-create.json');
+
+/** The authoring questions, in declaration order. */
+const CREATE_VARIABLES = [
+  'request',
+  'notes',
+  'rigor',
+  'isolated',
+  'origin',
+  'origin_branch',
+  'worktree_name',
+] as const;
+
+const RIGORS = ['trivial', 'light', 'standard', 'deep', 'critical'] as const;
+
+/** The minimum `spec-create` answer set: every always-visible question. */
+const CREATE_VALUES = { request: 'Ship login', rigor: 'standard', isolated: 'no' } as const;
 
 /**
  * Rules that must survive both interaction modes: only asking changes, never
@@ -52,6 +71,7 @@ const scopedRoot = Effect.gen(function* () {
 const REVIEW_SKILLS = [
   'montflow-adversarial-review',
   'montflow-addressing-adversarial-review',
+  'using-git-worktrees',
 ] as const;
 
 /** Doctor plus stubs for the foreign skills, so every declared skill resolves. */
@@ -82,17 +102,22 @@ Vitest.describe('Prompt.load runtime', () => {
       const root = yield* scopedRoot;
       yield* doctor(root);
 
-      const loaded = yield* load(root, 'spec-create', { request: 'Ship login' });
+      const loaded = yield* load(root, 'spec-create', CREATE_VALUES);
       Vitest.expect(loaded.name).toBe('spec-create');
       Vitest.expect(loaded.text).toContain('Ship login');
-      Vitest.expect(loaded.text).toContain('## 2. Appraise the complexity');
+      Vitest.expect(loaded.text).toContain('Chosen rigor: `standard`');
+      Vitest.expect(loaded.text).toContain('## 1. The user chose the rigor');
+      Vitest.expect(loaded.text).toContain('## 2. Appraise against the chosen rigor');
       Vitest.expect(loaded.text).toContain('spec-appraiser');
-      Vitest.expect(loaded.text).toContain('mf-specs tier <tier>');
-      Vitest.expect(loaded.text).toContain('## 6. Record the creation run');
+      Vitest.expect(loaded.text).toContain('mf-specs rigor standard');
+      Vitest.expect(loaded.text).toContain('## 7. Record the creation run');
       Vitest.expect(loaded.text).toContain('questions <n>/<budget>');
       Vitest.expect(loaded.text).toContain('self-reported');
-      Vitest.expect(loaded.skills).toStrictEqual(['montflow-create-specs']);
-      Vitest.expect(loaded.prompt.skills).toStrictEqual(['montflow-create-specs']);
+      Vitest.expect(loaded.skills).toStrictEqual(['montflow-create-specs', 'using-git-worktrees']);
+      Vitest.expect(loaded.prompt.skills).toStrictEqual([
+        'montflow-create-specs',
+        'using-git-worktrees',
+      ]);
     }).pipe(Effect.provide(StoreLive)),
   );
 
@@ -101,7 +126,7 @@ Vitest.describe('Prompt.load runtime', () => {
       const root = yield* scopedRoot;
       yield* doctor(root);
 
-      const create = yield* load(root, 'spec-create', { request: 'Ship login' });
+      const create = yield* load(root, 'spec-create', CREATE_VALUES);
       Vitest.expect(create.text).toContain('self-reported');
       Vitest.expect(create.text).toContain('questions <n>/<budget>');
       Vitest.expect(create.text).toContain('unresolved');
@@ -129,11 +154,11 @@ Vitest.describe('Prompt.load runtime', () => {
       const root = yield* scopedRoot;
       yield* doctor(root);
 
-      const plain = yield* load(root, 'spec-create', { request: 'Ship login' });
+      const plain = yield* load(root, 'spec-create', CREATE_VALUES);
       Vitest.expect(plain.text).not.toContain('Extra constraints');
 
       const noted = yield* load(root, 'spec-create', {
-        request: 'Ship login',
+        ...CREATE_VALUES,
         notes: 'Do not touch packages/core.',
       });
       Vitest.expect(noted.text).toContain('Extra constraints');
@@ -324,7 +349,7 @@ Vitest.describe('Prompt.load runtime', () => {
     Effect.gen(function* () {
       const root = yield* scopedRoot;
 
-      const error = yield* load(root, 'spec-create', { request: 'Ship login' }).pipe(Effect.flip);
+      const error = yield* load(root, 'spec-create', CREATE_VALUES).pipe(Effect.flip);
       Vitest.expect(error).toBeInstanceOf(PromptError);
       Vitest.expect(error.code).toBe(CODES.missing);
       Vitest.expect(error.path).toBe(installedFile(root, 'spec-create'));
@@ -366,10 +391,112 @@ Vitest.describe('Prompt.load runtime', () => {
       const root = yield* scopedRoot;
       yield* doctor(root);
 
-      const error = yield* load(root, 'spec-create', {}).pipe(Effect.flip);
+      const error = yield* load(root, 'spec-create', { request: 'Ship login' }).pipe(Effect.flip);
       Vitest.expect(error.code).toBe(CODES.missingVariable);
-      Vitest.expect(error.field).toBe('request');
-      Vitest.expect(error.actual).toBe('missing: request');
+      Vitest.expect(error.field).toBe('rigor');
+      Vitest.expect(error.actual).toBe('missing: rigor, isolated');
+    }).pipe(Effect.provide(StoreLive)),
+  );
+});
+
+Vitest.describe('spec-create authoring contract', () => {
+  Vitest.it('declares the questions in first-appearance order and hides the branch', () => {
+    const raw = Fs.readFileSync(CREATE_PROMPT_FILE, 'utf-8');
+    const prompt = Schema.decodeUnknownSync(Prompts.FromJson)(raw);
+    Vitest.expect(Prompts.verifyPromptFile('spec-create', raw).valid).toBe(true);
+    Vitest.expect(prompt.variables.map((variable) => variable.name)).toStrictEqual([
+      ...CREATE_VARIABLES,
+    ]);
+    Vitest.expect(Prompts.templateVariables(prompt.template)).toStrictEqual([...CREATE_VARIABLES]);
+
+    const rigor = prompt.variables.find((variable) => variable.name === 'rigor');
+    Vitest.expect(rigor?.type).toBe('select');
+    Vitest.expect(rigor?.options).toStrictEqual([...RIGORS]);
+    Vitest.expect(rigor?.required).toBe(true);
+    Vitest.expect(rigor?.default).toBe('');
+
+    const origin = prompt.variables.find((variable) => variable.name === 'origin');
+    Vitest.expect(origin?.when).toStrictEqual({ controller: 'isolated', equals: 'yes' });
+    const originBranch = prompt.variables.find((variable) => variable.name === 'origin_branch');
+    Vitest.expect(originBranch?.when).toStrictEqual({ controller: 'origin', equals: 'other' });
+    const worktree = prompt.variables.find((variable) => variable.name === 'worktree_name');
+    Vitest.expect(worktree?.when).toStrictEqual({ controller: 'isolated', equals: 'yes' });
+  });
+
+  Vitest.it.effect('isolated: no drops every origin and worktree token', () =>
+    Effect.gen(function* () {
+      const root = yield* scopedRoot;
+      yield* doctor(root);
+      const loaded = yield* load(root, 'spec-create', {
+        ...CREATE_VALUES,
+        isolated: 'no',
+        origin: 'main',
+        origin_branch: 'release/2',
+        worktree_name: 'feature-x',
+      });
+      const text = loaded.text.toLowerCase();
+      for (const token of ['origin', 'worktree', 'using-git-worktrees', 'release/2', 'feature-x']) {
+        Vitest.expect(text).not.toContain(token);
+      }
+      Vitest.expect(loaded.text).toContain('In-place authoring run');
+      Vitest.expect(loaded.text).toContain('`in-place`');
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('isolated: yes carries origin and the worktree branch and name', () =>
+    Effect.gen(function* () {
+      const root = yield* scopedRoot;
+      yield* doctor(root);
+      const loaded = yield* load(root, 'spec-create', {
+        ...CREATE_VALUES,
+        isolated: 'yes',
+        origin: 'main',
+        worktree_name: 'feature-x',
+      });
+      Vitest.expect(loaded.text).toContain('from origin `main`');
+      Vitest.expect(loaded.text).toContain('worktree named `feature-x`');
+      Vitest.expect(loaded.text).toContain('using-git-worktrees');
+      Vitest.expect(loaded.text).toContain('--workspace-type worktree');
+      Vitest.expect(loaded.text).not.toContain('at branch');
+      Vitest.expect(loaded.text).toContain('`isolated: yes · origin: main`');
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('origin: other carries the freeform branch and nothing else does', () =>
+    Effect.gen(function* () {
+      const root = yield* scopedRoot;
+      yield* doctor(root);
+      const other = yield* load(root, 'spec-create', {
+        ...CREATE_VALUES,
+        isolated: 'yes',
+        origin: 'other',
+        origin_branch: 'release/2',
+        worktree_name: 'feature-x',
+      });
+      Vitest.expect(other.text).toContain('at branch `release/2`');
+      Vitest.expect(other.text).toContain('with branch `release/2`');
+
+      for (const origin of ['current', 'main'] as const) {
+        const loaded = yield* load(root, 'spec-create', {
+          ...CREATE_VALUES,
+          isolated: 'yes',
+          origin,
+          worktree_name: 'feature-x',
+        });
+        Vitest.expect(loaded.text).not.toContain('release/2');
+        Vitest.expect(loaded.text).not.toContain('at branch');
+        Vitest.expect(loaded.text).not.toContain('Origin branch');
+      }
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('doctor installs the packaged prompt bytes', () =>
+    Effect.gen(function* () {
+      const root = yield* scopedRoot;
+      yield* doctor(root);
+      Vitest.expect(Fs.readFileSync(installedFile(root, 'spec-create'), 'utf-8')).toBe(
+        Fs.readFileSync(CREATE_PROMPT_FILE, 'utf-8'),
+      );
     }).pipe(Effect.provide(StoreLive)),
   );
 });

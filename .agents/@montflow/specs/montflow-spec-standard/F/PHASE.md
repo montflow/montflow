@@ -1,7 +1,7 @@
 ---
 id: F
 objective: Close the dependency-verification gap with coded findings and fixtures.
-status: pending
+status: complete
 review: none
 gate: none
 ---

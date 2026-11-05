@@ -79,17 +79,17 @@ aliases for frozen records.
   task directories. Task directory: `TASK.md`, `MEMORY.md`, optional `GATES.md`,
   `MAILBOX.md`, and `GATE-RESULTS.jsonl`.
 - Ids, statuses, timestamps, locks, and gate results are generated:
-  `init`, `new-phase`, `new-task`, `stamp`, `claim`, `lock`, `waiver`, `tier`,
+  `init`, `new-phase`, `new-task`, `stamp`, `claim`, `lock`, `waiver`, `rigor`,
   `gate run`, `gate record`, `mail`, and `review decide`. A lock is derived from
   completion, gate proof, and a closed review round or effective waiver;
   `mf-specs lock` only confirms it and stores nothing. No surface reads a
   stored lock list, and no phase reserves a `*099` review task.
 - Every surface reads the same phase tree: the `mf-specs` binary, `/specs` in
   the OpenCode host, the `spec_author` / `spec_execute` / `spec_sizing` /
-  `spec_tier` / `spec_models` tools, and the TUI picker. The TUI offers only
+  `spec_rigor` / `spec_models` tools, and the TUI picker. The TUI offers only
   directories holding `SPEC.md`, never a phase or task directory.
 - Shipped artifacts are package payload declared in each package's
-  `payload.json` (`skill`, `profile`, `prompt`, `tier`). `mf-<cli> doctor
+  `payload.json` (`skill`, `profile`, `prompt`, `rigor`). `mf-<cli> doctor
   --check` reports without writing; `mf-<cli> doctor` repairs; `bun run mf:doctor`
   repairs every payload package. A manifest-owned file edited locally is
   `stale` and repair overwrites it; an unlisted file in the same store is user
@@ -116,7 +116,7 @@ aliases for frozen records.
   repo's own artifacts (`.agents/skills`, `.agents/@montflow/prompts`,
   `.agents/@montflow/specs`, `.agents/@montflow/profiles`,
   `.agents/@montflow/reviews`, `.agents/@montflow/references`,
-  `.agents/@montflow/tiers`) plus the `payload.json` manifest of every package
+  `.agents/@montflow/rigors`) plus the `payload.json` manifest of every package
   that ships one. Each artifact family runs its `doctor --check` (report-only)
   and fails on drift; `bun run mf:doctor` is the repair path for every payload
   package.

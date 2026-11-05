@@ -11,9 +11,11 @@ Install or verify the specs payload in 1 minute.
 | `prompt` | `spec-create`           | `.agents/@montflow/prompts/spec-create.json`  |
 | `prompt` | `spec-execute`          | `.agents/@montflow/prompts/spec-execute.json` |
 | `prompt` | `spec-sizing`           | `.agents/@montflow/prompts/spec-sizing.json`  |
-| `tier`   | `micro`                 | `.agents/@montflow/tiers/micro.md`            |
-| `tier`   | `standard`              | `.agents/@montflow/tiers/standard.md`         |
-| `tier`   | `full`                  | `.agents/@montflow/tiers/full.md`             |
+| `rigor`  | `trivial`               | `.agents/@montflow/rigors/trivial.md`         |
+| `rigor`  | `light`                 | `.agents/@montflow/rigors/light.md`           |
+| `rigor`  | `standard`              | `.agents/@montflow/rigors/standard.md`        |
+| `rigor`  | `deep`                  | `.agents/@montflow/rigors/deep.md`            |
+| `rigor`  | `critical`              | `.agents/@montflow/rigors/critical.md`        |
 
 Other packages own the other kinds: one `profile` per spec role is installed by `mf-profiles doctor`, and model-fallback owns one `prompt`. The manifest is the single source of truth for each package.
 
@@ -38,6 +40,6 @@ The payload is embedded in the `mf-specs` binary at build time with `bun run gen
 
 ## See also
 
-- [Verbs](./verbs.md) — the commands that load the prompts and tiers.
-- [Phases](./phases.md) — what the authoring skill and tier decide.
+- [Verbs](./verbs.md) — the commands that load the prompts and rigors.
+- [Phases](./phases.md) — what the authoring skill and rigor decide.
 - [Specs](./specs.md) — the store the payload writes into.

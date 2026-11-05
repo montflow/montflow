@@ -31,7 +31,7 @@ Vitest.describe('Cli.claim runtime', () => {
     withWorkspace((workspace) =>
       Effect.gen(function* () {
         const storeRoot = `${workspace}/${root}`;
-        yield* init({ root: storeRoot, name: 'demo', tier: 'micro' });
+        yield* init({ root: storeRoot, name: 'demo', rigor: 'trivial' });
         const specDir = `${storeRoot}/demo`;
 
         const bound = yield* claim({
@@ -132,7 +132,7 @@ Vitest.describe('Cli.claim runtime', () => {
     withWorkspace((workspace) =>
       Effect.gen(function* () {
         const storeRoot = `${workspace}/${root}`;
-        yield* init({ root: storeRoot, name: 'demo', tier: 'micro' });
+        yield* init({ root: storeRoot, name: 'demo', rigor: 'trivial' });
         yield* claim({
           root: storeRoot,
           workspace,
@@ -190,7 +190,7 @@ Vitest.describe('Cli.claim runtime', () => {
     withWorkspace((workspace) =>
       Effect.gen(function* () {
         const storeRoot = `${workspace}/${root}`;
-        yield* init({ root: storeRoot, name: 'demo', tier: 'micro' });
+        yield* init({ root: storeRoot, name: 'demo', rigor: 'trivial' });
         yield* claim({
           root: storeRoot,
           workspace,
@@ -238,7 +238,7 @@ Vitest.describe('Cli.claim runtime', () => {
     withWorkspace((workspace) =>
       Effect.gen(function* () {
         const storeRoot = `${workspace}/${root}`;
-        yield* init({ root: storeRoot, name: 'demo', tier: 'micro' });
+        yield* init({ root: storeRoot, name: 'demo', rigor: 'trivial' });
         yield* claim({
           root: storeRoot,
           workspace,
@@ -274,7 +274,7 @@ Vitest.describe('Cli.claim runtime', () => {
     withWorkspace((workspace) =>
       Effect.gen(function* () {
         const storeRoot = `${workspace}/${root}`;
-        yield* init({ root: storeRoot, name: 'demo', tier: 'micro' });
+        yield* init({ root: storeRoot, name: 'demo', rigor: 'trivial' });
         yield* claim({
           root: storeRoot,
           workspace,
@@ -311,7 +311,7 @@ Vitest.describe('Cli.claim runtime', () => {
     withWorkspace((workspace) =>
       Effect.gen(function* () {
         const storeRoot = `${workspace}/${root}`;
-        yield* init({ root: storeRoot, name: 'demo', tier: 'micro' });
+        yield* init({ root: storeRoot, name: 'demo', rigor: 'trivial' });
         yield* claim({
           root: storeRoot,
           workspace,
@@ -347,7 +347,7 @@ Vitest.describe('Cli.claim runtime', () => {
     withWorkspace((workspace) =>
       Effect.gen(function* () {
         const storeRoot = `${workspace}/${root}`;
-        yield* init({ root: storeRoot, name: 'demo', tier: 'micro' });
+        yield* init({ root: storeRoot, name: 'demo', rigor: 'trivial' });
         yield* claim({
           root: storeRoot,
           workspace,
@@ -403,7 +403,7 @@ Vitest.describe('Cli.claim runtime', () => {
     withWorkspace((workspace) =>
       Effect.gen(function* () {
         const storeRoot = `${workspace}/${root}`;
-        yield* init({ root: storeRoot, name: 'demo', tier: 'standard' });
+        yield* init({ root: storeRoot, name: 'demo', rigor: 'standard' });
         const fs = yield* FileSystem.FileSystem;
         const work = `${storeRoot}/demo/A/A001-implement/TASK.md`;
         yield* fs.writeFileString(
@@ -452,7 +452,7 @@ Vitest.describe('Cli.claim runtime', () => {
     withWorkspace((workspace) =>
       Effect.gen(function* () {
         const storeRoot = `${workspace}/${root}`;
-        yield* init({ root: storeRoot, name: 'demo', tier: 'standard' });
+        yield* init({ root: storeRoot, name: 'demo', rigor: 'standard' });
         const fs = yield* FileSystem.FileSystem;
         const work = `${storeRoot}/demo/A/A001-implement/TASK.md`;
         yield* fs.writeFileString(
@@ -519,7 +519,7 @@ Vitest.describe('Cli.claim runtime', () => {
     withWorkspace((workspace) =>
       Effect.gen(function* () {
         const storeRoot = `${workspace}/${root}`;
-        yield* init({ root: storeRoot, name: 'demo', tier: 'standard' });
+        yield* init({ root: storeRoot, name: 'demo', rigor: 'standard' });
         const fs = yield* FileSystem.FileSystem;
         const review = `${storeRoot}/demo/A/A002-review-phase/TASK.md`;
         yield* fs.writeFileString(

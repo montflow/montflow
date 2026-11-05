@@ -1,5 +1,5 @@
 import { Schema } from 'effect';
-import { tierOfSpec } from '../creation/index.js';
+import { rigorOfSpec } from '../creation/index.js';
 import { fieldList, fieldString, parseMarkdown } from '../frontmatter/index.js';
 import type { FieldValue } from '../frontmatter/index.js';
 import { GATE_RESULTS_FILE, latestResults, parseGateResults } from '../gates/index.js';
@@ -12,7 +12,7 @@ import {
   phaseOf,
 } from '../task/index.js';
 import { type Issue, type Result, finding, issue, noErrors } from '../verify/index.js';
-import { waiverAllowed } from '../tier/index.js';
+import { CODES as RIGOR_CODES, RIGOR_CONTRACT, waiverAllowed } from '../rigor/index.js';
 import type { SpecSnapshot } from '../structure/index.js';
 
 /** Per-phase record file, beside the task directories. */
@@ -563,7 +563,7 @@ export const verifyPhaseFile = (
         message: 'A required phase holds no review task; the phase stays unlocked.',
         expected: 'a review-type task, or `review: waived` or `review: none`',
         actual: 'no review task',
-        fix: 'Request a review task when the tier needs one, or declare the phase review-free.',
+        fix: 'Request a review task when the rigor needs one, or declare the phase review-free.',
       }),
     );
   }
@@ -696,7 +696,7 @@ export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
   const proven: Array<string> = [];
   const issues: Array<Issue> = [];
   const specText = fileAt('SPEC.md');
-  const tier = specText === undefined ? undefined : tierOfSpec(specText);
+  const rigor = specText === undefined ? undefined : rigorOfSpec(specText);
 
   for (const phase of childrenOf('')
     .filter((dir) => PHASE_PATTERN.test(dir))
@@ -769,11 +769,33 @@ export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
         isReviewReason(parsed.reviewReason) &&
         !taskTypes.includes('review') &&
         complete &&
-        tier !== undefined &&
-        waiverAllowed(tier, taskTypes) &&
+        rigor !== undefined &&
+        waiverAllowed(rigor, taskTypes) &&
         coverage;
       if (waiver) waived.push(phase);
-      if (parsed.review === 'none' && !taskTypes.includes('review')) none.push(phase);
+      if (parsed.review === 'none' && !taskTypes.includes('review')) {
+        if (rigor === undefined) {
+          none.push(phase);
+        } else {
+          const contract = RIGOR_CONTRACT[rigor];
+          const reviewRequired = contract.review === 'required';
+          const waiverForbidden = contract.waiver === 'forbidden';
+          if (reviewRequired || waiverForbidden) {
+            issues.push(
+              finding({
+                code: RIGOR_CODES.reviewForbidden,
+                field: 'review',
+                message: `Phase '${phase}' declares review: none, but ${rigor} requires review and its waiver policy is ${contract.waiver}.`,
+                expected: 'review: required',
+                actual: 'review: none',
+                fix: 'Set the phase review to required; review: none is only valid where the rigor permits it.',
+              }),
+            );
+          } else {
+            none.push(phase);
+          }
+        }
+      }
       if (parsed.review === 'waived' && complete && !waiver) {
         issues.push(
           finding({

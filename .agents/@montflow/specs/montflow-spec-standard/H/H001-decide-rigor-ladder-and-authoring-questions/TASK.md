@@ -6,7 +6,7 @@ originator: user
 size: tiny
 depends-on: B003
 related-tasks: H002, H003, H004
-status: pending
+status: complete
 write-scope: none
 ---
 
@@ -80,8 +80,8 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] Five level names, their order, and the full per-level matrix are in `MEMORY.md`
-- [ ] The question flow lists every variable with type, options, default, required, and `when`
-- [ ] The worktree recipe delegates to `using-git-worktrees` and fixes origin resolution, branch/path convention, and push policy
-- [ ] The persistence decision and its effect on execution are stated
-- [ ] The supersession list names every B003/C006 edit, and the split boundary is unchanged
+- [x] Five level names, their order, and the full per-level matrix are in `MEMORY.md`
+- [x] The question flow lists every variable with type, options, default, required, and `when`
+- [x] The worktree recipe delegates to `using-git-worktrees` and fixes origin resolution, branch/path convention, and push policy
+- [x] The persistence decision and its effect on execution are stated
+- [x] The supersession list names every B003/C006 edit, and the split boundary is unchanged

@@ -1,7 +1,7 @@
 export * as Spec from './spec/index.js';
 export * as Phase from './phase/index.js';
 export * as Task from './task/index.js';
-export * as Tier from './tier/index.js';
+export * as Rigor from './rigor/index.js';
 export * as Creation from './creation/index.js';
 export * as Init from './init/index.js';
 export * as Gates from './gates/index.js';

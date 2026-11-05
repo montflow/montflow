@@ -5,7 +5,13 @@ import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import { phaseMarkdown } from '../../../modules/phase/tests/helpers.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import * as Catalogue from '../../../modules/catalogue/index.js';
-import { DEFAULT_ROOT, SurfaceError, runSlash, sizingConfig } from '../index.js';
+import {
+  author as authorEngine,
+  DEFAULT_ROOT,
+  SurfaceError,
+  runSlash,
+  sizingConfig,
+} from '../index.js';
 import { REPO_SIZING, SPEC_SIZING, entry, memory, stubLayer } from './helpers.js';
 
 const specs = new Map([
@@ -270,7 +276,8 @@ Vitest.describe('Cli.runSlash flag validation', () => {
         'list --pending --verbose',
         'list --status=complete',
         'create --name ship-login --description Ship --author Tester --workspace-type in-place --tasks build:execution:gates --reviewer-profiles reviewer',
-        'author --request Ship login --notes Note',
+        'author --request Ship login --notes Note --rigor standard --isolated no',
+        'author --request Ship login --rigor standard --isolated yes --origin other --origin-branch release/2 --worktree-name ship-login',
         'execute --name ok --phase A --focus Steer --mode guided',
         'sizing-config --scope repo',
         'sizing-config --scope spec --name ok',
@@ -539,7 +546,7 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
     Effect.gen(function* () {
       const work = yield* workspace;
       const report = yield* runSlash(
-        'author --request Ship login --notes Do not touch packages/core.',
+        'author --request Ship login --notes Do not touch packages/core. --rigor standard --isolated no',
         work.root,
       ).pipe(Effect.provide(stubLayer(specs)));
       Vitest.expect(report.ok).toBe(true);
@@ -553,11 +560,11 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
     Effect.gen(function* () {
       const work = yield* workspace;
       const spaced = yield* runSlash(
-        'author --request Ship login --notes Do not touch packages/core.',
+        'author --request Ship login --notes Do not touch packages/core. --rigor standard --isolated no',
         work.root,
       ).pipe(Effect.provide(stubLayer(specs)));
       const inline = yield* runSlash(
-        'author --request=Ship login --notes=Do not touch packages/core.',
+        'author --request=Ship login --notes=Do not touch packages/core. --rigor=standard --isolated=no',
         work.root,
       ).pipe(Effect.provide(stubLayer(specs)));
       Vitest.expect(inline.ok).toBe(true);
@@ -565,6 +572,60 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
       Vitest.expect(inline.output).toBe(spaced.output);
       Vitest.expect(inline.output).toContain('Ship login');
       Vitest.expect(inline.output).toContain('Do not touch packages/core.');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('carries every authoring flag and renders the binary text', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const report = yield* runSlash(
+        'author --request Ship login --notes Do not touch packages/core. --rigor deep --isolated yes --origin other --origin-branch release/2 --worktree-name ship-login',
+        work.root,
+      ).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(report.ok).toBe(true);
+      Vitest.expect(report.output).toContain('Chosen rigor: `deep`');
+      Vitest.expect(report.output).toContain('from origin `other`');
+      Vitest.expect(report.output).toContain('at branch `release/2`');
+      Vitest.expect(report.output).toContain('worktree named `ship-login`');
+      Vitest.expect(report.output).toContain('Do not touch packages/core.');
+
+      const engine = yield* authorEngine(work.dir, {
+        request: 'Ship login',
+        notes: 'Do not touch packages/core.',
+        rigor: 'deep',
+        isolated: 'yes',
+        origin: 'other',
+        originBranch: 'release/2',
+        worktreeName: 'ship-login',
+      }).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(report.output).toBe(engine.text);
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('drops hidden isolation flags and refuses a missing origin branch', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const inPlace = yield* runSlash(
+        'author --request Ship login --rigor standard --isolated no --origin main --origin-branch release/2 --worktree-name ship-login',
+        work.root,
+      ).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(inPlace.ok).toBe(true);
+      for (const hidden of ['release/2', 'ship-login', 'from origin', 'worktree named']) {
+        Vitest.expect(inPlace.output).not.toContain(hidden);
+      }
+
+      const missing = yield* runSlash(
+        'author --request Ship login --rigor standard --isolated yes --origin other --worktree-name ship-login',
+        work.root,
+      ).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(missing.ok).toBe(false);
+      Vitest.expect(missing.output).toContain('code     cli.invalid-argument');
+      Vitest.expect(missing.output).toContain('field    --origin-branch');
+      Vitest.expect(missing.output).toContain('expected a non-empty branch name');
+      Vitest.expect(missing.output).toContain('actual   missing');
+      Vitest.expect(missing.output).toContain(
+        'next     mf-specs author --request <text> --rigor standard --isolated yes --origin other --worktree-name ship-login --origin-branch <branch>',
+      );
     }).pipe(Effect.provide(stubLayer(specs))),
   );
 
@@ -582,6 +643,22 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
       Vitest.expect(found?.field).toBe('--request');
       Vitest.expect(found?.problem).toContain('author requires --request');
       Vitest.expect(found?.fix).toContain('--request');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('refuses an absent rigor with the coded authoring diagnostic', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const report = yield* runSlash('author --request Ship login --isolated no', work.root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).toContain('code     cli.invalid-argument');
+      Vitest.expect(report.output).toContain('field    --rigor');
+      Vitest.expect(report.output).toContain(
+        'expected one of trivial, light, standard, deep, critical',
+      );
+      Vitest.expect(report.output).toContain('next     mf-specs author');
     }).pipe(Effect.provide(stubLayer(specs))),
   );
 
@@ -731,7 +808,7 @@ Vitest.describe('Cli.runSlash v2 surfaces', () => {
     Effect.gen(function* () {
       const created = new Map(specs);
       const layer = stubLayer(created);
-      const report = yield* runSlash('init --name demo --tier micro', root).pipe(
+      const report = yield* runSlash('init --name demo --rigor trivial', root).pipe(
         Effect.provide(layer),
       );
       Vitest.expect(report.ok).toBe(true);
@@ -753,7 +830,7 @@ Vitest.describe('Cli.runSlash v2 surfaces', () => {
       const created = new Map(specs);
       const layer = stubLayer(created);
       const report = yield* runSlash(
-        'init --name demo --tier micro --task A:first:execution:medium:scope=app',
+        'init --name demo --rigor trivial --task A:first:execution:medium:scope=app',
         root,
       ).pipe(Effect.provide(layer));
       Vitest.expect(report.ok).toBe(true);
@@ -761,7 +838,7 @@ Vitest.describe('Cli.runSlash v2 surfaces', () => {
       Vitest.expect(task?.content).toContain('write-scope: app');
 
       const refused = yield* runSlash(
-        'init --name other --tier micro --task A:first:execution:medium:typo=1',
+        'init --name other --rigor trivial --task A:first:execution:medium:typo=1',
         root,
       ).pipe(Effect.provide(layer));
       Vitest.expect(refused.ok).toBe(false);
@@ -773,7 +850,7 @@ Vitest.describe('Cli.runSlash v2 surfaces', () => {
     Effect.gen(function* () {
       const created = new Map(specs);
       const layer = stubLayer(created);
-      yield* runSlash('init --name grow --tier standard', root).pipe(Effect.provide(layer));
+      yield* runSlash('init --name grow --rigor standard', root).pipe(Effect.provide(layer));
       const phase = yield* runSlash(
         'new-phase --name grow --objective Ship the second slice --review required',
         root,
@@ -792,11 +869,11 @@ Vitest.describe('Cli.runSlash v2 surfaces', () => {
     }),
   );
 
-  Vitest.it.effect('tier refuses an unknown value and gate needs its subcommand', () =>
+  Vitest.it.effect('rigor refuses an unknown value and gate needs its subcommand', () =>
     Effect.gen(function* () {
-      const tier = yield* runSlash('tier split', root).pipe(Effect.provide(stubLayer(specs)));
-      Vitest.expect(tier.ok).toBe(false);
-      Vitest.expect(tier.output).toContain('code     tier.unknown');
+      const rigor = yield* runSlash('rigor split', root).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(rigor.ok).toBe(false);
+      Vitest.expect(rigor.output).toContain('code     rigor.unknown');
 
       const gate = yield* runSlash('gate --name ok --phase A', root).pipe(
         Effect.provide(stubLayer(specs)),

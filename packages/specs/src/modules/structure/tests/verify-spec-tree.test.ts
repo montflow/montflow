@@ -469,10 +469,13 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
         entry('B/B099-review-phase/MEMORY.md', memory),
       ]),
     );
-    Vitest.expect(result.issues).toContainEqual({
-      field: 'task A001',
-      message: "depends-on 'B001' points to a later phase.",
-    });
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({
+        code: 'depends-on.forward-phase',
+        field: 'task A001',
+        message: "depends-on 'B001' points to a later phase.",
+      }),
+    );
   });
 
   Vitest.it('flags a dependency cycle', () => {
@@ -1117,6 +1120,210 @@ Vitest.describe('Structure.verifySpecTree parallel authoring', () => {
     );
     Vitest.expect(result.issues).toContainEqual(
       Vitest.expect.objectContaining({ code: 'gate.scope-missing' }),
+    );
+  });
+});
+
+interface DependencyFixture {
+  readonly id: string;
+  readonly name: string;
+  readonly type?: string;
+  readonly status?: string;
+  readonly dependsOn?: string;
+  readonly relatedTasks?: string;
+}
+
+/** Phase prefix of a task id. */
+const phaseOfId = (id: string): string => id.replace(/\d+$/, '');
+
+/** A v2 tree built from a flat task list, with a review-free phase when none holds a review. */
+const depSnapshot = (tasks: ReadonlyArray<DependencyFixture>) => {
+  const phases = [...new Set(tasks.map((item) => phaseOfId(item.id)))];
+  return snapshot([
+    entry(
+      'SPEC.md',
+      specMarkdown({
+        version: '2',
+        rows: tasks.map((item) => ({
+          id: item.id,
+          name: item.name,
+          type: item.type ?? 'planning',
+          status: item.status ?? 'pending',
+          gates: 'No',
+        })),
+      }),
+    ),
+    ...phases.flatMap((phase) => {
+      const inPhase = tasks.filter((item) => phaseOfId(item.id) === phase);
+      const statuses = inPhase.map((item) => item.status ?? 'pending');
+      const status = statuses.every((value) => value === 'complete')
+        ? 'complete'
+        : statuses.some((value) => value === 'in-progress' || value === 'complete')
+          ? 'in-progress'
+          : statuses.some((value) => value === 'blocked')
+            ? 'blocked'
+            : 'pending';
+      const hasReview = inPhase.some((item) => item.type === 'review');
+      return [
+        entry(
+          `${phase}/PHASE.md`,
+          phaseMarkdown({ id: phase, status, review: hasReview ? 'required' : 'none' }),
+        ),
+        entry(`${phase}/MEMORY.md`, memory),
+      ];
+    }),
+    ...tasks.flatMap((item) => {
+      const phase = phaseOfId(item.id);
+      const base = {
+        id: item.id,
+        name: item.name,
+        type: item.type ?? 'planning',
+        status: item.status ?? 'pending',
+      };
+      const withDepends =
+        item.dependsOn === undefined ? base : { ...base, dependsOn: item.dependsOn };
+      const fixture =
+        item.relatedTasks === undefined
+          ? withDepends
+          : { ...withDepends, relatedTasks: item.relatedTasks };
+      return [
+        entry(`${phase}/${item.id}-${item.name}/TASK.md`, taskMarkdown(fixture)),
+        entry(`${phase}/${item.id}-${item.name}/MEMORY.md`, memory),
+      ];
+    }),
+  ]);
+};
+
+Vitest.describe('Structure.verifySpecTree dependency integrity', () => {
+  Vitest.it('rejects a direct dependency on its own phase review', () => {
+    const result = verifyTree(
+      depSnapshot([
+        { id: 'A001', name: 'work', dependsOn: 'A099' },
+        { id: 'A099', name: 'review-phase', type: 'review' },
+      ]),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({
+        code: 'depends-on.own-phase-review',
+        field: 'task A001',
+        actual: 'A001 -> A099',
+      }),
+    );
+  });
+
+  Vitest.it('reports the same-phase chain that reaches the review', () => {
+    const result = verifyTree(
+      depSnapshot([
+        { id: 'A001', name: 'work', dependsOn: 'A002' },
+        { id: 'A002', name: 'middle', dependsOn: 'A099' },
+        { id: 'A099', name: 'review-phase', type: 'review' },
+      ]),
+    );
+    const found = result.issues.find(
+      (issueFound) =>
+        issueFound.code === 'depends-on.own-phase-review' && issueFound.field === 'task A001',
+    );
+    Vitest.expect(found).toBeDefined();
+    Vitest.expect(found?.actual).toBe('A001 -> A002 -> A099');
+    Vitest.expect(found?.message).toContain('through A002 -> A099');
+    Vitest.expect(found?.fix).toContain("'A002'");
+  });
+
+  Vitest.it('accepts a dependency on an earlier phase review', () => {
+    const result = verifyTree(
+      depSnapshot([
+        { id: 'A099', name: 'review-phase', type: 'review' },
+        { id: 'B001', name: 'work', dependsOn: 'A099' },
+      ]),
+    );
+    Vitest.expect(result.valid).toBe(true);
+    Vitest.expect(result.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'depends-on.own-phase-review' }),
+    );
+  });
+
+  Vitest.it('rejects a complete task whose dependency is not complete', () => {
+    const result = verifyTree(
+      depSnapshot([
+        { id: 'A001', name: 'work', status: 'complete', dependsOn: 'A002' },
+        { id: 'A002', name: 'later' },
+      ]),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({
+        code: 'depends-on.complete-before-target',
+        field: 'task A001',
+        actual: 'A002 is pending',
+      }),
+    );
+  });
+
+  Vitest.it('accepts a complete task whose dependency is complete', () => {
+    const result = verifyTree(
+      depSnapshot([
+        { id: 'A001', name: 'work', status: 'complete', dependsOn: 'A002' },
+        { id: 'A002', name: 'earlier', status: 'complete' },
+        { id: 'A003', name: 'remaining' },
+      ]),
+    );
+    Vitest.expect(result.valid).toBe(true);
+    Vitest.expect(result.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'depends-on.complete-before-target' }),
+    );
+  });
+
+  Vitest.it('keeps an unknown dependency as the only finding on a complete task', () => {
+    const result = verifyTree(
+      depSnapshot([{ id: 'A001', name: 'work', status: 'complete', dependsOn: 'A404' }]),
+    );
+    const findings = result.issues.filter((issueFound) => issueFound.field === 'task A001');
+    Vitest.expect(findings).toStrictEqual([
+      Vitest.expect.objectContaining({
+        code: 'depends-on.unknown-target',
+        actual: 'A404 not found',
+      }),
+    ]);
+    Vitest.expect(result.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'depends-on.complete-before-target' }),
+    );
+  });
+
+  Vitest.it('rejects a related-tasks target with no task directory', () => {
+    const result = verifyTree(depSnapshot([{ id: 'A001', name: 'work', relatedTasks: 'A404' }]));
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({
+        code: 'related-tasks.unknown-target',
+        field: 'task A001',
+        actual: 'A404 not found',
+      }),
+    );
+  });
+
+  Vitest.it('rejects a self related-tasks reference', () => {
+    const result = verifyTree(depSnapshot([{ id: 'A001', name: 'work', relatedTasks: 'A001' }]));
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({
+        code: 'related-tasks.self-reference',
+        field: 'task A001',
+        actual: 'A001',
+      }),
+    );
+  });
+
+  Vitest.it('accepts a related-tasks target in another phase', () => {
+    const result = verifyTree(
+      depSnapshot([
+        { id: 'A001', name: 'work', relatedTasks: 'B001' },
+        { id: 'B001', name: 'other' },
+      ]),
+    );
+    Vitest.expect(result.valid).toBe(true);
+    Vitest.expect(result.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'related-tasks.unknown-target' }),
     );
   });
 });

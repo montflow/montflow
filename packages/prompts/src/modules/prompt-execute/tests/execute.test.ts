@@ -10,17 +10,23 @@ const variable = (
     required: boolean;
     default: string;
     label: string;
-    type: 'text' | 'textarea';
+    type: 'text' | 'textarea' | 'select' | 'confirm';
+    options: ReadonlyArray<string>;
+    when: Prompts.VariableCondition;
   }> = {},
-): Prompts.Variable =>
-  new Prompts.Variable({
+): Prompts.Variable => {
+  const base = {
     name,
     label: rest.label ?? name,
     description: '',
     type: rest.type ?? 'text',
     required: rest.required ?? true,
     default: rest.default ?? '',
-  });
+  };
+  const withOptions = rest.options === undefined ? base : { ...base, options: [...rest.options] };
+  const withWhen = rest.when === undefined ? withOptions : { ...withOptions, when: rest.when };
+  return new Prompts.Variable(withWhen);
+};
 
 /** Build a prompt from a template plus explicit variables. */
 const prompt = (
@@ -374,5 +380,150 @@ Vitest.describe('PromptExecute.execute file-level verification', () => {
       values: { scope: 'src/' },
     });
     Vitest.expect(plan).toMatchObject({ ok: true, text: 'Do X about src/' });
+  });
+});
+
+/** The G001 branch: isolation decides whether origin exists. */
+const branchPrompt = (): Prompts.Prompt =>
+  prompt('{{isolated}}{{#if origin}} origin={{origin}}{{/if}}', [
+    variable('isolated', { type: 'select', options: ['yes', 'no'] }),
+    variable('origin', {
+      type: 'select',
+      options: ['current', 'main'],
+      when: { controller: 'isolated', equals: 'yes' },
+    }),
+  ]);
+
+Vitest.describe('PromptExecute visibility', () => {
+  Vitest.it('reports the condition and whether a variable is visible', () => {
+    const summary = PromptExecute.inspect({
+      prompt: branchPrompt(),
+      values: { isolated: 'no' },
+    });
+    const origin = summary.variables.find((entry) => entry.name === 'origin');
+    Vitest.expect(origin?.condition).toStrictEqual({ controller: 'isolated', equals: 'yes' });
+    Vitest.expect(origin?.visible).toBe(false);
+    Vitest.expect(origin?.value).toBe('');
+  });
+
+  Vitest.it('does not report a hidden required variable as missing', () => {
+    const hidden = PromptExecute.inspect({
+      prompt: branchPrompt(),
+      values: { isolated: 'no' },
+    });
+    Vitest.expect(hidden.missing).toStrictEqual([]);
+    const shown = PromptExecute.inspect({
+      prompt: branchPrompt(),
+      values: { isolated: 'yes' },
+    });
+    Vitest.expect(shown.missing).toStrictEqual(['origin']);
+  });
+
+  Vitest.it('keeps a hidden variable in the table, marked hidden, and shows its condition', () => {
+    const hidden = PromptExecute.table(
+      PromptExecute.inspect({ prompt: branchPrompt(), values: { isolated: 'no' } }),
+    );
+    Vitest.expect(hidden).toContain('isolated');
+    Vitest.expect(hidden).toContain('origin');
+    Vitest.expect(hidden).toContain('select when isolated=yes (hidden)');
+
+    const shown = PromptExecute.table(
+      PromptExecute.inspect({ prompt: branchPrompt(), values: { isolated: 'yes' } }),
+    );
+    Vitest.expect(shown).toContain('isolated=yes');
+    Vitest.expect(shown).not.toContain('(hidden)');
+  });
+
+  Vitest.it('drops a supplied value for a hidden variable before rendering', () => {
+    const plan = PromptExecute.execute({
+      prompt: branchPrompt(),
+      model: 'p/m',
+      values: { isolated: 'no', origin: 'main' },
+    });
+    Vitest.expect(plan).toMatchObject({ ok: true, text: 'no' });
+  });
+
+  Vitest.it('refuses a select value outside its options', () => {
+    const plan = PromptExecute.execute({
+      prompt: branchPrompt(),
+      model: 'p/m',
+      values: { isolated: 'maybe' },
+    });
+    Vitest.expect(plan).toMatchObject({ ok: false, problem: 'invalid-values' });
+    if (plan.ok) return;
+    Vitest.expect(plan.message).toContain("'maybe'");
+    Vitest.expect(plan.message).toContain("'isolated'");
+    Vitest.expect(plan.message).toContain('select');
+    Vitest.expect(plan.message).toContain('yes, no');
+  });
+
+  Vitest.it('ignores an invalid value for a hidden variable instead of making it visible', () => {
+    const plan = PromptExecute.execute({
+      prompt: branchPrompt(),
+      model: 'p/m',
+      values: { isolated: 'no', origin: 'not-an-option' },
+    });
+    Vitest.expect(plan).toMatchObject({ ok: true, text: 'no' });
+  });
+});
+
+/** A confirm controller gating one text child. */
+const confirmPrompt = (): Prompts.Prompt =>
+  prompt('Flag: {{flag}}{{#if child}} Child: {{child}}.{{/if}}', [
+    variable('flag', { type: 'confirm', required: false }),
+    variable('child', { required: false, when: { controller: 'flag', truthy: true } }),
+  ]);
+
+Vitest.describe('PromptExecute confirm variables', () => {
+  Vitest.it('widens the summary type and resolves truthy visibility', () => {
+    const shown = PromptExecute.inspect({
+      prompt: confirmPrompt(),
+      values: { flag: 'yes' },
+    });
+    const flag = shown.variables.find((entry) => entry.name === 'flag');
+    const child = shown.variables.find((entry) => entry.name === 'child');
+    Vitest.expect(flag?.type).toBe('confirm');
+    Vitest.expect(child?.visible).toBe(true);
+
+    const hidden = PromptExecute.inspect({ prompt: confirmPrompt(), values: { flag: '' } });
+    const hiddenChild = hidden.variables.find((entry) => entry.name === 'child');
+    Vitest.expect(hiddenChild?.visible).toBe(false);
+    Vitest.expect(hidden.missing).toStrictEqual([]);
+  });
+
+  Vitest.it('shows a confirm and its truthy condition in the table', () => {
+    const text = PromptExecute.table(
+      PromptExecute.inspect({ prompt: confirmPrompt(), values: { flag: 'yes' } }),
+    );
+    Vitest.expect(text).toContain('confirm');
+    Vitest.expect(text).toContain('text when flag is set');
+  });
+
+  Vitest.it('accepts yes and empty, and refuses any other confirm value', () => {
+    const accepted = PromptExecute.execute({
+      prompt: confirmPrompt(),
+      model: 'p/m',
+      values: { flag: 'yes', child: 'x' },
+    });
+    Vitest.expect(accepted).toMatchObject({ ok: true, text: 'Flag: yes Child: x.' });
+
+    const unchecked = PromptExecute.execute({
+      prompt: confirmPrompt(),
+      model: 'p/m',
+      values: { flag: '' },
+    });
+    Vitest.expect(unchecked).toMatchObject({ ok: true, text: 'Flag: ' });
+
+    const refused = PromptExecute.execute({
+      prompt: confirmPrompt(),
+      model: 'p/m',
+      values: { flag: 'no' },
+    });
+    Vitest.expect(refused).toMatchObject({ ok: false, problem: 'invalid-values' });
+    if (refused.ok) return;
+    Vitest.expect(refused.message).toContain("'no'");
+    Vitest.expect(refused.message).toContain("'flag'");
+    Vitest.expect(refused.message).toContain('confirm');
+    Vitest.expect(refused.message).toContain("'yes'");
   });
 });

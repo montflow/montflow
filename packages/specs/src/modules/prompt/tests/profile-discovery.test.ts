@@ -27,7 +27,7 @@ const template = (): string =>
 /** The prompt's phase-rules section, where the reviewer choice is made. */
 const phaseRules = (): string => {
   const text = template();
-  const at = text.indexOf('## 8. Follow the phase rules');
+  const at = text.indexOf('## 9. Follow the phase rules');
   if (at < 0) throw new Error('prompt drift: no phase-rules section');
   return flat(text.slice(at));
 };

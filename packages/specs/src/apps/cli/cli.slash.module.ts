@@ -67,7 +67,7 @@ import {
   newPhaseCommand,
   newTaskCommand,
   stampCommand,
-  tierCommand,
+  rigorCommand,
   lockCommand,
   waiverCommand,
   reviewCommand,
@@ -90,7 +90,7 @@ import {
   slashNewPhase,
   slashNewTask,
   slashStamp,
-  slashTier,
+  slashRigor,
   slashWaiver,
 } from './cli.apps.module.js';
 import * as Cli from '@montflow/version/cli';
@@ -126,7 +126,7 @@ export const rootCommand = Command.make('mf-specs').pipe(
     newPhaseCommand,
     newTaskCommand,
     stampCommand,
-    tierCommand,
+    rigorCommand,
     claimCommand,
     lockCommand,
     waiverCommand,
@@ -204,7 +204,15 @@ export const slashAuthor = (context: SlashContext): SlashEffect => {
   }
   const request = parsed.request;
   return slashOutcome(
-    author(workspace, { request, notes: parsed.notes }),
+    author(workspace, {
+      request,
+      notes: parsed.notes,
+      rigor: parsed.values.rigor,
+      isolated: parsed.values.isolated,
+      origin: parsed.values.origin,
+      originBranch: parsed.values['origin-branch'],
+      worktreeName: parsed.values['worktree-name'],
+    }),
     (loaded): SlashReport => ({ output: loaded.text, ok: true }),
     { path: workspace, rerun: 'mf-specs author', verbose: parsed.verbose },
   );
@@ -569,8 +577,8 @@ export const slashArm = (context: SlashContext): SlashEffect => {
       return slashNewTask(context);
     case 'stamp':
       return slashStamp(context);
-    case 'tier':
-      return slashTier(context);
+    case 'rigor':
+      return slashRigor(context);
     case 'claim':
       return slashClaim(context);
     case 'lock':

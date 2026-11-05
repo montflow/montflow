@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.19.0] - 2026-11-04
+
+### Changed
+
+- The authoring questions are part of the flow: the user chooses `rigor` (five levels, no default), `isolated`, and, when isolated, `origin`, `origin_branch`, and `worktree_name`; the appraiser only recommends and flags a level that cannot hold the request
+- An isolated run loads `using-git-worktrees`, passes the chosen origin and worktree name, and authors in the resulting workspace with `--workspace-type worktree`; the in-place run keeps today's behaviour
+
+## [2.18.0] - 2026-11-04
+
+### Changed
+
+- The spec-level `tier` becomes `rigor`, with five levels: `trivial`, `light`, `standard`, `deep`, and `critical`; `mf-specs rigor <level>` loads exactly one file from `.agents/@montflow/rigors/`
+- The rigor table states all five rows; the split verdict keeps its frozen `tier` part field
+
 ## [2.17.0] - 2026-11-03
 
 ### Added

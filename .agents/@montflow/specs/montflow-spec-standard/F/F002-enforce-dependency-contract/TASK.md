@@ -6,7 +6,7 @@ originator: planner:F001
 size: tiny
 depends-on: F001, C001
 related-tasks: E001
-status: pending
+status: complete
 write-scope: packages/specs
 ---
 
@@ -51,13 +51,13 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] A non-review task reaching its own phase's review fails with a coded
+- [x] A non-review task reaching its own phase's review fails with a coded
       finding naming the path
-- [ ] A complete task with an incomplete dependency fails; an unknown
+- [x] A complete task with an incomplete dependency fails; an unknown
       dependency reports only its existing finding
-- [ ] Duplicate `depends-on` and unresolvable or self `related-tasks` fail with
+- [x] Duplicate `depends-on` and unresolvable or self `related-tasks` fail with
       their own codes
-- [ ] A dependency on an earlier phase's review task passes
-- [ ] `bun run --cwd packages/specs test` passes with the new fixtures
-- [ ] `bun run mf-specs:check` reports zero issues for every spec in the store
-- [ ] `ts:check`, `lint:check`, and `fmt:check` pass
+- [x] A dependency on an earlier phase's review task passes
+- [x] `bun run --cwd packages/specs test` passes with the new fixtures
+- [x] `bun run mf-specs:check` reports zero issues for every spec in the store
+- [x] `ts:check`, `lint:check`, and `fmt:check` pass

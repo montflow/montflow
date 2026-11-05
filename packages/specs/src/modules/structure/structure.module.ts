@@ -9,7 +9,7 @@ import {
   SPEC_VERSION_FIELD,
 } from '../spec/index.js';
 import { fieldString, parseMarkdown } from '../frontmatter/index.js';
-import { tierOfSpec } from '../creation/index.js';
+import { rigorOfSpec } from '../creation/index.js';
 import {
   GATE_CODES,
   GATE_RESULTS_FILE,
@@ -28,6 +28,7 @@ import {
   verifyPhaseParallelism,
   verifyTaskWriteScopes,
 } from './structure.parallel.module.js';
+import { verifyRigorCeilings } from './structure.rigor.module.js';
 import { verify as verifyLifecycle } from '../lifecycle/index.js';
 import { verifyMemoryFile } from '../memory/index.js';
 import { MAILBOX_FILE, type ChannelKind, verifyChannel } from '../channel/index.js';
@@ -173,41 +174,6 @@ const directoryPaths = (entries: ReadonlyArray<SpecFileEntry>): Set<string> => {
   return dirs;
 };
 
-/**
- * Find the first `depends-on` cycle, if any. Returns the offending ids in
- * cycle order (the repeated id closes the cycle).
- */
-const findCycle = (tasks: ReadonlyMap<string, Task>): ReadonlyArray<string> | undefined => {
-  const state = new Map<string, 'visiting' | 'done'>();
-  const stack: Array<string> = [];
-  let cycle: Array<string> | undefined;
-
-  const visit = (id: string): void => {
-    if (cycle !== undefined) return;
-    const current = state.get(id);
-    if (current === 'done') return;
-    if (current === 'visiting') {
-      cycle = stack.slice(stack.indexOf(id)).concat(id);
-      return;
-    }
-    state.set(id, 'visiting');
-    stack.push(id);
-    const task = tasks.get(id);
-    if (task !== undefined) {
-      for (const dep of task.dependsOn) visit(dep);
-    }
-    stack.pop();
-    state.set(id, 'done');
-  };
-
-  for (const id of tasks.keys()) visit(id);
-  return cycle;
-};
-
-/**
- * Prefix a nested file's issues with its path so output is actionable, keeping
- * each finding's severity, fix, and line intact.
- */
 const nest = (path: string, result: Result): ReadonlyArray<Issue> =>
   result.issues.map((found) => ({ ...found, field: `${path}: ${found.field}` }));
 
@@ -409,11 +375,24 @@ export {
   verifyTaskWriteScopes,
   type GateStageEntry,
 } from './structure.parallel.module.js';
+import { verifyDependencies } from './dependency.module.js';
 
 /** Stable code for a surviving v2 `locked-phases` field. */
 export const LOCKED_PHASES_PRESENT_CODE = 'spec.locked-phases';
 
-/** Task types whose tier contract requires a mechanical proof file. */
+export {
+  DEPENDS_ON_UNKNOWN_CODE,
+  DEPENDS_ON_SELF_CODE,
+  DEPENDS_ON_FORWARD_CODE,
+  DEPENDS_ON_CYCLE_CODE,
+  DEPENDS_ON_OWN_PHASE_REVIEW_CODE,
+  DEPENDS_ON_COMPLETE_CODE,
+  RELATED_TASKS_UNKNOWN_CODE,
+  RELATED_TASKS_SELF_CODE,
+  verifyDependencies,
+} from './dependency.module.js';
+
+/** Task types whose rigor contract requires a mechanical proof file. */
 const GATED_TASK_TYPES = new Set(['execution', 'defect', 'interruptor']);
 
 /**
@@ -425,8 +404,10 @@ const GATED_TASK_TYPES = new Set(['execution', 'defect', 'interruptor']);
  * phase `BOARD.md` and task `MAILBOX.md`, the record checks (a complete
  * task's completion checklist and gate progress are errors when unchecked and
  * silent while the task is unfinished), an optional spec-root
- * `sizing.json`, dependency existence + phase ordering + cycles, the review
- * budget, and the review link when the caller supplies series. Pure — no IO.
+ * `sizing.json`, dependency existence + phase ordering + cycles + the
+ * own-phase-review and complete-before-target contradictions, `related-tasks`
+ * resolution, the review budget, and the review link when the caller supplies
+ * series. Pure — no IO.
  *
  * There is no stored lock list and no required review task: a phase is complete
  * when every task under it is complete, and its lock is derived from a passed
@@ -467,7 +448,7 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
   const spec = parseSpecFile(specFile.content);
   const rows: ReadonlyArray<TaskRow> = parsedSpec === null ? [] : parseTaskTable(parsedSpec.body);
   const version = parsedSpec === null ? undefined : readSpecVersion(parsedSpec.fields);
-  const tier = tierOfSpec(specFile.content);
+  const rigor = rigorOfSpec(specFile.content);
   if (version !== undefined && version.version >= 2) {
     const transformed = isV2Transformed(snapshot);
     if (!transformed.ok) {
@@ -865,7 +846,17 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
     if (!rowById.has(id))
       issues.push(issue('SPEC.md', `Task '${id}' is missing from the task table.`));
   }
-  if (version !== undefined && version.version >= 2 && tier !== undefined) {
+  if (version !== undefined && version.version >= 2) {
+    issues.push(
+      ...verifyRigorCeilings({
+        specText: specFile.content,
+        phaseDirs,
+        tasks,
+      }),
+    );
+  }
+
+  if (version !== undefined && version.version >= 2 && rigor !== undefined) {
     for (const [id, task] of tasks) {
       if (!GATED_TASK_TYPES.has(task.type) || gates.get(id) === true) continue;
       issues.push(
@@ -881,25 +872,7 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
     }
   }
 
-  for (const [id, task] of tasks) {
-    for (const dep of task.dependsOn) {
-      const depTask = tasks.get(dep);
-      if (depTask === undefined) {
-        issues.push(issue(`task ${id}`, `depends-on '${dep}' has no task directory.`));
-        continue;
-      }
-      if (dep === id) {
-        issues.push(issue(`task ${id}`, 'depends-on must not reference the task itself.'));
-        continue;
-      }
-      if (phaseRank(phaseOf(dep)) > phaseRank(phaseOf(id))) {
-        issues.push(issue(`task ${id}`, `depends-on '${dep}' points to a later phase.`));
-      }
-    }
-  }
-  const cycle = findCycle(tasks);
-  if (cycle !== undefined)
-    issues.push(issue('depends-on', `Dependency cycle: ${cycle.join(' -> ')}.`));
+  issues.push(...verifyDependencies(tasks));
 
   const phases = new Set<string>();
   for (const id of tasks.keys()) phases.add(phaseOf(id));
@@ -951,7 +924,7 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
         provenPhases: evidence.proven,
         tasks: Array.from(tasks.values()).map((task) => ({ id: task.id, status: task.status })),
         // Every v2 record completes through a lock, including a v1 record
-        // migrated without a `## Creation` tier. A frozen v1 record keeps the
+        // migrated without a `## Creation` rigor. A frozen v1 record keeps the
         // status-only rule it shipped with.
         requireLocks: reviewAware,
       }).issues,

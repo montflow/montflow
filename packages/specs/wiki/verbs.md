@@ -18,21 +18,21 @@ Every surface delegates to the same engine, so output, codes, and exit truth do 
 
 ## Generators
 
-| Command                                                | Writes                                     |
-| ------------------------------------------------------ | ------------------------------------------ |
-| `init --name <spec> --tier <tier>`                     | a whole v2 tree from a validated tier plan |
-| `create --name <spec>`                                 | the tier-agnostic scaffold                 |
-| `new-phase --name <spec> --objective <line>`           | the next `PHASE.md` and phase memory       |
-| `new-task --name <spec> --phase <id> ...`              | the next `TASK.md` and `SPEC.md` row       |
-| `stamp [--format instant\|date]`                       | one UTC timestamp, printed                 |
-| `claim --name <spec> --task <id>`                      | the session binding for a task             |
-| `waiver --name <spec> --phase <id> ...`                | the phase review decision and evidence     |
-| `gate run --name <spec> --phase <id>`                  | `GATE-RESULTS.jsonl`                       |
-| `gate record ... --judge <slug> --verdict pass\|fail`  | one subjective verdict                     |
-| `mail --name <spec> --to <task-id\|all> --text <text>` | a board or mailbox entry                   |
-| `migrate [--name <spec>\|--all] [--include-complete]`  | the v2 phase tree and `spec-version`       |
-| `review decide --name <spec> --phase <id>`             | nothing; it only decides                   |
-| `lock --name <spec> --phase <id>`                      | nothing; it only confirms                  |
+| Command                                                | Writes                                      |
+| ------------------------------------------------------ | ------------------------------------------- |
+| `init --name <spec> --rigor <rigor>`                   | a whole v2 tree from a validated rigor plan |
+| `create --name <spec>`                                 | the rigor-agnostic scaffold                 |
+| `new-phase --name <spec> --objective <line>`           | the next `PHASE.md` and phase memory        |
+| `new-task --name <spec> --phase <id> ...`              | the next `TASK.md` and `SPEC.md` row        |
+| `stamp [--format instant\|date]`                       | one UTC timestamp, printed                  |
+| `claim --name <spec> --task <id>`                      | the session binding for a task              |
+| `waiver --name <spec> --phase <id> ...`                | the phase review decision and evidence      |
+| `gate run --name <spec> --phase <id>`                  | `GATE-RESULTS.jsonl`                        |
+| `gate record ... --judge <slug> --verdict pass\|fail`  | one subjective verdict                      |
+| `mail --name <spec> --to <task-id\|all> --text <text>` | a board or mailbox entry                    |
+| `migrate [--name <spec>\|--all] [--include-complete]`  | the v2 phase tree and `spec-version`        |
+| `review decide --name <spec> --phase <id>`             | nothing; it only decides                    |
+| `lock --name <spec> --phase <id>`                      | nothing; it only confirms                   |
 
 `lock` is a confirmation verb, not a lock list. It writes no file and owns no status row. `review decide` is read-only and prints `decision`, `rounds`, `open`, `reason`, and the per-series breakdown.
 
@@ -48,7 +48,7 @@ A transition writes the task status, the `SPEC.md` row, and the `PHASE.md` mirro
 | ---------- | ----------------------------------------------------------------------------------------------------- |
 | Binary     | `mf-specs <verb> [flags]`                                                                             |
 | Slash      | `/specs <verb> [flags]` — the command verbs; `review decide`, `doctor`, and `version` are binary-only |
-| Host tools | `spec_author`, `spec_execute`, `spec_sizing`, `spec_tier`, `spec_models`                              |
+| Host tools | `spec_author`, `spec_execute`, `spec_sizing`, `spec_rigor`, `spec_models`                             |
 | TUI        | the specs picker; offers only directories holding `SPEC.md`                                           |
 
 The slash form validates flags per command and refuses a flag the verb does not implement with `cli.invalid-argument` and the command to run instead. The host tools render or read; they do not add a second rule set.
@@ -61,4 +61,4 @@ The slash form validates flags per command and refuses a flag the verb does not 
 
 - [Phases](./phases.md) — what `claim`, `gate`, `waiver`, and `lock` change.
 - [Specs](./specs.md) — what the readers report.
-- [Payload](./payload.md) — install the skills, prompts, and tiers the verbs load.
+- [Payload](./payload.md) — install the skills, prompts, and rigors the verbs load.

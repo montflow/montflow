@@ -6,7 +6,7 @@ originator: user
 size: tiny
 depends-on: G002
 related-tasks: G001, G003
-status: pending
+status: complete
 write-scope: apps/workspace, packages/prompts/src/modules/prompts, packages/prompts/skills/montflow-create-prompts, packages/prompts/README.md
 ---
 
@@ -47,8 +47,8 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] Saving and reopening a conditional prompt preserves the condition byte-for-byte
-- [ ] The editor refuses an unknown controller, a later controller, or a value outside the controller's options
-- [ ] The detail view marks a hidden variable without changing its stored value
-- [ ] `authoringRules()` and the packaged skill both state the condition grammar and the guard rule
-- [ ] The drift test fails if either guidance loses the condition field
+- [x] Saving and reopening a conditional prompt preserves the condition byte-for-byte
+- [x] The editor refuses an unknown controller, a later controller, or a value outside the controller's options
+- [x] The detail view marks a hidden variable without changing its stored value
+- [x] `authoringRules()` and the packaged skill both state the condition grammar and the guard rule
+- [x] The drift test fails if either guidance loses the condition field

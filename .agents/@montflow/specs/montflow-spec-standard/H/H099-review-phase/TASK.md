@@ -6,7 +6,7 @@ originator: user
 size: medium
 depends-on: H001, H002, H003, H004
 related-tasks:
-status: pending
+status: in-progress
 ---
 
 # Task H099: review the rigor and isolation phase

@@ -1,10 +1,10 @@
 # Review Series: montflow-spec-standard
 
 ## Metadata
-- Target: montflow-spec-standard
-- Status: closed
-- Rounds: 12
-- Created: 2026-11-03
+- Target: spec montflow-spec-standard phase H
+- Status: open
+- Rounds: 16
+- Created: 2026-11-04
 
 ## Rounds
 
@@ -22,6 +22,10 @@
 | 010 | open | 0 | 2 | 2 | 0 | 0 |
 | 011 | open | 0 | 1 | 2 | 0 | 0 |
 | 012 | closed | 0 | 0 | 1 | 0 | 0 |
+| 013 | closed | 0 | 0 | 10 | 0 | 0 |
+| 014 | closed | 0 | 0 | 4 | 0 | 0 |
+| 015 | open | 1 | 0 | 13 | 0 | 0 |
+| 016 | open | 7 | 0 | 0 | 0 | 0 |
 
 ## Findings
 
@@ -130,3 +134,38 @@
 | 011 | F26 | Minor | Resolved | `create --tasks` refuses a three-path scope, and its diagnostic names the wrong fragment |
 | 011 | F27 | Major | In Review | A waiter's reused record is appended outside the run lock, so it can land after a newer attempt's record and decide `check` against the run state |
 | 012 | F27 | Major | Resolved | A waiter's reused record is appended outside the run lock, so it can land after a newer attempt's record and decide `check` against the run state |
+| 013 | F1 | Major | Resolved | The guard check rejects a legitimate `{{#if}}` on a controller that is itself conditional, so a two-level branch cannot be written |
+| 013 | F2 | Major | Resolved | The workspace "editor" is a pure module with no caller, so no user can choose or have a condition refused |
+| 013 | F3 | Minor | Resolved | `confirm` silently absorbs `options`, `default`, and `required`, so the verifier accepts a file that contradicts the kind's contract and a save drops the fields |
+| 013 | F4 | Minor | Resolved | Render and fill surfaces skip verification, so a malformed `when` renders a stale hidden value while `execute` refuses the same prompt |
+| 013 | F5 | Minor | Resolved | The worked example and its fixture use hyphenated names the verifier cannot accept, so the copyable branch cannot be copied |
+| 013 | F6 | Minor | Resolved | `table` drops hidden rows, so the only text view of `inspect` cannot report that a variable exists and is hidden |
+| 013 | F7 | Minor | Resolved | The question counter counts skipped hidden variables, so it promises questions that never come |
+| 013 | F8 | Minor | Resolved | The packaged skill still says `type` is text/textarea only and never states the `confirm` field rules |
+| 013 | F9 | Nit | Resolved | `isVisibleAt`'s `seen` set and cycle comment are unreachable dead code |
+| 013 | F10 | Nit | Resolved | The module CONTEXT docs still describe the pre-condition surface |
+| 014 | F7 | Minor | Resolved | The question counter counts skipped hidden variables, so it promises questions that never come |
+| 014 | F11 | Minor | Resolved | `fillInputs` asks a controller that has a `default` on the first fill, contradicting its own default rule |
+| 014 | F12 | Minor | Resolved | The interactive fill tests never execute: an Effect-returning body registered with plain `Vitest.it` is not awaited |
+| 014 | F13 | Nit | Resolved | The create-prompts skill's "seven rules it measures" list omits the condition and confirm diagnostics |
+| 015 | F1 | Critical | Resolved | `--review none` skips the required review at `standard`, `deep`, and `critical`, and `check` stays green |
+| 015 | F2 | Major | Open | The ladder's ceilings, exploration, and gate rules are enforced only by `init`; `new-phase` and `new-task` grow past any level and `check` stays green |
+| 015 | F3 | Major | Resolved | The isolated flow never resolves `current`/`main`/`other` to a git ref, so the delegated skill starts from an invalid or stale base |
+| 015 | F4 | Major | Resolved | An isolated run that cannot create its worktree authors in place but still reports `isolated: yes` with a worktree path |
+| 015 | F5 | Major | Resolved | `trivial.md` orders the run to choose `light`, and the prompt's escalation question exceeds the `trivial`/`light` budgets |
+| 015 | F6 | Major | Resolved | The rigor contract's `waiver`, `grilling`, and artifact fields are inert, so the table is documentation rather than the one source of truth |
+| 015 | F7 | Minor | Resolved | Every authoring refusal reuses one fixed rerun line, so the `origin`/`origin-branch`/`worktree-name` refusals do not give the exact command |
+| 015 | F8 | Minor | Resolved | The isolated branch leaves the skill's Type and Push parameters and its branch/path convention unstated |
+| 015 | F9 | Minor | Resolved | The packaged skill and README still document `author --request` without the now-required `--rigor`/`--isolated` |
+| 015 | F10 | Minor | Resolved | The repo's agent rules and installation guide still describe the removed `tier` verb, tool, and payload kind |
+| 015 | F11 | Minor | Resolved | No test exercises the per-level ceilings, the new deep/critical exploration branches, or `waiverAllowed` |
+| 015 | F12 | Minor | Resolved | The isolated branch depends on `using-git-worktrees`, which the prompt neither declares nor marks as a prerequisite |
+| 015 | F13 | Nit | Resolved | The exported `rigor` command is still named `tierCommand` |
+| 015 | F14 | Nit | Resolved | `critical` spends a grilling question on a review-waiver decision it forbids |
+| 016 | F2 | Major | Open | The ladder's ceilings, exploration, and gate rules are enforced only by `init`; `new-phase` and `new-task` grow past any level and `check` stays green |
+| 016 | F15 | Major | Open | The documented `rigor: <new> (raised-from <old>)` escalation record is unparseable, so an escalated spec silently loses every rigor rule |
+| 016 | F16 | Minor | Open | An in-place rendering still names `using-git-worktrees`, so `isolated: no` carries worktree text whenever the skill is absent |
+| 016 | F17 | Minor | Open | The conditional artifact arm never fires outside `init`, so a `light` phase grown past one task gets no `BOARD.md`/`MAILBOX.md` |
+| 016 | F18 | Nit | Open | The "accepts every level at its ceiling" test only filters two codes, so a plan that violates exploration still counts as accepted |
+| 016 | F19 | Nit | Open | The payload changelog still describes four payload kinds |
+| 016 | F20 | Nit | Open | The rename to `.agents/@montflow/rigors` leaves every previously installed `tiers/` store behind with no cleanup or migration note |

@@ -1,5 +1,25 @@
 # Changelog
 
+## [3.3.1] - 2026-11-04
+
+### Changed
+
+- The verification section now lists ten rules, adding the condition diagnostics (one form, an earlier `select`/`confirm` controller of the matching kind, an offered `equals` value, no guard on a condition-less controller) and the `confirm` field rules
+
+## [3.3.0] - 2026-11-04
+
+### Changed
+
+- The variable kinds are listed as `text`, `textarea`, `select`, and `confirm`; the `confirm` rules (no `options`, `default`, or `required`; values `yes` and `""`) are stated beside the select rules
+- Added a two-level conditional example with flat `origin_branch` / `worktree_name` names and the note that a controller with its own `when` may be guarded
+
+## [3.2.0] - 2026-11-04
+
+### Added
+
+- Conditional variables: the optional `when` object selects an earlier discrete controller — `{ "controller": "isolated", "equals": "yes" }` for a `select`, or `{ "controller": "flag", "truthy": true }` for a `confirm` — and the skill now shows one guarded conditional example
+- The earlier-controller rule, the `{{#if}}` guard alignment on the conditional child, and the hidden-branch fallback in `{{else}}`
+
 ## [3.1.0] - 2026-11-03
 
 ### Changed

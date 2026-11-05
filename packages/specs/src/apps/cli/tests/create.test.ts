@@ -465,7 +465,7 @@ Vitest.describe('Cli.runSlash create', () => {
     Effect.gen(function* () {
       const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
       const created = yield* runSlash(
-        'init --name init-scope --tier micro --task A:first:execution:medium:scope=app,lib',
+        'init --name init-scope --rigor trivial --task A:first:execution:medium:scope=app,lib',
         root,
       ).pipe(Effect.provide(stubLayer(specs)));
       Vitest.expect(created.ok).toBe(true);
@@ -480,7 +480,7 @@ Vitest.describe('Cli.runSlash create', () => {
     Effect.gen(function* () {
       const specs = new Map<string, ReadonlyArray<SpecFileEntry>>();
       const created = yield* runSlash(
-        'init --name init-three --tier micro --task A:first:execution:medium:scope=app,lib,docs',
+        'init --name init-three --rigor trivial --task A:first:execution:medium:scope=app,lib,docs',
         root,
       ).pipe(Effect.provide(stubLayer(specs)));
       Vitest.expect(created.ok).toBe(true);

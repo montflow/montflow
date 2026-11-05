@@ -1,7 +1,14 @@
 import { Console, Effect } from 'effect';
 import { Command, Flag } from 'effect/cli';
 
-import { phaseIdAt, renderSubjectiveGate } from '../../modules/init/index.js';
+import {
+  phaseIdAt,
+  renderSubjectiveGate,
+  ceilingIssues,
+  explorationIssues,
+} from '../../modules/init/index.js';
+import { declaredRigorOfSpec } from '../../modules/creation/index.js';
+import { CODES as RIGOR_CODES, RIGOR_CONTRACT, writesArtifact } from '../../modules/rigor/index.js';
 import {
   PHASE_BOARD_FILE,
   PHASE_FILE,
@@ -14,7 +21,7 @@ import { PHASE_PATTERN } from '../../modules/spec/index.js';
 import { SLUG_PATTERN, phaseRank } from '../../modules/task/index.js';
 import { SpecStore } from '../../services/index.js';
 
-import { authoringFailure, phaseIds, readSpec } from './cli.authoring.helpers.js';
+import { authoringFailure, phaseIds, readSpec, tasksIn } from './cli.authoring.helpers.js';
 import {
   SURFACE_CODES,
   SurfaceError,
@@ -64,7 +71,22 @@ export const newPhase = (
 ): Effect.Effect<NewPhaseReport, SurfaceError | SpecStore.StoreError, SpecStore.SpecStore> =>
   Effect.gen(function* () {
     const operation = 'SpecNewPhase';
-    const { snapshot } = yield* readSpec(options.root, options.name, operation);
+    const { snapshot, specText, rigor } = yield* readSpec(options.root, options.name, operation);
+    const declaredRigor = declaredRigorOfSpec(specText);
+    if (rigor === undefined && declaredRigor !== undefined) {
+      return yield* Effect.fail(
+        authoringFailure(operation, {
+          code: RIGOR_CODES.unknownRigor,
+          path: `${options.name}/SPEC.md`,
+          field: 'rigor',
+          problem: `The spec declares unknown rigor '${declaredRigor}'; the phase ceiling cannot be checked.`,
+          rerun: `mf-specs check --name ${options.name}`,
+          expected: 'trivial, light, standard, deep, or critical',
+          actual: declaredRigor,
+          fix: 'Correct the `- rigor:` line in SPEC.md, then re-run this verb.',
+        }),
+      );
+    }
     const ids = phaseIds(snapshot).filter((id) => PHASE_PATTERN.test(id));
     const nextRank = ids.length === 0 ? 1 : Math.max(...ids.map(phaseRank)) + 1;
     if (nextRank > 26 + 26 * 26) {
@@ -93,6 +115,47 @@ export const newPhase = (
           actual: review,
         }),
       );
+    }
+    if (review === 'none' && rigor !== undefined) {
+      const contract = RIGOR_CONTRACT[rigor];
+      const reviewRequired = contract.review === 'required';
+      const waiverForbidden = contract.waiver === 'forbidden';
+      if (reviewRequired || waiverForbidden) {
+        return yield* Effect.fail(
+          authoringFailure(operation, {
+            code: RIGOR_CODES.reviewForbidden,
+            path: `${options.name}/${phaseIdAt(nextRank)}`,
+            field: '--review',
+            problem: `A ${rigor} phase cannot declare review: none; ${rigor} requires review and its waiver policy is ${RIGOR_CONTRACT[rigor].waiver}.`,
+            rerun: `mf-specs new-phase --name ${options.name} --objective <line> --review required`,
+            expected: 'required',
+            actual: 'none',
+            fix: 'Pass --review required, or re-appraise the rigor with the user.',
+          }),
+        );
+      }
+    }
+    if (rigor !== undefined) {
+      const types = ids.map((phaseId) => tasksIn(snapshot, phaseId).map((task) => task.type));
+      const counts = types.map((list) => list.filter((type) => type !== 'review').length);
+      const ceiling = ceilingIssues(rigor, [...counts, 0]);
+      const exploration = explorationIssues(rigor, [...types, []]);
+      const blocked = [...ceiling, ...exploration];
+      if (blocked.length > 0) {
+        const first = blocked[0];
+        return yield* Effect.fail(
+          authoringFailure(operation, {
+            code: first?.code ?? RIGOR_CODES.ceilingExceeded,
+            path: options.name,
+            field: first?.field ?? 'phases',
+            problem: first?.message ?? `A ${rigor} spec cannot take another phase.`,
+            rerun: `mf-specs state --name ${options.name}`,
+            expected: first?.expected,
+            actual: first?.actual,
+            fix: 'Split the work into a new spec, or re-appraise the rigor with the user.',
+          }),
+        );
+      }
     }
     if (review === 'waived' && (options.reviewReason ?? '').trim() === '') {
       return yield* Effect.fail(
@@ -179,7 +242,11 @@ export const newPhase = (
         content: renderSubjectiveGate(`phase ${id}`, judge),
       });
     }
-    if (options.board !== false) {
+    const writesBoard =
+      rigor === undefined
+        ? true
+        : writesArtifact(RIGOR_CONTRACT[rigor], 'BOARD.md', tasksIn(snapshot, id).length);
+    if (options.board ?? writesBoard) {
       files.push({ path: `${id}/${PHASE_BOARD_FILE}`, content: '# Board\n' });
     }
     yield* store.write(options.root, options.name, files);

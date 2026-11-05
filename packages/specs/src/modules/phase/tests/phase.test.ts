@@ -254,7 +254,7 @@ const evidenceTree = (withResults: boolean) =>
         '',
         '## Creation',
         '',
-        '- tier: micro',
+        '- rigor: trivial',
         '- questions 0/0',
         '- unresolved: none',
         '',

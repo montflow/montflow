@@ -13,10 +13,17 @@ touches disk. Composes the per-file verifiers from `spec`, `task`,
 - `SpecSnapshot`, `SpecFileEntry` — the in-memory directory shape
 - `verifySpecTree` — required files, the phase-directory walk,
   task-directory naming and placement, id/name agreement, unique ids,
-  task-table agreement (name/type/status/gates), dependency existence /
-  phase ordering / cycles, and an empty phase directory. Its review input is
+  task-table agreement (name/type/status/gates), and an empty phase
+  directory. Its dependency pass is delegated to `dependency`: dependency
+  existence / phase ordering / cycles, the implicit contradictions
+  `depends-on.own-phase-review` and `depends-on.complete-before-target`, and
+  `related-tasks` resolution (`related-tasks.unknown-target`,
+  `related-tasks.self-reference`). Its review input is
   required, so no caller can omit the budget verdict; a caller with no review
   store passes `NO_REVIEW` explicitly
+- `verifyDependencies` — the dependency-integrity pass on the parsed task map,
+  exported so a caller can run it without the full tree walk; its codes live in
+  the same sibling module
 - The record checks a complete task owes: its `## Completion` checklist
   checked (`task.completion-unchecked`) and at least one checked gate item
   (`gate.unchecked`), both errors on a `complete` task and both silent on an

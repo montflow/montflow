@@ -452,7 +452,10 @@ const missingSkillAdvisory = (root: string, promptName: string, skill: string): 
 /** The command that renders one shipped prompt, for an advisory's `next` row. */
 const rerunOf = (promptName: string): string =>
   Match.value(promptName).pipe(
-    Match.when('spec-create', () => 'mf-specs author --request <text>'),
+    Match.when(
+      'spec-create',
+      () => 'mf-specs author --request <text> --rigor <level> --isolated <yes|no>',
+    ),
     Match.when('spec-execute', () => 'mf-specs execute --name <spec>'),
     Match.when('spec-sizing', () => 'mf-specs sizing-config'),
     Match.orElse(() => 'mf-specs doctor'),

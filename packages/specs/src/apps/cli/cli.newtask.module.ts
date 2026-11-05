@@ -1,7 +1,13 @@
 import { Console, Effect } from 'effect';
 import { Command, Flag } from 'effect/cli';
 
-import { defaultWriteScope, gateTemplateFor } from '../../modules/init/index.js';
+import {
+  defaultWriteScope,
+  gateTemplateFor,
+  ceilingIssues,
+  explorationIssues,
+} from '../../modules/init/index.js';
+import { declaredRigorOfSpec } from '../../modules/creation/index.js';
 import {
   PHASE_FILE,
   parsePhaseFile,
@@ -14,6 +20,7 @@ import {
   FINDING_REF_PATTERN,
   ORIGINATOR_PATTERN,
   type Task,
+  type TaskType,
   TASK_TYPES,
   isTaskType,
   parseTaskFile,
@@ -22,7 +29,7 @@ import {
   sortKey,
 } from '../../modules/task/index.js';
 import { isScopeList } from '../../modules/scheduler/index.js';
-import { waiverAllowed } from '../../modules/tier/index.js';
+import { CODES as RIGOR_CODES, RIGOR_CONTRACT, waiverAllowed } from '../../modules/rigor/index.js';
 import type { SpecSnapshot } from '../../modules/structure/index.js';
 import { SpecStore } from '../../services/index.js';
 
@@ -118,7 +125,7 @@ const renderTaskFile = (
   ].join('\n');
 };
 
-/** Task types whose tier contract requires a `GATES.md`. */
+/** Task types whose rigor contract requires a `GATES.md`. */
 const GATED_TASK_TYPES = new Set(['execution', 'defect', 'interruptor']);
 
 /**
@@ -327,8 +334,24 @@ export const newTask = (
         }),
       );
     }
-    const { snapshot, specText, tier } = yield* readSpec(options.root, options.name, operation);
-    if (!phaseIds(snapshot).includes(options.phase)) {
+    const { snapshot, specText, rigor } = yield* readSpec(options.root, options.name, operation);
+    const declaredRigor = declaredRigorOfSpec(specText);
+    if (rigor === undefined && declaredRigor !== undefined) {
+      return yield* Effect.fail(
+        authoringFailure(operation, {
+          code: RIGOR_CODES.unknownRigor,
+          path: `${options.name}/SPEC.md`,
+          field: 'rigor',
+          problem: `The spec declares unknown rigor '${declaredRigor}'; the task ceiling cannot be checked.`,
+          rerun: `mf-specs check --name ${options.name}`,
+          expected: 'trivial, light, standard, deep, or critical',
+          actual: declaredRigor,
+          fix: 'Correct the `- rigor:` line in SPEC.md, then re-run this verb.',
+        }),
+      );
+    }
+    const phases = phaseIds(snapshot);
+    if (!phases.includes(options.phase)) {
       return yield* Effect.fail(
         authoringFailure(operation, {
           code: 'spec.phase-not-found',
@@ -338,6 +361,54 @@ export const newTask = (
           rerun: `mf-specs state --name ${options.name}`,
         }),
       );
+    }
+    const candidateType: TaskType = isTaskType(options.type) ? options.type : 'execution';
+    if (rigor !== undefined) {
+      const counts = phases.map(
+        (phaseId) => tasksIn(snapshot, phaseId).filter((task) => task.type !== 'review').length,
+      );
+      const phaseIndex = phases.indexOf(options.phase);
+      if (candidateType !== 'review' && phaseIndex !== -1) {
+        counts[phaseIndex] = (counts[phaseIndex] ?? 0) + 1;
+      }
+      const ceiling = ceilingIssues(rigor, counts);
+      if (ceiling.length > 0) {
+        const first = ceiling[0];
+        return yield* Effect.fail(
+          authoringFailure(operation, {
+            code: first?.code ?? RIGOR_CODES.ceilingExceeded,
+            path: options.name,
+            field: first?.field ?? 'tasks',
+            problem: first?.message ?? `A ${rigor} spec cannot take another task.`,
+            rerun: 'mf-specs state --name <spec>',
+            expected: first?.expected,
+            actual: first?.actual,
+            fix: 'Split the work into a new spec, or re-appraise the rigor with the user.',
+          }),
+        );
+      }
+      const typesByPhase = phases.map((phaseId) =>
+        tasksIn(snapshot, phaseId).map((task) => task.type),
+      );
+      if (phaseIndex !== -1) {
+        typesByPhase[phaseIndex] = [...(typesByPhase[phaseIndex] ?? []), candidateType];
+      }
+      const exploration = explorationIssues(rigor, typesByPhase);
+      if (exploration.length > 0) {
+        const first = exploration[0];
+        return yield* Effect.fail(
+          authoringFailure(operation, {
+            code: first?.code ?? 'task.exploration-placement',
+            path: options.name,
+            field: first?.field ?? '--type',
+            problem: first?.message ?? `A ${rigor} spec cannot take this task.`,
+            rerun: 'mf-specs state --name <spec>',
+            expected: first?.expected,
+            actual: first?.actual,
+            fix: 'Re-appraise the rigor with the user, or plan the task the rigor allows.',
+          }),
+        );
+      }
     }
     const phasePath = `${options.phase}/${PHASE_FILE}`;
     const phaseText = snapshot.files.find(
@@ -450,51 +521,16 @@ export const newTask = (
         }),
       );
     }
-    if (phase.review === 'waived' && tier !== undefined && tier === 'standard') {
-      const recordWork =
-        options.type === 'execution' || options.type === 'defect' || options.type === 'interruptor';
-      if (
-        recordWork &&
-        !waiverAllowed(tier, [...existing.map((task) => task.type), options.type])
-      ) {
+    if (phase.review === 'waived' && rigor !== undefined) {
+      if (!waiverAllowed(rigor, [...existing.map((task) => task.type), candidateType])) {
         return yield* Effect.fail(
           authoringFailure(operation, {
             code: 'task.waiver-policy',
             path: `${options.name}/${phasePath}`,
             field: 'review',
-            problem:
-              'This waived standard phase is records-only; adding code work makes it non-waivable.',
+            problem: `This waived ${rigor} phase does not permit adding '${candidateType}' work; its waiver policy is ${RIGOR_CONTRACT[rigor].waiver}.`,
             rerun: `mf-specs waiver --name ${options.name} --phase ${options.phase} --required`,
-            fix: 'Set the phase review to required before adding execution work.',
-          }),
-        );
-      }
-    }
-    if (options.type === 'exploratory' && tier === 'standard') {
-      const exploratory = tasksIn(snapshot, options.phase).filter(
-        (task) => task.type === 'exploratory',
-      );
-      const all = phaseIds(snapshot);
-      if (exploratory.length > 0) {
-        return yield* Effect.fail(
-          authoringFailure(operation, {
-            code: 'task.exploration-count',
-            path: `${options.name}/${options.phase}`,
-            field: '--type',
-            problem: 'A standard spec allows at most one exploratory task.',
-            rerun: `mf-specs state --name ${options.name}`,
-            fix: 'Re-appraise the tier, or split the spec.',
-          }),
-        );
-      }
-      if (all[0] !== options.phase) {
-        return yield* Effect.fail(
-          authoringFailure(operation, {
-            code: 'task.exploration-placement',
-            path: `${options.name}/${options.phase}`,
-            field: '--type',
-            problem: 'A standard exploratory task must sit in the first phase.',
-            rerun: `mf-specs new-task --name ${options.name} --phase ${all[0] ?? 'A'} --task ${options.task} --type exploratory`,
+            fix: 'Set the phase review to required before adding the work.',
           }),
         );
       }

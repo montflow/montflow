@@ -10,8 +10,9 @@ import {
   claim,
   init,
   lockPhase,
+  newPhase,
   newTask,
-  readTier,
+  readRigor,
   setWaiver,
   stampValue,
 } from '../index.js';
@@ -20,8 +21,8 @@ import { entry, memory, stubLayer } from './helpers.js';
 const Platform = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 const root = '.agents/@montflow/specs';
 
-Vitest.describe('Cli.tier/stamp runtime', () => {
-  Vitest.it.effect('prints the installed tier body when it matches the package', () =>
+Vitest.describe('Cli.rigor/stamp runtime', () => {
+  Vitest.it.effect('prints the installed rigor body when it matches the package', () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -31,11 +32,11 @@ Vitest.describe('Cli.tier/stamp runtime', () => {
       yield* fs.makeDirectory(installed, { recursive: true });
       yield* fs.makeDirectory(shipped, { recursive: true });
       const body =
-        '---\ntier: micro\n---\n\n# Tier: micro\n\nThis run may ask at most 0 questions.\n';
-      yield* fs.writeFileString(path.join(installed, 'micro.md'), body);
-      yield* fs.writeFileString(path.join(shipped, 'micro.md'), body);
-      const value = yield* readTier({
-        tier: 'micro',
+        '---\nrigor: trivial\n---\n\n# Rigor: trivial\n\nThis run may ask at most 0 questions.\n';
+      yield* fs.writeFileString(path.join(installed, 'trivial.md'), body);
+      yield* fs.writeFileString(path.join(shipped, 'trivial.md'), body);
+      const value = yield* readRigor({
+        rigor: 'trivial',
         workspace: dir,
         installedDir: installed,
         shippedDir: shipped,
@@ -44,7 +45,7 @@ Vitest.describe('Cli.tier/stamp runtime', () => {
     }).pipe(Effect.provide(Platform)),
   );
 
-  Vitest.it.effect('refuses a stale installed tier', () =>
+  Vitest.it.effect('refuses a stale installed rigor', () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -53,24 +54,24 @@ Vitest.describe('Cli.tier/stamp runtime', () => {
       const shipped = path.join(dir, 'shipped');
       yield* fs.makeDirectory(installed, { recursive: true });
       yield* fs.makeDirectory(shipped, { recursive: true });
-      yield* fs.writeFileString(path.join(installed, 'micro.md'), 'drifted');
-      yield* fs.writeFileString(path.join(shipped, 'micro.md'), 'packaged');
-      const result = yield* readTier({
-        tier: 'micro',
+      yield* fs.writeFileString(path.join(installed, 'trivial.md'), 'drifted');
+      yield* fs.writeFileString(path.join(shipped, 'trivial.md'), 'packaged');
+      const result = yield* readRigor({
+        rigor: 'trivial',
         workspace: dir,
         installedDir: installed,
         shippedDir: shipped,
       }).pipe(Effect.result);
       Vitest.expect('failure' in result).toBe(true);
-      if ('failure' in result) Vitest.expect(result.failure.code).toBe('tier.stale');
+      if ('failure' in result) Vitest.expect(result.failure.code).toBe('rigor.stale');
     }).pipe(Effect.provide(Platform)),
   );
 
-  Vitest.it.effect('refuses an unknown tier before reading any file', () =>
+  Vitest.it.effect('refuses an unknown rigor before reading any file', () =>
     Effect.gen(function* () {
-      const result = yield* readTier({ tier: 'split', workspace: '.' }).pipe(Effect.result);
+      const result = yield* readRigor({ rigor: 'split', workspace: '.' }).pipe(Effect.result);
       Vitest.expect('failure' in result).toBe(true);
-      if ('failure' in result) Vitest.expect(result.failure.code).toBe('tier.unknown');
+      if ('failure' in result) Vitest.expect(result.failure.code).toBe('rigor.unknown');
     }).pipe(Effect.provide(Platform)),
   );
 
@@ -88,7 +89,7 @@ Vitest.describe('Cli.lock/waiver runtime', () => {
       const fs = yield* FileSystem.FileSystem;
       const workspace = yield* fs.makeTempDirectoryScoped();
       const storeRoot = `${workspace}/${root}`;
-      yield* init({ root: storeRoot, name: 'demo', tier: 'standard' });
+      yield* init({ root: storeRoot, name: 'demo', rigor: 'standard' });
       const lock = yield* lockPhase({ root: storeRoot, name: 'demo', phase: 'A' });
       Vitest.expect(lock.locked).toBe(false);
       Vitest.expect(lock.blockers).toContain('task.pending');
@@ -100,7 +101,7 @@ Vitest.describe('Cli.lock/waiver runtime', () => {
       const fs = yield* FileSystem.FileSystem;
       const workspace = yield* fs.makeTempDirectoryScoped();
       const storeRoot = `${workspace}/${root}`;
-      yield* init({ root: storeRoot, name: 'demo', tier: 'micro' });
+      yield* init({ root: storeRoot, name: 'demo', rigor: 'trivial' });
       const phaseMemory = `${storeRoot}/demo/A/MEMORY.md`;
       const scaffolded = yield* fs.readFileString(phaseMemory);
 
@@ -153,7 +154,7 @@ Vitest.describe('Cli.lock/waiver runtime', () => {
       yield* init({
         root: storeRoot,
         name: 'demo',
-        tier: 'standard',
+        rigor: 'standard',
         phaseObjectives: ['Record the decision only'],
         taskFlags: ['A:plan:planning'],
         reviewFlags: ['A:waived'],
@@ -179,7 +180,7 @@ Vitest.describe('Cli.lock/waiver runtime', () => {
       const fs = yield* FileSystem.FileSystem;
       const workspace = yield* fs.makeTempDirectoryScoped();
       const storeRoot = `${workspace}/${root}`;
-      yield* init({ root: storeRoot, name: 'demo', tier: 'standard' });
+      yield* init({ root: storeRoot, name: 'demo', rigor: 'standard' });
       const result = yield* setWaiver({
         root: storeRoot,
         name: 'demo',
@@ -196,7 +197,7 @@ Vitest.describe('Cli.lock/waiver runtime', () => {
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(Platform)),
   );
 
-  Vitest.it.effect('refuses a waiver when the v2 Creation tier record is absent', () =>
+  Vitest.it.effect('refuses a waiver when the v2 Creation rigor record is absent', () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const workspace = yield* fs.makeTempDirectoryScoped();
@@ -204,7 +205,7 @@ Vitest.describe('Cli.lock/waiver runtime', () => {
       yield* init({
         root: storeRoot,
         name: 'demo',
-        tier: 'standard',
+        rigor: 'standard',
         taskFlags: ['A:plan:planning'],
         reviewFlags: ['A:waived'],
         reasonFlags: ['A:No code changes; the gate is the evidence.'],
@@ -274,7 +275,7 @@ Vitest.describe('Cli.lock/waiver runtime', () => {
       const fs = yield* FileSystem.FileSystem;
       const workspace = yield* fs.makeTempDirectoryScoped();
       const storeRoot = `${workspace}/${root}`;
-      yield* init({ root: storeRoot, name: 'demo', tier: 'standard' });
+      yield* init({ root: storeRoot, name: 'demo', rigor: 'standard' });
       const first = yield* newTask({
         root: storeRoot,
         name: 'demo',
@@ -304,7 +305,7 @@ Vitest.describe('Cli.lock/waiver runtime', () => {
       const fs = yield* FileSystem.FileSystem;
       const workspace = yield* fs.makeTempDirectoryScoped();
       const storeRoot = `${workspace}/${root}`;
-      yield* init({ root: storeRoot, name: 'demo', tier: 'standard' });
+      yield* init({ root: storeRoot, name: 'demo', rigor: 'standard' });
       const report = yield* newTask({
         root: storeRoot,
         name: 'demo',
@@ -323,7 +324,7 @@ Vitest.describe('Cli.lock/waiver runtime', () => {
       const fs = yield* FileSystem.FileSystem;
       const workspace = yield* fs.makeTempDirectoryScoped();
       const storeRoot = `${workspace}/${root}`;
-      yield* init({ root: storeRoot, name: 'demo', tier: 'standard' });
+      yield* init({ root: storeRoot, name: 'demo', rigor: 'standard' });
       yield* newTask({
         root: storeRoot,
         name: 'demo',
@@ -333,6 +334,106 @@ Vitest.describe('Cli.lock/waiver runtime', () => {
       });
       const review = yield* fs.readFileString(`${storeRoot}/demo/A/A002-review-phase/TASK.md`);
       Vitest.expect(review).toContain('depends-on: A001, A003');
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(Platform)),
+  );
+});
+
+Vitest.describe('Cli.rigor growth runtime', () => {
+  Vitest.it.effect('refuses review: none at a rigor that requires review', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const workspace = yield* fs.makeTempDirectoryScoped();
+      const storeRoot = `${workspace}/${root}`;
+      yield* init({ root: storeRoot, name: 'demo', rigor: 'standard' });
+      const result = yield* newPhase({
+        root: storeRoot,
+        name: 'demo',
+        objective: 'Second slice',
+        review: 'none',
+      }).pipe(Effect.result);
+      Vitest.expect('failure' in result).toBe(true);
+      if ('failure' in result) {
+        const found = 'diagnostics' in result.failure ? result.failure.diagnostics[0] : undefined;
+        Vitest.expect(found?.code).toBe('rigor.review-forbidden');
+      }
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('refuses a phase and a task past their rigor ceilings', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const workspace = yield* fs.makeTempDirectoryScoped();
+      const storeRoot = `${workspace}/${root}`;
+      yield* init({ root: storeRoot, name: 'demo', rigor: 'trivial' });
+
+      const phase = yield* newPhase({
+        root: storeRoot,
+        name: 'demo',
+        objective: 'Second slice',
+      }).pipe(Effect.result);
+      Vitest.expect('failure' in phase).toBe(true);
+      if ('failure' in phase) {
+        const found = 'diagnostics' in phase.failure ? phase.failure.diagnostics[0] : undefined;
+        Vitest.expect(found?.code).toBe('init.phase-count');
+      }
+
+      const second = yield* newTask({
+        root: storeRoot,
+        name: 'demo',
+        phase: 'A',
+        task: 'second',
+        type: 'execution',
+      });
+      Vitest.expect(second.task).toBe('A002');
+
+      const third = yield* newTask({
+        root: storeRoot,
+        name: 'demo',
+        phase: 'A',
+        task: 'third',
+        type: 'execution',
+      }).pipe(Effect.result);
+      Vitest.expect('failure' in third).toBe(true);
+      if ('failure' in third) {
+        const found = 'diagnostics' in third.failure ? third.failure.diagnostics[0] : undefined;
+        Vitest.expect(found?.code).toBe('init.task-ceiling');
+      }
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('refuses exploration a rigor forbids and a second deep exploration', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const workspace = yield* fs.makeTempDirectoryScoped();
+      const storeRoot = `${workspace}/${root}`;
+
+      yield* init({ root: storeRoot, name: 'tiny', rigor: 'trivial' });
+      const trivial = yield* newTask({
+        root: storeRoot,
+        name: 'tiny',
+        phase: 'A',
+        task: 'look',
+        type: 'exploratory',
+      }).pipe(Effect.result);
+      Vitest.expect('failure' in trivial).toBe(true);
+      if ('failure' in trivial) {
+        const found = 'diagnostics' in trivial.failure ? trivial.failure.diagnostics[0] : undefined;
+        Vitest.expect(found?.code).toBe('init.exploration-forbidden');
+      }
+
+      yield* init({ root: storeRoot, name: 'deep', rigor: 'deep' });
+      const deep = yield* newTask({
+        root: storeRoot,
+        name: 'deep',
+        phase: 'A',
+        task: 'explore-more',
+        type: 'exploratory',
+      }).pipe(Effect.result);
+      Vitest.expect('failure' in deep).toBe(true);
+      if ('failure' in deep) {
+        const found = 'diagnostics' in deep.failure ? deep.failure.diagnostics[0] : undefined;
+        Vitest.expect(found?.code).toBe('init.exploration-count');
+      }
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(Platform)),
   );
 });

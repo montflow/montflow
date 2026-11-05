@@ -29,10 +29,17 @@ interface EmbeddedBuckets {
   profile: Record<string, PayloadFiles>;
   prompt: Record<string, PayloadFiles>;
   tier: Record<string, PayloadFiles>;
+  rigor: Record<string, PayloadFiles>;
 }
 
 /** Empty buckets for every kind, so the generated module has a stable shape. */
-const emptyBuckets = (): EmbeddedBuckets => ({ skill: {}, profile: {}, prompt: {}, tier: {} });
+const emptyBuckets = (): EmbeddedBuckets => ({
+  skill: {},
+  profile: {},
+  prompt: {},
+  tier: {},
+  rigor: {},
+});
 
 /** Options for {@link generateEmbeddedPayload}. */
 export interface GenerateEmbeddedPayloadOptions {
@@ -80,7 +87,7 @@ const readEntry = async (packageRoot: string, entry: PayloadEntry): Promise<Payl
 /** Human-readable summary of what was embedded. */
 const describe = (manifest: PayloadManifest, embedded: EmbeddedBuckets): string => {
   const parts: Array<string> = [];
-  // SAFETY: `EmbeddedBuckets` is constructed here with exactly the four kind keys.
+  // SAFETY: `EmbeddedBuckets` is constructed here with exactly the payload kind keys.
   for (const kind of Object.keys(embedded) as Array<PayloadKind>) {
     const byName = embedded[kind];
     const names = Object.keys(byName);
@@ -126,7 +133,7 @@ export const generateEmbeddedPayload = async (
  *
  * Source: \`payload.json\`
  */
-export const EMBEDDED_PAYLOAD: Readonly<Record<'skill' | 'profile' | 'prompt' | 'tier', Readonly<Record<string, Readonly<Record<string, string>>>>>> = ${JSON.stringify(buckets, null, 2)};
+export const EMBEDDED_PAYLOAD: Readonly<Record<'skill' | 'profile' | 'prompt' | 'tier' | 'rigor', Readonly<Record<string, Readonly<Record<string, string>>>>>> = ${JSON.stringify(buckets, null, 2)};
 `;
   await mkdir(dirname(options.output), { recursive: true });
   await writeFile(options.output, body, 'utf8');

@@ -6,7 +6,7 @@ originator: user
 size: tiny
 depends-on:
 related-tasks: G002, G003, G004
-status: pending
+status: complete
 write-scope: none
 ---
 
@@ -77,8 +77,8 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] `MEMORY.md` carries the exact JSON shape for every variable kind and every condition form
-- [ ] Every consumer's visibility behaviour is stated, including hidden required, stale-answer clearing, and first-appearance order
-- [ ] The verification table names each invalid condition, its message, and its fix
-- [ ] The worked `spec-create` example is complete enough to copy into the prompt
-- [ ] Backward compatibility is stated against every installed prompt
+- [x] `MEMORY.md` carries the exact JSON shape for every variable kind and every condition form
+- [x] Every consumer's visibility behaviour is stated, including hidden required, stale-answer clearing, and first-appearance order
+- [x] The verification table names each invalid condition, its message, and its fix
+- [x] The worked `spec-create` example is complete enough to copy into the prompt
+- [x] Backward compatibility is stated against every installed prompt

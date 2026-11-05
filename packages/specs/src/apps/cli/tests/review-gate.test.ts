@@ -38,7 +38,7 @@ const tree = (profiles?: string) => [
       ],
     }).replace(
       '## Tasks',
-      '## Creation\n\n- tier: standard\n- questions 0/2\n- unresolved: none\n\n## Tasks',
+      '## Creation\n\n- rigor: standard\n- questions 0/2\n- unresolved: none\n\n## Tasks',
     ),
   ),
   entry('A/PHASE.md', phaseMarkdown({ id: 'A', status: 'complete', review: 'required' })),

@@ -6,7 +6,7 @@ originator: user
 size: tiny
 depends-on: G001
 related-tasks: G003, G004
-status: pending
+status: complete
 write-scope: packages/prompts/src/modules/prompts
 ---
 
@@ -50,8 +50,8 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] The condition field round-trips and a prompt without one is byte-identical on encode
-- [ ] `isVisible` is exported and is the only visibility rule used by resolution and rendering
-- [ ] A hidden required variable is not reported missing and renders as empty
-- [ ] Every invalid condition from G001 fails with its coded message and fix
-- [ ] The existing prompt fixtures still verify clean
+- [x] The condition field round-trips and a prompt without one is byte-identical on encode
+- [x] `isVisible` is exported and is the only visibility rule used by resolution and rendering
+- [x] A hidden required variable is not reported missing and renders as empty
+- [x] Every invalid condition from G001 fails with its coded message and fix
+- [x] The existing prompt fixtures still verify clean

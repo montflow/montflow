@@ -1,14 +1,16 @@
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import * as Vitest from '@effect/vitest';
-import { PromptStore } from '@montflow/prompts';
+import { Cli, PromptStore } from '@montflow/prompts';
 import { Cause, Effect, FileSystem, Layer, Path } from 'effect';
 import { runDoctor } from '../../../modules/doctor/index.js';
 import { PromptError } from '../../../modules/prompt/index.js';
+import { RIGORS } from '../../../modules/rigor/index.js';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
 import { memoryMarkdown, taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import { SpecStore } from '../../../services/index.js';
 import {
   author,
+  type AuthorOptions,
   diagnoseCause,
   execute,
   type ExecuteOptions,
@@ -80,6 +82,14 @@ const prepare = Effect.gen(function* () {
   const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-specs-author-execute-' });
   const root = path.join(dir, DEFAULT_ROOT);
   yield* fs.makeDirectory(root, { recursive: true });
+  // The create prompt declares `using-git-worktrees`; install it so advisory
+  // text does not leak into the authoring assertions.
+  const worktreeSkill = path.join(dir, '.agents', 'skills', 'using-git-worktrees');
+  yield* fs.makeDirectory(worktreeSkill, { recursive: true });
+  yield* fs.writeFileString(
+    path.join(worktreeSkill, 'SKILL.md'),
+    '---\nname: using-git-worktrees\ndescription: fixture\n---\n',
+  );
   return { fs, path, dir, root };
 });
 
@@ -271,7 +281,10 @@ const branch = (work: Work, name: string) =>
     yield* work.fs.writeFileString(work.path.join(git, 'HEAD'), `ref: refs/heads/${name}\n`);
   });
 
-const runAuthor = (work: Work, options: { request: string; notes?: string }) =>
+/** A complete authoring answer set: the two always-required choices. */
+const AUTHOR_BASE = { request: 'Ship login', rigor: 'standard', isolated: 'no' } as const;
+
+const runAuthor = (work: Work, options: AuthorOptions) =>
   author(work.dir, options).pipe(Effect.provide(StoreLive));
 
 const runExecute = (work: Work, options: ExecuteOptions = {}) =>
@@ -295,11 +308,129 @@ Vitest.describe('Cli.author runtime', () => {
       const work = yield* prepare;
       yield* runDoctor(work.dir);
 
-      const loaded = yield* runAuthor(work, { request: 'Ship login' });
+      const loaded = yield* runAuthor(work, { ...AUTHOR_BASE });
       Vitest.expect(loaded.name).toBe('spec-create');
       Vitest.expect(loaded.text).toContain('Ship login');
-      Vitest.expect(loaded.text).toContain('## 2. Appraise the complexity');
-      Vitest.expect(loaded.skills).toStrictEqual(['montflow-create-specs']);
+      Vitest.expect(loaded.text).toContain('Chosen rigor: `standard`');
+      Vitest.expect(loaded.text).toContain('## 2. Appraise against the chosen rigor');
+      Vitest.expect(loaded.skills).toStrictEqual(['montflow-create-specs', 'using-git-worktrees']);
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('refuses an absent or unknown rigor with a coded argument error', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* runDoctor(work.dir);
+
+      const absent = yield* runAuthor(work, { request: 'Ship login', isolated: 'no' }).pipe(
+        Effect.flip,
+      );
+      const absentText = diagnose(absent);
+      Vitest.expect(absentText).toContain('code     cli.invalid-argument');
+      Vitest.expect(absentText).toContain('field    --rigor');
+      Vitest.expect(absentText).toContain(
+        'expected one of trivial, light, standard, deep, critical',
+      );
+      Vitest.expect(absentText).toContain('actual   missing');
+      Vitest.expect(absentText).toContain('next     mf-specs author');
+
+      const unknown = yield* runAuthor(work, {
+        request: 'Ship login',
+        rigor: 'huge',
+        isolated: 'no',
+      }).pipe(Effect.flip);
+      const unknownText = diagnose(unknown);
+      Vitest.expect(unknownText).toContain('code     cli.invalid-argument');
+      Vitest.expect(unknownText).toContain('field    --rigor');
+      Vitest.expect(unknownText).toContain("'huge' is not a rigor level");
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('isolated: no drops every origin and worktree answer', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* runDoctor(work.dir);
+
+      const loaded = yield* runAuthor(work, {
+        ...AUTHOR_BASE,
+        isolated: 'no',
+        origin: 'main',
+        originBranch: 'release/2',
+        worktreeName: 'feature-x',
+      });
+      const text = loaded.text.toLowerCase();
+      for (const token of ['origin', 'worktree', 'using-git-worktrees', 'release/2', 'feature-x']) {
+        Vitest.expect(text).not.toContain(token);
+      }
+      Vitest.expect(loaded.text).toContain('In-place authoring run');
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('isolated: yes carries the origin, branch, and worktree name', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* runDoctor(work.dir);
+
+      const loaded = yield* runAuthor(work, {
+        ...AUTHOR_BASE,
+        isolated: 'yes',
+        origin: 'other',
+        originBranch: 'release/2',
+        worktreeName: 'feature-x',
+      });
+      Vitest.expect(loaded.text).toContain('from origin `other`');
+      Vitest.expect(loaded.text).toContain('at branch `release/2`');
+      Vitest.expect(loaded.text).toContain('worktree named `feature-x`');
+      Vitest.expect(loaded.text).toContain('using-git-worktrees');
+      Vitest.expect(loaded.text).toContain('--workspace-type worktree');
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect(
+    'resolves each origin to a git ref and states the fixed worktree parameters',
+    () =>
+      Effect.gen(function* () {
+        const work = yield* prepare;
+        yield* runDoctor(work.dir);
+
+        const loaded = yield* runAuthor(work, {
+          ...AUTHOR_BASE,
+          isolated: 'yes',
+          origin: 'other',
+          originBranch: 'release/2',
+          worktreeName: 'feature-x',
+        });
+        for (const token of [
+          'git branch --show-current',
+          'detached HEAD',
+          'git fetch origin',
+          'origin/main',
+          'git rev-parse --verify',
+          'Type `feat`',
+          'Push `false`',
+          'feat/feature-x',
+          '.worktrees/feat/feature-x',
+          'isolated: no (requested yes, creation denied)',
+        ]) {
+          Vitest.expect(loaded.text, token).toContain(token);
+        }
+        Vitest.expect(loaded.text).toContain('never fall back to the current checkout');
+      }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('renders the trivial prompt with no escalation question to ask', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* runDoctor(work.dir);
+
+      const loaded = yield* runAuthor(work, {
+        ...AUTHOR_BASE,
+        rigor: 'trivial',
+      });
+      Vitest.expect(loaded.text).toContain('at `trivial` the budget is 0');
+      Vitest.expect(loaded.text).toContain('do not ask it');
+      Vitest.expect(loaded.text).not.toContain('Ask the one escalation question');
+      Vitest.expect(loaded.text).not.toContain('choose `light`');
     }).pipe(Effect.provide(StoreLive)),
   );
 
@@ -308,15 +439,260 @@ Vitest.describe('Cli.author runtime', () => {
       const work = yield* prepare;
       yield* runDoctor(work.dir);
 
-      const plain = yield* runAuthor(work, { request: 'Ship login' });
+      const plain = yield* runAuthor(work, { ...AUTHOR_BASE });
       Vitest.expect(plain.text).not.toContain('Extra constraints');
 
       const noted = yield* runAuthor(work, {
-        request: 'Ship login',
+        ...AUTHOR_BASE,
         notes: 'Do not touch packages/core.',
       });
       Vitest.expect(noted.text).toContain('Extra constraints');
       Vitest.expect(noted.text).toContain('Do not touch packages/core.');
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('renders every rigor and both non-other origins with the worktree name', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* runDoctor(work.dir);
+
+      for (const rigor of RIGORS) {
+        const loaded = yield* runAuthor(work, { ...AUTHOR_BASE, rigor });
+        Vitest.expect(loaded.text, rigor).toContain(`Chosen rigor: \`${rigor}\``);
+      }
+
+      for (const origin of ['current', 'main'] as const) {
+        const loaded = yield* runAuthor(work, {
+          ...AUTHOR_BASE,
+          isolated: 'yes',
+          origin,
+          worktreeName: 'ship-login',
+        });
+        Vitest.expect(loaded.text, origin).toContain(`from origin \`${origin}\``);
+        Vitest.expect(loaded.text, origin).toContain('worktree named `ship-login`');
+        Vitest.expect(loaded.text, origin).not.toContain('at branch');
+      }
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('drops an origin branch hidden behind a non-other origin', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* runDoctor(work.dir);
+
+      const loaded = yield* runAuthor(work, {
+        ...AUTHOR_BASE,
+        isolated: 'yes',
+        origin: 'current',
+        originBranch: 'release/2',
+        worktreeName: 'ship-login',
+      });
+      Vitest.expect(loaded.text).not.toContain('release/2');
+      Vitest.expect(loaded.text).not.toContain('at branch');
+      Vitest.expect(loaded.text).toContain('from origin `current`');
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('refuses every invalid authoring value with its flag, values, and rerun', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* runDoctor(work.dir);
+
+      const refused: ReadonlyArray<{
+        readonly options: AuthorOptions;
+        readonly field: string;
+        readonly expected: string;
+        readonly actual: string;
+        readonly rerun: string;
+      }> = [
+        {
+          options: { request: '', rigor: 'standard', isolated: 'no' },
+          field: '--request',
+          expected: 'a non-empty --request value',
+          actual: 'missing',
+          rerun: 'mf-specs author --request <text> --rigor standard --isolated no',
+        },
+        {
+          options: { request: 'Ship login', isolated: 'no' },
+          field: '--rigor',
+          expected: 'one of trivial, light, standard, deep, critical',
+          actual: 'missing',
+          rerun: 'mf-specs author --request <text> --rigor <level> --isolated no',
+        },
+        {
+          options: { request: 'Ship login', rigor: 'huge', isolated: 'no' },
+          field: '--rigor',
+          expected: 'one of trivial, light, standard, deep, critical',
+          actual: 'huge',
+          rerun: 'mf-specs author --request <text> --rigor <level> --isolated no',
+        },
+        {
+          options: { request: 'Ship login', rigor: 'standard' },
+          field: '--isolated',
+          expected: 'yes or no',
+          actual: 'missing',
+          rerun: 'mf-specs author --request <text> --rigor standard --isolated <yes|no>',
+        },
+        {
+          options: { request: 'Ship login', rigor: 'standard', isolated: 'maybe' },
+          field: '--isolated',
+          expected: 'yes or no',
+          actual: 'maybe',
+          rerun: 'mf-specs author --request <text> --rigor standard --isolated <yes|no>',
+        },
+        {
+          options: {
+            request: 'Ship login',
+            rigor: 'standard',
+            isolated: 'yes',
+            worktreeName: 'ship-login',
+          },
+          field: '--origin',
+          expected: 'current, main, or other',
+          actual: 'missing',
+          rerun:
+            'mf-specs author --request <text> --rigor standard --isolated yes --origin <current|main|other> --worktree-name ship-login',
+        },
+        {
+          options: {
+            request: 'Ship login',
+            rigor: 'standard',
+            isolated: 'yes',
+            origin: 'develop',
+            worktreeName: 'ship-login',
+          },
+          field: '--origin',
+          expected: 'current, main, or other',
+          actual: 'develop',
+          rerun:
+            'mf-specs author --request <text> --rigor standard --isolated yes --origin <current|main|other> --worktree-name ship-login',
+        },
+        {
+          options: {
+            request: 'Ship login',
+            rigor: 'standard',
+            isolated: 'yes',
+            origin: 'current',
+          },
+          field: '--worktree-name',
+          expected: 'a kebab-case worktree name',
+          actual: 'missing',
+          rerun:
+            'mf-specs author --request <text> --rigor standard --isolated yes --origin current --worktree-name <kebab-case>',
+        },
+        {
+          options: {
+            request: 'Ship login',
+            rigor: 'standard',
+            isolated: 'yes',
+            origin: 'current',
+            worktreeName: 'Ship Login',
+          },
+          field: '--worktree-name',
+          expected: 'a kebab-case worktree name',
+          actual: 'Ship Login',
+          rerun:
+            'mf-specs author --request <text> --rigor standard --isolated yes --origin current --worktree-name <kebab-case>',
+        },
+        {
+          options: {
+            request: 'Ship login',
+            rigor: 'standard',
+            isolated: 'yes',
+            origin: 'other',
+            worktreeName: 'ship-login',
+          },
+          field: '--origin-branch',
+          expected: 'a non-empty branch name',
+          actual: 'missing',
+          rerun:
+            'mf-specs author --request <text> --rigor standard --isolated yes --origin other --worktree-name ship-login --origin-branch <branch>',
+        },
+      ];
+
+      for (const { options, field, expected, actual, rerun } of refused) {
+        const error = yield* runAuthor(work, options).pipe(Effect.flip);
+        const text = diagnose(error);
+        Vitest.expect(text, field).toContain('code     cli.invalid-argument');
+        Vitest.expect(text, field).toContain(`field    ${field}`);
+        Vitest.expect(text, field).toContain(`expected ${expected}`);
+        Vitest.expect(text, field).toContain(`actual   ${actual}`);
+        Vitest.expect(text, field).toContain(`next     ${rerun}`);
+      }
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('performs no worktree or branch mutation for an isolated run', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* runDoctor(work.dir);
+      yield* branch(work, 'main');
+      const head = work.path.join(work.dir, '.git', 'HEAD');
+      const before = yield* work.fs.readFileString(head);
+
+      const loaded = yield* runAuthor(work, {
+        ...AUTHOR_BASE,
+        isolated: 'yes',
+        origin: 'other',
+        originBranch: 'release/2',
+        worktreeName: 'ship-login',
+      });
+      Vitest.expect(loaded.text).toContain('worktree named `ship-login`');
+
+      // Rendering the recipe must not run it: the checkout and branch stay put,
+      // and no worktree directory appears.
+      Vitest.expect(yield* work.fs.readFileString(head)).toBe(before);
+      for (const dir of ['.worktrees', 'worktrees']) {
+        Vitest.expect(yield* work.fs.exists(work.path.join(work.dir, dir)), dir).toBe(false);
+      }
+      Vitest.expect(
+        yield* work.fs.exists(work.path.join(work.dir, '.worktrees', 'feat', 'ship-login')),
+      ).toBe(false);
+    }).pipe(Effect.provide(StoreLive)),
+  );
+
+  Vitest.it.effect('renders the same text as the /mf-prompts fill for the same answers', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* runDoctor(work.dir);
+
+      const cases = [
+        {
+          options: { ...AUTHOR_BASE, notes: 'Do not touch packages/core.' },
+          values: {
+            request: 'Ship login',
+            notes: 'Do not touch packages/core.',
+            rigor: 'standard',
+            isolated: 'no',
+          },
+        },
+        {
+          options: {
+            request: 'Ship login',
+            rigor: 'deep',
+            isolated: 'yes',
+            origin: 'other',
+            originBranch: 'release/2',
+            worktreeName: 'ship-login',
+          },
+          values: {
+            request: 'Ship login',
+            rigor: 'deep',
+            isolated: 'yes',
+            origin: 'other',
+            origin_branch: 'release/2',
+            worktree_name: 'ship-login',
+          },
+        },
+      ] as const;
+
+      for (const { options, values } of cases) {
+        const binary = yield* runAuthor(work, options);
+        const filled = yield* Cli.Engines.render({ cwd: work.dir }, 'spec-create', values).pipe(
+          Effect.provide(StoreLive),
+        );
+        Vitest.expect(filled).toBe(binary.text);
+      }
     }).pipe(Effect.provide(StoreLive)),
   );
 
@@ -329,7 +705,7 @@ Vitest.describe('Cli.author runtime', () => {
         '{"name":"spec-create"}\n',
       );
 
-      const error = yield* runAuthor(work, { request: 'Ship login' }).pipe(Effect.flip);
+      const error = yield* runAuthor(work, { ...AUTHOR_BASE }).pipe(Effect.flip);
       const text = diagnose(error);
       Vitest.expect(text).toContain('code     prompt.stale');
       Vitest.expect(text).toContain('fix      Run mf-specs doctor');
@@ -339,7 +715,7 @@ Vitest.describe('Cli.author runtime', () => {
   Vitest.it.effect('refuses a missing prompt with the coded doctor gate', () =>
     Effect.gen(function* () {
       const work = yield* prepare;
-      const error = yield* runAuthor(work, { request: 'Ship login' }).pipe(Effect.flip);
+      const error = yield* runAuthor(work, { ...AUTHOR_BASE }).pipe(Effect.flip);
       const report = diagnose(error);
       Vitest.expect(report).toContain('code     prompt.missing');
       Vitest.expect(report).toContain('not installed');
@@ -888,7 +1264,7 @@ Vitest.describe('Cli.execute runtime', () => {
         yield* seed(work, 'ship-login', phaseA('ship-login', 'small'));
         yield* preparePrompts(work);
 
-        const authored = yield* runAuthor(work, { request: 'Ship login' });
+        const authored = yield* runAuthor(work, { ...AUTHOR_BASE });
         Vitest.expect(authored.text).toContain('Ship login');
 
         const executed = yield* runExecute(work, { name: 'ship-login' });
@@ -918,8 +1294,11 @@ Vitest.describe('Cli fresh doctor-only workspace', () => {
       // The only install step: no foreign skill is copied into this workspace.
       yield* runDoctor(work.dir);
 
-      const authored = yield* runAuthor(work, { request: 'Ship login' });
-      Vitest.expect(authored.skills).toStrictEqual(['montflow-create-specs']);
+      const authored = yield* runAuthor(work, { ...AUTHOR_BASE });
+      Vitest.expect(authored.skills).toStrictEqual([
+        'montflow-create-specs',
+        'using-git-worktrees',
+      ]);
       Vitest.expect(authored.advisories).toStrictEqual([]);
 
       const executed = yield* runExecute(work, { name: 'ship-login' });

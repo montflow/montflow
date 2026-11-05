@@ -6,7 +6,7 @@ originator: user
 size: tiny
 depends-on: H002, G003, C006
 related-tasks: H004
-status: pending
+status: complete
 write-scope: packages/specs, packages/profiles/profiles/spec-creation-orchestrator
 ---
 
@@ -62,9 +62,9 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] The rendered prompt with `isolated: no` contains no origin or worktree token
-- [ ] The rendered prompt with `isolated: yes` carries origin and worktree/branch
-- [ ] `origin: other` carries the freeform origin branch and nothing else does
-- [ ] The prompt delegates worktree creation to `using-git-worktrees` and uses `workspace-type: worktree`
-- [ ] The profile, skill, and prompt agree on the five names and the question order
-- [ ] `mf-specs doctor` and the prompt tests are green
+- [x] The rendered prompt with `isolated: no` contains no origin or worktree token
+- [x] The rendered prompt with `isolated: yes` carries origin and worktree/branch
+- [x] `origin: other` carries the freeform origin branch and nothing else does
+- [x] The prompt delegates worktree creation to `using-git-worktrees` and uses `workspace-type: worktree`
+- [x] The profile, skill, and prompt agree on the five names and the question order
+- [x] `mf-specs doctor` and the prompt tests are green

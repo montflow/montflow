@@ -75,10 +75,17 @@ Vitest.describe('fresh doctor-only workspace', () => {
       const root = yield* scopedRoot;
       yield* runDoctor(root);
 
-      const created = yield* load(root, 'spec-create', { request: 'Ship login' });
+      const created = yield* load(root, 'spec-create', {
+        request: 'Ship login',
+        rigor: 'standard',
+        isolated: 'no',
+      });
       Vitest.expect(created.skills).toStrictEqual(['montflow-create-specs']);
-      Vitest.expect(created.advisories).toStrictEqual([]);
-      Vitest.expect(created.text).not.toContain('## Skill advisories');
+      Vitest.expect(created.advisories.map((advisory) => advisory.field)).toStrictEqual([
+        'using-git-worktrees',
+      ]);
+      Vitest.expect(created.text).toContain('## Skill advisories');
+      Vitest.expect(created.text).toContain('using-git-worktrees');
 
       const executed = yield* load(root, 'spec-execute', EXECUTE_VALUES);
       Vitest.expect(executed.skills).toStrictEqual(['montflow-find-specs']);
@@ -163,7 +170,11 @@ Vitest.describe('doctor-owned skill gate', () => {
         recursive: true,
       });
 
-      const error = yield* load(root, 'spec-create', { request: 'Ship login' }).pipe(Effect.flip);
+      const error = yield* load(root, 'spec-create', {
+        request: 'Ship login',
+        rigor: 'standard',
+        isolated: 'no',
+      }).pipe(Effect.flip);
       Vitest.expect(error.code).toBe(CODES.skillMissing);
       Vitest.expect(error.field).toBe('montflow-create-specs');
       Vitest.expect(error.fix).toBe(DOCTOR_FIX);
@@ -177,7 +188,11 @@ Vitest.describe('doctor-owned skill gate', () => {
       const fs = yield* FileSystem.FileSystem;
       yield* fs.writeFileString(installedSkill(root, 'montflow-create-specs'), 'stale\n');
 
-      const error = yield* load(root, 'spec-create', { request: 'Ship login' }).pipe(Effect.flip);
+      const error = yield* load(root, 'spec-create', {
+        request: 'Ship login',
+        rigor: 'standard',
+        isolated: 'no',
+      }).pipe(Effect.flip);
       Vitest.expect(error.code).toBe(CODES.skillStale);
       Vitest.expect(error.field).toBe('montflow-create-specs');
       Vitest.expect(error.fix).toBe(DOCTOR_FIX);

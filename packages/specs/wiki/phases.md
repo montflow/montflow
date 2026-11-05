@@ -64,7 +64,7 @@ A phase is **complete** when every task under it is complete. It is **locked** w
 ## Create and grow
 
 ```bash
-mf-specs init --name ship-login --tier standard
+mf-specs init --name ship-login --rigor standard
 mf-specs new-phase --name ship-login --objective "Ship the second slice"
 mf-specs new-task --name ship-login --phase B --task ship --type execution
 ```
@@ -75,4 +75,4 @@ mf-specs new-task --name ship-login --phase B --task ship --type execution
 
 - [Specs](./specs.md) — the store and the frozen-v1 rule.
 - [Verbs](./verbs.md) — `claim`, `gate run`, `gate record`, `waiver`, and `lock`.
-- [Payload](./payload.md) — install the authoring skill and tier files.
+- [Payload](./payload.md) — install the authoring skill and rigor files.

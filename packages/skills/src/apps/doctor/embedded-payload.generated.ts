@@ -9,7 +9,7 @@
  *
  * Source: `payload.json`
  */
-export const EMBEDDED_PAYLOAD: Readonly<Record<'skill' | 'profile' | 'prompt' | 'tier', Readonly<Record<string, Readonly<Record<string, string>>>>>> = {
+export const EMBEDDED_PAYLOAD: Readonly<Record<'skill' | 'profile' | 'prompt' | 'tier' | 'rigor', Readonly<Record<string, Readonly<Record<string, string>>>>>> = {
   "skill": {
     "montflow-create-skills": {
       "CHANGELOG.md": "# Changelog\n\n## [1.1.1] - 2026-10-22\n\n### Changed\n\n- Namespacing rule names `@montflow/*` plugins; the verify forms point at the OpenCode host and `packages/skills`\n\n## [1.1.0]\n\n### Added\n\n- Extension-owned skills are namespaced: a skill shipped by a `montflow/pi-*`\n  extension must be prefixed `montflow-`.\n\n## [1.0.0]\n\n### Added\n\n- Initial release: authors a workspace skill under `.agents/skills/<name>/`\n  from the pi-skills contract, then self-checks with `mf-skills verify`.\n",
@@ -22,5 +22,6 @@ export const EMBEDDED_PAYLOAD: Readonly<Record<'skill' | 'profile' | 'prompt' | 
   },
   "profile": {},
   "prompt": {},
-  "tier": {}
+  "tier": {},
+  "rigor": {}
 };

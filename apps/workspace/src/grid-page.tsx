@@ -408,6 +408,86 @@ const WorkspacePage = (props: WorkspacePageProps) => {
   };
 
   /**
+   * Edit one open prompt's variable condition through the host dialogs. Every
+   * pick runs through the pure editor helpers, so an unknown or later
+   * controller and an unoffered answer surface the refusal instead of writing
+   * a condition the verifier would reject.
+   */
+  const editPromptCondition = async (): Promise<void> => {
+    const current = detail();
+    if (current === undefined || current.kind !== 'prompts') return;
+    const prompt = promptRows().find((row) => row.id === current.id);
+    if (prompt === undefined) return;
+    if (prompt.variables.length === 0) {
+      notify('This prompt has no variables to condition.', 'warning');
+      return;
+    }
+    const variableName = await ports.interaction
+      .select<string>({
+        title: `Condition for prompt '${prompt.name}'`,
+        options: prompt.variables.map((variable) => ({
+          title: variable.name,
+          value: variable.name,
+          description:
+            variable.when === undefined
+              ? 'always visible'
+              : `currently ${variable.when.controller}${variable.when.equals === undefined ? ' is set' : ` = ${variable.when.equals}`}`,
+        })),
+      })
+      .pipe(Effect.runPromise);
+    if (variableName === undefined) return;
+    const index = prompt.variables.findIndex((variable) => variable.name === variableName);
+    const controllers = Prompts.conditionControllers(prompt.variables, index);
+    if (controllers.length === 0) {
+      notify(`'${variableName}' has no earlier select or confirm to condition on.`, 'warning');
+      return;
+    }
+    const controllerName = await ports.interaction
+      .select<string>({
+        title: `Controller for '${variableName}'`,
+        options: controllers.map((controller) => ({
+          title: `${controller.name} (${controller.form === 'truthy' ? 'confirm' : 'select'})`,
+          value: controller.name,
+          description: controller.values.join(', '),
+        })),
+      })
+      .pipe(Effect.runPromise);
+    if (controllerName === undefined) return;
+    const controller = controllers.find((candidate) => candidate.name === controllerName);
+    if (controller === undefined) return;
+    const value = await ports.interaction
+      .select<string>({
+        title: `Show '${variableName}' when '${controller.name}' is`,
+        options: controller.values.map((option) => ({ title: option, value: option })),
+      })
+      .pipe(Effect.runPromise);
+    if (value === undefined) return;
+    const edit = Prompts.applyConditionByName(
+      prompt.variables,
+      variableName,
+      controller.name,
+      value,
+    );
+    if (!edit.ok) {
+      notify(`Condition refused: ${edit.message}`, 'error');
+      return;
+    }
+    const failure = await Prompts.savePrompt(root, {
+      ...prompt,
+      variables: edit.variables,
+    }).pipe(
+      Effect.match({ onFailure: (error) => error.message, onSuccess: () => undefined }),
+      Effect.runPromise,
+    );
+    if (failure !== undefined) {
+      notify(failure, 'error');
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: Query.promptsKey });
+    notify(`Saved condition for '${variableName}'.`, 'success');
+  };
+
+  /**
    * The page's own keymap layer: panel keybinds from the layout plus the
    * list/detail keys the grid has always answered to. The host owns every
    * key outside this layer, and a dialog takes input scope while it is open.
@@ -495,6 +575,13 @@ const WorkspacePage = (props: WorkspacePageProps) => {
         run: () => removeOpen(),
       },
       {
+        id: 'workspace.condition',
+        title: 'Edit a prompt variable condition',
+        group: 'Workspace',
+        bind: 'c',
+        run: () => editPromptCondition(),
+      },
+      {
         id: 'workspace.refresh',
         title: 'Refresh every store',
         group: 'Workspace',
@@ -543,6 +630,7 @@ const WorkspacePage = (props: WorkspacePageProps) => {
         Keybinds.selectRow(),
         ...(current.mode === 'view' ? [Keybinds.scroll()] : []),
         ...(current.kind === 'specs' ? [] : [Keybinds.remove()]),
+        ...(current.kind === 'prompts' ? [Keybinds.condition()] : []),
         Keybinds.showFull(),
         Keybinds.back(),
       ]);
@@ -577,6 +665,12 @@ const WorkspacePage = (props: WorkspacePageProps) => {
     return current?.kind === 'prompts'
       ? promptRows().find((row) => row.id === current.id)
       : undefined;
+  });
+  const openPromptHidden = createMemo(() => {
+    const prompt = openPrompt();
+    return prompt === undefined
+      ? new Set<string>()
+      : Prompts.currentHiddenVariableNames(prompt.variables);
   });
 
   return (
@@ -716,6 +810,7 @@ const WorkspacePage = (props: WorkspacePageProps) => {
                         {(prompt: Accessor<Prompts.PromptSummary>) => (
                           <PromptDetail
                             prompt={prompt()}
+                            hidden={openPromptHidden()}
                             mode={current().mode}
                             scrollOffset={current().scroll}
                             maxBodyLines={detailBodyLines()}
@@ -742,6 +837,7 @@ const WorkspacePage = (props: WorkspacePageProps) => {
               <KeybindBanner
                 items={[
                   { key: 'v', action: 'view' },
+                  ...(current().kind === 'prompts' ? [{ key: 'c', action: 'condition' }] : []),
                   { key: 'esc', action: 'back' },
                 ]}
               />
@@ -782,6 +878,7 @@ const HelpOverlay = () => (
         ['⏎', 'open the highlighted row'],
         ['/', 'search the focused list'],
         ['v', 'toggle preview and full view'],
+        ['c', 'edit a prompt variable condition (prompts)'],
         ['d', 'delete the open row (skills, profiles, prompts)'],
         ['R', 'refresh every store'],
         ['esc', 'close the detail, clear the filter, then leave the page'],

@@ -31,6 +31,37 @@ const pinnedRaw = JSON.stringify({
   model: 'pinned/model',
 });
 
+/** A conditional prompt: isolation controls whether origin exists. */
+const branchRaw = JSON.stringify({
+  name: 'branch',
+  description: 'Pick a branch.',
+  template: 'Isolated: {{isolated}}.{{#if origin}} Origin: {{origin}}.{{else}} No origin.{{/if}}',
+  variables: [
+    { name: 'isolated', type: 'select', options: ['yes', 'no'] },
+    {
+      name: 'origin',
+      type: 'select',
+      options: ['current', 'main'],
+      when: { controller: 'isolated', equals: 'yes' },
+    },
+  ],
+  skills: [],
+  model: 'p/m',
+});
+
+/** A confirm controller gating one text child. */
+const confirmRaw = JSON.stringify({
+  name: 'confirm',
+  description: 'Confirm a flag.',
+  template: 'Flag: {{flag}}.{{#if child}} Child: {{child}}.{{/if}}',
+  variables: [
+    { name: 'flag', type: 'confirm' },
+    { name: 'child', required: false, when: { controller: 'flag', truthy: true } },
+  ],
+  skills: [],
+  model: 'p/m',
+});
+
 /** Stub store serving the given prompt files by name. */
 const stubLayer = (files: Readonly<Record<string, string>>): Layer.Layer<PromptStore.PromptStore> =>
   Layer.succeed(
@@ -356,6 +387,185 @@ Vitest.describe('Cli.run doctor', () => {
         Effect.provide(stubLayer({})),
       );
       Vitest.expect(notifies[0]).toContain('repaired');
+      yield* cleanup(root);
+    }),
+  );
+});
+
+Vitest.describe('Cli.run conditional render and execute', () => {
+  Vitest.it.effect('renders the yes path exactly as the interactive answers', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(readyRoot);
+      const notifies: Array<string> = [];
+      yield* Cli.run(
+        'render branch isolated=yes origin=main',
+        scriptedUi(notifies),
+        root,
+        recordingExecutor([]),
+      ).pipe(Effect.provide(stubLayer({ branch: branchRaw })));
+      Vitest.expect(notifies[0]).toBe('Isolated: yes. Origin: main.');
+      yield* cleanup(root);
+    }),
+  );
+
+  Vitest.it.effect('ignores a value for a hidden variable when rendering', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(readyRoot);
+      const notifies: Array<string> = [];
+      yield* Cli.run(
+        'render branch isolated=no origin=main',
+        scriptedUi(notifies),
+        root,
+        recordingExecutor([]),
+      ).pipe(Effect.provide(stubLayer({ branch: branchRaw })));
+      Vitest.expect(notifies[0]).toBe('Isolated: no. No origin.');
+      yield* cleanup(root);
+    }),
+  );
+
+  Vitest.it.effect('refuses a select value outside its options when rendering', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(readyRoot);
+      const error = yield* Cli.run(
+        'render branch isolated=yes origin=maybe',
+        scriptedUi([]),
+        root,
+        recordingExecutor([]),
+      ).pipe(Effect.provide(stubLayer({ branch: branchRaw })), Effect.flip);
+      Vitest.expect(error).toContain("'maybe'");
+      Vitest.expect(error).toContain("'origin'");
+      Vitest.expect(error).toContain('select');
+      Vitest.expect(error).toContain('current, main');
+      yield* cleanup(root);
+    }),
+  );
+
+  Vitest.it.effect('executes the yes path with the same rendered text as render', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(readyRoot);
+      const seen: Array<PromptExecute.ExecutionRequest> = [];
+      yield* Cli.run(
+        'execute branch --model p/m isolated=yes origin=main',
+        scriptedUi([]),
+        root,
+        recordingExecutor(seen),
+      ).pipe(Effect.provide(stubLayer({ branch: branchRaw })));
+      Vitest.expect(seen[0]?.text).toBe('Isolated: yes. Origin: main.');
+      yield* cleanup(root);
+    }),
+  );
+
+  Vitest.it.effect('executes the no path and drops the hidden answer', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(readyRoot);
+      const seen: Array<PromptExecute.ExecutionRequest> = [];
+      yield* Cli.run(
+        'execute branch --model p/m isolated=no origin=main',
+        scriptedUi([]),
+        root,
+        recordingExecutor(seen),
+      ).pipe(Effect.provide(stubLayer({ branch: branchRaw })));
+      Vitest.expect(seen[0]?.text).toBe('Isolated: no. No origin.');
+      yield* cleanup(root);
+    }),
+  );
+
+  Vitest.it.effect('refuses a select value outside its options when executing', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(readyRoot);
+      const seen: Array<PromptExecute.ExecutionRequest> = [];
+      const error = yield* Cli.run(
+        'execute branch --model p/m isolated=yes origin=maybe',
+        scriptedUi([]),
+        root,
+        recordingExecutor(seen),
+      ).pipe(Effect.provide(stubLayer({ branch: branchRaw })), Effect.flip);
+      Vitest.expect(seen).toStrictEqual([]);
+      Vitest.expect(error).toContain("'maybe'");
+      Vitest.expect(error).toContain("'origin'");
+      Vitest.expect(error).toContain('current, main');
+      yield* cleanup(root);
+    }),
+  );
+});
+
+Vitest.describe('Cli.run confirm render and execute', () => {
+  Vitest.it.effect('renders the yes path and gates the dependent', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(readyRoot);
+      const notifies: Array<string> = [];
+      yield* Cli.run(
+        'render confirm flag=yes child=extra',
+        scriptedUi(notifies),
+        root,
+        recordingExecutor([]),
+      ).pipe(Effect.provide(stubLayer({ confirm: confirmRaw })));
+      Vitest.expect(notifies[0]).toBe('Flag: yes. Child: extra.');
+      yield* cleanup(root);
+    }),
+  );
+
+  Vitest.it.effect('accepts an unchecked confirm as the empty answer', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(readyRoot);
+      const notifies: Array<string> = [];
+      yield* Cli.run(
+        'render confirm flag=',
+        scriptedUi(notifies),
+        root,
+        recordingExecutor([]),
+      ).pipe(Effect.provide(stubLayer({ confirm: confirmRaw })));
+      Vitest.expect(notifies[0]).toBe('Flag: .');
+      yield* cleanup(root);
+    }),
+  );
+
+  Vitest.it.effect('refuses any other confirm value when rendering', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(readyRoot);
+      const error = yield* Cli.run(
+        'render confirm flag=no',
+        scriptedUi([]),
+        root,
+        recordingExecutor([]),
+      ).pipe(Effect.provide(stubLayer({ confirm: confirmRaw })), Effect.flip);
+      Vitest.expect(error).toContain("'no'");
+      Vitest.expect(error).toContain("'flag'");
+      Vitest.expect(error).toContain('confirm');
+      Vitest.expect(error).toContain("'yes'");
+      yield* cleanup(root);
+    }),
+  );
+
+  Vitest.it.effect('executes the yes path with the same rendered text as render', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(readyRoot);
+      const seen: Array<PromptExecute.ExecutionRequest> = [];
+      yield* Cli.run(
+        'execute confirm --model p/m flag=yes child=extra',
+        scriptedUi([]),
+        root,
+        recordingExecutor(seen),
+      ).pipe(Effect.provide(stubLayer({ confirm: confirmRaw })));
+      Vitest.expect(seen[0]?.text).toBe('Flag: yes. Child: extra.');
+      yield* cleanup(root);
+    }),
+  );
+
+  Vitest.it.effect('refuses any other confirm value when executing', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(readyRoot);
+      const seen: Array<PromptExecute.ExecutionRequest> = [];
+      const error = yield* Cli.run(
+        'execute confirm --model p/m flag=no',
+        scriptedUi([]),
+        root,
+        recordingExecutor(seen),
+      ).pipe(Effect.provide(stubLayer({ confirm: confirmRaw })), Effect.flip);
+      Vitest.expect(seen).toStrictEqual([]);
+      Vitest.expect(error).toContain("'no'");
+      Vitest.expect(error).toContain("'flag'");
+      Vitest.expect(error).toContain('confirm');
       yield* cleanup(root);
     }),
   );

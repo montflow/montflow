@@ -1,13 +1,15 @@
 import { parseMarkdown } from '../frontmatter/index.js';
-import { TIER_CONTRACT, type Tier, tierOrUndefined } from '../tier/index.js';
+import { RIGOR_CONTRACT, type Rigor, rigorOrUndefined } from '../rigor/index.js';
 
 /** Heading of the creation record `init` writes into SPEC.md. */
 export const CREATION_HEADING = 'Creation';
 
 /** One creation record read from a SPEC.md body. */
 export interface Creation {
-  /** The appraiser's chosen tier, when the record names a known one. */
-  readonly tier: Tier | undefined;
+  /** The rigor the record names, when it names a known one. */
+  readonly rigor: Rigor | undefined;
+  /** The raw value the record names, even when it is not a known rigor. */
+  readonly declaredRigor: string | undefined;
   /** The creation run's self-reported question count and its budget. */
   readonly questions: { readonly count: number; readonly budget: number } | undefined;
   /** Any user-owned decision the run stopped on, or `none`. */
@@ -30,21 +32,31 @@ const sectionLines = (body: string, heading: string): ReadonlyArray<string> => {
 
 /**
  * Parse the `## Creation` record. A missing section yields every field absent;
- * an unknown tier reads as no tier so a generator refuses rather than guesses.
+ * an unknown rigor reads as no rigor so a generator refuses rather than guesses.
+ * A legacy `tier:` line is inert and never read.
  * @param markdown - raw SPEC.md contents
  * @returns the parsed creation record
  */
 export const creationOf = (markdown: string): Creation => {
   const parsed = parseMarkdown(markdown);
-  if (parsed === null) return { tier: undefined, questions: undefined, unresolved: undefined };
-  let tier: Tier | undefined;
+  if (parsed === null) {
+    return {
+      rigor: undefined,
+      declaredRigor: undefined,
+      questions: undefined,
+      unresolved: undefined,
+    };
+  }
+  let rigor: Rigor | undefined;
+  let declaredRigor: string | undefined;
   let questions: Creation['questions'];
   let unresolved: string | undefined;
   for (const raw of sectionLines(parsed.body, CREATION_HEADING)) {
     const line = raw.replace(/^\s*-\s*/, '').trim();
-    const tierMatch = /^tier:\s*(\S+)$/.exec(line);
-    if (tierMatch !== null) {
-      tier = tierOrUndefined(tierMatch[1]);
+    const rigorMatch = /^rigor:\s*(\S+)$/.exec(line);
+    if (rigorMatch !== null) {
+      declaredRigor = rigorMatch[1];
+      rigor = rigorOrUndefined(rigorMatch[1]);
       continue;
     }
     const questionsMatch = /^questions\s+(\d+)\s*\/\s*(\d+)$/.exec(line);
@@ -58,32 +70,42 @@ export const creationOf = (markdown: string): Creation => {
     const unresolvedMatch = /^unresolved:\s*(.+)$/.exec(line);
     if (unresolvedMatch !== null) unresolved = (unresolvedMatch[1] ?? '').trim();
   }
-  return { tier, questions, unresolved };
+  return { rigor, declaredRigor, questions, unresolved };
 };
 
 /**
- * The tier a SPEC.md `## Creation` record declares.
+ * The rigor a SPEC.md `## Creation` record declares.
  * @param markdown - raw SPEC.md contents
- * @returns the tier, or undefined when the record is absent or unknown
+ * @returns the rigor, or undefined when the record is absent or unknown
  */
-export const tierOfSpec = (markdown: string): Tier | undefined => creationOf(markdown).tier;
+export const rigorOfSpec = (markdown: string): Rigor | undefined => creationOf(markdown).rigor;
 
-/** The self-reported question budget for a tier. */
-export const questionBudget = (tier: Tier): number => TIER_CONTRACT[tier].interaction;
+/**
+ * The raw rigor token a SPEC.md `## Creation` record names, even when it is
+ * unknown. A typo is reported as `rigor.unknown`, so a reader can tell a
+ * missing record from an unrecognised value.
+ * @param markdown - raw SPEC.md contents
+ * @returns the declared token, or undefined when the record names none
+ */
+export const declaredRigorOfSpec = (markdown: string): string | undefined =>
+  creationOf(markdown).declaredRigor;
+
+/** The self-reported question budget for a rigor level. */
+export const questionBudget = (rigor: Rigor): number => RIGOR_CONTRACT[rigor].interaction;
 
 /**
  * Render the `## Creation` body section, including its heading. The initial
  * question count is always `0/<budget>`: the creation run owns updating it.
- * @param tier - the chosen tier
+ * @param rigor - the chosen rigor level
  * @param unresolved - a user-owned decision the run stopped on; defaults to `none`
  * @returns the markdown section
  */
-export const renderCreationSection = (tier: Tier, unresolved = 'none'): string =>
+export const renderCreationSection = (rigor: Rigor, unresolved = 'none'): string =>
   [
     `## ${CREATION_HEADING}`,
     '',
-    `- tier: ${tier}`,
-    `- questions 0/${questionBudget(tier)}`,
+    `- rigor: ${rigor}`,
+    `- questions 0/${questionBudget(rigor)}`,
     `- unresolved: ${unresolved.trim() === '' ? 'none' : unresolved.trim()}`,
     '',
   ].join('\n');

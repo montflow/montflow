@@ -3,7 +3,6 @@ import { Command, Flag } from 'effect/cli';
 
 import {
   INIT_CODES,
-  MICRO_WAIVER_REASON,
   type InitPhasePlan,
   type InitPlan,
   type InitTaskPlan,
@@ -11,6 +10,7 @@ import {
   phaseIdAt,
   renderInitTree,
   validateInitPlan,
+  waiverReason,
 } from '../../modules/init/index.js';
 import { DEFAULT_SIZE, type Size, SIZES, isSize } from '../../modules/sizing/index.js';
 import { isValidName, isValidPhase } from '../../modules/spec/index.js';
@@ -22,7 +22,7 @@ import {
   phaseRank,
 } from '../../modules/task/index.js';
 import { isScopeList } from '../../modules/scheduler/index.js';
-import { type Tier, isTier } from '../../modules/tier/index.js';
+import { RIGOR_CONTRACT, type Rigor, RIGORS, isRigor } from '../../modules/rigor/index.js';
 import { SpecStore } from '../../services/index.js';
 
 import { authoringFailure } from './cli.authoring.helpers.js';
@@ -127,7 +127,7 @@ export const parseInitTaskFlag = (
 export interface InitOptions {
   readonly root: string;
   readonly name: string;
-  readonly tier?: string | undefined;
+  readonly rigor?: string | undefined;
   readonly author?: string | undefined;
   readonly description?: string | undefined;
   readonly workspaceType?: string | undefined;
@@ -141,7 +141,7 @@ export interface InitOptions {
 /** What {@link init} wrote. */
 export interface InitReport {
   readonly name: string;
-  readonly tier: Tier;
+  readonly rigor: Rigor;
   readonly phases: ReadonlyArray<string>;
   readonly tasks: number;
   readonly files: ReadonlyArray<string>;
@@ -168,10 +168,10 @@ const phaseValueMap = (
   return { ok: true, values };
 };
 
-/** Build the plan from CLI flags, applying tier defaults before validation. */
+/** Build the plan from CLI flags, applying rigor defaults before validation. */
 const buildPlan = (
   options: InitOptions,
-  tier: Tier,
+  rigor: Rigor,
   created: string,
 ):
   | { readonly ok: true; readonly plan: InitPlan }
@@ -194,15 +194,17 @@ const buildPlan = (
 
   const reviewFor = (phase: string): 'required' | 'waived' | 'none' => {
     const raw = reviewOverrides.ok ? reviewOverrides.values.get(phase) : undefined;
-    if (raw === undefined) return defaultReview(tier);
+    if (raw === undefined) return defaultReview(rigor);
     if (raw === 'required' || raw === 'waived' || raw === 'none') return raw;
     errors.push(`--review ${phase} must be 'required', 'waived', or 'none'.`);
-    return defaultReview(tier);
+    return defaultReview(rigor);
   };
   const reasonFor = (review: 'required' | 'waived' | 'none', phase: string): string | undefined => {
     const reason = reasons.ok ? reasons.values.get(phase) : undefined;
     if (reason !== undefined) return reason;
-    return review === 'waived' && tier === 'micro' ? MICRO_WAIVER_REASON : undefined;
+    return review === 'waived' && (rigor === 'trivial' || rigor === 'light')
+      ? waiverReason(rigor)
+      : undefined;
   };
 
   let phases: Array<InitPhasePlan>;
@@ -214,6 +216,7 @@ const buildPlan = (
       const tasks = parsedTasks
         .filter((parsed) => parsed.phase === phase)
         .map((parsed) => parsed.task);
+      const explores = index === 0 && RIGOR_CONTRACT[rigor].exploration === 'required';
       const phasePlan: InitPhasePlan = {
         objective,
         review,
@@ -222,8 +225,8 @@ const buildPlan = (
             ? tasks
             : [
                 {
-                  name: index === 0 && tier === 'full' ? 'explore' : 'implement',
-                  type: index === 0 && tier === 'full' ? 'exploratory' : 'execution',
+                  name: explores ? 'explore' : 'implement',
+                  type: explores ? 'exploratory' : 'execution',
                   size: 'medium',
                   after: [],
                 },
@@ -243,7 +246,7 @@ const buildPlan = (
       name: string;
       after: string[];
     }> =
-      tier === 'full'
+      RIGOR_CONTRACT[rigor].exploration === 'required'
         ? [
             {
               objective: 'Explore the problem and record what the implementation must satisfy.',
@@ -306,7 +309,7 @@ const buildPlan = (
     ok: true,
     plan: {
       name: options.name,
-      tier,
+      rigor,
       author,
       created,
       workspaceType: resolvedWorkspaceType,
@@ -318,7 +321,7 @@ const buildPlan = (
 };
 
 /**
- * Create a whole v2 tree from a tier plan. Every tier-contract violation is
+ * Create a whole v2 tree from a rigor plan. Every rigor-contract violation is
  * rejected before a single file is written; ids are allocated from the plan
  * order, never caller arithmetic.
  * @param options - spec metadata and the ordered phase/task plan
@@ -336,25 +339,25 @@ export const init = (
           path: '--name',
           field: '--name',
           problem: `Spec name '${options.name}' is not a slug.`,
-          rerun: 'mf-specs init --name <slug> --tier <tier>',
+          rerun: 'mf-specs init --name <slug> --rigor <rigor>',
         }),
       );
     }
-    if (options.tier === undefined || !isTier(options.tier)) {
+    if (options.rigor === undefined || !isRigor(options.rigor)) {
       return yield* Effect.fail(
         authoringFailure(operation, {
-          code: 'tier.unknown',
-          path: options.tier ?? '--tier',
-          field: '--tier',
-          problem: `Tier '${options.tier ?? ''}' is not a tier.`,
-          rerun: 'mf-specs init --name <slug> --tier <tier>',
-          expected: 'micro, standard, full',
-          actual: options.tier ?? 'missing',
-          fix: 'Pass one of micro, standard, full.',
+          code: 'rigor.unknown',
+          path: options.rigor ?? '--rigor',
+          field: '--rigor',
+          problem: `Rigor '${options.rigor ?? ''}' is not a rigor.`,
+          rerun: 'mf-specs init --name <slug> --rigor <rigor>',
+          expected: RIGORS.join(', '),
+          actual: options.rigor ?? 'missing',
+          fix: `Pass one of ${RIGORS.join(', ')}.`,
         }),
       );
     }
-    const tier = options.tier;
+    const rigor = options.rigor;
     const store = yield* SpecStore.SpecStore;
     if (yield* store.exists(options.root, options.name)) {
       return yield* Effect.fail(
@@ -370,7 +373,7 @@ export const init = (
     }
     const now = yield* Clock.currentTimeMillis;
     const created = new Date(now).toISOString().slice(0, 10);
-    const built = buildPlan(options, tier, created);
+    const built = buildPlan(options, rigor, created);
     if (!built.ok) {
       return yield* Effect.fail(
         new SurfaceError({
@@ -381,7 +384,7 @@ export const init = (
               path: '--task/--phase',
               field: 'plan',
               problem,
-              rerun: 'mf-specs init --name <slug> --tier <tier>',
+              rerun: 'mf-specs init --name <slug> --rigor <rigor>',
               fix: 'Correct the plan tokens.',
             }),
           ),
@@ -399,7 +402,7 @@ export const init = (
               path: options.name,
               field: found.field,
               problem: found.message,
-              rerun: 'mf-specs init --name <slug> --tier <tier>',
+              rerun: 'mf-specs init --name <slug> --rigor <rigor>',
               expected: found.expected,
               actual: found.actual,
               fix: found.fix,
@@ -412,7 +415,7 @@ export const init = (
     yield* store.write(options.root, options.name, files);
     return {
       name: options.name,
-      tier,
+      rigor,
       phases: built.plan.phases.map((_, index) => phaseIdAt(index + 1)),
       tasks: files.filter((file) => file.path.endsWith('/TASK.md')).length,
       files: files.map((file) => file.path),
@@ -422,7 +425,7 @@ export const init = (
 /** Render an init report. */
 export const renderInit = (report: InitReport): string =>
   [
-    `✓ created '${report.name}' · tier ${report.tier} · phases ${report.phases.join(',')} · ${report.tasks} task${report.tasks === 1 ? '' : 's'}`,
+    `✓ created '${report.name}' · rigor ${report.rigor} · phases ${report.phases.join(',')} · ${report.tasks} task${report.tasks === 1 ? '' : 's'}`,
     ...report.files.map((file) => `  ${file}`),
   ].join('\n');
 
@@ -432,13 +435,13 @@ export const renderInit = (report: InitReport): string =>
 const repeated = (name: string, description: string) =>
   Flag.String(name).pipe(Flag.withDescription(description), Flag.atLeast(0));
 
-/** `init`: tier -> a whole valid v2 tree. */
+/** `init`: rigor -> a whole valid v2 tree. */
 export const initCommand = Command.make(
   'init',
   {
     dir: dirFlag,
     name: nameFlag,
-    tier: Flag.String('tier'),
+    rigor: Flag.String('rigor'),
     author: Flag.optional(Flag.String('author')),
     description: Flag.optional(Flag.String('description')),
     workspaceType: Flag.optional(Flag.String('workspace-type')),
@@ -457,7 +460,7 @@ export const initCommand = Command.make(
         const report = yield* init({
           root: storeDirOf(config.dir),
           name: config.name,
-          tier: config.tier,
+          rigor: config.rigor,
           author: opt(config.author),
           description: opt(config.description),
           workspaceType: opt(config.workspaceType),
@@ -474,11 +477,11 @@ export const initCommand = Command.make(
       }),
       () => ({
         path: config.name,
-        rerun: `mf-specs init --name ${config.name} --tier ${config.tier}`,
+        rerun: `mf-specs init --name ${config.name} --rigor ${config.rigor}`,
         verbose: false,
       }),
     ),
 ).pipe(
-  Command.withDescription('Create a whole v2 spec tree from a validated tier plan.'),
+  Command.withDescription('Create a whole v2 spec tree from a validated rigor plan.'),
   Command.provide(SpecStore.Default),
 );

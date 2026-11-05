@@ -221,7 +221,7 @@ Vitest.describe('montflow-create-prompts claims', () => {
     });
   });
 
-  Vitest.it('names exactly the seven checks verifyPromptFile performs', () => {
+  Vitest.it('names every rule verifyPromptFile measures', () => {
     for (const item of [
       'valid JSON',
       'slug `name` matching the file name',
@@ -230,6 +230,10 @@ Vitest.describe('montflow-create-prompts claims', () => {
       'first-appearance order',
       'legal flat name',
       'both `required` and defaulted',
+      'exactly one of `equals` or `truthy`',
+      "uses one of that controller's options",
+      'carries no `options`, `default`, or `required`',
+      'no `{{#if}}` guards a controller that has no condition of its own',
     ]) {
       Vitest.expect(createSkill()).toContain(item);
     }

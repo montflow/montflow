@@ -16,7 +16,7 @@ import {
   newPhase,
   newTask,
   opencodeSteerPort,
-  readTier,
+  readRigor,
   recordGate,
   renderClaim,
   renderDiagnostic,
@@ -44,7 +44,7 @@ const callerSession = Config.option(Config.String('OPENCODE_SESSION_ID')).pipe(
 /** The spawner the gate and mail arms need for their one subprocess seam. */
 const Spawner = NodeChildProcessSpawner.layer;
 
-/** `/specs init --name <spec> --tier <tier> ...`, the v2 tier tree. */
+/** `/specs init --name <spec> --rigor <rigor> ...`, the v2 rigor tree. */
 export const slashInit = (context: SlashContext): SlashEffect => {
   const { parsed, dir } = context;
   const name = parsed.name;
@@ -52,16 +52,16 @@ export const slashInit = (context: SlashContext): SlashEffect => {
     return Effect.fail(
       new SpecStore.StoreError({
         operation: 'SpecInit',
-        reason: 'init requires --name <spec> and --tier <tier>.',
+        reason: 'init requires --name <spec> and --rigor <rigor>.',
       }),
     );
   }
-  const tier = parsed.values.tier;
+  const rigor = parsed.values.rigor;
   return slashOutcome(
     init({
       root: dir,
       name,
-      tier,
+      rigor,
       author: parsed.values.author,
       description: parsed.values.description,
       workspaceType: parsed.values['workspace-type'],
@@ -74,7 +74,7 @@ export const slashInit = (context: SlashContext): SlashEffect => {
     (report): SlashReport => ({ output: renderInit(report), ok: true }),
     {
       path: name,
-      rerun: `mf-specs init --name ${name} --tier ${tier ?? '<tier>'}`,
+      rerun: `mf-specs init --name ${name} --rigor ${rigor ?? '<rigor>'}`,
       verbose: parsed.verbose,
     },
   );
@@ -189,21 +189,21 @@ export const slashStamp = (context: SlashContext): SlashEffect => {
   );
 };
 
-/** `/specs tier <micro|standard|full>`, the one tier read path. */
-export const slashTier = (context: SlashContext): SlashEffect => {
+/** `/specs rigor <trivial|light|standard|deep|critical>`, the one rigor read path. */
+export const slashRigor = (context: SlashContext): SlashEffect => {
   const { parsed, workspace } = context;
-  const tier = parsed.positionals[0] ?? parsed.values.tier ?? '';
-  return readTier({ tier, workspace }).pipe(
+  const rigor = parsed.positionals[0] ?? parsed.values.rigor ?? '';
+  return readRigor({ rigor, workspace }).pipe(
     Effect.map((output): SlashReport => ({ output, ok: true })),
-    Effect.catchTag('@montflow/TierLoadError', (error) =>
+    Effect.catchTag('@montflow/RigorLoadError', (error) =>
       Effect.succeed({
         output: renderDiagnostic(
           diagnostic({
             code: error.code,
             path: error.path,
-            field: 'tier',
+            field: 'rigor',
             problem: error.problem,
-            rerun: `mf-specs tier ${tier}`,
+            rerun: `mf-specs rigor ${rigor}`,
             expected: error.expected,
             actual: error.actual,
             fix: error.fix,
@@ -214,7 +214,7 @@ export const slashTier = (context: SlashContext): SlashEffect => {
     ),
     Effect.catchCause((cause) =>
       Effect.succeed(
-        slashFailure(cause, { path: tier, rerun: `mf-specs tier ${tier}`, verbose: false }),
+        slashFailure(cause, { path: rigor, rerun: `mf-specs rigor ${rigor}`, verbose: false }),
       ),
     ),
   );

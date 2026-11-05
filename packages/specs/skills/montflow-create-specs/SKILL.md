@@ -3,7 +3,7 @@ name: montflow-create-specs
 description: Authors a spec under .agents/@montflow/specs/ — SPEC.md plus one directory per phase (PHASE.md, MEMORY.md, BOARD.md) and one directory per task (TASK.md, MEMORY.md, GATES.md, MAILBOX.md) — by scaffolding with `mf-specs init` or `create` then filling in the rules below. Use when an agent must create a spec directly, without dispatching a session.
 id: 6ebf45d24cb3d3a1
 author: Daniel Montilla
-version: 2.17.0
+version: 2.19.0
 license: MIT
 dependencies:
   - executing-skills
@@ -27,9 +27,10 @@ blocked doctor-owned skill fails prompt load with `prompt.skill-missing` /
 never downgraded. The execution and sizing prompts also declare
 `montflow-adversarial-review`, `montflow-addressing-adversarial-review`,
 `executing-skills`, `grilling`, and `i-have-adhd`, which this package does not
-ship. A missing one is advisory (`prompt.skill-advisory`): the prompt still
-renders and names every missing skill, and only installed skills are handed to
-the executor. Install an external skill with
+ship. The `spec-create` prompt also declares `using-git-worktrees`, which the
+isolated branch loads; a missing one is advisory (`prompt.skill-advisory`): the
+prompt still renders and names every missing skill, and only installed skills
+are handed to the executor. Install an external skill with
 `npx skills add montflow/montflow -s <skill> -y` before relying on its guidance.
 
 # Pipeline
@@ -40,11 +41,32 @@ The authoring flow ships as the `spec-create` prompt
 (`packages/specs/prompts/spec-create.json`), and that prompt declares this skill.
 Point at the prompt; never copy its text into another artifact.
 
-- **Dispatching a session**: `mf-specs author --request "<text>" [--notes "<text>"]`
-  loads, gates, renders, and prints the prompt. In the OpenCode host,
-  `/specs author …` or the `spec_author` tool dispatches the same text.
+- **Dispatching a session**: `mf-specs author --request "<text>" --rigor <level> --isolated <yes|no> [--notes "<text>"]`
+  loads, gates, renders, and prints the prompt. Pass the isolation answers
+  (`--origin`, `--worktree-name`, and `--origin-branch` when origin is `other`)
+  only for `--isolated yes`. In the OpenCode host, `/specs author …` or the
+  `spec_author` tool dispatches the same text.
 - **Authoring here**: scaffold with `mf-specs create` and follow the steps
   below. The artifact contract lives in this skill; the prompt drives the run.
+
+## 0. Ask the Authoring Questions
+
+Ask the questions the `spec-create` prompt declares, in this order. A hidden
+question is never asked, and a hidden answer is dropped.
+
+| #   | Name            | Type     | Options                                            | Required | When           |
+| --- | --------------- | -------- | -------------------------------------------------- | -------- | -------------- |
+| 1   | `request`       | textarea | —                                                  | yes      | always         |
+| 2   | `notes`         | textarea | —                                                  | no       | always         |
+| 3   | `rigor`         | select   | `trivial`, `light`, `standard`, `deep`, `critical` | yes      | always         |
+| 4   | `isolated`      | select   | `yes`, `no`                                        | yes      | always         |
+| 5   | `origin`        | select   | `current`, `main`, `other`                         | yes      | `isolated=yes` |
+| 6   | `origin_branch` | text     | —                                                  | yes      | `origin=other` |
+| 7   | `worktree_name` | text     | —                                                  | yes      | `isolated=yes` |
+
+The user selects `rigor`; it has no default. The appraiser recommends a level
+and must flag a request the chosen level cannot hold, but it never chooses or
+overrides. The prompt file is the source of truth; this table must match it.
 
 ## 1. Choose the Name
 
@@ -54,11 +76,11 @@ execute it.
 
 ## 2. Scaffold the Tree
 
-The tier-aware scaffold is one deterministic, model-free command that reads the
-tier contract and writes a tree that already passes `mf-specs check`:
+The rigor-aware scaffold is one deterministic, model-free command that reads the
+rigor contract and writes a tree that already passes `mf-specs check`:
 
 ```bash
-bun run --cwd packages/specs cli init --name <kebab-name> --tier <tier> \
+bun run --cwd packages/specs cli init --name <kebab-name> --rigor <rigor> \
   [--description "<one line>"] [--author "<name>"] \
   [--workspace-type in-place|worktree] \
   [--phase "<one-line objective>"]... \
@@ -68,9 +90,9 @@ bun run --cwd packages/specs cli init --name <kebab-name> --tier <tier> \
   [--reviewer-profiles "<a>,<b>"]
 ```
 
-`init` refuses a plan that violates the tier's phase range, task ceiling,
+`init` refuses a plan that violates the rigor's phase range, task ceiling,
 exploration rule, gate kind, waiver policy, or review task decision. It writes
-the `## Creation` section (`tier`, `questions 0/<budget>`, `unresolved: none`)
+the `## Creation` section (`rigor`, `questions 0/<budget>`, `unresolved: none`)
 and generates a review task exactly for a `review: required` phase; a phase may
 instead declare `review: none` and hold no review at all. Grow the spec with
 `mf-specs new-phase --name <spec> --objective <line>` and
@@ -79,8 +101,8 @@ both allocate the next id from disk. Record a review decision with
 `mf-specs waiver --name <spec> --phase <id> --waived --reason <line>` or
 `--required`, or author `review: none` with `new-phase --review none`.
 
-`mf-specs create` remains the tier-agnostic mechanical scaffold for a tree that
-does not need a tier plan. It writes a tree passing `mf-specs check`:
+`mf-specs create` remains the rigor-agnostic mechanical scaffold for a tree that
+does not need a rigor plan. It writes a tree passing `mf-specs check`:
 
 ```bash
 bun run --cwd packages/specs cli create --name <kebab-name> \
@@ -110,36 +132,71 @@ ids, `status`, `created`, and every timestamp — so never type one by hand.
 Grow an existing spec with `mf-specs new-phase` and `mf-specs new-task`; both
 allocate the next id from disk. Transition status only with `mf-specs claim`.
 
-## Tier Selection and Loading
+## Rigor Selection and Loading
 
-The appraiser chooses exactly one tier. The authoring run loads exactly that
-tier with `mf-specs tier <tier>` — one positional value, no default, no
-directory listing, and no second tier. The table below is the enum summary; the
+The user chooses exactly one rigor, `trivial`, `light`, `standard`, `deep`, or
+`critical`, with no default. The appraiser recommends a level and flags a
+request the chosen level cannot hold; it never chooses, upgrades, or overrides.
+The authoring run loads exactly the user's rigor with `mf-specs rigor <rigor>` — one positional value, no default, no
+directory listing, and no second rigor. The table below is the enum summary; the
 loaded file is the only place the artifact matrix and the interaction budget are
 stated.
 
-| Tier     | Phases | Exploration | Tasks | Review   | Questions |
+| Rigor    | Phases | Exploration | Tasks | Review   | Questions |
 | -------- | ------ | ----------- | ----- | -------- | --------- |
-| micro    | 1      | forbidden   | 2     | waived   | 0         |
+| trivial  | 1      | forbidden   | 2     | waived   | 0         |
+| light    | 1      | optional    | 4     | waived   | 1         |
 | standard | 1–2    | optional    | 6     | required | 2         |
-| full     | 2–4    | required    | 12    | required | 8         |
+| deep     | 2–3    | required    | 9     | required | 4         |
+| critical | 2–4    | required    | 12    | required | 8         |
 
 - `Phases` is the inclusive phase range; `Tasks` is the maximum number of work
   tasks, excluding a generated review task.
-- `Exploration` is `forbidden` for `micro`, `optional` (at most one exploratory
-  task, in the first phase) for `standard`, and `required` as a dedicated phase
-  `A` for `full`.
+- `Exploration` is `forbidden` for `trivial`, `optional` (at most one
+  exploratory task in phase `A`) for `light` and `standard`, and `required` for
+  `deep` (one exploratory task in phase `A`) and `critical` (a dedicated
+  exploration phase `A`).
 - `Review` is the default decision; the waiver policy is `permitted` for
-  `micro`, `records-only` for `standard`, and `forbidden` for `full`.
+  `trivial` and `light`, `records-only` for `standard` and `deep`, and
+  `forbidden` for `critical`.
 - `Questions` is the maximum number of `ask_user` calls in one creation run. It
   is recorded in `SPEC.md` as `questions <n>/<budget>`, self-reported and
   advisory; there is no harness counter.
-- Anything above `full` is the `split` verdict, not a tier. It carries
+- Anything above `critical` is the `split` verdict, not a rigor. It carries
   `verdict`, `cut`, `count`, `specs`, `slug`, `tier`, `scope`, and `evidence`,
   and authors nothing.
 
 A plan outside the phase range, the task ceiling, or the exploration rule is
 invalid: re-appraise, then split only when the work holds independent concerns.
+
+## Isolated Authoring
+
+When the user selects `isolated: yes`, load the `using-git-worktrees` skill and
+follow its pipeline. Resolve the chosen `origin` to a real git ref first — the
+skill's `BASE` must pass `git rev-parse --verify`, so never pass the enum:
+
+- `current` → `git branch --show-current`. A detached HEAD has no branch: stop
+  and report `isolated: no (requested yes, origin current unresolved: detached
+HEAD)`; author nothing.
+- `main` → run `git fetch origin`, then pass `origin/main`.
+- `other` → pass the `origin_branch` only after `git rev-parse --verify`
+  succeeds; an unverifiable branch is a stop, not a guess.
+
+Give the skill its fixed parameters too: Type `feat`, Push `false`, branch
+`feat/<worktree_name>`, and path `.worktrees/feat/<worktree_name>`. Never ask
+about type or push and never push a branch unless the user asked for it. Never
+run `git worktree add` yourself. The skill owns Step 0: if the run is already in
+a linked worktree, create nothing and author in that workspace instead of
+nesting another. If `using-git-worktrees` is not installed, stop and report
+`isolated: no (requested yes, skill missing)`; author nothing in place.
+
+The skill reports `Worktree ready at <abs-path>`. Make that path the run's
+workspace root, so every generator path resolves there, and scaffold with
+`--workspace-type worktree`. If creation is denied or the skill refuses, stop
+and report `isolated: no (requested yes, creation denied)` with the skill's
+reason; author nothing and never fall back to the current checkout. When
+`isolated` is `no`, author in the current checkout with
+`--workspace-type in-place` and create no separate workspace.
 
 ## 3. Write `SPEC.md`
 
@@ -413,10 +470,10 @@ Prove a generated config in this order, scoped to what was touched:
 A phase is a directory named `<PHASE>/`; every task directory lives inside its
 phase directory, and the phase's own files (`PHASE.md`, `MEMORY.md`,
 `BOARD.md`, optional `GATES.md`/`GATE-RESULTS.jsonl`) sit beside them. A phase
-reviews, waives, or holds no review at all; the tier sets the default and the
+reviews, waives, or holds no review at all; the rigor sets the default and the
 waiver policy. A generated review task exists exactly for a `review: required`
 phase: never add one to a waived or `review: none` phase and never require one
-where the tier allows a waiver. A phase lock is derived from every task being
+where the rigor allows a waiver. A phase lock is derived from every task being
 complete, every classified mechanical gate being proven, and a closed review
 round, an effective waiver, or a `review: none` decision; never hand-write a
 lock or a lock list. Confirm one with `mf-specs lock --name <spec> --phase <id>`
@@ -426,9 +483,9 @@ a phase.
 ## 7. Ask Only When the Decision Is the User's
 
 Ask with `ask_user` only when the decision is theirs — scope, naming, or real
-ambiguity; otherwise decide and proceed. The tier's question budget is advisory
+ambiguity; otherwise decide and proceed. The rigor's question budget is advisory
 and self-reported in `## Creation`; it is never a licence to ask a fact the
-repository can answer, and `micro` asks nothing. Use `notify_user` for progress
+repository can answer, and `trivial` asks nothing. Use `notify_user` for progress
 the user should see. Do not invent extra context.
 
 ## 8. Self-Check Before You Stop
@@ -436,9 +493,13 @@ the user should see. Do not invent extra context.
 Only edit files if you skipped the scaffold or changed the tree by hand; a fresh
 `init` or `create` output already verifies.
 
-- The appraiser named `micro`, `standard`, or `full`, or emitted `split`; the
-  authoring run loaded exactly that tier with `mf-specs tier <tier>`.
-- `SPEC.md` carries `## Creation` with `tier`, self-reported
+- The user chose one of `trivial`, `light`, `standard`, `deep`, or `critical`, or
+  the appraiser emitted `split`; the authoring run loaded exactly that rigor with
+  `mf-specs rigor <rigor>`.
+- An isolated run resolved the origin to a real ref, loaded
+  `using-git-worktrees`, authored in the workspace it reported, and passed
+  `--workspace-type worktree`; an in-place run passed `--workspace-type in-place`.
+- `SPEC.md` carries `## Creation` with `rigor`, self-reported
   `questions <n>/<budget>`, and unresolved decisions or `none`.
 - Every task directory matches a row in `## Tasks`, and every row has a directory.
 - Each `TASK.md` `id` equals its directory id, and `name` equals the directory name after the id.
@@ -471,7 +532,7 @@ line>` in its `PHASE.md`.
   `BOARD.md`, optional `GATES.md`/`GATE-RESULTS.jsonl`) holding one directory per
   task (`TASK.md`, `MEMORY.md`, optional `GATES.md`/`MAILBOX.md`/`GATE-RESULTS.jsonl`).
 - **Generator verbs**: `init`, `new-phase`, `new-task`, `stamp`, `claim`,
-  `waiver`, `tier`, `gate run`, `gate record`, `mail`, and `lock` (confirmation
+  `waiver`, `rigor`, `gate run`, `gate record`, `mail`, and `lock` (confirmation
   only). Every verifier-checked record has one of these as its writer.
 - **Write scope**: `TASK.md` frontmatter `write-scope:` — comma-separated
   repo-root-relative POSIX paths, optional trailing `/` for a subtree, `.` for
@@ -486,12 +547,12 @@ line>` in its `PHASE.md`.
   fingerprint; it runs one attempt per key, reuses an unchanged pass, reruns a
   failure, and bounds the heavy lane and in-flight count through
   `.agents/@montflow/gate.json`.
-- **Tier CLI**: `mf-specs tier <micro|standard|full>` prints exactly one installed tier file from `.agents/@montflow/tiers/<tier>.md`; there is no default, no listing, and no second tier. The files are `packages/specs/tiers/*.md`, installed by `mf-specs doctor`.
+- **Rigor CLI**: `mf-specs rigor <trivial|light|standard|deep|critical>` prints exactly one installed rigor file from `.agents/@montflow/rigors/<rigor>.md`; there is no default, no listing, and no second rigor. The files are `packages/specs/rigors/*.md`, installed by `mf-specs doctor`.
 - **Profiles CLI**: `mf-profiles list` (`/mf-profiles list` in the OpenCode host) pairs every profile name with its description — run it before choosing `reviewer-profiles`, never reading the store directory directly. `mf-profiles show <name>` (`/mf-profiles show <name>` in the host) reports that profile's instructions and review checklist when a description does not settle the choice.
-- **Scaffold CLI**: `mf-specs init --name <spec> --tier <tier>` is the tier-aware entry; `mf-specs create` (or `/specs create` in the OpenCode host) remains the tier-agnostic scaffold — flags `--name`, `--description`, `--author`, `--workspace-type`, `--tasks` (each `name[:type[:gates[:size]]]`, size defaulting to `medium`), `--reviewer-profiles`.
+- **Scaffold CLI**: `mf-specs init --name <spec> --rigor <rigor>` is the rigor-aware entry; `mf-specs create` (or `/specs create` in the OpenCode host) remains the rigor-agnostic scaffold — flags `--name`, `--description`, `--author`, `--workspace-type`, `--tasks` (each `name[:type[:gates[:size]]]`, size defaulting to `medium`), `--reviewer-profiles`.
 - **Sizing config**: `<specs-root>/sizing.json` (repo layer) and `<spec>/sizing.json` (spec layer, with `phases.<PHASE>.sizes`); absent size entry means `inherit`.
 - **Sizing CLI**: `mf-specs sizing --name <spec> --task <id> [--verbose|--human]` — compact by default (id, size, target, source); `--verbose` / `--human` add the task and phase budgets and the provenance matrix. `mf-specs resolve --name <spec> --task <id>` prints the bare dispatch target; `mf-specs status` / `next` show per-task size, target, and source.
 - **Catalogue CLI**: `mf-specs models [--provider <id>] [--json] [--catalog <path>]` lists the models this harness can dispatch and their effort variants (`variants unknown` vs `variants none`); outside the host pass `--catalog <path>` to either form, or use the `spec_models` tool in the host. `mf-specs models --verify [--name <spec>]` cross-checks every config entry, warns `models.unknown-model` / `models.unknown-effort`, and states the entries checked and skipped split by layer and provider.
-- **Prompt**: `packages/specs/prompts/spec-create.json` (`spec-create`), doctor-installed into `.agents/@montflow/prompts/`; render it with `mf-specs author --request <text>` or `/specs author` in the host.
+- **Prompt**: `packages/specs/prompts/spec-create.json` (`spec-create`), doctor-installed into `.agents/@montflow/prompts/`; it carries the authoring questions (rigor, isolation, origin, branch, worktree name) and renders the hidden branch away. Render it with `mf-specs author --request <text> --rigor <level> --isolated <yes|no>` or `/specs author` in the host.
 - **Sizing prompt**: `packages/specs/prompts/spec-sizing.json` (`spec-sizing`), the wizard the `spec-sizing-orchestrator` role runs; render it with `mf-specs sizing-config` or `/specs sizing-config` / the `spec_sizing` tool. It generates one config layer from the live catalogue and writes nothing before confirmation.
-- **Contract source**: `modules/tier`, `modules/init`, `modules/scaffold`, `modules/lifecycle`, `modules/structure`, `modules/sizing`, `packages/specs/tiers/`, and the shipped `spec-create` prompt.
+- **Contract source**: `modules/rigor`, `modules/init`, `modules/scaffold`, `modules/lifecycle`, `modules/structure`, `modules/sizing`, `packages/specs/rigors/`, and the shipped `spec-create` prompt.

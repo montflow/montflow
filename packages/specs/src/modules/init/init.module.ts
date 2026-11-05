@@ -10,10 +10,17 @@ import type { PhaseGate, PhaseReview, PhaseStatus } from '../phase/index.js';
 import { type Size, isSize } from '../sizing/index.js';
 import type { SpecFileEntry } from '../structure/index.js';
 import { type TaskType, SLUG_PATTERN, TASK_TYPES, isTaskType, sortKey } from '../task/index.js';
-import { TIER_CONTRACT, type Tier, type TierContract, waiverAllowed } from '../tier/index.js';
+import {
+  RIGOR_CONTRACT,
+  type Rigor,
+  type RigorContract,
+  CODES as RIGOR_CODES,
+  waiverAllowed,
+  writesArtifact,
+} from '../rigor/index.js';
 import { type Issue, finding } from '../verify/index.js';
 
-/** Stable codes for `init`'s tier-contract and plan validation. */
+/** Stable codes for `init`'s rigor-contract and plan validation. */
 export const INIT_CODES = {
   exists: 'init.exists',
   explorationMissing: 'init.exploration-missing',
@@ -68,7 +75,7 @@ export interface InitPhasePlan {
 /** A complete, validated `init` plan. */
 export interface InitPlan {
   readonly name: string;
-  readonly tier: Tier;
+  readonly rigor: Rigor;
   readonly author: string;
   readonly created: string;
   readonly workspaceType: 'in-place' | 'worktree';
@@ -78,8 +85,9 @@ export interface InitPlan {
   readonly phases: ReadonlyArray<InitPhasePlan>;
 }
 
-/** The default micro waiver reason B005 F1 names. */
-export const MICRO_WAIVER_REASON = 'micro tier default: every task gate is the review evidence.';
+/** The default waiver reason for a rigor whose review is waived. */
+export const waiverReason = (rigor: Rigor): string =>
+  `${rigor} rigor default: every task gate is the review evidence.`;
 
 /** The phase id at a 1-based rank: `1` → `A`, `27` → `AA`. */
 export const phaseIdAt = (rank: number): string => {
@@ -93,9 +101,9 @@ export const phaseIdAt = (rank: number): string => {
   return id;
 };
 
-/** A default plan for a tier, before any CLI override. */
-export const defaultInitPhases = (tier: Tier): ReadonlyArray<InitPhasePlan> => {
-  if (tier === 'full') {
+/** A default plan for a rigor, before any CLI override. */
+export const defaultInitPhases = (rigor: Rigor): ReadonlyArray<InitPhasePlan> => {
+  if (RIGOR_CONTRACT[rigor].exploration === 'required') {
     return [
       {
         objective: 'Explore the problem and record what the implementation must satisfy.',
@@ -109,13 +117,13 @@ export const defaultInitPhases = (tier: Tier): ReadonlyArray<InitPhasePlan> => {
       },
     ];
   }
-  const review = TIER_CONTRACT[tier].review;
+  const review = RIGOR_CONTRACT[rigor].review;
   const phase: InitPhasePlan = {
     objective: 'Implement the spec.',
     review,
     tasks: [{ name: 'implement', type: 'execution', size: 'medium', after: [] }],
   };
-  return [review === 'waived' ? { ...phase, reviewReason: MICRO_WAIVER_REASON } : phase];
+  return [review === 'waived' ? { ...phase, reviewReason: waiverReason(rigor) } : phase];
 };
 
 /** One issue with its code, so a caller can render a coded diagnostic. */
@@ -143,8 +151,8 @@ const coded = (
   return finding(found);
 };
 
-/** The default review decision for a tier. */
-export const defaultReview = (tier: Tier): 'required' | 'waived' => TIER_CONTRACT[tier].review;
+/** The default review decision for a rigor. */
+export const defaultReview = (rigor: Rigor): 'required' | 'waived' => RIGOR_CONTRACT[rigor].review;
 
 /** One allocated task in the rendered tree. */
 interface AllocatedTask {
@@ -236,7 +244,7 @@ const allocate = (plan: InitPlan): AllocatedPlan => {
         id,
         phase,
         tasks: byPhase.get(id) ?? [],
-        gate: plan.tier === 'full' ? 'mechanical' : 'none',
+        gate: RIGOR_CONTRACT[plan.rigor].gate === 'phase-and-task' ? 'mechanical' : 'none',
       };
     }),
   };
@@ -260,7 +268,192 @@ const reachesPhaseA = (
 };
 
 /**
- * Validate a plan against the tier contract before any file is written.
+ * The exploration and trivial-gate rules for one rigor over the phases'
+ * task-type lists. `init` validates a plan with it and `new-task` / `new-phase`
+ * reuse it to refuse growth past the same rules.
+ * @param rigor - the spec's rigor
+ * @param phases - one task-type list per phase, in phase-rank order
+ * @returns every exploration finding
+ */
+export const explorationIssues = (
+  rigor: Rigor,
+  phases: ReadonlyArray<ReadonlyArray<TaskType>>,
+): ReadonlyArray<Issue> => {
+  const issues: Array<Issue> = [];
+  const exploratory = phases.flatMap((tasks) => tasks.filter((type) => type === 'exploratory'));
+  if (rigor === 'trivial') {
+    if (exploratory.length > 0) {
+      issues.push(
+        coded(
+          INIT_CODES.explorationForbidden,
+          'phases',
+          'A trivial plan declares an exploratory task; trivial has no exploration step.',
+          'no exploratory task',
+          exploratory[0] ?? 'exploratory',
+          'Use an execution task, or choose the light rigor.',
+        ),
+      );
+    }
+    for (const [index, tasks] of phases.entries()) {
+      for (const type of tasks) {
+        if (type === 'planning' || type === 'exploratory') {
+          issues.push(
+            coded(
+              INIT_CODES.gateKind,
+              `phase ${phaseIdAt(index + 1)}`,
+              `Trivial task '${type}' is ${type}: it has no command gate, and every trivial task that changes a file needs one.`,
+              'a command gate on every file-changing task',
+              type,
+              'Make the task execution work, or choose the light rigor.',
+            ),
+          );
+        }
+      }
+    }
+  }
+  if (rigor === 'light' || rigor === 'standard') {
+    if (exploratory.length > 1) {
+      issues.push(
+        coded(
+          INIT_CODES.explorationCount,
+          'phases',
+          `A ${rigor} plan declares ${exploratory.length} exploratory tasks; it allows at most one.`,
+          'at most one exploratory task',
+          String(exploratory.length),
+          'Remove the extra exploratory tasks, or re-appraise and split the spec.',
+        ),
+      );
+    }
+    for (const [index, tasks] of phases.entries()) {
+      if (tasks.some((type) => type === 'exploratory') && index !== 0) {
+        issues.push(
+          coded(
+            INIT_CODES.explorationPlacement,
+            `phase ${phaseIdAt(index + 1)}`,
+            `A ${rigor} exploratory task must sit in the first phase.`,
+            'the exploratory task in phase A',
+            `phase ${phaseIdAt(index + 1)}`,
+            'Move the exploratory task into the first phase.',
+          ),
+        );
+      }
+      if (index !== 0 && tasks.length > 0 && tasks.every((type) => type === 'exploratory')) {
+        issues.push(
+          coded(
+            INIT_CODES.explorationForbidden,
+            `phase ${phaseIdAt(index + 1)}`,
+            `A ${rigor} plan may not declare an exploration phase of its own.`,
+            'at most one exploratory task in the first phase',
+            `phase ${phaseIdAt(index + 1)} holds only exploratory tasks`,
+            'Fold the exploration into a first-phase task.',
+          ),
+        );
+      }
+    }
+  }
+  if (rigor === 'deep' || rigor === 'critical') {
+    const phaseA = phases[0] ?? [];
+    const exploreA = phaseA.filter((type) => type === 'exploratory');
+    if (exploreA.length === 0) {
+      issues.push(
+        coded(
+          INIT_CODES.explorationMissing,
+          'phases',
+          `A ${rigor} plan needs an exploration phase A holding an exploratory task.`,
+          'phase A with an exploratory task',
+          phaseA.length === 0 ? 'no phase A' : 'phase A has no exploratory task',
+          'Add an exploratory task to phase A, or choose a smaller rigor.',
+        ),
+      );
+    } else {
+      if (rigor === 'deep' && exploreA.length > 1) {
+        issues.push(
+          coded(
+            INIT_CODES.explorationCount,
+            'phases',
+            `A deep plan declares ${exploreA.length} exploratory tasks in phase A; it allows one.`,
+            'one exploratory task in phase A',
+            String(exploreA.length),
+            'Fold the discovery into one task.',
+          ),
+        );
+      }
+      if (rigor === 'critical' && phaseA.some((type) => type !== 'exploratory')) {
+        issues.push(
+          coded(
+            INIT_CODES.explorationPlacement,
+            'phase A',
+            'A critical plan needs phase A to be a dedicated exploration phase.',
+            'phase A holding only exploratory tasks',
+            phaseA.join(', '),
+            'Move non-exploratory work out of phase A.',
+          ),
+        );
+      }
+    }
+  }
+  return issues;
+};
+
+/**
+ * The phase-count and task ceilings for one rigor. `init` validates a plan with
+ * it, and `new-phase` / `new-task` reuse it to refuse growth past the contract.
+ * The minimum phase count is `init`'s own rule; this helper reports only a
+ * tree that exceeds a maximum.
+ * @param rigor - the spec's rigor
+ * @param phaseTaskCounts - work-task count (review tasks excluded) per phase
+ * @returns every ceiling finding
+ */
+export const ceilingIssues = (
+  rigor: Rigor,
+  phaseTaskCounts: ReadonlyArray<number>,
+): ReadonlyArray<Issue> => {
+  const issues: Array<Issue> = [];
+  const contract = RIGOR_CONTRACT[rigor];
+  const total = phaseTaskCounts.reduce((sum, count) => sum + count, 0);
+  if (phaseTaskCounts.length > contract.maxPhases) {
+    issues.push(
+      coded(
+        INIT_CODES.phaseCount,
+        'phases',
+        `A ${rigor} plan needs ${contract.minPhases}-${contract.maxPhases} phases; it declares ${phaseTaskCounts.length}.`,
+        `${contract.minPhases}-${contract.maxPhases} phases`,
+        String(phaseTaskCounts.length),
+        'Re-appraise the rigor, or split the spec.',
+      ),
+    );
+  }
+  if (total > contract.maxTasks) {
+    issues.push(
+      coded(
+        INIT_CODES.taskCeiling,
+        'tasks',
+        `A ${rigor} plan allows ${contract.maxTasks} work tasks; it declares ${total}.`,
+        `at most ${contract.maxTasks} work tasks`,
+        String(total),
+        'Re-appraise the rigor, or split the spec.',
+      ),
+    );
+  }
+  for (const [index, count] of phaseTaskCounts.entries()) {
+    if (count > contract.maxTasksPerPhase) {
+      issues.push(
+        coded(
+          INIT_CODES.taskCeiling,
+          `phase ${phaseIdAt(index + 1)}`,
+          `A ${rigor} phase allows ${contract.maxTasksPerPhase} work tasks; phase '${phaseIdAt(index + 1)}' declares ${count}.`,
+          `at most ${contract.maxTasksPerPhase} work tasks per phase`,
+          String(count),
+          'Re-appraise the phase plan.',
+        ),
+      );
+    }
+  }
+  return issues;
+};
+
+/**
+ * Validate a plan against the rigor contract before any file is written.
  * Exploration placement, the waiver predicate, the review-task rule, phase and
  * task ceilings, dependency resolution, and naming are all checked here.
  * @param plan - the plan to validate
@@ -268,10 +461,8 @@ const reachesPhaseA = (
  */
 export const validateInitPlan = (plan: InitPlan): ReadonlyArray<Issue> => {
   const issues: Array<Issue> = [];
-  const contract: TierContract = TIER_CONTRACT[plan.tier];
+  const contract: RigorContract = RIGOR_CONTRACT[plan.rigor];
   const phases = plan.phases;
-  const allTasks = phases.flatMap((phase) => phase.tasks);
-  const workTasks = allTasks.filter((task) => task.type !== 'review');
 
   if (!SLUG_PATTERN.test(plan.name)) {
     issues.push(coded(INIT_CODES.taskName, 'name', `Spec name '${plan.name}' is not a slug.`));
@@ -356,96 +547,16 @@ export const validateInitPlan = (plan: InitPlan): ReadonlyArray<Issue> => {
   }
 
   // ── Exploration placement ───────────────────────────────────────────
-  const exploratory = workTasks.filter((task) => task.type === 'exploratory');
-  if (plan.tier === 'micro' && exploratory.length > 0) {
-    issues.push(
-      coded(
-        INIT_CODES.explorationForbidden,
-        'phases',
-        'A micro plan declares an exploratory task; micro has no exploration step.',
-        'no exploratory task',
-        exploratory[0]?.name ?? 'exploratory',
-        'Use an execution task, or choose the standard tier.',
-      ),
-    );
-  }
-  if (plan.tier === 'micro') {
-    for (const phase of phases) {
-      for (const task of phase.tasks) {
-        if (task.type === 'planning' || task.type === 'exploratory') {
-          issues.push(
-            coded(
-              INIT_CODES.gateKind,
-              `phase ${phaseIdAt(phases.indexOf(phase) + 1)}`,
-              `Micro task '${task.name}' is ${task.type}: it has no command gate, and every micro task that changes a file needs one.`,
-              'a command gate on every file-changing task',
-              task.type,
-              'Make the task execution work, or choose the standard tier.',
-            ),
-          );
-        }
-      }
-    }
-  }
-  if (plan.tier === 'standard') {
-    if (exploratory.length > 1) {
-      issues.push(
-        coded(
-          INIT_CODES.explorationCount,
-          'phases',
-          `A standard plan declares ${exploratory.length} exploratory tasks; it allows at most one.`,
-          'at most one exploratory task',
-          String(exploratory.length),
-          'Remove the extra exploratory tasks, or re-appraise and split the spec.',
-        ),
-      );
-    }
-    for (const [index, phase] of phases.entries()) {
-      if (phase.tasks.some((task) => task.type === 'exploratory') && index !== 0) {
-        issues.push(
-          coded(
-            INIT_CODES.explorationPlacement,
-            `phase ${phaseIdAt(index + 1)}`,
-            'A standard exploratory task must sit in the first phase.',
-            'the exploratory task in phase A',
-            `phase ${phaseIdAt(index + 1)}`,
-            'Move the exploratory task into the first phase.',
-          ),
-        );
-      }
-      if (
-        index !== 0 &&
-        phase.tasks.length > 0 &&
-        phase.tasks.every((task) => task.type === 'exploratory')
-      ) {
-        issues.push(
-          coded(
-            INIT_CODES.explorationForbidden,
-            `phase ${phaseIdAt(index + 1)}`,
-            'A standard plan may not declare an exploration phase of its own.',
-            'at most one exploratory task in the first phase',
-            `phase ${phaseIdAt(index + 1)} holds only exploratory tasks`,
-            'Fold the exploration into a first-phase task.',
-          ),
-        );
-      }
-    }
-  }
-  if (plan.tier === 'full') {
+  issues.push(
+    ...explorationIssues(
+      plan.rigor,
+      phases.map((phase) => phase.tasks.map((task) => task.type)),
+    ),
+  );
+  if (plan.rigor === 'deep' || plan.rigor === 'critical') {
     const phaseA = phases[0];
     const exploreA = phaseA?.tasks.filter((task) => task.type === 'exploratory') ?? [];
-    if (phaseA === undefined || exploreA.length === 0) {
-      issues.push(
-        coded(
-          INIT_CODES.explorationMissing,
-          'phases',
-          'A full plan needs a dedicated exploration phase A holding an exploratory task.',
-          'phase A with an exploratory task',
-          phaseA === undefined ? 'no phase A' : 'phase A has no exploratory task',
-          'Add an exploratory task to phase A, or choose a smaller tier.',
-        ),
-      );
-    } else {
+    if (phaseA !== undefined && exploreA.length > 0) {
       const allocated = allocate(plan);
       const byId = new Map(
         allocated.phases.flatMap((phase) => phase.tasks).map((task) => [task.id, task]),
@@ -470,49 +581,43 @@ export const validateInitPlan = (plan: InitPlan): ReadonlyArray<Issue> => {
   }
 
   // ── Phase and task ceilings ─────────────────────────────────────────
-  if (phases.length < contract.minPhases || phases.length > contract.maxPhases) {
+  if (phases.length < contract.minPhases) {
     issues.push(
       coded(
         INIT_CODES.phaseCount,
         'phases',
-        `A ${plan.tier} plan needs ${contract.minPhases}-${contract.maxPhases} phases; it declares ${phases.length}.`,
+        `A ${plan.rigor} plan needs ${contract.minPhases}-${contract.maxPhases} phases; it declares ${phases.length}.`,
         `${contract.minPhases}-${contract.maxPhases} phases`,
         String(phases.length),
-        'Re-appraise the tier, or split the spec.',
+        'Re-appraise the rigor, or split the spec.',
       ),
     );
   }
-  if (workTasks.length > contract.maxTasks) {
-    issues.push(
-      coded(
-        INIT_CODES.taskCeiling,
-        'tasks',
-        `A ${plan.tier} plan allows ${contract.maxTasks} work tasks; it declares ${workTasks.length}.`,
-        `at most ${contract.maxTasks} work tasks`,
-        String(workTasks.length),
-        'Re-appraise the tier, or split the spec.',
-      ),
-    );
-  }
-  for (const [index, phase] of phases.entries()) {
-    const count = phase.tasks.filter((task) => task.type !== 'review').length;
-    if (count > contract.maxTasksPerPhase) {
-      issues.push(
-        coded(
-          INIT_CODES.taskCeiling,
-          `phase ${phaseIdAt(index + 1)}`,
-          `A ${plan.tier} phase allows ${contract.maxTasksPerPhase} work tasks; phase '${phaseIdAt(index + 1)}' declares ${count}.`,
-          `at most ${contract.maxTasksPerPhase} work tasks per phase`,
-          String(count),
-          'Re-appraise the phase plan.',
-        ),
-      );
-    }
-  }
+  issues.push(
+    ...ceilingIssues(
+      plan.rigor,
+      phases.map((phase) => phase.tasks.filter((task) => task.type !== 'review').length),
+    ),
+  );
 
   // ── Review decision and waiver policy ───────────────────────────────
   for (const [index, phase] of phases.entries()) {
     const id = phaseIdAt(index + 1);
+    if (
+      phase.review === 'none' &&
+      (contract.review === 'required' || contract.waiver === 'forbidden')
+    ) {
+      issues.push(
+        coded(
+          RIGOR_CODES.reviewForbidden,
+          `phase ${id}`,
+          `A ${plan.rigor} phase cannot declare review: none; ${plan.rigor} requires review and its waiver policy is ${contract.waiver}.`,
+          'review: required',
+          'review: none',
+          'Set the phase review to required; the waiver verb may only prove a permitted waiver.',
+        ),
+      );
+    }
     if (phase.review === 'waived') {
       if (phase.reviewReason === undefined || phase.reviewReason.trim() === '') {
         issues.push(
@@ -528,24 +633,24 @@ export const validateInitPlan = (plan: InitPlan): ReadonlyArray<Issue> => {
       }
       if (
         !waiverAllowed(
-          plan.tier,
+          plan.rigor,
           phase.tasks.map((task) => task.type),
         )
       ) {
         issues.push(
           coded(
-            plan.tier === 'full' ? 'tier.waiver-forbidden' : INIT_CODES.waiverPolicy,
+            plan.rigor === 'critical' ? 'rigor.waiver-forbidden' : INIT_CODES.waiverPolicy,
             `phase ${id}`,
-            plan.tier === 'full'
-              ? 'A full phase never waives review.'
+            plan.rigor === 'critical'
+              ? 'A critical phase never waives review.'
               : `Phase '${id}' holds execution/defect/interruptor work, so it is not records-only.`,
-            plan.tier === 'full'
+            plan.rigor === 'critical'
               ? 'review: required'
               : 'a phase whose tasks are planning/exploratory/review',
             phase.tasks.map((task) => task.type).join(', '),
-            plan.tier === 'full'
+            plan.rigor === 'critical'
               ? 'Set the phase review to required.'
-              : 'Set the phase review to required, or re-appraise as micro.',
+              : 'Set the phase review to required, or choose a lighter rigor.',
           ),
         );
       }
@@ -745,7 +850,7 @@ const renderSpec = (plan: InitPlan, allocated: AllocatedPlan): string => {
       ? ['- TODO: list what must hold.']
       : plan.requirements.map((item) => `- ${item}`)),
     '',
-    renderCreationSection(plan.tier),
+    renderCreationSection(plan.rigor),
     '## Tasks',
     '',
     '| ID | Name | Type | Status | Gates |',
@@ -777,12 +882,22 @@ interface MutableInitPhase {
  * @param plan - a plan that already passed {@link validateInitPlan}
  * @returns every file, spec-relative
  */
+/**
+ * Non-review task count in one allocated phase.
+ * @param phase - the allocated phase
+ * @returns its work-task count
+ */
+const workTaskCount = (phase: AllocatedPlan['phases'][number]): number =>
+  phase.tasks.filter((task) => !task.generatedReview).length;
+
 export const renderInitTree = (plan: InitPlan): ReadonlyArray<SpecFileEntry> => {
   const allocated = allocate(plan);
   const files: Array<SpecFileEntry> = [{ path: 'SPEC.md', content: renderSpec(plan, allocated) }];
-  const standardMailbox = (phase: AllocatedPlan['phases'][number]): boolean =>
-    plan.tier === 'full' ||
-    (plan.tier === 'standard' && phase.tasks.filter((t) => !t.generatedReview).length > 1);
+  const contract = RIGOR_CONTRACT[plan.rigor];
+  const writesBoard = (phase: AllocatedPlan['phases'][number]): boolean =>
+    writesArtifact(contract, 'BOARD.md', workTaskCount(phase));
+  const writesMailbox = (phase: AllocatedPlan['phases'][number]): boolean =>
+    writesArtifact(contract, 'MAILBOX.md', workTaskCount(phase));
   for (const phase of allocated.phases) {
     const evidence: Array<string> = [];
     if (phase.gate !== 'none') evidence.push('phase:0');
@@ -805,7 +920,7 @@ export const renderInitTree = (plan: InitPlan): ReadonlyArray<SpecFileEntry> => 
     }
     files.push({ path: `${phase.id}/${PHASE_FILE}`, content: renderPhaseFile(phaseRecord) });
     files.push({ path: `${phase.id}/${PHASE_MEMORY_FILE}`, content: renderPhaseMemory() });
-    if (plan.tier === 'standard' || plan.tier === 'full') {
+    if (writesBoard(phase)) {
       files.push({ path: `${phase.id}/BOARD.md`, content: '# Board\n' });
     }
     if (phase.gate === 'mechanical') {
@@ -821,7 +936,7 @@ export const renderInitTree = (plan: InitPlan): ReadonlyArray<SpecFileEntry> => 
       if (!task.generatedReview) {
         files.push({ path: `${dir}/GATES.md`, content: gateTemplateFor(task.type, task.name) });
       }
-      if (standardMailbox(phase)) files.push({ path: `${dir}/MAILBOX.md`, content: '# Mailbox\n' });
+      if (writesMailbox(phase)) files.push({ path: `${dir}/MAILBOX.md`, content: '# Mailbox\n' });
     }
   }
   return files;

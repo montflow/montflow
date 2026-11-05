@@ -9,7 +9,7 @@ import {
   SPEC_SKILL_NAMES,
   runDoctor,
 } from '../../../modules/doctor/index.js';
-import { SPEC_TIER_NAMES } from '../../../modules/doctor/doctor.paths.module.js';
+import { SPEC_RIGOR_NAMES } from '../../../modules/doctor/doctor.paths.module.js';
 import { doctorExitCode, renderDoctor, runDoctorRun } from '../index.js';
 
 /**
@@ -69,7 +69,7 @@ Vitest.describe('Cli.doctor runtime', () => {
       Vitest.expect(report).toContain('Run: mf-specs doctor');
       const lines = payloadLines(report);
       Vitest.expect(lines).toHaveLength(
-        SPEC_SKILL_NAMES.length + SPEC_PROMPT_NAMES.length + SPEC_TIER_NAMES.length,
+        SPEC_SKILL_NAMES.length + SPEC_PROMPT_NAMES.length + SPEC_RIGOR_NAMES.length,
       );
       Vitest.expect(lines.every((line) => line.startsWith('\u2717'))).toBe(true);
       Vitest.expect(lines.some((line) => line.includes(`${CREATE_SPEC_SKILL_NAME}: `))).toBe(true);
@@ -94,6 +94,26 @@ Vitest.describe('Cli.doctor runtime', () => {
       Vitest.expect(report).toContain(`${CREATE_SPEC_SKILL_NAME}: up to date`);
       Vitest.expect(report).not.toContain('Run: mf-specs doctor');
       Vitest.expect(payloadLines(report).every((line) => line.startsWith('\u2713'))).toBe(true);
+    }),
+  );
+
+  Vitest.it.effect('installs every rigor file byte-for-byte from the package', () =>
+    Effect.gen(function* () {
+      const root = freshRoot();
+      yield* runDoctor(root);
+      for (const name of SPEC_RIGOR_NAMES) {
+        const packaged = NodePath.resolve(
+          import.meta.dirname,
+          '..',
+          '..',
+          '..',
+          '..',
+          'rigors',
+          `${name}.md`,
+        );
+        const installed = NodePath.join(root, '.agents', '@montflow', 'rigors', `${name}.md`);
+        Vitest.expect(Fs.readFileSync(installed, 'utf-8')).toBe(Fs.readFileSync(packaged, 'utf-8'));
+      }
     }),
   );
 

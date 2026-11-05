@@ -4,9 +4,9 @@ name: review-phase
 type: review
 originator: user
 size: medium
-depends-on: G001, G002, G003, G004
+depends-on: G001, G002, G003, G004, G100
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task G099: review the conditional-variable phase
@@ -41,8 +41,9 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] Review written to `.agents/@montflow/reviews/montflow-spec-standard/G.md`
-      and read by the human
-- [ ] Every finding about a hidden branch being asked, required, rendered, or
+- [x] Review written to the series
+      `.agents/@montflow/reviews/montflow-spec-standard/013/REVIEW.md` (re-review
+      014) and read by the human
+- [x] Every finding about a hidden branch being asked, required, rendered, or
       resurrected has a disposition
-- [ ] `bun run mf:check` green with the conditional-variable tests in place
+- [x] `bun run mf:check` green with the conditional-variable tests in place

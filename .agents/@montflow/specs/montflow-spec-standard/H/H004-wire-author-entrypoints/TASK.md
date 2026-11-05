@@ -6,7 +6,7 @@ originator: user
 size: tiny
 depends-on: H003
 related-tasks:
-status: pending
+status: complete
 write-scope: packages/specs
 ---
 
@@ -48,9 +48,9 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] Every new flag reaches the rendered prompt with the same value the fill flow would use
-- [ ] A hidden flag is not required and does not render
-- [ ] `origin-branch` is required only for `origin: other`; `worktree-name` only for `isolated: yes`
-- [ ] Each invalid value fails with a coded message naming the flag and its accepted values
-- [ ] `spec_author` and `/specs author` accept the same inputs as the binary
-- [ ] The binary performs no git mutation
+- [x] Every new flag reaches the rendered prompt with the same value the fill flow would use
+- [x] A hidden flag is not required and does not render
+- [x] `origin-branch` is required only for `origin: other`; `worktree-name` only for `isolated: yes`
+- [x] Each invalid value fails with a coded message naming the flag and its accepted values
+- [x] `spec_author` and `/specs author` accept the same inputs as the binary
+- [x] The binary performs no git mutation

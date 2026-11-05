@@ -31,6 +31,9 @@ export const WRITE_SCOPE_FIELD = 'write-scope';
 /** Stable code for a complete task whose completion checklist is not checked off. */
 export const COMPLETION_UNCHECKED_CODE = 'task.completion-unchecked';
 
+/** Stable code for a task id listed more than once in `depends-on`. */
+export const DEPENDENCY_DUPLICATE_CODE = 'depends-on.duplicate';
+
 // ─── Enums ────────────────────────────────────────────────────────────
 
 /** Executor behavior for a task. `defect` is a type, never a status. */
@@ -452,8 +455,32 @@ export const verifyTaskFile = (dirName: string, markdown: string): Result => {
     issues.push(issue('originator', 'Must be `user`, `defect:<task-id>`, or `planner:<task-id>`.'));
   }
 
-  for (const dep of fieldList(fields, 'depends-on')) {
-    if (!TASK_ID_PATTERN.test(dep)) issues.push(issue('depends-on', `'${dep}' is not a task id.`));
+  const dependencies = fieldList(fields, 'depends-on');
+  const dependencyCounts = new Map<string, number>();
+  for (const dep of dependencies) dependencyCounts.set(dep, (dependencyCounts.get(dep) ?? 0) + 1);
+  const seenDependencies = new Set<string>();
+  for (const dep of dependencies) {
+    // One finding per distinct id: a repeat of an invalid id stays the single
+    // malformed-id error, and a repeat of a valid id gets the duplicate error.
+    if (seenDependencies.has(dep)) continue;
+    seenDependencies.add(dep);
+    if (!TASK_ID_PATTERN.test(dep)) {
+      issues.push(issue('depends-on', `'${dep}' is not a task id.`));
+      continue;
+    }
+    const count = dependencyCounts.get(dep) ?? 1;
+    if (count > 1) {
+      issues.push(
+        finding({
+          code: DEPENDENCY_DUPLICATE_CODE,
+          field: 'depends-on',
+          message: `'${dep}' is listed more than once.`,
+          expected: 'each task id at most once',
+          actual: `${dep} listed ${count} times`,
+          fix: `Remove the repeated '${dep}' from 'depends-on:'.`,
+        }),
+      );
+    }
   }
   for (const related of fieldList(fields, 'related-tasks')) {
     if (!TASK_ID_PATTERN.test(related)) {

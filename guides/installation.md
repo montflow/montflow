@@ -148,7 +148,7 @@ phase (`PHASE.md`, `MEMORY.md`, `BOARD.md`, optional `GATES.md`), with task
 directories (`TASK.md`, `MEMORY.md`, optional `GATES.md`, `MAILBOX.md`) inside
 the phase. Owns the store `.agents/@montflow/specs`.
 
-Install — installs the packaged spec skills, prompts, and tier files:
+Install — installs the packaged spec skills, prompts, and rigor files:
 
 ```bash
 bun run --cwd "$M/packages/specs" cli doctor --dir "$PWD"

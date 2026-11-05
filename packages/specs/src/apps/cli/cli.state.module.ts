@@ -1,7 +1,7 @@
 import { Clock, Console, Data, Effect, FileSystem, Path } from 'effect';
 import { Argument, Command, Flag } from 'effect/cli';
 
-import { tierOfSpec } from '../../modules/creation/index.js';
+import { rigorOfSpec } from '../../modules/creation/index.js';
 import { parseMarkdown } from '../../modules/frontmatter/index.js';
 import {
   PHASE_FILE,
@@ -19,13 +19,20 @@ import { phaseReviewBudget } from '../../modules/sizing/index.js';
 import { readSpecVersion } from '../../modules/spec/index.js';
 import { instant } from '../../modules/stamp/index.js';
 import { type Task, parseTaskFile, phaseOf, sizeOf, sortKey } from '../../modules/task/index.js';
-import { type Tier, CODES, TIER_HINT, isTier, waiverAllowed } from '../../modules/tier/index.js';
+import {
+  type Rigor,
+  CODES,
+  RIGOR_HINT,
+  isRigor,
+  waiverAllowed,
+} from '../../modules/rigor/index.js';
 import {
   EXECUTION_BRIEF_MISSING_CODE,
   executionBriefStatus,
   type SpecSnapshot,
 } from '../../modules/structure/index.js';
-import { installedTierFile, shippedTierFile } from '../../modules/doctor/doctor.paths.module.js';
+import { installedRigorFile, shippedRigorFile } from '../../modules/doctor/doctor.paths.module.js';
+
 import { SpecStore } from '../../services/index.js';
 
 import {
@@ -58,11 +65,11 @@ export const stampValue = (format: string = 'instant'): Effect.Effect<string> =>
     Effect.map((millis) => (format === 'date' ? instant(millis).slice(0, 10) : instant(millis))),
   );
 
-/** Stable codes for the `tier` verb. */
-export const TIER_CODES = CODES;
+/** Stable codes for the `rigor` verb. */
+export const RIGOR_CODES = CODES;
 
-/** The tier loader's coded failure. */
-export class TierLoadError extends Data.TaggedError('@montflow/TierLoadError')<{
+/** The rigor loader's coded failure. */
+export class RigorLoadError extends Data.TaggedError('@montflow/RigorLoadError')<{
   readonly code: string;
   readonly path: string;
   readonly problem: string;
@@ -71,62 +78,62 @@ export class TierLoadError extends Data.TaggedError('@montflow/TierLoadError')<{
   readonly actual?: string;
 }> {}
 
-/** Options for {@link readTier}. */
-export interface TierReadOptions {
-  readonly tier: string;
+/** Options for {@link readRigor}. */
+export interface RigorReadOptions {
+  readonly rigor: string;
   readonly workspace: string;
-  /** Package directory that ships the tier files; defaults to this package. */
+  /** Package directory that ships the rigor files; defaults to this package. */
   readonly shippedDir?: string | undefined;
-  /** Installed tier directory; defaults to `<workspace>/.agents/@montflow/tiers`. */
+  /** Installed rigor directory; defaults to `<workspace>/.agents/@montflow/rigors`. */
   readonly installedDir?: string | undefined;
 }
 
 /**
- * Read exactly one tier instruction file. The value must be one enum member; a
+ * Read exactly one rigor instruction file. The value must be one enum member; a
  * missing installed file, a missing packaged copy, or a byte difference is a
- * coded refusal, never a fallback to another tier.
- * @param options - tier value, workspace, and optional test directories
+ * coded refusal, never a fallback to another rigor.
+ * @param options - rigor value, workspace, and optional test directories
  * @returns the installed file contents, verbatim
  */
-export const readTier = (
-  options: TierReadOptions,
-): Effect.Effect<string, TierLoadError, FileSystem.FileSystem | Path.Path> =>
+export const readRigor = (
+  options: RigorReadOptions,
+): Effect.Effect<string, RigorLoadError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    if (!isTier(options.tier)) {
+    if (!isRigor(options.rigor)) {
       return yield* Effect.fail(
-        new TierLoadError({
-          code: TIER_CODES.unknownTier,
-          path: options.tier,
-          problem: `'${options.tier}' is not a tier.`,
-          expected: TIER_HINT,
-          actual: options.tier,
-          fix: `Pass one of: ${TIER_HINT}.`,
+        new RigorLoadError({
+          code: RIGOR_CODES.unknownRigor,
+          path: options.rigor,
+          problem: `'${options.rigor}' is not a rigor.`,
+          expected: RIGOR_HINT,
+          actual: options.rigor,
+          fix: `Pass one of: ${RIGOR_HINT}.`,
         }),
       );
     }
-    // SAFETY: the `isTier` guard above narrowed this string to the tier union.
-    const tier = options.tier as Tier;
+    // SAFETY: the `isRigor` guard above narrowed this string to the rigor union.
+    const rigor = options.rigor as Rigor;
     const installed =
       options.installedDir === undefined
-        ? installedTierFile(path, options.workspace, tier)
-        : path.join(options.installedDir, `${tier}.md`);
+        ? installedRigorFile(path, options.workspace, rigor)
+        : path.join(options.installedDir, `${rigor}.md`);
     const shipped =
       options.shippedDir === undefined
-        ? shippedTierFile(path, tier)
-        : path.join(options.shippedDir, `${tier}.md`);
+        ? shippedRigorFile(path, rigor)
+        : path.join(options.shippedDir, `${rigor}.md`);
     const installedText = yield* fs.readFileString(installed).pipe(
       Effect.matchEffect({
         onFailure: () =>
           Effect.fail(
-            new TierLoadError({
-              code: TIER_CODES.missingFile,
+            new RigorLoadError({
+              code: RIGOR_CODES.missingFile,
               path: installed,
-              problem: `The installed tier file '${installed}' is missing.`,
-              expected: `an installed ${tier} tier instruction`,
+              problem: `The installed rigor file '${installed}' is missing.`,
+              expected: `an installed ${rigor} rigor instruction`,
               actual: 'missing',
-              fix: 'Run mf-specs doctor, then load the tier again.',
+              fix: 'Run mf-specs doctor, then load the rigor again.',
             }),
           ),
         onSuccess: (text) => Effect.succeed(text),
@@ -136,11 +143,11 @@ export const readTier = (
       Effect.matchEffect({
         onFailure: () =>
           Effect.fail(
-            new TierLoadError({
-              code: TIER_CODES.missingFile,
+            new RigorLoadError({
+              code: RIGOR_CODES.missingFile,
               path: shipped,
-              problem: `The packaged tier file '${shipped}' is missing.`,
-              expected: `the packaged ${tier} tier instruction`,
+              problem: `The packaged rigor file '${shipped}' is missing.`,
+              expected: `the packaged ${rigor} rigor instruction`,
               actual: 'missing',
               fix: `Reinstall @montflow/specs, then run mf-specs doctor.`,
             }),
@@ -150,13 +157,13 @@ export const readTier = (
     );
     if (installedText !== shippedText) {
       return yield* Effect.fail(
-        new TierLoadError({
-          code: TIER_CODES.staleFile,
+        new RigorLoadError({
+          code: RIGOR_CODES.staleFile,
           path: installed,
           problem: `Installed '${installed}' differs from the packaged '${shipped}'.`,
           expected: 'the packaged bytes',
           actual: 'drifted bytes',
-          fix: 'Run mf-specs doctor to reinstall the tier instruction.',
+          fix: 'Run mf-specs doctor to reinstall the rigor instruction.',
         }),
       );
     }
@@ -517,11 +524,11 @@ export const setWaiver = (
           ),
         );
       }
-      const tier = tierOfSpec(specText);
+      const rigor = rigorOfSpec(specText);
       if (
-        tier === undefined ||
+        rigor === undefined ||
         !waiverAllowed(
-          tier,
+          rigor,
           tasks.map((task) => task.type),
         )
       ) {
@@ -530,14 +537,14 @@ export const setWaiver = (
             WAIVER_CODES.policy,
             `${options.name}/${phasePath}`,
             'review',
-            tier === undefined
-              ? 'A v2 waiver needs the `## Creation` tier record; without it the waiver policy cannot be checked.'
-              : tier === 'full'
-                ? 'A full phase never waives review.'
-                : 'A standard phase holding execution/defect/interruptor work is not records-only and cannot waive.',
+            rigor === undefined
+              ? 'A v2 waiver needs the `## Creation` rigor record; without it the waiver policy cannot be checked.'
+              : rigor === 'critical'
+                ? 'A critical phase never waives review.'
+                : `A ${rigor} phase holding execution/defect/interruptor work is not records-only and cannot waive.`,
             `mf-specs waiver --name ${options.name} --phase ${options.phase} --required`,
-            tier === undefined
-              ? 'Add the `## Creation` record (with its tier) before waiving, or keep the phase required.'
+            rigor === undefined
+              ? 'Add the `## Creation` record (with its rigor) before waiving, or keep the phase required.'
               : 'Keep the phase required; only records-only phases may waive.',
           ),
         );
@@ -647,31 +654,31 @@ export const stampCommand = Command.make(
     ),
 ).pipe(Command.withDescription('Print a UTC timestamp from the system clock.'));
 
-/** `tier <tier>`: the one tier read path. */
-export const tierCommand = Command.make(
-  'tier',
+/** `rigor <rigor>`: the one rigor read path. */
+export const rigorCommand = Command.make(
+  'rigor',
   {
-    tier: Argument.String('tier'),
+    rigor: Argument.String('rigor'),
     dir: dirFlag,
   },
   (config) =>
     runDiagnosed(
       Effect.gen(function* () {
         const workspace = yield* workspaceRoot(config.dir);
-        const body = yield* readTier({ tier: config.tier, workspace });
+        const body = yield* readRigor({ rigor: config.rigor, workspace });
         yield* Console.log(body);
       }).pipe(
-        Effect.catchTag('@montflow/TierLoadError', (error) =>
+        Effect.catchTag('@montflow/RigorLoadError', (error) =>
           Effect.fail(
             new SurfaceError({
-              operation: 'SpecTier',
+              operation: 'SpecRigor',
               diagnostics: [
                 diagnostic({
                   code: error.code,
                   path: error.path,
-                  field: 'tier',
+                  field: 'rigor',
                   problem: error.problem,
-                  rerun: `mf-specs tier ${config.tier}`,
+                  rerun: `mf-specs rigor ${config.rigor}`,
                   expected: error.expected,
                   actual: error.actual,
                   fix: error.fix,
@@ -681,9 +688,9 @@ export const tierCommand = Command.make(
           ),
         ),
       ),
-      () => ({ path: config.tier, rerun: `mf-specs tier ${config.tier}`, verbose: false }),
+      () => ({ path: config.rigor, rerun: `mf-specs rigor ${config.rigor}`, verbose: false }),
     ),
-).pipe(Command.withDescription('Print one tier instruction file verbatim.'));
+).pipe(Command.withDescription('Print one rigor instruction file verbatim.'));
 
 /** `lock`: confirm a derived phase lock. Writes nothing. */
 export const lockCommand = Command.make(

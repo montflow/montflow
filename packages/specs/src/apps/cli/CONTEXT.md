@@ -65,7 +65,9 @@ agents and humans:
   fresh spec tree via `modules/scaffold` and writes it through
   `SpecStore.write`. Refuses to overwrite an existing spec. A malformed `--name`
   is `cli.invalid-argument` with the slug rule, before `--tasks` is parsed.
-- `author --request <text> [--notes <text>]` — loads `spec-create` through
+- `author --request <text> --rigor <level> --isolated <yes|no> [--notes <text>]
+[--origin current|main|other --worktree-name <name> [--origin-branch <branch>]]`
+  — loads `spec-create` through
   `modules/prompt` (which gates on `mf-specs doctor`), renders it with the
   request, and prints the prompt and nothing else. Model-free: it never opens a
   session. `--dir` defaults to the nearest repository root so the package
@@ -223,7 +225,7 @@ In OpenCode, the same engines are exposed as `/specs` by
 `models [--provider <id>] [--json] [--catalog <path>] [--verify [--name <spec>]]` /
 `create --name <spec> [--description <text>] [--author <name>]
 [--workspace-type <in-place|worktree>] [--tasks <name[:type[:gates[:size]]],…>]` /
-`author --request <text> [--notes <text>]` /
+`author --request <text> --rigor <level> --isolated <yes|no> [--notes <text>]` /
 `execute [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous]` /
 `sizing-config [--scope repo|spec|phase] [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous]`).
 The same plugin registers the `spec_author`, `spec_execute`, `spec_sizing`, and

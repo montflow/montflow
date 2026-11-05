@@ -179,7 +179,7 @@ Vitest.describe('specs server command', () => {
   );
 
   Vitest.it.effect(
-    'registers the author/execute/sizing/models/tier tools and the full slash surface',
+    'registers the author/execute/sizing/models/rigor tools and the full slash surface',
     () =>
       Effect.gen(function* () {
         const root = yield* Effect.promise(freshRoot);
@@ -190,7 +190,7 @@ Vitest.describe('specs server command', () => {
             'spec_execute',
             'spec_sizing',
             'spec_models',
-            'spec_tier',
+            'spec_rigor',
           ]);
           Vitest.expect(COMMAND_DESCRIPTION).toContain('author --request <text>');
           Vitest.expect(COMMAND_DESCRIPTION).toContain('execute [--name <spec>]');
@@ -198,11 +198,11 @@ Vitest.describe('specs server command', () => {
           Vitest.expect(COMMAND_DESCRIPTION).toContain('no --scope asks which layer');
           Vitest.expect(COMMAND_DESCRIPTION).toContain('models [--provider <id>]');
           for (const verb of [
-            'init --name <spec> --tier',
+            'init --name <spec> --rigor',
             'new-phase --name <spec>',
             'new-task --name <spec>',
             'stamp [--format instant|date]',
-            'tier <micro|standard|full>',
+            'rigor <trivial|light|standard|deep|critical>',
             'claim --name <spec>',
             'lock --name <spec>',
             'waiver --name <spec>',

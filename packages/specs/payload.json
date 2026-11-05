@@ -33,22 +33,34 @@
       "target": ".agents/@montflow/prompts/spec-sizing.json"
     },
     {
-      "kind": "tier",
-      "name": "micro",
-      "source": "tiers/micro.md",
-      "target": ".agents/@montflow/tiers/micro.md"
+      "kind": "rigor",
+      "name": "trivial",
+      "source": "rigors/trivial.md",
+      "target": ".agents/@montflow/rigors/trivial.md"
     },
     {
-      "kind": "tier",
+      "kind": "rigor",
+      "name": "light",
+      "source": "rigors/light.md",
+      "target": ".agents/@montflow/rigors/light.md"
+    },
+    {
+      "kind": "rigor",
       "name": "standard",
-      "source": "tiers/standard.md",
-      "target": ".agents/@montflow/tiers/standard.md"
+      "source": "rigors/standard.md",
+      "target": ".agents/@montflow/rigors/standard.md"
     },
     {
-      "kind": "tier",
-      "name": "full",
-      "source": "tiers/full.md",
-      "target": ".agents/@montflow/tiers/full.md"
+      "kind": "rigor",
+      "name": "deep",
+      "source": "rigors/deep.md",
+      "target": ".agents/@montflow/rigors/deep.md"
+    },
+    {
+      "kind": "rigor",
+      "name": "critical",
+      "source": "rigors/critical.md",
+      "target": ".agents/@montflow/rigors/critical.md"
     }
   ]
 }

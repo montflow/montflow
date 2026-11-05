@@ -192,7 +192,7 @@ const renderTask = (
     '',
   ].join('\n');
 
-/** Task types whose tier contract requires a `GATES.md`. */
+/** Task types whose rigor contract requires a `GATES.md`. */
 const GATED_TASK_TYPES = new Set(['execution', 'defect', 'interruptor']);
 
 /**

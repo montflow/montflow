@@ -46,7 +46,7 @@ Vitest.describe('Cli.check execution brief runtime', () => {
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
         const storeRoot = `${workspace}/${root}`;
-        yield* init({ root: storeRoot, name: 'demo', tier: 'micro' });
+        yield* init({ root: storeRoot, name: 'demo', rigor: 'trivial' });
         const phaseMemory = `${storeRoot}/demo/A/MEMORY.md`;
 
         const fresh = yield* check(storeRoot, { name: 'demo' });

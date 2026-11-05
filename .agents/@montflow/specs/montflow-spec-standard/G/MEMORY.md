@@ -6,7 +6,7 @@ None yet.
 
 ## Progress
 
-- pending
+- Phase G complete: G001-G004, G100 closed; review rounds 013/014 closed minor-deferred; `review decide` pass (review.clean); repo-wide gate next.
 
 ## Open Questions
 

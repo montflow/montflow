@@ -6,7 +6,7 @@ originator: user
 size: tiny
 depends-on: H001, C006
 related-tasks: H003
-status: pending
+status: complete
 write-scope: packages/specs, packages/profiles/profiles/spec-appraiser
 ---
 
@@ -28,11 +28,11 @@ the payload manifest or the doctor.
   `packages/specs/src/modules/tier/`; keep `TIERS`, `isTier`, `SPLIT`,
   `SPLIT_FIELDS`, and the no-default rule. A missing or unknown value still
   fails `tier.unknown`; `split` is still a verdict, never a tier.
-- Write one tier file per value under `packages/specs/tiers/`, with frontmatter
+- Write one tier file per value under `packages/specs/rigors/`, with frontmatter
   matching the contract field-by-field and prose that states the selection
   test, phase plan, exploration rule, gate expectation, review default, waiver
   policy, artifact rules, and the exact question budget sentence.
-- Extend `mf-specs tier <value>` to the five values and keep the
+- Extend `mf-specs rigor <value>` to the five values and keep the
   `tier.missing`/`tier.stale` diagnostics, the payload manifest entries, and
   the installed copies under `.agents/@montflow/tiers/` correct.
 - Update the drift test to cover five values and every leg H001 names: enum ↔
@@ -54,8 +54,8 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] Five values exist in code and in `packages/specs/tiers/`, with no extra file and no missing one
-- [ ] `mf-specs tier <value>` prints exactly the chosen file for all five and rejects the others
-- [ ] The drift test fails by name when a file, frontmatter field, prose budget, or skill row is missing
-- [ ] No rigor file names a size, model, effort, or review-cycle count
-- [ ] Every existing spec and installed prompt still checks clean
+- [x] Five values exist in code and in `packages/specs/rigors/`, with no extra file and no missing one
+- [x] `mf-specs rigor <value>` prints exactly the chosen file for all five and rejects the others
+- [x] The drift test fails by name when a file, frontmatter field, prose budget, or skill row is missing
+- [x] No rigor file names a size, model, effort, or review-cycle count
+- [x] Every existing spec and installed prompt still checks clean

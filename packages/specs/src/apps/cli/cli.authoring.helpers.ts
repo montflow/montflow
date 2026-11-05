@@ -1,10 +1,10 @@
 import { Effect } from 'effect';
 
-import { tierOfSpec } from '../../modules/creation/index.js';
+import { rigorOfSpec } from '../../modules/creation/index.js';
 import { parseMarkdown } from '../../modules/frontmatter/index.js';
 import { PHASE_PATTERN, parseSpecFile, readSpecVersion } from '../../modules/spec/index.js';
 import { type Task, parseTaskFile, phaseOf, phaseRank } from '../../modules/task/index.js';
-import type { Tier } from '../../modules/tier/index.js';
+import type { Rigor } from '../../modules/rigor/index.js';
 import type { SpecSnapshot } from '../../modules/structure/index.js';
 import { SpecStore } from '../../services/index.js';
 
@@ -67,7 +67,7 @@ export const readSpec = (
   name: string,
   operation: string,
 ): Effect.Effect<
-  { readonly snapshot: SpecSnapshot; readonly specText: string; readonly tier: Tier | undefined },
+  { readonly snapshot: SpecSnapshot; readonly specText: string; readonly rigor: Rigor | undefined },
   SurfaceError | SpecStore.StoreError,
   SpecStore.SpecStore
 > =>
@@ -113,7 +113,7 @@ export const readSpec = (
         }),
       );
     }
-    return { snapshot, specText, tier: tierOfSpec(specText) };
+    return { snapshot, specText, rigor: rigorOfSpec(specText) };
   });
 
 /** Comma-separated values; blank or absent reads as an empty list. */

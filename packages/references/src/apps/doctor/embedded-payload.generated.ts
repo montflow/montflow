@@ -9,7 +9,7 @@
  *
  * Source: `payload.json`
  */
-export const EMBEDDED_PAYLOAD: Readonly<Record<'skill' | 'profile' | 'prompt' | 'tier', Readonly<Record<string, Readonly<Record<string, string>>>>>> = {
+export const EMBEDDED_PAYLOAD: Readonly<Record<'skill' | 'profile' | 'prompt' | 'tier' | 'rigor', Readonly<Record<string, Readonly<Record<string, string>>>>>> = {
   "skill": {
     "montflow-add-reference": {
       "CHANGELOG.md": "# Changelog\n\n## [1.1.0] - 2026-10-28\n\n### Changed\n\n- Documents the shipped output modes: the default is agent-first and compact, `--human` renders readable tables for people, `--verbose` adds detail, and the two compose.\n\n## [1.0.0] - 2026-10-26\n\n### Added\n\n- Initial release: registers an https repository as a reference through `mf-references add` (or `/mf-references add`, or the `reference_add` tool), then confirms the committed entry with `show`.\n- Documents the routed-add rule: a `routed add -> update` line is a notice, not a completed add; success requires the following `created`/`updated`/`present` line and exit 0, and any refusal is surfaced unchanged.\n\n### Changed (breaking)\n\n- Replaces the retired generic `adding-references` / `finding-references` pair. The registry table in `finding-references/SKILL.md` is gone; `.agents/@montflow/references/<slug>/REFERENCE.md` is the registry; clones stay at `.agents/references/<slug>`; `/mf-references` and `mf-references` own the lifecycle.\n",
@@ -22,5 +22,6 @@ export const EMBEDDED_PAYLOAD: Readonly<Record<'skill' | 'profile' | 'prompt' | 
   },
   "profile": {},
   "prompt": {},
-  "tier": {}
+  "tier": {},
+  "rigor": {}
 };

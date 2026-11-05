@@ -41,7 +41,17 @@ interface PromptFileFields {
   readonly name: string;
   readonly description: string;
   readonly template: string;
-  readonly variables: ReadonlyArray<{ readonly name: string; readonly required?: boolean }>;
+  readonly variables: ReadonlyArray<{
+    readonly name: string;
+    readonly required?: boolean;
+    readonly type?: 'text' | 'textarea' | 'select' | 'confirm';
+    readonly options?: readonly string[];
+    readonly when?: {
+      readonly controller: string;
+      readonly equals?: string;
+      readonly truthy?: true;
+    };
+  }>;
   readonly skills: ReadonlyArray<string>;
   readonly model: string;
 }
@@ -340,6 +350,34 @@ Vitest.describe('Engines over the store', () => {
       yield* seed(root);
       const error = yield* Engines.render({ cwd: root }, 'audit', {}).pipe(Effect.flip);
       Vitest.expect(error).toContain('files');
+      yield* cleanup(root);
+    }).pipe(Effect.provide(Live)),
+  );
+
+  Vitest.it.effect('refuses to render the same malformed prompt execute refuses', () =>
+    Effect.gen(function* () {
+      const root = yield* readyRoot;
+      yield* writePrompt(root, 'audit.json', {
+        name: 'audit',
+        description: 'Audits.',
+        template: '{{isolated}}{{#if origin}}O={{origin}}{{/if}}',
+        variables: [
+          { name: 'isolated', type: 'select', options: ['yes', 'no'] },
+          { name: 'origin', when: { controller: 'isolated' } },
+        ],
+        skills: [],
+        model: '',
+      });
+      const values = { isolated: 'no', origin: 'stale' };
+      const renderError = yield* Engines.render({ cwd: root }, 'audit', values).pipe(Effect.flip);
+      Vitest.expect(renderError).toContain('must carry exactly one');
+      Vitest.expect(renderError).toContain('verify');
+
+      const plan = yield* Engines.plan({ cwd: root, model: 'p/m', values }, 'audit');
+      Vitest.expect(plan.ok).toBe(false);
+      if (plan.ok) return;
+      Vitest.expect(plan.problem).toBe('invalid-prompt');
+      Vitest.expect(plan.message).toContain('must carry exactly one');
       yield* cleanup(root);
     }).pipe(Effect.provide(Live)),
   );

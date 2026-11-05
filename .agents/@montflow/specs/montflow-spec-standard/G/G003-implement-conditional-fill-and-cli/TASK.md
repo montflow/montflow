@@ -6,7 +6,7 @@ originator: user
 size: tiny
 depends-on: G002
 related-tasks: G004
-status: pending
+status: complete
 write-scope: packages/prompts/src/apps/interactive, packages/prompts/src/apps/cli, packages/prompts/src/modules/prompt-execute
 ---
 
@@ -49,8 +49,8 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] A select is offered as a list, not a free-text line
-- [ ] A hidden variable is never asked, required, or rendered from a stale answer
-- [ ] Switching the controller clears every hidden answer
-- [ ] CLI `render`/`execute` accept exactly what the interactive fill accepts
-- [ ] `PromptExecute.inspect`/`table` show the condition and visibility
+- [x] A select is offered as a list, not a free-text line
+- [x] A hidden variable is never asked, required, or rendered from a stale answer
+- [x] Switching the controller clears every hidden answer
+- [x] CLI `render`/`execute` accept exactly what the interactive fill accepts
+- [x] `PromptExecute.inspect`/`table` show the condition and visibility

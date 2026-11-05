@@ -6,7 +6,7 @@ originator: user
 size: tiny
 depends-on:
 related-tasks: C001
-status: pending
+status: complete
 write-scope: none
 ---
 
@@ -52,6 +52,6 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] Each contradiction has a rule, a severity, a stable code, and a fix string
-- [ ] Each rule names its owning module and its test
-- [ ] The decision records that no existing spec in the store violates the new rules
+- [x] Each contradiction has a rule, a severity, a stable code, and a fix string
+- [x] Each rule names its owning module and its test
+- [x] The decision records that no existing spec in the store violates the new rules

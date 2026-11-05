@@ -35,7 +35,7 @@ export const SLASH_COMMANDS = [
   'new-phase',
   'new-task',
   'stamp',
-  'tier',
+  'rigor',
   'claim',
   'lock',
   'waiver',
@@ -82,6 +82,10 @@ export const SLASH_FLAG_KINDS = {
   'reviewer-profiles': 'value',
   request: 'value',
   notes: 'value',
+  isolated: 'value',
+  origin: 'value',
+  'origin-branch': 'value',
+  'worktree-name': 'value',
   scope: 'value',
   phase: 'value',
   focus: 'value',
@@ -102,7 +106,7 @@ export const SLASH_FLAG_KINDS = {
   originator: 'value',
   'finding-ref': 'value',
   requirement: 'value',
-  tier: 'value',
+  rigor: 'value',
   format: 'value',
   session: 'value',
   orchestrator: 'switch',
@@ -155,7 +159,7 @@ export const SLASH_COMMAND_FLAGS = {
   migrate: ['name', 'all', 'dry-run', 'include-complete'],
   init: [
     'name',
-    'tier',
+    'rigor',
     'author',
     'description',
     'workspace-type',
@@ -191,7 +195,7 @@ export const SLASH_COMMAND_FLAGS = {
     'requirement',
   ],
   stamp: ['format'],
-  tier: ['tier'],
+  rigor: ['rigor'],
   claim: [
     'name',
     'task',
@@ -208,7 +212,7 @@ export const SLASH_COMMAND_FLAGS = {
   waiver: ['name', 'phase', 'waived', 'required', 'reason'],
   gate: ['name', 'phase', 'task', 'stage', 'all', 'timeout', 'judge', 'verdict', 'note'],
   mail: ['name', 'to', 'text', 'phase', 'session'],
-  author: ['request', 'notes'],
+  author: ['request', 'notes', 'rigor', 'isolated', 'origin', 'origin-branch', 'worktree-name'],
   execute: ['name', 'phase', 'focus', 'mode'],
   'sizing-config': ['scope', 'name', 'phase', 'focus', 'mode'],
 } as const satisfies Record<SlashCommand, ReadonlyArray<SlashFlagName>>;
@@ -276,7 +280,7 @@ export interface SlashArgs {
   readonly multi: Readonly<Record<string, ReadonlyArray<string>>>;
   /** Every switch flag the caller wrote, bare. */
   readonly switches: ReadonlySet<string>;
-  /** Bare positional tokens, e.g. `run` for `gate run` or `micro` for `tier`. */
+  /** Bare positional tokens, e.g. `run` for `gate run` or `trivial` for `rigor`. */
   readonly positionals: ReadonlyArray<string>;
 }
 
@@ -402,7 +406,7 @@ export const parseSlashArgs = (args: string): SlashArgs => {
       record('verify', undefined, 'switch');
       continue;
     }
-    // Every other switch (tier/claim/waiver/gate/init flags) is bare and sets
+    // Every other switch (rigor/claim/waiver/gate/init flags) is bare and sets
     // its name. An inline `=value` falls to the branch below and is refused,
     // so a switch can never be silently set by `--force=no`.
     if (token.startsWith('--') && slashFlagKind(token.slice(2)) === 'switch') {
@@ -452,7 +456,7 @@ export const parseSlashArgs = (args: string): SlashArgs => {
     }
     // Any other `--token`. Switch flags are read above, so this one has no
     // reader at all: recorded, then refused by the command's flag row. A bare
-    // word is a positional token `gate run` and `tier micro` read.
+    // word is a positional token `gate run` and `rigor trivial` read.
     if (token.startsWith('--')) record(token.slice(2), undefined, 'unknown');
     else positionals.push(token);
   }

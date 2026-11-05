@@ -3,8 +3,8 @@
 Spec primitives and a CLI for montflow — the v2 phase tree (`SPEC.md` + one
 directory per phase + one directory per task), schema-backed parsing, mechanical
 verification, derived state, the generator verbs that write every verifiable
-record, and the shipped authoring, execution, sizing, and tier payloads that
-`mf-specs author`, `execute`, `sizing-config`, `tier`, and `which` render and
+record, and the shipped authoring, execution, sizing, and rigor payloads that
+`mf-specs author`, `execute`, `sizing-config`, `rigor`, and `which` render and
 resolve.
 
 ## CLI
@@ -103,7 +103,7 @@ explicit `migrate --name <spec> --include-complete` upgrades it. Relabeling
   A scaffold with two execution tasks must declare distinct `scope=` values (or
   add a real `depends-on` edge); otherwise `check` reports
   `phase.write-scope-overlap`, exactly as it would for hand-authored work.
-- `init --name <spec> --tier <micro|standard|full>` — the tier-aware scaffold.
+- `init --name <spec> --rigor <trivial|light|standard|deep|critical>` — the rigor-aware scaffold.
   Validates the phase range, exploration rule, work-task ceiling, gate kind,
   waiver policy, review decision, and dependency graph, then writes the whole v2
   tree: `SPEC.md` with `## Creation`, every `PHASE.md`/phase `MEMORY.md`, each
@@ -138,9 +138,9 @@ explicit `migrate --name <spec> --include-complete` upgrades it. Relabeling
   stands in for a round. A waived phase cannot hold a review task. A phase with
   `review: none` holds no review task and needs no waiver: set it at authoring
   time with `new-phase --review none` or `init --review <PHASE>:none`.
-- `tier <micro|standard|full>` — print the installed tier file verbatim and
-  nothing else. A missing file is `tier.missing`; a packaged copy that differs
-  is `tier.stale`. Never list the tier directory or load two tiers.
+- `rigor <trivial|light|standard|deep|critical>` — print the installed rigor file verbatim and
+  nothing else. A missing file is `rigor.missing`; a packaged copy that differs
+  is `rigor.stale`. Never list the rigor directory or load two rigors.
 - `migrate [--name <spec> | --all] [--dry-run] [--include-complete]` — move flat
   task directories under their `<PHASE>/` directory, then upgrade a v1 phase
   tree by writing the missing `PHASE.md`/phase `MEMORY.md` and `spec-version: 2`.
@@ -167,9 +167,15 @@ explicit `migrate --name <spec> --include-complete` upgrades it. Relabeling
 - `review decide --name <spec> --phase <id> [--mode guided|autonomous] [--json]`
   — compute the review-cycle decision from the store. Read-only; see
   [Review cycle decisions](#review-cycle-decisions).
-- `author --request <text> [--notes <text>]` — loads the `spec-create` prompt
-  (gated on `mf-specs doctor`), renders it with the request, and prints it and
-  nothing else. Model-free: the binary never dispatches a session.
+- `author --request <text> --rigor <level> --isolated <yes|no> [--notes <text>]
+[--origin current|main|other --worktree-name <name> [--origin-branch <branch>]]`
+  — loads the `spec-create` prompt (gated on `mf-specs doctor`), renders it with
+  the request and the user's choices, and prints it and nothing else. `rigor` and
+  `isolated` are required and have no default; the isolation answers are only
+  accepted (and only rendered) when `isolated` is `yes`, and `--origin-branch`
+  is required only for `--origin other`. A missing or invalid answer is
+  `cli.invalid-argument` with the exact rerun. Model-free: the binary never
+  dispatches a session.
 - `execute [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous]`
   — loads the `spec-execute` prompt with the derived state, ready set, and
   review budget, and prints it. An explicit `--name` wins; otherwise it asks
@@ -230,13 +236,13 @@ explicit `migrate --name <spec> --include-complete` upgrades it. Relabeling
 - `doctor [--check]` — reads this package's `payload.json` and checks or repairs
   every declared artifact: the `montflow-create-specs` and `montflow-find-specs`
   skills, `spec-create.json`, `spec-execute.json`, `spec-sizing.json`, and the
-  `micro`/`standard`/`full` tier files. `--check` writes nothing and reports
+  `trivial`/`light`/`standard`/`deep`/`critical` rigor files. `--check` writes nothing and reports
   `ok` / `missing` / `stale` / `mismatched` / `blocked` per payload. Repair mode
   distinguishes `present` / `installed` / `repaired` / `blocked` and reports a
   `blocked` payload with a coded failure instead of aborting the run. Skill
   repair rewrites only the files the package ships and leaves any other file in
   the directory in place. Idempotent; resolves the repo root from the working
-  directory. It never touches any prompt, skill, or tier it does not own. The
+  directory. It never touches any prompt, skill, or rigor it does not own. The
   other skills the shipped prompts declare are external prerequisites, not
   doctor payloads: see
   [Prerequisite skills and advisories](#prerequisite-skills-and-advisories).
@@ -254,12 +260,12 @@ anything renders, with the file, the problem, and the `mf-specs doctor` fix.
 Every generator verb is on the `/specs` surface with the same arguments and
 engines as the binary: `check`, `status`, `state`, `next`, `resolve`, `sizing`,
 `models`, `which`, `list`, `create`, `migrate`, `init`, `new-phase`, `new-task`,
-`stamp`, `tier`, `claim`, `lock`, `waiver`, `gate`, `mail`, `author`, `execute`,
+`stamp`, `rigor`, `claim`, `lock`, `waiver`, `gate`, `mail`, `author`, `execute`,
 and `sizing-config`. `review decide`, `doctor`, and `version` are binary-only.
 The host tools are
-`spec_author`, `spec_execute`, `spec_sizing`, `spec_tier`, and `spec_models`;
-`spec_tier` returns the installed tier verbatim, with the same refusal codes as
-`mf-specs tier`. The TUI picker previews derived state and never offers a phase
+`spec_author`, `spec_execute`, `spec_sizing`, `spec_rigor`, and `spec_models`;
+`spec_rigor` returns the installed rigor verbatim, with the same refusal codes as
+`mf-specs rigor`. The TUI picker previews derived state and never offers a phase
 or task directory as a spec. No surface reads or writes a lock file.
 
 The `/specs` form validates flags per command. Every verb accepts `--dir` and
@@ -278,7 +284,8 @@ those are advisory.
 
 Required skills and advisory skills, by prompt:
 
-- `spec-create` requires `montflow-create-specs` and declares no advisory skill.
+- `spec-create` requires `montflow-create-specs`; advisory:
+  `using-git-worktrees` (the isolated branch loads it).
 - `spec-execute` requires `montflow-find-specs`; advisory:
   `montflow-adversarial-review`, `montflow-addressing-adversarial-review`.
 - `spec-sizing` requires `montflow-find-specs` and `montflow-create-specs`;
@@ -310,8 +317,12 @@ and writes nothing itself. With no scope flag the prompt asks which layer;
 over the implication.
 
 ```bash
-# render the authoring prompt with the user's request
-bun run --cwd packages/specs cli author --request "Ship login"
+# render the authoring prompt with the user's request and choices
+bun run --cwd packages/specs cli author --request "Ship login" --rigor standard --isolated no
+
+# the isolated form needs the origin and the worktree name too
+bun run --cwd packages/specs cli author --request "Ship login" --rigor standard \
+  --isolated yes --origin main --worktree-name ship-login
 
 # begin or resume the spec whose name the current branch names;
 # on feat/ship-login this resolves ship-login
@@ -490,17 +501,17 @@ already `gate.result-inconsistent`. The scheduler's own refusals are
 
 ## Artifact payload
 
-The skill, prompt, and tier files this package ships are declared in
+The skill, prompt, and rigor files this package ships are declared in
 [`payload.json`](payload.json) and copied into the workspace by `doctor`:
 
 | Kind     | Source                | Installed target                        |
 | -------- | --------------------- | --------------------------------------- |
 | `skill`  | `skills/<name>/`      | `.agents/skills/<name>/`                |
 | `prompt` | `prompts/<name>.json` | `.agents/@montflow/prompts/<name>.json` |
-| `tier`   | `tiers/<name>.md`     | `.agents/@montflow/tiers/<name>.md`     |
+| `rigor`  | `rigors/<name>.md`    | `.agents/@montflow/rigors/<name>.md`    |
 
 The manifest is the only name list: `SPEC_SKILL_NAMES`, `SPEC_PROMPT_NAMES`, and
-`SPEC_TIER_NAMES` are derived from it. `@montflow/payload` owns the one
+`SPEC_RIGOR_NAMES` are derived from it. `@montflow/payload` owns the one
 compare/install engine and the embedded-payload generator every payload package
 uses.
 
@@ -521,7 +532,7 @@ doctor never reads, rewrites, or deletes it, and an extra file alone does not
 make a skill stale.
 
 The payload is embedded in the `mf-specs` binary at build time
-(`bun run generate:payload` from `skills/`, `prompts/`, and `tiers/`), so
+(`bun run generate:payload` from `skills/`, `prompts/`, and `rigors/`), so
 `doctor` works from the standalone binary with no package checkout beside it.
 The package directory still wins when present, and
 `src/modules/doctor/tests/embedded-payload.test.ts` fails if the embed drifts
@@ -880,12 +891,12 @@ itself is not a completed task:
   `renderPhaseFile`, `renderPhaseMemory`, `PHASE_DIR_FILES`, and `PHASE_CODES`.
   `phaseEvidence` resolves gate evidence refs, the effective waiver, and the
   proven set a lock reads.
-- **`Tier`** — the `micro`/`standard`/`full` enum (`TIERS`, `isTier`), the
-  artifact contract, the waiver predicate, the `split` shape, and `readTier`
-  (installed file first, packaged file second, `tier.missing` / `tier.stale`).
+- **`Rigor`** — the `trivial`/`light`/`standard`/`deep`/`critical` enum (`RIGORS`, `isRigor`), the
+  artifact contract, the waiver predicate, the `split` shape, and `readRigor`
+  (installed file first, packaged file second, `rigor.missing` / `rigor.stale`).
 - **`Creation`** — `## Creation` read/render (`readCreation`, `renderCreation`)
-  for the tier and the self-reported question count.
-- **`Init`** — the tier-aware tree generator: plan validation (`INIT_CODES`),
+  for the rigor and the self-reported question count.
+- **`Init`** — the rigor-aware tree generator: plan validation (`INIT_CODES`),
   phase/task allocation, the default plans, and the render path behind
   `mf-specs init`.
 - **`Claim`** — the atomic status transaction (`claim`, `commitTransaction`):
@@ -986,9 +997,9 @@ itself is not a completed task:
   `renderModelFindings`, `renderWhich`), and the `effect/cli` commands.
   `renderDiagnostic` is `Diagnostic`'s, re-exported here.
 - **`Doctor`** — `runDoctor(root)` / `runDoctorAt(startDir)` read the packaged
-  `payload.json` and install or verify the spec skills, prompts, and tiers,
+  `payload.json` and install or verify the spec skills, prompts, and rigors,
   reporting one outcome per artifact (`SPEC_SKILL_NAMES`, `SPEC_PROMPT_NAMES`,
-  `SPEC_TIER_NAMES`). Repair mode refreshes a stale or mismatched artifact from
+  `SPEC_RIGOR_NAMES`). Repair mode refreshes a stale or mismatched artifact from
   the package bytes; `--check` writes nothing and performs no directory
   creation.
 
@@ -1045,5 +1056,5 @@ the phase budget.
 ## Status
 
 Early (`0.0.1`, private). Targets the v2 spec standard: the phase tree, derived
-locks, tier-aware authoring, gate execution, and the review-cycle policy.
+locks, rigor-aware authoring, gate execution, and the review-cycle policy.
 Source-only — no build step: the OpenCode host loads the `.ts` files directly.

@@ -1,7 +1,7 @@
 ---
 id: G
 objective: Add conditional prompt variables shared by verifier, renderer, fill, CLI, and editor.
-status: pending
+status: complete
 review: required
 gate: none
 ---

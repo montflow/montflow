@@ -1,9 +1,9 @@
 import { Path } from 'effect';
 
-import { TIERS } from '../tier/index.js';
+import { RIGORS } from '../rigor/index.js';
 
-/** Tier file names, derived from the one enum; no second list. */
-export const SPEC_TIER_NAMES = TIERS;
+/** Rigor file names, derived from the one enum; no second list. */
+export const SPEC_RIGOR_NAMES = RIGORS;
 
 /** Root of the installed package, holding `skills/` and `prompts/`. */
 export const packageRoot = (path: Path.Path): string =>
@@ -33,17 +33,17 @@ export const installedPromptFile = (path: Path.Path, root: string, name: string)
 export const shippedPromptFile = (path: Path.Path, name: string): string =>
   path.join(shippedPromptDir(path), `${name}.json`);
 
-/** Directory the package ships its tier files in. */
-export const shippedTierDir = (path: Path.Path): string => path.join(packageRoot(path), 'tiers');
+/** Directory the package ships its rigor files in. */
+export const shippedRigorDir = (path: Path.Path): string => path.join(packageRoot(path), 'rigors');
 
-/** File the package ships one tier instruction in. */
-export const shippedTierFile = (path: Path.Path, name: string): string =>
-  path.join(shippedTierDir(path), `${name}.md`);
+/** File the package ships one rigor instruction in. */
+export const shippedRigorFile = (path: Path.Path, name: string): string =>
+  path.join(shippedRigorDir(path), `${name}.md`);
 
-/** Directory `doctor` installs the tier files into. */
-export const installedTierDir = (path: Path.Path, root: string): string =>
-  path.join(root, '.agents', '@montflow', 'tiers');
+/** Directory `doctor` installs the rigor files into. */
+export const installedRigorDir = (path: Path.Path, root: string): string =>
+  path.join(root, '.agents', '@montflow', 'rigors');
 
-/** File `doctor` installs one tier instruction into. */
-export const installedTierFile = (path: Path.Path, root: string, name: string): string =>
-  path.join(installedTierDir(path, root), `${name}.md`);
+/** File `doctor` installs one rigor instruction into. */
+export const installedRigorFile = (path: Path.Path, root: string, name: string): string =>
+  path.join(installedRigorDir(path, root), `${name}.md`);

@@ -316,4 +316,37 @@ Vitest.describe('Task.verifyTaskFile runtime', () => {
     );
     Vitest.expect(checked.issues).toStrictEqual([]);
   });
+
+  Vitest.it('rejects a repeated depends-on id without normalizing it', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({
+        id: 'A001',
+        name: 'implement-login',
+        dependsOn: 'A002, A002',
+      }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues).toStrictEqual([
+      {
+        code: 'depends-on.duplicate',
+        field: 'depends-on',
+        message: "'A002' is listed more than once.",
+        expected: 'each task id at most once',
+        actual: 'A002 listed 2 times',
+        fix: "Remove the repeated 'A002' from 'depends-on:'.",
+      },
+    ]);
+  });
+
+  Vitest.it('reports a repeated malformed depends-on id only once', () => {
+    const result = Task.verifyTaskFile(
+      'A001-implement-login',
+      taskMarkdown({ id: 'A001', name: 'implement-login', dependsOn: 'nope, nope' }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues).toStrictEqual([
+      { field: 'depends-on', message: "'nope' is not a task id." },
+    ]);
+  });
 });

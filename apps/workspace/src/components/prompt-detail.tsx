@@ -1,13 +1,17 @@
 /** @jsxImportSource @opentui/solid */
+import { For } from 'solid-js';
 import type { Prompts } from '../services/index.js';
 import { MarkdownBody } from './markdown-body.js';
 import { palette } from './palette.js';
+import { promptVariableLines } from './prompt-conditions.js';
 
 /** Detail body mode: truncated preview or scrollable full view. */
 export type PromptDetailMode = 'preview' | 'view';
 
 export interface PromptDetailProps {
   readonly prompt: Prompts.PromptSummary;
+  /** Names the current answers hide; their stored values stay untouched. */
+  readonly hidden: ReadonlySet<string>;
   readonly mode: PromptDetailMode;
   readonly scrollOffset: number;
   readonly maxBodyLines: number;
@@ -44,10 +48,11 @@ export const PromptDetail = (props: PromptDetailProps) => {
         </text>
         <text>
           <span style={{ fg: palette.dim }}>variables </span>
-          {props.prompt.variables.length > 0
-            ? props.prompt.variables.map((variable) => variable.label).join(', ')
-            : '—'}
+          {props.prompt.variables.length > 0 ? '' : '—'}
         </text>
+        <For each={promptVariableLines(props.prompt.variables, props.hidden)}>
+          {(line) => <text>{`  ${line}`}</text>}
+        </For>
       </box>
       <MarkdownBody
         lines={lines()}
