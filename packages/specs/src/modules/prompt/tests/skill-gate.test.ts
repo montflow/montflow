@@ -86,6 +86,12 @@ Vitest.describe('fresh doctor-only workspace', () => {
       ]);
       Vitest.expect(created.text).toContain('## Skill advisories');
       Vitest.expect(created.text).toContain('using-git-worktrees');
+      // The in-place body never carries the isolated branch; only the advisory
+      // block names the skill the user will not load.
+      const [body] = created.text.split('## Skill advisories');
+      Vitest.expect(body).not.toContain('using-git-worktrees');
+      Vitest.expect(body).not.toContain('.worktrees');
+      Vitest.expect(body).not.toContain('isolated: yes');
 
       const executed = yield* load(root, 'spec-execute', EXECUTE_VALUES);
       Vitest.expect(executed.skills).toStrictEqual(['montflow-find-specs']);
