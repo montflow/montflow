@@ -26,11 +26,15 @@ const PACKAGES = [
 ] as const;
 
 /** Run a command and return its status and combined output. */
-const spawn = (command: string, args: ReadonlyArray<string>, cwd: string) => {
+const spawn = (command: string, args: ReadonlyArray<string>, cwd: string, hermetic = true) => {
   const result = spawnSync(command, [...args], {
     cwd,
     encoding: 'utf8',
-    env: { PATH: '/usr/bin:/bin', HOME: '/tmp/opencode', CI: 'true' },
+    // Only the compiled artifact — invoked by absolute path — runs hermetically.
+    // The build step needs a PATH that actually contains `bun`
+    // (~/.bun/bin on ubuntu-latest CI, /usr/bin on the dev host).
+    // oxlint-disable-next-line montflow/no-process-env -- the build step inherits the runner PATH so `bun` resolves; only the hermetic artifact run overrides it.
+    env: hermetic ? { PATH: '/usr/bin:/bin', HOME: '/tmp/opencode', CI: 'true' } : process.env,
   });
   return { status: result.status, output: `${result.stdout ?? ''}${result.stderr ?? ''}` };
 };
@@ -45,10 +49,13 @@ Vitest.describe('compiled binary doctor', () => {
           Fs.mkdtempSync(NodePath.join(Os.tmpdir(), `mf-${pkg}-compiled-`)),
           `mf-${pkg}`,
         );
+        // The build step inherits the parent PATH so `bun` resolves; the
+        // compiled artifact runs hermetically below.
         const build = spawn(
           'bun',
           ['build', 'src/apps/cli/main.ts', '--compile', '--outfile', artifact],
           packageDir,
+          false,
         );
         Vitest.expect(build.status, `${pkg} build: ${build.output}`).toBe(0);
 
