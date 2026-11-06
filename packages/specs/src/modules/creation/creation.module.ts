@@ -10,6 +10,10 @@ export interface Creation {
   readonly rigor: Rigor | undefined;
   /** The raw value the record names, even when it is not a known rigor. */
   readonly declaredRigor: string | undefined;
+  /** The level the user raised the rigor from, when the record carries one. */
+  readonly raisedFrom: Rigor | undefined;
+  /** The raw `raised-from` value, even when it is not a known rigor. */
+  readonly declaredRaisedFrom: string | undefined;
   /** The creation run's self-reported question count and its budget. */
   readonly questions: { readonly count: number; readonly budget: number } | undefined;
   /** Any user-owned decision the run stopped on, or `none`. */
@@ -43,20 +47,45 @@ export const creationOf = (markdown: string): Creation => {
     return {
       rigor: undefined,
       declaredRigor: undefined,
+      raisedFrom: undefined,
+      declaredRaisedFrom: undefined,
       questions: undefined,
       unresolved: undefined,
     };
   }
   let rigor: Rigor | undefined;
   let declaredRigor: string | undefined;
+  let raisedFrom: Rigor | undefined;
+  let declaredRaisedFrom: string | undefined;
   let questions: Creation['questions'];
   let unresolved: string | undefined;
   for (const raw of sectionLines(parsed.body, CREATION_HEADING)) {
     const line = raw.replace(/^\s*-\s*/, '').trim();
-    const rigorMatch = /^rigor:\s*(\S+)$/.exec(line);
+    const rigorMatch = /^rigor:\s*(.*)$/.exec(line);
     if (rigorMatch !== null) {
-      declaredRigor = rigorMatch[1];
-      rigor = rigorOrUndefined(rigorMatch[1]);
+      const value = (rigorMatch[1] ?? '').trim();
+      const parsedRigor = /^(\S+)(?:\s+\(raised-from\s+(\S+)\))?$/.exec(value);
+      if (parsedRigor === null) {
+        // A malformed record is unknown, never absent: the verifier reports it.
+        declaredRigor = value;
+        rigor = undefined;
+        raisedFrom = undefined;
+        declaredRaisedFrom = undefined;
+        continue;
+      }
+      const level = parsedRigor[1] ?? '';
+      const raised = parsedRigor[2];
+      declaredRigor = level;
+      rigor = rigorOrUndefined(level);
+      if (raised !== undefined) {
+        declaredRaisedFrom = raised;
+        raisedFrom = rigorOrUndefined(raised);
+        if (raisedFrom === undefined) {
+          // An unknown `raised-from` value makes the whole record unparseable.
+          declaredRigor = value;
+          rigor = undefined;
+        }
+      }
       continue;
     }
     const questionsMatch = /^questions\s+(\d+)\s*\/\s*(\d+)$/.exec(line);
@@ -70,7 +99,7 @@ export const creationOf = (markdown: string): Creation => {
     const unresolvedMatch = /^unresolved:\s*(.+)$/.exec(line);
     if (unresolvedMatch !== null) unresolved = (unresolvedMatch[1] ?? '').trim();
   }
-  return { rigor, declaredRigor, questions, unresolved };
+  return { rigor, declaredRigor, raisedFrom, declaredRaisedFrom, questions, unresolved };
 };
 
 /**
@@ -89,6 +118,15 @@ export const rigorOfSpec = (markdown: string): Rigor | undefined => creationOf(m
  */
 export const declaredRigorOfSpec = (markdown: string): string | undefined =>
   creationOf(markdown).declaredRigor;
+
+/**
+ * The level a SPEC.md `## Creation` record was raised from, when the accepted
+ * escalation recorded `rigor: <new> (raised-from <old>)`.
+ * @param markdown - raw SPEC.md contents
+ * @returns the base level, or undefined when the record carries none or is malformed
+ */
+export const raisedFromOfSpec = (markdown: string): Rigor | undefined =>
+  creationOf(markdown).raisedFrom;
 
 /** The self-reported question budget for a rigor level. */
 export const questionBudget = (rigor: Rigor): number => RIGOR_CONTRACT[rigor].interaction;

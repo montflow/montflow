@@ -68,9 +68,10 @@ worktree`. When `isolated` is `no`, author in the current checkout with
    `rigor: <value>`, `questions 0/<budget>`, and `unresolved: none`. Before you
    stop, update the count to `questions <n>/<budget>` and name any user-owned
    decision the run stopped on, or `none`. Record `rigor: <new> (raised-from
-<old>)` only when the user accepted the one escalation. There is no harness
-   counter: the count is self-reported and the budget is advisory beyond the
-   rigor file, this instruction, and the phase review. At the cap, stop and
+<old>)` only when the user accepted the one escalation; the recorded budget is
+   the raised level's budget, and the writer parses that suffix. There is no
+   harness counter: the count is self-reported and the budget is advisory
+   beyond the rigor file, this instruction, and the phase review. At the cap, stop and
    report instead of guessing.
 9. **Hand the records to the bookkeeper.** Dispatch `spec-bookkeeper` to run the
    spec verifier and repair bookkeeping. Apply only fixes it reports as prose or

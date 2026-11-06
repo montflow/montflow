@@ -68,4 +68,5 @@ the level. Facts about the repository are read, never asked.
 
 The creation run records its count in `SPEC.md` as `questions <n>/<budget>`;
 the number is self-reported and the budget is advisory beyond this instruction
-and the phase review.
+and the phase review. After a raise, `<budget>` is the raised level's budget,
+never `trivial`'s zero.
