@@ -3,9 +3,10 @@
 Spec primitives and a CLI for montflow — the v2 phase tree (`SPEC.md` + one
 directory per phase + one directory per task), schema-backed parsing, mechanical
 verification, derived state, the generator verbs that write every verifiable
-record, and the shipped authoring, execution, sizing, and rigor payloads that
-`mf-specs author`, `execute`, `sizing-config`, `rigor`, and `which` render and
-resolve.
+record, and the shipped authoring, execution, sizing, status, and rigor payloads
+that `mf-specs author`, `execute`, `sizing-config`, `status-report`, `rigor`,
+and `which` render
+and resolve, alongside the read-only `spec-status` prompt in the prompt store.
 
 ## CLI
 
@@ -67,6 +68,12 @@ explicit `migrate --name <spec> --include-complete` upgrades it. Relabeling
   review decision, gate kind, proof, and derived lock, and the verification
   verdict. Exits non-zero when the spec fails verification, including the
   review budget read from the review store.
+- `status-report [--name <spec>] [--focus <text>]` — renders the read-only
+  `spec-status` prompt for one spec (gated on `mf-specs doctor`) and prints it.
+  An explicit `--name` wins; otherwise it asks `which` which spec the branch
+  names, failing with the candidates and `next ask the user` when the match is
+  absent or ambiguous. It reads no spec content, writes nothing, dispatches
+  nothing, and mutates no git state. The raw `status` panel is unchanged.
 - `state --name <spec>` — compact derived state: status, lifecycle state,
   active phase, derived locked phases, and the active phase's review decision
   and gate proof. A phase is locked when every task under it is complete, every
@@ -235,8 +242,9 @@ explicit `migrate --name <spec> --include-complete` upgrades it. Relabeling
   directories holding `SPEC.md`.
 - `doctor [--check]` — reads this package's `payload.json` and checks or repairs
   every declared artifact: the `montflow-create-specs` and `montflow-find-specs`
-  skills, `spec-create.json`, `spec-execute.json`, `spec-sizing.json`, and the
-  `trivial`/`light`/`standard`/`deep`/`critical` rigor files. `--check` writes nothing and reports
+  skills, `spec-create.json`, `spec-execute.json`, `spec-sizing.json`,
+  `spec-status.json`, and the `trivial`/`light`/`standard`/`deep`/`critical`
+  rigor files. `--check` writes nothing and reports
   `ok` / `missing` / `stale` / `mismatched` / `blocked` per payload. Repair mode
   distinguishes `present` / `installed` / `repaired` / `blocked` and reports a
   `blocked` payload with a coded failure instead of aborting the run. Skill
@@ -249,24 +257,36 @@ explicit `migrate --name <spec> --include-complete` upgrades it. Relabeling
 
 ### Authoring, execution, sizing, and surfaces
 
-`author`, `execute`, and `sizing-config` render; they do not dispatch. The
-binary loads the shipped prompt, gates it on `mf-specs doctor`, renders it from
-the spec or flag state, and prints it. Inside the OpenCode host, `/specs author`
-/ `/specs execute` / `/specs sizing-config` and the `spec_author` /
-`spec_execute` / `spec_sizing` tools dispatch the same rendered text
-through `@montflow/prompts`' executor. A missing or stale prompt fails before
-anything renders, with the file, the problem, and the `mf-specs doctor` fix.
+`author`, `execute`, `sizing-config`, and `status-report` render; they do not
+dispatch. The binary loads the shipped prompt, gates it on `mf-specs doctor`,
+renders it from the spec or flag state, and prints it. Inside the OpenCode host,
+`/specs author` / `/specs execute` / `/specs sizing-config` /
+`/specs status-report` and the `spec_author` / `spec_execute` / `spec_sizing` /
+`spec_status` tools dispatch the same rendered text through
+`@montflow/prompts`' executor. A missing or stale prompt fails before anything
+renders, with the file, the problem, and the `mf-specs doctor` fix.
+
+`spec-status` is the read-only counterpart to `spec-execute`. It is a shipped
+prompt in the same store, rendered through the `/mf-prompts` path
+(`mf-prompts render spec-status name=<spec> root=<workspace>`): it takes one spec from the shared picker and
+reports the derived state, task counts, ready set, review evidence, verification
+blockers, and one next command without editing a record, status, lock, or
+worktree. `mf-specs status-report` (or `/specs status-report`, or the
+`spec_status` tool) renders that prompt for one spec. Execution stays with
+`spec-execute`.
 
 Every generator verb is on the `/specs` surface with the same arguments and
-engines as the binary: `check`, `status`, `state`, `next`, `resolve`, `sizing`,
-`models`, `which`, `list`, `create`, `migrate`, `init`, `new-phase`, `new-task`,
-`stamp`, `rigor`, `claim`, `lock`, `waiver`, `gate`, `mail`, `author`, `execute`,
-and `sizing-config`. `review decide`, `doctor`, and `version` are binary-only.
+engines as the binary: `check`, `status`, `status-report`, `state`, `next`,
+`resolve`, `sizing`, `models`, `which`, `list`, `create`, `migrate`, `init`,
+`new-phase`, `new-task`, `stamp`, `rigor`, `claim`, `lock`, `waiver`, `gate`,
+`mail`, `author`, `execute`, and `sizing-config`. `review decide`, `doctor`, and
+`version` are binary-only.
 The host tools are
-`spec_author`, `spec_execute`, `spec_sizing`, `spec_rigor`, and `spec_models`;
-`spec_rigor` returns the installed rigor verbatim, with the same refusal codes as
-`mf-specs rigor`. The TUI picker previews derived state and never offers a phase
-or task directory as a spec. No surface reads or writes a lock file.
+`spec_author`, `spec_execute`, `spec_status`, `spec_sizing`, `spec_rigor`, and
+`spec_models`; `spec_rigor` returns the installed rigor verbatim, with the same
+refusal codes as `mf-specs rigor`. The TUI picker previews derived state and
+never offers a phase or task directory as a spec. No surface reads or writes a
+lock file.
 
 The `/specs` form validates flags per command. Every verb accepts `--dir` and
 `--verbose`, plus the flags its binary counterpart implements; a flag the verb
@@ -290,6 +310,7 @@ Required skills and advisory skills, by prompt:
   `montflow-adversarial-review`, `montflow-addressing-adversarial-review`.
 - `spec-sizing` requires `montflow-find-specs` and `montflow-create-specs`;
   advisory: `executing-skills`, `grilling`, `i-have-adhd`.
+- `spec-status` requires `montflow-find-specs`; no advisory skills.
 
 A missing, stale, or blocked **doctor-owned** skill fails prompt load before
 anything renders with `prompt.skill-missing`, `prompt.skill-stale`, or
@@ -308,7 +329,7 @@ npx skills add montflow/montflow -s <skill> -y
 ```
 
 The behavior is deliberate: doctor's ownership boundary stays exactly the two
-spec skills and the three prompts it ships, while a fresh workspace with only
+spec skills and the four prompts it ships, while a fresh workspace with only
 `mf-specs doctor` applied can still render every shipped prompt.
 
 `sizing-config` sizes exactly one layer — repo-wide, one spec, or one phase —
@@ -597,6 +618,13 @@ edited by a later migration. Upgrade one deliberately with
 `mf-specs migrate --name <spec> --include-complete`; after that it is v2 and the
 normal rules apply. The same table is recorded in the bookkeeper's artifact
 ledger.
+
+The rigor store moved from `.agents/@montflow/tiers/` to
+`.agents/@montflow/rigors/`; this is a payload rename, not a spec migration.
+`doctor` never deletes a directory it no longer ships, so a workspace that
+installed the old three-file tier store keeps it until you remove
+`.agents/@montflow/tiers/` once after upgrading. Nothing reads that directory,
+and `mf-specs rigor` reads only the new store.
 
 ## Sizing
 
@@ -960,8 +988,9 @@ itself is not a completed task:
   `mf-specs doctor`, read and verify it through `@montflow/prompts`, render it
   with the caller's values, and return the text plus the installed skills, the
   `SkillAdvisory` items for missing non-owned declared skills, and the decoded
-  prompt. `PROMPT_NAMES` is `spec-create`, `spec-execute`, and `spec-sizing`, and
-  the templates live only in `packages/specs/prompts/`. `parseMode` / `MODES`
+  prompt. `PROMPT_NAMES` is `spec-create`, `spec-execute`, `spec-sizing`, and
+  `spec-status`, and the templates live only in `packages/specs/prompts/`.
+  `parseMode` / `MODES`
   carry the public `guided` (default) and `autonomous` names.
 - **`Scaffold`** — `renderSpecScaffold` / `ScaffoldSpecInput` /
   `ScaffoldTask`: pure renderer for a fresh spec tree (the mechanical
@@ -989,8 +1018,8 @@ itself is not a completed task:
   `snapshot`, `reviewSeries`) backing the CLI. `reviewSeries` reads the review
   store beside the specs store (`<specs-root>/../reviews`) for the series a
   spec owns.
-- **`Cli`** — pure engines (`check`, `status`, `list`, `sizingOf`, `models`,
-  `listModels`, `verifyModels`, `author`,
+- **`Cli`** — pure engines (`check`, `status`, `statusReport`, `list`,
+  `sizingOf`, `models`, `listModels`, `verifyModels`, `author`,
   `execute`, `sizingConfig`, `resolveSizingScope`, `which`), pure renderers
   (`renderCheck`, `renderStatus`,
   `renderNext`, `renderList`, `renderSizing`, `renderSizingReport`,

@@ -11,6 +11,7 @@ Install or verify the specs payload in 1 minute.
 | `prompt` | `spec-create`           | `.agents/@montflow/prompts/spec-create.json`  |
 | `prompt` | `spec-execute`          | `.agents/@montflow/prompts/spec-execute.json` |
 | `prompt` | `spec-sizing`           | `.agents/@montflow/prompts/spec-sizing.json`  |
+| `prompt` | `spec-status`           | `.agents/@montflow/prompts/spec-status.json`  |
 | `rigor`  | `trivial`               | `.agents/@montflow/rigors/trivial.md`         |
 | `rigor`  | `light`                 | `.agents/@montflow/rigors/light.md`           |
 | `rigor`  | `standard`              | `.agents/@montflow/rigors/standard.md`        |

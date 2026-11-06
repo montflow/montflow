@@ -48,14 +48,14 @@ A transition writes the task status, the `SPEC.md` row, and the `PHASE.md` mirro
 | ---------- | ----------------------------------------------------------------------------------------------------- |
 | Binary     | `mf-specs <verb> [flags]`                                                                             |
 | Slash      | `/specs <verb> [flags]` — the command verbs; `review decide`, `doctor`, and `version` are binary-only |
-| Host tools | `spec_author`, `spec_execute`, `spec_sizing`, `spec_rigor`, `spec_models`                             |
+| Host tools | `spec_author`, `spec_execute`, `spec_status`, `spec_sizing`, `spec_rigor`, `spec_models`              |
 | TUI        | the specs picker; offers only directories holding `SPEC.md`                                           |
 
 The slash form validates flags per command and refuses a flag the verb does not implement with `cli.invalid-argument` and the command to run instead. The host tools render or read; they do not add a second rule set.
 
 ## Payload and prompts
 
-`author`, `execute`, and `sizing-config` render a shipped prompt and print it; they do not dispatch. `doctor --check` reports payload drift, and `doctor` repairs it. See [payload](./payload.md).
+`author`, `execute`, `sizing-config`, and `status-report` render a shipped prompt and print it; they do not dispatch. Inside the host, the matching slash verb and tool dispatch the rendered prompt on a session instead. `doctor --check` reports payload drift, and `doctor` repairs it. See [payload](./payload.md).
 
 ## See also
 

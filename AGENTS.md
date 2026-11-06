@@ -85,9 +85,10 @@ aliases for frozen records.
   `mf-specs lock` only confirms it and stores nothing. No surface reads a
   stored lock list, and no phase reserves a `*099` review task.
 - Every surface reads the same phase tree: the `mf-specs` binary, `/specs` in
-  the OpenCode host, the `spec_author` / `spec_execute` / `spec_sizing` /
-  `spec_rigor` / `spec_models` tools, and the TUI picker. The TUI offers only
-  directories holding `SPEC.md`, never a phase or task directory.
+  the OpenCode host, the `spec_author` / `spec_execute` / `spec_status` /
+  `spec_sizing` / `spec_rigor` / `spec_models` tools, and the TUI picker. The
+  TUI offers only directories holding `SPEC.md`, never a phase or task
+  directory.
 - Shipped artifacts are package payload declared in each package's
   `payload.json` (`skill`, `profile`, `prompt`, `rigor`). `mf-<cli> doctor
   --check` reports without writing; `mf-<cli> doctor` repairs; `bun run mf:doctor`

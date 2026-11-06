@@ -1,8 +1,8 @@
 # Doctor apps module
 
 `mf-specs doctor` — install the spec skills an agent needs to
-author and discover specs, plus the shipped `spec-create`, `spec-execute`, and
-`spec-sizing` prompts.
+author and discover specs, plus the shipped `spec-create`, `spec-execute`,
+`spec-sizing`, and `spec-status` prompts.
 
 ## Belongs here
 
@@ -10,7 +10,7 @@ author and discover specs, plus the shipped `spec-create`, `spec-execute`, and
   `SPEC_SKILL_NAMES` (`montflow-create-specs`,
   `montflow-find-specs`) and `<root>/.agents/@montflow/prompts/<name>.json`
   for each name in `SPEC_PROMPT_NAMES` (`spec-create`, `spec-execute`,
-  `spec-sizing`);
+  `spec-sizing`, `spec-status`);
   installs what is missing, rewrites what is stale or partial, and is
   idempotent
 - `runDoctorAt(startDir)` — resolves the nearest repo root, then runs `doctor`
