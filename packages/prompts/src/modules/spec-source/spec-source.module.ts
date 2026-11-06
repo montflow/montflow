@@ -28,11 +28,24 @@ const normalizeFeature = (value: string): string =>
   value.toLowerCase().replaceAll('/', '-').replaceAll('_', '-');
 
 /**
+ * One name is a prefix of the other, ending on a segment boundary: the shorter
+ * name must stop exactly where the longer one continues after a `-`. This is
+ * the same rule `modules/which` applies, so the picker and every entry point
+ * agree on a branch.
+ */
+const isPrefixPair = (feature: string, name: string): boolean => {
+  const [shorter, longer] = feature.length <= name.length ? [feature, name] : [name, feature];
+  return longer.startsWith(shorter) && longer.charAt(shorter.length) === '-';
+};
+
+/**
  * Pick the one spec the branch names: `feat/<spec>` matches a spec whose
- * normalized name equals, ends with, or starts with `<spec>`. Ambiguity returns
+ * normalized name equals `<spec>`, or one side is a prefix of the other ending
+ * at a `-` boundary. This mirrors `modules/which`'s `matchFeature` rule, so the
+ * picker never preselects a spec the entry point would refuse. Ambiguity returns
  * `undefined`, because a wrong guess is worse than no guess.
  * @param names - every spec slug the picker found
- * @param branch - current branch name, such as `feat/spec-standard`
+ * @param branch - current branch name, such as `feat/montflow-spec`
  * @returns the matching spec slug, or undefined when the match is not certain
  */
 export const guess = (names: ReadonlyArray<string>, branch: string): string | undefined => {
@@ -42,13 +55,7 @@ export const guess = (names: ReadonlyArray<string>, branch: string): string | un
   const exact = names.filter((name) => normalizeFeature(name) === feature);
   if (exact.length === 1) return exact[0];
   if (exact.length > 1) return undefined;
-  const suffixed = names.filter((name) => normalizeFeature(name).endsWith(feature));
-  if (suffixed.length === 1) return suffixed[0];
-  if (suffixed.length > 1) return undefined;
-  const prefixed = names.filter((name) => {
-    const normalized = normalizeFeature(name);
-    return normalized.startsWith(feature) || feature.startsWith(normalized);
-  });
+  const prefixed = names.filter((name) => isPrefixPair(feature, normalizeFeature(name)));
   return prefixed.length === 1 ? prefixed[0] : undefined;
 };
 

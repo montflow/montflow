@@ -78,19 +78,33 @@ Vitest.describe('SpecSource.guess', () => {
     ).toBe('plugin-host-integration');
   });
 
-  Vitest.it('prefers an exact match over a suffixed one', () => {
+  Vitest.it('prefers an exact match over a prefix one', () => {
     Vitest.expect(SpecSource.guess(names, 'feat/spec-standard')).toBe('spec-standard');
   });
 
-  Vitest.it('matches a spec that ends with the branch remainder', () => {
-    Vitest.expect(SpecSource.guess(['montflow-spec-standard'], 'feat/spec-standard')).toBe(
+  Vitest.it('matches a unique prefix that ends on a hyphen boundary', () => {
+    Vitest.expect(SpecSource.guess(['montflow-spec-standard'], 'feat/montflow-spec')).toBe(
       'montflow-spec-standard',
+    );
+    Vitest.expect(SpecSource.guess(['montflow-spec'], 'feat/montflow-spec-standard')).toBe(
+      'montflow-spec',
     );
   });
 
-  Vitest.it('refuses an ambiguous match', () => {
+  Vitest.it('does not match a suffix or a mid-word prefix', () => {
+    // The entry point's `which` rule matches exact or hyphen-boundary prefixes.
     Vitest.expect(
-      SpecSource.guess(['montflow-spec-standard', 'legacy-spec-standard'], 'feat/spec-standard'),
+      SpecSource.guess(['montflow-spec-standard'], 'feat/spec-standard'),
+    ).toBeUndefined();
+    Vitest.expect(SpecSource.guess(['special-case'], 'feat/spec')).toBeUndefined();
+  });
+
+  Vitest.it('refuses an ambiguous prefix match', () => {
+    Vitest.expect(
+      SpecSource.guess(
+        ['montflow-spec-standard', 'montflow-spec-optimizations'],
+        'feat/montflow-spec',
+      ),
     ).toBeUndefined();
   });
 
