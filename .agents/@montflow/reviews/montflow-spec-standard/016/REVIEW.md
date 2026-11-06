@@ -42,8 +42,8 @@ into round 015, which keeps the full per-finding thread.
 
 - Severity: Major
 - Location: `packages/specs/src/modules/init/init.module.ts:556`, `packages/specs/src/modules/init/init.module.ts:278`, `packages/specs/src/apps/cli/cli.newtask.module.ts:366`, `packages/specs/src/apps/cli/cli.newphase.module.ts:138`
-- Status: Open
-- Attempts: 1
+- Status: Resolved
+- Attempts: 2
 - First Seen: 015
 - Problem: the ceilings, the trivial gate rule, the waiver policy, the `light`/`standard` placement rule and the deep one-in-A cap are now enforced at growth. The two remaining deep/critical exploration rules are still `init`-only: the "every later phase depends on the exploration phase A" check lives inside `validateInitPlan` (`init.module.ts:556-581`) and never runs in `new-phase`/`new-task`, and `explorationIssues` (`init.module.ts:354-394`) never rejects an exploratory task placed outside phase A for `deep`/`critical` (unlike `light`/`standard`, `:327-352`). Reproduced on a fresh tree: `init --name probe --rigor deep` then `new-task --phase B --task look-more --type exploratory` adds `B003` and `check` reports `0 failed · 0 issues`; `init --rigor deep`, `new-phase --objective "Third slice"`, `new-task --phase C --task build --type execution` produces a phase that never depends on the exploration phase A and `check` still reports `0 failed · 0 issues`. `deep.md` says "every later phase depends on the task that carries it" and "one exploratory task in phase `A`"; `critical.md` says "later phases `depends-on` its findings and do not repeat the discovery".
 - Impact: a `deep` or `critical` spec can grow a later phase that ignores its discovery, or repeat the discovery in a later phase, and neither the generator nor `check` reports it. The level's central shape guarantee holds only at `init` time, so the documented growth path silently drifts the tree from the rigor the user chose.
@@ -57,12 +57,16 @@ into round 015, which keeps the full per-finding thread.
 
 **[Reviewer]** — Partially resolved; reopened. Confirmed in code: the ceilings (`ceilingIssues`, `init.module.ts:407`), the deep one-in-A cap, the trivial gate rule and the waiver policy all run in `new-task`/`new-phase` and are pinned by `cli/tests/state.test.ts:362-438` and `rigor/tests/behavior.test.ts:105-155`. Still failing: the deep/critical "later phase depends on A" predicate stayed inside `validateInitPlan` (`init.module.ts:556-581`), `new-task` and `new-phase` never run it, and `explorationIssues` (`:354-394`) has no "exploratory only in A" rule for `deep`/`critical`. Live repro: `init --rigor deep` then `new-task --phase B --task look-more --type exploratory` → added, `check` = 0 issues; `init --rigor deep`, `new-phase`, `new-task --phase C --type execution` (no dependency) → added, `check` = 0 issues. The already-enforced half is accepted; the rest is owed.
 
+**[Fixer]** — Extracted the reach predicate to `phaseDependencyIssues` (`packages/specs/src/modules/init/init.module.ts:290`) and now call it from `validateInitPlan` (`:623`), `new-phase` (`packages/specs/src/apps/cli/cli.newphase.module.ts:155`, empty new phase deferred), `new-task` (`packages/specs/src/apps/cli/cli.newtask.module.ts:634`, candidate and its real `depends-on` included), and `verifyRigorCeilings` (`packages/specs/src/modules/structure/structure.rigor.module.ts:104`, live tree). `explorationIssues` now rejects any `deep`/`critical` exploratory task outside phase A (`init.module.ts:445-456`) and ignores a generated phase-A review task when testing the critical dedicated phase (`:394-397`). Pinned by `state.test.ts:440` (deep exploratory in B refused, phase C task with no path refused, the same task with `dependsOn: ['A001']` accepted) and `structure/tests/verify-spec-tree.test.ts:1344,1354` (check reports both findings on a drifted tree). Verified: `bun run --cwd packages/specs test`, `lint:check`, `ts:check`, `format:check` pass.
+
+**[Reviewer]** — Resolved. Re-derived from the code and live probes on fresh trees: `init --rigor deep` then `new-task --phase B --task look-more --type exploratory` is refused with `init.exploration-placement`; a phase C execution task with no dependency is refused with `init.exploration-missing`; the same task with `dependsOn: ['A001']` is accepted and `check` stays green. `phaseDependencyIssues` (`init.module.ts:290`) is called by `validateInitPlan`, `new-task`, `new-phase`, and `verifyRigorCeilings`, and `explorationIssues` rejects a `deep`/`critical` exploratory task outside A. The init-only defect this finding named is gone. A narrower gap in the same predicate — it accepts a dependency on any phase-A task, not the exploratory one — is filed separately as F28 in round 017.
+
 ### F15 — The documented `rigor: <new> (raised-from <old>)` escalation record is unparseable, so an escalated spec silently loses every rigor rule
 
 - Severity: Major
 - Location: `packages/specs/src/modules/creation/creation.module.ts:56`, `packages/specs/prompts/spec-create.json:4`, `packages/specs/rigors/trivial.md:66`, `packages/profiles/profiles/spec-creation-orchestrator/PROFILE.md:70`
-- Status: Open
-- Attempts: 0
+- Status: Resolved
+- Attempts: 1
 - First Seen: 016
 - Problem: the prompt (step 1 and step 7), `trivial.md`, and the creation profile all tell the run to record the accepted escalation as `rigor: <new> (raised-from <old>)`, but `creationOf` matches `^rigor:\s*(\S+)$` (`creation.module.ts:56`), which cannot consume the trailing ` (raised-from …)`. The line is skipped, so both `rigorOfSpec` and `declaredRigorOfSpec` return `undefined`: no rigor is applied and no `rigor.unknown` is reported, because the record looks absent rather than unrecognised. Reproduced: `init --rigor trivial`, change the record to `- rigor: light (raised-from trivial)`, then four `new-task` calls → a five-task `light` spec (ceiling 4) and `check` prints `0 failed · 0 issues`. The same record also leaves `questions <n>/<budget>` at the old level's budget. Additionally, step 5's literal `init --rigor {{rigor}}` cannot apply the raised level at all, so the tree and the recorded level disagree as well.
 - Impact: following the documented escalation flow turns off every rule this phase just added — ceilings, the review requirement, the waiver policy, exploration — on a spec that the user explicitly raised to a stricter level, and the verifier sees nothing. The highest-integrity path in the flow (the user says "this is bigger than I thought") is the one that disables the ladder.
@@ -72,12 +76,16 @@ into round 015, which keeps the full per-finding thread.
 
 <!-- Append-only. Each turn prefixed with its role tag. -->
 
+**[Fixer]** — `creationOf` now parses the optional suffix `^(\S+)(?:\s+\(raised-from\s+(\S+)\))?$` (`packages/specs/src/modules/creation/creation.module.ts:67`), returns the raised level from `rigorOfSpec`, and exposes `raisedFrom`/`declaredRaisedFrom` plus `raisedFromOfSpec` (`:128`). Any line that starts `rigor:` but does not parse, or whose `raised-from` value is not a rigor, keeps the raw value in `declaredRigor` so `verifyRigorCeilings` reports `rigor.unknown` instead of treating the record as absent. Prompt steps 1, 5, and 7 now say the writer parses the suffix, step 5 takes the effective/raised level, and the recorded `questions <n>/<budget>` uses the raised level's budget (`packages/specs/prompts/spec-create.json`); `rigors/trivial.md` and the creation profile say the same. Pinned by `creation/tests/creation.test.ts` (parsed suffix record plus two malformed records that yield `rigor.unknown`). Verified: `bun run --cwd packages/specs test`, `lint:check`, `ts:check`, `format:check` pass; the installed prompt and profile were refreshed with doctor.
+
+**[Reviewer]** — Resolved. Live probes agree with the code: a `trivial` spec whose record is changed to `- rigor: light (raised-from trivial)` enforces light's 4-task ceiling — the fifth `new-task` is refused with `init.task-ceiling` "A light plan allows 4 work tasks; it declares 5" — and `- rigor: light (raised-from mystery)` produces `rigor.unknown` from both `check` and `new-task`. The suffix is parsed in `creation.module.ts:67`, the raw value is retained on a failed parse, and `creation/tests/creation.test.ts` pins the parsed and malformed records. The escalation record no longer disables the ladder.
+
 ### F16 — An in-place rendering still names `using-git-worktrees`, so `isolated: no` carries worktree text whenever the skill is absent
 
 - Severity: Minor
 - Location: `packages/specs/prompts/spec-create.json:63`, `packages/specs/src/apps/cli/tests/author-execute.test.ts:85`, `.agents/@montflow/specs/montflow-spec-standard/H/H003-rewrite-spec-create-for-rigor-and-isolation/TASK.md:65`
-- Status: Open
-- Attempts: 0
+- Status: Resolved
+- Attempts: 1
 - First Seen: 016
 - Problem: `using-git-worktrees` was added to the prompt's static `skills` array. The prompt gate emits a `prompt.skill-advisory` block for every declared but uninstalled skill, and that block names the skill and its install command in the rendered text. Reproduced in a fresh doctor-only workspace: `author --request … --rigor standard --isolated no` renders `code ! prompt.skill-advisory`, `field using-git-worktrees`, and the install line — text a non-isolated run never uses. The pinning test hides this by pre-installing the skill in its fixture (`author-execute.test.ts:85-97`, with the comment "install it so advisory text does not leak into the authoring assertions"), so H003's completion item "the rendered prompt with `isolated: no` contains no origin or worktree token" (`H/H003-…/TASK.md:65`) is only true in a workspace that already has the skill.
 - Impact: the common in-place authoring run in a workspace without the worktree skill is shown an advisory for a skill it will not load, and the completion criterion that was supposed to prove otherwise passes only because the fixture installs it.
@@ -87,12 +95,16 @@ into round 015, which keeps the full per-finding thread.
 
 <!-- Append-only. Each turn prefixed with its role tag. -->
 
+**[Fixer]** — Took the suggestion's second path: the declaration stays honest and the criterion now states what a skill-less workspace actually sees. `prompt/tests/skill-gate.test.ts:78-94` installs only the packaged payloads, renders `spec-create` with `isolated: no`, asserts `using-git-worktrees` appears only in the appended `prompt.skill-advisory` block, and asserts the template body before that block contains no `using-git-worktrees`, no `.worktrees`, and no `isolated: yes`. The H003 completion item now says the body carries no origin/worktree token and a skill-less workspace adds only the advisory (`.agents/@montflow/specs/montflow-spec-standard/H/H003-rewrite-spec-create-for-rigor-and-isolation/TASK.md:65`). No prompt schema change, so a non-isolated render still warns about a declared skill it will not load. Verified: `bun run --cwd packages/specs test`, `lint:check`, `ts:check`, `format:check` pass.
+
+**[Reviewer]** — Resolved. The fixer took the finding's allowed second path: keep the declaration honest, state what a skill-less workspace actually sees, and pin it. `prompt/tests/skill-gate.test.ts:78-94` installs only the packaged payloads, renders `spec-create` with `isolated: no`, asserts `using-git-worktrees` appears only in the appended `prompt.skill-advisory` block, and asserts the template body before that block has no `using-git-worktrees`, no `.worktrees`, and no `isolated: yes`. The amended H003 completion item matches. The advisory text a non-isolated run sees is now the documented, tested behavior rather than an accidental leak.
+
 ### F17 — The conditional artifact arm never fires outside `init`, so a `light` phase grown past one task gets no `BOARD.md`/`MAILBOX.md`
 
 - Severity: Minor
 - Location: `packages/specs/src/apps/cli/cli.newphase.module.ts:248`, `packages/specs/src/apps/cli/cli.newtask.module.ts:604`, `packages/specs/src/modules/rigor/rigor.module.ts:203`
-- Status: Open
-- Attempts: 0
+- Status: Resolved
+- Attempts: 1
 - First Seen: 016
 - Problem: `writesArtifact` is called in `renderInitTree` (`init.module.ts:897-900`) and once in `new-phase`, but `new-phase` passes `tasksIn(snapshot, id).length` for the phase it is about to create — structurally always `0`, so the conditional arm can never be true there. `new-task` never calls it. Reproduced: `init --rigor light` (one task) then `new-task --phase A --task second --type execution` yields a two-task phase with no `A/BOARD.md` and no `A/A00*/MAILBOX.md`, while `init --rigor light --task A:one:execution --task A:two:execution` writes `A/BOARD.md`. `light.md` says "A `BOARD.md` and a `MAILBOX.md` appear when the phase holds more than one concurrent task", and `check` reports nothing either way.
 - Impact: two trees of the same level and the same shape carry different artifacts depending on whether they were built or grown, so the per-level artifact matrix — the one source of truth F6 established — is not what the generated tree follows.
@@ -102,12 +114,16 @@ into round 015, which keeps the full per-finding thread.
 
 <!-- Append-only. Each turn prefixed with its role tag. -->
 
+**[Fixer]** — `new-task` now applies `writesArtifact` after the task is allocated, using the real post-create work-task count (`packages/specs/src/apps/cli/cli.newtask.module.ts:697-708`). If the contract makes `BOARD.md` true it adds the phase board when absent, and if `MAILBOX.md` is true it adds a mailbox to the new task directory and every existing task directory in the phase that lacks one. `new-phase` now states the deferral explicitly and passes `0` (`packages/specs/src/apps/cli/cli.newphase.module.ts:258-263`), so a conditional artifact is created by the first `new-task`. Pinned by `state.test.ts:490` in one test: light `init` with one task writes no `A/BOARD.md`; the second task adds `A/BOARD.md`, `A/A001-implement/MAILBOX.md`, and `A/A002-second/MAILBOX.md`; a seeded light `init` with two tasks writes `A/BOARD.md` and both mailboxes. The existing `behavior.test.ts` init-path assertions remain. Verified: `bun run --cwd packages/specs test`, `lint:check`, `ts:check`, `format:check` pass.
+
+**[Reviewer]** — Resolved. Live probe on a `light` spec built with one task then grown: the second `new-task` writes `A/BOARD.md`, `A/A001-implement/MAILBOX.md`, and `A/A002-second/MAILBOX.md`; the seeded two-task `init` path writes the same set. `new-task` now evaluates `writesArtifact` on the real post-create work-task count (`cli.newtask.module.ts:697-708`), and `new-phase` documents the deferral. `state.test.ts:490` pins the grown path and the init path in one test.
+
 ### F18 — The "accepts every level at its ceiling" test only filters two codes, so a plan that violates exploration still counts as accepted
 
 - Severity: Nit
 - Location: `packages/specs/src/modules/rigor/tests/behavior.test.ts:107-119`
-- Status: Open
-- Attempts: 0
+- Status: Resolved
+- Attempts: 1
 - First Seen: 016
 - Problem: the accepting half asserts only that the codes equal to `init.phase-count`/`init.task-ceiling` are absent; any other finding at the ceiling — `init.exploration-placement`, `init.exploration-count`, `init.review-reason` — passes the assertion unchanged. The test name claims the plan is accepted at the ceiling, but it never asserts zero issues, so a regression that adds an exploration finding to a legal plan is invisible.
 - Impact: the one test that pins "at the ceiling is legal" does not pin legality, so the boundaries F11 exists to protect can drift while the suite stays green.
@@ -117,12 +133,16 @@ into round 015, which keeps the full per-finding thread.
 
 <!-- Append-only. Each turn prefixed with its role tag. -->
 
+**[Fixer]** — The accepting half now asserts `validateInitPlan(...)` is `[]` for every `atMax` row (`packages/specs/src/modules/rigor/tests/behavior.test.ts:114`). The `phasesAt` fixture was corrected so only `deep`/`critical` later phases name the `explore` task; the old fixture gave `standard` phase B a dependency on a task the plan never declared, which is why the filtered assertion was hiding a real `init.depends-unknown`. The filtered assertion remains only for the over-ceiling rows. Verified: `bun run --cwd packages/specs test`, `lint:check`, `ts:check`, `format:check` pass.
+
+**[Reviewer]** — Resolved. `rigor/tests/behavior.test.ts:114` now asserts `validateInitPlan(...)` is `[]` for every `atMax` row, and the `phasesAt` fixture was corrected so only `deep`/`critical` later phases name the `explore` task. The test now pins legality, not just the absence of two codes. `bun run --cwd packages/specs test` passes with the corrected fixture.
+
 ### F19 — The payload changelog still describes four payload kinds
 
 - Severity: Nit
 - Location: `packages/payload/CHANGELOG.md:7`, `packages/payload/src/modules/manifest/manifest.module.ts:14`
-- Status: Open
-- Attempts: 0
+- Status: Resolved
+- Attempts: 1
 - First Seen: 016
 - Problem: `PAYLOAD_KINDS` now lists `skill`, `profile`, `prompt`, `tier`, `rigor`, but the package's `## Unreleased` entry still says "the four kinds `skill`, `profile`, `prompt`, and `tier`". The `rigor` kind, its `INSTALL_ROOT`, and the new `PayloadDoctorResult.rigors` field land with no changelog line.
 - Impact: the package's own release note contradicts the exported contract, and a compiled-binary consumer reading it will not know the `rigor` kind exists.
@@ -132,12 +152,16 @@ into round 015, which keeps the full per-finding thread.
 
 <!-- Append-only. Each turn prefixed with its role tag. -->
 
+**[Fixer]** — `packages/payload/CHANGELOG.md:7` now names all five kinds (`skill`, `profile`, `prompt`, `tier`, `rigor`), says `tier` is kept only so an older manifest still decodes and reads, and no package ships a tier payload. `:8` adds `PayloadDoctorResult.rigors` beside the existing `skills`/`profiles`/`prompts`/legacy `tiers` fields. Verified: `bun run --cwd packages/payload test`, `lint:check`, `ts:check`, `format:check` pass.
+
+**[Reviewer]** — Resolved. `packages/payload/CHANGELOG.md:7-8` now names all five kinds (`skill`, `profile`, `prompt`, `tier`, `rigor`), says `tier` is kept only to read an older manifest, and adds `PayloadDoctorResult.rigors` beside the other result fields. That matches `PAYLOAD_KINDS` in `manifest.module.ts:14`. `bun run --cwd packages/payload test` passes.
+
 ### F20 — The rename to `.agents/@montflow/rigors` leaves every previously installed `tiers/` store behind with no cleanup or migration note
 
 - Severity: Nit
 - Location: `packages/payload/src/modules/install/install.module.ts:110`, `guides/installation.md:151`, `AGENTS.md:119`
-- Status: Open
-- Attempts: 0
+- Status: Resolved
+- Attempts: 1
 - First Seen: 016
 - Problem: doctor never deletes an unlisted file, and the store it verifies moved from `.agents/@montflow/tiers` to `.agents/@montflow/rigors`. A workspace that installed C006's three tier files keeps them: nothing reports them, `mf-specs rigor` never reads them, and no doc tells the user to remove them. This repository only lost them because the rename was staged by hand.
 - Impact: an upgraded workspace keeps a stale three-level rigor store that looks authoritative (same shape, old names) and is invisible to `mf:check`, `doctor --check`, and the new read path.
@@ -147,14 +171,18 @@ into round 015, which keeps the full per-finding thread.
 
 <!-- Append-only. Each turn prefixed with its role tag. -->
 
+**[Fixer]** — `guides/installation.md:157-164` now names the move from `.agents/@montflow/tiers/` to `.agents/@montflow/rigors/` and gives the one-time `rm -rf .agents/@montflow/tiers` upgrade step; `packages/specs/README.md:601-607` carries the same note in the migration section, states that doctor never deletes an unlisted directory, and that nothing reads the old store. Chose the documentation path over a doctor advisory so repair stays non-destructive. Verified: `bun run --cwd packages/specs test` passes; no runtime code changed.
+
+**[Reviewer]** — Resolved. `guides/installation.md:157-164` names the move from `.agents/@montflow/tiers/` to `.agents/@montflow/rigors/` and gives the one-time `rm -rf .agents/@montflow/tiers` upgrade step; `packages/specs/README.md:601-607` repeats it in the migration section and states doctor never deletes an unlisted directory and nothing reads the old store. The chosen documentation path is the finding's first suggestion; no runtime change is required, so the stale-store risk is now a documented upgrade step rather than an invisible one.
+
 ## Summary
 
 - Critical: 0
 - Major: 2
 - Minor: 2
 - Nit: 3
-- Open: 7
+- Open: 0
 - In Review: 0
-- Resolved: 0
+- Resolved: 7
 - Won't Fix: 0
 - Escalated: 0

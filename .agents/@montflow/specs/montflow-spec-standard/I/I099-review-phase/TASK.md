@@ -6,7 +6,7 @@ originator: user
 size: medium
 depends-on: I001, I002, I003
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task I099: review the status prompt phase
@@ -49,8 +49,9 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] Review written to `.agents/@montflow/reviews/montflow-spec-standard/I.md`
-      and read by the human
-- [ ] Every finding about a fabricated state, a write, a guessed spec, or a
+- [x] Review written to the series
+      `.agents/@montflow/reviews/montflow-spec-standard/018/REVIEW.md` (re-review
+      019) and read by the human
+- [x] Every finding about a fabricated state, a write, a guessed spec, or a
       surface disagreement has a disposition
-- [ ] `bun run mf:check` green with the status prompt and entry points in place
+- [x] `bun run mf:check` green with the status prompt and entry points in place

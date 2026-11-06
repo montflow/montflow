@@ -1,10 +1,10 @@
 # Review Series: montflow-spec-standard
 
 ## Metadata
-- Target: spec montflow-spec-standard phase H
+- Target: spec montflow-spec-standard phase I
 - Status: open
-- Rounds: 16
-- Created: 2026-11-04
+- Rounds: 19
+- Created: 2026-11-06
 
 ## Rounds
 
@@ -25,7 +25,10 @@
 | 013 | closed | 0 | 0 | 10 | 0 | 0 |
 | 014 | closed | 0 | 0 | 4 | 0 | 0 |
 | 015 | open | 1 | 0 | 13 | 0 | 0 |
-| 016 | open | 7 | 0 | 0 | 0 | 0 |
+| 016 | open | 0 | 0 | 7 | 0 | 0 |
+| 017 | closed | 0 | 0 | 1 | 0 | 0 |
+| 018 | closed | 0 | 0 | 9 | 0 | 0 |
+| 019 | closed | 0 | 0 | 13 | 0 | 0 |
 
 ## Findings
 
@@ -162,10 +165,33 @@
 | 015 | F12 | Minor | Resolved | The isolated branch depends on `using-git-worktrees`, which the prompt neither declares nor marks as a prerequisite |
 | 015 | F13 | Nit | Resolved | The exported `rigor` command is still named `tierCommand` |
 | 015 | F14 | Nit | Resolved | `critical` spends a grilling question on a review-waiver decision it forbids |
-| 016 | F2 | Major | Open | The ladder's ceilings, exploration, and gate rules are enforced only by `init`; `new-phase` and `new-task` grow past any level and `check` stays green |
-| 016 | F15 | Major | Open | The documented `rigor: <new> (raised-from <old>)` escalation record is unparseable, so an escalated spec silently loses every rigor rule |
-| 016 | F16 | Minor | Open | An in-place rendering still names `using-git-worktrees`, so `isolated: no` carries worktree text whenever the skill is absent |
-| 016 | F17 | Minor | Open | The conditional artifact arm never fires outside `init`, so a `light` phase grown past one task gets no `BOARD.md`/`MAILBOX.md` |
-| 016 | F18 | Nit | Open | The "accepts every level at its ceiling" test only filters two codes, so a plan that violates exploration still counts as accepted |
-| 016 | F19 | Nit | Open | The payload changelog still describes four payload kinds |
-| 016 | F20 | Nit | Open | The rename to `.agents/@montflow/rigors` leaves every previously installed `tiers/` store behind with no cleanup or migration note |
+| 016 | F2 | Major | Resolved | The ladder's ceilings, exploration, and gate rules are enforced only by `init`; `new-phase` and `new-task` grow past any level and `check` stays green |
+| 016 | F15 | Major | Resolved | The documented `rigor: <new> (raised-from <old>)` escalation record is unparseable, so an escalated spec silently loses every rigor rule |
+| 016 | F16 | Minor | Resolved | An in-place rendering still names `using-git-worktrees`, so `isolated: no` carries worktree text whenever the skill is absent |
+| 016 | F17 | Minor | Resolved | The conditional artifact arm never fires outside `init`, so a `light` phase grown past one task gets no `BOARD.md`/`MAILBOX.md` |
+| 016 | F18 | Nit | Resolved | The "accepts every level at its ceiling" test only filters two codes, so a plan that violates exploration still counts as accepted |
+| 016 | F19 | Nit | Resolved | The payload changelog still describes four payload kinds |
+| 016 | F20 | Nit | Resolved | The rename to `.agents/@montflow/rigors` leaves every previously installed `tiers/` store behind with no cleanup or migration note |
+| 017 | F28 | Minor | Resolved | The deep/critical reach rule accepts a dependency on any phase-A task, so a later phase can build on a non-exploratory task and never on the discovery |
+| 018 | F29 | Major | Resolved | Section 8 sources the `verify` verdict from `check`, which never prints it |
+| 018 | F30 | Major | Resolved | Compiled-binary payload embeds the pre-status `montflow-find-specs` skill, and the guard test is red |
+| 018 | F31 | Major | Resolved | Server registration test still expects five tools, so the scoped suite is red |
+| 018 | F32 | Minor | Resolved | Repo rules and package wiki still enumerate the old host-tool/prompt surface |
+| 018 | F33 | Minor | Resolved | No binary-level status-report parity test, though I003 requires binary/slash parity |
+| 018 | F34 | Minor | Resolved | Binary `--dir` is not carried into the rendered command forms, so the report can query a different store |
+| 018 | F35 | Minor | Resolved | Picker guess and `which` disagree on the same branch |
+| 018 | F36 | Minor | Resolved | `unreadable SPEC.md` terminal is a two-branch placeholder with an unreachable `spec.not-found` arm |
+| 018 | F37 | Nit | Resolved | `montflow-find-specs` says the host `spec_status` tool prints the prompt; it dispatches a session |
+| 019 | F29 | Major | Resolved | Section 8 sources the `verify` verdict from `check`, which never prints it |
+| 019 | F30 | Major | Resolved | Compiled-binary payload embeds the pre-status `montflow-find-specs` skill, and the guard test is red |
+| 019 | F31 | Major | Resolved | Server registration test still expects five tools, so the scoped suite is red |
+| 019 | F32 | Minor | Resolved | Repo rules and package wiki still enumerate the old host-tool/prompt surface |
+| 019 | F33 | Minor | Resolved | No binary-level status-report parity test, though I003 requires binary/slash parity |
+| 019 | F34 | Minor | Resolved | Binary `--dir` is not carried into the rendered command forms, so the report can query a different store |
+| 019 | F35 | Minor | Resolved | Picker guess and `which` disagree on the same branch |
+| 019 | F36 | Minor | Resolved | `unreadable SPEC.md` terminal is a two-branch placeholder with an unreachable `spec.not-found` arm |
+| 019 | F38 | Minor | Resolved | The generic `/mf-prompts` render leaves `root` empty, so every command form says `--dir ""` |
+| 019 | F39 | Minor | Resolved | Section 8's `check` verdict shapes omit the clean and warning-only pass |
+| 019 | F41 | Nit | Resolved | A missing `SPEC.md` matches three terminal lines at once, with no stated precedence |
+| 019 | F37 | Nit | Resolved | `montflow-find-specs` says the host `spec_status` tool prints the prompt; it dispatches a session |
+| 019 | F40 | Nit | Resolved | Docs still count three shipped prompts, and the plugin comment omits `spec_status` |

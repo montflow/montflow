@@ -62,7 +62,7 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [x] The rendered prompt with `isolated: no` contains no origin or worktree token
+- [x] The rendered prompt with `isolated: no` contains no origin or worktree token in its body; a workspace without the skill adds only the `prompt.skill-advisory` block
 - [x] The rendered prompt with `isolated: yes` carries origin and worktree/branch
 - [x] `origin: other` carries the freeform origin branch and nothing else does
 - [x] The prompt delegates worktree creation to `using-git-worktrees` and uses `workspace-type: worktree`

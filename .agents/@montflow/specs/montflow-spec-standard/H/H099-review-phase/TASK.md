@@ -6,7 +6,7 @@ originator: user
 size: medium
 depends-on: H001, H002, H003, H004
 related-tasks:
-status: in-progress
+status: complete
 ---
 
 # Task H099: review the rigor and isolation phase
@@ -46,8 +46,9 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] Review written to `.agents/@montflow/reviews/montflow-spec-standard/H.md`
-      and read by the human
-- [ ] Every finding about an under-specified level, a silently raised level, a
+- [x] Review written to the series
+      `.agents/@montflow/reviews/montflow-spec-standard/017/REVIEW.md` (re-review
+      of 016) and read by the human
+- [x] Every finding about an under-specified level, a silently raised level, a
       misplaced or nested worktree, or a surface disagreement has a disposition
-- [ ] `bun run mf:check` green with the five-level ladder and prompt in place
+- [x] `bun run mf:check` green with the five-level ladder and prompt in place

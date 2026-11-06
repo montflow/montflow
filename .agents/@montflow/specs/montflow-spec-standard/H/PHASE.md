@@ -1,7 +1,7 @@
 ---
 id: H
 objective: Replace the tier vocabulary with the five-level rigor ladder and add isolated worktree authoring.
-status: in-progress
+status: complete
 review: required
 gate: none
 ---

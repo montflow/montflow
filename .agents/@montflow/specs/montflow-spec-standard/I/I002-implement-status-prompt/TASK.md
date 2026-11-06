@@ -6,7 +6,7 @@ originator: user
 size: tiny
 depends-on: I001
 related-tasks: I003, I099
-status: pending
+status: complete
 write-scope: packages/specs
 ---
 
@@ -66,9 +66,9 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] `packages/specs/prompts/spec-status.json` exists, verifies, and declares the I001 variables in order
-- [ ] The report renders every I001 section from derived commands, never from prompt-side reasoning
-- [ ] The prompt is read-only and hands execution off to `spec-execute`
-- [ ] The payload manifest, doctor ownership list, embedded payload, and installed copy agree
-- [ ] The picker preselects the branch guess and shows pending specs first
-- [ ] Scoped prompt and doctor tests are green
+- [x] `packages/specs/prompts/spec-status.json` exists, verifies, and declares the I001 variables in order
+- [x] The report renders every I001 section from derived commands, never from prompt-side reasoning
+- [x] The prompt is read-only and hands execution off to `spec-execute`
+- [x] The payload manifest, doctor ownership list, embedded payload, and installed copy agree
+- [x] The picker preselects the branch guess and shows pending specs first
+- [x] Scoped prompt and doctor tests are green

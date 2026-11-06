@@ -6,7 +6,7 @@ originator: user
 size: tiny
 depends-on:
 related-tasks: I002, I003, I099
-status: pending
+status: complete
 write-scope: none
 ---
 
@@ -71,8 +71,8 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] The report contract lists every section, its source command, and its order
-- [ ] The variable table names each variable with type, required flag, source, and position
-- [ ] The read-only boundary and the `spec-execute` handoff are explicit
-- [ ] Every terminal state has one closing line with its code and exact next command
-- [ ] The binary, slash, and host entry points are fixed, and ambiguous branch resolution asks the user
+- [x] The report contract lists every section, its source command, and its order
+- [x] The variable table names each variable with type, required flag, source, and position
+- [x] The read-only boundary and the `spec-execute` handoff are explicit
+- [x] Every terminal state has one closing line with its code and exact next command
+- [x] The binary, slash, and host entry points are fixed, and ambiguous branch resolution asks the user

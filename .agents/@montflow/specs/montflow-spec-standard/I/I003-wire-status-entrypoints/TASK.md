@@ -6,7 +6,7 @@ originator: user
 size: tiny
 depends-on: I002
 related-tasks: I099
-status: pending
+status: complete
 write-scope: packages/specs
 ---
 
@@ -60,9 +60,9 @@ Follow the phase `MEMORY.md` `## Execution Brief`: read only this task, that bri
 
 ## Completion
 
-- [ ] Every surface I001 names loads the installed `spec-status` prompt and renders the same text
-- [ ] An explicit name wins, and ambiguous or missing branch resolution asks the user with the candidates
-- [ ] The binary performs no writes, dispatch, or git mutation
-- [ ] Unknown spec, malformed name, and missing root carry the coded diagnostic and exact rerun
-- [ ] The help, skill, README, and CLI docs name the new surface without copying the template
-- [ ] Scoped CLI and host-tool tests are green
+- [x] Every surface I001 names loads the installed `spec-status` prompt and renders the same text
+- [x] An explicit name wins, and ambiguous or missing branch resolution asks the user with the candidates
+- [x] The binary performs no writes, dispatch, or git mutation
+- [x] Unknown spec, malformed name, and missing root carry the coded diagnostic and exact rerun
+- [x] The help, skill, README, and CLI docs name the new surface without copying the template
+- [x] Scoped CLI and host-tool tests are green

@@ -1,6 +1,6 @@
 ---
 name: montflow-spec-standard
-status: in-progress
+status: complete
 workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-07
@@ -213,8 +213,8 @@ resolution as `execute`.
 | H002 | implement-five-level-rigor | execution | complete | Yes |
 | H003 | rewrite-spec-create-for-rigor-and-isolation | execution | complete | Yes |
 | H004 | wire-author-entrypoints | execution | complete | Yes |
-| H099 | review-phase | review | in-progress | No |
-| I001 | decide-status-prompt-contract       | planning    | pending | No    |
-| I002 | implement-status-prompt             | execution   | pending | Yes   |
-| I003 | wire-status-entrypoints             | execution   | pending | Yes   |
-| I099 | review-phase                        | review      | pending | No    |
+| H099 | review-phase | review | complete | No |
+| I001 | decide-status-prompt-contract | planning | complete | No |
+| I002 | implement-status-prompt | execution | complete | Yes |
+| I003 | wire-status-entrypoints | execution | complete | Yes |
+| I099 | review-phase | review | complete | No |
