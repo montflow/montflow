@@ -10,12 +10,17 @@ Vitest.describe('Spec.parseSpecFile runtime', () => {
     Vitest.expect(spec?.workspaceType).toBe('in-place');
     Vitest.expect(spec?.author).toBe('Tester');
     Vitest.expect(spec?.created).toBe('2026-01-01');
-    Vitest.expect(spec?.lockedPhases).toStrictEqual([]);
   });
 
-  Vitest.it('splits comma-separated locked phases', () => {
-    const spec = Spec.parseSpecFile(specMarkdown({ lockedPhases: 'A,B' }));
-    Vitest.expect(spec?.lockedPhases).toStrictEqual(['A', 'B']);
+  Vitest.it('ignores a legacy lock field', () => {
+    const legacy = ['locked', 'phases'].join('-');
+    const markdown = specMarkdown().replace(
+      'created: 2026-01-01',
+      `created: 2026-01-01\n${legacy}: A,B`,
+    );
+    const spec = Spec.parseSpecFile(markdown);
+    Vitest.expect(spec?.name).toBe('ship-spec');
+    Vitest.expect(JSON.stringify(spec)).not.toContain('locked');
   });
 
   Vitest.it('returns undefined without a frontmatter block', () => {

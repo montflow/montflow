@@ -9,13 +9,24 @@ import {
   LAYERS,
   verifyText as verifySizingText,
 } from '../../modules/sizing/index.js';
-import { verifySpecTree } from '../../modules/structure/index.js';
+import { type SpecSnapshot, verifySpecTree } from '../../modules/structure/index.js';
+import {
+  GATE_RESULTS_FILE,
+  type GateResult,
+  parseGateResults,
+  parseGates,
+  stageScope,
+  verifyResultFreshness,
+} from '../../modules/gates/index.js';
+import { fingerprintScopes, gateKey } from '../../modules/scheduler/index.js';
 
 import * as Catalogue from '../../modules/catalogue/index.js';
 import {
   parseTaskDirName,
   parseTaskFile,
+  phaseOf,
   REVIEWER_PROFILES_FIELD,
+  writeScopeTokens,
 } from '../../modules/task/index.js';
 import {
   type Issue,
@@ -50,6 +61,7 @@ import {
   dirFlag,
   nameFlag,
   reviewStoreFix,
+  workspaceOf,
 } from './cli.shared.module.js';
 import { configEntries, loadRepoSizing } from './cli.apps.module.js';
 /** Spec store directory, relative to the workspace root. */
@@ -260,11 +272,133 @@ export const withSpecLayers = (found: Issue): Issue => {
   return found;
 };
 
-/** Phase of the task a nested `TASK.md` field belongs to, e.g. `A001-build`. */
+/** Phase of the task a nested `TASK.md` field belongs to, e.g. `A/A001-build`. */
 export const taskPhaseInField = (field: string): string | undefined => {
-  const slash = field.indexOf('/');
-  return slash === -1 ? undefined : parseTaskDirName(field.slice(0, slash))?.phase;
+  const segments = field.split('/');
+  if (segments.length < 2) return undefined;
+  return parseTaskDirName(segments[1] ?? '')?.phase;
 };
+
+/** One owner's result records and whether the owner is complete. */
+interface FreshnessOwner {
+  readonly owner: string;
+  readonly complete: boolean;
+  readonly records: ReadonlyArray<GateResult>;
+  /** The owner's `GATES.md`, so a stage's declared scope can be resolved. */
+  readonly gates?: string | undefined;
+  /** The owner fallback scope: a task's `write-scope:`, or `repo` for a phase. */
+  readonly fallbackScope?: ReadonlyArray<string> | undefined;
+}
+
+/**
+ * Group every `GATE-RESULTS.jsonl` in a snapshot by owner, with the owner's
+ * completion derived from its `TASK.md` (or from every task in the phase), its
+ * `GATES.md`, and the scope a stage with no `scope:` line falls back to.
+ */
+const freshnessOwners = (snapshot: SpecSnapshot): ReadonlyArray<FreshnessOwner> => {
+  const taskStatuses = new Map<string, string>();
+  const taskScopes = new Map<string, ReadonlyArray<string> | undefined>();
+  for (const file of snapshot.files) {
+    if ((file.kind ?? 'file') !== 'file' || !file.path.endsWith('/TASK.md')) continue;
+    const task = parseTaskFile(file.content);
+    if (task !== undefined) {
+      taskStatuses.set(task.id, task.status);
+      const tokens = writeScopeTokens(task);
+      taskScopes.set(
+        task.id,
+        tokens !== undefined && tokens.length === 1 && tokens[0] === 'none' ? undefined : tokens,
+      );
+    }
+  }
+  const phaseComplete = (phase: string): boolean => {
+    const inPhase = [...taskStatuses].filter(([id]) => phaseOf(id) === phase);
+    return inPhase.length > 0 && inPhase.every(([, status]) => status === 'complete');
+  };
+  const fileAt = (path: string): string | undefined =>
+    snapshot.files.find((file) => (file.kind ?? 'file') === 'file' && file.path === path)?.content;
+  const owners: Array<FreshnessOwner> = [];
+  for (const file of snapshot.files) {
+    if ((file.kind ?? 'file') !== 'file') continue;
+    if (!file.path.endsWith(`/${GATE_RESULTS_FILE}`)) continue;
+    const segments = file.path.split('/');
+    const records = parseGateResults(file.content).records;
+    if (segments.length === 2) {
+      const phase = segments[0] ?? '';
+      owners.push({
+        owner: `Phase '${phase}'`,
+        complete: phaseComplete(phase),
+        records,
+        gates: fileAt(`${phase}/GATES.md`),
+        fallbackScope: ['repo'],
+      });
+      continue;
+    }
+    if (segments.length !== 3) continue;
+    const parsed = parseTaskDirName(segments[1] ?? '');
+    if (parsed === undefined) continue;
+    owners.push({
+      owner: `Task '${parsed.id}'`,
+      complete: taskStatuses.get(parsed.id) === 'complete',
+      records,
+      gates: fileAt(`${segments[0] ?? ''}/${segments[1] ?? ''}/GATES.md`),
+      fallbackScope: taskScopes.get(parsed.id),
+    });
+  }
+  return owners;
+};
+
+/**
+ * Recompute every keyed pass's run key against the current workspace and report
+ * the ones whose inputs changed. Freshness is checked against the real files, so
+ * a `GATES.md` edit, a source edit, or a moved scope turns the old green into
+ * `gate.stale-result`; the stage's declared scope (not the record's claim) is
+ * the authority, and a scope that no longer exists is `gate.scope-missing`
+ * rather than silently accepted.
+ * @param root - spec store directory, used to recover the workspace root
+ * @param snapshot - the spec's files, including every results file
+ * @returns the findings; an empty array when every keyed pass is current
+ */
+export const staleResultIssues = (
+  root: string,
+  snapshot: SpecSnapshot,
+): Effect.Effect<ReadonlyArray<Issue>, never, FileSystem.FileSystem> =>
+  Effect.gen(function* () {
+    const owners = freshnessOwners(snapshot);
+    const scopes = new Map<string, ReadonlyArray<string>>();
+    for (const { records } of owners) {
+      for (const record of records) {
+        if (record.scope === undefined) continue;
+        scopes.set(record.scope.join(','), record.scope);
+      }
+    }
+    const prints = new Map<string, string>();
+    const missing = new Set<string>();
+    for (const [cacheKey, scope] of scopes) {
+      const found = yield* fingerprintScopes(workspaceOf(root), scope);
+      if (found.missing.length === 0) prints.set(cacheKey, found.fingerprint);
+      else missing.add(cacheKey);
+    }
+    return owners.flatMap(({ owner, complete, records, gates, fallbackScope }) => {
+      const stages = gates === undefined ? [] : parseGates(gates);
+      return verifyResultFreshness({
+        owner,
+        complete,
+        records,
+        declaredScope: (record) => {
+          const stage = stages.find((candidate) => candidate.stage === record.stage);
+          return stage === undefined ? fallbackScope : (stageScope(stage) ?? fallbackScope);
+        },
+        missingScope: (record) => record.scope !== undefined && missing.has(record.scope.join(',')),
+        recompute: (record) => {
+          if (record.scope === undefined || record.command === undefined) return undefined;
+          const fingerprint = prints.get(record.scope.join(','));
+          return fingerprint === undefined
+            ? undefined
+            : gateKey(record.command, record.scope, fingerprint);
+        },
+      }).issues;
+    });
+  });
 
 /**
  * Mechanically verify every spec under `root` (or one `name`). Each
@@ -396,8 +530,15 @@ export const check = (
       Effect.gen(function* () {
         const snapshot = yield* store.snapshot(root, name);
         const review = yield* store.reviewSeries(root, name);
-        const result = verifySpecTree(snapshot, { series: review, requireRounds: false });
+        const result = verifySpecTree(snapshot, {
+          series: review,
+          requireRounds: false,
+          available: true,
+        });
         const issues: Array<Issue> = result.issues.map(withSpecLayers);
+        // A recorded green only proves the tree it ran over: recompute each keyed
+        // pass against the current files and reject the ones whose inputs moved.
+        issues.push(...(yield* staleResultIssues(root, snapshot)));
         if (options.requireComplete === true) {
           const specFile = snapshot.files.find((entry) => entry.path === 'SPEC.md');
           const spec = specFile === undefined ? undefined : parseSpecFile(specFile.content);

@@ -1,6 +1,9 @@
 import { type Issue, type Result, hasSection, issue, noErrors } from '../verify/index.js';
 
-/** Sections the MEMORY.md template defines, in order. */
+/**
+ * Sections every MEMORY.md must carry, in order. A task memory adds `Findings`
+ * and `Gates`; a phase memory adds `Execution Brief` instead.
+ */
 export const MEMORY_SECTIONS = [
   'Context',
   'Progress',
@@ -8,6 +11,41 @@ export const MEMORY_SECTIONS = [
   'Handoff',
   'Deviations',
 ] as const;
+
+/** Render the fixed `MEMORY.md` template every task directory carries. */
+export const renderTaskMemory = (): string =>
+  [
+    '# Memory',
+    '',
+    '## Context',
+    '',
+    'None yet.',
+    '',
+    '## Progress',
+    '',
+    '- pending',
+    '',
+    '## Findings',
+    '',
+    '- None yet.',
+    '',
+    '## Gates',
+    '',
+    '- None yet.',
+    '',
+    '## Open Questions',
+    '',
+    '- None.',
+    '',
+    '## Handoff',
+    '',
+    '- See TASK.md.',
+    '',
+    '## Deviations',
+    '',
+    '- None.',
+    '',
+  ].join('\n');
 
 /**
  * Mechanically verify a MEMORY.md file: non-empty, a `# Memory` title,

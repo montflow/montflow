@@ -2,6 +2,25 @@ import { Effect, Schema, SchemaGetter } from 'effect';
 import * as TemplateEngine from '../template-engine/index.js';
 
 /**
+ * A visibility condition: the variable exists only when an earlier, discrete
+ * variable holds a chosen value. Exactly one of `equals` (a `select` option)
+ * or `truthy` (a `confirm`'s non-empty value) belongs on disk; the verifier
+ * rejects both or neither. `equals` is kept as a plain string so a malformed
+ * value reaches verification instead of failing the decode.
+ */
+export const VariableCondition = Schema.Struct({
+  /** Name of the earlier variable that decides visibility. */
+  controller: Schema.NonEmptyString,
+  /** Visible when the controller's value equals this `select` option. */
+  equals: Schema.optionalKey(Schema.String),
+  /** Visible when the controller's value is non-empty; the literal `true`. */
+  truthy: Schema.optionalKey(Schema.Literal(true)),
+});
+
+/** A visibility condition as resolution and verification see it. */
+export type VariableCondition = Schema.Schema.Type<typeof VariableCondition>;
+
+/**
  * One template variable, in its *resolved* form: every field has a value, so
  * callers never write `?? true` or `?? ''`. On disk the fields below
  * `name` are optional and omitted when they hold their default — see
@@ -15,8 +34,11 @@ export class Variable extends Schema.Class<Variable>('PromptVariable')({
   label: Schema.String,
   /** Help text under the field in the run dialog. Empty when unstated. */
   description: Schema.String,
-  /** `text` (single line), `textarea` (multi-line), or a `select` list. */
-  type: Schema.Literals(['text', 'textarea', 'select']),
+  /**
+   * `text` (single line), `textarea` (multi-line), a `select` list, or a
+   * boolean `confirm` whose canonical values are `"yes"` and `""`.
+   */
+  type: Schema.Literals(['text', 'textarea', 'select', 'confirm']),
   /** Allowed values for a `select`; empty for every other type. */
   options: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)),
   /** Dynamic option source, such as the specs in this workspace. */
@@ -39,6 +61,12 @@ export class Variable extends Schema.Class<Variable>('PromptVariable')({
    * false unless the user actually supplied something. See `GRAMMAR`.
    */
   default: Schema.String,
+  /**
+   * Absent means always visible. A present condition hides the variable — and
+   * clears any stale supplied answer — while the controller's effective value
+   * does not match. See {@link isVisible}.
+   */
+  when: Schema.optionalKey(VariableCondition),
 }) {}
 
 /** The on-disk shape of a variable: only `name` is required. */
@@ -46,12 +74,13 @@ const VariableFile = Schema.Struct({
   name: Schema.NonEmptyString,
   label: Schema.optionalKey(Schema.String),
   description: Schema.optionalKey(Schema.String),
-  type: Schema.optionalKey(Schema.Literals(['text', 'textarea', 'select'])),
+  type: Schema.optionalKey(Schema.Literals(['text', 'textarea', 'select', 'confirm'])),
   options: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)),
   source: Schema.optionalKey(Schema.Literals(['specs'])),
   internal: Schema.optionalKey(Schema.Boolean),
   required: Schema.optionalKey(Schema.Boolean),
   default: Schema.optionalKey(Schema.String),
+  when: Schema.optionalKey(VariableCondition),
 });
 
 /** The optional-field JSON shape `encode` writes, with defaults left out. */
@@ -59,12 +88,20 @@ interface VariableFileValue {
   readonly name: string;
   readonly label?: string;
   readonly description?: string;
-  readonly type?: 'text' | 'textarea' | 'select';
+  readonly type?: 'text' | 'textarea' | 'select' | 'confirm';
   readonly options?: readonly string[];
   readonly source?: 'specs';
   readonly internal?: boolean;
   readonly required?: boolean;
   readonly default?: string;
+  readonly when?: VariableCondition;
+}
+
+/** The minimal JSON shape of a condition, with only the present form. */
+interface ConditionFileValue {
+  readonly controller: string;
+  readonly equals?: string;
+  readonly truthy?: true;
 }
 
 /** A `variables` entry in either accepted on-disk form. */
@@ -75,12 +112,13 @@ interface MutableVariableFile {
   name: string;
   label?: string;
   description?: string;
-  type?: 'text' | 'textarea' | 'select';
+  type?: 'text' | 'textarea' | 'select' | 'confirm';
   options?: Array<string>;
   source?: 'specs';
   internal?: boolean;
   required?: boolean;
   default?: string;
+  when?: ConditionFileValue;
 }
 
 /**
@@ -91,19 +129,45 @@ const isBareName = (entry: string | VariableFileValue): entry is string =>
   // oxlint-disable-next-line anti-slop/no-runtime-typeof -- `entry` is the declared union `string | VariableFileValue` produced by `VariableSource`; `typeof` picks which arm of that contract to fill in, not an unparsed value.
   typeof entry === 'string';
 
+/** A condition file being built, before its optional form is chosen. */
+interface MutableConditionFile {
+  controller: string;
+  equals?: string;
+  truthy?: true;
+}
+
+/** Minimal JSON for a condition: only the controller and the chosen form. */
+const toConditionFile = (condition: VariableCondition): ConditionFileValue => {
+  const file: MutableConditionFile = { controller: condition.controller };
+  if (condition.equals !== undefined) file.equals = condition.equals;
+  if (condition.truthy === true) file.truthy = true;
+  return file;
+};
+
 /** Fully-defaulted JSON for a variable, as `encode` writes it. */
 const toFile = (variable: Variable): VariableFileValue => {
   const file: MutableVariableFile = { name: variable.name };
   if (variable.label !== variable.name) file.label = variable.label;
   if (variable.description !== '') file.description = variable.description;
   if (variable.type !== 'text') file.type = variable.type;
-  if (variable.options !== undefined && variable.options.length > 0) {
+  if (
+    variable.type !== 'confirm' &&
+    variable.options !== undefined &&
+    variable.options.length > 0
+  ) {
     file.options = [...variable.options];
   }
   if (variable.source !== undefined) file.source = variable.source;
   if (variable.internal === true) file.internal = true;
-  if (!variable.required) file.required = false;
-  if (variable.default !== '') file.default = variable.default;
+  // A confirm carries no `required`: unchecked ("") is a valid no answer, so
+  // writing `"required": false` would be default noise the kind never means.
+  if (!variable.required && variable.type !== 'confirm') file.required = false;
+  // A confirm carries no `default` or `options`: writing either would preserve
+  // a field the kind does not mean, and verification rejects it.
+  if (variable.type !== 'confirm' && variable.default !== '') file.default = variable.default;
+  // A variable without a condition encodes exactly as it did before `when`
+  // existed: no key, no default-shaped object.
+  if (variable.when !== undefined) file.when = toConditionFile(variable.when);
   return file;
 };
 
@@ -112,12 +176,13 @@ interface ResolvedVariableFile {
   readonly name: string;
   readonly label: string;
   readonly description: string;
-  readonly type: 'text' | 'textarea' | 'select';
+  readonly type: 'text' | 'textarea' | 'select' | 'confirm';
   readonly options: ReadonlyArray<string>;
   readonly source?: 'specs';
   readonly internal?: boolean;
   readonly required: boolean;
   readonly default: string;
+  readonly when?: VariableCondition;
 }
 
 /** Fill in every default a `variables` entry left out. */
@@ -133,17 +198,23 @@ const resolveFile = (entry: string | VariableFileValue): ResolvedVariableFile =>
       default: '',
     };
   }
+  const type = entry.type ?? 'text';
+  // A confirm is a boolean: unchecked ("") is the no answer. A missing
+  // `required` therefore resolves to false, but a stated field is preserved —
+  // verification must be able to diagnose `options`, `default`, or `required`
+  // on a confirm instead of silently erasing it before it is checked.
   const resolved: ResolvedVariableFile = {
     name: entry.name,
     label: entry.label ?? entry.name,
     description: entry.description ?? '',
-    type: entry.type ?? 'text',
+    type,
     options: entry.options ?? [],
-    required: entry.required ?? true,
+    required: type === 'confirm' ? (entry.required ?? false) : (entry.required ?? true),
     default: entry.default ?? '',
   };
   const withSource = entry.source === undefined ? resolved : { ...resolved, source: entry.source };
-  return entry.internal === true ? { ...withSource, internal: true } : withSource;
+  const withInternal = entry.internal === true ? { ...withSource, internal: true } : withSource;
+  return entry.when === undefined ? withInternal : { ...withInternal, when: entry.when };
 };
 
 /**
@@ -280,11 +351,101 @@ export const analyze = (template: string): TemplateEngine.TemplateAnalysis =>
 /** True when the template parses and stays inside the allowed grammar. */
 export const isValidTemplate = (template: string): boolean => TemplateEngine.isValid(template);
 
+/** A supplied value, treating the empty string as "not supplied". */
+const suppliedOrEmpty = (values: Readonly<Record<string, string>>, name: string): string => {
+  const supplied = values[name];
+  return supplied !== undefined && supplied !== '' ? supplied : '';
+};
+
 /**
- * Effective value of each declared variable for a set of collected answers:
- * the user's value when non-empty, otherwise the variable's `default`. A
- * variable with neither is `''`, which is false — so `{{#if name}}` takes
- * the `{{else}}` branch exactly when the user supplied nothing.
+ * A variable's effective value: the user's value when non-empty, otherwise its
+ * `default`, otherwise `''`. This is the value a guard tests and the value a
+ * controller's condition compares against.
+ * @param variable - declared variable
+ * @param values - collected user values by name
+ * @returns the effective value
+ */
+export const effectiveValue = (
+  variable: Variable,
+  values: Readonly<Record<string, string>>,
+): string => suppliedOrEmpty(values, variable.name) || variable.default;
+
+/**
+ * Whether an effective value satisfies a condition's chosen form. A condition
+ * carrying neither form (or both) is malformed, and a malformed condition
+ * fails closed: rendering must never expose a branch verification would refuse.
+ */
+const conditionMatches = (condition: VariableCondition, value: string): boolean => {
+  if (condition.equals !== undefined && condition.truthy !== undefined) return false;
+  if (condition.equals !== undefined) return value === condition.equals;
+  if (condition.truthy === true) return value !== '';
+  return false;
+};
+
+/**
+ * Visibility at one declared position. Conditions only point backwards (the
+ * verifier enforces that), so every recursive step moves to a strictly earlier
+ * index and the walk terminates without any cycle bookkeeping. An unusable
+ * link — an unknown, later, or non-discrete controller — fails closed, so a
+ * malformed list hides the dependent instead of exposing a stale branch.
+ */
+const isVisibleAt = (
+  index: number,
+  variables: ReadonlyArray<Variable>,
+  values: Readonly<Record<string, string>>,
+): boolean => {
+  const variable = variables[index];
+  if (variable?.when === undefined) return true;
+  const when = variable.when;
+  const controllerIndex = variables.findIndex((candidate) => candidate.name === when.controller);
+  const controller = controllerIndex < 0 ? undefined : variables[controllerIndex];
+  if (controller === undefined || controllerIndex >= index) return false;
+  // Widened so a text/textarea controller is refused instead of compared.
+  const controllerType: string = controller.type;
+  if (controllerType !== 'select' && controllerType !== 'confirm') return false;
+  if (!isVisibleAt(controllerIndex, variables, values)) return false;
+  return conditionMatches(when, effectiveValue(controller, values));
+};
+
+/**
+ * The one visibility rule in the package: a variable without `when` is always
+ * visible; otherwise it is visible exactly when its controller is visible and
+ * the controller's effective value matches the condition. A hidden controller
+ * therefore hides every dependent, recursively.
+ * @param name - variable name to test
+ * @param variables - declared variables
+ * @param values - collected user values by name
+ * @returns true when the variable is visible
+ */
+export const isVisible = (
+  name: string,
+  variables: ReadonlyArray<Variable>,
+  values: Readonly<Record<string, string>>,
+): boolean => {
+  const index = variables.findIndex((variable) => variable.name === name);
+  return index < 0 ? true : isVisibleAt(index, variables, values);
+};
+
+/**
+ * The variables a run may ask about, in declaration (first-appearance) order.
+ * Consumers use this so a hidden branch is never presented, always through
+ * {@link isVisible}, never by re-deriving a condition.
+ * @param variables - declared variables
+ * @param values - collected user values by name
+ * @returns the visible variables, in declared order
+ */
+export const visibleVariables = (
+  variables: ReadonlyArray<Variable>,
+  values: Readonly<Record<string, string>>,
+): ReadonlyArray<Variable> =>
+  variables.filter((variable) => isVisible(variable.name, variables, values));
+
+/**
+ * Effective value of each declared variable for a set of collected answers.
+ * A hidden variable resolves to `''`, dropping any stale supplied answer, so
+ * its `{{#if}}` takes the `{{else}}` branch and its `{{name}}` substitutes
+ * nothing. A visible variable keeps the supplied value, else its `default`,
+ * else `''`.
  * @param variables - declared variables
  * @param values - collected user values by name
  * @returns one resolved value per declared variable, in declared order
@@ -293,15 +454,15 @@ export const resolveValues = (
   variables: ReadonlyArray<Variable>,
   values: Readonly<Record<string, string>>,
 ): ReadonlyArray<{ readonly name: string; readonly value: string }> =>
-  variables.map((variable) => {
-    const supplied = values[variable.name];
-    const value = supplied !== undefined && supplied !== '' ? supplied : variable.default;
-    return { name: variable.name, value };
-  });
+  variables.map((variable) => ({
+    name: variable.name,
+    value: isVisible(variable.name, variables, values) ? effectiveValue(variable, values) : '',
+  }));
 
 /**
- * Names the user still has to answer before the prompt can dispatch: those
- * declared `required` with no `default`, and not already answered.
+ * Names the user still has to answer before the prompt can dispatch: visible,
+ * declared `required`, and with an empty effective value. A hidden required
+ * variable is never missing.
  * @param variables - declared variables
  * @param values - collected user values by name
  * @returns the outstanding names, in declared order
@@ -309,13 +470,21 @@ export const resolveValues = (
 export const missingRequired = (
   variables: ReadonlyArray<Variable>,
   values: Readonly<Record<string, string>>,
-): readonly string[] =>
-  resolveValues(variables, values)
+): readonly string[] => {
+  const visible = new Set(visibleVariables(variables, values).map((variable) => variable.name));
+  return resolveValues(variables, values)
     .filter((entry) => {
       const variable = variables.find((candidate) => candidate.name === entry.name);
-      return variable?.required === true && entry.value === '';
+      // A confirm's empty value is its "no" answer, never a missing value.
+      return (
+        visible.has(entry.name) &&
+        variable?.required === true &&
+        variable.type !== 'confirm' &&
+        entry.value === ''
+      );
     })
     .map((entry) => entry.name);
+};
 
 /**
  * Render a template to text with collected values. Declared variables are
@@ -580,6 +749,15 @@ export const verifyPrompt = (prompt: Prompt, options: VerifyOptions = {}): Verif
   const implied = analysis.variables;
   const declared = prompt.variables;
   const seen = new Set<string>();
+  /** First declaration position of each name, for condition-controller rules. */
+  const declaredIndex = new Map<string, number>();
+  declared.forEach((variable, index) => {
+    if (!declaredIndex.has(variable.name)) declaredIndex.set(variable.name, index);
+  });
+  /** Every name used as a condition controller, for the guard rule. */
+  const controllers = new Set(
+    declared.flatMap((variable) => (variable.when === undefined ? [] : [variable.when.controller])),
+  );
   /**
    * Whether the declared list still agrees with the template's implied list
    * (order aside). Set false by anything that makes the list itself wrong,
@@ -587,7 +765,7 @@ export const verifyPrompt = (prompt: Prompt, options: VerifyOptions = {}): Verif
    */
   let listAgrees = true;
 
-  for (const variable of declared) {
+  for (const [index, variable] of declared.entries()) {
     if (seen.has(variable.name)) {
       issues.push(
         verifyIssue(
@@ -608,7 +786,7 @@ export const verifyPrompt = (prompt: Prompt, options: VerifyOptions = {}): Verif
         ),
       );
     }
-    if (variable.required && variable.default !== '') {
+    if (variable.required && variable.default !== '' && variable.type !== 'confirm') {
       issues.push(
         verifyIssue(
           'variables',
@@ -618,6 +796,38 @@ export const verifyPrompt = (prompt: Prompt, options: VerifyOptions = {}): Verif
       );
     }
     const selectOptions = variable.options ?? [];
+    if (variable.type === 'confirm') {
+      // Preserved through decode on purpose: a confirm's only values are "yes"
+      // and "", so these three fields contradict the kind. Diagnose each one
+      // instead of erasing it and letting the save path drop it silently.
+      if (selectOptions.length > 0) {
+        issues.push(
+          verifyIssue(
+            'variables',
+            `'${variable.name}' is a confirm but declares options.`,
+            `Remove "options": a confirm's values are "yes" and "".`,
+          ),
+        );
+      }
+      if (variable.default !== '') {
+        issues.push(
+          verifyIssue(
+            'variables',
+            `'${variable.name}' is a confirm but has a default.`,
+            `Remove "default": a confirm's values are "yes" and "".`,
+          ),
+        );
+      }
+      if (variable.required) {
+        issues.push(
+          verifyIssue(
+            'variables',
+            `'${variable.name}' is a confirm but is required.`,
+            `Remove "required": a confirm's empty value is its "no" answer.`,
+          ),
+        );
+      }
+    }
     if (variable.type === 'select' && selectOptions.length === 0) {
       issues.push(
         verifyIssue(
@@ -627,7 +837,7 @@ export const verifyPrompt = (prompt: Prompt, options: VerifyOptions = {}): Verif
         ),
       );
     }
-    if (variable.type !== 'select' && selectOptions.length > 0) {
+    if (variable.type !== 'select' && variable.type !== 'confirm' && selectOptions.length > 0) {
       issues.push(
         verifyIssue(
           'variables',
@@ -658,6 +868,77 @@ export const verifyPrompt = (prompt: Prompt, options: VerifyOptions = {}): Verif
         ),
       );
     }
+
+    const when = variable.when;
+    if (when !== undefined) {
+      const forms = (when.equals === undefined ? 0 : 1) + (when.truthy === undefined ? 0 : 1);
+      if (forms !== 1) {
+        issues.push(
+          verifyIssue(
+            'variables',
+            `'${variable.name}' "when" must carry exactly one of "equals" or "truthy".`,
+            forms === 2
+              ? `when carries both 'equals' and 'truthy'; keep one form.`
+              : `Add "equals" for a select controller, or "truthy": true for a confirm.`,
+          ),
+        );
+      } else {
+        const controllerIndex = declaredIndex.get(when.controller);
+        const controller = controllerIndex === undefined ? undefined : declared[controllerIndex];
+        if (controllerIndex === undefined || controller === undefined) {
+          issues.push(
+            verifyIssue(
+              'variables',
+              `when.controller '${when.controller}' is not a declared variable.`,
+              `Declare '${when.controller}' earlier in "variables", or correct the controller name.`,
+            ),
+          );
+        } else if (controllerIndex >= index) {
+          issues.push(
+            verifyIssue(
+              'variables',
+              `'${when.controller}' must be declared before '${variable.name}'.`,
+              `Move '${when.controller}' above '${variable.name}' in "variables".`,
+            ),
+          );
+        } else {
+          // Widened so the `confirm` arm stays checkable even before that kind
+          // is a first-class member of `Variable.type`.
+          const controllerType: string = controller.type;
+          if (controllerType !== 'select' && controllerType !== 'confirm') {
+            issues.push(
+              verifyIssue(
+                'variables',
+                `when.controller '${when.controller}' has type ${controllerType}.`,
+                `Use a "select" or "confirm" controller.`,
+              ),
+            );
+          } else if (
+            (when.equals !== undefined && controllerType !== 'select') ||
+            (when.truthy !== undefined && controllerType !== 'confirm')
+          ) {
+            issues.push(
+              verifyIssue(
+                'variables',
+                `truthy requires confirm; equals requires select.`,
+                `Switch the form to match the controller's kind, or change the controller's type.`,
+              ),
+            );
+          } else if (
+            when.equals !== undefined &&
+            !(controller.options ?? []).includes(when.equals)
+          ) {
+            issues.push(
+              verifyIssue(
+                'variables',
+                `'${when.equals}' is not an option of '${when.controller}'.`,
+                `Add '${when.equals}' to '${when.controller}' options, or use an offered value.`,
+              ),
+            );
+          }
+        }
+      }
+    }
   }
 
   for (const referenced of implied) {
@@ -675,14 +956,36 @@ export const verifyPrompt = (prompt: Prompt, options: VerifyOptions = {}): Verif
   for (const variable of declared) {
     if (!implied.includes(variable.name)) {
       issues.push(
-        verifyIssue(
-          'variables',
-          `'${variable.name}' is listed in 'variables' but not used in the template.`,
-          `Use it in the template, or remove it from 'variables'.`,
-        ),
+        variable.when === undefined
+          ? verifyIssue(
+              'variables',
+              `'${variable.name}' is listed in 'variables' but not used in the template.`,
+              `Use it in the template, or remove it from 'variables'.`,
+            )
+          : verifyIssue(
+              'variables',
+              `conditional '${variable.name}' never appears in the template.`,
+              `Guard it with {{#if ${variable.name}}}, use it, or remove "when".`,
+            ),
       );
       listAgrees = false;
     }
+  }
+  // A select's "no" is a non-empty string, so a guard on a controller with no
+  // condition of its own is always true and renders the branch that should have
+  // been hidden. A controller that is itself conditional must be guarded,
+  // though: its branch has to disappear when its own `when` is false.
+  for (const guarded of analysis.conditionals) {
+    if (!controllers.has(guarded)) continue;
+    const guardedVariable = declared.find((variable) => variable.name === guarded);
+    if (guardedVariable?.when !== undefined) continue;
+    issues.push(
+      verifyIssue(
+        'variables',
+        `{{#if ${guarded}}} guards controller '${guarded}'.`,
+        `Guard the conditional variable instead; a select's "no" is non-empty.`,
+      ),
+    );
   }
   if (listAgrees && declared.some((variable, index) => variable.name !== implied[index])) {
     issues.push(
@@ -809,11 +1112,53 @@ Each entry in 'variables' is either a bare name (meaning: required, no
 default) or an object:
 
   { "name": "scope", "label": "Scope", "description": "What to limit to",
-    "type": "text" | "textarea", "required": true | false, "default": "…" }
+    "type": "text" | "textarea" | "select" | "confirm",
+    "required": true | false, "default": "…" }
 
 Omit any field to take its default: label = name, description = "", type =
 "text", required = true, default = "". Omit fields that hold their default —
 an entry that is only required and unlabelled should be just { "name": "…" }.
+
+A "select" adds "options": a non-empty list of strings; its value is one of
+those options or "". A "confirm" is a boolean question: it has no "options",
+"default", or "required", and its value is "yes" when checked and "" when not.
+
+  { "name": "flag", "label": "Use a worktree?", "type": "confirm" }
+
+A variable may also declare visibility. The optional "when" field is the
+condition form of the variable, a discriminated union with exactly one member
+and no other keys:
+
+  { "controller": "isolated", "equals": "yes" }   // controller type "select"
+  { "controller": "flag", "truthy": true }        // controller type "confirm"
+
+"controller" must name an earlier variable in "variables" — declaration order
+is the only order the renderer walks, so a later controller is refused. A
+select controller is compared with "equals" against one of its own "options";
+a confirm controller is compared with "truthy": true. A variable with no
+"when" is always visible. Never point "when" at a text or textarea variable,
+at a later variable, or at a value the controller does not offer — the
+verifier rejects each of those.
+
+Visibility drives the template. A hidden variable resolves to empty, so its
+{{#if}} takes {{else}}: put the hidden branch's fallback in the else branch.
+Guard the conditional child, never the controller — for an "origin" that has
+"when", write {{#if origin}}, not {{#if isolated}}. A select's "no" is a
+non-empty string, so a guard on the controller is always true and renders the
+branch that should have been hidden. Omit "default" on a conditional variable
+so flipping the controller back cannot surface a stale prefill. A conditional
+is "required" only when it must be answered while it is visible.
+
+One conditional pair, with its guard:
+
+  { "name": "isolated", "label": "Isolated branch?", "type": "select",
+    "options": ["yes", "no"], "required": true },
+  { "name": "origin", "label": "Origin", "type": "select",
+    "options": ["current", "main", "other"],
+    "when": { "controller": "isolated", "equals": "yes" } }
+
+  {{#if origin}}Branch from {{origin}}.
+  {{else}}Use the current checkout.{{/if}}
 
 How 'required', 'default', and {{#if}} interact — the one rule that matters:
 

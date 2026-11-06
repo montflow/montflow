@@ -2,27 +2,37 @@ import * as Vitest from '@effect/vitest';
 import { Effect, FileSystem, Path } from 'effect';
 import { runDoctor } from '../../../modules/doctor/index.js';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
+import { phaseMarkdown } from '../../../modules/phase/tests/helpers.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import * as Catalogue from '../../../modules/catalogue/index.js';
-import { DEFAULT_ROOT, SurfaceError, runSlash, sizingConfig } from '../index.js';
+import {
+  author as authorEngine,
+  DEFAULT_ROOT,
+  SurfaceError,
+  runSlash,
+  sizingConfig,
+  statusReport as statusReportEngine,
+} from '../index.js';
 import { REPO_SIZING, SPEC_SIZING, entry, memory, stubLayer } from './helpers.js';
 
 const specs = new Map([
   [
     'ok',
     [
-      entry('SPEC.md', specMarkdown({ name: 'ok' })),
+      entry('SPEC.md', specMarkdown({ name: 'ok', version: '2' })),
+      entry('A/PHASE.md', phaseMarkdown()),
+      entry('A/MEMORY.md', memory),
       entry('sizing.json', SPEC_SIZING),
       entry(
-        'A001-implement-login/TASK.md',
+        'A/A001-implement-login/TASK.md',
         taskMarkdown({ id: 'A001', name: 'implement-login', size: 'tiny' }),
       ),
-      entry('A001-implement-login/MEMORY.md', memory),
+      entry('A/A001-implement-login/MEMORY.md', memory),
       entry(
-        'A099-review-phase/TASK.md',
+        'A/A099-review-phase/TASK.md',
         taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
       ),
-      entry('A099-review-phase/MEMORY.md', memory),
+      entry('A/A099-review-phase/MEMORY.md', memory),
     ],
   ],
   ['bad', [entry('SPEC.md', specMarkdown({ name: 'bad' }))]],
@@ -267,8 +277,10 @@ Vitest.describe('Cli.runSlash flag validation', () => {
         'list --pending --verbose',
         'list --status=complete',
         'create --name ship-login --description Ship --author Tester --workspace-type in-place --tasks build:execution:gates --reviewer-profiles reviewer',
-        'author --request Ship login --notes Note',
+        'author --request Ship login --notes Note --rigor standard --isolated no',
+        'author --request Ship login --rigor standard --isolated yes --origin other --origin-branch release/2 --worktree-name ship-login',
         'execute --name ok --phase A --focus Steer --mode guided',
+        'status-report --name ok --focus Steer',
         'sizing-config --scope repo',
         'sizing-config --scope spec --name ok',
         'sizing-config --scope phase --name ok --phase A --focus Steer --mode autonomous',
@@ -536,7 +548,7 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
     Effect.gen(function* () {
       const work = yield* workspace;
       const report = yield* runSlash(
-        'author --request Ship login --notes Do not touch packages/core.',
+        'author --request Ship login --notes Do not touch packages/core. --rigor standard --isolated no',
         work.root,
       ).pipe(Effect.provide(stubLayer(specs)));
       Vitest.expect(report.ok).toBe(true);
@@ -550,11 +562,11 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
     Effect.gen(function* () {
       const work = yield* workspace;
       const spaced = yield* runSlash(
-        'author --request Ship login --notes Do not touch packages/core.',
+        'author --request Ship login --notes Do not touch packages/core. --rigor standard --isolated no',
         work.root,
       ).pipe(Effect.provide(stubLayer(specs)));
       const inline = yield* runSlash(
-        'author --request=Ship login --notes=Do not touch packages/core.',
+        'author --request=Ship login --notes=Do not touch packages/core. --rigor=standard --isolated=no',
         work.root,
       ).pipe(Effect.provide(stubLayer(specs)));
       Vitest.expect(inline.ok).toBe(true);
@@ -562,6 +574,60 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
       Vitest.expect(inline.output).toBe(spaced.output);
       Vitest.expect(inline.output).toContain('Ship login');
       Vitest.expect(inline.output).toContain('Do not touch packages/core.');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('carries every authoring flag and renders the binary text', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const report = yield* runSlash(
+        'author --request Ship login --notes Do not touch packages/core. --rigor deep --isolated yes --origin other --origin-branch release/2 --worktree-name ship-login',
+        work.root,
+      ).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(report.ok).toBe(true);
+      Vitest.expect(report.output).toContain('Chosen rigor: `deep`');
+      Vitest.expect(report.output).toContain('from origin `other`');
+      Vitest.expect(report.output).toContain('at branch `release/2`');
+      Vitest.expect(report.output).toContain('worktree named `ship-login`');
+      Vitest.expect(report.output).toContain('Do not touch packages/core.');
+
+      const engine = yield* authorEngine(work.dir, {
+        request: 'Ship login',
+        notes: 'Do not touch packages/core.',
+        rigor: 'deep',
+        isolated: 'yes',
+        origin: 'other',
+        originBranch: 'release/2',
+        worktreeName: 'ship-login',
+      }).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(report.output).toBe(engine.text);
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('drops hidden isolation flags and refuses a missing origin branch', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const inPlace = yield* runSlash(
+        'author --request Ship login --rigor standard --isolated no --origin main --origin-branch release/2 --worktree-name ship-login',
+        work.root,
+      ).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(inPlace.ok).toBe(true);
+      for (const hidden of ['release/2', 'ship-login', 'from origin', 'worktree named']) {
+        Vitest.expect(inPlace.output).not.toContain(hidden);
+      }
+
+      const missing = yield* runSlash(
+        'author --request Ship login --rigor standard --isolated yes --origin other --worktree-name ship-login',
+        work.root,
+      ).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(missing.ok).toBe(false);
+      Vitest.expect(missing.output).toContain('code     cli.invalid-argument');
+      Vitest.expect(missing.output).toContain('field    --origin-branch');
+      Vitest.expect(missing.output).toContain('expected a non-empty branch name');
+      Vitest.expect(missing.output).toContain('actual   missing');
+      Vitest.expect(missing.output).toContain(
+        'next     mf-specs author --request <text> --rigor standard --isolated yes --origin other --worktree-name ship-login --origin-branch <branch>',
+      );
     }).pipe(Effect.provide(stubLayer(specs))),
   );
 
@@ -582,6 +648,22 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
     }).pipe(Effect.provide(stubLayer(specs))),
   );
 
+  Vitest.it.effect('refuses an absent rigor with the coded authoring diagnostic', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const report = yield* runSlash('author --request Ship login --isolated no', work.root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).toContain('code     cli.invalid-argument');
+      Vitest.expect(report.output).toContain('field    --rigor');
+      Vitest.expect(report.output).toContain(
+        'expected one of trivial, light, standard, deep, critical',
+      );
+      Vitest.expect(report.output).toContain('next     mf-specs author');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
   Vitest.it.effect('renders execute for an explicit name with the derived budget', () =>
     Effect.gen(function* () {
       const work = yield* workspace;
@@ -590,7 +672,7 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
       );
       Vitest.expect(report.ok).toBe(true);
       Vitest.expect(report.output).toContain('ok');
-      Vitest.expect(report.output).toContain('budget is 1');
+      Vitest.expect(report.output).toContain('is the budget of the phase this session starts on');
       Vitest.expect(report.output).toContain('A001');
     }).pipe(Effect.provide(stubLayer(specs))),
   );
@@ -667,6 +749,311 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
       Vitest.expect(report.ok).toBe(false);
       Vitest.expect(report.output).toContain('code     models.unavailable');
       Vitest.expect(report.output).toContain('--catalog');
+    }),
+  );
+});
+
+/** A throwaway workspace plus the platform services the prompt loader needs. */
+interface StatusWork {
+  readonly fs: FileSystem.FileSystem;
+  readonly path: Path.Path;
+  readonly dir: string;
+}
+
+/** Write `<dir>/.git/HEAD` with a branch ref. */
+const statusBranch = (work: StatusWork, name: string) =>
+  Effect.gen(function* () {
+    const git = work.path.join(work.dir, '.git');
+    yield* work.fs.makeDirectory(git, { recursive: true });
+    yield* work.fs.writeFileString(work.path.join(git, 'HEAD'), `ref: refs/heads/${name}\n`);
+  });
+
+/** A one-spec map holding only a `SPEC.md`, which is all resolution reads. */
+const statusSpec = (name: string) => new Map([[name, [entry('SPEC.md', specMarkdown({ name }))]]]);
+
+Vitest.describe('Cli.runSlash status-report runtime', () => {
+  /**
+   * A throwaway workspace with the doctor-installed prompts. The in-memory
+   * store still supplies the spec names, so these tests never touch the
+   * developer's checkout.
+   */
+  const workspace = Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-specs-slash-status-' });
+    yield* runDoctor(dir);
+    return { fs, path, dir, root: path.join(dir, DEFAULT_ROOT) };
+  });
+
+  Vitest.it.effect('renders the binary text for one named spec and carries focus', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const local = new Map(specs);
+      const slash = yield* runSlash('status-report --name ok --focus review risk', work.root).pipe(
+        Effect.provide(stubLayer(local)),
+      );
+      Vitest.expect(slash.ok).toBe(true);
+      Vitest.expect(slash.output).toContain('ok');
+      Vitest.expect(slash.output).toContain('Focus this report on: review risk');
+
+      // The binary prints `prompt.text`; the slash arm returns exactly it.
+      const engine = yield* statusReportEngine(work.root, {
+        name: 'ok',
+        focus: 'review risk',
+        workspace: work.dir,
+      }).pipe(Effect.provide(stubLayer(local)));
+      Vitest.expect(slash.output).toBe(engine.prompt.text);
+      Vitest.expect(engine.prompt.name).toBe('spec-status');
+      Vitest.expect(engine.prompt.skills).toStrictEqual(['montflow-find-specs']);
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('lets an explicit name win over an ambiguous branch', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const local = new Map([...statusSpec('spec-one'), ...statusSpec('spec-two')]);
+      yield* statusBranch(work, 'feat/spec');
+      const report = yield* runSlash('status-report --name spec-one', work.root).pipe(
+        Effect.provide(stubLayer(local)),
+      );
+      Vitest.expect(report.ok).toBe(true);
+      Vitest.expect(report.output).toContain('spec-one');
+      Vitest.expect(report.output).not.toContain('spec-two');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('fails an ambiguous branch with both candidates and asks the user', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const local = new Map([...statusSpec('spec-one'), ...statusSpec('spec-two')]);
+      yield* statusBranch(work, 'feat/spec');
+      const report = yield* runSlash('status-report', work.root).pipe(
+        Effect.provide(stubLayer(local)),
+      );
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).toContain('code     SPEC_AMBIGUOUS');
+      Vitest.expect(report.output).toContain('--name spec-one');
+      Vitest.expect(report.output).toContain('--name spec-two');
+      Vitest.expect(report.output).toContain('next     ask the user');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('fails a detached HEAD and a prefix-less branch, never picking a spec', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const local = statusSpec('ship-login');
+
+      const detached = work.path.join(work.dir, '.git');
+      yield* work.fs.makeDirectory(detached, { recursive: true });
+      yield* work.fs.writeFileString(
+        work.path.join(detached, 'HEAD'),
+        '0123456789abcdef0123456789abcdef01234567\n',
+      );
+      const noBranch = yield* runSlash('status-report', work.root).pipe(
+        Effect.provide(stubLayer(local)),
+      );
+      Vitest.expect(noBranch.ok).toBe(false);
+      Vitest.expect(noBranch.output).toContain('code     SPEC_NO_MATCH');
+      Vitest.expect(noBranch.output).toContain('detached');
+      Vitest.expect(noBranch.output).toContain('--name ship-login');
+      Vitest.expect(noBranch.output).toContain('next     ask the user');
+
+      yield* statusBranch(work, 'wip/ship-login');
+      const unprefixed = yield* runSlash('status-report', work.root).pipe(
+        Effect.provide(stubLayer(local)),
+      );
+      Vitest.expect(unprefixed.ok).toBe(false);
+      Vitest.expect(unprefixed.output).toContain('conventional prefix');
+      Vitest.expect(unprefixed.output).toContain('--name ship-login');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('reports an unknown spec with the raw command diagnostic', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const report = yield* runSlash('status-report --name nope', work.root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).toContain('code     spec.not-found');
+      Vitest.expect(report.output).toContain('next     mf-specs list');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('refuses a malformed name before any read and names the exact rerun', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      for (const name of ['Bad', '..', 'a/b', '']) {
+        const report = yield* runSlash(
+          name === '' ? 'status-report --name=' : `status-report --name ${name}`,
+          work.root,
+        ).pipe(Effect.provide(stubLayer(specs)));
+        Vitest.expect(report.ok, JSON.stringify(name)).toBe(false);
+        Vitest.expect(report.output, JSON.stringify(name)).toContain(
+          'code     cli.invalid-argument',
+        );
+        Vitest.expect(report.output, JSON.stringify(name)).toContain('field    --name');
+        Vitest.expect(report.output, JSON.stringify(name)).toContain(
+          'next     mf-specs status-report --name <spec>',
+        );
+      }
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('reports a missing specs root with the coded store diagnostic', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const report = yield* runSlash('status-report --name ok', work.root).pipe(
+        Effect.provide(stubLayer(specs, new Map(), { hasRoot: false })),
+      );
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).toContain('code     store.error');
+      Vitest.expect(report.output).toContain('Specs directory not found');
+      Vitest.expect(report.output).toContain('next     mf-specs status-report');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('writes no spec state while rendering', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const local = new Map(specs);
+      const before = JSON.stringify([...local]);
+      yield* runSlash('status-report --name ok', work.root).pipe(Effect.provide(stubLayer(local)));
+      Vitest.expect(JSON.stringify([...local])).toBe(before);
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+});
+
+Vitest.describe('Cli.runSlash v2 surfaces', () => {
+  Vitest.it.effect('status and state show the derived lock and PHASE.md review decision', () =>
+    Effect.gen(function* () {
+      const layer = stubLayer(specs);
+      const statusReport = yield* runSlash('status --name ok', root).pipe(Effect.provide(layer));
+      Vitest.expect(statusReport.ok).toBe(true);
+      Vitest.expect(statusReport.output).toContain('Phase A');
+      Vitest.expect(statusReport.output).toContain('review required');
+      Vitest.expect(statusReport.output).toContain('gate none');
+      Vitest.expect(statusReport.output).not.toContain('locked-phases');
+
+      const stateReport = yield* runSlash('state --name ok', root).pipe(Effect.provide(layer));
+      Vitest.expect(stateReport.ok).toBe(true);
+      Vitest.expect(stateReport.output).toContain('locked none');
+      Vitest.expect(stateReport.output).toContain('review A:required');
+      Vitest.expect(stateReport.output).toContain('gate none');
+      Vitest.expect(stateReport.output).not.toContain('locked-phases');
+    }),
+  );
+
+  Vitest.it.effect('next shows the active phase review decision and gate state', () =>
+    Effect.gen(function* () {
+      const report = yield* runSlash('next --name ok', root).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(report.ok).toBe(true);
+      Vitest.expect(report.output).toContain('phase A');
+      Vitest.expect(report.output).toContain('review A:required');
+      Vitest.expect(report.output).toContain('gate none');
+    }),
+  );
+
+  Vitest.it.effect('lock derives from the phase tree and never writes a list', () =>
+    Effect.gen(function* () {
+      const report = yield* runSlash('lock --name ok --phase A', root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).toContain('not locked A');
+      Vitest.expect(report.output).toContain('phase.review-missing');
+      Vitest.expect(report.output).toContain('task.pending');
+    }),
+  );
+
+  Vitest.it.effect('stamp prints the one clock in either format', () =>
+    Effect.gen(function* () {
+      const instant = yield* runSlash('stamp', root).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(instant.output).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+      const date = yield* runSlash('stamp --format date', root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(date.output).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }),
+  );
+
+  Vitest.it.effect('init writes phase directories and list reads the derived lifecycle', () =>
+    Effect.gen(function* () {
+      const created = new Map(specs);
+      const layer = stubLayer(created);
+      const report = yield* runSlash('init --name demo --rigor trivial', root).pipe(
+        Effect.provide(layer),
+      );
+      Vitest.expect(report.ok).toBe(true);
+      Vitest.expect(report.output).toContain("created 'demo'");
+      const files = created.get('demo') ?? [];
+      Vitest.expect(files.some((file) => file.path === 'SPEC.md')).toBe(true);
+      Vitest.expect(files.some((file) => file.path === 'A/PHASE.md')).toBe(true);
+      Vitest.expect(files.some((file) => /^A\/A\d{3}-/.test(file.path))).toBe(true);
+
+      const listed = yield* runSlash('list', root).pipe(Effect.provide(layer));
+      Vitest.expect(listed.ok).toBe(true);
+      Vitest.expect(listed.output).toContain('demo');
+      Vitest.expect(listed.output).not.toContain('locked-phases');
+    }),
+  );
+
+  Vitest.it.effect('init accepts the documented scope= short form and refuses another token', () =>
+    Effect.gen(function* () {
+      const created = new Map(specs);
+      const layer = stubLayer(created);
+      const report = yield* runSlash(
+        'init --name demo --rigor trivial --task A:first:execution:medium:scope=app',
+        root,
+      ).pipe(Effect.provide(layer));
+      Vitest.expect(report.ok).toBe(true);
+      const task = (created.get('demo') ?? []).find((file) => file.path === 'A/A001-first/TASK.md');
+      Vitest.expect(task?.content).toContain('write-scope: app');
+
+      const refused = yield* runSlash(
+        'init --name other --rigor trivial --task A:first:execution:medium:typo=1',
+        root,
+      ).pipe(Effect.provide(layer));
+      Vitest.expect(refused.ok).toBe(false);
+      Vitest.expect(refused.output).toContain("'typo=1' is not a known task token");
+    }),
+  );
+
+  Vitest.it.effect('new-phase and new-task allocate phase-tree directories', () =>
+    Effect.gen(function* () {
+      const created = new Map(specs);
+      const layer = stubLayer(created);
+      yield* runSlash('init --name grow --rigor standard', root).pipe(Effect.provide(layer));
+      const phase = yield* runSlash(
+        'new-phase --name grow --objective Ship the second slice --review required',
+        root,
+      ).pipe(Effect.provide(layer));
+      Vitest.expect(phase.ok).toBe(true);
+      Vitest.expect(phase.output).toContain('added phase B');
+
+      const task = yield* runSlash(
+        'new-task --name grow --phase B --task ship --type execution',
+        root,
+      ).pipe(Effect.provide(layer));
+      Vitest.expect(task.ok).toBe(true);
+      Vitest.expect(task.output).toContain('added B001');
+      const files = created.get('grow') ?? [];
+      Vitest.expect(files.some((file) => file.path === 'B/B001-ship/TASK.md')).toBe(true);
+    }),
+  );
+
+  Vitest.it.effect('rigor refuses an unknown value and gate needs its subcommand', () =>
+    Effect.gen(function* () {
+      const rigor = yield* runSlash('rigor split', root).pipe(Effect.provide(stubLayer(specs)));
+      Vitest.expect(rigor.ok).toBe(false);
+      Vitest.expect(rigor.output).toContain('code     rigor.unknown');
+
+      const gate = yield* runSlash('gate --name ok --phase A', root).pipe(
+        Effect.provide(stubLayer(specs)),
+        Effect.flip,
+      );
+      Vitest.expect(gate).toBeInstanceOf(SurfaceError);
+      Vitest.expect(slashProblem(gate)).toContain('gate requires `run` or `record`');
     }),
   );
 });

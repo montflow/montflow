@@ -6,7 +6,7 @@ carries the template's sections.
 
 ## Belongs here
 
-- `MEMORY_SECTIONS`, `verifyMemoryFile`
+- `MEMORY_SECTIONS`, `renderTaskMemory`, `verifyMemoryFile`
 
 ## Does not belong here
 

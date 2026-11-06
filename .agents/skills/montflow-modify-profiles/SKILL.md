@@ -3,7 +3,7 @@ name: montflow-modify-profiles
 description: Modifies, updates, extends, or audits existing agent profiles in .agents/@montflow/profiles/. Use when the user wants to edit an existing profile, add content to a profile, audit a profile for quality, or update profile metadata.
 id: 6be1129292870a51
 author: Daniel
-version: 1.1.0
+version: 1.2.1
 license: MIT
 groups:
   - profiles
@@ -35,7 +35,7 @@ If the task involves quality review, assess against [montflow-create-profiles co
 - `name` is a kebab-case slug matching the directory name
 - `description` is one line saying WHAT the agent is (role and job)
 - `model` is a real `provider/model-id` or blank — never invented
-- Every skill in `skills:` exists under `.agents/skills/` (checked via frontmatter `name:`)
+- Every skill in `skills:` exists — check the names with `mf-skills list` (it prints each name and description) instead of scanning the store; `mf-profiles verify <name>` reports a declared skill that is not installed as a **warning**, not an error, and exits 0, so treat that warning as a fix item
 - `## Instructions` is non-empty and actionable
 - `## Review Checklist` has at least one verifiable item
 
@@ -47,7 +47,7 @@ Outline the specific modifications needed:
 
 - Which fields or sections change and how
 - Whether the change alters what the agent is (update `description`) or only how it behaves (update `## Instructions`)
-- Whether new skills must be referenced (verify they exist first)
+- Whether new skills must be referenced (discover them with `mf-skills list` first)
 
 Present the plan to the user for confirmation before executing.
 
@@ -57,14 +57,31 @@ Apply changes using Edit/Write tools. Follow these conventions:
 
 - Never rename the profile directory and never change the `name` field — the name is the identity
 - Keep `description` saying WHAT the agent is (its role and job — it drives profile selection)
-- Reference existing skills only (check `.agents/skills/` SKILL.md frontmatter `name:` values); drop unknown names instead of inventing them
+- Reference existing skills only (discover names with `mf-skills list`); drop unknown names instead of inventing them
 - Keep at least one `## Review Checklist` item
 - If `.agents/skills/montflow-create-profiles/SKILL.md` exists, follow its standards
 - Edit only the named profile under `.agents/@montflow/profiles/` — do not touch anything else
 
 ## 6. Verify
 
-Run through [GATES.md](GATES.md) checks. Fix any failures.
+Run the mechanical check first — it validates the file shape and reports the
+skills declared in `skills:`:
+
+```
+mf-profiles verify <name>
+```
+
+Where the binary is not on `PATH`:
+
+```
+bun run --cwd packages/profiles cli verify <name> --dir "$PWD"
+```
+
+A declared skill that is not installed is a **warning**, not an error: the check
+prints `1 warning` and still exits 0 (`mf-profiles verify` and `mf-prompts
+verify` behave the same). Treat every warning as a fix item before the gate
+passes — a check mark alone does not validate a declared skill. Then run through
+[GATES.md](GATES.md) for what the verifier cannot judge, and fix any failures.
 
 # Reference
 

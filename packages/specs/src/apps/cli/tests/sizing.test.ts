@@ -68,7 +68,7 @@ const tree = (options: TreeOptions = {}): ReadonlyArray<SpecFileEntry> => {
     ),
     ...(options.specSizing === undefined ? [] : [entry('sizing.json', options.specSizing)]),
     entry(
-      'A001-build/TASK.md',
+      'A/A001-build/TASK.md',
       taskMarkdown({
         id: 'A001',
         name: 'build',
@@ -77,9 +77,9 @@ const tree = (options: TreeOptions = {}): ReadonlyArray<SpecFileEntry> => {
         withoutSize: options.withoutSize === true || options.a001WithoutSize === true,
       }),
     ),
-    entry('A001-build/MEMORY.md', memory),
+    entry('A/A001-build/MEMORY.md', memory),
     entry(
-      'A002-wire/TASK.md',
+      'A/A002-wire/TASK.md',
       taskMarkdown({
         id: 'A002',
         name: 'wire',
@@ -87,9 +87,9 @@ const tree = (options: TreeOptions = {}): ReadonlyArray<SpecFileEntry> => {
         withoutSize: options.withoutSize === true,
       }),
     ),
-    entry('A002-wire/MEMORY.md', memory),
+    entry('A/A002-wire/MEMORY.md', memory),
     entry(
-      'A099-review-phase/TASK.md',
+      'A/A099-review-phase/TASK.md',
       taskMarkdown({
         id: 'A099',
         name: 'review-phase',
@@ -97,7 +97,7 @@ const tree = (options: TreeOptions = {}): ReadonlyArray<SpecFileEntry> => {
         size: options.a099Size ?? 'medium',
       }),
     ),
-    entry('A099-review-phase/MEMORY.md', memory),
+    entry('A/A099-review-phase/MEMORY.md', memory),
   ];
 };
 
@@ -386,7 +386,7 @@ Vitest.describe('Cli.check sizing aggregation runtime', () => {
         ]);
         const codes = report.specs[0]?.issues
           .map((found) => found.code)
-          .filter((code) => code !== undefined);
+          .filter((code) => code !== undefined && code !== 'spec.version-outdated');
         Vitest.expect(codes).toStrictEqual([
           'task.missing-size',
           'task.missing-size',
@@ -404,7 +404,7 @@ Vitest.describe('Cli.check sizing aggregation runtime', () => {
         Vitest.expect(text).toContain('  fix      Add "model": "provider/model" to sizes.tiny.');
         Vitest.expect(text).toContain('  path     ship-spec/sizing.json');
         Vitest.expect(text).toContain('  field    extra');
-        Vitest.expect(text).toContain('  path     ship-spec/A001-build/TASK.md');
+        Vitest.expect(text).toContain('  path     ship-spec/A/A001-build/TASK.md');
         Vitest.expect(text).toContain('  code     task.missing-size');
         Vitest.expect(text).toContain('5 issues');
       }),
@@ -421,9 +421,9 @@ Vitest.describe('Cli.check sizing aggregation runtime', () => {
       Vitest.expect(found?.severity).toBe('warning');
       Vitest.expect(found?.message).toContain("Phase 'B' has no tasks");
       Vitest.expect(report.specs[0]?.valid).toBe(true);
-      Vitest.expect(report.warningCount).toBe(1);
+      Vitest.expect(report.warningCount).toBe(2);
       const text = renderCheck(report, false);
-      Vitest.expect(text).toContain('\u2713 ship-spec (1 warning)');
+      Vitest.expect(text).toContain('\u2713 ship-spec (2 warnings)');
       Vitest.expect(text).toContain(
         '  ! sizing.unknown-phase \u00d7 1 \u00b7 ship-spec/sizing.json',
       );
@@ -436,10 +436,13 @@ Vitest.describe('Cli.check sizing aggregation runtime', () => {
       const report = yield* runCheck({ a001Status: 'complete', a001WithoutSize: true });
       const found = report.specs[0]?.issues.find(
         (candidate) =>
-          candidate.code === 'task.missing-size' && candidate.field === 'A001-build/TASK.md: size',
+          candidate.code === 'task.missing-size' &&
+          candidate.field === 'A/A001-build/TASK.md: size',
       );
       Vitest.expect(found?.severity).toBe('warning');
-      Vitest.expect(found?.expected).toBe('tiny, small, medium, large');
+      Vitest.expect(found?.expected).toBe(
+        "tiny, small, medium, large; or 'none' on a complete task",
+      );
       Vitest.expect(found?.actual).toBe('missing');
       Vitest.expect(found?.layers).toStrictEqual({
         consulted: ['repo', 'spec', 'phase'],
@@ -447,6 +450,30 @@ Vitest.describe('Cli.check sizing aggregation runtime', () => {
       });
       Vitest.expect(renderCheck(report, true)).toContain('  code     ! task.missing-size');
       Vitest.expect(report.specs[0]?.valid).toBe(true);
+    }),
+  );
+});
+
+Vitest.describe('Cli size none runtime', () => {
+  Vitest.it.effect('accepts size none on a complete task and resolves no model', () =>
+    Effect.gen(function* () {
+      const report = yield* runSizing({ a001Status: 'complete', a001Size: 'none' });
+      Vitest.expect(report.target.size).toBeUndefined();
+      Vitest.expect(report.target.target).toBe('inherit');
+      Vitest.expect(report.budget).toBe(0);
+      Vitest.expect(report.phaseBudget).toBe(2);
+    }),
+  );
+
+  Vitest.it.effect('rejects size none on an unfinished task through resolve', () =>
+    Effect.gen(function* () {
+      const error = yield* runSizing({ a001Size: 'none' }).pipe(Effect.flip);
+      const diagnosed = diagnoseCause(Cause.fail(error), {
+        path: specName,
+        rerun: 'mf-specs check --name ship-spec',
+        verbose: false,
+      });
+      Vitest.expect(diagnosed.output).toContain('code     task.size-none-unfinished');
     }),
   );
 });
@@ -463,10 +490,10 @@ Vitest.describe('Cli dispatch gating runtime', () => {
       });
       Vitest.expect(diagnosed.exitCode).toBe(VALIDATION_EXIT_CODE);
       Vitest.expect(diagnosed.output).toContain('code     task.missing-size');
-      Vitest.expect(diagnosed.output).toContain('path     ship-spec/A001-build/TASK.md');
+      Vitest.expect(diagnosed.output).toContain('path     ship-spec/A/A001-build/TASK.md');
       Vitest.expect(diagnosed.output).toContain('field    size');
       Vitest.expect(diagnosed.output).toContain(
-        'fix      Add `size: medium` to TASK.md frontmatter (tiny, small, medium, large).',
+        'fix      Add `size: none` (record-only, complete tasks) or a real size: tiny, small, medium, large.',
       );
     }),
   );
@@ -482,7 +509,7 @@ Vitest.describe('Cli dispatch gating runtime', () => {
       Vitest.expect(diagnosed.exitCode).toBe(VALIDATION_EXIT_CODE);
       Vitest.expect(diagnosed.output).toContain('code     task.unknown-size');
       Vitest.expect(diagnosed.output).not.toContain('task.not-found');
-      Vitest.expect(diagnosed.output).toContain('path     ship-spec/A001-build/TASK.md');
+      Vitest.expect(diagnosed.output).toContain('path     ship-spec/A/A001-build/TASK.md');
       Vitest.expect(diagnosed.output).toContain('actual   huge');
     }),
   );

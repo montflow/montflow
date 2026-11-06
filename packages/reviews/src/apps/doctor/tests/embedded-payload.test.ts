@@ -6,7 +6,10 @@ import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Effect, FileSystem, Layer, Path } from 'effect';
 import * as Vitest from '@effect/vitest';
 import * as Doctor from '../index.js';
-import { EMBEDDED_SKILL_PAYLOAD } from '../embedded-payload.generated.js';
+import { EMBEDDED_PAYLOAD } from '../embedded-payload.generated.js';
+
+/** Skills embedded in this package. */
+const EMBEDDED_SKILL_PAYLOAD = EMBEDDED_PAYLOAD.skill ?? {};
 
 /**
  * The embedded payload exists so a `--compile`d binary can install and verify

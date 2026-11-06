@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.7.0] - 2026-11-05
+
+### Added
+
+- The read-only status report: `mf-specs status-report`, `/specs status-report`, and the `spec_status` tool render the shipped `spec-status` prompt for one spec, with `--focus`, explicit-name precedence, and the ask-the-user rule on a branch miss
+
+## [1.6.0] - 2026-11-03
+
+### Added
+
+- The execution channels: `BOARD.md` broadcast, `MAILBOX.md` targeted, orchestrator-only writes, and the worker read points at start and before a receipt
+- The verification scheduler: the `gate-v1:` run key over command, scopes, and file fingerprint; single flight, pass reuse, rerun on failure, and the heavy-lane and in-flight bounds in `gate.json`
+- The parallel phase rule in the reference: the widest ready set, real `depends-on` edges only, and a declared `write-scope:`
+
+## [1.5.1] - 2026-11-03
+
+### Changed
+
+- The reference and output sections describe the v2 phase tree and the `locked` / `review` columns that a v2 spec appends to `list`
+- The reference names `state`/`status` and the confirmation-only `lock` verb
+
 ## [1.5.0] - 2026-10-26
 
 ### Added

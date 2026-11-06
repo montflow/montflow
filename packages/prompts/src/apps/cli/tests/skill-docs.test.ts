@@ -221,7 +221,7 @@ Vitest.describe('montflow-create-prompts claims', () => {
     });
   });
 
-  Vitest.it('names exactly the seven checks verifyPromptFile performs', () => {
+  Vitest.it('names every rule verifyPromptFile measures', () => {
     for (const item of [
       'valid JSON',
       'slug `name` matching the file name',
@@ -230,9 +230,26 @@ Vitest.describe('montflow-create-prompts claims', () => {
       'first-appearance order',
       'legal flat name',
       'both `required` and defaulted',
+      'exactly one of `equals` or `truthy`',
+      "uses one of that controller's options",
+      'carries no `options`, `default`, or `required`',
+      'no `{{#if}}` guards a controller that has no condition of its own',
     ]) {
       Vitest.expect(createSkill()).toContain(item);
     }
+  });
+
+  Vitest.it('delegates skill discovery and the self-check to the CLI', () => {
+    const markdown = createSkill();
+    // The CLI answers both questions the skill used to answer by hand: which
+    // skills exist (`list`, with descriptions) and what the full file says
+    // (`show`). A hand scan is no longer an acceptable substitute.
+    Vitest.expect(markdown).toContain('mf-skills list');
+    Vitest.expect(markdown).toContain('mf-skills show');
+    // `verify` is the mandatory gate on create and again on modify, so the
+    // command appears at least twice; losing either call fails here.
+    Vitest.expect([...markdown.matchAll(/mf-prompts verify/gu)].length).toBeGreaterThanOrEqual(2);
+    Vitest.expect(markdown).toContain('bun run --cwd packages/prompts cli verify');
   });
 
   Vitest.it('documents every field the Variable schema has', () => {

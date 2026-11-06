@@ -97,6 +97,7 @@ Vitest.describe('runDoctor', () => {
         'present',
         'present',
         'present',
+        'present',
       ]);
     }),
   );
@@ -133,6 +134,7 @@ Vitest.describe('runDoctor', () => {
         'missing',
         'missing',
         'missing',
+        'missing',
       ]);
       Vitest.expect(Fs.existsSync(installedSkillFile(root, CREATE_SPEC_SKILL_NAME))).toBe(false);
       Vitest.expect(Fs.existsSync(NodePath.join(root, '.agents'))).toBe(false);
@@ -145,6 +147,7 @@ Vitest.describe('runDoctor', () => {
         'ok',
         'ok',
         'ok',
+        'ok',
       ]);
 
       Fs.appendFileSync(installedSkillFile(root, CREATE_SPEC_SKILL_NAME), '\nhand-edit-marker\n');
@@ -154,6 +157,7 @@ Vitest.describe('runDoctor', () => {
       Vitest.expect(stale.skills.map((skill) => skill.status)).toStrictEqual(['stale', 'ok']);
       Vitest.expect(stale.prompts.map((prompt) => prompt.status)).toStrictEqual([
         'stale',
+        'ok',
         'ok',
         'ok',
       ]);
@@ -174,6 +178,7 @@ Vitest.describe('runDoctor', () => {
       const result = yield* runDoctor(root);
       Vitest.expect(result.status).toBe('installed');
       Vitest.expect(result.prompts.map((prompt) => prompt.status)).toStrictEqual([
+        'installed',
         'installed',
         'installed',
         'installed',
@@ -202,6 +207,7 @@ Vitest.describe('runDoctor', () => {
         'stale',
         'ok',
         'ok',
+        'ok',
       ]);
       const stale = checked.prompts[0];
       Vitest.expect(stale?.source).toBe(NodePath.join(PACKAGE_PROMPT_DIR, `${name}.json`));
@@ -215,6 +221,7 @@ Vitest.describe('runDoctor', () => {
         'repaired',
         'present',
         'present',
+        'present',
       ]);
       Vitest.expect(Fs.readFileSync(installedPromptFile(root, name), 'utf-8')).toBe(
         packagedPrompt(name),
@@ -224,6 +231,7 @@ Vitest.describe('runDoctor', () => {
       const again = yield* runDoctor(root);
       Vitest.expect(again.status).toBe('present');
       Vitest.expect(again.prompts.map((prompt) => prompt.status)).toStrictEqual([
+        'present',
         'present',
         'present',
         'present',
@@ -244,10 +252,12 @@ Vitest.describe('runDoctor', () => {
         'ok',
         'ok',
         'ok',
+        'ok',
       ]);
 
       const repaired = yield* runDoctor(root);
       Vitest.expect(repaired.prompts.map((prompt) => prompt.status)).toStrictEqual([
+        'present',
         'present',
         'present',
         'present',
@@ -275,6 +285,7 @@ Vitest.describe('runDoctor', () => {
         'stale',
         'ok',
         'ok',
+        'ok',
       ]);
       const stale = checked.prompts[0];
       Vitest.expect(stale?.failure?.code).toBe('doctor.read');
@@ -284,6 +295,7 @@ Vitest.describe('runDoctor', () => {
       const repaired = yield* runDoctor(root);
       Vitest.expect(repaired.prompts.map((prompt) => prompt.status)).toStrictEqual([
         'repaired',
+        'present',
         'present',
         'present',
       ]);
@@ -310,6 +322,7 @@ Vitest.describe('runDoctor', () => {
       const repaired = yield* runDoctor(root);
       Vitest.expect(repaired.prompts.map((prompt) => prompt.status)).toStrictEqual([
         'repaired',
+        'present',
         'present',
         'present',
       ]);
@@ -358,7 +371,7 @@ Vitest.describe('runDoctor', () => {
       Fs.rmSync(changelog);
 
       const checked = yield* runDoctor(root, { check: true });
-      Vitest.expect(checked.skills[0]?.status).toBe('stale');
+      Vitest.expect(checked.skills[0]?.status).toBe('mismatched');
       Vitest.expect(checked.skills[0]?.detail).toBe('installed copy is missing: CHANGELOG.md');
 
       const repaired = yield* runDoctor(root);
@@ -444,6 +457,7 @@ Vitest.describe('runDoctor', () => {
         'present',
         'present',
         'present',
+        'present',
       ]);
     }),
   );
@@ -465,11 +479,13 @@ Vitest.describe('runDoctor', () => {
           'blocked',
           'blocked',
           'blocked',
+          'blocked',
         ]);
         Vitest.expect(checked.prompts[0]?.failure?.code).toBe('doctor.create');
 
         const repaired = yield* runDoctor(root);
         Vitest.expect(repaired.prompts.map((prompt) => prompt.status)).toStrictEqual([
+          'blocked',
           'blocked',
           'blocked',
           'blocked',

@@ -94,6 +94,50 @@ supplied, or its `default`, or empty. That single rule is what makes
 `{{#if scope}}…{{else}}…{{/if}}` the "user gave me a scope, otherwise do X"
 pattern.
 
+A variable may also declare visibility with an optional `when` object — a
+discriminated union with exactly one form and no other keys:
+
+```json
+{ "controller": "isolated", "equals": "yes" }
+{ "controller": "flag", "truthy": true }
+```
+
+`when.controller` must be declared **earlier** in `variables`. A `select`
+controller compares one of its own `options` with `equals`; a `confirm`
+controller compares with `truthy: true`. With no `when`, the variable is always
+visible; a later controller, a `text`/`textarea` controller, or an unoffered
+value is refused by verification. A hidden variable resolves to empty, so its
+`{{#if}}` takes `{{else}}`; guard the conditional child (`{{#if origin}}`), never
+a controller that has no condition of its own, and omit `default` on a
+conditional variable so flipping the controller back cannot surface a stale
+prefill.
+
+A controller may itself be conditional. Names stay flat identifiers —
+`origin_branch`, not `origin-branch` — and each level is guarded:
+
+```json
+{ "name": "isolated", "type": "select", "options": ["yes", "no"],
+  "required": true },
+{ "name": "origin", "type": "select", "options": ["current", "other"],
+  "required": true, "when": { "controller": "isolated", "equals": "yes" } },
+{ "name": "origin_branch", "type": "text", "required": true,
+  "when": { "controller": "origin", "equals": "other" } },
+{ "name": "worktree_name", "type": "text", "required": true,
+  "when": { "controller": "isolated", "equals": "yes" } }
+```
+
+```handlebars
+Isolated:
+{{isolated}}.
+{{#if origin}}Origin:
+  {{origin}}
+  {{#if origin_branch}}Branch: {{origin_branch}}{{/if}}
+  {{#if worktree_name}}Worktree: {{worktree_name}}{{/if}}{{/if}}
+```
+
+`{{#if origin}}` is legal even though `origin` controls `origin_branch`: it has
+its own `when`, so it is a conditional child.
+
 ## Verification
 
 `Prompts.verifyPromptFile(name, raw)` is pure and reports every problem in one

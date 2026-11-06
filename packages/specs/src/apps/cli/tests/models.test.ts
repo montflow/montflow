@@ -47,13 +47,13 @@ const specs = new Map([
           phases: { A: { sizes: { small: { model: 'fixture/known', effort: 'low' } } } },
         }),
       ),
-      entry('A001-build/TASK.md', taskMarkdown({ id: 'A001', name: 'build', size: 'tiny' })),
-      entry('A001-build/MEMORY.md', memory),
+      entry('A/A001-build/TASK.md', taskMarkdown({ id: 'A001', name: 'build', size: 'tiny' })),
+      entry('A/A001-build/MEMORY.md', memory),
       entry(
-        'A099-review-phase/TASK.md',
+        'A/A099-review-phase/TASK.md',
         taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
       ),
-      entry('A099-review-phase/MEMORY.md', memory),
+      entry('A/A099-review-phase/MEMORY.md', memory),
     ],
   ],
 ]);

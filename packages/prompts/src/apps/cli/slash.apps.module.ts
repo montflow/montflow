@@ -28,11 +28,11 @@ export const COMMAND_NAME = 'mf-prompts';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Run the prompts CLI headlessly: doctor, list [--status valid|invalid], inspect, execute, show, verify [<name>|--all], render, create, modify, or delete a prompt. Store operations accept --dir to target a workspace root other than the working directory. Type /mf-prompts with no arguments to open the picker.';
+  'Run the prompts CLI headlessly: doctor, list [--status valid|invalid], inspect, execute, show, verify [<name>|--all] [--strict], render, create, modify, or delete a prompt. Store operations accept --dir to target a workspace root other than the working directory. Type /mf-prompts with no arguments to open the picker.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-prompts doctor [--check] | list [--status valid|invalid] | inspect <name> [key=value ...] | execute <name> --model p/m [key=value ...] | show <name> | verify [<name>|--all] [--dir path] | render <name> [key=value ...] | create <name> --template "text" [--description d] [--model p/m] [--skills a,b] [--variable name[:flags]] [--dir path] | modify <name> [--template "text" ...] [--dir path] | delete <name> | help';
+  '/mf-prompts doctor [--check] | list [--status valid|invalid] | inspect <name> [key=value ...] | execute <name> --model p/m [key=value ...] | show <name> | verify [<name>|--all] [--strict] [--dir path] | render <name> [key=value ...] | create <name> --template "text" [--description d] [--model p/m] [--skills a,b] [--variable name[:flags]] [--dir path] | modify <name> [--template "text" ...] [--dir path] | delete <name> | help';
 
 /** Flags `execute` and `doctor` understand. Anything else is usage. */
 const KNOWN_RUN_FLAGS: ReadonlySet<string> = new Set(['model', 'check']);
@@ -71,6 +71,7 @@ export type CliAction =
       readonly kind: 'Verify';
       readonly name: string | undefined;
       readonly all: boolean;
+      readonly strict: boolean;
       readonly dir: string | undefined;
     }
   | { readonly kind: 'Render'; readonly name: string; readonly values: Record<string, string> }
@@ -205,13 +206,18 @@ export const parseCliArgs = (args: string): CliAction => {
     case 'show':
       return tokens[1] === undefined ? { kind: 'Help' } : { kind: 'Show', name: tokens[1] };
     case 'verify': {
-      const split = splitTokens(tokens.slice(1), new Set(['all', 'dir']));
+      const strict = tokens.includes('--strict');
+      const split = splitTokens(
+        tokens.slice(1).filter((token) => token !== '--strict'),
+        new Set(['all', 'dir']),
+      );
       if (split.unknown.length > 0) return { kind: 'Help' };
       const name = split.positionals[0];
       return {
         kind: 'Verify',
         name,
         all: split.flags['all'] !== undefined || name === undefined,
+        strict,
         dir: one(split.flags['dir']),
       };
     }
@@ -319,14 +325,19 @@ export const run = (
       }
       case 'Verify': {
         if (action.all || action.name === undefined) {
-          const report = yield* Engines.verifyAll({ cwd: action.dir ?? cwd });
+          const report = yield* Engines.verifyAll(
+            { cwd: action.dir ?? cwd },
+            { strict: action.strict },
+          );
           yield* say(Renderers.verifyAll(report));
           if (report.entries.some((entry) => !entry.result.valid)) {
             return yield* Effect.fail(`verification failed:\n${Renderers.verifyAll(report)}`);
           }
           return;
         }
-        const result = yield* Engines.verify({ cwd: action.dir ?? cwd }, action.name);
+        const result = yield* Engines.verify({ cwd: action.dir ?? cwd }, action.name, {
+          strict: action.strict,
+        });
         yield* say(Renderers.verify(action.name, result));
         if (!result.valid) {
           return yield* Effect.fail(

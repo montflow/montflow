@@ -77,15 +77,46 @@ Vitest.describe('Cli.parseCliArgs', () => {
   });
 
   Vitest.it('parses verify as the whole store or a list of names', () => {
-    Vitest.expect(Cli.parseCliArgs('verify')).toStrictEqual({ kind: 'Verify', names: [] });
+    Vitest.expect(Cli.parseCliArgs('verify')).toStrictEqual({
+      kind: 'Verify',
+      names: [],
+      strict: false,
+    });
     Vitest.expect(Cli.parseCliArgs('verify alpha')).toStrictEqual({
       kind: 'Verify',
       names: ['alpha'],
+      strict: false,
     });
     Vitest.expect(Cli.parseCliArgs('verify alpha beta')).toStrictEqual({
       kind: 'Verify',
       names: ['alpha', 'beta'],
+      strict: false,
     });
+    Vitest.expect(Cli.parseCliArgs('verify --strict alpha')).toStrictEqual({
+      kind: 'Verify',
+      names: ['alpha'],
+      strict: true,
+    });
+    Vitest.expect(Cli.parseCliArgs('verify --bogus')).toStrictEqual({ kind: 'Help' });
+  });
+
+  Vitest.it('parses doctor in repair and report-only modes', () => {
+    Vitest.expect(Cli.parseCliArgs('doctor')).toStrictEqual({
+      kind: 'Doctor',
+      check: false,
+      dir: undefined,
+    });
+    Vitest.expect(Cli.parseCliArgs('doctor --check')).toStrictEqual({
+      kind: 'Doctor',
+      check: true,
+      dir: undefined,
+    });
+    Vitest.expect(Cli.parseCliArgs('doctor --check --dir /tmp/ws')).toStrictEqual({
+      kind: 'Doctor',
+      check: true,
+      dir: '/tmp/ws',
+    });
+    Vitest.expect(Cli.parseCliArgs('doctor --bogus')).toStrictEqual({ kind: 'Help' });
   });
 });
 

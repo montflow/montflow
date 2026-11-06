@@ -26,13 +26,61 @@ const StoreLive = Layer.mergeAll(
 const Root = 'fixtures/.agents/@montflow/specs';
 
 Vitest.describe('CLI fixtures runtime', () => {
-  Vitest.it.effect('mock-ok verifies clean', () =>
+  Vitest.it.effect('mock-ok verifies with only the v1 version warning', () =>
     Effect.gen(function* () {
       const store = yield* SpecStore.SpecStore;
       const snapshot = yield* store.snapshot(Root, 'mock-ok');
       const result = verifySpecTree(snapshot, NO_REVIEW);
+      Vitest.expect(result.valid).toBe(true);
+      Vitest.expect(result.issues).toStrictEqual([
+        Vitest.expect.objectContaining({
+          code: 'spec.version-outdated',
+          severity: 'warning',
+          field: 'SPEC.md: spec-version',
+        }),
+      ]);
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
+  );
+
+  Vitest.it.effect('the v1 fixture verifies with only the version warning', () =>
+    Effect.gen(function* () {
+      const store = yield* SpecStore.SpecStore;
+      const result = verifySpecTree(yield* store.snapshot(Root, 'mock-v1'), NO_REVIEW);
+      Vitest.expect(result.valid).toBe(true);
+      Vitest.expect(result.issues.map((found) => found.code)).toStrictEqual([
+        'spec.version-outdated',
+      ]);
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
+  );
+
+  Vitest.it.effect('the v2 fixture verifies clean', () =>
+    Effect.gen(function* () {
+      const store = yield* SpecStore.SpecStore;
+      const result = verifySpecTree(yield* store.snapshot(Root, 'mock-v2'), NO_REVIEW);
       Vitest.expect(result.issues).toStrictEqual([]);
       Vitest.expect(result.valid).toBe(true);
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
+  );
+
+  Vitest.it.effect('a future version errors', () =>
+    Effect.gen(function* () {
+      const store = yield* SpecStore.SpecStore;
+      const result = verifySpecTree(yield* store.snapshot(Root, 'mock-future'), NO_REVIEW);
+      Vitest.expect(result.valid).toBe(false);
+      Vitest.expect(result.issues).toContainEqual(
+        Vitest.expect.objectContaining({ code: 'spec.version-future' }),
+      );
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
+  );
+
+  Vitest.it.effect('a v2 version on a v1 tree is rejected as untransformed', () =>
+    Effect.gen(function* () {
+      const store = yield* SpecStore.SpecStore;
+      const result = verifySpecTree(yield* store.snapshot(Root, 'mock-untransformed'), NO_REVIEW);
+      Vitest.expect(result.valid).toBe(false);
+      Vitest.expect(result.issues).toContainEqual(
+        Vitest.expect.objectContaining({ code: 'spec.version-untransformed' }),
+      );
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
   );
 
@@ -44,19 +92,20 @@ Vitest.describe('CLI fixtures runtime', () => {
       Vitest.expect(result.valid).toBe(false);
       const fields = result.issues.map((issue) => issue.field);
       Vitest.expect(fields).toContain('SPEC.md: tasks');
-      Vitest.expect(fields).toContain('A002-explore-thing/MEMORY.md');
-      Vitest.expect(fields).toContain('A003-bad-kind/TASK.md: type');
-      Vitest.expect(fields).toContain('B001-late-thing/MEMORY.md: body');
-      Vitest.expect(fields).toContain('B002-gated-thing/GATES.md: Stage 0: Core Validation');
+      Vitest.expect(fields).toContain('A/A002-explore-thing/MEMORY.md');
+      Vitest.expect(fields).toContain('A/A003-bad-kind/TASK.md: type');
+      Vitest.expect(fields).toContain('B/B001-late-thing/MEMORY.md: body');
+      Vitest.expect(fields).toContain('B/B002-gated-thing/GATES.md: Stage 0: Core Validation');
       Vitest.expect(fields).toContain('task A001');
-      Vitest.expect(fields).toContain('phase A');
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
   );
-  Vitest.it.effect('mock-complete is fully consistent', () =>
+  Vitest.it.effect('mock-complete is fully consistent apart from its v1 version', () =>
     Effect.gen(function* () {
       const store = yield* SpecStore.SpecStore;
       const result = verifySpecTree(yield* store.snapshot(Root, 'mock-complete'), NO_REVIEW);
-      Vitest.expect(result.issues).toStrictEqual([]);
+      Vitest.expect(result.issues.map((found) => found.code)).toStrictEqual([
+        'spec.version-outdated',
+      ]);
       Vitest.expect(result.valid).toBe(true);
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
   );
@@ -68,8 +117,7 @@ Vitest.describe('CLI fixtures runtime', () => {
       Vitest.expect(result.valid).toBe(false);
       Vitest.expect(result.issues).toContainEqual({
         field: 'status',
-        message:
-          "All tasks are complete and all phases are locked, but spec status is 'in-progress'.",
+        message: "All tasks are complete, but spec status is 'in-progress'.",
       });
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
   );
@@ -77,12 +125,16 @@ Vitest.describe('CLI fixtures runtime', () => {
   Vitest.it.effect('enforces the review budget from the fixture series', () =>
     Effect.gen(function* () {
       const history = yield* check(Root, { name: 'mock-history' });
-      Vitest.expect(history.specs[0]?.issues).toStrictEqual([]);
+      Vitest.expect(history.specs[0]?.issues.map((found) => found.code)).toStrictEqual([
+        'spec.version-outdated',
+      ]);
       Vitest.expect(history.failed).toBe(0);
 
       const over = yield* check(Root, { name: 'mock-over-budget' });
       Vitest.expect(over.failed).toBe(1);
-      Vitest.expect(over.specs[0]?.issues).toStrictEqual([
+      Vitest.expect(
+        over.specs[0]?.issues.filter((found) => found.severity !== 'warning'),
+      ).toStrictEqual([
         {
           code: 'review.budget-exceeded',
           field: 'review-series',
@@ -184,7 +236,9 @@ Vitest.describe('CLI fixtures dispatch truth', () => {
     Effect.gen(function* () {
       const checked = yield* check(Root, { name: 'mock-over-budget' });
       Vitest.expect(checked.failed).toBe(1);
-      Vitest.expect(checked.specs[0]?.issues[0]?.code).toBe('review.budget-exceeded');
+      Vitest.expect(checked.specs[0]?.issues.map((found) => found.code)).toContain(
+        'review.budget-exceeded',
+      );
 
       const reported = yield* status(Root, 'mock-over-budget');
       Vitest.expect(dispatchExitCode(reported.sizing, reported.verify, reported.name)).toBe(1);

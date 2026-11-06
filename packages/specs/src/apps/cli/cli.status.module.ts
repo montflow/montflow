@@ -1,7 +1,8 @@
-import { Console, Effect } from 'effect';
+import { Clock, Console, Effect, FileSystem, Option } from 'effect';
 import { Command } from 'effect/cli';
 
-import { type Spec, parseSpecFile } from '../../modules/spec/index.js';
+import { type Spec, parseSpecFile, readSpecVersion } from '../../modules/spec/index.js';
+import { parseMarkdown } from '../../modules/frontmatter/index.js';
 import {
   type Analysis,
   type State,
@@ -12,10 +13,27 @@ import { SIZES, phaseReviewBudget, resolve as resolveSizing } from '../../module
 import {
   type ReviewInput,
   type SpecSnapshot,
+  reviewedPhasesOf,
   verifySpecTree,
 } from '../../modules/structure/index.js';
 import type { SeriesSnapshot } from '../../modules/review-link/index.js';
-import { Task, parseTaskDirName, phaseOf } from '../../modules/task/index.js';
+import {
+  Task,
+  parseTaskDirName,
+  phaseOf,
+  phaseRank,
+  sortKey,
+  writeScopeTokens,
+} from '../../modules/task/index.js';
+import { type PhaseStatus, parsePhaseFile, phaseEvidence } from '../../modules/phase/index.js';
+import { parseGates } from '../../modules/gates/index.js';
+import {
+  GATE_CONFIG_FILE,
+  type RunSummary,
+  lastAttempt,
+  parseGateConfig,
+  runSummary,
+} from '../../modules/scheduler/index.js';
 import { type Result, errorCount, isWarning, warningCount } from '../../modules/verify/index.js';
 import { renderDiagnostic } from '../../modules/diagnostic/index.js';
 
@@ -37,6 +55,7 @@ import {
   verboseFlag,
   dirFlag,
   nameFlag,
+  workspaceOf,
 } from './cli.shared.module.js';
 import {
   tasksOf,
@@ -56,6 +75,37 @@ import {
 } from './cli.apps.module.js';
 /** Spec store directory, relative to the workspace root. */
 
+/**
+ * One phase's derived record view: the `PHASE.md` review decision and gate
+ * kind beside the lock the lifecycle derives from completion, proof, and review.
+ * A v1 phase has no record, so its decision fields stay undefined.
+ */
+export interface PhaseView {
+  readonly phase: string;
+  readonly review: 'required' | 'waived' | 'none' | undefined;
+  readonly reviewReason?: string | undefined;
+  readonly gate: 'none' | 'mechanical' | 'subjective' | undefined;
+  readonly status: PhaseStatus | undefined;
+  /** Derived lock; never read from a stored list. */
+  readonly locked: boolean;
+  /** True when every classified mechanical stage has a latest pass. */
+  readonly proven: boolean;
+  /** True when the phase declares an effective `PHASE.md` waiver. */
+  readonly waived: boolean;
+}
+
+/** Mutable builder for one {@link PhaseView}, so an absent reason stays absent. */
+interface MutablePhaseView {
+  phase: string;
+  review: PhaseView['review'];
+  reviewReason?: string;
+  gate: PhaseView['gate'];
+  status: PhaseStatus | undefined;
+  locked: boolean;
+  proven: boolean;
+  waived: boolean;
+}
+
 export interface StatusReport {
   readonly name: string;
   readonly spec: Spec | undefined;
@@ -67,20 +117,99 @@ export interface StatusReport {
   readonly sizing: SizingLoad;
   /** Task ids carrying a `GATES.md`, derived from the snapshot. */
   readonly gatedTaskIds?: ReadonlySet<string>;
+  /** Phase id → its `GATES.md` contents, for the boundary gate annotation. */
+  readonly phaseGates?: ReadonlyMap<string, string>;
+  /** Per-phase `PHASE.md` decision and derived lock/gate state. */
+  readonly phases?: ReadonlyArray<PhaseView>;
+  /** Workspace run states, read by `status` and `next`. */
+  readonly runs?: RunSummary;
 }
 
-/** Task ids carrying a `GATES.md`, read from the snapshot. */
+/**
+ * Build the per-phase view from the phase records, the evidence derived from
+ * their gates, and the lifecycle's derived locks. Phase ids come from the
+ * `PHASE.md` directories and from the task tree, so a v1 phase still appears
+ * without a record and a v2 phase with no tasks still appears with its review
+ * decision.
+ * @param snapshot - every file under the spec root
+ * @param evidence - waived/proven sets derived by `phaseEvidence`
+ * @param state - the lifecycle analysis, when SPEC.md parses
+ * @returns one view per phase, in phase-rank order
+ */
+export const phaseViews = (
+  snapshot: SpecSnapshot,
+  evidence: {
+    readonly waived: ReadonlyArray<string>;
+    readonly none: ReadonlyArray<string>;
+    readonly proven: ReadonlyArray<string>;
+  },
+  state: Analysis | undefined,
+): ReadonlyArray<PhaseView> => {
+  const found = new Map<string, string>();
+  for (const file of snapshot.files) {
+    if ((file.kind ?? 'file') !== 'file') continue;
+    const match = /^([A-Z]{1,2})\/PHASE\.md$/.exec(file.path);
+    if (match !== null && match[1] !== undefined) found.set(match[1], file.content);
+  }
+  const ids = new Set<string>([
+    ...found.keys(),
+    ...(state?.phases.map((summary) => summary.phase) ?? []),
+  ]);
+  return [...ids]
+    .toSorted((left, right) => phaseRank(left) - phaseRank(right))
+    .map((phase) => {
+      const markdown = found.get(phase);
+      const record = markdown === undefined ? undefined : parsePhaseFile(markdown);
+      const view: MutablePhaseView = {
+        phase,
+        review: record?.review,
+        gate: record?.gate,
+        status: record?.status,
+        locked: state?.phases.find((summary) => summary.phase === phase)?.locked === true,
+        proven: evidence.proven.includes(phase),
+        waived: evidence.waived.includes(phase),
+      };
+      if (record?.reviewReason !== undefined) view.reviewReason = record.reviewReason;
+      return view;
+    });
+};
+
+/** Render one phase's review decision for the status and state lines. */
+export const phaseReviewText = (phase: PhaseView): string =>
+  phase.review === undefined
+    ? 'review none'
+    : phase.review === 'waived' && phase.reviewReason !== undefined
+      ? `review waived: ${phase.reviewReason}`
+      : `review ${phase.review}`;
+
+/** Render one phase's gate state: kind plus derived proof. */
+export const phaseGateText = (phase: PhaseView): string => {
+  if (phase.gate === undefined) return 'gate none';
+  if (phase.gate === 'none') return 'gate none';
+  return `gate ${phase.gate} ${phase.proven ? 'proven' : 'unproven'}`;
+};
+
+/** Task ids carrying a `GATES.md`, read from the nested task directory. */
 export const gatedTaskIds = (snapshot: SpecSnapshot): ReadonlySet<string> => {
   const ids = new Set<string>();
   for (const file of snapshot.files) {
-    const slash = file.path.indexOf('/');
-    if (slash === -1) continue;
-    const dir = file.path.slice(0, slash);
-    if (file.path !== `${dir}/GATES.md`) continue;
-    const parsed = parseTaskDirName(dir);
+    const segments = file.path.split('/');
+    if (segments.length !== 3 || segments[2] !== 'GATES.md') continue;
+    const parsed = parseTaskDirName(segments[1] ?? '');
     if (parsed !== undefined) ids.add(parsed.id);
   }
   return ids;
+};
+
+/** Phase id → the contents of its `GATES.md`, when it has one. */
+export const phaseGateFiles = (snapshot: SpecSnapshot): ReadonlyMap<string, string> => {
+  const gates = new Map<string, string>();
+  for (const file of snapshot.files) {
+    if ((file.kind ?? 'file') !== 'file') continue;
+    const match = /^([A-Z]{1,2})\/GATES\.md$/.exec(file.path);
+    if (match !== null && match[1] !== undefined) gates.set(match[1], file.content);
+  }
+  return gates;
 };
 
 /**
@@ -102,23 +231,35 @@ export const summarize = (
 ): StatusReport => {
   const specFile = snapshot.files.find((file) => file.path === 'SPEC.md');
   const spec = specFile === undefined ? undefined : parseSpecFile(specFile.content);
+  const parsedSpec = specFile === undefined ? null : parseMarkdown(specFile.content);
+  const specVersion = parsedSpec === null ? undefined : readSpecVersion(parsedSpec.fields).version;
   const ordered = tasksOf(snapshot);
-  const reviewInput: ReviewInput = { series: review, requireRounds: false };
+  const reviewInput: ReviewInput = { series: review, requireRounds: false, available: true };
+  const evidence = phaseEvidence(snapshot);
+  const state =
+    spec === undefined
+      ? undefined
+      : analyzeLifecycle({
+          status: spec.status,
+          reviewedPhases: reviewedPhasesOf(snapshot, reviewInput),
+          waivedPhases: evidence.waived,
+          nonePhases: evidence.none,
+          provenPhases: evidence.proven,
+          tasks: ordered.map((task) => ({ id: task.id, status: task.status })),
+          // A complete v2 record must agree with its derived locks; a frozen v1
+          // record keeps the status-only rule it shipped with.
+          requireLocks: specVersion !== undefined && specVersion >= 2,
+        });
   return {
     name,
     spec,
     tasks: ordered,
-    state:
-      spec === undefined
-        ? undefined
-        : analyzeLifecycle({
-            status: spec.status,
-            lockedPhases: spec.lockedPhases,
-            tasks: ordered.map((task) => ({ id: task.id, status: task.status })),
-          }),
+    state,
     verify: verifySpecTree(snapshot, reviewInput),
     sizing,
     gatedTaskIds: gatedTaskIds(snapshot),
+    phaseGates: phaseGateFiles(snapshot),
+    phases: phaseViews(snapshot, evidence, state),
   };
 };
 
@@ -132,7 +273,11 @@ export const summarize = (
 export const status = (
   root: string,
   name: string,
-): Effect.Effect<StatusReport, SurfaceError | SpecStore.StoreError, SpecStore.SpecStore> =>
+): Effect.Effect<
+  StatusReport,
+  SurfaceError | SpecStore.StoreError,
+  SpecStore.SpecStore | FileSystem.FileSystem
+> =>
   Effect.gen(function* () {
     yield* guardFailure('SpecStatus', guardSpecName(name, GUARD_RERUN.status));
     const store = yield* SpecStore.SpecStore;
@@ -155,7 +300,16 @@ export const status = (
     // undispatchable everywhere instead of only failing the gate.
     const review = yield* store.reviewSeries(root, name);
     const sizing = yield* loadSizing(root, name, snapshot);
-    return summarize(name, snapshot, review, sizing);
+    const summary = summarize(name, snapshot, review, sizing);
+    const workspace = workspaceOf(root);
+    const fs = yield* FileSystem.FileSystem;
+    const configText = yield* fs
+      .readFileString(`${workspace.replace(/\/+$/, '')}/${GATE_CONFIG_FILE}`)
+      .pipe(Effect.option);
+    const lanes = parseGateConfig(Option.isNone(configText) ? undefined : configText.value).config
+      .heavy.lanes;
+    const runs = yield* runSummary(workspace, yield* Clock.currentTimeMillis, lanes);
+    return { ...summary, runs };
   });
 
 /** Per-status display mark, kept terse for token efficiency. */
@@ -176,6 +330,32 @@ export const statusCounts = (tasks: ReadonlyArray<Task>): string =>
     .map((entry) => `${entry.count} ${entry.status}`)
     .join(' \u00b7 ');
 
+/** Elapsed whole seconds since an instant, or 0 when it is unparsable. */
+const elapsedSeconds = (at: string | undefined, now: number): number => {
+  if (at === undefined) return 0;
+  const parsed = Date.parse(at);
+  return Number.isNaN(parsed) ? 0 : Math.max(0, Math.round((now - parsed) / 1000));
+};
+
+/**
+ * Render the workspace run panel: one summary line, then one line per run with
+ * its key, lane occupancy, owner task, state, and elapsed time.
+ * @param runs - summary read from the workspace runtime tree
+ * @returns the display lines
+ */
+export const renderRuns = (runs: RunSummary): ReadonlyArray<string> => {
+  const lines: Array<string> = [
+    `runs ${runs.inFlight} in-flight \u00b7 ${runs.queued} queued \u00b7 ${runs.stale} stale`,
+  ];
+  for (const run of runs.runs) {
+    const attempt = lastAttempt(run);
+    lines.push(
+      `run ${run.key} ${run.lane} ${runs.inFlight}/${runs.lanes} ${attempt?.owner.task ?? 'phase'} ${run.state} ${elapsedSeconds(attempt?.startedAt, runs.at)}s`,
+    );
+  }
+  return lines;
+};
+
 /**
  * Render a human-readable status panel for one spec.
  * @param report - report from {@link status}
@@ -189,8 +369,10 @@ export const renderStatus = (report: StatusReport): string => {
   } else {
     lines.push(`${spec.name} \u00b7 ${spec.status} \u00b7 ${spec.workspaceType}`);
     if (report.state !== undefined) lines.push(`state ${report.state.state}`);
-    const locked =
-      spec.lockedPhases.length > 0 ? ` \u00b7 locked ${spec.lockedPhases.join(',')}` : '';
+    const lockedPhases = (report.state?.phases ?? [])
+      .filter((phase) => phase.locked)
+      .map((phase) => phase.phase);
+    const locked = lockedPhases.length > 0 ? ` \u00b7 locked ${lockedPhases.join(',')}` : '';
     lines.push(`author ${spec.author} \u00b7 created ${spec.created}${locked}`);
   }
   lines.push(
@@ -231,20 +413,36 @@ export const renderStatus = (report: StatusReport): string => {
       ? configFilesLine(report.sizing)
       : `sizing \u2717 ${sizingErrors} issue${sizingErrors === 1 ? '' : 's'}`,
   );
+  if (report.runs !== undefined) lines.push(...renderRuns(report.runs));
 
-  const phases = new Map<string, Array<Task>>();
+  const tasksByPhase = new Map<string, Array<Task>>();
   for (const task of report.tasks) {
     const phase = phaseOf(task.id);
-    const bucket = phases.get(phase) ?? [];
+    const bucket = tasksByPhase.get(phase) ?? [];
     bucket.push(task);
-    phases.set(phase, bucket);
+    tasksByPhase.set(phase, bucket);
   }
-  for (const [phase, tasks] of phases) {
-    const locked = report.state?.phases.find((summary) => summary.phase === phase)?.locked === true;
+  const views = new Map((report.phases ?? []).map((view) => [view.phase, view]));
+  const phaseIds = [...new Set([...views.keys(), ...tasksByPhase.keys()])].toSorted(
+    (left, right) => phaseRank(left) - phaseRank(right),
+  );
+  for (const phase of phaseIds) {
+    const tasks = tasksByPhase.get(phase) ?? [];
+    const view = views.get(phase);
+    const locked = view?.locked === true;
     const sizes = phaseSizes(tasks);
+    // A v2 phase shows its PHASE.md decision and derived gate state beside the
+    // live lock; a v1 phase with no record keeps the original header shape.
+    const decision =
+      view !== undefined && view.review !== undefined
+        ? ` \u00b7 ${phaseReviewText(view)} \u00b7 ${phaseGateText(view)}`
+        : '';
+    // A review-free phase holds no rounds, so its budget is 0 even though the
+    // task sizes would otherwise buy at least one.
+    const budget = view?.review === 'none' ? 0 : phaseReviewBudget(tasks.map(budgetInput));
     lines.push('');
     lines.push(
-      `Phase ${phase}${locked ? ' \u00b7 locked' : ''} \u00b7 budget ${phaseReviewBudget(tasks.map(budgetInput))}${sizes.length === 0 ? '' : ` \u00b7 sizes ${sizes.join(',')}`}`,
+      `Phase ${phase}${locked ? ' \u00b7 locked' : ''}${decision} \u00b7 budget ${budget}${sizes.length === 0 ? '' : ` \u00b7 sizes ${sizes.join(',')}`}`,
     );
     if (!blocked) {
       lines.push(
@@ -273,7 +471,10 @@ export interface StateReport {
   readonly state: State;
   /** Active phase: the first unlocked phase with unfinished work, if any. */
   readonly phase: string | undefined;
+  /** Derived locks: complete phases with a passed review round. */
   readonly lockedPhases: ReadonlyArray<string>;
+  /** Per-phase `PHASE.md` decision and derived lock/gate state. */
+  readonly phases?: ReadonlyArray<PhaseView>;
   /** True when an error `check` reports blocks dispatch of this spec. */
   readonly blocked: boolean;
   /**
@@ -299,7 +500,10 @@ export const stateOf = (report: StatusReport): StateReport => ({
   declared: report.spec?.status ?? 'unreadable',
   state: report.state?.state ?? 'inconsistent',
   phase: activePhaseOf(report),
-  lockedPhases: report.spec?.lockedPhases ?? [],
+  lockedPhases: (report.state?.phases ?? [])
+    .filter((phase) => phase.locked)
+    .map((phase) => phase.phase),
+  phases: report.phases ?? [],
   blocked: dispatchBlocked(report.sizing, report.verify, report.name),
   blockers: [
     ...new Set(
@@ -326,7 +530,7 @@ export const stateWithReport = (
 ): Effect.Effect<
   { readonly report: StatusReport; readonly state: StateReport },
   SurfaceError | SpecStore.StoreError,
-  SpecStore.SpecStore
+  SpecStore.SpecStore | FileSystem.FileSystem
 > =>
   Effect.gen(function* () {
     yield* guardFailure('SpecState', guardSpecName(name, GUARD_RERUN.state));
@@ -345,8 +549,11 @@ export const stateWithReport = (
 export const state = (
   root: string,
   name: string,
-): Effect.Effect<StateReport, SurfaceError | SpecStore.StoreError, SpecStore.SpecStore> =>
-  stateWithReport(root, name).pipe(Effect.map((found) => found.state));
+): Effect.Effect<
+  StateReport,
+  SurfaceError | SpecStore.StoreError,
+  SpecStore.SpecStore | FileSystem.FileSystem
+> => stateWithReport(root, name).pipe(Effect.map((found) => found.state));
 
 /** The active phase from a status report: first unlocked phase with unfinished work. */
 export const activePhaseOf = (report: StatusReport): string | undefined =>
@@ -362,7 +569,18 @@ export const activePhaseOf = (report: StatusReport): string | undefined =>
 export const renderState = (report: StateReport): string => {
   const phase = report.phase === undefined ? 'none' : report.phase;
   const locked = report.lockedPhases.length === 0 ? 'none' : report.lockedPhases.join(',');
-  const line = `${report.name} · ${report.declared} · state ${report.state} · phase ${phase} · locked ${locked}`;
+  // Show the active phase's PHASE.md decision and derived gate proof. A v1
+  // phase has no record, so its line keeps the original compact shape.
+  const views = report.phases ?? [];
+  const shown =
+    report.phase === undefined
+      ? views.findLast((view) => view.review !== undefined)
+      : views.find((view) => view.phase === report.phase);
+  const decision =
+    shown === undefined || shown.review === undefined
+      ? ''
+      : ` · review ${shown.phase}:${shown.review}${shown.reviewReason === undefined ? '' : ` (${shown.reviewReason})`} · ${phaseGateText(shown)}`;
+  const line = `${report.name} · ${report.declared} · state ${report.state} · phase ${phase} · locked ${locked}${decision}`;
   if (!report.blocked) return line;
   const codes = report.blockers.length === 0 ? 'unspecified' : report.blockers.join(', ');
   return `${line} · blocked ${codes}\nnext mf-specs status --name ${report.name}`;
@@ -375,6 +593,8 @@ export interface ReadyTask {
   readonly type: string;
   /** True when the task carries a per-task `GATES.md` that must pass first. */
   readonly gates: boolean;
+  /** Declared `write-scope` tokens, or undefined when the task declares none. */
+  readonly writeScope?: ReadonlyArray<string> | undefined;
   /** Declared size, resolved target, and winning layer. */
   readonly sizing: TaskTarget;
 }
@@ -392,6 +612,12 @@ export interface NextReport {
   readonly verify: Result;
   /** Loaded sizing layers for target resolution. */
   readonly sizing: SizingLoad;
+  /** Per-phase `PHASE.md` decision and derived lock/gate state. */
+  readonly phases?: ReadonlyArray<PhaseView>;
+  /** Phase id → its `GATES.md` contents. */
+  readonly phaseGates?: ReadonlyMap<string, string>;
+  /** Workspace run states, read for the run panel. */
+  readonly runs?: RunSummary;
 }
 
 /**
@@ -404,16 +630,23 @@ export interface NextReport {
 export const nextOf = (report: StatusReport): NextReport => {
   const derived = report.state?.state ?? 'inconsistent';
   const phase = activePhaseOf(report);
+  const base = {
+    name: report.name,
+    state: derived,
+    verify: report.verify,
+    sizing: report.sizing,
+    phases: report.phases ?? [],
+    phaseGates: report.phaseGates ?? new Map(),
+  };
+  const runs = report.runs;
   if (derived === 'inconsistent' || derived === 'complete' || phase === undefined) {
-    return {
-      name: report.name,
-      state: derived,
+    const empty: NextReport = {
+      ...base,
       phase: undefined,
       budget: undefined,
       ready: [],
-      verify: report.verify,
-      sizing: report.sizing,
     };
+    return runs === undefined ? empty : { ...empty, runs };
   }
   const byId = new Map(report.tasks.map((task) => [task.id, task]));
   const gates = report.gatedTaskIds ?? new Set<string>();
@@ -426,6 +659,7 @@ export const nextOf = (report: StatusReport): NextReport => {
       name: task.name,
       type: task.type,
       gates: gates.has(task.id),
+      writeScope: writeScopeTokens(task),
       sizing: taskTarget(report.sizing, task),
     };
     if (task.type === 'review') {
@@ -435,16 +669,15 @@ export const nextOf = (report: StatusReport): NextReport => {
     }
     if (task.dependsOn.every((dep) => byId.get(dep)?.status === 'complete')) ready.push(entry);
   }
-  ready.sort((a, b) => a.id.localeCompare(b.id));
-  return {
-    name: report.name,
-    state: derived,
+  ready.sort((a, b) => sortKey(a.id) - sortKey(b.id));
+  const reviewFree = (report.phases ?? []).find((view) => view.phase === phase)?.review === 'none';
+  const filled: NextReport = {
+    ...base,
     phase,
-    budget: phaseReviewBudget(inPhase.map(budgetInput)),
+    budget: reviewFree ? 0 : phaseReviewBudget(inPhase.map(budgetInput)),
     ready,
-    verify: report.verify,
-    sizing: report.sizing,
   };
+  return runs === undefined ? filled : { ...filled, runs };
 };
 
 /**
@@ -460,7 +693,11 @@ export const nextOf = (report: StatusReport): NextReport => {
 export const next = (
   root: string,
   name: string,
-): Effect.Effect<NextReport, SurfaceError | SpecStore.StoreError, SpecStore.SpecStore> =>
+): Effect.Effect<
+  NextReport,
+  SurfaceError | SpecStore.StoreError,
+  SpecStore.SpecStore | FileSystem.FileSystem
+> =>
   Effect.gen(function* () {
     yield* guardFailure('SpecNext', guardSpecName(name, GUARD_RERUN.next));
     const store = yield* SpecStore.SpecStore;
@@ -481,7 +718,8 @@ export const next = (
     const review = yield* store.reviewSeries(root, name);
     const sizing = yield* loadSizing(root, name, snapshot);
     const report = summarize(name, snapshot, review, sizing);
-    return nextOf(report);
+    const runs = yield* runSummary(workspaceOf(root), yield* Clock.currentTimeMillis);
+    return { ...nextOf(report), runs };
   });
 
 /**
@@ -495,7 +733,30 @@ export const next = (
  */
 export const renderNext = (report: NextReport): string => {
   const budget = report.budget === undefined ? '' : ` · budget ${report.budget}`;
-  const head = `state ${report.state}${report.phase === undefined ? '' : ` · phase ${report.phase}`}${budget}`;
+  const view =
+    report.phase === undefined
+      ? undefined
+      : (report.phases ?? []).find((phase) => phase.phase === report.phase);
+  const decision =
+    view === undefined || view.review === undefined
+      ? ''
+      : ` · review ${view.phase}:${view.review} · ${phaseGateText(view)}`;
+  const phaseGateTextOf =
+    report.phase === undefined
+      ? ''
+      : ((text) => {
+          if (text === undefined) return '';
+          const kinds = [
+            ...new Set(
+              parseGates(text)
+                .map((stage) => stage.kind)
+                .filter((kind): kind is NonNullable<typeof kind> => kind !== undefined),
+            ),
+          ].toSorted((left, right) => left.localeCompare(right));
+          const kind = kinds.length === 0 ? 'unclassified' : kinds.join('+');
+          return ` · phase-gate ${kind} repo · shared once at boundary`;
+        })((report.phaseGates ?? new Map()).get(report.phase));
+  const head = `state ${report.state}${report.phase === undefined ? '' : ` · phase ${report.phase}`}${budget}${decision}${phaseGateTextOf}`;
   if (report.ready.length === 0) return `${head}\nready none`;
   // The same predicate the command exits on: a tree `check` calls invalid never
   // prints a dispatchable target, whatever kind of error blocks it.
@@ -506,7 +767,9 @@ export const renderNext = (report: NextReport): string => {
       // A ready task with a missing or unknown size gets no target; its
       // siblings still carry theirs, and the command prints the diagnostic.
       const sized = !blocked && task.sizing.size !== undefined;
-      return `${task.id}  ${task.gates ? 'gated  ' : ''}${task.type}  ${task.name}${sized ? targetColumns(task.sizing) : ''}`;
+      const scope = task.writeScope === undefined ? 'none' : task.writeScope.join(',');
+      const gate = task.gates ? ` · gate task-local ${scope}` : '';
+      return `${task.id}  ${task.gates ? 'gated  ' : ''}${task.type}  ${task.name}${gate}${sized ? targetColumns(task.sizing) : ''}`;
     }),
   ].join('\n');
 };

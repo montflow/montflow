@@ -8,9 +8,17 @@ not.
 ## Belongs here
 
 - `inspect({ prompt, values })` — a flat, display-ready summary: metadata, one
-  entry per variable with its effective value, and the required values still
-  missing
-- `table(summary)` — that summary as aligned plain text
+  entry per variable with its type, condition (`condition`), current visibility
+  (`visible`), effective value, and unanswered flag, plus the required values
+  still missing
+- `table(summary)` — that summary as aligned plain text; hidden rows stay in the
+  table with a `(hidden)` marker and their condition, so a reader can see that a
+  branch exists
+- `resolveInputs(prompt, values)` — accepts values for visible variables only,
+  drops a hidden branch's stale answer, and refuses a discrete value outside its
+  options or a confirm answer outside `yes`/`""`
+- `invalidOptionMessage` / `invalidConfirmMessage` — the shared refusal wording
+  for a select and a confirm, used by the fill dialog and the CLI
 - `execute({ prompt, model, values, skills })` — resolves a run to an
   {@link ExecutePlan}, or blocks it with a message written for whoever asked
 - `ExecutePlan` / `ExecuteReady` / `ExecuteBlocked` / `ExecuteProblem`
@@ -31,8 +39,10 @@ not.
   has to satisfy is then testable without a model, and the same plan drives
   the CLI, the TUI, and an OpenCode tool.
 - **Check order is deliberate**: empty template → unparseable template →
-  missing model → missing required values. The cheapest decisive check runs
-  first so a blocked plan names _one_ real problem instead of a pile.
+  file-level verification → missing model → rejected values → missing required
+  values. The cheapest decisive check runs first so a blocked plan names _one_
+  real problem instead of a pile. `render` and the interactive fill run the same
+  file-level verification, so all three surfaces accept exactly the same files.
 - **Messages are self-contained.** Every blocked plan names the flag to pass
   _and_ the file to edit, because the reader is usually an agent that has
   neither the skill loaded nor the conversation that produced the prompt.

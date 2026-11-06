@@ -1,0 +1,141 @@
+/**
+ * Build-time embedded payload: the one generator every package's `build:cli`
+ * runs. It reads the package manifest and writes a TypeScript module carrying
+ * every shipped artifact, so a `bun build --compile` binary can still verify
+ * and repair its payload when the package directory is not on disk.
+ */
+
+// oxlint-disable-next-line montflow/no-node-platform-imports -- build-time composition root: the generator runs from a package script, not an Effect runtime.
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+// oxlint-disable-next-line montflow/no-node-platform-imports -- same build-time boundary as above.
+import { dirname, join } from 'node:path';
+import {
+  PAYLOAD_FORMS,
+  REQUIRED_TREE_FILE,
+  type PayloadEntry,
+  type PayloadKind,
+  type PayloadManifest,
+} from '../manifest/index.js';
+
+/** One artifact's files, keyed by filename. A file kind has exactly one entry. */
+export type PayloadFiles = Readonly<Record<string, string>>;
+
+/** Every artifact a package ships, keyed by kind and then by name. */
+export type EmbeddedPayload = Readonly<Record<string, Readonly<Record<string, PayloadFiles>>>>;
+
+/** The concrete map the generator fills before it is written as a module. */
+interface EmbeddedBuckets {
+  skill: Record<string, PayloadFiles>;
+  profile: Record<string, PayloadFiles>;
+  prompt: Record<string, PayloadFiles>;
+  tier: Record<string, PayloadFiles>;
+  rigor: Record<string, PayloadFiles>;
+}
+
+/** Empty buckets for every kind, so the generated module has a stable shape. */
+const emptyBuckets = (): EmbeddedBuckets => ({
+  skill: {},
+  profile: {},
+  prompt: {},
+  tier: {},
+  rigor: {},
+});
+
+/** Options for {@link generateEmbeddedPayload}. */
+export interface GenerateEmbeddedPayloadOptions {
+  /** The package directory that owns `source` paths. */
+  readonly packageRoot: string;
+  /** The validated package manifest. */
+  readonly manifest: PayloadManifest;
+  /** The TypeScript module to write. */
+  readonly output: string;
+}
+
+/** Resolve every file of a flat tree artifact. */
+const readTree = async (dir: string): Promise<PayloadFiles> => {
+  const entries = (await readdir(dir)).filter((entry) => !entry.startsWith('.')).toSorted();
+  const resolved = await Promise.all(
+    entries.map(async (entry): Promise<readonly [string, string]> => {
+      const path = join(dir, entry);
+      const info = await stat(path);
+      if (info.isDirectory()) {
+        throw new Error(
+          `payload tree '${dir}' contains directory '${entry}'; only flat files ship`,
+        );
+      }
+      return [entry, await readFile(path, 'utf8')] as const;
+    }),
+  );
+  return Object.fromEntries(resolved);
+};
+
+/** Resolve one manifest entry to its files, refusing an incomplete tree. */
+const readEntry = async (packageRoot: string, entry: PayloadEntry): Promise<PayloadFiles> => {
+  const source = join(packageRoot, entry.source);
+  if (PAYLOAD_FORMS[entry.kind] === 'tree') {
+    const files = await readTree(source);
+    const required = REQUIRED_TREE_FILE[entry.kind];
+    if (required !== undefined && files[required] === undefined) {
+      throw new Error(`${entry.kind} '${entry.name}' has no ${required} at '${source}'`);
+    }
+    return files;
+  }
+  const basename = entry.source.split('/').at(-1) ?? entry.source;
+  return { [basename]: await readFile(source, 'utf8') };
+};
+
+/** Human-readable summary of what was embedded. */
+const describe = (manifest: PayloadManifest, embedded: EmbeddedBuckets): string => {
+  const parts: Array<string> = [];
+  // SAFETY: `EmbeddedBuckets` is constructed here with exactly the payload kind keys.
+  for (const kind of Object.keys(embedded) as Array<PayloadKind>) {
+    const byName = embedded[kind];
+    const names = Object.keys(byName);
+    if (names.length === 0) continue;
+    const bytes = Object.values(byName).reduce(
+      (total, files) => total + Object.values(files).reduce((sum, text) => sum + text.length, 0),
+      0,
+    );
+    parts.push(`${names.length} ${kind} (${bytes} bytes)`);
+  }
+  return `${manifest.package}: ${parts.join(', ')}`;
+};
+
+/**
+ * Read every manifest entry and write one generated module.
+ *
+ * The filesystem wins at runtime, so this copy is a fallback for a compiled
+ * binary only; a test per package asserts it equals the packaged bytes.
+ * @param options - package root, validated manifest, and output path
+ * @returns a summary of what was written
+ */
+export const generateEmbeddedPayload = async (
+  options: GenerateEmbeddedPayloadOptions,
+): Promise<string> => {
+  const buckets = emptyBuckets();
+  const resolved = await Promise.all(
+    options.manifest.payloads.map(async (entry) => ({
+      entry,
+      files: await readEntry(options.packageRoot, entry),
+    })),
+  );
+  for (const { entry, files } of resolved) {
+    buckets[entry.kind][entry.name] = files;
+  }
+  const body = `/**
+ * DO NOT EDIT — generated by \`bun run generate:payload\`.
+ *
+ * The packaged payload, embedded verbatim so this package's compiled binary is
+ * self-contained under \`bun build --compile\`, where the package directory does
+ * not exist at runtime. \`doctor\` prefers a readable package directory and falls
+ * back to this copy; the package's embedded-payload test fails if the two ever
+ * diverge.
+ *
+ * Source: \`payload.json\`
+ */
+export const EMBEDDED_PAYLOAD: Readonly<Record<'skill' | 'profile' | 'prompt' | 'tier' | 'rigor', Readonly<Record<string, Readonly<Record<string, string>>>>>> = ${JSON.stringify(buckets, null, 2)};
+`;
+  await mkdir(dirname(options.output), { recursive: true });
+  await writeFile(options.output, body, 'utf8');
+  return describe(options.manifest, buckets);
+};

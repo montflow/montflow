@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Schema } from 'effect';
 import * as Vitest from '@effect/vitest';
 import * as Prompts from '../index.js';
 
@@ -17,12 +18,17 @@ const modelRaw = readFileSync(
 interface VariableOverride {
   readonly label?: string;
   readonly description?: string;
-  readonly type?: 'text' | 'textarea' | 'select';
+  readonly type?: 'text' | 'textarea' | 'select' | 'confirm';
   readonly options?: readonly string[];
   readonly source?: 'specs';
   readonly internal?: boolean;
   readonly required?: boolean;
   readonly default?: string;
+  readonly when?: {
+    readonly controller: string;
+    readonly equals?: string;
+    readonly truthy?: true;
+  };
 }
 
 /** Either accepted `variables` form: the legacy bare name, or the object. */
@@ -226,6 +232,295 @@ Vitest.describe('Prompts.verifyPromptFile variables', () => {
       promptFile({ name: 'audit', template: 'Audit {{user.name}}' }),
     );
     Vitest.expect(result.expectedVariables).toBeUndefined();
+  });
+});
+
+Vitest.describe('Prompts.verifyPromptFile confirm fields', () => {
+  const confirmFile = (rest: VariableOverride): string =>
+    promptFile({
+      name: 'audit',
+      template: 'Flag: {{flag}}{{#if child}} {{child}}{{/if}}',
+      variables: [
+        variableFile('flag', { type: 'confirm', ...rest }),
+        variableFile('child', { required: false, when: { controller: 'flag', truthy: true } }),
+      ],
+    });
+
+  Vitest.it('diagnoses every field a confirm cannot carry', () => {
+    const result = Prompts.verifyPromptFile(
+      'audit',
+      confirmFile({ options: ['x'], default: 'x', required: true }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    const messages = result.issues.map((found) => found.message);
+    Vitest.expect(messages).toContain("'flag' is a confirm but declares options.");
+    Vitest.expect(messages).toContain("'flag' is a confirm but has a default.");
+    Vitest.expect(messages).toContain("'flag' is a confirm but is required.");
+    for (const found of result.issues) {
+      Vitest.expect(found.fix).toBeDefined();
+    }
+  });
+
+  Vitest.it('still accepts a confirm with no options, default, or required', () => {
+    Vitest.expect(Prompts.verifyPromptFile('audit', confirmFile({}))).toStrictEqual({
+      valid: true,
+      issues: [],
+    });
+  });
+
+  Vitest.it('keeps the raw fields through decode so the diagnosis can fire', () => {
+    const decoded = Schema.decodeUnknownSync(Prompts.Prompt)({
+      name: 'audit',
+      description: 'Does X.',
+      template: 'Flag: {{flag}}{{#if child}} {{child}}{{/if}}',
+      variables: [
+        { name: 'flag', type: 'confirm', options: ['x'], default: 'x', required: true },
+        { name: 'child', required: false, when: { controller: 'flag', truthy: true } },
+      ],
+      skills: [],
+      model: '',
+    });
+    const flag = decoded.variables[0];
+    Vitest.expect(flag).toMatchObject({
+      type: 'confirm',
+      options: ['x'],
+      default: 'x',
+      required: true,
+    });
+  });
+});
+
+Vitest.describe('Prompts.verifyPromptFile conditions', () => {
+  const conditionalTemplate = 'Isolated: {{isolated}}{{#if origin}} from {{origin}}{{/if}}';
+  const isolated = variableFile('isolated', { type: 'select', options: ['yes', 'no'] });
+
+  Vitest.it('accepts a condition controlled by an earlier select', () => {
+    const result = Prompts.verifyPromptFile(
+      'audit',
+      promptFile({
+        name: 'audit',
+        template: conditionalTemplate,
+        variables: [
+          isolated,
+          variableFile('origin', { when: { controller: 'isolated', equals: 'yes' } }),
+        ],
+      }),
+    );
+    Vitest.expect(result).toStrictEqual({ valid: true, issues: [] });
+  });
+
+  Vitest.it('accepts a truthy condition controlled by an earlier confirm', () => {
+    const result = Prompts.verifyPromptFile(
+      'audit',
+      promptFile({
+        name: 'audit',
+        template: 'Flag: {{flag}}{{#if child}} {{child}}{{/if}}',
+        variables: [
+          variableFile('flag', { type: 'confirm' }),
+          variableFile('child', { when: { controller: 'flag', truthy: true } }),
+        ],
+      }),
+    );
+    Vitest.expect(result).toStrictEqual({ valid: true, issues: [] });
+  });
+
+  Vitest.it('rejects an equals condition on a confirm controller', () => {
+    const result = Prompts.verifyPromptFile(
+      'audit',
+      promptFile({
+        name: 'audit',
+        template: 'Flag: {{flag}}{{#if child}} {{child}}{{/if}}',
+        variables: [
+          variableFile('flag', { type: 'confirm' }),
+          variableFile('child', { when: { controller: 'flag', equals: 'yes' } }),
+        ],
+      }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.message).toBe(
+      'truthy requires confirm; equals requires select.',
+    );
+  });
+
+  Vitest.it('keeps a prompt with no condition byte-identical to the old shape', () => {
+    const result = Prompts.verifyPromptFile(
+      'commit',
+      promptFile({
+        name: 'commit',
+        template: 'Audit {{files}}',
+        variables: ['files'],
+      }),
+    );
+    Vitest.expect(result).toStrictEqual({ valid: true, issues: [] });
+  });
+
+  Vitest.it('rejects an unknown controller', () => {
+    const result = Prompts.verifyPromptFile(
+      'audit',
+      promptFile({
+        name: 'audit',
+        template: conditionalTemplate,
+        variables: [
+          isolated,
+          variableFile('origin', { when: { controller: 'missing', equals: 'yes' } }),
+        ],
+      }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.message).toBe(
+      "when.controller 'missing' is not a declared variable.",
+    );
+    Vitest.expect(result.issues[0]?.fix).toContain('Declare');
+  });
+
+  Vitest.it('rejects a controller declared after the conditional', () => {
+    const result = Prompts.verifyPromptFile(
+      'audit',
+      promptFile({
+        name: 'audit',
+        template: '{{origin}}{{isolated}}',
+        variables: [
+          variableFile('origin', { when: { controller: 'isolated', equals: 'yes' } }),
+          isolated,
+        ],
+      }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.message).toBe("'isolated' must be declared before 'origin'.");
+    Vitest.expect(result.issues[0]?.fix).toContain('Move');
+  });
+
+  Vitest.it('rejects a non-discrete controller', () => {
+    const result = Prompts.verifyPromptFile(
+      'audit',
+      promptFile({
+        name: 'audit',
+        template: conditionalTemplate.replace('{{isolated}}', '{{mode}}'),
+        variables: [
+          variableFile('mode'),
+          variableFile('origin', { when: { controller: 'mode', equals: 'yes' } }),
+        ],
+      }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.message).toBe("when.controller 'mode' has type text.");
+    Vitest.expect(result.issues[0]?.fix).toContain('select');
+  });
+
+  Vitest.it('rejects a truthy condition on a select controller', () => {
+    const result = Prompts.verifyPromptFile(
+      'audit',
+      promptFile({
+        name: 'audit',
+        template: conditionalTemplate,
+        variables: [
+          isolated,
+          variableFile('origin', { when: { controller: 'isolated', truthy: true } }),
+        ],
+      }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.message).toBe(
+      'truthy requires confirm; equals requires select.',
+    );
+    Vitest.expect(result.issues[0]?.fix).toContain('kind');
+  });
+
+  Vitest.it('rejects an equals value the controller does not offer', () => {
+    const result = Prompts.verifyPromptFile(
+      'audit',
+      promptFile({
+        name: 'audit',
+        template: conditionalTemplate,
+        variables: [
+          isolated,
+          variableFile('origin', { when: { controller: 'isolated', equals: 'maybe' } }),
+        ],
+      }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.message).toBe("'maybe' is not an option of 'isolated'.");
+    Vitest.expect(result.issues[0]?.fix).toContain('options');
+  });
+
+  Vitest.it('rejects a condition carrying both forms', () => {
+    const result = Prompts.verifyPromptFile(
+      'audit',
+      promptFile({
+        name: 'audit',
+        template: conditionalTemplate,
+        variables: [
+          isolated,
+          variableFile('origin', {
+            when: { controller: 'isolated', equals: 'yes', truthy: true },
+          }),
+        ],
+      }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.fix).toBe(
+      "when carries both 'equals' and 'truthy'; keep one form.",
+    );
+  });
+
+  Vitest.it('rejects a conditional the template never uses', () => {
+    const result = Prompts.verifyPromptFile(
+      'audit',
+      promptFile({
+        name: 'audit',
+        template: 'Isolated: {{isolated}}',
+        variables: [
+          isolated,
+          variableFile('origin', { when: { controller: 'isolated', equals: 'yes' } }),
+        ],
+      }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.message).toBe(
+      "conditional 'origin' never appears in the template.",
+    );
+    Vitest.expect(result.issues[0]?.fix).toContain('{{#if origin}}');
+  });
+
+  Vitest.it('accepts a guard on a controller that is itself conditional', () => {
+    const result = Prompts.verifyPromptFile(
+      'audit',
+      promptFile({
+        name: 'audit',
+        template:
+          '{{isolated}}{{#if origin}} origin={{origin}}{{/if}}{{#if origin_branch}} branch={{origin_branch}}{{/if}}',
+        variables: [
+          isolated,
+          variableFile('origin', {
+            type: 'select',
+            options: ['current', 'other'],
+            when: { controller: 'isolated', equals: 'yes' },
+          }),
+          variableFile('origin_branch', {
+            required: false,
+            when: { controller: 'origin', equals: 'other' },
+          }),
+        ],
+      }),
+    );
+    Vitest.expect(result).toStrictEqual({ valid: true, issues: [] });
+  });
+
+  Vitest.it('rejects a guard on the controller instead of the conditional', () => {
+    const result = Prompts.verifyPromptFile(
+      'audit',
+      promptFile({
+        name: 'audit',
+        template: '{{#if isolated}}yes{{/if}}{{#if origin}} from {{origin}}{{/if}}',
+        variables: [
+          isolated,
+          variableFile('origin', { when: { controller: 'isolated', equals: 'yes' } }),
+        ],
+      }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.message).toBe("{{#if isolated}} guards controller 'isolated'.");
+    Vitest.expect(result.issues[0]?.fix).toContain('conditional variable');
   });
 });
 

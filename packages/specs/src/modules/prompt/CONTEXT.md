@@ -7,7 +7,7 @@ only source is `packages/specs/prompts/*.json`, installed into
 ## Belongs here
 
 - `PROMPT_NAMES` — the shipped slugs (`spec-create`, `spec-execute`,
-  `spec-sizing`), re-exported from the doctor ownership list
+  `spec-sizing`, `spec-status`), re-exported from the doctor ownership list
 - `load(root, name, values)` — gate on `mf-specs doctor`, read the installed
   prompt through `@montflow/prompts`' `PromptStore`, verify it and resolve its
   declared skills, check required values, render it, and return
@@ -37,9 +37,10 @@ only source is `packages/specs/prompts/*.json`, installed into
   `Prompts.renderPrompt`; it does not parse JSON, validate templates, or
   substitute values itself.
 - **Skills are returned, never inlined.** The caller loads `spec-create`'s
-  `montflow-create-specs`, `spec-execute`'s find/review skills, and
+  `montflow-create-specs`, `spec-execute`'s find/review skills,
   `spec-sizing`'s find/create plus `executing-skills`, `grilling`, and
-  `i-have-adhd`. No skill body is duplicated in TypeScript.
+  `i-have-adhd`, and `spec-status`'s `montflow-find-specs`. No skill body is
+  duplicated in TypeScript.
 - **Doctor-owned skills are required; the rest are advisory.** Every declared
   doctor-owned skill is resolved against the doctor result. A missing, stale, or
   blocked owned skill fails with `prompt.skill-missing` / `prompt.skill-stale` /

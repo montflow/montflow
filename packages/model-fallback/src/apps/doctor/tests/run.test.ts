@@ -42,7 +42,7 @@ Vitest.describe('Doctor.run runtime', () => {
         const result = yield* run(root);
 
         Vitest.expect(result.healthy).toBe(true);
-        Vitest.expect(result.status).toBe('repaired');
+        Vitest.expect(result.status).toBe('installed');
         Vitest.expect(result.artifacts[0]?.status).toBe('installed');
         Vitest.expect(result.artifacts[0]?.target).toBe(installedPrompt(root, promptName));
         Vitest.expect(existsSync(installedPrompt(root, promptName))).toBe(true);

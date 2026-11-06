@@ -31,9 +31,13 @@ Vitest.describe('SpecStore runtime', () => {
       const snapshot = yield* store.snapshot(root, 'ship-spec');
       Vitest.expect(snapshot.name).toBe('ship-spec');
       Vitest.expect(snapshot.files.map((file) => file.path).toSorted()).toStrictEqual([
+        'A001-implement-login',
         'A001-implement-login/TASK.md',
         'SPEC.md',
       ]);
+      Vitest.expect(snapshot.files.find((file) => file.path === 'A001-implement-login')?.kind).toBe(
+        'directory',
+      );
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
   );
 
@@ -61,8 +65,11 @@ Vitest.describe('SpecStore runtime', () => {
 
       const store = yield* SpecStore.SpecStore;
       Vitest.expect(yield* store.reviewSeries(root, 'ship-spec')).toStrictEqual([
-        { name: 'ship-spec', rounds: [{ round: '001', phase: 'A' }] },
-        { name: 'ship-spec-effect-reviewer', rounds: [{ round: '001', phase: 'A' }] },
+        { name: 'ship-spec', rounds: [{ round: '001', phase: 'A', passed: false }] },
+        {
+          name: 'ship-spec-effect-reviewer',
+          rounds: [{ round: '001', phase: 'A', passed: false }],
+        },
       ]);
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
   );
@@ -169,8 +176,56 @@ Vitest.describe('SpecStore runtime', () => {
       Vitest.expect(yield* store.hasRoot(root)).toBe(true);
       const snapshot = yield* store.snapshot(root, 'ship-login');
       Vitest.expect(snapshot.files.map((file) => file.path).toSorted()).toStrictEqual([
+        'A001-implement',
         'A001-implement/TASK.md',
         'SPEC.md',
+      ]);
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
+  );
+
+  Vitest.it.effect('moves a directory into a phase and removes it again', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = path.join(yield* fs.makeTempDirectoryScoped(), 'specs');
+      const store = yield* SpecStore.SpecStore;
+
+      yield* store.write(root, 'ship-login', [
+        { path: 'SPEC.md', content: '# Spec\n' },
+        { path: 'A001-implement/TASK.md', content: '# Task\n' },
+      ]);
+      yield* store.move(root, 'ship-login', 'A001-implement', 'A/A001-implement');
+      const moved = yield* store.snapshot(root, 'ship-login');
+      Vitest.expect(moved.files.map((file) => file.path)).toContain('A/A001-implement/TASK.md');
+      Vitest.expect(moved.files.map((file) => file.path)).not.toContain('A001-implement/TASK.md');
+
+      const error = yield* store
+        .move(root, 'ship-login', 'A/A001-implement', 'A/A001-implement')
+        .pipe(Effect.flip);
+      Vitest.expect(error.reason).toContain('already exists');
+
+      yield* store.move(root, 'ship-login', 'A/A001-implement', 'A001-implement');
+      yield* store.removeDirectory(root, 'ship-login', 'A');
+      const restored = yield* store.snapshot(root, 'ship-login');
+      Vitest.expect(restored.files.map((file) => file.path)).toContain('A001-implement/TASK.md');
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
+  );
+
+  Vitest.it.effect('reports a closed review round as passed', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = path.join(yield* fs.makeTempDirectoryScoped({ prefix: 'mf-store-' }), 'specs');
+      const target = path.join(path.dirname(root), 'reviews', 'ship-spec', '001', 'REVIEW.md');
+      yield* fs.makeDirectory(path.dirname(target), { recursive: true });
+      yield* fs.writeFileString(
+        target,
+        '## Metadata\n\n- Phase: A\n- Status: closed\n\n## Findings\n',
+      );
+
+      const store = yield* SpecStore.SpecStore;
+      Vitest.expect(yield* store.reviewSeries(root, 'ship-spec')).toStrictEqual([
+        { name: 'ship-spec', rounds: [{ round: '001', phase: 'A', passed: true }] },
       ]);
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
   );

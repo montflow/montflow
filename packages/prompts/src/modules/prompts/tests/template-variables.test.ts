@@ -2,25 +2,50 @@ import { Schema } from 'effect';
 import * as Vitest from '@effect/vitest';
 import * as Prompts from '../index.js';
 
+/** A condition in its resolved form, as `VariableEntry` produces. */
+const when = (fields: {
+  readonly controller: string;
+  readonly equals?: string;
+  readonly truthy?: true;
+}): Prompts.VariableCondition => fields;
+
+/** The resolved fields a test variable is built from, before defaults apply. */
+interface VariableInput {
+  name: string;
+  label: string;
+  description: string;
+  type: 'text' | 'textarea' | 'select' | 'confirm';
+  options?: readonly string[];
+  required: boolean;
+  default: string;
+  when?: Prompts.VariableCondition;
+}
+
 /** A variable with every field resolved, as `VariableEntry` produces. */
 const variable = (
   name: string,
   overrides: Partial<{
     label: string;
     description: string;
-    type: 'text' | 'textarea';
+    type: 'text' | 'textarea' | 'select' | 'confirm';
+    options: readonly string[];
     required: boolean;
     default: string;
+    when: Prompts.VariableCondition;
   }> = {},
-): Prompts.Variable =>
-  new Prompts.Variable({
+): Prompts.Variable => {
+  const input: VariableInput = {
     name,
     label: overrides.label ?? name,
     description: overrides.description ?? '',
     type: overrides.type ?? 'text',
     required: overrides.required ?? true,
     default: overrides.default ?? '',
-  });
+  };
+  if (overrides.options !== undefined) input.options = overrides.options;
+  if (overrides.when !== undefined) input.when = overrides.when;
+  return new Prompts.Variable(input);
+};
 
 Vitest.describe('Prompts.templateVariables', () => {
   Vitest.it('returns unique variables in first-appearance order', () => {
@@ -64,6 +89,102 @@ Vitest.describe('Prompts.resolveValues', () => {
       { name: 'a', value: '1' },
     ]);
   });
+
+  Vitest.it('resolves a hidden variable to empty and drops its stale answer', () => {
+    Vitest.expect(
+      Prompts.resolveValues([isolated, origin], { isolated: 'no', origin: 'main' }),
+    ).toStrictEqual([
+      { name: 'isolated', value: 'no' },
+      { name: 'origin', value: '' },
+    ]);
+    Vitest.expect(
+      Prompts.resolveValues([isolated, origin], { isolated: 'yes', origin: 'main' }),
+    ).toStrictEqual([
+      { name: 'isolated', value: 'yes' },
+      { name: 'origin', value: 'main' },
+    ]);
+  });
+});
+
+/** A select controller plus its conditional child, the common shape. */
+const isolated = variable('isolated', {
+  type: 'select',
+  options: ['yes', 'no'],
+  required: true,
+});
+const origin = variable('origin', {
+  required: false,
+  when: when({ controller: 'isolated', equals: 'yes' }),
+});
+
+Vitest.describe('Prompts.isVisible', () => {
+  Vitest.it('treats a variable without a condition as always visible', () => {
+    Vitest.expect(Prompts.isVisible('isolated', [isolated, origin], {})).toBe(true);
+  });
+
+  Vitest.it('compares the controller effective value: supplied, default, then empty', () => {
+    Vitest.expect(Prompts.isVisible('origin', [isolated, origin], { isolated: 'yes' })).toBe(true);
+    Vitest.expect(Prompts.isVisible('origin', [isolated, origin], { isolated: 'no' })).toBe(false);
+    const defaulted = variable('isolated', {
+      type: 'select',
+      options: ['yes', 'no'],
+      default: 'yes',
+    });
+    Vitest.expect(Prompts.isVisible('origin', [defaulted, origin], {})).toBe(true);
+    Vitest.expect(Prompts.isVisible('origin', [isolated, origin], {})).toBe(false);
+  });
+
+  Vitest.it('hides a dependent when its controller is itself hidden', () => {
+    const gate = variable('gate', {
+      required: false,
+      when: when({ controller: 'isolated', equals: 'yes' }),
+    });
+    const child = variable('child', {
+      required: false,
+      when: when({ controller: 'gate', equals: 'go' }),
+    });
+    Vitest.expect(
+      Prompts.isVisible('child', [isolated, gate, child], { isolated: 'no', gate: 'go' }),
+    ).toBe(false);
+  });
+
+  Vitest.it('resolves truthy visibility through a confirm controller', () => {
+    const flag = variable('flag', { type: 'confirm', required: false });
+    const child = variable('child', {
+      required: false,
+      when: when({ controller: 'flag', truthy: true }),
+    });
+    Vitest.expect(Prompts.isVisible('child', [flag, child], { flag: 'yes' })).toBe(true);
+    Vitest.expect(Prompts.isVisible('child', [flag, child], { flag: '' })).toBe(false);
+    Vitest.expect(Prompts.isVisible('child', [flag, child], {})).toBe(false);
+  });
+
+  Vitest.it('keeps a dependent hidden when its confirm controller is hidden', () => {
+    const gate = variable('gate', {
+      type: 'confirm',
+      required: false,
+      when: when({ controller: 'isolated', equals: 'yes' }),
+    });
+    const child = variable('child', {
+      required: false,
+      when: when({ controller: 'gate', truthy: true }),
+    });
+    Vitest.expect(
+      Prompts.isVisible('child', [isolated, gate, child], { isolated: 'no', gate: 'yes' }),
+    ).toBe(false);
+    Vitest.expect(
+      Prompts.isVisible('child', [isolated, gate, child], { isolated: 'yes', gate: 'yes' }),
+    ).toBe(true);
+  });
+
+  Vitest.it('lists visible variables in declaration order', () => {
+    Vitest.expect(
+      Prompts.visibleVariables([isolated, origin], { isolated: 'yes' }).map((entry) => entry.name),
+    ).toStrictEqual(['isolated', 'origin']);
+    Vitest.expect(
+      Prompts.visibleVariables([isolated, origin], { isolated: 'no' }).map((entry) => entry.name),
+    ).toStrictEqual(['isolated']);
+  });
 });
 
 Vitest.describe('Prompts.missingRequired', () => {
@@ -81,6 +202,25 @@ Vitest.describe('Prompts.missingRequired', () => {
 
   Vitest.it('is empty when every required variable has a value or a default', () => {
     Vitest.expect(Prompts.missingRequired([variable('a', { default: 'x' })], {})).toStrictEqual([]);
+  });
+
+  Vitest.it('never reports a hidden required variable as missing', () => {
+    const requiredOrigin = variable('origin', {
+      required: true,
+      when: when({ controller: 'isolated', equals: 'yes' }),
+    });
+    Vitest.expect(
+      Prompts.missingRequired([isolated, requiredOrigin], { isolated: 'no' }),
+    ).toStrictEqual([]);
+    Vitest.expect(
+      Prompts.missingRequired([isolated, requiredOrigin], { isolated: 'yes' }),
+    ).toStrictEqual(['origin']);
+  });
+
+  Vitest.it('never reports an unchecked confirm as missing', () => {
+    const flag = variable('flag', { type: 'confirm', required: true });
+    Vitest.expect(Prompts.missingRequired([flag], {})).toStrictEqual([]);
+    Vitest.expect(Prompts.missingRequired([flag], { flag: 'yes' })).toStrictEqual([]);
   });
 });
 
@@ -121,6 +261,28 @@ Vitest.describe('Prompts.renderToString', () => {
   Vitest.it('renders an undeclared reference as empty rather than throwing', () => {
     Vitest.expect(Prompts.renderToString('[{{ghost}}]', [], {})).toBe('[]');
   });
+
+  Vitest.it('takes the else branch and substitutes nothing for a hidden variable', () => {
+    const template = '{{#if origin}}from {{origin}}{{else}}current{{/if}}';
+    Vitest.expect(
+      Prompts.renderToString(template, [isolated, origin], {
+        isolated: 'no',
+        origin: 'stale answer',
+      }),
+    ).toBe('current');
+    Vitest.expect(
+      Prompts.renderToString(template, [isolated, origin], {
+        isolated: 'yes',
+        origin: 'main',
+      }),
+    ).toBe('from main');
+    Vitest.expect(
+      Prompts.renderToString('[{{origin}}]', [isolated, origin], {
+        isolated: 'no',
+        origin: 'stale answer',
+      }),
+    ).toBe('[]');
+  });
 });
 
 /** Decode one `variables` entry from its on-disk form. */
@@ -136,12 +298,17 @@ interface VariableFileValue {
   readonly name: string;
   readonly label?: string;
   readonly description?: string;
-  readonly type?: 'text' | 'textarea' | 'select';
+  readonly type?: 'text' | 'textarea' | 'select' | 'confirm';
   readonly options?: readonly string[];
   readonly source?: 'specs';
   readonly internal?: boolean;
   readonly required?: boolean;
   readonly default?: string;
+  readonly when?: {
+    readonly controller: string;
+    readonly equals?: string;
+    readonly truthy?: true;
+  };
 }
 
 /** Either accepted on-disk form: the legacy bare name, or the object. */
@@ -191,7 +358,57 @@ Vitest.describe('Prompts.VariableEntry codec', () => {
   });
 
   Vitest.it('encodes back to the minimal object, never growing default noise', () => {
-    Vitest.expect(encode(decode('files'))).toStrictEqual({ name: 'files' });
+    const encoded = encode(decode('files'));
+    Vitest.expect(encoded).toStrictEqual({ name: 'files' });
+    Vitest.expect(encoded).not.toHaveProperty('when');
+  });
+
+  Vitest.it('round-trips an equals condition with only the present form', () => {
+    const file: VariableFileValue = {
+      name: 'origin',
+      when: { controller: 'isolated', equals: 'yes' },
+    };
+    Vitest.expect(encode(decode(file))).toStrictEqual(file);
+  });
+
+  Vitest.it('round-trips a truthy condition', () => {
+    const file: VariableFileValue = {
+      name: 'branch',
+      when: { controller: 'flag', truthy: true },
+    };
+    Vitest.expect(encode(decode(file))).toStrictEqual(file);
+  });
+
+  Vitest.it('round-trips a confirm with no options, default, or required', () => {
+    const file: VariableFileValue = {
+      name: 'flag',
+      label: 'Use a worktree?',
+      type: 'confirm',
+    };
+    const decoded = decode(file);
+    Vitest.expect(decoded).toMatchObject({
+      name: 'flag',
+      label: 'Use a worktree?',
+      type: 'confirm',
+      required: false,
+      default: '',
+    });
+    Vitest.expect(decoded.options ?? []).toStrictEqual([]);
+    Vitest.expect(encode(decoded)).toStrictEqual(file);
+  });
+
+  Vitest.it('round-trips a truthy condition on a confirm controller', () => {
+    const file: VariableFileValue = {
+      name: 'flag',
+      type: 'confirm',
+    };
+    const decoded = decode(file);
+    const child: VariableFileValue = {
+      name: 'child',
+      when: { controller: 'flag', truthy: true },
+    };
+    Vitest.expect(encode(decoded)).toStrictEqual(file);
+    Vitest.expect(encode(decode(child))).toStrictEqual(child);
   });
 
   Vitest.it('encodes every non-default field it was given', () => {

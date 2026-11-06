@@ -20,8 +20,12 @@ Note: namespace + class share the name, so call-site reads `Task.Task`.
 - `sizeOf` (narrow a declared value to a known size) and `verifyTaskSize`
   (the size rule on its own, reused by the dispatch verbs)
 - `verifyTaskCompletion` (the completion-record rule on its own): a `complete`
-  task with unchecked `## Completion` items is `task.completion-unchecked`,
-  a warning that keeps historical records succeeding
+  task with unchecked `## Completion` items is an error,
+  `task.completion-unchecked`; an unfinished task may carry an unchecked
+  checklist with no finding
+- The repeated `depends-on` id rule: `depends-on.duplicate` errors once per
+  distinct repeated id and normalizes nothing; a repeated malformed id keeps
+  only its single `is not a task id` finding
 - Type/status guards (`isTaskType`, `isTaskStatus`, `isReview`)
 - Enforcing a declared task size; the size vocabulary itself lives in
   `sizing`. The schema keeps the declared value as written so an unknown size

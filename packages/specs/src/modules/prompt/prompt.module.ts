@@ -245,7 +245,7 @@ const applyMode = (
 
 /** A rendered prompt ready to dispatch. */
 export interface LoadedPrompt {
-  /** Prompt slug (`spec-create`, `spec-execute`, or `spec-sizing`). */
+  /** Prompt slug (`spec-create`, `spec-execute`, `spec-sizing`, or `spec-status`). */
   readonly name: string;
   /** Rendered text to send to the agent, with any skill advisories appended. */
   readonly text: string;
@@ -293,7 +293,7 @@ const gateFailure = (
       code: CODES.missing,
       problem: `Prompt '${name}' is not installed.`,
     })),
-    Match.when('stale', (): GateOutcome => ({
+    Match.whenOr('stale', 'mismatched', (): GateOutcome => ({
       code: CODES.stale,
       problem: `Prompt '${name}' is not current: ${entry.failure?.problem ?? entry.detail ?? entry.status}.`,
     })),
@@ -361,7 +361,7 @@ const ownedSkillFailure = (
         cause: entry.failure?.cause,
       }),
     ),
-    Match.when('stale', () =>
+    Match.whenOr('stale', 'mismatched', () =>
       promptError({
         code: CODES.skillStale,
         path: entry.target,
@@ -452,9 +452,13 @@ const missingSkillAdvisory = (root: string, promptName: string, skill: string): 
 /** The command that renders one shipped prompt, for an advisory's `next` row. */
 const rerunOf = (promptName: string): string =>
   Match.value(promptName).pipe(
-    Match.when('spec-create', () => 'mf-specs author --request <text>'),
+    Match.when(
+      'spec-create',
+      () => 'mf-specs author --request <text> --rigor <level> --isolated <yes|no>',
+    ),
     Match.when('spec-execute', () => 'mf-specs execute --name <spec>'),
     Match.when('spec-sizing', () => 'mf-specs sizing-config'),
+    Match.when('spec-status', () => 'mf-specs status-report --name <spec>'),
     Match.orElse(() => 'mf-specs doctor'),
   );
 
@@ -491,7 +495,7 @@ const advisorySection = (advisories: ReadonlyArray<SkillAdvisory>, promptName: s
  * checked, and only then is the template rendered. Every refusal is a
  * {@link PromptError} naming the file, the problem, and `mf-specs doctor`.
  * @param root - repo root that owns `.agents/@montflow/prompts/`
- * @param name - prompt slug (`spec-create`, `spec-execute`, or `spec-sizing`)
+ * @param name - prompt slug (`spec-create`, `spec-execute`, `spec-sizing`, or `spec-status`)
  * @param values - caller values by variable name, plus the optional `mode`
  *   (`guided` or `autonomous`); the loader folds it into `unsupervised`
  * @returns the rendered text, the declared skills, and the decoded prompt

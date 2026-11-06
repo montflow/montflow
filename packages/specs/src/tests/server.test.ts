@@ -179,7 +179,7 @@ Vitest.describe('specs server command', () => {
   );
 
   Vitest.it.effect(
-    'registers the spec_author, spec_execute, spec_sizing, and spec_models tools',
+    'registers the author/execute/status/sizing/models/rigor tools and the full slash surface',
     () =>
       Effect.gen(function* () {
         const root = yield* Effect.promise(freshRoot);
@@ -188,14 +188,33 @@ Vitest.describe('specs server command', () => {
           Vitest.expect(tools.map((tool) => tool.name)).toStrictEqual([
             'spec_author',
             'spec_execute',
+            'spec_status',
             'spec_sizing',
             'spec_models',
+            'spec_rigor',
           ]);
           Vitest.expect(COMMAND_DESCRIPTION).toContain('author --request <text>');
+          Vitest.expect(COMMAND_DESCRIPTION).toContain(
+            'status-report [--name <spec>] [--focus <text>]',
+          );
           Vitest.expect(COMMAND_DESCRIPTION).toContain('execute [--name <spec>]');
           Vitest.expect(COMMAND_DESCRIPTION).toContain('sizing-config [--scope repo|spec|phase]');
           Vitest.expect(COMMAND_DESCRIPTION).toContain('no --scope asks which layer');
           Vitest.expect(COMMAND_DESCRIPTION).toContain('models [--provider <id>]');
+          for (const verb of [
+            'init --name <spec> --rigor',
+            'new-phase --name <spec>',
+            'new-task --name <spec>',
+            'stamp [--format instant|date]',
+            'rigor <trivial|light|standard|deep|critical>',
+            'claim --name <spec>',
+            'lock --name <spec>',
+            'waiver --name <spec>',
+            'gate run|record --name <spec>',
+            'mail --name <spec>',
+          ]) {
+            Vitest.expect(COMMAND_DESCRIPTION, verb).toContain(verb);
+          }
         } finally {
           yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
         }

@@ -16,6 +16,7 @@ import {
   taskContribution,
   resolve as resolveSizing,
 } from '../../modules/sizing/index.js';
+import { parsePhaseFile } from '../../modules/phase/index.js';
 import { type SpecSnapshot } from '../../modules/structure/index.js';
 
 import {
@@ -238,9 +239,10 @@ export const tasksOf = (snapshot: SpecSnapshot): ReadonlyArray<Task> => {
 /** The task directory a snapshot holds for `id`, when one parses. */
 export const taskDirOf = (snapshot: SpecSnapshot, id: string): string | undefined => {
   for (const file of snapshot.files) {
-    if (!file.path.endsWith('/TASK.md')) continue;
-    const dir = file.path.slice(0, file.path.indexOf('/'));
-    if (parseTaskDirName(dir)?.id === id) return dir;
+    const segments = file.path.split('/');
+    if (segments.length !== 3 || segments[2] !== 'TASK.md') continue;
+    const leaf = segments[1] ?? '';
+    if (parseTaskDirName(leaf)?.id === id) return `${segments[0]}/${leaf}`;
   }
   return undefined;
 };
@@ -317,15 +319,22 @@ export const sizingOf = (
     }
     const phase = phaseOf(task.id);
     const size = sizeOf(task);
+    const phaseText = snapshot.files.find(
+      (entry) => entry.path === `${phase}/PHASE.md` && (entry.kind ?? 'file') === 'file',
+    )?.content;
+    const record = phaseText === undefined ? undefined : parsePhaseFile(phaseText);
     return {
       name,
       task,
       phase,
       target: taskTarget(load, task),
       budget: size === undefined ? 0 : reviewCycles(size),
-      phaseBudget: phaseReviewBudget(
-        tasks.filter((candidate) => phaseOf(candidate.id) === phase).map(budgetInput),
-      ),
+      phaseBudget:
+        record?.review === 'none'
+          ? 0
+          : phaseReviewBudget(
+              tasks.filter((candidate) => phaseOf(candidate.id) === phase).map(budgetInput),
+            ),
       load,
     };
   });

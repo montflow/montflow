@@ -41,7 +41,17 @@ interface PromptFileFields {
   readonly name: string;
   readonly description: string;
   readonly template: string;
-  readonly variables: ReadonlyArray<{ readonly name: string; readonly required?: boolean }>;
+  readonly variables: ReadonlyArray<{
+    readonly name: string;
+    readonly required?: boolean;
+    readonly type?: 'text' | 'textarea' | 'select' | 'confirm';
+    readonly options?: readonly string[];
+    readonly when?: {
+      readonly controller: string;
+      readonly equals?: string;
+      readonly truthy?: true;
+    };
+  }>;
   readonly skills: ReadonlyArray<string>;
   readonly model: string;
 }
@@ -253,9 +263,11 @@ Vitest.describe('Engines over the store', () => {
       Vitest.expect(bare.issues).toStrictEqual([]);
 
       // Store exists with `effect` only: `missing-skill` is a named warning.
-      yield* Effect.promise(() =>
-        mkdir(join(root, '.agents', 'skills', 'effect'), { recursive: true }),
-      );
+      yield* Effect.promise(async () => {
+        const dir = join(root, '.agents', 'skills', 'effect');
+        await mkdir(dir, { recursive: true });
+        await writeFile(join(dir, 'SKILL.md'), '# effect\n', 'utf8');
+      });
       const warned = yield* Engines.verify({ cwd: root }, 'audit');
       Vitest.expect(warned.valid).toBe(true);
       const miss = warned.issues.find((issue) => issue.field === 'skills');
@@ -281,9 +293,11 @@ Vitest.describe('Engines over the store', () => {
         skills: ['effect', 'missing-skill'],
         model: '',
       });
-      yield* Effect.promise(() =>
-        mkdir(join(root, '.agents', 'skills', 'effect'), { recursive: true }),
-      );
+      yield* Effect.promise(async () => {
+        const dir = join(root, '.agents', 'skills', 'effect');
+        await mkdir(dir, { recursive: true });
+        await writeFile(join(dir, 'SKILL.md'), '# effect\n', 'utf8');
+      });
 
       const report = yield* Engines.verifyAll({ cwd: root });
       Vitest.expect(report.issueCount).toBe(0);
@@ -306,9 +320,11 @@ Vitest.describe('Engines over the store', () => {
         skills: ['effect', 'missing-skill'],
         model: '',
       });
-      yield* Effect.promise(() =>
-        mkdir(join(root, '.agents', 'skills', 'effect'), { recursive: true }),
-      );
+      yield* Effect.promise(async () => {
+        const dir = join(root, '.agents', 'skills', 'effect');
+        await mkdir(dir, { recursive: true });
+        await writeFile(join(dir, 'SKILL.md'), '# effect\n', 'utf8');
+      });
 
       const entries = yield* Engines.list({ cwd: root }, { status: 'valid' });
       Vitest.expect(entries.map((entry) => entry.prompt.name)).toStrictEqual(['audit']);
@@ -334,6 +350,34 @@ Vitest.describe('Engines over the store', () => {
       yield* seed(root);
       const error = yield* Engines.render({ cwd: root }, 'audit', {}).pipe(Effect.flip);
       Vitest.expect(error).toContain('files');
+      yield* cleanup(root);
+    }).pipe(Effect.provide(Live)),
+  );
+
+  Vitest.it.effect('refuses to render the same malformed prompt execute refuses', () =>
+    Effect.gen(function* () {
+      const root = yield* readyRoot;
+      yield* writePrompt(root, 'audit.json', {
+        name: 'audit',
+        description: 'Audits.',
+        template: '{{isolated}}{{#if origin}}O={{origin}}{{/if}}',
+        variables: [
+          { name: 'isolated', type: 'select', options: ['yes', 'no'] },
+          { name: 'origin', when: { controller: 'isolated' } },
+        ],
+        skills: [],
+        model: '',
+      });
+      const values = { isolated: 'no', origin: 'stale' };
+      const renderError = yield* Engines.render({ cwd: root }, 'audit', values).pipe(Effect.flip);
+      Vitest.expect(renderError).toContain('must carry exactly one');
+      Vitest.expect(renderError).toContain('verify');
+
+      const plan = yield* Engines.plan({ cwd: root, model: 'p/m', values }, 'audit');
+      Vitest.expect(plan.ok).toBe(false);
+      if (plan.ok) return;
+      Vitest.expect(plan.problem).toBe('invalid-prompt');
+      Vitest.expect(plan.message).toContain('must carry exactly one');
       yield* cleanup(root);
     }).pipe(Effect.provide(Live)),
   );

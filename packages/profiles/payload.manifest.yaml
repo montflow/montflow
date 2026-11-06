@@ -1,0 +1,16 @@
+package: '@montflow/profiles'
+kinds:
+  - kind: profiles
+    sourceDir: 'profiles/'
+    targetDir: '.agents/@montflow/profiles/'
+    naming: 'by-directory'
+    compare: contents
+    installPolicy: repair
+    required: true
+  - kind: prompts
+    sourceDir: 'prompts/'
+    targetDir: '.agents/@montflow/prompts/'
+    naming: 'by-file'
+    compare: contents
+    installPolicy: repair
+    required: true

@@ -42,6 +42,22 @@ Vitest.describe('adversarial-review skill against the round grammar', () => {
     () => {
       Vitest.expect(SKILL).toContain('explicit round');
       Vitest.expect(SKILL).toContain('one per declared reviewer profile');
+      Vitest.expect(SKILL).toContain('mf-reviews create <name> --round <NNN>');
     },
   );
+
+  Vitest.it('takes the round from the CLI instead of a directory scan', () => {
+    // All three verbs the workflow needs: discovery, a new round, a re-review.
+    for (const command of [
+      'mf-reviews list --verbose',
+      'mf-reviews create <name>',
+      'mf-reviews resume <name>',
+    ]) {
+      Vitest.expect(SKILL).toContain(command);
+    }
+    // The removed rule, verbatim; the explicit-round bullet may still warn
+    // against computing this, but the default path must not use it.
+    Vitest.expect(SKILL).not.toContain('highest existing number + 1');
+    Vitest.expect(SKILL).toContain('bun run --cwd packages/reviews cli');
+  });
 });

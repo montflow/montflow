@@ -25,6 +25,13 @@ agents and humans:
   effective size -> target mapping, per-task size/target/source, and the
   verification verdict. Exits non-zero on every error `check` reports for that
   spec, config or tree.
+- `status-report [--name <spec>] [--focus <text>]` — loads `spec-status`
+  through `modules/prompt` (which gates on `mf-specs doctor`), renders the
+  read-only report prompt for one spec, and prints it. An explicit `--name` wins;
+  otherwise `which` reads the branch, and an absent or ambiguous match fails
+  with the candidates and `next ask the user`. It reads no spec content, writes
+  nothing, dispatches nothing, and mutates no git state; the raw `status` panel
+  above is unchanged.
 - `state --name <spec>` — compact derived state, active phase, and
   locked phases for an orchestrator. Exits non-zero on the same dispatch errors
   `status` reports, and the line stays compact: a blocked spec appends
@@ -65,7 +72,9 @@ agents and humans:
   fresh spec tree via `modules/scaffold` and writes it through
   `SpecStore.write`. Refuses to overwrite an existing spec. A malformed `--name`
   is `cli.invalid-argument` with the slug rule, before `--tasks` is parsed.
-- `author --request <text> [--notes <text>]` — loads `spec-create` through
+- `author --request <text> --rigor <level> --isolated <yes|no> [--notes <text>]
+[--origin current|main|other --worktree-name <name> [--origin-branch <branch>]]`
+  — loads `spec-create` through
   `modules/prompt` (which gates on `mf-specs doctor`), renders it with the
   request, and prints the prompt and nothing else. Model-free: it never opens a
   session. `--dir` defaults to the nearest repository root so the package
@@ -162,7 +171,7 @@ strict-only warning fails `check` alone. `/specs status`, `/specs next`, and
 
 ## Belongs here
 
-- Pure engines (`check`, `status`, `list`, `scaffold`, `loadSizing`,
+- Pure engines (`check`, `status`, `statusReport`, `list`, `scaffold`, `loadSizing`,
   `sizingOf`, `models`, `listModels`, `verifyModels`, `which`, `author`,
   `execute`, `sizingConfig`, `resolveSizingScope`, `stateOf`) over the
   `SpecStore` service, the prompt loader, and the host model catalogue
@@ -177,7 +186,8 @@ strict-only warning fails `check` alone. `/specs status`, `/specs next`, and
   `dispatchExitCode`) shared by `status` and `next` for both the exit code and
   the target columns, and `runDiagnosed` — the one command boundary that catches
   `Cause`
-- `Command`/`Flag` wiring (`checkCommand`, `statusCommand`, `resolveCommand`,
+- `Command`/`Flag` wiring (`checkCommand`, `statusCommand`,
+  `statusReportCommand`, `resolveCommand`,
   `sizingCommand`, `whichCommand`, `listCommand`, `createCommand`,
   `authorCommand`, `executeCommand`, `sizingConfigCommand`, `doctorCommand`,
   `rootCommand`)
@@ -191,7 +201,8 @@ strict-only warning fails `check` alone. `/specs status`, `/specs next`, and
 - Spec file templates — `modules/scaffold`
 - Prompt loading, rendering, and the doctor gate — `modules/prompt`
 - Dispatching a rendered prompt — `apps/server` (`spec_author` /
-  `spec_execute`) and the host `subagent`/session seams; the CLI never dispatches
+  `spec_execute` / `spec_status`) and the host `subagent`/session seams; the CLI
+  never dispatches
 
 ## Running
 
@@ -215,7 +226,8 @@ target build would be required for `npx` without Bun.
 
 In OpenCode, the same engines are exposed as `/specs` by
 `src/server.ts` (`check [--name <spec>] [--verbose]` /
-`status --name <spec>` / `state --name <spec>` / `next --name <spec>` /
+`status --name <spec>` / `status-report [--name <spec>] [--focus <text>]` /
+`state --name <spec>` / `next --name <spec>` /
 `resolve --name <spec> --task <id>` /
 `sizing --name <spec> --task <id> [--verbose|--human]` /
 `which [--branch <name>] [--dir <path>]` /
@@ -223,11 +235,11 @@ In OpenCode, the same engines are exposed as `/specs` by
 `models [--provider <id>] [--json] [--catalog <path>] [--verify [--name <spec>]]` /
 `create --name <spec> [--description <text>] [--author <name>]
 [--workspace-type <in-place|worktree>] [--tasks <name[:type[:gates[:size]]],…>]` /
-`author --request <text> [--notes <text>]` /
+`author --request <text> --rigor <level> --isolated <yes|no> [--notes <text>]` /
 `execute [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous]` /
 `sizing-config [--scope repo|spec|phase] [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous]`).
-The same plugin registers the `spec_author`, `spec_execute`, `spec_sizing`, and
-`spec_models` tools
+The same plugin registers the `spec_author`, `spec_execute`, `spec_status`,
+`spec_sizing`, `spec_models`, and `spec_rigor` tools
 (`apps/server`). The prompt tools dispatch the rendered text through
 `@montflow/prompts`' executor and the host `ModelPort` + `SessionDispatchPort`;
 `spec_models` reads the same host `ModelPort` catalogue the slash form prints.
@@ -267,10 +279,10 @@ Two supported paths — neither needs Node or a model at runtime:
   `#!/usr/bin/env bun`) works with `bun link` for local/agent use where
   Bun is installed.
 
-Everything `check`/`status`/`list`/`create`/`author`/`execute`/`sizing-config`
+Everything `check`/`status`/`status-report`/`list`/`create`/`author`/`execute`/`sizing-config`
 do is pure filesystem work, so the binary and slash command work fully offline:
-`author`, `execute`, and `sizing-config` load, render, and print a prompt but
-never dispatch it. Only the host `spec_author` / `spec_execute` / `spec_sizing`
+`author`, `execute`, `status-report`, and `sizing-config` load, render, and print a prompt but
+never dispatch it. Only the host `spec_author` / `spec_execute` / `spec_status` / `spec_sizing`
 tools reach a model and a session.
 
 ## Parallelism

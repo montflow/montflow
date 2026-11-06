@@ -19,20 +19,74 @@ export interface VariableSummary {
   readonly name: string;
   /** Label shown in the run dialog; equals `name` when unset. */
   readonly label: string;
-  /** `text` or `textarea`. */
-  readonly type: 'text' | 'textarea' | 'select';
-  readonly options?: readonly string[];
+  /** `text`, `textarea`, a `select` list, or a boolean `confirm`. */
+  readonly type: 'text' | 'textarea' | 'select' | 'confirm';
+  readonly options?: readonly string[] | undefined;
   /** True when the run cannot dispatch without a value. */
   readonly required: boolean;
   /** Value used when the user leaves the field blank. Empty when none. */
   readonly default: string;
   /** True when the template only tests this name (`{{#if name}}`), never substitutes it. */
   readonly conditional: boolean;
-  /** Effective value right now: supplied, else `default`, else empty. */
+  /** Visibility condition, or `undefined` when the variable is always visible. */
+  readonly condition?: Prompts.VariableCondition | undefined;
+  /** True when the condition currently holds; always true without one. */
+  readonly visible: boolean;
+  /** Effective value right now: supplied, else `default`, else empty. Hidden is empty. */
   readonly value: string;
   /** True when nothing supplied it and there is no default. */
   readonly unanswered: boolean;
 }
+
+/** A supplied value the prompt cannot accept. */
+export interface ValueProblem {
+  /** Variable the value was supplied for. */
+  readonly name: string;
+  /** That variable's kind, so the message can say what was expected. */
+  readonly kind: string;
+  /** Values the kind accepts; empty when the kind is free text. */
+  readonly options: readonly string[];
+  /** The rejected value. */
+  readonly value: string;
+  /** One display-ready line naming the variable, kind, and allowed options. */
+  readonly message: string;
+}
+
+/** Values a prompt can accept, plus every value it refused. */
+export interface ResolvedInputs {
+  /** Supplied values for visible variables only, in no particular key order. */
+  readonly values: Record<string, string>;
+  /** One entry per rejected value; empty when every value was accepted. */
+  readonly problems: ReadonlyArray<ValueProblem>;
+}
+
+/**
+ * The refusal for a discrete value outside its options. Shared by every
+ * surface so the interactive fill, the CLI, and the verifier word the same
+ * contract the same way.
+ * @param variable - the variable the value was supplied for
+ * @param value - the rejected value
+ * @returns the display-ready message
+ */
+export const invalidOptionMessage = (
+  variable: Pick<Prompts.Variable, 'name' | 'type' | 'options'>,
+  value: string,
+): string =>
+  `'${value}' is not an option of '${variable.name}' (${variable.type}). Choose one of: ${(variable.options ?? []).join(', ')}.`;
+
+/**
+ * The refusal for a confirm value outside its canonical yes/empty pair. Shared
+ * by the interactive fill, the CLI, and the verifier so every surface states
+ * the same contract.
+ * @param variable - the confirm the value was supplied for
+ * @param value - the rejected value
+ * @returns the display-ready message
+ */
+export const invalidConfirmMessage = (
+  variable: Pick<Prompts.Variable, 'name'>,
+  value: string,
+): string =>
+  `'${value}' is not a valid answer for '${variable.name}' (confirm). Use 'yes' or leave it empty.`;
 
 /** A whole prompt, flattened for display. */
 export interface PromptSummary {
@@ -61,16 +115,21 @@ const summarize = (
 ): ReadonlyArray<VariableSummary> => {
   const analysis = Prompts.analyze(prompt.template);
   const substituted = new Set(analysis.references);
+  const resolved = new Map(
+    Prompts.resolveValues(prompt.variables, values).map((entry) => [entry.name, entry.value]),
+  );
   return prompt.variables.map((variable) => {
-    const supplied = values[variable.name];
-    const value = supplied !== undefined && supplied !== '' ? supplied : variable.default;
+    const value = resolved.get(variable.name) ?? '';
     return {
       name: variable.name,
       label: variable.label,
       type: variable.type,
+      options: variable.options,
       required: variable.required,
       default: variable.default,
       conditional: !substituted.has(variable.name) && analysis.conditionals.includes(variable.name),
+      condition: variable.when,
+      visible: Prompts.isVisible(variable.name, prompt.variables, values),
       value,
       unanswered: value === '',
     };
@@ -78,9 +137,55 @@ const summarize = (
 };
 
 /**
+ * Accept the values a caller supplied, dropping every value for a hidden
+ * variable and refusing a discrete value outside its options. Dropping is not
+ * an error: a value for a hidden branch is stale by definition, exactly as it
+ * is when a controller changes mid-fill.
+ * @param prompt - prompt whose variables define the accepted values
+ * @param values - supplied values by name
+ * @returns the accepted values and one problem per rejected value
+ */
+export const resolveInputs = (
+  prompt: Prompts.Prompt,
+  values: Readonly<Record<string, string>> = {},
+): ResolvedInputs => {
+  const accepted: Record<string, string> = {};
+  const problems: Array<ValueProblem> = [];
+  for (const variable of prompt.variables) {
+    if (!Prompts.isVisible(variable.name, prompt.variables, values)) continue;
+    const supplied = values[variable.name];
+    if (supplied === undefined) continue;
+    const options = variable.options ?? [];
+    if (variable.type === 'select' && supplied !== '' && !options.includes(supplied)) {
+      problems.push({
+        name: variable.name,
+        kind: variable.type,
+        options,
+        value: supplied,
+        message: invalidOptionMessage(variable, supplied),
+      });
+      continue;
+    }
+    if (variable.type === 'confirm' && supplied !== '' && supplied !== 'yes') {
+      problems.push({
+        name: variable.name,
+        kind: variable.type,
+        options: ['yes'],
+        value: supplied,
+        message: invalidConfirmMessage(variable, supplied),
+      });
+      continue;
+    }
+    accepted[variable.name] = supplied;
+  }
+  return { values: accepted, problems };
+};
+
+/**
  * Describe a prompt: its metadata, every variable with its effective value,
- * and which required values are still missing. Read-only — it never renders
- * the template, so a template with a syntax error still inspects cleanly.
+ * its visibility condition, and which visible required values are still
+ * missing. Read-only — it never renders the template, so a template with a
+ * syntax error still inspects cleanly.
  * @param request - the prompt and any collected values
  * @returns a display-ready summary
  */
@@ -94,9 +199,7 @@ export const inspect = (request: InspectRequest): PromptSummary => {
     skills: [...request.prompt.skills],
     template: request.prompt.template,
     variables,
-    missing: variables
-      .filter((variable) => variable.required && variable.unanswered)
-      .map((variable) => variable.name),
+    missing: [...Prompts.missingRequired(request.prompt.variables, values)],
   };
 };
 
@@ -114,36 +217,53 @@ const row = (cells: ReadonlyArray<string>, widths: ReadonlyArray<number>): strin
 /** Em dash stands in for an empty cell, so a blank column is not a layout bug. */
 const cell = (value: string): string => (value === '' ? '—' : value);
 
+/** A condition as one compact cell: `isolated=yes` or `flag is set`. */
+const conditionCell = (condition: PromptSummary['variables'][number]['condition']): string => {
+  if (condition === undefined) return '';
+  return condition.equals !== undefined
+    ? `${condition.controller}=${condition.equals}`
+    : `${condition.controller} is set`;
+};
+
 /**
  * Render a summary as plain text for `ui.notify` and for agent tool output.
  *
- * Plain text on purpose: this output is read by agents as well as humans, and
- * ANSI escapes would be noise in a tool result. Columns are padded to the
- * widest cell, so the table lines up whatever the variable names are.
+ * Every declared variable gets a row, including one the current answers hide;
+ * a hidden row carries a `(hidden)` marker in its TYPE cell so the only text
+ * view can distinguish "not declared" from "declared but hidden". The
+ * condition that would reveal it is shown on the same row. Plain text on
+ * purpose: this output is read by agents as well as humans, and ANSI escapes
+ * would be noise in a tool result. Columns are padded to the widest cell, so
+ * the table lines up whatever the variable names are.
  * @param summary - result of {@link inspect}
  * @returns a multi-line report
  */
 export const table = (summary: PromptSummary): string => {
-  const requiredCount = summary.variables.filter((variable) => variable.required).length;
+  const visible = summary.variables.filter((variable) => variable.visible);
+  const requiredCount = visible.filter((variable) => variable.required).length;
   const lines: Array<string> = [
     `${summary.name}${summary.description === '' ? '' : ` — ${summary.description}`}`,
     metaLine('model', summary.model),
     metaLine('skills', summary.skills.join(', ')),
     metaLine(
       'variables',
-      `${summary.variables.length} (${requiredCount} required, ${summary.variables.length - requiredCount} optional)`,
+      `${visible.length} (${requiredCount} required, ${visible.length - requiredCount} optional)`,
     ),
   ];
 
   if (summary.variables.length > 0) {
     const headers = ['NAME', 'TYPE', 'REQUIRED', 'DEFAULT', 'VALUE'];
-    const body = summary.variables.map((variable) => [
-      variable.label === variable.name ? variable.name : `${variable.name} (${variable.label})`,
-      variable.type,
-      variable.required ? 'yes' : 'no',
-      cell(variable.default),
-      variable.unanswered ? cell('') : variable.value,
-    ]);
+    const body = summary.variables.map((variable) => {
+      const condition = conditionCell(variable.condition);
+      const kind = condition === '' ? variable.type : `${variable.type} when ${condition}`;
+      return [
+        variable.label === variable.name ? variable.name : `${variable.name} (${variable.label})`,
+        variable.visible ? kind : `${kind} (hidden)`,
+        variable.required ? 'yes' : 'no',
+        cell(variable.default),
+        variable.unanswered ? cell('') : variable.value,
+      ];
+    });
     const widths = headers.map((header, column) =>
       Math.max(header.length, ...body.map((cells) => (cells[column] ?? '').length)),
     );
@@ -173,6 +293,7 @@ export type ExecuteProblem =
   | 'empty-template'
   | 'invalid-template'
   | 'invalid-prompt'
+  | 'invalid-values'
   | 'missing-model'
   | 'missing-variables';
 
@@ -245,7 +366,10 @@ const missingModel = (summary: PromptSummary, invocation: string): ExecuteBlocke
 
 /** `missing-variables` message: name each gap and give a runnable command. */
 const missingVariables = (summary: PromptSummary, invocation: string): ExecuteBlocked => {
-  const gaps = summary.variables.filter((variable) => variable.required && variable.unanswered);
+  const gaps = summary.missing.flatMap((name) => {
+    const variable = summary.variables.find((candidate) => candidate.name === name);
+    return variable === undefined ? [] : [variable];
+  });
   const pairs = gaps.map((variable) => `  ${variable.name.padEnd(12)}no value and no default`);
   return {
     ok: false,
@@ -262,6 +386,21 @@ const missingVariables = (summary: PromptSummary, invocation: string): ExecuteBl
     missing: gaps.map((variable) => variable.name),
   };
 };
+
+/** `invalid-values` message: name each rejected value and the offered options. */
+const invalidValues = (
+  summary: PromptSummary,
+  problems: ReadonlyArray<ValueProblem>,
+): ExecuteBlocked => ({
+  ok: false,
+  problem: 'invalid-values',
+  message: [
+    `Prompt '${summary.name}' got ${problems.length === 1 ? 'a value' : 'values'} it cannot accept.`,
+    ...problems.map((problem) => `  ${problem.message}`),
+    `Run: inspect '${summary.name}'`,
+  ].join('\n'),
+  missing: [],
+});
 
 /**
  * Resolve everything an execution needs, or explain what is still missing.
@@ -280,7 +419,7 @@ export const execute = (request: ExecuteRequest): ExecutePlan => {
   const { prompt } = request;
   const values = request.values ?? {};
   const invocation = request.invocation ?? DEFAULT_INVOCATION;
-  const summary = inspect({ prompt, values });
+  const rawSummary = inspect({ prompt, values });
 
   if (prompt.template.trim() === '') {
     return {
@@ -325,7 +464,11 @@ export const execute = (request: ExecuteRequest): ExecutePlan => {
 
   const requested = (request.model ?? '').trim();
   const model = requested === '' ? prompt.model.trim() : requested;
-  if (model === '') return missingModel(summary, invocation);
+  if (model === '') return missingModel(rawSummary, invocation);
+
+  const accepted = resolveInputs(prompt, values);
+  const summary = inspect({ prompt, values: accepted.values });
+  if (accepted.problems.length > 0) return invalidValues(summary, accepted.problems);
 
   if (summary.missing.length > 0) return missingVariables(summary, invocation);
 
@@ -335,7 +478,7 @@ export const execute = (request: ExecuteRequest): ExecutePlan => {
     model,
     skills: request.skills ?? [...prompt.skills],
     variables: summary.variables,
-    text: Prompts.renderToString(prompt.template, prompt.variables, values),
+    text: Prompts.renderToString(prompt.template, prompt.variables, accepted.values),
   };
 };
 

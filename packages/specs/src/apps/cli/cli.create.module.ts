@@ -14,6 +14,7 @@ import { DEFAULT_SIZE, LAYERS, SIZES } from '../../modules/sizing/index.js';
 
 import type { SeriesSnapshot } from '../../modules/review-link/index.js';
 import { SLUG_PATTERN } from '../../modules/task/index.js';
+import { isScopeList } from '../../modules/scheduler/index.js';
 import { type Issue, errorCount, warningCount } from '../../modules/verify/index.js';
 
 import { SpecStore } from '../../services/index.js';
@@ -29,6 +30,7 @@ import {
   guardSpecName,
   guardFailure,
   runDiagnosed,
+  scaffoldTaskSpecs,
   verboseFlag,
 } from './cli.shared.module.js';
 import {
@@ -169,8 +171,22 @@ export const renderList = (report: ListReport, verbose: boolean): string => {
     if (errors > 0) parts.push(`\u2717 ${errors}`);
     if (warnings > 0) parts.push(`! ${warnings} warning${warnings === 1 ? '' : 's'}`);
     const verdict = parts.length === 0 ? '' : ` \u00b7 ${parts.join(' \u00b7 ')}`;
+    // A v2 phase record names a review decision; render the derived lock beside
+    // the lifecycle so a reader never mistakes a phase for locked or reviewed
+    // without the record saying so. A v1 store has no phase records and keeps
+    // the original line shape.
+    const recorded = (spec.phases ?? []).filter((phase) => phase.review !== undefined);
+    const locked = (spec.state?.phases ?? [])
+      .filter((phase) => phase.locked)
+      .map((phase) => phase.phase);
+    const lifecycle =
+      recorded.length === 0
+        ? ''
+        : ` \u00b7 locked ${locked.length === 0 ? 'none' : locked.join(',')} \u00b7 review ${recorded
+            .map((phase) => `${phase.phase}:${phase.review}`)
+            .join(',')}`;
     lines.push(
-      `${mark} ${spec.name}  ${declared} \u00b7 ${derived ?? 'unreadable'} \u00b7 ${counts}${verdict}`,
+      `${mark} ${spec.name}  ${declared} \u00b7 ${derived ?? 'unreadable'} \u00b7 ${counts}${lifecycle}${verdict}`,
     );
   }
   if (lines.length > 0) lines.push('');
@@ -231,9 +247,9 @@ export interface ScaffoldOptions {
   readonly description?: string | undefined;
   /** `in-place` (default) or `worktree`. */
   readonly workspaceType?: string | undefined;
-  /** Raw tasks, each `name[:type[:gates[:size]]]`; defaults to one `implement` task. */
+  /** Raw tasks, each `name[:type[:gates[:size]]][:scope=path,path]`; defaults to one `implement` task. */
   readonly taskSpecs?: ReadonlyArray<string> | undefined;
-  /** Ordered reviewer profile slugs emitted on the phase's review task. */
+  /** Ordered reviewer profile slugs emitted on each requested review task. */
   readonly reviewerProfiles?: ReadonlyArray<string> | undefined;
 }
 
@@ -253,27 +269,32 @@ export type ScaffoldTaskParse =
   | { readonly ok: true; readonly task: ScaffoldTask }
   | { readonly ok: false; readonly error: string };
 
-/** Most tokens a task spec accepts: `name[:type[:gates[:size]]]`. */
-export const SCAFFOLD_TASK_TOKENS = 4;
+/** Most tokens a task spec accepts: `name[:type[:gates[:size]]][:scope=path,path]`. */
+export const SCAFFOLD_TASK_TOKENS = 5;
 
 /**
- * Parse one `name[:type[:gates[:size]]]` task spec. The type defaults to
- * `execution`, the gates token is `gates` or `true` to request a `GATES.md`,
- * and the size defaults to `medium` — including when the size token is present
- * but blank, so a trailing colon means "no size here". A fifth token is
- * rejected rather than dropped.
+ * Parse one `name[:type[:gates[:size]]][:scope=path,path]` task spec. The type
+ * defaults to `execution`, the gates token is `gates` or `true` to request a
+ * `GATES.md`, the size defaults to `medium`, and a `scope=` token declares the
+ * task's `write-scope:` wherever it appears after the name. Any other unknown
+ * token is rejected rather than dropped.
  * @param raw - one raw task spec
  * @returns the task, or a user-facing error
  */
 export const parseScaffoldTask = (raw: string): ScaffoldTaskParse => {
   const tokens = raw.split(':');
-  if (tokens.length > SCAFFOLD_TASK_TOKENS) {
+  const scopeTokens = tokens.filter((token) => token.startsWith('scope='));
+  if (scopeTokens.length > 1) {
+    return { ok: false, error: `'${raw}' declares scope= more than once.` };
+  }
+  const positional = tokens.filter((token) => !token.startsWith('scope='));
+  if (positional.length > SCAFFOLD_TASK_TOKENS - 1) {
     return {
       ok: false,
-      error: `'${raw}' has ${tokens.length} fields — use name[:type[:gates[:size]]] with at most ${SCAFFOLD_TASK_TOKENS}.`,
+      error: `'${raw}' has ${tokens.length} fields — use name[:type[:gates[:size]]][:scope=path,path] with at most ${SCAFFOLD_TASK_TOKENS}.`,
     };
   }
-  const [name = '', type = 'execution', gates = '', declaredSize] = tokens;
+  const [name = '', type = 'execution', gates = '', declaredSize] = positional;
   const size = declaredSize === undefined || declaredSize === '' ? DEFAULT_SIZE : declaredSize;
   if (!isValidName(name)) {
     return {
@@ -293,19 +314,33 @@ export const parseScaffoldTask = (raw: string): ScaffoldTaskParse => {
       error: `Unknown task size '${size}' — use one of: ${SIZES.join(', ')}.`,
     };
   }
+  if (gates !== '' && gates !== 'gates' && gates !== 'true') {
+    return {
+      ok: false,
+      error: `'${gates}' is not a gates token — use 'gates', 'true', or leave the field empty.`,
+    };
+  }
+  const declaredScope = scopeTokens[0]?.slice('scope='.length) ?? '';
+  if (declaredScope !== '' && declaredScope !== 'none' && !isScopeList(declaredScope)) {
+    return {
+      ok: false,
+      error: `'${declaredScope}' must be comma-separated repo-root-relative paths or 'none'.`,
+    };
+  }
+  const task = { name, type, gates: gates === 'gates' || gates === 'true', size };
   return {
     ok: true,
-    task: { name, type, gates: gates === 'gates' || gates === 'true', size },
+    task: declaredScope === '' ? task : { ...task, writeScope: declaredScope },
   };
 };
 
 /**
- * Scaffold a mechanically valid spec tree under `root/<name>`: `SPEC.md`,
- * one task directory per task, and the phase's review task. Deterministic
- * and model-free — the mechanical half of `mf-specs create`. A malformed name is
- * refused through the shared usage guard, so the diagnostic names `--name` and
- * the slug rule instead of a store path. Refuses to touch an existing spec
- * directory.
+ * Scaffold a mechanically valid spec tree under `root/<name>`: `SPEC.md` and
+ * one task directory per task. A review task appears only when requested.
+ * Deterministic and model-free — the mechanical half of `mf-specs create`. A
+ * malformed name is refused through the shared usage guard, so the diagnostic
+ * names `--name` and the slug rule instead of a store path. Refuses to touch an
+ * existing spec directory.
  * @param root - spec root directory
  * @param options - spec name, metadata, and task specs
  * @returns what was written, failing with a displayable reason
@@ -349,6 +384,14 @@ export const scaffold = (
       const parsed = parseScaffoldTask(raw);
       if (!parsed.ok) return yield* refuse(parsed.error);
       tasks.push(parsed.task);
+    }
+    if (
+      (options.reviewerProfiles ?? []).length > 0 &&
+      !tasks.some((task) => task.type === 'review')
+    ) {
+      return yield* refuse(
+        '--reviewer-profiles needs a review task: add a `name:review` entry to --tasks.',
+      );
     }
     const now = yield* Clock.currentTimeMillis;
     const created = new Date(now).toISOString().slice(0, 10);
@@ -448,12 +491,12 @@ export const createCommand = Command.make(
     ),
     tasks: Flag.String('tasks').pipe(
       Flag.withDescription(
-        'Comma-separated tasks, each name[:type[:gates[:size]]]. Default: implement.',
+        "Tasks separated by `;`, each name[:type[:gates[:size]]][:scope=path,path]. A comma separates tasks only when the entry has no scope= field; everything after scope= up to the next `;` is that task's scope list, so `scope=app,lib,docs` is one task. Use `;` before a following task-shaped entry (e.g. `first:execution:scope=app;build:execution`). Default: implement.",
       ),
       Flag.optional,
     ),
     reviewerProfiles: Flag.String('reviewer-profiles').pipe(
-      Flag.withDescription('Comma-separated reviewer profiles for the phase review task.'),
+      Flag.withDescription('Comma-separated reviewer profiles for a requested review task.'),
       Flag.optional,
     ),
     verbose: verboseFlag,
@@ -465,7 +508,25 @@ export const createCommand = Command.make(
         // first diagnostic instead of a task error about a spec that cannot
         // exist at that path.
         yield* guardFailure('SpecsCreate', guardSpecName(config.name, GUARD_RERUN.create));
-        const taskSpecs = csv(opt(config.tasks));
+        const split = scaffoldTaskSpecs(opt(config.tasks));
+        if (!split.ok) {
+          return yield* Effect.fail(
+            new SurfaceError({
+              operation: 'SpecsCreate',
+              diagnostics: [
+                diagnostic({
+                  code: SURFACE_CODES.invalidArgument,
+                  path: config.name,
+                  field: '--tasks',
+                  problem: split.problem,
+                  fix: 'Separate a following task with a semicolon (`first:execution:scope=app,build;second:execution`), not a comma.',
+                  rerun: `mf-specs create --name ${config.name}`,
+                }),
+              ],
+            }),
+          );
+        }
+        const taskSpecs = split.specs;
         for (const raw of taskSpecs) {
           const parsed = parseScaffoldTask(raw);
           if (!parsed.ok) {
@@ -478,7 +539,7 @@ export const createCommand = Command.make(
                     path: config.name,
                     field: '--tasks',
                     problem: parsed.error,
-                    fix: 'Pass each task as name[:type[:gates[:size]]].',
+                    fix: 'Pass each task as name[:type[:gates[:size]]][:scope=path,path].',
                     rerun: `mf-specs create --name ${config.name}`,
                   }),
                 ],
@@ -503,9 +564,7 @@ export const createCommand = Command.make(
       }),
     ),
 ).pipe(
-  Command.withDescription(
-    'Scaffold a spec tree: SPEC.md, task directories, and the phase review task. Model-free.',
-  ),
+  Command.withDescription('Scaffold a spec tree: SPEC.md and one directory per task. Model-free.'),
   Command.provide(SpecStore.Default),
 );
 

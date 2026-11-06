@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "package": "@montflow/prompts",
+  "payloads": [
+    {
+      "kind": "skill",
+      "name": "montflow-create-prompts",
+      "source": "skills/montflow-create-prompts",
+      "target": ".agents/skills/montflow-create-prompts"
+    },
+    {
+      "kind": "skill",
+      "name": "montflow-execute-prompts",
+      "source": "skills/montflow-execute-prompts",
+      "target": ".agents/skills/montflow-execute-prompts"
+    }
+  ]
+}

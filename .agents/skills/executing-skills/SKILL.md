@@ -3,7 +3,7 @@ name: executing-skills
 description: Loads, executes, and verifies skills from .agents/skills/. Use when the user's request matches an existing skill's description or when instructed to use a specific skill.
 id: 4a214a52249a2ba9
 author: Daniel Montilla
-version: 1.1.0
+version: 1.2.0
 license: MIT
 groups:
   - skills
@@ -19,7 +19,17 @@ Use when the user's request matches an existing skill's description, when told t
 
 ## 1. Identify the Skill
 
-Match the user's request to a skill description. Search `.agents/skills/` using Glob/Grep or load [finding-skills](../finding-skills/SKILL.md) to discover relevant skills.
+Match the user's request to a skill description. Try `mf-skills list` first —
+it prints every skill name with its description; load
+[finding-skills](../finding-skills/SKILL.md) for the full discovery pipeline.
+Where the binary is not on `PATH`, use the in-repo form:
+
+```
+bun run --cwd packages/skills cli list --dir "$PWD"
+```
+
+**Fallback**: only when `mf-skills` is unavailable, search `.agents/skills/`
+with Glob/Grep and state that the fallback was used.
 
 If no skill matches, stop — do not proceed. Inform the user that no skill exists for their request.
 

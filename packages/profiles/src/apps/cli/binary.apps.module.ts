@@ -159,6 +159,23 @@ const verifyCommand = Command.make(
   ),
 );
 
+const doctorCommand = Command.make(
+  'doctor',
+  {
+    dir: dirFlag,
+    check: optionalBoolean('check', 'Report only; never write.'),
+  },
+  (config) =>
+    Effect.gen(function* () {
+      const result = yield* Engines.doctor(scope(config.dir), config.check);
+      yield* Console.log(Renderers.doctor(result));
+      if (!result.healthy) yield* exitFailed;
+      return yield* Effect.void;
+    }).pipe(Effect.catch((message) => Console.log(message).pipe(Effect.andThen(exitFailed)))),
+).pipe(
+  Command.withDescription('Install or verify the packaged profiles in .agents/@montflow/profiles.'),
+);
+
 const createCommand = Command.make(
   'create',
   {
@@ -212,6 +229,7 @@ export const rootCommand = Command.make('mf-profiles').pipe(
     listCommand,
     showCommand,
     verifyCommand,
+    doctorCommand,
     createCommand,
     modifyCommand,
     deleteCommand,

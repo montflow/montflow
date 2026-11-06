@@ -13,6 +13,7 @@ import {
 import { type State } from '../../modules/lifecycle/index.js';
 
 import { phaseOf } from '../../modules/task/index.js';
+import { RIGOR_HINT } from '../../modules/rigor/index.js';
 
 import { SpecStore } from '../../services/index.js';
 
@@ -47,32 +48,10 @@ import {
   renderWhich,
   status,
 } from './cli.apps.module.js';
-/** Spec store directory, relative to the workspace root. */
+import { author } from './cli.author.inputs.js';
 
-export interface AuthorOptions {
-  /** The user's request, as typed; required by the prompt. */
-  readonly request: string;
-  /** Extra constraints to carry into the authoring session. */
-  readonly notes?: string | undefined;
-}
-
-/**
- * Load and render the shipped authoring prompt. The binary stays model-free:
- * this returns text to print, and the host tool is what dispatches it.
- * @param workspace - workspace root that owns `.agents/@montflow/prompts/`
- * @param options - the request and optional notes
- * @returns the rendered prompt and the skills it declares
- */
-export const author = (
-  workspace: string,
-  options: AuthorOptions,
-): Effect.Effect<LoadedPrompt, PromptError, PromptStore.PromptStore> => {
-  const values =
-    options.notes === undefined || options.notes === ''
-      ? { request: options.request }
-      : { request: options.request, notes: options.notes };
-  return loadPrompt(workspace, 'spec-create', values);
-};
+export { AUTHOR_RERUN, author } from './cli.author.inputs.js';
+export type { AuthorOptions } from './cli.author.inputs.js';
 
 /** What `execute` renders from. */
 export interface ExecuteOptions {
@@ -695,6 +674,33 @@ export const authorCommand = Command.make(
     notes: Flag.optional(
       Flag.String('notes').pipe(Flag.withDescription('Extra constraints for the authoring run.')),
     ),
+    rigor: Flag.optional(
+      Flag.String('rigor').pipe(
+        Flag.withDescription(
+          `The user's rigor level: one of ${RIGOR_HINT}. Required; there is no default.`,
+        ),
+      ),
+    ),
+    isolated: Flag.optional(
+      Flag.String('isolated').pipe(
+        Flag.withDescription('Author in an isolated worktree (yes) or the current checkout (no).'),
+      ),
+    ),
+    origin: Flag.optional(
+      Flag.String('origin').pipe(
+        Flag.withDescription('Worktree origin: current, main, or other. Required when isolated.'),
+      ),
+    ),
+    originBranch: Flag.optional(
+      Flag.String('origin-branch').pipe(
+        Flag.withDescription('Freeform origin branch. Required when --origin other.'),
+      ),
+    ),
+    worktreeName: Flag.optional(
+      Flag.String('worktree-name').pipe(
+        Flag.withDescription('Kebab-case worktree name. Required when isolated.'),
+      ),
+    ),
     verbose: verboseFlag,
   },
   (config) =>
@@ -704,6 +710,11 @@ export const authorCommand = Command.make(
         const loaded = yield* author(workspace, {
           request: config.request,
           notes: opt(config.notes),
+          rigor: opt(config.rigor),
+          isolated: opt(config.isolated),
+          origin: opt(config.origin),
+          originBranch: opt(config.originBranch),
+          worktreeName: opt(config.worktreeName),
         });
         yield* Console.log(loaded.text);
       }),

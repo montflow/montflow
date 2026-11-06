@@ -21,6 +21,19 @@ export const DEFAULT_SIZE: Size = 'medium';
 /** True when `value` is one of the four sizes. */
 export const isSize = (value: string): value is Size => SIZES.some((size) => size === value);
 
+/**
+ * The record-only opt-out a `complete` task may declare instead of a size.
+ * It is never a dispatch target and never contributes to a review budget.
+ */
+export const NONE_SIZE = 'none';
+
+/** A `TASK.md` size value: one of the four sizes, or the record opt-out. */
+export type DeclaredSize = Size | typeof NONE_SIZE;
+
+/** True when `value` is a size a task may declare. */
+export const isDeclaredSize = (value: string): value is DeclaredSize =>
+  isSize(value) || value === NONE_SIZE;
+
 /** Human-readable size list for diagnostics. */
 export const SIZE_HINT = SIZES.join(', ');
 
@@ -80,7 +93,7 @@ export const taskContribution = (input: BudgetInput): number => {
  * declares a size (a review-only phase, or completed unsized tasks plus their
  * pending review). A phase that can reach review must be able to hold the one
  * round its lock requires; a budget of 0 would deadlock the only path to
- * `locked-phases`. An empty phase has no review to hold and stays 0.
+ * a derived phase lock. An empty phase has no review to hold and stays 0.
  * @param sizes - phase members, as sizes or typed tasks
  * @returns the budget, between 0 (empty phase) and {@link MAX_REVIEW_CYCLES}
  */
@@ -114,6 +127,7 @@ export const CODES = {
   invalidConfig: 'sizing.invalid-config',
   missingSize: 'task.missing-size',
   unknownTaskSize: 'task.unknown-size',
+  noneSizeUnfinished: 'task.size-none-unfinished',
 } as const;
 
 /** One stable sizing failure code. */

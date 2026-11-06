@@ -21,9 +21,17 @@ const program = Effect.gen(function* () {
 - `mf-profiles <subcommand> …` — the same command as a binary.
 - `profile_execute` — run a stored profile on a task in a native session.
 
+## Payload
+
+`packages/profiles/payload.json` declares the six spec-role profiles as
+`profile` payload. `mf-profiles doctor` installs or repairs them under
+`.agents/@montflow/profiles/`; `mf-profiles doctor --check` is report-only and
+is what `mf-profiles:check` runs. A manifest-owned profile edited locally is
+`stale` and repair overwrites it; an unlisted profile in the same store is user
+data and is never deleted.
+
 ## Status
 
-Boilerplate (`0.0.1`, private). Source-only — no build step: a local-path
-OpenCode install loads the `.ts` files directly. Run `bun install` from the repo
-root for dependencies, then `turbo` `test` / `ts:check` cover this package like
-the rest.
+Private (`0.0.2`), source-only — no build step: a local-path OpenCode install
+loads the `.ts` files directly. Run `bun install` from the repo root for
+dependencies, then `turbo` `test` / `ts:check` cover this package like the rest.
