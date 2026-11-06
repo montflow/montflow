@@ -278,6 +278,10 @@
         "effect": "4.0.1",
       },
     },
+    "packages/shared": {
+      "name": "@montflow/shared",
+      "version": "0.0.0",
+    },
     "packages/skills": {
       "name": "@montflow/skills",
       "version": "0.0.2",
@@ -630,6 +634,8 @@
     "@montflow/references": ["@montflow/references@workspace:packages/references"],
 
     "@montflow/reviews": ["@montflow/reviews@workspace:packages/reviews"],
+
+    "@montflow/shared": ["@montflow/shared@workspace:packages/shared"],
 
     "@montflow/skills": ["@montflow/skills@workspace:packages/skills"],
 
