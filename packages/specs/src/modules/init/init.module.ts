@@ -250,10 +250,23 @@ const allocate = (plan: InitPlan): AllocatedPlan => {
   };
 };
 
-/** True when any path from `task` reaches a task in phase `A`. */
-const reachesPhaseA = (
-  task: AllocatedTask,
-  byId: ReadonlyMap<string, AllocatedTask>,
+/** One task's identity and dependency edges, for the ladder's reachability rule. */
+export interface LadderTask {
+  readonly id: string;
+  readonly type: TaskType;
+  readonly phaseIndex: number;
+  readonly dependsOn: ReadonlyArray<string>;
+}
+/** One phase's id and its tasks, in phase-rank order. */
+export interface LadderPhase {
+  readonly id: string;
+  readonly tasks: ReadonlyArray<LadderTask>;
+}
+type DependencyNode = Pick<LadderTask, 'id' | 'phaseIndex' | 'dependsOn'>;
+const reachesExploration = (
+  task: DependencyNode,
+  exploration: ReadonlySet<string>,
+  byId: ReadonlyMap<string, DependencyNode>,
   seen = new Set<string>(),
 ): boolean => {
   if (seen.has(task.id)) return false;
@@ -261,10 +274,48 @@ const reachesPhaseA = (
   for (const dependency of task.dependsOn) {
     const next = byId.get(dependency);
     if (next === undefined) continue;
-    if (next.phaseIndex === 0) return true;
-    if (reachesPhaseA(next, byId, seen)) return true;
+    if (exploration.has(next.id)) return true;
+    if (reachesExploration(next, exploration, byId, seen)) return true;
   }
   return false;
+};
+
+/**
+ * Every deep/critical phase after `A` reaches the task carrying the
+ * exploration. `init`, `new-phase`, `new-task`, and `check` all read it; an
+ * empty phase is deferred until its first task arrives.
+ * @param rigor - the spec's rigor
+ * @param phases - every phase with its tasks, in phase-rank order
+ * @returns every finding for a later phase with no dependency path to the exploration task
+ */
+export const phaseDependencyIssues = (
+  rigor: Rigor,
+  phases: ReadonlyArray<LadderPhase>,
+): ReadonlyArray<Issue> => {
+  if (rigor !== 'deep' && rigor !== 'critical') return [];
+  const phaseA = phases[0];
+  if (phaseA === undefined) return [];
+  const exploration = new Set(
+    phaseA.tasks.filter((task) => task.type === 'exploratory').map((task) => task.id),
+  );
+  if (exploration.size === 0) return [];
+  const byId = new Map(phases.flatMap((phase) => phase.tasks).map((task) => [task.id, task]));
+  const issues: Array<Issue> = [];
+  for (const [index, phase] of phases.entries()) {
+    if (index === 0 || phase.tasks.length === 0) continue;
+    if (phase.tasks.some((task) => reachesExploration(task, exploration, byId))) continue;
+    issues.push(
+      coded(
+        INIT_CODES.explorationMissing,
+        `phase ${phase.id}`,
+        `Phase '${phase.id}' does not depend on the exploration task in phase A; every later phase must build on that discovery.`,
+        'at least one task depending on the phase A exploration task',
+        'no dependency path to the phase A exploration task',
+        'Add `after=<the phase A exploratory task name>` to a task in this phase.',
+      ),
+    );
+  }
+  return issues;
 };
 
 /**
@@ -378,7 +429,10 @@ export const explorationIssues = (
           ),
         );
       }
-      if (rigor === 'critical' && phaseA.some((type) => type !== 'exploratory')) {
+      if (
+        rigor === 'critical' &&
+        phaseA.some((type) => type !== 'exploratory' && type !== 'review')
+      ) {
         issues.push(
           coded(
             INIT_CODES.explorationPlacement,
@@ -387,6 +441,21 @@ export const explorationIssues = (
             'phase A holding only exploratory tasks',
             phaseA.join(', '),
             'Move non-exploratory work out of phase A.',
+          ),
+        );
+      }
+    }
+    for (const [index, tasks] of phases.entries()) {
+      if (index === 0) continue;
+      if (tasks.some((type) => type === 'exploratory')) {
+        issues.push(
+          coded(
+            INIT_CODES.explorationPlacement,
+            `phase ${phaseIdAt(index + 1)}`,
+            `A ${rigor} plan explores only in phase A; later phases build on that discovery.`,
+            'the exploratory task in phase A',
+            `phase ${phaseIdAt(index + 1)}`,
+            'Move the discovery into phase A, then depend on it from this phase.',
           ),
         );
       }
@@ -554,30 +623,21 @@ export const validateInitPlan = (plan: InitPlan): ReadonlyArray<Issue> => {
     ),
   );
   if (plan.rigor === 'deep' || plan.rigor === 'critical') {
-    const phaseA = phases[0];
-    const exploreA = phaseA?.tasks.filter((task) => task.type === 'exploratory') ?? [];
-    if (phaseA !== undefined && exploreA.length > 0) {
-      const allocated = allocate(plan);
-      const byId = new Map(
-        allocated.phases.flatMap((phase) => phase.tasks).map((task) => [task.id, task]),
-      );
-      for (const [index, phase] of allocated.phases.entries()) {
-        if (index === 0) continue;
-        const linked = phase.tasks.some((task) => reachesPhaseA(task, byId));
-        if (!linked) {
-          issues.push(
-            coded(
-              INIT_CODES.explorationMissing,
-              `phase ${phase.id}`,
-              `Phase '${phase.id}' does not depend on the exploration phase A; every later phase must build on it.`,
-              'at least one task depending on a phase A task',
-              'no dependency path to phase A',
-              'Add `after=<an A-phase task name>` to a task in this phase.',
-            ),
-          );
-        }
-      }
-    }
+    const allocated = allocate(plan);
+    issues.push(
+      ...phaseDependencyIssues(
+        plan.rigor,
+        allocated.phases.map((phase, index) => ({
+          id: phase.id,
+          tasks: phase.tasks.map((task) => ({
+            id: task.id,
+            type: task.type,
+            phaseIndex: index,
+            dependsOn: task.dependsOn,
+          })),
+        })),
+      ),
+    );
   }
 
   // ── Phase and task ceilings ─────────────────────────────────────────
@@ -875,21 +935,16 @@ interface MutableInitPhase {
   notes: string;
 }
 
-/**
- * Render a complete v2 tree for a validated plan. Allocation is from the plan
- * order, never from caller arithmetic; ids restart at `001` in every phase and
- * a generated review task is the last task of a required phase.
- * @param plan - a plan that already passed {@link validateInitPlan}
- * @returns every file, spec-relative
- */
-/**
- * Non-review task count in one allocated phase.
- * @param phase - the allocated phase
- * @returns its work-task count
- */
+/** Non-review task count in one allocated phase. */
 const workTaskCount = (phase: AllocatedPlan['phases'][number]): number =>
   phase.tasks.filter((task) => !task.generatedReview).length;
 
+/**
+ * Render a complete v2 tree for a validated plan (plan order; ids restart per
+ * phase; a generated review task comes last).
+ * @param plan - a plan that already passed {@link validateInitPlan}
+ * @returns every file, spec-relative
+ */
 export const renderInitTree = (plan: InitPlan): ReadonlyArray<SpecFileEntry> => {
   const allocated = allocate(plan);
   const files: Array<SpecFileEntry> = [{ path: 'SPEC.md', content: renderSpec(plan, allocated) }];

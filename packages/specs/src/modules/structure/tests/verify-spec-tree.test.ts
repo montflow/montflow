@@ -1327,3 +1327,64 @@ Vitest.describe('Structure.verifySpecTree dependency integrity', () => {
     );
   });
 });
+
+Vitest.describe('Structure.verifySpecTree rigor shape', () => {
+  /** A v2 tree whose SPEC.md records `deep` rigor. */
+  const deepTree = (tasks: ReadonlyArray<DependencyFixture>) => {
+    const base = depSnapshot(tasks);
+    const creation = '\n## Creation\n\n- rigor: deep\n- questions 0/4\n- unresolved: none\n';
+    return {
+      ...base,
+      files: base.files.map((file) =>
+        file.path === 'SPEC.md' ? { ...file, content: `${file.content}${creation}` } : file,
+      ),
+    };
+  };
+
+  Vitest.it('reports a later phase with no dependency path to phase A', () => {
+    const result = verifyTree(
+      deepTree([
+        { id: 'A001', name: 'explore', type: 'exploratory' },
+        { id: 'B001', name: 'build' },
+      ]),
+    );
+    Vitest.expect(result.issues.map((found) => found.code)).toContain('init.exploration-missing');
+  });
+
+  Vitest.it('reports a deep exploratory task outside phase A', () => {
+    const result = verifyTree(
+      deepTree([
+        { id: 'A001', name: 'explore', type: 'exploratory' },
+        { id: 'B001', name: 'look-more', type: 'exploratory', dependsOn: 'A001' },
+      ]),
+    );
+    Vitest.expect(result.issues.map((found) => found.code)).toContain('init.exploration-placement');
+  });
+
+  Vitest.it('reports a later phase that reaches only a non-exploratory phase A task', () => {
+    const result = verifyTree(
+      deepTree([
+        { id: 'A001', name: 'explore', type: 'exploratory' },
+        { id: 'A002', name: 'setup' },
+        { id: 'B001', name: 'build', dependsOn: 'A002' },
+      ]),
+    );
+    Vitest.expect(result.issues.map((found) => found.code)).toContain('init.exploration-missing');
+  });
+
+  Vitest.it(
+    'accepts a later phase that reaches the exploration through a phase A work task',
+    () => {
+      const result = verifyTree(
+        deepTree([
+          { id: 'A001', name: 'explore', type: 'exploratory' },
+          { id: 'A002', name: 'setup', dependsOn: 'A001' },
+          { id: 'B001', name: 'build', dependsOn: 'A002' },
+        ]),
+      );
+      Vitest.expect(result.issues.map((found) => found.code)).not.toContain(
+        'init.exploration-missing',
+      );
+    },
+  );
+});

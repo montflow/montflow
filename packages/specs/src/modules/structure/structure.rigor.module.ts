@@ -1,7 +1,8 @@
 import { declaredRigorOfSpec, rigorOfSpec } from '../creation/index.js';
+import { explorationIssues, phaseDependencyIssues } from '../init/index.js';
 import { CODES as RIGOR_CODES, RIGOR_CONTRACT, RIGOR_HINT } from '../rigor/index.js';
 import type { Task } from '../task/index.js';
-import { phaseOf } from '../task/index.js';
+import { phaseOf, phaseRank } from '../task/index.js';
 import { type Issue, finding } from '../verify/index.js';
 
 /**
@@ -75,5 +76,32 @@ export const verifyRigorCeilings = (input: {
       );
     }
   }
+
+  // Exploration placement and the deep/critical dependency on phase A hold on
+  // the live tree too, so a phase or task grown past the rule fails `check`.
+  const phases = [...input.phaseDirs].toSorted((a, b) => phaseRank(a) - phaseRank(b));
+  const tasksByPhase = new Map<string, Array<Task>>();
+  for (const task of input.tasks.values()) {
+    const phase = phaseOf(task.id);
+    const bucket = tasksByPhase.get(phase) ?? [];
+    bucket.push(task);
+    tasksByPhase.set(phase, bucket);
+  }
+  const graph = phases.map((phase, index) => ({
+    id: phase,
+    tasks: (tasksByPhase.get(phase) ?? []).map((task) => ({
+      id: task.id,
+      type: task.type,
+      phaseIndex: index,
+      dependsOn: task.dependsOn,
+    })),
+  }));
+  issues.push(
+    ...explorationIssues(
+      rigor,
+      phases.map((phase) => (tasksByPhase.get(phase) ?? []).map((task) => task.type)),
+    ),
+    ...phaseDependencyIssues(rigor, graph),
+  );
   return issues;
 };

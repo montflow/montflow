@@ -6,9 +6,12 @@ import {
   gateTemplateFor,
   ceilingIssues,
   explorationIssues,
+  phaseDependencyIssues,
 } from '../../modules/init/index.js';
+import { MAILBOX_FILE } from '../../modules/channel/index.js';
 import { declaredRigorOfSpec } from '../../modules/creation/index.js';
 import {
+  PHASE_BOARD_FILE,
   PHASE_FILE,
   parsePhaseFile,
   renderPhaseMemory,
@@ -29,7 +32,12 @@ import {
   sortKey,
 } from '../../modules/task/index.js';
 import { isScopeList } from '../../modules/scheduler/index.js';
-import { CODES as RIGOR_CODES, RIGOR_CONTRACT, waiverAllowed } from '../../modules/rigor/index.js';
+import {
+  CODES as RIGOR_CODES,
+  RIGOR_CONTRACT,
+  waiverAllowed,
+  writesArtifact,
+} from '../../modules/rigor/index.js';
 import type { SpecSnapshot } from '../../modules/structure/index.js';
 import { SpecStore } from '../../services/index.js';
 
@@ -599,6 +607,47 @@ export const newTask = (
         if (task.type !== 'review' && !dependsOn.includes(task.id)) dependsOn.push(task.id);
       }
     }
+    // A deep/critical tree keeps its discovery: every phase after A must reach
+    // the task carrying the exploration, including a phase grown after init.
+    if (rigor === 'deep' || rigor === 'critical') {
+      const phaseIndex = phases.indexOf(options.phase);
+      const graph = phases.map((phaseId, index) => ({
+        id: phaseId,
+        tasks: tasksIn(snapshot, phaseId).map((task) => ({
+          id: task.id,
+          type: task.type,
+          phaseIndex: index,
+          dependsOn: task.dependsOn,
+        })),
+      }));
+      const withCandidate = graph.map((phaseNode, index) =>
+        index === phaseIndex
+          ? {
+              ...phaseNode,
+              tasks: [
+                ...phaseNode.tasks,
+                { id, type: candidateType, phaseIndex: index, dependsOn: [...dependsOn] },
+              ],
+            }
+          : phaseNode,
+      );
+      const reach = phaseDependencyIssues(rigor, withCandidate);
+      if (reach.length > 0) {
+        const first = reach[0];
+        return yield* Effect.fail(
+          authoringFailure(operation, {
+            code: first?.code ?? 'init.exploration-missing',
+            path: options.name,
+            field: first?.field ?? '--depends-on',
+            problem: first?.message ?? `A ${rigor} phase must depend on the exploration phase A.`,
+            rerun: `mf-specs new-task --name ${options.name} --phase ${options.phase} --task <name> --type <type> --depends-on <A-phase task id>`,
+            expected: first?.expected,
+            actual: first?.actual,
+            fix: 'Add a dependency on the task that carries phase A exploration.',
+          }),
+        );
+      }
+    }
     // A v2 execution/defect/interruptor task always carries its own proof.
     const gated = options.gates === true || GATED_TASK_TYPES.has(options.type);
     const files: Array<{ path: string; content: string }> = [
@@ -635,6 +684,32 @@ export const newTask = (
         path: phasePath,
         content: appendEvidence(phaseText, id, phase.reviewReason, phase.reviewEvidence),
       });
+    }
+    // The per-level artifact matrix follows the real post-create work-task
+    // count, so a grown tree matches the one `init` would have written.
+    if (rigor !== undefined) {
+      const contract = RIGOR_CONTRACT[rigor];
+      const workCount =
+        existing.filter((task) => task.type !== 'review').length +
+        (candidateType === 'review' ? 0 : 1);
+      const present = new Set(snapshot.files.map((entry) => entry.path));
+      const boardPath = `${options.phase}/${PHASE_BOARD_FILE}`;
+      if (writesArtifact(contract, 'BOARD.md', workCount) && !present.has(boardPath)) {
+        files.push({ path: boardPath, content: '# Board\n' });
+      }
+      if (writesArtifact(contract, 'MAILBOX.md', workCount)) {
+        const dirs = new Set([dir]);
+        for (const task of existing) {
+          const existingDir = taskDirOf(snapshot, task.id);
+          if (existingDir !== undefined) dirs.add(existingDir);
+        }
+        for (const mailboxDir of dirs) {
+          const mailboxPath = `${mailboxDir}/${MAILBOX_FILE}`;
+          if (!present.has(mailboxPath)) {
+            files.push({ path: mailboxPath, content: '# Mailbox\n' });
+          }
+        }
+      }
     }
     const store = yield* SpecStore.SpecStore;
     yield* store.write(options.root, options.name, files);

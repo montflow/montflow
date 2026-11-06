@@ -60,7 +60,13 @@ const phasesAt = (rigor: Rigor, counts: ReadonlyArray<number>): ReadonlyArray<In
     }
     while (tasks.length < count) {
       if (rigor === 'critical' && index === 0) tasks.push(explore());
-      else tasks.push(execute(`${index}-${tasks.length}`, index === 0 ? [] : ['explore']));
+      else
+        tasks.push(
+          execute(
+            `${index}-${tasks.length}`,
+            index === 0 || (rigor !== 'deep' && rigor !== 'critical') ? [] : ['explore'],
+          ),
+        );
     }
     const phase: InitPhasePlan = {
       objective: `Phase ${index + 1}`,
@@ -105,10 +111,7 @@ Vitest.describe('Rigor.behaviour runtime', () => {
   Vitest.it('accepts every level at its ceiling and rejects one past each ceiling', () => {
     for (const entry of CEILINGS) {
       const atMax = validateInitPlan(plan(entry.rigor, phasesAt(entry.rigor, entry.atMax)));
-      Vitest.expect(
-        codes(atMax).filter((code) => code === 'init.phase-count' || code === 'init.task-ceiling'),
-        entry.rigor,
-      ).toStrictEqual([]);
+      Vitest.expect(atMax, entry.rigor).toStrictEqual([]);
 
       for (const counts of [entry.overTasks, entry.overPhase, entry.overPhases]) {
         const issues = validateInitPlan(plan(entry.rigor, phasesAt(entry.rigor, counts)));

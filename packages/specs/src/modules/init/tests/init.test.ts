@@ -164,6 +164,29 @@ Vitest.describe('Init.rigors runtime', () => {
     Vitest.expect(codes(issues)).toContain(INIT_CODES.explorationMissing);
   });
 
+  Vitest.it('accepts only a dependency on the phase A exploration, never a work task', () => {
+    const phaseA: InitPhasePlan = {
+      objective: 'One',
+      review: 'required',
+      tasks: [work('explore', 'exploratory'), work('setup', 'execution')],
+    };
+    const workOnly = validateInitPlan(
+      plan('deep', [
+        phaseA,
+        { objective: 'Two', review: 'required', tasks: [work('build', 'execution', ['setup'])] },
+      ]),
+    );
+    Vitest.expect(codes(workOnly)).toContain(INIT_CODES.explorationMissing);
+
+    const discovery = validateInitPlan(
+      plan('deep', [
+        phaseA,
+        { objective: 'Two', review: 'required', tasks: [work('build', 'execution', ['explore'])] },
+      ]),
+    );
+    Vitest.expect(codes(discovery)).not.toContain(INIT_CODES.explorationMissing);
+  });
+
   Vitest.it('rejects trivial exploration and a prose-only trivial gate', () => {
     const exploration = validateInitPlan(
       plan('trivial', [

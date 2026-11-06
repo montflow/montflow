@@ -6,6 +6,7 @@ import {
   renderSubjectiveGate,
   ceilingIssues,
   explorationIssues,
+  phaseDependencyIssues,
 } from '../../modules/init/index.js';
 import { declaredRigorOfSpec } from '../../modules/creation/index.js';
 import { CODES as RIGOR_CODES, RIGOR_CONTRACT, writesArtifact } from '../../modules/rigor/index.js';
@@ -138,9 +139,21 @@ export const newPhase = (
     if (rigor !== undefined) {
       const types = ids.map((phaseId) => tasksIn(snapshot, phaseId).map((task) => task.type));
       const counts = types.map((list) => list.filter((type) => type !== 'review').length);
+      const graph = ids.map((phaseId, index) => ({
+        id: phaseId,
+        tasks: tasksIn(snapshot, phaseId).map((task) => ({
+          id: task.id,
+          type: task.type,
+          phaseIndex: index,
+          dependsOn: task.dependsOn,
+        })),
+      }));
       const ceiling = ceilingIssues(rigor, [...counts, 0]);
       const exploration = explorationIssues(rigor, [...types, []]);
-      const blocked = [...ceiling, ...exploration];
+      // The new phase holds no task yet, so its reachability is deferred to the
+      // first `new-task`; this still reports an already-drifted earlier phase.
+      const reach = phaseDependencyIssues(rigor, [...graph, { id, tasks: [] }]);
+      const blocked = [...ceiling, ...exploration, ...reach];
       if (blocked.length > 0) {
         const first = blocked[0];
         return yield* Effect.fail(
@@ -242,10 +255,10 @@ export const newPhase = (
         content: renderSubjectiveGate(`phase ${id}`, judge),
       });
     }
+    // A new phase has no work task yet, so the conditional `BOARD.md` arm waits
+    // for the first `new-task`; an unconditional contract artifact is written now.
     const writesBoard =
-      rigor === undefined
-        ? true
-        : writesArtifact(RIGOR_CONTRACT[rigor], 'BOARD.md', tasksIn(snapshot, id).length);
+      rigor === undefined ? true : writesArtifact(RIGOR_CONTRACT[rigor], 'BOARD.md', 0);
     if (options.board ?? writesBoard) {
       files.push({ path: `${id}/${PHASE_BOARD_FILE}`, content: '# Board\n' });
     }

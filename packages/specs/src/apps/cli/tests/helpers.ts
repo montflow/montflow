@@ -19,6 +19,8 @@ export interface StubOptions {
   readonly reviews?: ReadonlyArray<SeriesSnapshot>;
   /** Make every `reviewSeries` fail, as an unreadable review store does. */
   readonly reviewFailure?: SpecStore.StoreError;
+  /** Report the specs root as absent; defaults to present. */
+  readonly hasRoot?: boolean;
 }
 
 /** MEMORY.md contents with the template's sections. */
@@ -65,7 +67,7 @@ export const stubLayer = (
       SpecStore.SpecStore,
       SpecStore.SpecStore.of({
         names: () => Effect.succeed([...specs.keys()].toSorted()),
-        hasRoot: () => Effect.succeed(true),
+        hasRoot: () => Effect.succeed(options.hasRoot ?? true),
         exists: (_root, name) => Effect.succeed(specs.has(name)),
         hasFile: (_root, name, relative) =>
           Effect.succeed(specs.get(name)?.some((file) => file.path === relative) ?? false),

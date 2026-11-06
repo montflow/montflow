@@ -436,4 +436,136 @@ Vitest.describe('Cli.rigor growth runtime', () => {
       }
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(Platform)),
   );
+
+  Vitest.it.effect('refuses deep exploration outside A and a later phase with no path to A', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const workspace = yield* fs.makeTempDirectoryScoped();
+      const storeRoot = `${workspace}/${root}`;
+      yield* init({ root: storeRoot, name: 'deep', rigor: 'deep' });
+
+      const laterExploration = yield* newTask({
+        root: storeRoot,
+        name: 'deep',
+        phase: 'B',
+        task: 'look-more',
+        type: 'exploratory',
+      }).pipe(Effect.result);
+      Vitest.expect('failure' in laterExploration).toBe(true);
+      if ('failure' in laterExploration) {
+        const found =
+          'diagnostics' in laterExploration.failure
+            ? laterExploration.failure.diagnostics[0]
+            : undefined;
+        Vitest.expect(found?.code).toBe('init.exploration-placement');
+      }
+
+      yield* newPhase({ root: storeRoot, name: 'deep', objective: 'Third slice' });
+      const unlinked = yield* newTask({
+        root: storeRoot,
+        name: 'deep',
+        phase: 'C',
+        task: 'build',
+        type: 'execution',
+      }).pipe(Effect.result);
+      Vitest.expect('failure' in unlinked).toBe(true);
+      if ('failure' in unlinked) {
+        const found =
+          'diagnostics' in unlinked.failure ? unlinked.failure.diagnostics[0] : undefined;
+        Vitest.expect(found?.code).toBe('init.exploration-missing');
+      }
+
+      const linked = yield* newTask({
+        root: storeRoot,
+        name: 'deep',
+        phase: 'C',
+        task: 'build',
+        type: 'execution',
+        dependsOn: ['A001'],
+      });
+      Vitest.expect(linked.task).toBe('C001');
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('keeps a grown deep phase grounded in the phase A exploration task', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const workspace = yield* fs.makeTempDirectoryScoped();
+      const storeRoot = `${workspace}/${root}`;
+      yield* init({ root: storeRoot, name: 'drift', rigor: 'deep' });
+      yield* newTask({
+        root: storeRoot,
+        name: 'drift',
+        phase: 'A',
+        task: 'setup',
+        type: 'execution',
+      });
+      yield* newPhase({ root: storeRoot, name: 'drift', objective: 'Third slice' });
+
+      const workOnly = yield* newTask({
+        root: storeRoot,
+        name: 'drift',
+        phase: 'C',
+        task: 'build',
+        type: 'execution',
+        dependsOn: ['A003'],
+      }).pipe(Effect.result);
+      Vitest.expect('failure' in workOnly).toBe(true);
+      if ('failure' in workOnly) {
+        const found =
+          'diagnostics' in workOnly.failure ? workOnly.failure.diagnostics[0] : undefined;
+        Vitest.expect(found?.code).toBe('init.exploration-missing');
+      }
+
+      const discovery = yield* newTask({
+        root: storeRoot,
+        name: 'drift',
+        phase: 'C',
+        task: 'build',
+        type: 'execution',
+        dependsOn: ['A001'],
+      });
+      Vitest.expect(discovery.task).toBe('C001');
+
+      const taskPath = `${storeRoot}/drift/C/C001-build/TASK.md`;
+      const written = yield* fs.readFileString(taskPath);
+      yield* fs.writeFileString(taskPath, written.replace('depends-on: A001', 'depends-on: A003'));
+      const drifted = yield* check(storeRoot, { name: 'drift' });
+      Vitest.expect(drifted.failed).toBeGreaterThan(0);
+      Vitest.expect(
+        drifted.specs.flatMap((spec) => spec.issues).map((issue) => issue.code),
+      ).toContain('init.exploration-missing');
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('writes the conditional channels when a light phase grows past one task', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const workspace = yield* fs.makeTempDirectoryScoped();
+      const storeRoot = `${workspace}/${root}`;
+      yield* init({ root: storeRoot, name: 'demo', rigor: 'light' });
+      Vitest.expect(yield* fs.exists(`${storeRoot}/demo/A/BOARD.md`)).toBe(false);
+
+      const report = yield* newTask({
+        root: storeRoot,
+        name: 'demo',
+        phase: 'A',
+        task: 'second',
+        type: 'execution',
+      });
+      Vitest.expect(report.files).toContain('A/BOARD.md');
+      Vitest.expect(report.files).toContain('A/A001-implement/MAILBOX.md');
+      Vitest.expect(report.files).toContain('A/A002-second/MAILBOX.md');
+
+      yield* init({
+        root: storeRoot,
+        name: 'seeded',
+        rigor: 'light',
+        taskFlags: ['A:one:execution', 'A:two:execution'],
+      });
+      Vitest.expect(yield* fs.exists(`${storeRoot}/seeded/A/BOARD.md`)).toBe(true);
+      Vitest.expect(yield* fs.exists(`${storeRoot}/seeded/A/A001-one/MAILBOX.md`)).toBe(true);
+      Vitest.expect(yield* fs.exists(`${storeRoot}/seeded/A/A002-two/MAILBOX.md`)).toBe(true);
+    }).pipe(Effect.provide(SpecStore.Default), Effect.provide(Platform)),
+  );
 });
