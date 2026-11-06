@@ -179,7 +179,7 @@ Vitest.describe('specs server command', () => {
   );
 
   Vitest.it.effect(
-    'registers the author/execute/sizing/models/rigor tools and the full slash surface',
+    'registers the author/execute/status/sizing/models/rigor tools and the full slash surface',
     () =>
       Effect.gen(function* () {
         const root = yield* Effect.promise(freshRoot);
@@ -188,11 +188,15 @@ Vitest.describe('specs server command', () => {
           Vitest.expect(tools.map((tool) => tool.name)).toStrictEqual([
             'spec_author',
             'spec_execute',
+            'spec_status',
             'spec_sizing',
             'spec_models',
             'spec_rigor',
           ]);
           Vitest.expect(COMMAND_DESCRIPTION).toContain('author --request <text>');
+          Vitest.expect(COMMAND_DESCRIPTION).toContain(
+            'status-report [--name <spec>] [--focus <text>]',
+          );
           Vitest.expect(COMMAND_DESCRIPTION).toContain('execute [--name <spec>]');
           Vitest.expect(COMMAND_DESCRIPTION).toContain('sizing-config [--scope repo|spec|phase]');
           Vitest.expect(COMMAND_DESCRIPTION).toContain('no --scope asks which layer');

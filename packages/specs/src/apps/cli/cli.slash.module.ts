@@ -25,6 +25,7 @@ import {
   toolsCommand,
   checkCommand,
   statusCommand,
+  statusReportCommand,
   stateCommand,
   nextCommand,
   resolveCommand,
@@ -73,6 +74,7 @@ import {
   reviewCommand,
   renderScaffold,
   status,
+  statusReport,
   state,
   migrate,
   renderMigrate,
@@ -111,6 +113,7 @@ export const rootCommand = Command.make('mf-specs').pipe(
   Command.withSubcommands([
     checkCommand,
     statusCommand,
+    statusReportCommand,
     stateCommand,
     nextCommand,
     resolveCommand,
@@ -358,6 +361,20 @@ export const slashStatus = (context: SlashContext): SlashEffect => {
   );
 };
 
+/** `/specs status-report`, the read-only `spec-status` prompt. */
+export const slashStatusReport = (context: SlashContext): SlashEffect => {
+  const { parsed, dir, workspace } = context;
+  return slashOutcome(
+    statusReport(dir, {
+      name: parsed.name,
+      focus: parsed.focus,
+      workspace,
+    }),
+    (report): SlashReport => ({ output: report.prompt.text, ok: true }),
+    { path: dir, rerun: 'mf-specs status-report', verbose: parsed.verbose },
+  );
+};
+
 /** `/specs state --name <spec>`. */
 export const slashState = (context: SlashContext): SlashEffect => {
   const { parsed, dir } = context;
@@ -591,6 +608,8 @@ export const slashArm = (context: SlashContext): SlashEffect => {
       return slashMail(context);
     case 'status':
       return slashStatus(context);
+    case 'status-report':
+      return slashStatusReport(context);
     case 'state':
       return slashState(context);
     case 'next':

@@ -15,6 +15,7 @@ import {
   readRigor,
   renderDiagnostic,
   sizingConfig,
+  statusReport,
   storeDirOf,
   verifyModels,
 } from '../cli/index.js';
@@ -72,6 +73,16 @@ export const SpecExecuteInput = Schema.Struct({
 
 /** Decoded `spec_execute` input. */
 export type SpecExecuteInput = typeof SpecExecuteInput.Type;
+
+/** Input for `spec_status`. */
+export const SpecStatusInput = Schema.Struct({
+  name: Schema.optional(Schema.String),
+  focus: Schema.optional(Schema.String),
+  model: Schema.optional(Schema.String),
+});
+
+/** Decoded `spec_status` input. */
+export type SpecStatusInput = typeof SpecStatusInput.Type;
 
 /** What the tool factories need: the workspace and the shared executor. */
 export interface SpecToolOptions {
@@ -157,6 +168,36 @@ export const specExecuteTool = (options: SpecToolOptions): ToolDefinition<SpecEx
         Effect.provide(Live),
         Effect.catchCause((cause) =>
           Effect.fail(failureText(cause, storeDirOf(workspace), 'mf-specs execute')),
+        ),
+      );
+      const model = yield* modelOf(options, input.model);
+      return yield* options.execute({
+        cwd: workspace,
+        name: report.prompt.name,
+        model,
+        text: report.prompt.text,
+        skills: report.prompt.skills,
+      });
+    }),
+});
+
+/** The `spec_status` tool: render `spec-status` and dispatch it on a session. */
+export const specStatusTool = (options: SpecToolOptions): ToolDefinition<SpecStatusInput> => ({
+  name: 'spec_status',
+  description:
+    "Resolve one spec read-only, render the shipped spec-status prompt, then dispatch it on a native session and return the agent's last reply. Omit `name` to resolve the spec from the branch; when that match is absent or ambiguous the failure lists the candidates and says to ask the user, so never pick one yourself. The report is read-only by prompt contract: it quotes state, status, next, check, and review evidence and never edits a record, status, lock, or worktree. Pass a model label to override the session default.",
+  input: SpecStatusInput,
+  execute: (input) =>
+    Effect.gen(function* () {
+      const workspace = options.cwd;
+      const report = yield* statusReport(storeDirOf(workspace), {
+        name: input.name,
+        focus: input.focus,
+        workspace,
+      }).pipe(
+        Effect.provide(Live),
+        Effect.catchCause((cause) =>
+          Effect.fail(failureText(cause, storeDirOf(workspace), 'mf-specs status-report')),
         ),
       );
       const model = yield* modelOf(options, input.model);

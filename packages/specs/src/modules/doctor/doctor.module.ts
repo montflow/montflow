@@ -44,6 +44,7 @@ export const SPEC_PROMPT_NAMES = [
   nameAt(MANIFEST, 'prompt', 0),
   nameAt(MANIFEST, 'prompt', 1),
   nameAt(MANIFEST, 'prompt', 2),
+  nameAt(MANIFEST, 'prompt', 3),
 ] as const;
 
 export type { DoctorCode, DoctorError, PayloadInstall };

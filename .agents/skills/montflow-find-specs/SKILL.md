@@ -3,7 +3,7 @@ name: montflow-find-specs
 description: Finds and filters montflow specs under .agents/@montflow/specs/ with the `mf-specs list` CLI (or `/specs list` in the OpenCode host), reporting each spec's derived lifecycle state. Use when an agent must answer "what is pending?", pick a spec to resume, or list specs by state.
 id: f21093485cea4b44
 author: Daniel Montilla
-version: 1.6.0
+version: 1.7.0
 license: MIT
 dependencies:
   - executing-skills
@@ -112,7 +112,24 @@ cannot make from the spec; every other decision is recorded in `MEMORY.md`. The
 mode changes interaction only — dispatch, gates, review, locking, and
 verification are identical in both.
 
-## 7. Read the Execution Channels and Scheduler
+## 7. Report One Spec Read-Only
+
+When the question is "what is this spec's state?" rather than "do the work",
+render the read-only report instead of executing or re-deriving anything:
+
+```bash
+bun run --cwd packages/specs cli status-report [--name <spec>] [--focus <text>]
+```
+
+Inside the host the same engine is `/specs status-report` or the `spec_status`
+tool; both dispatch the rendered `spec-status` prompt on a session and return the
+agent's reply. Only the binary prints the prompt. The report itself quotes
+`state`, `status`, `next`, `check`, and `review decide`. With no
+`--name` it uses `which`; an explicit name always wins, and an absent or
+ambiguous branch fails with the candidates and asks the user instead of
+picking one. It never edits a record, status, lock, or worktree.
+
+## 8. Read the Execution Channels and Scheduler
 
 A phase has two channels and the orchestrator is the only writer:
 `BOARD.md` is broadcast (`mail --to all`) and carries phase boundaries, shared
@@ -129,7 +146,7 @@ time while light checks never wait behind it; both count toward the in-flight ca
 in `.agents/@montflow/gate.json`. A phase-shared check therefore runs once for
 the phase instead of once per worker.
 
-## 8. Do Not Guess
+## 9. Do Not Guess
 
 The listing reflects the spec files on disk. If `list` reports no specs,
 none exist under the root — do not invent one. To author a new spec use
@@ -153,15 +170,18 @@ dispatch `subagent` sessions from the orchestrator.
 - **Parallel phase**: a phase is the widest ready set; `depends-on` carries only
   a real dependency and every task declares `write-scope:`.
 - **Commands**: `mf-specs list` (or `/specs list`), `mf-specs which [--branch <name>]`
-  (or `/specs which`), and `mf-specs execute [--name <spec>] [--mode guided|autonomous]`
+  (or `/specs which`), `mf-specs status-report [--name <spec>] [--focus <text>]`
+  (or `/specs status-report`, or the `spec_status` tool), and
+  `mf-specs execute [--name <spec>] [--mode guided|autonomous]`
   (or `/specs execute`) which loads the `spec-execute` prompt. `state` and
   `status` show the phase's derived lock and review decision; `lock` confirms a
   derived lock and writes nothing.
-- **Prompt**: `packages/specs/prompts/spec-execute.json` (`spec-execute`),
-  doctor-installed into `.agents/@montflow/prompts/`; it declares this skill
-  plus the review skills.
+- **Prompts**: `packages/specs/prompts/spec-execute.json` (`spec-execute`) and
+  `packages/specs/prompts/spec-status.json` (`spec-status`), doctor-installed
+  into `.agents/@montflow/prompts/`; both declare this skill, and the execute
+  prompt also declares the review skills.
 - **CLI engine**: `packages/specs/src/apps/cli/cli.apps.module.ts` —
-  `list`, `renderList`, `resolveListOptions`, `which`, `execute`, `scaffold`
-  (the `create` engine).
+  `list`, `renderList`, `resolveListOptions`, `which`, `statusReport`,
+  `execute`, `scaffold` (the `create` engine).
 - **Lifecycle contract**: `packages/specs/src/modules/lifecycle/lifecycle.module.ts`
   — the derived states and their meanings.

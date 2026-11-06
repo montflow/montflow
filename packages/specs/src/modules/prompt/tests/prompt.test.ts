@@ -382,7 +382,9 @@ Vitest.describe('Prompt.load runtime', () => {
       const error = yield* load(root, 'commit', {}).pipe(Effect.flip);
       Vitest.expect(error.code).toBe(CODES.unknown);
       Vitest.expect(error.problem).toContain("Unknown spec prompt 'commit'");
-      Vitest.expect(error.expected).toBe('one of spec-create, spec-execute, spec-sizing');
+      Vitest.expect(error.expected).toBe(
+        'one of spec-create, spec-execute, spec-sizing, spec-status',
+      );
     }).pipe(Effect.provide(StoreLive)),
   );
 

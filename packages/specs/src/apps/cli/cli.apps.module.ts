@@ -3,6 +3,7 @@ export * from './cli.slash.parse.module.js';
 export * from './cli.slash.commands.module.js';
 export * from './cli.check.module.js';
 export * from './cli.status.module.js';
+export * from './cli.statusreport.module.js';
 export * from './cli.sizing.module.js';
 export * from './cli.models.module.js';
 export * from './cli.create.module.js';

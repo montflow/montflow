@@ -22,6 +22,7 @@ export interface SlashReport {
 export const SLASH_COMMANDS = [
   'check',
   'status',
+  'status-report',
   'state',
   'next',
   'resolve',
@@ -148,6 +149,7 @@ export const SLASH_COMMON_FLAGS: ReadonlyArray<SlashFlagName> = ['dir', 'verbose
 export const SLASH_COMMAND_FLAGS = {
   check: ['name', 'strict', 'catalog'],
   status: ['name'],
+  'status-report': ['name', 'focus'],
   state: ['name'],
   next: ['name'],
   resolve: ['name', 'task'],

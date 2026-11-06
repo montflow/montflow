@@ -33,6 +33,12 @@
       "target": ".agents/@montflow/prompts/spec-sizing.json"
     },
     {
+      "kind": "prompt",
+      "name": "spec-status",
+      "source": "prompts/spec-status.json",
+      "target": ".agents/@montflow/prompts/spec-status.json"
+    },
+    {
       "kind": "rigor",
       "name": "trivial",
       "source": "rigors/trivial.md",

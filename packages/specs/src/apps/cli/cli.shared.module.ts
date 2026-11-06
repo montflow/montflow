@@ -455,6 +455,7 @@ export const invalidPhaseDiagnostic = (phase: string, rerun: string): SizingDiag
  */
 export const GUARD_RERUN = {
   status: 'mf-specs status --name <spec>',
+  statusReport: 'mf-specs status-report --name <spec>',
   next: 'mf-specs next --name <spec>',
   state: 'mf-specs state --name <spec>',
   check: 'mf-specs check --name <spec>',

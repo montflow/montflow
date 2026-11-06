@@ -11,6 +11,7 @@ import {
   SurfaceError,
   runSlash,
   sizingConfig,
+  statusReport as statusReportEngine,
 } from '../index.js';
 import { REPO_SIZING, SPEC_SIZING, entry, memory, stubLayer } from './helpers.js';
 
@@ -279,6 +280,7 @@ Vitest.describe('Cli.runSlash flag validation', () => {
         'author --request Ship login --notes Note --rigor standard --isolated no',
         'author --request Ship login --rigor standard --isolated yes --origin other --origin-branch release/2 --worktree-name ship-login',
         'execute --name ok --phase A --focus Steer --mode guided',
+        'status-report --name ok --focus Steer',
         'sizing-config --scope repo',
         'sizing-config --scope spec --name ok',
         'sizing-config --scope phase --name ok --phase A --focus Steer --mode autonomous',
@@ -748,6 +750,177 @@ Vitest.describe('Cli.runSlash author/execute runtime', () => {
       Vitest.expect(report.output).toContain('code     models.unavailable');
       Vitest.expect(report.output).toContain('--catalog');
     }),
+  );
+});
+
+/** A throwaway workspace plus the platform services the prompt loader needs. */
+interface StatusWork {
+  readonly fs: FileSystem.FileSystem;
+  readonly path: Path.Path;
+  readonly dir: string;
+}
+
+/** Write `<dir>/.git/HEAD` with a branch ref. */
+const statusBranch = (work: StatusWork, name: string) =>
+  Effect.gen(function* () {
+    const git = work.path.join(work.dir, '.git');
+    yield* work.fs.makeDirectory(git, { recursive: true });
+    yield* work.fs.writeFileString(work.path.join(git, 'HEAD'), `ref: refs/heads/${name}\n`);
+  });
+
+/** A one-spec map holding only a `SPEC.md`, which is all resolution reads. */
+const statusSpec = (name: string) => new Map([[name, [entry('SPEC.md', specMarkdown({ name }))]]]);
+
+Vitest.describe('Cli.runSlash status-report runtime', () => {
+  /**
+   * A throwaway workspace with the doctor-installed prompts. The in-memory
+   * store still supplies the spec names, so these tests never touch the
+   * developer's checkout.
+   */
+  const workspace = Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-specs-slash-status-' });
+    yield* runDoctor(dir);
+    return { fs, path, dir, root: path.join(dir, DEFAULT_ROOT) };
+  });
+
+  Vitest.it.effect('renders the binary text for one named spec and carries focus', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const local = new Map(specs);
+      const slash = yield* runSlash('status-report --name ok --focus review risk', work.root).pipe(
+        Effect.provide(stubLayer(local)),
+      );
+      Vitest.expect(slash.ok).toBe(true);
+      Vitest.expect(slash.output).toContain('ok');
+      Vitest.expect(slash.output).toContain('Focus this report on: review risk');
+
+      // The binary prints `prompt.text`; the slash arm returns exactly it.
+      const engine = yield* statusReportEngine(work.root, {
+        name: 'ok',
+        focus: 'review risk',
+        workspace: work.dir,
+      }).pipe(Effect.provide(stubLayer(local)));
+      Vitest.expect(slash.output).toBe(engine.prompt.text);
+      Vitest.expect(engine.prompt.name).toBe('spec-status');
+      Vitest.expect(engine.prompt.skills).toStrictEqual(['montflow-find-specs']);
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('lets an explicit name win over an ambiguous branch', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const local = new Map([...statusSpec('spec-one'), ...statusSpec('spec-two')]);
+      yield* statusBranch(work, 'feat/spec');
+      const report = yield* runSlash('status-report --name spec-one', work.root).pipe(
+        Effect.provide(stubLayer(local)),
+      );
+      Vitest.expect(report.ok).toBe(true);
+      Vitest.expect(report.output).toContain('spec-one');
+      Vitest.expect(report.output).not.toContain('spec-two');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('fails an ambiguous branch with both candidates and asks the user', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const local = new Map([...statusSpec('spec-one'), ...statusSpec('spec-two')]);
+      yield* statusBranch(work, 'feat/spec');
+      const report = yield* runSlash('status-report', work.root).pipe(
+        Effect.provide(stubLayer(local)),
+      );
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).toContain('code     SPEC_AMBIGUOUS');
+      Vitest.expect(report.output).toContain('--name spec-one');
+      Vitest.expect(report.output).toContain('--name spec-two');
+      Vitest.expect(report.output).toContain('next     ask the user');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('fails a detached HEAD and a prefix-less branch, never picking a spec', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const local = statusSpec('ship-login');
+
+      const detached = work.path.join(work.dir, '.git');
+      yield* work.fs.makeDirectory(detached, { recursive: true });
+      yield* work.fs.writeFileString(
+        work.path.join(detached, 'HEAD'),
+        '0123456789abcdef0123456789abcdef01234567\n',
+      );
+      const noBranch = yield* runSlash('status-report', work.root).pipe(
+        Effect.provide(stubLayer(local)),
+      );
+      Vitest.expect(noBranch.ok).toBe(false);
+      Vitest.expect(noBranch.output).toContain('code     SPEC_NO_MATCH');
+      Vitest.expect(noBranch.output).toContain('detached');
+      Vitest.expect(noBranch.output).toContain('--name ship-login');
+      Vitest.expect(noBranch.output).toContain('next     ask the user');
+
+      yield* statusBranch(work, 'wip/ship-login');
+      const unprefixed = yield* runSlash('status-report', work.root).pipe(
+        Effect.provide(stubLayer(local)),
+      );
+      Vitest.expect(unprefixed.ok).toBe(false);
+      Vitest.expect(unprefixed.output).toContain('conventional prefix');
+      Vitest.expect(unprefixed.output).toContain('--name ship-login');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('reports an unknown spec with the raw command diagnostic', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const report = yield* runSlash('status-report --name nope', work.root).pipe(
+        Effect.provide(stubLayer(specs)),
+      );
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).toContain('code     spec.not-found');
+      Vitest.expect(report.output).toContain('next     mf-specs list');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('refuses a malformed name before any read and names the exact rerun', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      for (const name of ['Bad', '..', 'a/b', '']) {
+        const report = yield* runSlash(
+          name === '' ? 'status-report --name=' : `status-report --name ${name}`,
+          work.root,
+        ).pipe(Effect.provide(stubLayer(specs)));
+        Vitest.expect(report.ok, JSON.stringify(name)).toBe(false);
+        Vitest.expect(report.output, JSON.stringify(name)).toContain(
+          'code     cli.invalid-argument',
+        );
+        Vitest.expect(report.output, JSON.stringify(name)).toContain('field    --name');
+        Vitest.expect(report.output, JSON.stringify(name)).toContain(
+          'next     mf-specs status-report --name <spec>',
+        );
+      }
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('reports a missing specs root with the coded store diagnostic', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const report = yield* runSlash('status-report --name ok', work.root).pipe(
+        Effect.provide(stubLayer(specs, new Map(), { hasRoot: false })),
+      );
+      Vitest.expect(report.ok).toBe(false);
+      Vitest.expect(report.output).toContain('code     store.error');
+      Vitest.expect(report.output).toContain('Specs directory not found');
+      Vitest.expect(report.output).toContain('next     mf-specs status-report');
+    }).pipe(Effect.provide(stubLayer(specs))),
+  );
+
+  Vitest.it.effect('writes no spec state while rendering', () =>
+    Effect.gen(function* () {
+      const work = yield* workspace;
+      const local = new Map(specs);
+      const before = JSON.stringify([...local]);
+      yield* runSlash('status-report --name ok', work.root).pipe(Effect.provide(stubLayer(local)));
+      Vitest.expect(JSON.stringify([...local])).toBe(before);
+    }).pipe(Effect.provide(stubLayer(specs))),
   );
 });
 

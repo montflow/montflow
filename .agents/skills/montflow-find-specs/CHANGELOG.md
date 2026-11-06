@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.7.0] - 2026-11-05
+
+### Added
+
+- The read-only status report: `mf-specs status-report`, `/specs status-report`, and the `spec_status` tool render the shipped `spec-status` prompt for one spec, with `--focus`, explicit-name precedence, and the ask-the-user rule on a branch miss
+
 ## [1.6.0] - 2026-11-03
 
 ### Added

@@ -245,7 +245,7 @@ const applyMode = (
 
 /** A rendered prompt ready to dispatch. */
 export interface LoadedPrompt {
-  /** Prompt slug (`spec-create`, `spec-execute`, or `spec-sizing`). */
+  /** Prompt slug (`spec-create`, `spec-execute`, `spec-sizing`, or `spec-status`). */
   readonly name: string;
   /** Rendered text to send to the agent, with any skill advisories appended. */
   readonly text: string;
@@ -458,6 +458,7 @@ const rerunOf = (promptName: string): string =>
     ),
     Match.when('spec-execute', () => 'mf-specs execute --name <spec>'),
     Match.when('spec-sizing', () => 'mf-specs sizing-config'),
+    Match.when('spec-status', () => 'mf-specs status-report --name <spec>'),
     Match.orElse(() => 'mf-specs doctor'),
   );
 
@@ -494,7 +495,7 @@ const advisorySection = (advisories: ReadonlyArray<SkillAdvisory>, promptName: s
  * checked, and only then is the template rendered. Every refusal is a
  * {@link PromptError} naming the file, the problem, and `mf-specs doctor`.
  * @param root - repo root that owns `.agents/@montflow/prompts/`
- * @param name - prompt slug (`spec-create`, `spec-execute`, or `spec-sizing`)
+ * @param name - prompt slug (`spec-create`, `spec-execute`, `spec-sizing`, or `spec-status`)
  * @param values - caller values by variable name, plus the optional `mode`
  *   (`guided` or `autonomous`); the loader folds it into `unsupervised`
  * @returns the rendered text, the declared skills, and the decoded prompt
