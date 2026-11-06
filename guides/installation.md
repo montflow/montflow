@@ -154,6 +154,14 @@ Install — installs the packaged spec skills, prompts, and rigor files:
 bun run --cwd "$M/packages/specs" cli doctor --dir "$PWD"
 ```
 
+Upgrading from the pre-rigor install: the spec store moved from
+`.agents/@montflow/tiers/` to `.agents/@montflow/rigors/`. Doctor never deletes
+a directory it no longer ships, so remove the old store once after upgrading:
+
+```bash
+rm -rf .agents/@montflow/tiers
+```
+
 Create your first spec:
 
 ```bash
