@@ -72,7 +72,7 @@ exist; the manifest is the only name list, never a hand-written array:
 ### Spec store migration record (2026-11-03)
 
 `mf-specs migrate --all` over `.agents/@montflow/specs` reported
-`14 specs · 0 migrated · 2 upgraded · 0 planned · 12 frozen · 0 failed`.
+`13 specs · 0 migrated · 1 upgraded · 0 planned · 12 frozen · 0 failed`.
 Read a spec with no `spec-version` as v1 with a `spec.version-outdated` warning;
 never infer v2 from file presence, and never edit a frozen record.
 
@@ -87,7 +87,6 @@ never infer v2 from file presence, and never edit a frozen record.
 | `montflow-phase-directories`    | frozen (complete) | 1             |
 | `montflow-project-structure`    | frozen (complete) | 1             |
 | `montflow-references-plugin`    | frozen (complete) | 1             |
-| `montflow-references-tui`       | upgraded          | 2             |
 | `montflow-spec-completion-gate` | frozen (complete) | 1             |
 | `montflow-spec-standard`        | upgraded          | 2             |
 | `plugin-host-integration`      | frozen (complete) | 1             |
