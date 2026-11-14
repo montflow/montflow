@@ -25,7 +25,12 @@ import {
   parseGates,
   verifyGateResults,
 } from '../../modules/gates/index.js';
-import { PHASE_FILE, derivePhaseStatus, phaseEvidence } from '../../modules/phase/index.js';
+import {
+  PHASE_FILE,
+  derivePhaseStatus,
+  phaseEvidence,
+  phaseVerification,
+} from '../../modules/phase/index.js';
 import { parseMarkdown } from '../../modules/frontmatter/index.js';
 import { reviewDecisionPassed } from '../../modules/review-policy/index.js';
 import { phaseReviewBudget } from '../../modules/sizing/index.js';
@@ -48,11 +53,13 @@ import {
   diagnostic,
   dirFlag,
   nameFlag,
+  loadSizing,
   opt,
   runDiagnosed,
   storeDirOf,
   VALIDATION_EXIT_CODE,
 } from './cli.shared.module.js';
+import { taskVerifications } from './cli.apps.module.js';
 
 /** Stable codes for `claim`. */
 export const CLAIM_CODES = {
@@ -645,10 +652,12 @@ export const claim = (
       if (currentVersion && current.type === 'review') {
         const store = yield* SpecStore.SpecStore;
         const series = yield* store.reviewSeries(options.root, options.name);
-        const evidence = phaseEvidence(snapshot);
         const phaseTasks = [...tasks.values()].filter(
           (candidate) => phaseOf(candidate.id) === phase,
         );
+        const sizing = yield* loadSizing(options.root, options.name, snapshot);
+        const verifications = taskVerifications(sizing, phaseTasks);
+        const evidence = phaseEvidence(snapshot, verifications);
         const verdict = reviewDecisionPassed(
           options.name,
           {
@@ -661,6 +670,7 @@ export const claim = (
               })),
             ),
             waived: evidence.waived.includes(phase),
+            verification: phaseVerification(phaseTasks, verifications),
           },
           series,
         );

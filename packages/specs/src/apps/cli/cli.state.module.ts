@@ -11,6 +11,7 @@ import {
   parsePhaseFile,
   parsePhaseGateStages,
   phaseEvidence,
+  phaseVerification,
   renderPhaseReview,
 } from '../../modules/phase/index.js';
 import { passedPhases } from '../../modules/review-link/index.js';
@@ -41,12 +42,14 @@ import {
   diagnostic,
   dirFlag,
   nameFlag,
+  loadSizing,
   opt,
   runDiagnosed,
   storeDirOf,
   workspaceRoot,
   VALIDATION_EXIT_CODE,
 } from './cli.shared.module.js';
+import { taskVerifications } from './cli.apps.module.js';
 
 /** The `stamp` output formats. */
 export const STAMP_FORMATS = ['instant', 'date'] as const;
@@ -328,8 +331,11 @@ export const lockPhase = (
     }
     const store = yield* SpecStore.SpecStore;
     const review = yield* store.reviewSeries(options.root, options.name);
-    const evidence = phaseEvidence(snapshot);
     const tasks = tasksInPhase(snapshot, options.phase);
+    const sizing = yield* loadSizing(options.root, options.name, snapshot);
+    const verifications = taskVerifications(sizing, tasks);
+    const verification = phaseVerification(tasks, verifications);
+    const evidence = phaseEvidence(snapshot, verifications);
     if (currentVersion && phase !== undefined && (check.requireBrief ?? true)) {
       const started =
         phase.status === 'in-progress' || tasks.some((task) => task.status === 'in-progress');
@@ -379,6 +385,7 @@ export const lockPhase = (
               tasks.map((task) => ({ type: task.type, size: sizeOf(task) })),
             ),
             waived: evidence.waived.includes(options.phase),
+            verification,
           },
           review,
         ).passed
@@ -394,7 +401,9 @@ export const lockPhase = (
         blockers: [...blockers].toSorted(),
       };
     }
-    if (phase?.review === 'required') {
+    if (evidence.light.includes(options.phase)) {
+      // A light phase locks on completion and task-gate proof alone, like a waiver.
+    } else if (phase?.review === 'required') {
       if (!tasks.some((task) => task.type === 'review')) blockers.add('phase.review-missing');
       else if (!reviewed) blockers.add('phase.review-missing');
     } else if (phase?.review === 'none') {

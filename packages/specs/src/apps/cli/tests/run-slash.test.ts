@@ -313,7 +313,7 @@ Vitest.describe('Cli.runSlash sizing verbs runtime', () => {
       const report = yield* runSlash('sizing --name ok --task A001', root).pipe(
         Effect.provide(stubLayer(specs)),
       );
-      Vitest.expect(report.output).toBe('A001  tiny  fixture/phase-model#high  phase');
+      Vitest.expect(report.output).toBe('A001  tiny  fixture/phase-model#high  phase  light');
       Vitest.expect(report.ok).toBe(true);
     }),
   );
@@ -956,8 +956,24 @@ Vitest.describe('Cli.runSlash v2 surfaces', () => {
 
   Vitest.it.effect('lock derives from the phase tree and never writes a list', () =>
     Effect.gen(function* () {
+      const fullSizing = JSON.stringify({
+        sizes: {
+          tiny: { model: 'fixture/spec-model', effort: 'medium', verification: 'full' },
+          small: { model: 'fixture/spec-model', verification: 'full' },
+        },
+        phases: {
+          A: {
+            sizes: { tiny: { model: 'fixture/phase-model', effort: 'high', verification: 'full' } },
+          },
+        },
+      });
+      const okFull = (specs.get('ok') ?? []).map((file) =>
+        file.path === 'sizing.json' ? entry('sizing.json', fullSizing) : file,
+      );
+      const full = new Map(specs);
+      full.set('ok', okFull);
       const report = yield* runSlash('lock --name ok --phase A', root).pipe(
-        Effect.provide(stubLayer(specs)),
+        Effect.provide(stubLayer(full)),
       );
       Vitest.expect(report.ok).toBe(false);
       Vitest.expect(report.output).toContain('not locked A');

@@ -40,6 +40,7 @@ import {
   PHASE_GATES_FILE,
   PHASE_MEMORY_FILE,
   phaseEvidence,
+  phaseVerification,
   parsePhaseFile,
   verifyPhaseFile,
 } from '../phase/index.js';
@@ -75,6 +76,7 @@ import {
   CODES,
   CONFIG_FILE,
   type ConfigSource,
+  type Verification,
   phaseReviewBudget,
   verifyText,
 } from '../sizing/index.js';
@@ -206,6 +208,11 @@ export interface ReviewInput {
   /** The spec's review series, as the review store supplies them. */
   readonly series: ReadonlyArray<SeriesSnapshot>;
   /**
+   * Resolved verification mode by task id. Callers resolve it from the sizing
+   * layers; absent means every task follows the `full` rule.
+   */
+  readonly verifications?: ReadonlyMap<string, Verification> | undefined;
+  /**
    * True when every complete `review` task must have a round attributed to its
    * phase in every expected series, regardless of the spec version. A v2 tree
    * already requires this whenever the review store is available; the flag is
@@ -297,16 +304,20 @@ export const isV2Transformed = (snapshot: SpecSnapshot): TransformResult => {
  * budget, and whether its waiver is effective. A phase with no task is not a
  * phase the lifecycle rolls up, so it contributes nothing.
  * @param snapshot - the spec directory listing
+ * @param verifications - resolved verification mode by task id, when the caller holds one
  * @returns one entry per phase that holds a task, in phase order
  */
-export const phaseReviewInputs = (snapshot: SpecSnapshot): ReadonlyArray<PhaseReviewInput> => {
+export const phaseReviewInputs = (
+  snapshot: SpecSnapshot,
+  verifications?: ReadonlyMap<string, Verification> | undefined,
+): ReadonlyArray<PhaseReviewInput> => {
   const tasks: Array<Task> = [];
   for (const entry of snapshot.files) {
     if ((entry.kind ?? 'file') !== 'file' || !entry.path.endsWith('/TASK.md')) continue;
     const task = parseTaskFile(entry.content);
     if (task !== undefined) tasks.push(task);
   }
-  const evidence = phaseEvidence(snapshot);
+  const evidence = phaseEvidence(snapshot, verifications);
   const phases = [...new Set(tasks.map((task) => phaseOf(task.id)))].toSorted(
     (a, b) => phaseRank(a) - phaseRank(b),
   );
@@ -321,6 +332,7 @@ export const phaseReviewInputs = (snapshot: SpecSnapshot): ReadonlyArray<PhaseRe
       ],
       budget: phaseReviewBudget(inPhase.map((task) => ({ type: task.type, size: sizeOf(task) }))),
       waived: evidence.waived.includes(phase),
+      verification: phaseVerification(inPhase, verifications ?? new Map()),
     };
   });
 };
@@ -343,7 +355,11 @@ export const reviewedPhasesOf = (
   const parsed = specFile === undefined ? null : parseMarkdown(specFile.content);
   const version = parsed === null ? undefined : readSpecVersion(parsed.fields);
   return version !== undefined && version.version >= 2 && review.available !== false
-    ? passedReviewPhases(snapshot.name, phaseReviewInputs(snapshot), review.series)
+    ? passedReviewPhases(
+        snapshot.name,
+        phaseReviewInputs(snapshot, review.verifications),
+        review.series,
+      )
     : passedPhases(review.series);
 };
 
@@ -893,7 +909,7 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
     );
   }
 
-  const evidence = phaseEvidence(snapshot);
+  const evidence = phaseEvidence(snapshot, review.verifications);
   issues.push(...evidence.issues);
 
   const current = version !== undefined && version.version >= 2;
@@ -909,6 +925,10 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
       ),
     ],
     waived: evidence.waived.includes(phase),
+    verification: phaseVerification(
+      Array.from(tasks.values()).filter((task) => phaseOf(task.id) === phase),
+      review.verifications ?? new Map(),
+    ),
   }));
   const reviewedPhases = reviewAware
     ? passedReviewPhases(snapshot.name, reviewInputs, review.series)
@@ -922,6 +942,7 @@ export const verifySpecTree = (snapshot: SpecSnapshot, review: ReviewInput): Res
         waivedPhases: evidence.waived,
         nonePhases: evidence.none,
         provenPhases: evidence.proven,
+        lightPhases: evidence.light,
         tasks: Array.from(tasks.values()).map((task) => ({ id: task.id, status: task.status })),
         // Every v2 record completes through a lock, including a v1 record
         // migrated without a `## Creation` rigor. A frozen v1 record keeps the

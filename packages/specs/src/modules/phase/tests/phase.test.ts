@@ -370,3 +370,171 @@ Vitest.describe('Phase.phaseEvidence', () => {
     ).toStrictEqual([]);
   });
 });
+
+Vitest.describe('Phase.phaseVerification', () => {
+  Vitest.it('derives light only when every non-review task is light', () => {
+    const verifications = new Map([
+      ['A001', 'light'],
+      ['A002', 'light'],
+    ] as const);
+    Vitest.expect(
+      Phase.phaseVerification(
+        [
+          { id: 'A001', type: 'execution' },
+          { id: 'A002', type: 'execution' },
+        ],
+        verifications,
+      ),
+    ).toBe('light');
+  });
+
+  Vitest.it('derives full when any non-review task is full', () => {
+    const verifications = new Map([
+      ['A001', 'light'],
+      ['A002', 'full'],
+    ] as const);
+    Vitest.expect(
+      Phase.phaseVerification(
+        [
+          { id: 'A001', type: 'execution' },
+          { id: 'A002', type: 'execution' },
+        ],
+        verifications,
+      ),
+    ).toBe('full');
+  });
+
+  Vitest.it('ignores the review task when deriving the phase mode', () => {
+    const verifications = new Map([
+      ['A001', 'light'],
+      ['A099', 'full'],
+    ] as const);
+    Vitest.expect(
+      Phase.phaseVerification(
+        [
+          { id: 'A001', type: 'execution' },
+          { id: 'A099', type: 'review' },
+        ],
+        verifications,
+      ),
+    ).toBe('light');
+  });
+
+  Vitest.it('derives full for a review-only phase and for missing modes', () => {
+    Vitest.expect(Phase.phaseVerification([{ id: 'A099', type: 'review' }], new Map())).toBe(
+      'full',
+    );
+    Vitest.expect(Phase.phaseVerification([{ id: 'A001', type: 'execution' }], new Map())).toBe(
+      'full',
+    );
+  });
+});
+
+Vitest.describe('Phase verification audit', () => {
+  Vitest.it('renders and parses the light audit line with model id', () => {
+    const line = Phase.renderVerificationAudit('light', 'fixture/model#high');
+    Vitest.expect(line).toBe('verification: light · model: fixture/model#high');
+    Vitest.expect(Phase.parseVerificationAudit(`- ${line}\n`)).toStrictEqual({
+      verification: 'light',
+      target: 'fixture/model#high',
+    });
+  });
+
+  Vitest.it('renders and parses the full audit line', () => {
+    const line = Phase.renderVerificationAudit('full', 'fixture/model');
+    Vitest.expect(Phase.parseVerificationAudit(line)).toStrictEqual({
+      verification: 'full',
+      target: 'fixture/model',
+    });
+  });
+
+  Vitest.it('reports no audit line when the memory carries none', () => {
+    Vitest.expect(Phase.parseVerificationAudit('# Memory\n\n- pending\n')).toBeUndefined();
+  });
+});
+
+const lightTree = () =>
+  snapshot([
+    entry('SPEC.md', ['---', 'name: ship-spec', 'status: in-progress', '---', ''].join('\n')),
+    entry(
+      'A/PHASE.md',
+      phaseMarkdown({ status: 'complete', review: 'required', gate: 'mechanical' }),
+    ),
+    entry('A/MEMORY.md', memory),
+    entry('A/GATES.md', mechanicalPhaseGate()),
+    entry(
+      'A/A001-implement/TASK.md',
+      taskMarkdown({ id: 'A001', name: 'implement', status: 'complete' }),
+    ),
+    entry('A/A001-implement/MEMORY.md', memory),
+    entry('A/A001-implement/GATES.md', '## Stage 0: Verify (mechanical)\n\n- [x] Suite passes.\n'),
+    entry('A/A001-implement/GATE-RESULTS.jsonl', `${passingResult()}\n`),
+  ]);
+
+Vitest.describe('Phase.phaseEvidence light verification', () => {
+  Vitest.it('proves a light phase on task gates alone when the phase gate is unproven', () => {
+    const verifications = new Map([['A001', 'light']] as const);
+    const evidence = Phase.phaseEvidence(lightTree(), verifications);
+    Vitest.expect(evidence.light).toStrictEqual(['A']);
+    Vitest.expect(evidence.proven).toStrictEqual(['A']);
+    Vitest.expect(evidence.waived).toStrictEqual([]);
+    const analysis = Lifecycle.analyze({
+      status: 'in-progress',
+      reviewedPhases: [],
+      waivedPhases: evidence.waived,
+      nonePhases: evidence.none,
+      provenPhases: evidence.proven,
+      lightPhases: evidence.light,
+      tasks: [{ id: 'A001', status: 'complete' }],
+    });
+    Vitest.expect(
+      analysis.phases.filter((phase) => phase.locked).map((phase) => phase.phase),
+    ).toStrictEqual(['A']);
+  });
+
+  Vitest.it('requires phase-gate proof for the same phase under full', () => {
+    const verifications = new Map([['A001', 'full']] as const);
+    const evidence = Phase.phaseEvidence(lightTree(), verifications);
+    Vitest.expect(evidence.light).toStrictEqual([]);
+    Vitest.expect(evidence.proven).toStrictEqual([]);
+    const analysis = Lifecycle.analyze({
+      status: 'in-progress',
+      reviewedPhases: [],
+      waivedPhases: evidence.waived,
+      nonePhases: evidence.none,
+      provenPhases: evidence.proven,
+      lightPhases: evidence.light,
+      tasks: [{ id: 'A001', status: 'complete' }],
+    });
+    Vitest.expect(analysis.phases.filter((phase) => phase.locked)).toStrictEqual([]);
+  });
+
+  Vitest.it('keeps a light phase unproven when its task gate has no pass', () => {
+    const tree = snapshot([
+      entry('SPEC.md', ['---', 'name: ship-spec', 'status: in-progress', '---', ''].join('\n')),
+      entry('A/PHASE.md', phaseMarkdown({ status: 'complete', review: 'required' })),
+      entry('A/MEMORY.md', memory),
+      entry(
+        'A/A001-implement/TASK.md',
+        taskMarkdown({ id: 'A001', name: 'implement', status: 'complete' }),
+      ),
+      entry('A/A001-implement/MEMORY.md', memory),
+      entry(
+        'A/A001-implement/GATES.md',
+        '## Stage 0: Verify (mechanical)\n\n- [x] Suite passes.\n',
+      ),
+    ]);
+    const evidence = Phase.phaseEvidence(tree, new Map([['A001', 'light']] as const));
+    Vitest.expect(evidence.light).toStrictEqual(['A']);
+    Vitest.expect(evidence.proven).toStrictEqual([]);
+    const analysis = Lifecycle.analyze({
+      status: 'in-progress',
+      reviewedPhases: [],
+      waivedPhases: evidence.waived,
+      provenPhases: evidence.proven,
+      lightPhases: evidence.light,
+      tasks: [{ id: 'A001', status: 'complete' }],
+    });
+    Vitest.expect(analysis.phases.filter((phase) => phase.locked)).toStrictEqual([]);
+  });
+});

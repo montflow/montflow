@@ -1,7 +1,7 @@
 import { Data, Effect } from 'effect';
 import { Command, Flag } from 'effect/cli';
 
-import { parsePhaseFile, phaseEvidence } from '../../modules/phase/index.js';
+import { parsePhaseFile, phaseEvidence, phaseVerification } from '../../modules/phase/index.js';
 import {
   DEFAULT_REVIEW_MODE,
   type ReviewDecisionReport,
@@ -22,11 +22,13 @@ import {
   diagnostic,
   dirFlag,
   finish,
+  loadSizing,
   opt,
   renderDiagnostic,
   runDiagnosed,
   storeDirOf,
 } from './cli.shared.module.js';
+import { taskVerifications } from './cli.apps.module.js';
 
 /** The exit code the `review decide` verb uses for an invalid invocation. */
 export const USAGE_EXIT_CODE = 2;
@@ -187,7 +189,10 @@ export const reviewDecide = (
       ),
     ];
     const series = yield* store.reviewSeries(options.root, name);
-    const evidence = phaseEvidence(snapshot);
+    const sizing = yield* loadSizing(options.root, name, snapshot);
+    const verifications = taskVerifications(sizing, tasks);
+    const verification = phaseVerification(tasks, verifications);
+    const evidence = phaseEvidence(snapshot, verifications);
     const waived = evidence.waived.includes(phase);
     const phaseText = phaseFiles.find((entry) => entry.path.endsWith('/PHASE.md'))?.content;
     const record = phaseText === undefined ? undefined : parsePhaseFile(phaseText);
@@ -210,6 +215,7 @@ export const reviewDecide = (
       mode,
       budget,
       waived,
+      verification,
       profiles,
       series,
     });

@@ -42,8 +42,8 @@ const phaseTree = (name = 'ship-login'): ReadonlyArray<SpecFileEntry> =>
   }));
 
 /** The phase tree with every task complete, for the frozen-upgrade tests. */
-const completePhaseTree = (name = 'ship-login'): ReadonlyArray<SpecFileEntry> =>
-  phaseTree(name).map((file) =>
+const completePhaseTree = (name = 'ship-login'): ReadonlyArray<SpecFileEntry> => [
+  ...phaseTree(name).map((file) =>
     file.path === 'SPEC.md'
       ? entry(
           'SPEC.md',
@@ -74,7 +74,12 @@ const completePhaseTree = (name = 'ship-login'): ReadonlyArray<SpecFileEntry> =>
             .replace('status: pending', 'status: complete')
             .replace('- [ ]', '- [x]'),
         },
-  );
+  ),
+  entry(
+    'sizing.json',
+    JSON.stringify({ sizes: { medium: { model: 'fixture/full-model', verification: 'full' } } }),
+  ),
+];
 
 /** A v2 tree: the phase record is present and the version is current. */
 const v2Tree = (name = 'ship-login'): ReadonlyArray<SpecFileEntry> => [

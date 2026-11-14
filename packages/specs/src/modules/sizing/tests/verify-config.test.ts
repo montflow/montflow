@@ -127,6 +127,62 @@ Vitest.describe('Sizing.verify runtime', () => {
     });
   });
 
+  Vitest.it('accepts verification light and full on every size entry', () => {
+    const result = Sizing.verify(repo, {
+      sizes: {
+        tiny: { model: 'a/b', verification: 'light' },
+        small: { model: 'a/b', effort: 'low', verification: 'full' },
+        medium: { model: 'a/b' },
+      },
+    });
+    Vitest.expect(result.issues).toStrictEqual([]);
+    Vitest.expect(result.valid).toBe(true);
+  });
+
+  Vitest.it('accepts verification under a phase override', () => {
+    const result = Sizing.verify(spec, {
+      sizes: { medium: { model: 'a/b', verification: 'full' } },
+      phases: { A: { sizes: { tiny: { model: 'a/b', verification: 'light' } } } },
+    });
+    Vitest.expect(result.issues).toStrictEqual([]);
+    Vitest.expect(result.valid).toBe(true);
+  });
+
+  Vitest.it('codes a malformed verification mode', () => {
+    Vitest.expect(
+      Sizing.verify(repo, { sizes: { tiny: { model: 'a/b', verification: 'strict' } } }).issues,
+    ).toStrictEqual([
+      {
+        code: Sizing.CODES.malformedVerification,
+        field: 'sizes.tiny.verification',
+        message: 'Verification must be "light" or "full".',
+        expected: 'light, full',
+        actual: 'strict',
+        fix: 'Set sizes.tiny.verification to "light" or "full".',
+      },
+    ]);
+    const phaseIssues = Sizing.verify(spec, {
+      sizes: {},
+      phases: { A: { sizes: { tiny: { model: 'a/b', verification: 42 } } } },
+    }).issues;
+    Vitest.expect(phaseIssues).toStrictEqual([
+      {
+        code: Sizing.CODES.malformedVerification,
+        field: 'phases.A.sizes.tiny.verification',
+        message: 'Verification must be "light" or "full".',
+        expected: 'light, full',
+        actual: '42',
+        fix: 'Set phases.A.sizes.tiny.verification to "light" or "full".',
+      },
+    ]);
+  });
+
+  Vitest.it('codes verification without a model via the existing missing-model', () => {
+    const issues = Sizing.verify(repo, { sizes: { tiny: { verification: 'full' } } }).issues;
+    Vitest.expect(issues.map((found) => found.code)).toStrictEqual([Sizing.CODES.missingModel]);
+    Vitest.expect(issues[0]?.field).toBe('sizes.tiny.model');
+  });
+
   Vitest.it('codes a malformed effort token', () => {
     Vitest.expect(
       Sizing.verify(repo, { sizes: { tiny: { model: 'a/b', effort: 'HIGH!' } } }).issues,
@@ -186,7 +242,7 @@ Vitest.describe('Sizing.verify runtime', () => {
         code: Sizing.CODES.unknownKey,
         field: 'sizes.tiny.variant',
         message: "Unknown key 'variant' in a size entry.",
-        expected: 'model or effort',
+        expected: 'model, effort, or verification',
         actual: 'variant',
         fix: "Remove 'sizes.tiny.variant'.",
       },

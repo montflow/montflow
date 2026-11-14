@@ -44,6 +44,10 @@ const tree = (profiles?: string) => [
   entry('A/PHASE.md', phaseMarkdown({ id: 'A', status: 'complete', review: 'required' })),
   entry('A/MEMORY.md', memory),
   entry(
+    'sizing.json',
+    JSON.stringify({ sizes: { medium: { model: 'fixture/full-model', verification: 'full' } } }),
+  ),
+  entry(
     'A/A001-implement/TASK.md',
     taskMarkdown({ id: 'A001', name: 'implement', status: 'complete' }),
   ),

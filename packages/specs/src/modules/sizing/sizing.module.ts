@@ -37,6 +37,23 @@ export const isDeclaredSize = (value: string): value is DeclaredSize =>
 /** Human-readable size list for diagnostics. */
 export const SIZE_HINT = SIZES.join(', ');
 
+// ─── Verification modes ───────────────────────────────────────────────
+
+/** The two verification modes — the parameterised strictness per dispatch target. */
+export const VERIFICATIONS = ['light', 'full'] as const;
+
+/** Verification mode. `light` skips repo-wide gates and final review; `full` retains them. */
+export const Verification = Schema.Literals(VERIFICATIONS);
+
+/** Verification mode. */
+export type Verification = typeof Verification.Type;
+
+/** Verification mode applied when an entry omits one. */
+export const DEFAULT_VERIFICATION: Verification = 'light';
+
+/** Human-readable mode list for diagnostics. */
+export const VERIFICATION_HINT = VERIFICATIONS.join(', ');
+
 // ─── Review cycles ────────────────────────────────────────────────────
 
 /** Hard cap on review cycles per phase, whatever the task sizes are. */
@@ -120,6 +137,7 @@ export const CODES = {
   missingModel: 'sizing.missing-model',
   malformedModel: 'sizing.malformed-model',
   malformedEffort: 'sizing.malformed-effort',
+  malformedVerification: 'sizing.malformed-verification',
   effortWithoutModel: 'sizing.effort-without-model',
   nonObjectPhases: 'sizing.non-object-phases',
   nonObjectPhase: 'sizing.non-object-phase',
@@ -170,10 +188,11 @@ export const MODEL_RULE =
 /** What an effort token must look like, for diagnostics. */
 export const EFFORT_HINT = 'a catalogue variant token such as low, high, xhigh, or max';
 
-/** One size's dispatch target: a model id plus an optional effort. */
+/** One size's dispatch target: a model id, an optional effort, and an optional verification mode. */
 export interface SizeEntry {
   readonly model: string;
   readonly effort?: string;
+  readonly verification?: Verification;
 }
 
 const SizeEntrySchema = Schema.Struct({
@@ -187,6 +206,7 @@ const SizeEntrySchema = Schema.Struct({
       Schema.check(Schema.makeFilter((value: string) => EFFORT_PATTERN.test(value))),
     ),
   ),
+  verification: Schema.optionalKey(Verification),
 });
 
 const SizeMapSchema = Schema.Struct({
@@ -450,6 +470,17 @@ const issueFromFault = (source: ConfigSource, leaf: FaultLeaf): Issue | undefine
       });
     }
 
+    if (keyName === 'verification') {
+      return finding({
+        code: CODES.malformedVerification,
+        field: `${entryField}.verification`,
+        message: 'Verification must be "light" or "full".',
+        expected: VERIFICATION_HINT,
+        actual: displayValue(leaf.input),
+        fix: `Set ${entryField}.verification to "light" or "full".`,
+      });
+    }
+
     // Unknown key inside an entry.
     if (segments.length === 3 && leaf.tag === 'UnexpectedKey') {
       const unknownKey = segments[2] ?? '';
@@ -457,7 +488,7 @@ const issueFromFault = (source: ConfigSource, leaf: FaultLeaf): Issue | undefine
         code: CODES.unknownKey,
         field: `${entryField}.${unknownKey}`,
         message: `Unknown key '${unknownKey}' in a size entry.`,
-        expected: 'model or effort',
+        expected: 'model, effort, or verification',
         actual: unknownKey,
         fix: `Remove '${entryField}.${unknownKey}'.`,
       });
@@ -609,6 +640,16 @@ const issueFromFault = (source: ConfigSource, leaf: FaultLeaf): Issue | undefine
           expected: EFFORT_HINT,
           actual: displayValue(leaf.input),
           fix: `Set ${entryField}.effort to a token such as "low", "high", or "max".`,
+        });
+      }
+      if (keyName === 'verification') {
+        return finding({
+          code: CODES.malformedVerification,
+          field: `${entryField}.verification`,
+          message: 'Verification must be "light" or "full".',
+          expected: VERIFICATION_HINT,
+          actual: displayValue(leaf.input),
+          fix: `Set ${entryField}.verification to "light" or "full".`,
         });
       }
     }
@@ -868,6 +909,8 @@ export interface Resolved {
   readonly source?: Layer;
   /** Winning entry; absent when the target is `inherit`. */
   readonly entry?: SizeEntry;
+  /** Verification mode of the winning entry; `light` when absent or `inherit`. */
+  readonly verification: Verification;
 }
 
 /**
@@ -878,6 +921,12 @@ export interface Resolved {
  */
 export const resolve = (config: ConfigSet, size: Size): Resolved => {
   const found = mergedEntry(config, size);
-  if (found === undefined) return { size, target: INHERIT };
-  return { size, target: targetOf(found.entry), source: found.layer, entry: found.entry };
+  if (found === undefined) return { size, target: INHERIT, verification: DEFAULT_VERIFICATION };
+  return {
+    size,
+    target: targetOf(found.entry),
+    source: found.layer,
+    entry: found.entry,
+    verification: found.entry.verification ?? DEFAULT_VERIFICATION,
+  };
 };

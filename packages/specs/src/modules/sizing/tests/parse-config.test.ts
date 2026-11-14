@@ -87,6 +87,39 @@ Vitest.describe('Sizing.parse runtime', () => {
     }),
   );
 
+  Vitest.it.effect('decodes verification entries and leaves absent modes absent', () =>
+    Effect.gen(function* () {
+      const config = yield* Sizing.parse(
+        repo,
+        JSON.stringify({
+          sizes: {
+            tiny: { model: 'fixture/tiny-model', verification: 'full' },
+            medium: { model: 'fixture/medium-model' },
+          },
+        }),
+      );
+      Vitest.expect(config.sizes.tiny).toStrictEqual({
+        model: 'fixture/tiny-model',
+        verification: 'full',
+      });
+      Vitest.expect(config.sizes.medium).toStrictEqual({ model: 'fixture/medium-model' });
+      // The light default is applied at resolve, not at parse.
+      Vitest.expect(Sizing.resolve({ repo: config }, 'medium').verification).toBe('light');
+      Vitest.expect(Sizing.resolve({ repo: config }, 'tiny').verification).toBe('full');
+    }),
+  );
+
+  Vitest.it.effect('fails a malformed verification with the coded error', () =>
+    Effect.gen(function* () {
+      const error = yield* Sizing.parse(
+        repo,
+        JSON.stringify({ sizes: { tiny: { model: 'a/b', verification: 'strict' } } }),
+      ).pipe(Effect.flip);
+      Vitest.expect(error.code).toBe(Sizing.CODES.malformedVerification);
+      Vitest.expect(error.field).toBe('sizes.tiny.verification');
+    }),
+  );
+
   Vitest.it.effect('rejects an excess key through the verifier, not a generic schema error', () =>
     Effect.gen(function* () {
       const error = yield* Sizing.parse(

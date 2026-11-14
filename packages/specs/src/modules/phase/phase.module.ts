@@ -12,6 +12,7 @@ import {
   phaseOf,
 } from '../task/index.js';
 import { type Issue, type Result, finding, issue, noErrors } from '../verify/index.js';
+import type { Verification } from '../sizing/index.js';
 import { CODES as RIGOR_CODES, RIGOR_CONTRACT, waiverAllowed } from '../rigor/index.js';
 import type { SpecSnapshot } from '../structure/index.js';
 
@@ -645,6 +646,62 @@ export const verifyPhaseFile = (
   return { valid: noErrors(issues), issues };
 };
 
+/** One task's identity for phase-level verification derivation. */
+export interface VerificationTask {
+  /** Task id, e.g. `A001`. */
+  readonly id: string;
+  /** Task type; `review` tasks never decide the phase mode. */
+  readonly type: string;
+}
+
+/**
+ * The phase's verification mode from its tasks' resolved modes: `light` only
+ * when every non-review task resolves to `light`. A `review` task spends the
+ * review budget but does not raise it, so it never decides the phase mode
+ * either; unknown or missing modes read as `full`, the conservative branch.
+ * @param tasks - every task in the phase
+ * @param verifications - resolved verification mode by task id
+ * @returns `light` or `full`
+ */
+export const phaseVerification = (
+  tasks: ReadonlyArray<VerificationTask>,
+  verifications: ReadonlyMap<string, Verification>,
+): Verification => {
+  const substantive = tasks.filter((task) => task.type !== 'review');
+  if (substantive.length === 0) return 'full';
+  return substantive.every((task) => verifications.get(task.id) === 'light') ? 'light' : 'full';
+};
+
+/** The per-task audit line a light run records before the task closes. */
+export const AUDIT_VERIFICATION_PREFIX = 'verification:';
+
+/**
+ * Render the per-task audit line for one task memory.
+ * @param verification - resolved verification mode
+ * @param target - dispatch target, `provider/model#effort`
+ * @returns the single audit line
+ */
+export const renderVerificationAudit = (verification: Verification, target: string): string =>
+  `verification: ${verification} · model: ${target}`;
+
+/** One parsed audit line: the verification mode and the dispatch target. */
+export interface VerificationAudit {
+  readonly verification: Verification;
+  readonly target: string;
+}
+
+/**
+ * Parse the per-task audit line from a task `MEMORY.md`.
+ * @param markdown - raw task memory contents
+ * @returns the mode and target, or undefined when no audit line is present
+ */
+export const parseVerificationAudit = (markdown: string): VerificationAudit | undefined => {
+  const found = /^[-*\s]*verification:\s*(light|full)\s*·\s*model:\s*(\S+)\s*$/m.exec(markdown);
+  if (found === null || found[1] === undefined || found[2] === undefined || found[2] === '')
+    return undefined;
+  return { verification: found[1] === 'light' ? 'light' : 'full', target: found[2] };
+};
+
 /** Evidence derived from the phase records, its gates, and its results. */
 export interface PhaseEvidence {
   /** Phases with a valid, fully proven waiver. */
@@ -653,6 +710,8 @@ export interface PhaseEvidence {
   readonly none: ReadonlyArray<string>;
   /** Phases whose classified mechanical stages all have a latest pass. */
   readonly proven: ReadonlyArray<string>;
+  /** Phases in light verification: proven task gates lock without a review round, like a waiver. */
+  readonly light: ReadonlyArray<string>;
   /** Coverage findings that need the recorded results. */
   readonly issues: ReadonlyArray<Issue>;
 }
@@ -661,10 +720,17 @@ export interface PhaseEvidence {
  * Derive phase evidence from a snapshot: effective waivers, gate proof, and the
  * coverage findings that need `GATE-RESULTS.jsonl`. A phase with no classified
  * mechanical stage is vacuously proven, which keeps every v1 tree unchanged.
+ * A light phase is proven on its task gates alone: the phase gate and the
+ * review round are not required, so a stale or missing phase-gate pass cannot
+ * block it.
  * @param snapshot - every file and directory under the spec root
+ * @param taskVerifications - resolved verification mode by task id; absent means every task follows the `full` rule
  * @returns the waived and proven phase ids plus coverage findings
  */
-export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
+export const phaseEvidence = (
+  snapshot: SpecSnapshot,
+  taskVerifications?: ReadonlyMap<string, Verification> | undefined,
+): PhaseEvidence => {
   const files = snapshot.files.filter((entry) => (entry.kind ?? 'file') === 'file');
   const directories = new Set<string>();
   for (const entry of snapshot.files) {
@@ -694,7 +760,9 @@ export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
   const waived: Array<string> = [];
   const none: Array<string> = [];
   const proven: Array<string> = [];
+  const light: Array<string> = [];
   const issues: Array<Issue> = [];
+  const verifications = taskVerifications ?? new Map<string, Verification>();
   const specText = fileAt('SPEC.md');
   const rigor = specText === undefined ? undefined : rigorOfSpec(specText);
 
@@ -714,6 +782,7 @@ export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
     const complete = tasks.length > 0 && tasks.every((task) => task.status === 'complete');
 
     const refs = new Map<string, { kind: GateKind; pass: boolean }>();
+    const taskRefs = new Map<string, { kind: GateKind; pass: boolean }>();
     const collect = (owner: string, gatesPath: string, resultsPath: string): void => {
       const gates = fileAt(gatesPath);
       if (gates === undefined) return;
@@ -724,10 +793,12 @@ export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
         if (stage.kind === undefined) continue;
         const ref = `${owner}:${stage.stage}`;
         const result = latest?.get(stage.stage);
-        refs.set(ref, {
+        const entry = {
           kind: stage.kind,
           pass: result?.kind === stage.kind && result.verdict === 'pass',
-        });
+        };
+        refs.set(ref, entry);
+        if (owner !== 'phase') taskRefs.set(ref, entry);
       }
     };
     collect('phase', `${phase}/${PHASE_GATES_FILE}`, `${phase}/${GATE_RESULTS_FILE}`);
@@ -739,7 +810,14 @@ export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
     }
 
     const mechanical = [...refs.values()].filter((ref) => ref.kind === 'mechanical');
-    if (mechanical.every((ref) => ref.pass)) proven.push(phase);
+    const taskMechanical = [...taskRefs.values()].filter((ref) => ref.kind === 'mechanical');
+    const verification = phaseVerification(tasks, verifications);
+    if (verification === 'light') {
+      light.push(phase);
+      if (taskMechanical.every((ref) => ref.pass)) proven.push(phase);
+    } else if (mechanical.every((ref) => ref.pass)) {
+      proven.push(phase);
+    }
 
     if (parsed !== undefined) {
       const evidenceRefs = new Set(parsed.reviewEvidence);
@@ -811,7 +889,7 @@ export const phaseEvidence = (snapshot: SpecSnapshot): PhaseEvidence => {
     }
   }
 
-  return { waived, none, proven, issues };
+  return { waived, none, proven, light, issues };
 };
 
 /** Re-export the phase id brand for callers that only need the type. */

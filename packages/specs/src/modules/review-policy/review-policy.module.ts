@@ -21,6 +21,7 @@ import {
   seriesNames,
 } from '../review-link/index.js';
 import { phaseRank } from '../task/index.js';
+import type { Verification } from '../sizing/index.js';
 
 /** The decisions a phase review can reach, in increasing strictness. */
 export const REVIEW_DECISIONS = [
@@ -51,6 +52,7 @@ export const DEFAULT_REVIEW_MODE: ReviewMode = 'guided';
 /** Stable reason codes, one per matrix row. */
 export const REVIEW_REASONS = {
   waived: 'review.waived',
+  verificationLight: 'verification.light',
   roundMissing: 'review.round-missing',
   phaseUnattributed: REVIEW_PHASE_UNATTRIBUTED_CODE,
   clean: 'review.clean',
@@ -158,6 +160,12 @@ export interface ReviewPolicyInput {
   readonly budget: number;
   /** True when the phase's waiver is effective. */
   readonly waived: boolean;
+  /**
+   * Verification mode of the phase; `light` waives the review cycle outright.
+   * Absent means the caller holds no sizing resolution and the phase follows
+   * the normal decision order (the conservative `full` rule).
+   */
+  readonly verification?: Verification | undefined;
   /** Reviewer profile slugs declared on the phase's review task, in order. */
   readonly profiles: ReadonlyArray<string>;
   /** Every review series the store reports for the spec. */
@@ -254,6 +262,8 @@ export const decide = (input: ReviewPolicyInput): ReviewDecisionReport => {
       budget: input.budget,
       mode: input.mode,
     });
+    if (input.verification === 'light')
+      return { ...decision, decision: 'waived', reason: REVIEW_REASONS.verificationLight };
     return input.waived
       ? { ...decision, decision: 'waived', reason: REVIEW_REASONS.waived }
       : decision;
@@ -289,6 +299,11 @@ export interface PhaseReviewInput {
   readonly budget: number;
   /** True when the phase's waiver is effective. */
   readonly waived: boolean;
+  /**
+   * Verification mode of the phase; `light` passes the review without a
+   * round. Absent means the normal review rule applies.
+   */
+  readonly verification?: Verification | undefined;
 }
 
 /** One phase's derived review verdict. */
@@ -324,12 +339,13 @@ export const reviewDecisionPassed = (
     mode: DEFAULT_REVIEW_MODE,
     budget: input.budget,
     waived: input.waived,
+    verification: input.verification,
     profiles: input.profiles,
     series,
   });
   return {
     phase: input.phase,
-    passed: input.waived || report.decision === 'pass',
+    passed: input.waived || input.verification === 'light' || report.decision === 'pass',
     decision: report.decision,
     reason: report.reason,
   };
@@ -352,7 +368,7 @@ export const reviewVerdict = (
   series: ReadonlyArray<SeriesSnapshot>,
 ): PhaseReviewVerdict => {
   const verdict = reviewDecisionPassed(name, input, series);
-  if (input.waived) return verdict;
+  if (input.waived || input.verification === 'light') return verdict;
   const byName = new Map(series.map((snapshot) => [snapshot.name, snapshot]));
   const closed = seriesNames(name, input.profiles).every(
     (seriesName) =>

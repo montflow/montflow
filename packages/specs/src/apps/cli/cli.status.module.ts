@@ -66,6 +66,7 @@ import {
   configSet,
   taskSizeErrors,
   taskTarget,
+  taskVerifications,
   targetColumns,
   dispatchErrors,
   type TaskTarget,
@@ -234,8 +235,14 @@ export const summarize = (
   const parsedSpec = specFile === undefined ? null : parseMarkdown(specFile.content);
   const specVersion = parsedSpec === null ? undefined : readSpecVersion(parsedSpec.fields).version;
   const ordered = tasksOf(snapshot);
-  const reviewInput: ReviewInput = { series: review, requireRounds: false, available: true };
-  const evidence = phaseEvidence(snapshot);
+  const verifications = taskVerifications(sizing, ordered);
+  const reviewInput: ReviewInput = {
+    series: review,
+    requireRounds: false,
+    available: true,
+    verifications,
+  };
+  const evidence = phaseEvidence(snapshot, verifications);
   const state =
     spec === undefined
       ? undefined
@@ -245,6 +252,7 @@ export const summarize = (
           waivedPhases: evidence.waived,
           nonePhases: evidence.none,
           provenPhases: evidence.proven,
+          lightPhases: evidence.light,
           tasks: ordered.map((task) => ({ id: task.id, status: task.status })),
           // A complete v2 record must agree with its derived locks; a frozen v1
           // record keeps the status-only rule it shipped with.

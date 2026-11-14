@@ -405,6 +405,12 @@ Vitest.describe('Cli.claim runtime', () => {
         const storeRoot = `${workspace}/${root}`;
         yield* init({ root: storeRoot, name: 'demo', rigor: 'standard' });
         const fs = yield* FileSystem.FileSystem;
+        yield* fs.writeFileString(
+          `${storeRoot}/demo/sizing.json`,
+          JSON.stringify({
+            sizes: { medium: { model: 'fixture/full-model', verification: 'full' } },
+          }),
+        );
         const work = `${storeRoot}/demo/A/A001-implement/TASK.md`;
         yield* fs.writeFileString(
           work,

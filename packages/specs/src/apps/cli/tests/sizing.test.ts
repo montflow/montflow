@@ -128,7 +128,9 @@ Vitest.describe('Cli.sizingOf compact runtime', () => {
   Vitest.it.effect('reports the phase override as the winning layer', () =>
     Effect.gen(function* () {
       const report = yield* runSizing({ repo: REPO_SIZING, specSizing: SPEC_SIZING });
-      Vitest.expect(renderSizing(report)).toBe('A001  tiny  fixture/phase-model#high  phase');
+      Vitest.expect(renderSizing(report)).toBe(
+        'A001  tiny  fixture/phase-model#high  phase  light',
+      );
     }),
   );
 
@@ -156,7 +158,7 @@ Vitest.describe('Cli.sizingOf compact runtime', () => {
   Vitest.it.effect('reports inherit when no layer defines the size', () =>
     Effect.gen(function* () {
       const report = yield* runSizing();
-      Vitest.expect(renderSizing(report)).toBe('A001  tiny  inherit');
+      Vitest.expect(renderSizing(report)).toBe('A001  tiny  inherit  light');
     }),
   );
 
@@ -175,7 +177,7 @@ Vitest.describe('Cli.sizingOf compact runtime', () => {
         'size budget 3 · contributes 0 · phase A · phase budget 2',
       );
       // A review task's compact line is unchanged by the detailed labels.
-      Vitest.expect(renderSizing(review)).toBe('A099  medium  inherit');
+      Vitest.expect(renderSizing(review)).toBe('A099  medium  inherit  light');
     }),
   );
 });
@@ -186,7 +188,7 @@ Vitest.describe('Cli.renderSizingReport runtime', () => {
       const report = yield* runSizing({ repo: REPO_SIZING, specSizing: SPEC_SIZING });
       const lines = renderSizingReport(report).split('\n');
       Vitest.expect(lines[0]).toBe(
-        'A001 · declared tiny · target fixture/phase-model#high · source phase',
+        'A001 · declared tiny · target fixture/phase-model#high · source phase · verification light',
       );
       Vitest.expect(lines[1]).toBe('size budget 1 · contributes 1 · phase A · phase budget 2');
       Vitest.expect((lines[3] ?? '').split(/\s{2,}/)).toStrictEqual([

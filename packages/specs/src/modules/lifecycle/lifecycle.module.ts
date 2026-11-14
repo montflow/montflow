@@ -33,6 +33,11 @@ export interface Input {
   readonly waivedPhases: ReadonlyArray<string>;
   /** Phases that declare `review: none` and hold no review task. */
   readonly nonePhases?: ReadonlyArray<string> | undefined;
+  /**
+   * Phases in light verification: proven task gates lock without a review
+   * round, on the same path as a waiver. Phase-gate proof is not required.
+   */
+  readonly lightPhases?: ReadonlyArray<string> | undefined;
   /** Phases whose classified mechanical gate stages all have a latest pass. */
   readonly provenPhases: ReadonlyArray<string>;
   /** Parsed tasks (tasks whose TASK.md failed to parse are excluded). */
@@ -83,9 +88,9 @@ const countByStatus = (tasks: ReadonlyArray<TaskEntry>) => {
 /**
  * A phase is complete when every task under it is complete. It is locked when
  * it is complete, every classified mechanical gate stage is proven, and it has
- * a passed review round, an effective waiver, or no review at all. The
- * conjunction is the whole lock model — a locked phase can never hold open work
- * or unproven gates.
+ * a passed review round, an effective waiver, no review at all, or light
+ * verification on proven task gates. The conjunction is the whole lock
+ * model — a locked phase can never hold open work or unproven gates.
  */
 const phaseSummaries = (
   tasks: ReadonlyArray<TaskEntry>,
@@ -93,6 +98,7 @@ const phaseSummaries = (
   waived: ReadonlySet<string>,
   none: ReadonlySet<string>,
   proven: ReadonlySet<string>,
+  light: ReadonlySet<string>,
 ): ReadonlyArray<PhaseSummary> =>
   distinctPhases(tasks).map((phase) => {
     const inPhase = tasks.filter((task) => phaseOf(task.id) === phase);
@@ -102,7 +108,7 @@ const phaseSummaries = (
       locked:
         complete === inPhase.length &&
         proven.has(phase) &&
-        (reviewed.has(phase) || waived.has(phase) || none.has(phase)),
+        (reviewed.has(phase) || waived.has(phase) || none.has(phase) || light.has(phase)),
       total: inPhase.length,
       complete,
     };
@@ -138,6 +144,7 @@ export const verify = (input: Input): Result => {
         new Set(input.waivedPhases),
         new Set(input.nonePhases ?? []),
         new Set(input.provenPhases),
+        new Set(input.lightPhases ?? []),
       ).filter((phase) => !phase.locked);
       if (unlocked.length > 0) {
         issues.push(
@@ -171,7 +178,8 @@ export const analyze = (input: Input): Analysis => {
   const waived = new Set(input.waivedPhases);
   const none = new Set(input.nonePhases ?? []);
   const proven = new Set(input.provenPhases);
-  const phases = phaseSummaries(input.tasks, reviewed, waived, none, proven);
+  const light = new Set(input.lightPhases ?? []);
+  const phases = phaseSummaries(input.tasks, reviewed, waived, none, proven, light);
   const allComplete =
     input.tasks.length > 0 && input.tasks.every((task) => task.status === 'complete');
   const anyInProgress = input.tasks.some((task) => task.status === 'in-progress');

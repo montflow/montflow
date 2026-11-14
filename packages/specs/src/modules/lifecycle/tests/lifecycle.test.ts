@@ -225,3 +225,104 @@ Vitest.describe('Lifecycle.verify runtime', () => {
     Vitest.expect(result).toStrictEqual({ valid: true, issues: [] });
   });
 });
+
+Vitest.describe('Lifecycle light verification', () => {
+  Vitest.it('locks a complete proven phase in light without a passed round or waiver', () => {
+    const result = Lifecycle.analyze({
+      status: 'in-progress',
+      reviewedPhases: [],
+      waivedPhases: [],
+      nonePhases: [],
+      provenPhases: ['A'],
+      lightPhases: ['A'],
+      tasks: [done],
+    });
+    Vitest.expect(result.phases).toStrictEqual([
+      { phase: 'A', locked: true, total: 1, complete: 1 },
+    ]);
+  });
+
+  Vitest.it('keeps an identical full phase unlocked without a passed round', () => {
+    const result = Lifecycle.analyze({
+      status: 'in-progress',
+      reviewedPhases: [],
+      waivedPhases: [],
+      nonePhases: [],
+      provenPhases: ['A'],
+      lightPhases: [],
+      tasks: [done],
+    });
+    Vitest.expect(result.phases).toStrictEqual([
+      { phase: 'A', locked: false, total: 1, complete: 1 },
+    ]);
+  });
+
+  Vitest.it('keeps a light phase unlocked when its task gates are unproven', () => {
+    const result = Lifecycle.analyze({
+      status: 'in-progress',
+      reviewedPhases: [],
+      waivedPhases: [],
+      provenPhases: [],
+      lightPhases: ['A'],
+      tasks: [done],
+    });
+    Vitest.expect(result.phases).toStrictEqual([
+      { phase: 'A', locked: false, total: 1, complete: 1 },
+    ]);
+  });
+
+  Vitest.it('never locks light work that is still open', () => {
+    const result = Lifecycle.analyze({
+      status: 'in-progress',
+      reviewedPhases: [],
+      waivedPhases: [],
+      provenPhases: ['A'],
+      lightPhases: ['A'],
+      tasks: [pending],
+    });
+    Vitest.expect(result.phases).toStrictEqual([
+      { phase: 'A', locked: false, total: 1, complete: 0 },
+    ]);
+  });
+
+  Vitest.it('locks a light phase while an identical full phase stays unlocked', () => {
+    const result = Lifecycle.analyze({
+      status: 'in-progress',
+      reviewedPhases: [],
+      waivedPhases: [],
+      provenPhases: ['A', 'B'],
+      lightPhases: ['A'],
+      tasks: [done, { id: 'B001', status: 'complete' }],
+    });
+    Vitest.expect(
+      result.phases.filter((phase) => phase.locked).map((phase) => phase.phase),
+    ).toStrictEqual(['A']);
+  });
+
+  Vitest.it('accepts a complete v2 spec locked through light verification', () => {
+    const result = Lifecycle.verify({
+      status: 'complete',
+      reviewedPhases: [],
+      waivedPhases: [],
+      provenPhases: ['A'],
+      requireLocks: true,
+      lightPhases: ['A'],
+      tasks: [done],
+    });
+    Vitest.expect(result).toStrictEqual({ valid: true, issues: [] });
+  });
+
+  Vitest.it('rejects a complete v2 spec that is light but unproven', () => {
+    const result = Lifecycle.verify({
+      status: 'complete',
+      reviewedPhases: [],
+      waivedPhases: [],
+      provenPhases: [],
+      requireLocks: true,
+      lightPhases: ['A'],
+      tasks: [done],
+    });
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues[0]?.message).toContain('1 phase is not locked');
+  });
+});

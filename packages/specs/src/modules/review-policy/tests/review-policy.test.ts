@@ -554,3 +554,101 @@ Vitest.describe('ReviewPolicy.reviewVerdict', () => {
     Vitest.expect(verdict.decision).toBe('waived');
   });
 });
+
+Vitest.describe('ReviewPolicy.decide verification', () => {
+  Vitest.it('returns waived with verification.light for light even with an open Major', () => {
+    const report = ReviewPolicy.decide({
+      name: 'ship-login',
+      phase: 'A',
+      mode: 'guided',
+      budget: 3,
+      waived: false,
+      verification: 'light',
+      profiles: [],
+      series: [
+        series('ship-login', [
+          round({ round: '001', phase: 'A', findings: [finding('F1', 'Major')] }),
+        ]),
+      ],
+    });
+    Vitest.expect({ decision: report.decision, reason: report.reason }).toStrictEqual({
+      decision: 'waived',
+      reason: 'verification.light',
+    });
+  });
+
+  Vitest.it('returns waived with verification.light for light with no round', () => {
+    const report = ReviewPolicy.decide({
+      name: 'ship-login',
+      phase: 'A',
+      mode: 'guided',
+      budget: 3,
+      waived: false,
+      verification: 'light',
+      profiles: [],
+      series: [series('ship-login', [])],
+    });
+    Vitest.expect({ decision: report.decision, reason: report.reason }).toStrictEqual({
+      decision: 'waived',
+      reason: 'verification.light',
+    });
+  });
+
+  Vitest.it('follows the normal order for full even with an open Major', () => {
+    const report = ReviewPolicy.decide({
+      name: 'ship-login',
+      phase: 'A',
+      mode: 'guided',
+      budget: 3,
+      waived: false,
+      verification: 'full',
+      profiles: [],
+      series: [
+        series('ship-login', [
+          round({ round: '001', phase: 'A', findings: [finding('F1', 'Major')] }),
+        ]),
+      ],
+    });
+    Vitest.expect({ decision: report.decision, reason: report.reason }).toStrictEqual({
+      decision: 'rework',
+      reason: 'review.budget-remaining',
+    });
+  });
+
+  Vitest.it('follows the normal order when verification is absent', () => {
+    const report = ReviewPolicy.decide({
+      name: 'ship-login',
+      phase: 'A',
+      mode: 'guided',
+      budget: 3,
+      waived: false,
+      profiles: [],
+      series: [series('ship-login', [])],
+    });
+    Vitest.expect({ decision: report.decision, reason: report.reason }).toStrictEqual({
+      decision: 'start',
+      reason: 'review.round-missing',
+    });
+  });
+});
+
+Vitest.describe('ReviewPolicy verification verdicts', () => {
+  Vitest.it('passes a light phase without any round', () => {
+    const verdict = ReviewPolicy.reviewVerdict(
+      'ship-login',
+      { ...phase(), verification: 'light' },
+      [snapshot('ship-login', [])],
+    );
+    Vitest.expect(verdict.passed).toBe(true);
+    Vitest.expect(verdict.decision).toBe('waived');
+    Vitest.expect(verdict.reason).toBe('verification.light');
+  });
+
+  Vitest.it('does not pass a full phase without a round', () => {
+    const verdict = ReviewPolicy.reviewVerdict('ship-login', { ...phase(), verification: 'full' }, [
+      snapshot('ship-login', []),
+    ]);
+    Vitest.expect(verdict.passed).toBe(false);
+    Vitest.expect(verdict.decision).toBe('start');
+  });
+});

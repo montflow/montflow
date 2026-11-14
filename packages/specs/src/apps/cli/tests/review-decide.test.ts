@@ -29,6 +29,10 @@ const tree = () => [
   entry('C/PHASE.md', phaseMarkdown({ id: 'C', review: 'required' })),
   entry('C/MEMORY.md', memory),
   entry(
+    'sizing.json',
+    JSON.stringify({ sizes: { medium: { model: 'fixture/full-model', verification: 'full' } } }),
+  ),
+  entry(
     'C/C001-implement/TASK.md',
     taskMarkdown({ id: 'C001', name: 'implement', status: 'complete' }),
   ),
@@ -257,6 +261,12 @@ Vitest.describe('Cli.reviewDecide is read-only', () => {
         ],
         [path.join(specDir, 'C', 'PHASE.md'), phaseMarkdown({ id: 'C', review: 'required' })],
         [path.join(specDir, 'C', 'MEMORY.md'), memory],
+        [
+          path.join(specDir, 'sizing.json'),
+          JSON.stringify({
+            sizes: { medium: { model: 'fixture/full-model', verification: 'full' } },
+          }),
+        ],
         [
           path.join(specDir, 'C', 'C001-implement', 'TASK.md'),
           taskMarkdown({ id: 'C001', name: 'implement', status: 'complete' }),

@@ -63,7 +63,7 @@ import {
   reviewStoreFix,
   workspaceOf,
 } from './cli.shared.module.js';
-import { configEntries, loadRepoSizing } from './cli.apps.module.js';
+import { configEntries, loadRepoSizing, taskVerifications, tasksOf } from './cli.apps.module.js';
 /** Spec store directory, relative to the workspace root. */
 
 export interface CheckSpec {
@@ -530,10 +530,17 @@ export const check = (
       Effect.gen(function* () {
         const snapshot = yield* store.snapshot(root, name);
         const review = yield* store.reviewSeries(root, name);
+        const sizingLoad = yield* loadSizing(root, name, snapshot).pipe(
+          Effect.matchEffect({
+            onFailure: () => Effect.succeed(NO_SIZING),
+            onSuccess: (value) => Effect.succeed(value),
+          }),
+        );
         const result = verifySpecTree(snapshot, {
           series: review,
           requireRounds: false,
           available: true,
+          verifications: taskVerifications(sizingLoad, tasksOf(snapshot)),
         });
         const issues: Array<Issue> = result.issues.map(withSpecLayers);
         // A recorded green only proves the tree it ran over: recompute each keyed
@@ -573,12 +580,7 @@ export const check = (
           }
         }
         if (catalogue !== undefined) {
-          const load = yield* loadSizing(root, name, snapshot).pipe(
-            Effect.matchEffect({
-              onFailure: () => Effect.succeed(NO_SIZING),
-              onSuccess: (value) => Effect.succeed(value),
-            }),
-          );
+          const load = sizingLoad;
           const tagged = configEntries(load, name).filter((item) => item.layer !== 'repo');
           const entries = tagged.map((item) => item.entry);
           const findings = Catalogue.verify(catalogue, entries);

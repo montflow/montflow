@@ -162,10 +162,12 @@ Vitest.describe('CLI fixtures runtime', () => {
         target: 'fixture/repo-model#low',
         source: 'repo',
         entry: { model: 'fixture/repo-model', effort: 'low' },
+        verification: 'light',
       });
       Vitest.expect(Sizing.resolve({ repo }, 'large')).toStrictEqual({
         size: 'large',
         target: Sizing.INHERIT,
+        verification: 'light',
       });
 
       const report = yield* list(Root);
@@ -191,16 +193,19 @@ Vitest.describe('CLI fixtures runtime', () => {
         target: 'fixture/phase-model#high',
         source: 'phase',
         entry: { model: 'fixture/phase-model', effort: 'high' },
+        verification: 'light',
       });
       Vitest.expect(Sizing.resolve({ repo, spec, phase: 'A' }, 'small')).toStrictEqual({
         size: 'small',
         target: 'fixture/spec-model',
         source: 'spec',
         entry: { model: 'fixture/spec-model' },
+        verification: 'light',
       });
       Vitest.expect(Sizing.resolve({ repo, spec, phase: 'A' }, 'large')).toStrictEqual({
         size: 'large',
         target: Sizing.INHERIT,
+        verification: 'light',
       });
     }).pipe(Effect.provide(SpecStore.Default), Effect.provide(PlatformLayer)),
   );

@@ -3,7 +3,7 @@
 ## Metadata
 - Target: spec montflow-spec-standard phase I
 - Status: open
-- Rounds: 19
+- Rounds: 21
 - Created: 2026-11-06
 
 ## Rounds
@@ -29,6 +29,8 @@
 | 017 | closed | 0 | 0 | 1 | 0 | 0 |
 | 018 | closed | 0 | 0 | 9 | 0 | 0 |
 | 019 | closed | 0 | 0 | 13 | 0 | 0 |
+| 020 | closed | 0 | 0 | 0 | 0 | 7 |
+| 021 | closed | 0 | 0 | 0 | 0 | 9 |
 
 ## Findings
 
@@ -195,3 +197,19 @@
 | 019 | F41 | Nit | Resolved | A missing `SPEC.md` matches three terminal lines at once, with no stated precedence |
 | 019 | F37 | Nit | Resolved | `montflow-find-specs` says the host `spec_status` tool prints the prompt; it dispatches a session |
 | 019 | F40 | Nit | Resolved | Docs still count three shipped prompts, and the plugin comment omits `spec_status` |
+| 020 | F1 | Major | Escalated | Cross-task break passes task gates but breaks the phase contract |
+| 020 | F2 | Critical | Escalated | Phase-gate-only checks never gate a light phase |
+| 020 | F3 | Major | Escalated | Stale PASS records lock until another signal fails |
+| 020 | F4 | Major | Escalated | Whole-entry merge silently drops a full to light |
+| 020 | F5 | Critical | Escalated | `inherit` resolves to light and its conservative branch is dead |
+| 020 | F6 | Major | Escalated | Close and lock can pass without any boundary gate |
+| 020 | F7 | Major | Escalated | Shipped prompts omit the verification contract |
+| 021 | F1 | Critical | Escalated | Bare spec still resolves light and waives review/lock |
+| 021 | F2 | Critical | Escalated | Unsized tasks resolve light under an explicit-full store |
+| 021 | F3 | Major | Escalated | Whole-entry merge drops a less-specific full |
+| 021 | F4 | Major | Escalated | Light proof is vacuous with zero task gates |
+| 021 | F5 | Minor | Escalated | `summarize` defaults sizing to NO_SIZING (light) |
+| 021 | F6 | Minor | Escalated | Failed sizing load maps to light in check |
+| 021 | F7 | Minor | Escalated | Status prints declared review, not effective verification |
+| 021 | F8 | Nit | Escalated | Barrel re-export cycle for taskVerifications |
+| 021 | F9 | Minor | Escalated | Lock trusts GATE-RESULTS without freshness re-fingerprint |

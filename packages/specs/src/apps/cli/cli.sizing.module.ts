@@ -4,12 +4,14 @@ import { Command, Flag } from 'effect/cli';
 import {
   CONFIG_FILE,
   type ConfigSet,
+  DEFAULT_VERIFICATION,
   INHERIT,
   LAYERS,
   type Layer,
   SIZES,
   type Size,
   type SizeMap,
+  type Verification,
   phaseReviewBudget,
   reviewCycles,
   targetOf,
@@ -68,6 +70,8 @@ export interface TaskTarget {
   readonly target: string;
   /** Winning layer; absent when the target is `inherit`. */
   readonly source?: Layer;
+  /** Verification mode of the winning entry; `light` when absent or `inherit`. */
+  readonly verification: Verification;
 }
 
 /** The config layers that apply to a task in `phase`. */
@@ -87,18 +91,34 @@ export const configSet = (load: SizingLoad, phase: string): ConfigSet => ({
  */
 export const taskTarget = (load: SizingLoad, task: Task): TaskTarget => {
   const size = sizeOf(task);
-  if (size === undefined) return { size: undefined, target: INHERIT };
+  if (size === undefined) {
+    return { size: undefined, target: INHERIT, verification: DEFAULT_VERIFICATION };
+  }
   const resolved = resolveSizing(configSet(load, phaseOf(task.id)), size);
-  const base = { size, target: resolved.target };
+  const base = { size, target: resolved.target, verification: resolved.verification };
   return resolved.source === undefined ? base : { ...base, source: resolved.source };
 };
 
-/** Render the size, target, and source columns of a task line. */
+/** Render the size, target, source, and verification columns of a task line. */
 export const targetColumns = (target: TaskTarget | undefined): string => {
   if (target === undefined) return '';
   const source = target.source === undefined ? '' : `  ${target.source}`;
-  return `  ${target.size ?? '-'}  ${target.target}${source}`;
+  return `  ${target.size ?? '-'}  ${target.target}${source}  ${target.verification}`;
 };
+
+/**
+ * Resolved verification mode by task id. Every consumer of phase-level
+ * derivation builds its inputs from this one helper, so a phase is light
+ * exactly when every task the resolver maps to `light` is light.
+ * @param load - the loaded config layers
+ * @param tasks - parsed tasks
+ * @returns the mode for each task id
+ */
+export const taskVerifications = (
+  load: SizingLoad,
+  tasks: ReadonlyArray<Task>,
+): ReadonlyMap<string, Verification> =>
+  new Map(tasks.map((task) => [task.id, taskTarget(load, task).verification]));
 
 /** The distinct sizes of a phase's own tasks, in canonical order. */
 export const phaseSizes = (tasks: ReadonlyArray<Task>): ReadonlyArray<Size> =>
@@ -347,7 +367,7 @@ export const sizingOf = (
  */
 export const renderSizing = (report: SizingReport): string => {
   const source = report.target.source === undefined ? '' : `  ${report.target.source}`;
-  return `${report.task.id}  ${report.target.size ?? '-'}  ${report.target.target}${source}`;
+  return `${report.task.id}  ${report.target.size ?? '-'}  ${report.target.target}${source}  ${report.target.verification}`;
 };
 
 /** One size's target in one layer, or a marker for an absent layer or size. */
@@ -386,7 +406,7 @@ export const layerCell = (load: SizingLoad, size: Size, layer: Layer, phase: str
 export const renderSizingReport = (report: SizingReport): string => {
   const { target, task } = report;
   const source = target.source === undefined ? '' : ` · source ${target.source}`;
-  const head = `${task.id} · declared ${target.size ?? 'none'} · target ${target.target}${source}`;
+  const head = `${task.id} · declared ${target.size ?? 'none'} · target ${target.target}${source} · verification ${target.verification}`;
   const budget = `size budget ${report.budget} · contributes ${contribution(task)} · phase ${report.phase} · phase budget ${report.phaseBudget}`;
   const header: ReadonlyArray<string> = ['size', ...LAYERS, 'winner'];
   const rows: ReadonlyArray<ReadonlyArray<string>> = SIZES.map((size) => [
@@ -611,7 +631,16 @@ export const taskFlag = Flag.String('task').pipe(Flag.withDescription('Task id, 
 
 export const resolveCommand = Command.make(
   'resolve',
-  { dir: dirFlag, name: nameFlag, task: taskFlag, verbose: verboseFlag },
+  {
+    dir: dirFlag,
+    name: nameFlag,
+    task: taskFlag,
+    verbose: verboseFlag,
+    json: Flag.Boolean('json').pipe(
+      Flag.withDescription('Print the JSON resolution: { size, target, source, verification }.'),
+      Flag.withDefault(false),
+    ),
+  },
   (config) =>
     runDiagnosed(
       Effect.gen(function* () {
@@ -621,7 +650,25 @@ export const resolveCommand = Command.make(
           config.task,
           GUARD_RERUN.resolve,
         );
-        yield* Console.log(report.target.target);
+        if (config.json) {
+          const target = report.target;
+          const payload =
+            target.source === undefined
+              ? {
+                  size: target.size ?? 'none',
+                  target: target.target,
+                  verification: target.verification,
+                }
+              : {
+                  size: target.size ?? 'none',
+                  target: target.target,
+                  source: target.source,
+                  verification: target.verification,
+                };
+          yield* Console.log(JSON.stringify(payload));
+        } else {
+          yield* Console.log(report.target.target);
+        }
       }),
       () => ({
         path: config.name,

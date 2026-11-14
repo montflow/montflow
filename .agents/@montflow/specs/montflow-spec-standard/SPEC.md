@@ -114,6 +114,13 @@ contract, I002 ships the prompt through the doctor payload, and I003 exposes it
 on the binary, slash, and host tool surfaces with the same no-guess name
 resolution as `execute`.
 
+Phase J parameterizes verification strictness per dispatch target. A
+`verification` value sits beside `model` and `effort` in each
+`sizing.json` size entry. `light` (default) keeps task-local mechanical
+gates and skips repo-wide gates and final review; `full` keeps the
+current behavior. The resolver, status surfaces, lock derivation,
+`review decide`, and execution loop all read the same mode.
+
 ## Requirements
 
 - `Issue` carries a severity with warnings defaulting to non-fatal, a `--strict` promotion, and a `fix` field on par with the prompts package's richer issue shape.
@@ -218,3 +225,9 @@ resolution as `execute`.
 | I002 | implement-status-prompt | execution | complete | Yes |
 | I003 | wire-status-entrypoints | execution | complete | Yes |
 | I099 | review-phase | review | complete | No |
+| J001 | decide-verification-modes | planning | complete | No |
+| J002 | implement-verification-schema | execution | complete | Yes |
+| J003 | wire-execution-lock-review | execution | complete | Yes |
+| J004 | review-phase | review | complete | No |
+| K001 | fix-light-fixture-regressions | defect | complete | Yes |
+| K002 | review-phase | review | complete | No |
