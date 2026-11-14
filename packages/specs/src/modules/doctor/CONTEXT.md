@@ -1,8 +1,8 @@
 # Doctor apps module
 
 `mf-specs doctor` — install the spec skills an agent needs to
-author and discover specs, plus the shipped `spec-create`, `spec-execute`, and
-`spec-sizing` prompts.
+author and discover specs, plus the shipped `spec-create`, `spec-execute`,
+`spec-sizing`, and `spec-status` prompts.
 
 ## Belongs here
 
@@ -10,7 +10,7 @@ author and discover specs, plus the shipped `spec-create`, `spec-execute`, and
   `SPEC_SKILL_NAMES` (`montflow-create-specs`,
   `montflow-find-specs`) and `<root>/.agents/@montflow/prompts/<name>.json`
   for each name in `SPEC_PROMPT_NAMES` (`spec-create`, `spec-execute`,
-  `spec-sizing`);
+  `spec-sizing`, `spec-status`);
   installs what is missing, rewrites what is stale or partial, and is
   idempotent
 - `runDoctorAt(startDir)` — resolves the nearest repo root, then runs `doctor`
@@ -52,7 +52,7 @@ author and discover specs, plus the shipped `spec-create`, `spec-execute`, and
   `description` and `template`) before install. An invalid package prompt is
   `blocked` in both modes — invalid bytes are never installed.
 - Doctor owns exactly `SPEC_PROMPT_NAMES`. It never reads, rewrites, or deletes
-  `commit.json`, `effect-review.json`, or any other prompt in the same
+  `commit.json`, `model-fallback.json`, or any other prompt in the same
   directory.
 - Doctor owns exactly `SPEC_SKILL_NAMES`. Every other skill a shipped prompt
   declares is external: doctor never installs or rewrites it, and the prompt

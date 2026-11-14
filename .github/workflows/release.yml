@@ -124,7 +124,7 @@ jobs:
           - name: lint
             script: lint:check
           - name: format
-            script: format:check
+            script: fmt:check
     steps:
       - uses: actions/checkout@v4
 

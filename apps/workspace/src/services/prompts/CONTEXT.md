@@ -24,6 +24,15 @@ displayable message and a retry re-imports (load failures clear the cache;
   (pure, tested) — the delete keybind behind the detail
 - `savePrompt` (directory create plus `encode` through the loaded runtime,
   slug-guarded) — the manual save path
+- `prompt-editor` (pure): eligible earlier controllers for a condition,
+  `chooseCondition`, and `applyCondition`/`applyConditionByName`/
+  `validateCondition`, which refuse an unknown or later controller, a
+  non-discrete kind, and an unoffered value. The grid page's `c` keybind on an
+  open prompt runs the dialog flow through `applyConditionByName`, so its
+  refusal is what the user sees.
+- `hiddenVariableNames` / `currentHiddenVariableNames`: hidden names through the
+  loaded package predicate, so the detail view marks visibility without
+  re-deriving a condition or changing a stored value
 - `panelInstalled(r, 'prompts')` marks the store installed; the loader stages
   boot as `PromptsPhase` (`extension` | `prompts`)
 

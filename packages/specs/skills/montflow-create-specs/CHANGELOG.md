@@ -1,5 +1,95 @@
 # Changelog
 
+## [2.19.0] - 2026-11-04
+
+### Changed
+
+- The authoring questions are part of the flow: the user chooses `rigor` (five levels, no default), `isolated`, and, when isolated, `origin`, `origin_branch`, and `worktree_name`; the appraiser only recommends and flags a level that cannot hold the request
+- An isolated run loads `using-git-worktrees`, passes the chosen origin and worktree name, and authors in the resulting workspace with `--workspace-type worktree`; the in-place run keeps today's behaviour
+
+## [2.18.0] - 2026-11-04
+
+### Changed
+
+- The spec-level `tier` becomes `rigor`, with five levels: `trivial`, `light`, `standard`, `deep`, and `critical`; `mf-specs rigor <level>` loads exactly one file from `.agents/@montflow/rigors/`
+- The rigor table states all five rows; the split verdict keeps its frozen `tier` part field
+
+## [2.17.0] - 2026-11-03
+
+### Added
+
+- Plan in **waves**: name the independent tasks that dispatch together and the critical path, so the phase costs the longest wave rather than the sum of its tasks; a task that only needs an earlier artifact at its end starts in the earlier wave
+- A `## Completion` item names only what the task's own gate proves; a repo-wide suite belongs to the phase gate and forces no extra heavyweight run mid-phase
+
+## [2.16.0] - 2026-11-03
+
+### Added
+
+- The parallel phase shape: author the widest ready set, give every task a declared `write-scope:`, use `depends-on` only for a real data or ordering dependency, split a phase whose tasks collide, and state a genuinely serial phase with `serial-reason:`
+- The two gate layers: a task `GATES.md` names task-local commands, while phase-shared and repo-wide checks are named once in the phase `GATES.md` with `scope:` and `lane:`
+- The channel protocol (`BOARD.md` broadcast, `MAILBOX.md` targeted, orchestration-only writes) and the scheduler's run key, pass reuse, rerun-on-failure, and heavy-lane/in-flight bounds
+
+## [2.15.1] - 2026-11-03
+
+### Changed
+
+- `GATES.md` is the sole owner of executable commands: a command appears exactly once on the `command:` line of the gate that runs it, the brief only points at the gate and never carries a runnable command, and an infrastructure task whose subject is the repo-wide gate may name it and still runs it once at the orchestrator's task gate
+- The brief check requires the five named elements (Read, Write scope, Gate, Record, Review); a heading alone or a stub is not a brief, and `mf-specs lock` refuses a started phase without a valid brief
+
+## [2.15.0] - 2026-11-03
+
+### Added
+
+- The phase `## Execution Brief`: every new phase's `MEMORY.md` carries the context packet, read budget, write scope, official gate command, and record cap, and each pending task points at it with a short `## Execution` section instead of repeating it
+- The rule that a worker `MEMORY.md` stays at or under 80 lines with full logs in `/tmp/<task-id>.log`, that the official gate runs once per task, and that the repo-wide gate runs once per phase boundary
+
+### Changed
+
+- A task's `GATES.md` never restates a command the phase brief already names: name the command once and point at that line
+
+## [2.14.0] - 2026-11-03
+
+### Added
+
+- Profile discovery before choosing `reviewer-profiles`: run `mf-profiles list` and read each description, with `mf-profiles show <name>` for the instructions and review checklist when a description does not settle the choice; the Reference names the same CLI
+- The no-review-task rule: a small phase whose tasks are fully gated may end at its gates, and the waiver reason is recorded (B004 decides the file and field that carry it)
+
+## [2.13.1] - 2026-11-03
+
+### Changed
+
+- The layout section documents the v2 phase directory (`PHASE.md`, `MEMORY.md`, `BOARD.md`, optional `GATES.md`/`GATE-RESULTS.jsonl`) and the task files (`TASK.md`, `MEMORY.md`, optional `GATES.md`/`MAILBOX.md`/`GATE-RESULTS.jsonl`); a phase is no longer described as a pure task container
+- The phase rules name `mf-specs lock` as the confirmation verb that stores nothing
+
+## [2.13.0] - 2026-11-03
+
+### Added
+
+- The complexity tier contract: `micro`, `standard`, and `full` with the phase range, exploration rule, work-task ceiling, review default, waiver policy, and question budget; `mf-specs tier <tier>` loads exactly one shipped tier file
+- Tier-aware authoring with `mf-specs init --tier`, the `## Creation` record (`tier`, self-reported `questions <n>/<budget>`, unresolved decisions), and `mf-specs waiver` for the phase review decision
+
+### Changed
+
+- The scaffold step prefers `init`; `create` remains the tier-agnostic scaffold, and no phase has a reserved review task
+- The split verdict is the exact `verdict`/`cut`/`count`/`specs`/`slug`/`tier`/`scope`/`evidence` shape
+
+## [2.12.0] - 2026-11-03
+
+### Changed
+
+- `mf-specs create` no longer appends a reserved `<PHASE>099` review task; a review task is emitted only when `--tasks` requests `name:review`, and `--reviewer-profiles` applies to the requested review task
+
+## [2.11.0] - 2026-11-02
+
+### Changed
+
+- `task.completion-unchecked` and `gate.unchecked` are errors on a `complete` task, not warnings; an unfinished task may still carry an unchecked checklist or an all-unchecked gate with no finding
+- The phase directory is the container for every task, and no phase requires a reserved review task; a lock is derived from a closed review round
+
+### Added
+
+- `size: none` as the completed-record opt-out: it is accepted only on a `complete` task, is never a dispatch target, and contributes no review budget
+
 ## [2.10.0] - 2026-10-28
 
 ### Added

@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.0] - 2026-11-03
+
+### Changed
+
+- Discovery tries `mf-skills list` first and falls back to Glob/Grep only when the binary is unavailable, stating the fallback
+
 ## [1.1.0] - 2026-07-24
 
 ### Added

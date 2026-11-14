@@ -30,7 +30,7 @@ Vitest.describe('Doctor.runDoctor', () => {
       const root = yield* Effect.promise(freshRoot);
       const result = yield* Doctor.runDoctor(root);
       Vitest.expect(result.healthy).toBe(true);
-      Vitest.expect(result.status).toBe('repaired');
+      Vitest.expect(result.status).toBe('installed');
       Vitest.expect(result.skills.map((skill) => skill.status)).toStrictEqual(
         Doctor.SKILL_NAMES.map(() => 'installed'),
       );
@@ -46,9 +46,9 @@ Vitest.describe('Doctor.runDoctor', () => {
       const root = yield* Effect.promise(freshRoot);
       yield* Doctor.runDoctor(root);
       const second = yield* Doctor.runDoctor(root);
-      Vitest.expect(second.status).toBe('ok');
+      Vitest.expect(second.status).toBe('present');
       Vitest.expect(second.healthy).toBe(true);
-      Vitest.expect(second.skills.every((skill) => skill.status === 'ok')).toBe(true);
+      Vitest.expect(second.skills.every((skill) => skill.status === 'present')).toBe(true);
       Vitest.expect(second.message).toContain('installed and up to date');
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }),
@@ -62,7 +62,7 @@ Vitest.describe('Doctor.runDoctor', () => {
       const good = yield* Effect.promise(() => readInstalled(root, name));
       yield* Effect.promise(() => install(root, name, '# edited by hand and now out of date\n'));
       const repaired = yield* Doctor.runDoctor(root);
-      Vitest.expect(repaired.status).toBe('repaired');
+      Vitest.expect(repaired.status).toBe('installed');
       Vitest.expect(repaired.skills.find((skill) => skill.name === name)?.status).toBe('repaired');
       Vitest.expect(yield* Effect.promise(() => readInstalled(root, name))).toBe(good);
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
@@ -109,7 +109,7 @@ Vitest.describe('Doctor.runDoctor', () => {
     }),
   );
 
-  Vitest.it.effect('detects an installed copy holding extra files', () =>
+  Vitest.it.effect('keeps an installed copy holding extra files healthy and untouched', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
       yield* Doctor.runDoctor(root);
@@ -119,8 +119,9 @@ Vitest.describe('Doctor.runDoctor', () => {
       );
       const checked = yield* Doctor.runDoctor(root, { check: true });
       const entry = checked.skills.find((skill) => skill.name === name);
-      Vitest.expect(entry?.status).toBe('mismatched');
-      Vitest.expect(entry?.detail).toContain('stray.md');
+      Vitest.expect(entry?.status).toBe('ok');
+      Vitest.expect(entry?.extras).toStrictEqual(['stray.md']);
+      Vitest.expect(checked.healthy).toBe(true);
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }),
   );

@@ -8,6 +8,8 @@ import {
   specExecuteTool,
   specModelsTool,
   specSizingTool,
+  specRigorTool,
+  specStatusTool,
 } from './apps/server/index.js';
 import { SpecStore } from './services/index.js';
 
@@ -19,7 +21,7 @@ export const COMMAND_NAME = 'specs';
 
 /** Help text shown for the slash command. */
 export const COMMAND_DESCRIPTION =
-  'Specs: check [--name <spec>] [--verbose] [--strict] | status --name <spec> | state --name <spec> | next --name <spec> | resolve --name <spec> --task <id> | sizing --name <spec> --task <id> [--verbose|--human] | models [--provider <id>] [--json] [--catalog <path>] [--verify [--name <spec>]] | which [--branch <name>] [--dir <path>] | list [--pending | --status <states>] [--verbose] | create --name <spec> [--description <text>] [--author <name>] [--workspace-type <in-place|worktree>] [--tasks <name[:type[:gates[:size]]],…>] | author --request <text> [--notes <text>] | execute [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous] | sizing-config [--scope repo|spec|phase] [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous] (no --scope asks which layer; --name implies spec and --name --phase implies phase).';
+  'Specs: check [--name <spec>] [--verbose] [--strict] | status --name <spec> | status-report [--name <spec>] [--focus <text>] | state --name <spec> | next --name <spec> | resolve --name <spec> --task <id> | sizing --name <spec> --task <id> [--verbose|--human] | models [--provider <id>] [--json] [--catalog <path>] [--verify [--name <spec>]] | which [--branch <name>] [--dir <path>] | list [--pending | --status <states>] [--verbose] | create --name <spec> [--description <text>] [--author <name>] [--workspace-type <in-place|worktree>] [--tasks <name[:type[:gates[:size]]],…>] | migrate --name <spec>|--all [--dry-run] [--include-complete] | init --name <spec> --rigor <trivial|light|standard|deep|critical> [--phase <objective>]… | new-phase --name <spec> --objective <line> | new-task --name <spec> --phase <id> --task <name> --type <type> | stamp [--format instant|date] | rigor <trivial|light|standard|deep|critical> | claim --name <spec> --task <id> | lock --name <spec> --phase <id> | waiver --name <spec> --phase <id> (--waived --reason <line> | --required) | gate run|record --name <spec> --phase <id> | mail --name <spec> --to <task-id|all> --text <text> | author --request <text> --rigor <level> --isolated <yes|no> [--notes <text>] [--origin current|main|other --worktree-name <name> [--origin-branch <branch>]] | execute [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous] | sizing-config [--scope repo|spec|phase] [--name <spec>] [--phase <id>] [--focus <text>] [--mode guided|autonomous] (no --scope asks which layer; --name implies spec and --name --phase implies phase).';
 
 /** Platform services the store, prompts, and git reads need. */
 const Platform = Layer.merge(NodeFileSystem.layer, NodePath.layer);
@@ -38,12 +40,13 @@ const CommandLive = Layer.mergeAll(Live, PromptLive, NodePath.layer, NodeFileSys
 
 /**
  * OpenCode server plugin entry: registers `/specs` for mechanically verifying
- * specs and rendering the shipped author/execute/sizing prompts, plus the
- * `spec_author` / `spec_execute` / `spec_sizing` tools that dispatch those
- * rendered prompts. The binary stays model-free; only these tools reach the
- * host `ModelPort` and `SessionDispatchPort`, through `@montflow/prompts`'
- * shared executor. The invocation text is the slash-command argument and every
- * path resolves from the plugin's directory, not the server process's.
+ * specs and rendering the shipped author/execute/status/sizing prompts, plus the
+ * `spec_author` / `spec_execute` / `spec_status` / `spec_sizing` prompt tools
+ * that dispatch those rendered prompts and the `spec_rigor` / `spec_models` read
+ * tools. The binary stays model-free; only the prompt tools reach the host
+ * `ModelPort` and `SessionDispatchPort`, through `@montflow/prompts`' shared
+ * executor. The invocation text is the slash-command argument and every path
+ * resolves from the plugin's directory, not the server process's.
  */
 export default entry(ID, (ports) =>
   Effect.gen(function* () {
@@ -62,8 +65,10 @@ export default entry(ID, (ports) =>
     };
     yield* ports.tool.add(defineTool(specAuthorTool(toolOptions)));
     yield* ports.tool.add(defineTool(specExecuteTool(toolOptions)));
+    yield* ports.tool.add(defineTool(specStatusTool(toolOptions)));
     yield* ports.tool.add(defineTool(specSizingTool(toolOptions)));
     yield* ports.tool.add(defineTool(specModelsTool({ cwd: ports.cwd, model: ports.model })));
+    yield* ports.tool.add(defineTool(specRigorTool({ cwd: ports.cwd })));
     yield* ports.command.register({
       name: COMMAND_NAME,
       description: COMMAND_DESCRIPTION,

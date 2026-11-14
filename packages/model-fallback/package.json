@@ -23,6 +23,12 @@
   "bin": {
     "mf-model-fallback": "./src/apps/cli/main.ts"
   },
+  "files": [
+    "payload.json",
+    "prompts",
+    "src",
+    "dist"
+  ],
   "type": "module",
   "exports": {
     "./package.json": "./package.json",
@@ -31,9 +37,9 @@
     "./tui": "./src/tui.tsx"
   },
   "scripts": {
-    "build:cli": "bun run scripts/generate-embedded-prompts.ts && bun build src/apps/cli/main.ts --compile --outfile dist/mf-model-fallback",
+    "build:cli": "bun run scripts/generate-embedded-payload.ts && bun build src/apps/cli/main.ts --compile --outfile dist/mf-model-fallback",
     "cli": "bun run src/apps/cli/main.ts",
-    "generate:payload": "bun run scripts/generate-embedded-prompts.ts",
+    "generate:payload": "bun run scripts/generate-embedded-payload.ts",
     "format:check": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "lint:check": "oxlint --deny-warnings .",
@@ -44,6 +50,7 @@
   "dependencies": {
     "@effect/platform-node": "4.0.1",
     "@montflow/opencode": "workspace:*",
+    "@montflow/payload": "workspace:*",
     "@montflow/prompts": "workspace:*",
     "@opencode/client": "2.0.18",
     "@opencode/plugin": "2.0.18",

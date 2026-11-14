@@ -2,22 +2,64 @@ import * as Vitest from '@effect/vitest';
 import * as Structure from '../index.js';
 import { specMarkdown } from '../../spec/tests/helpers.js';
 import { taskMarkdown } from '../../task/tests/helpers.js';
-import { entry, memory, snapshot } from './helpers.js';
-
-/** Structure-only verification: the tree rules with no review store. */
-const verifyTree = (tree: Structure.SpecSnapshot) =>
-  Structure.verifySpecTree(tree, Structure.NO_REVIEW);
+import { phaseMarkdown } from '../../phase/tests/helpers.js';
+import { briefedMemory, dirEntry, entry, memory, snapshot } from './helpers.js';
 
 const validTree = () =>
   snapshot([
-    entry('SPEC.md', specMarkdown()),
-    entry('A001-implement-login/TASK.md', taskMarkdown({ id: 'A001', name: 'implement-login' })),
-    entry('A001-implement-login/MEMORY.md', memory),
+    entry('SPEC.md', specMarkdown({ version: '2' })),
+    entry('A/PHASE.md', phaseMarkdown()),
+    entry('A/MEMORY.md', memory),
+    entry('A/A001-implement-login/TASK.md', taskMarkdown({ id: 'A001', name: 'implement-login' })),
+    entry('A/A001-implement-login/MEMORY.md', memory),
     entry(
-      'A099-review-phase/TASK.md',
+      'A/A099-review-phase/TASK.md',
       taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
     ),
-    entry('A099-review-phase/MEMORY.md', memory),
+    entry('A/A099-review-phase/MEMORY.md', memory),
+  ]);
+
+const verifyTree = (
+  tree: Structure.SpecSnapshot,
+  review: Structure.ReviewInput = Structure.NO_REVIEW,
+) => Structure.verifySpecTree(tree, review);
+
+/** A v2 tree whose phase status, task status, and phase memory vary. */
+const briefTree = (input: {
+  readonly phaseStatus: string;
+  readonly taskStatus: string;
+  readonly version: string;
+  readonly phaseMemory: string;
+}) =>
+  snapshot([
+    entry(
+      'SPEC.md',
+      specMarkdown({
+        version: input.version,
+        rows: [
+          {
+            id: 'A001',
+            name: 'implement-login',
+            type: 'execution',
+            status: input.taskStatus,
+            gates: 'No',
+          },
+          { id: 'A099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
+        ],
+      }),
+    ),
+    entry('A/PHASE.md', phaseMarkdown({ status: input.phaseStatus })),
+    entry('A/MEMORY.md', input.phaseMemory),
+    entry(
+      'A/A001-implement-login/TASK.md',
+      taskMarkdown({ id: 'A001', name: 'implement-login', status: input.taskStatus }),
+    ),
+    entry('A/A001-implement-login/MEMORY.md', memory),
+    entry(
+      'A/A099-review-phase/TASK.md',
+      taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
+    ),
+    entry('A/A099-review-phase/MEMORY.md', memory),
   ]);
 
 Vitest.describe('Structure.verifySpecTree runtime', () => {
@@ -27,8 +69,159 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
     Vitest.expect(result.valid).toBe(true);
   });
 
+  Vitest.it('requires a classified gate on an unfinished v2 task, not on a complete one', () => {
+    const prose = ['# GATES', '', '## Stage 0: Static', '', '- [ ] Pass.', ''].join('\n');
+    const tree = (status: string, mark: string) =>
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            version: '2',
+            rows: [
+              {
+                id: 'A001',
+                name: 'implement-login',
+                type: 'execution',
+                status,
+                gates: 'Yes',
+              },
+              { id: 'A099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
+            ],
+          }),
+        ),
+        entry('A/PHASE.md', phaseMarkdown()),
+        entry('A/MEMORY.md', memory),
+        entry(
+          'A/A001-implement-login/TASK.md',
+          taskMarkdown({ id: 'A001', name: 'implement-login', status }),
+        ),
+        entry('A/A001-implement-login/MEMORY.md', memory),
+        entry('A/A001-implement-login/GATES.md', prose.replace('- [ ] Pass.', mark)),
+        entry(
+          'A/A099-review-phase/TASK.md',
+          taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
+        ),
+        entry('A/A099-review-phase/MEMORY.md', memory),
+      ]);
+
+    const pending = verifyTree(tree('pending', '- [ ] Pass.'));
+    Vitest.expect(pending.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.no-mechanical-stages' }),
+    );
+
+    const complete = verifyTree(tree('complete', '- [x] Pass.'));
+    Vitest.expect(complete.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.no-mechanical-stages' }),
+    );
+  });
+
+  Vitest.it('warns when a v2 in-progress phase memory lacks the execution brief', () => {
+    const warned = verifyTree(
+      briefTree({
+        phaseStatus: 'in-progress',
+        taskStatus: 'in-progress',
+        version: '2',
+        phaseMemory: memory,
+      }),
+    );
+    Vitest.expect(warned.issues).toContainEqual(
+      Vitest.expect.objectContaining({
+        code: 'phase.execution-brief-missing',
+        severity: 'warning',
+        field: 'A/MEMORY.md',
+      }),
+    );
+    Vitest.expect(warned.valid).toBe(true);
+
+    const complete = verifyTree(
+      briefTree({
+        phaseStatus: 'complete',
+        taskStatus: 'complete',
+        version: '2',
+        phaseMemory: memory,
+      }),
+    );
+    Vitest.expect(complete.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'phase.execution-brief-missing' }),
+    );
+
+    const frozen = verifyTree(
+      briefTree({
+        phaseStatus: 'in-progress',
+        taskStatus: 'in-progress',
+        version: '1',
+        phaseMemory: memory,
+      }),
+    );
+    Vitest.expect(frozen.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'phase.execution-brief-missing' }),
+    );
+  });
+
+  Vitest.it('requires the five brief elements, not just the heading or a stub', () => {
+    const missingBrief = (phaseMemory: string) =>
+      verifyTree(
+        briefTree({
+          phaseStatus: 'in-progress',
+          taskStatus: 'in-progress',
+          version: '2',
+          phaseMemory,
+        }),
+      );
+    const headingOnly = `${memory}\n## Execution Brief\n`;
+    const stub = `${memory}\n## Execution Brief\n\n- TODO.\n`;
+    const partial = `${memory}\n## Execution Brief\n\n- Read: the brief.\n- Gate: point at GATES.md.\n`;
+
+    for (const phaseMemory of [headingOnly, stub, partial]) {
+      const result = missingBrief(phaseMemory);
+      Vitest.expect(result.issues).toContainEqual(
+        Vitest.expect.objectContaining({
+          code: 'phase.execution-brief-missing',
+          severity: 'warning',
+          field: 'A/MEMORY.md',
+        }),
+      );
+      Vitest.expect(result.valid).toBe(true);
+    }
+
+    const partialResult = missingBrief(partial);
+    Vitest.expect(
+      partialResult.issues.find((found) => found.code === 'phase.execution-brief-missing')?.message,
+    ).toContain('Write scope');
+
+    const complete = missingBrief(briefedMemory);
+    Vitest.expect(complete.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'phase.execution-brief-missing' }),
+    );
+  });
+
+  Vitest.it('accepts a valid spec that also lists its directories', () => {
+    const tree = validTree();
+    const result = verifyTree(
+      snapshot([
+        ...tree.files,
+        dirEntry('A/A001-implement-login'),
+        dirEntry('A/A099-review-phase'),
+      ]),
+    );
+    Vitest.expect(result.issues).toStrictEqual([]);
+    Vitest.expect(result.valid).toBe(true);
+  });
+
+  Vitest.it('flags an unexpected directory at the spec root', () => {
+    const tree = validTree();
+    const result = verifyTree({
+      name: tree.name,
+      files: [...tree.files, dirEntry('stray')],
+    });
+    Vitest.expect(result.issues).toContainEqual({
+      field: 'stray',
+      message: 'Unexpected directory at the spec root.',
+    });
+  });
+
   Vitest.it('fails when SPEC.md is missing', () => {
-    const result = verifyTree(snapshot([entry('A001-x/TASK.md', '')]));
+    const result = verifyTree(snapshot([entry('A/A001-x/TASK.md', '')]));
     Vitest.expect(result).toStrictEqual({
       valid: false,
       issues: [{ field: 'SPEC.md', message: 'Required file is missing.' }],
@@ -39,12 +232,123 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
     const tree = validTree();
     const result = verifyTree({
       name: tree.name,
-      files: tree.files.filter((file) => file.path !== 'A001-implement-login/TASK.md'),
+      files: tree.files.filter((file) => file.path !== 'A/A001-implement-login/TASK.md'),
     });
     Vitest.expect(result.valid).toBe(false);
     Vitest.expect(result.issues).toContainEqual({
-      field: 'A001-implement-login/TASK.md',
+      field: 'A/A001-implement-login/TASK.md',
       message: 'Required file is missing.',
+    });
+  });
+
+  Vitest.it('flags a task directory still at the spec root', () => {
+    const tree = validTree();
+    const result = verifyTree({
+      name: tree.name,
+      files: [
+        ...tree.files,
+        entry('B001-legacy/TASK.md', taskMarkdown({ id: 'B001', name: 'legacy' })),
+        entry('B001-legacy/MEMORY.md', memory),
+      ],
+    });
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues).toContainEqual({
+      field: 'B001-legacy',
+      message: "Task directory 'B001-legacy' must live inside a phase directory: B/B001-legacy/.",
+      fix: 'Move it to B/B001-legacy/.',
+    });
+  });
+
+  Vitest.it('flags an empty phase directory', () => {
+    const result = verifyTree(
+      snapshot([entry('SPEC.md', specMarkdown({ rows: [] })), dirEntry('B')]),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues).toContainEqual({
+      field: 'B',
+      message: 'Phase directory has no task directories.',
+    });
+  });
+
+  Vitest.it('flags an unexpected file in a phase directory', () => {
+    const tree = validTree();
+    const result = verifyTree({
+      name: tree.name,
+      files: [...tree.files, entry('A/notes.txt', 'scratch')],
+    });
+    Vitest.expect(result.issues).toContainEqual({
+      field: 'A/notes.txt',
+      message:
+        'Unexpected file in a phase directory; a phase holds PHASE.md, MEMORY.md, GATES.md, GATE-RESULTS.jsonl, and BOARD.md.',
+    });
+  });
+
+  Vitest.it('flags an unexpected directory inside a task directory', () => {
+    const tree = validTree();
+    const result = verifyTree({
+      name: tree.name,
+      files: [...tree.files, dirEntry('A/A001-implement-login/scratch')],
+    });
+    Vitest.expect(result.issues).toContainEqual({
+      field: 'A/A001-implement-login/scratch',
+      message: 'Unexpected directory inside a task directory.',
+    });
+  });
+
+  Vitest.it('flags a declared directory two levels inside a task directory', () => {
+    const tree = validTree();
+    const result = verifyTree({
+      name: tree.name,
+      files: [...tree.files, dirEntry('A/A001-implement-login/sub/deep')],
+    });
+    Vitest.expect(result.issues).toContainEqual({
+      field: 'A/A001-implement-login/sub',
+      message: 'Unexpected directory inside a task directory.',
+    });
+  });
+
+  Vitest.it('flags a non-task directory in a phase directory', () => {
+    const tree = validTree();
+    const result = verifyTree({
+      name: tree.name,
+      files: [...tree.files, dirEntry('A/notes')],
+    });
+    Vitest.expect(result.issues).toContainEqual({
+      field: 'A/notes',
+      message: 'Unexpected directory in a phase directory; a phase holds task directories only.',
+    });
+  });
+
+  Vitest.it('flags a task whose id phase disagrees with its phase directory', () => {
+    const result = verifyTree(
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            rows: [
+              { id: 'B001', name: 'wrong', type: 'execution', status: 'pending', gates: 'No' },
+            ],
+          }),
+        ),
+        entry('A/B001-wrong/TASK.md', taskMarkdown({ id: 'B001', name: 'wrong' })),
+        entry('A/B001-wrong/MEMORY.md', memory),
+      ]),
+    );
+    Vitest.expect(result.issues).toContainEqual({
+      field: 'A/B001-wrong',
+      message: "Task id 'B001' belongs to phase 'B', but lives under 'A/'.",
+    });
+  });
+
+  Vitest.it('flags a path deeper than a task directory', () => {
+    const tree = validTree();
+    const result = verifyTree({
+      name: tree.name,
+      files: [...tree.files, entry('A/A001-implement-login/sub/TASK.md', '')],
+    });
+    Vitest.expect(result.issues).toContainEqual({
+      field: 'A/A001-implement-login/sub/TASK.md',
+      message: 'Path is deeper than <phase>/<task>/<file>.',
     });
   });
 
@@ -58,6 +362,154 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
       field: 'notes.txt',
       message: 'Unexpected file at the spec root.',
     });
+  });
+
+  Vitest.it('flags a task-table type that disagrees with TASK.md', () => {
+    const result = verifyTree(
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            rows: [
+              {
+                id: 'A001',
+                name: 'implement-login',
+                type: 'exploratory',
+                status: 'pending',
+                gates: 'No',
+              },
+              { id: 'A099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
+            ],
+          }),
+        ),
+        entry(
+          'A/A001-implement-login/TASK.md',
+          taskMarkdown({ id: 'A001', name: 'implement-login' }),
+        ),
+        entry('A/A001-implement-login/MEMORY.md', memory),
+        entry(
+          'A/A099-review-phase/TASK.md',
+          taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
+        ),
+        entry('A/A099-review-phase/MEMORY.md', memory),
+      ]),
+    );
+    Vitest.expect(result.issues).toContainEqual({
+      field: 'SPEC.md',
+      message: "Task 'A001' type is 'exploratory' in the table but 'execution' in TASK.md.",
+    });
+  });
+
+  Vitest.it('flags a Gates column that disagrees with GATES.md', () => {
+    const result = verifyTree(
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            rows: [
+              {
+                id: 'A001',
+                name: 'implement-login',
+                type: 'execution',
+                status: 'pending',
+                gates: 'Yes',
+              },
+              { id: 'A099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
+            ],
+          }),
+        ),
+        entry(
+          'A/A001-implement-login/TASK.md',
+          taskMarkdown({ id: 'A001', name: 'implement-login' }),
+        ),
+        entry('A/A001-implement-login/MEMORY.md', memory),
+        entry(
+          'A/A099-review-phase/TASK.md',
+          taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
+        ),
+        entry('A/A099-review-phase/MEMORY.md', memory),
+      ]),
+    );
+    Vitest.expect(result.issues).toContainEqual({
+      field: 'SPEC.md',
+      message: "Task 'A001' Gates column is 'Yes' but GATES.md is missing.",
+    });
+  });
+
+  Vitest.it('flags a forward-phase dependency', () => {
+    const result = verifyTree(
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            rows: [
+              { id: 'A001', name: 'first', type: 'execution', status: 'pending', gates: 'No' },
+              { id: 'A099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
+              { id: 'B001', name: 'second', type: 'execution', status: 'pending', gates: 'No' },
+              { id: 'B099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
+            ],
+          }),
+        ),
+        entry(
+          'A/A001-first/TASK.md',
+          taskMarkdown({ id: 'A001', name: 'first', dependsOn: 'B001' }),
+        ),
+        entry('A/A001-first/MEMORY.md', memory),
+        entry(
+          'A/A099-review-phase/TASK.md',
+          taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
+        ),
+        entry('A/A099-review-phase/MEMORY.md', memory),
+        entry('B/B001-second/TASK.md', taskMarkdown({ id: 'B001', name: 'second' })),
+        entry('B/B001-second/MEMORY.md', memory),
+        entry(
+          'B/B099-review-phase/TASK.md',
+          taskMarkdown({ id: 'B099', name: 'review-phase', type: 'review' }),
+        ),
+        entry('B/B099-review-phase/MEMORY.md', memory),
+      ]),
+    );
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({
+        code: 'depends-on.forward-phase',
+        field: 'task A001',
+        message: "depends-on 'B001' points to a later phase.",
+      }),
+    );
+  });
+
+  Vitest.it('flags a dependency cycle', () => {
+    const result = verifyTree(
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            rows: [
+              { id: 'A001', name: 'first', type: 'execution', status: 'pending', gates: 'No' },
+              { id: 'A002', name: 'second', type: 'execution', status: 'pending', gates: 'No' },
+              { id: 'A099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
+            ],
+          }),
+        ),
+        entry(
+          'A/A001-first/TASK.md',
+          taskMarkdown({ id: 'A001', name: 'first', dependsOn: 'A002' }),
+        ),
+        entry('A/A001-first/MEMORY.md', memory),
+        entry(
+          'A/A002-second/TASK.md',
+          taskMarkdown({ id: 'A002', name: 'second', dependsOn: 'A001' }),
+        ),
+        entry('A/A002-second/MEMORY.md', memory),
+        entry(
+          'A/A099-review-phase/TASK.md',
+          taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
+        ),
+        entry('A/A099-review-phase/MEMORY.md', memory),
+      ]),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues.some((found) => found.field === 'depends-on')).toBe(true);
   });
 
   Vitest.it('allows a valid sizing.json at the spec root', () => {
@@ -110,190 +562,6 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
     Vitest.expect(issue?.cause).toBeDefined();
   });
 
-  Vitest.it('flags a task-table type that disagrees with TASK.md', () => {
-    const result = verifyTree(
-      snapshot([
-        entry(
-          'SPEC.md',
-          specMarkdown({
-            rows: [
-              {
-                id: 'A001',
-                name: 'implement-login',
-                type: 'exploratory',
-                status: 'pending',
-                gates: 'No',
-              },
-              { id: 'A099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
-            ],
-          }),
-        ),
-        entry(
-          'A001-implement-login/TASK.md',
-          taskMarkdown({ id: 'A001', name: 'implement-login' }),
-        ),
-        entry('A001-implement-login/MEMORY.md', memory),
-        entry(
-          'A099-review-phase/TASK.md',
-          taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
-        ),
-        entry('A099-review-phase/MEMORY.md', memory),
-      ]),
-    );
-    Vitest.expect(result.issues).toContainEqual({
-      field: 'SPEC.md',
-      message: "Task 'A001' type is 'exploratory' in the table but 'execution' in TASK.md.",
-    });
-  });
-
-  Vitest.it('flags a Gates column that disagrees with GATES.md', () => {
-    const result = verifyTree(
-      snapshot([
-        entry(
-          'SPEC.md',
-          specMarkdown({
-            rows: [
-              {
-                id: 'A001',
-                name: 'implement-login',
-                type: 'execution',
-                status: 'pending',
-                gates: 'Yes',
-              },
-              { id: 'A099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
-            ],
-          }),
-        ),
-        entry(
-          'A001-implement-login/TASK.md',
-          taskMarkdown({ id: 'A001', name: 'implement-login' }),
-        ),
-        entry('A001-implement-login/MEMORY.md', memory),
-        entry(
-          'A099-review-phase/TASK.md',
-          taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
-        ),
-        entry('A099-review-phase/MEMORY.md', memory),
-      ]),
-    );
-    Vitest.expect(result.issues).toContainEqual({
-      field: 'SPEC.md',
-      message: "Task 'A001' Gates column is 'Yes' but GATES.md is missing.",
-    });
-  });
-
-  Vitest.it('flags a forward-phase dependency', () => {
-    const result = verifyTree(
-      snapshot([
-        entry(
-          'SPEC.md',
-          specMarkdown({
-            rows: [
-              { id: 'A001', name: 'first', type: 'execution', status: 'pending', gates: 'No' },
-              { id: 'A099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
-              { id: 'B001', name: 'second', type: 'execution', status: 'pending', gates: 'No' },
-              { id: 'B099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
-            ],
-          }),
-        ),
-        entry('A001-first/TASK.md', taskMarkdown({ id: 'A001', name: 'first', dependsOn: 'B001' })),
-        entry('A001-first/MEMORY.md', memory),
-        entry(
-          'A099-review-phase/TASK.md',
-          taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
-        ),
-        entry('A099-review-phase/MEMORY.md', memory),
-        entry('B001-second/TASK.md', taskMarkdown({ id: 'B001', name: 'second' })),
-        entry('B001-second/MEMORY.md', memory),
-        entry(
-          'B099-review-phase/TASK.md',
-          taskMarkdown({ id: 'B099', name: 'review-phase', type: 'review' }),
-        ),
-        entry('B099-review-phase/MEMORY.md', memory),
-      ]),
-    );
-    Vitest.expect(result.issues).toContainEqual({
-      field: 'task A001',
-      message: "depends-on 'B001' points to a later phase.",
-    });
-  });
-
-  Vitest.it('flags a dependency cycle', () => {
-    const result = verifyTree(
-      snapshot([
-        entry(
-          'SPEC.md',
-          specMarkdown({
-            rows: [
-              { id: 'A001', name: 'first', type: 'execution', status: 'pending', gates: 'No' },
-              { id: 'A002', name: 'second', type: 'execution', status: 'pending', gates: 'No' },
-              { id: 'A099', name: 'review-phase', type: 'review', status: 'pending', gates: 'No' },
-            ],
-          }),
-        ),
-        entry('A001-first/TASK.md', taskMarkdown({ id: 'A001', name: 'first', dependsOn: 'A002' })),
-        entry('A001-first/MEMORY.md', memory),
-        entry(
-          'A002-second/TASK.md',
-          taskMarkdown({ id: 'A002', name: 'second', dependsOn: 'A001' }),
-        ),
-        entry('A002-second/MEMORY.md', memory),
-        entry(
-          'A099-review-phase/TASK.md',
-          taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
-        ),
-        entry('A099-review-phase/MEMORY.md', memory),
-      ]),
-    );
-    Vitest.expect(result.valid).toBe(false);
-    Vitest.expect(result.issues.some((found) => found.field === 'depends-on')).toBe(true);
-  });
-
-  Vitest.it('flags a phase without a review task', () => {
-    const result = verifyTree(
-      snapshot([
-        entry(
-          'SPEC.md',
-          specMarkdown({
-            rows: [
-              {
-                id: 'A001',
-                name: 'implement-login',
-                type: 'execution',
-                status: 'pending',
-                gates: 'No',
-              },
-            ],
-          }),
-        ),
-        entry(
-          'A001-implement-login/TASK.md',
-          taskMarkdown({ id: 'A001', name: 'implement-login' }),
-        ),
-        entry('A001-implement-login/MEMORY.md', memory),
-      ]),
-    );
-    Vitest.expect(result.issues).toContainEqual({
-      field: 'phase A',
-      message: 'Phase has no `review` task.',
-    });
-  });
-
-  Vitest.it('flags a locked phase with no tasks', () => {
-    const tree = validTree();
-    const result = verifyTree({
-      name: tree.name,
-      files: [
-        entry('SPEC.md', specMarkdown({ lockedPhases: 'A,B' })),
-        ...tree.files.filter((file) => file.path !== 'SPEC.md'),
-      ],
-    });
-    Vitest.expect(result.issues).toContainEqual({
-      field: 'locked-phases',
-      message: "Locked phase 'B' has no tasks.",
-    });
-  });
-
   Vitest.it('flags a TASK.md at the spec root with placement guidance', () => {
     const tree = validTree();
     const result = verifyTree({
@@ -302,7 +570,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
     });
     Vitest.expect(result.issues).toContainEqual({
       field: 'TASK.md',
-      message: 'TASK.md must live inside a task directory: A001-<kebab-name>/TASK.md.',
+      message: 'TASK.md must live inside a task directory: <phase>/A001-<kebab-name>/TASK.md.',
     });
   });
 
@@ -317,12 +585,12 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
             ],
           }),
         ),
-        entry('A001/TASK.md', taskMarkdown({ id: 'A001', name: 'thing' })),
+        entry('A/A001/TASK.md', taskMarkdown({ id: 'A001', name: 'thing' })),
       ]),
     );
     Vitest.expect(
       result.issues.some(
-        (found) => found.field === 'A001' && found.message.includes('missing its kebab name'),
+        (found) => found.field === 'A/A001' && found.message.includes('missing its kebab name'),
       ),
     ).toBe(true);
   });
@@ -340,15 +608,15 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
           }),
         ),
         entry(
-          'A001-implement-login/TASK.md',
+          'A/A001-implement-login/TASK.md',
           taskMarkdown({ id: 'A001', name: 'implement-login' }),
         ),
-        entry('A001-implement-login/MEMORY.md', memory),
+        entry('A/A001-implement-login/MEMORY.md', memory),
         entry(
-          'A099-review-phase/TASK.md',
+          'A/A099-review-phase/TASK.md',
           taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
         ),
-        entry('A099-review-phase/MEMORY.md', memory),
+        entry('A/A099-review-phase/MEMORY.md', memory),
       ]),
     );
     Vitest.expect(result.issues).toContainEqual({
@@ -361,10 +629,10 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
     const tree = validTree();
     const result = verifyTree({
       name: tree.name,
-      files: [...tree.files, entry('A001-implement-login/GATES.md', 'Validate manually.\n')],
+      files: [...tree.files, entry('A/A001-implement-login/GATES.md', 'Validate manually.\n')],
     });
     Vitest.expect(
-      result.issues.some((found) => found.field === 'A001-implement-login/GATES.md: body'),
+      result.issues.some((found) => found.field === 'A/A001-implement-login/GATES.md: body'),
     ).toBe(true);
   });
 
@@ -373,11 +641,11 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
     const result = verifyTree({
       name: tree.name,
       files: tree.files.map((file) =>
-        file.path === 'A001-implement-login/MEMORY.md' ? entry(file.path, '# Memory\n') : file,
+        file.path === 'A/A001-implement-login/MEMORY.md' ? entry(file.path, '# Memory\n') : file,
       ),
     });
     Vitest.expect(result.issues).toContainEqual({
-      field: 'A001-implement-login/MEMORY.md: body',
+      field: 'A/A001-implement-login/MEMORY.md: body',
       message: 'Missing `## Context` section.',
     });
   });
@@ -390,7 +658,6 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
           specMarkdown({
             name: 'ship-spec',
             status: 'complete',
-            lockedPhases: 'A',
             rows: [
               {
                 id: 'A001',
@@ -404,15 +671,15 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
           }),
         ),
         entry(
-          'A001-implement-login/TASK.md',
+          'A/A001-implement-login/TASK.md',
           taskMarkdown({ id: 'A001', name: 'implement-login', status: 'pending' }),
         ),
-        entry('A001-implement-login/MEMORY.md', memory),
+        entry('A/A001-implement-login/MEMORY.md', memory),
         entry(
-          'A099-review-phase/TASK.md',
+          'A/A099-review-phase/TASK.md',
           taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: 'complete' }),
         ),
-        entry('A099-review-phase/MEMORY.md', memory),
+        entry('A/A099-review-phase/MEMORY.md', memory),
       ]),
     );
     Vitest.expect(result.issues).toContainEqual({
@@ -426,6 +693,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
       entry(
         'SPEC.md',
         specMarkdown({
+          version: '2',
           rows: [
             {
               id: 'A001',
@@ -438,24 +706,32 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
           ],
         }),
       ),
-      entry('A001-implement-login/TASK.md', taskMarkdown({ id: 'A001', name: 'implement-login' })),
-      entry('A001-implement-login/MEMORY.md', memory),
+      entry('A/PHASE.md', phaseMarkdown({ status: 'in-progress' })),
+      entry('A/MEMORY.md', briefedMemory),
       entry(
-        'A099-review-phase/TASK.md',
+        'A/A001-implement-login/TASK.md',
+        taskMarkdown({ id: 'A001', name: 'implement-login' }),
+      ),
+      entry('A/A001-implement-login/MEMORY.md', memory),
+      entry(
+        'A/A099-review-phase/TASK.md',
         taskMarkdown({
           id: 'A099',
           name: 'review-phase',
           type: 'review',
-          reviewerProfiles: 'example-reviewer',
+          reviewerProfiles: 'effect-reviewer',
           status: 'complete',
         }),
       ),
-      entry('A099-review-phase/MEMORY.md', memory),
+      entry('A/A099-review-phase/MEMORY.md', memory),
     ]);
-    const result = Structure.verifySpecTree(tree, {
+    const result = verifyTree(tree, {
       series: [
-        { name: 'ship-spec', rounds: [{ round: '001', phase: 'A' }] },
-        { name: 'ship-spec-example-reviewer', rounds: [{ round: '001', phase: 'A' }] },
+        { name: 'ship-spec', rounds: [{ round: '001', phase: 'A', passed: true }] },
+        {
+          name: 'ship-spec-effect-reviewer',
+          rounds: [{ round: '001', phase: 'A', passed: true }],
+        },
       ],
       requireRounds: true,
     });
@@ -468,6 +744,7 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
       entry(
         'SPEC.md',
         specMarkdown({
+          version: '2',
           rows: [
             {
               id: 'A001',
@@ -480,28 +757,634 @@ Vitest.describe('Structure.verifySpecTree runtime', () => {
           ],
         }),
       ),
-      entry('A001-implement-login/TASK.md', taskMarkdown({ id: 'A001', name: 'implement-login' })),
-      entry('A001-implement-login/MEMORY.md', memory),
+      entry('A/PHASE.md', phaseMarkdown({ status: 'in-progress' })),
+      entry('A/MEMORY.md', briefedMemory),
       entry(
-        'A099-review-phase/TASK.md',
+        'A/A001-implement-login/TASK.md',
+        taskMarkdown({ id: 'A001', name: 'implement-login' }),
+      ),
+      entry('A/A001-implement-login/MEMORY.md', memory),
+      entry(
+        'A/A099-review-phase/TASK.md',
         taskMarkdown({
           id: 'A099',
           name: 'review-phase',
           type: 'review',
-          reviewerProfiles: 'example-reviewer',
+          reviewerProfiles: 'effect-reviewer',
           status: 'complete',
         }),
       ),
-      entry('A099-review-phase/MEMORY.md', memory),
+      entry('A/A099-review-phase/MEMORY.md', memory),
     ]);
-    const result = Structure.verifySpecTree(tree, {
+    const result = verifyTree(tree, {
       series: [{ name: 'ship-spec', rounds: [{ round: '001', phase: 'A' }] }],
       requireRounds: true,
     });
     Vitest.expect(result.issues).toContainEqual({
       field: 'review-series',
       message:
-        "Phase 'A' has a review task but review series 'ship-spec-example-reviewer' does not exist.",
+        "Phase 'A' has a review task but review series 'ship-spec-effect-reviewer' does not exist.",
     });
   });
+});
+
+const reviewTree = () =>
+  snapshot([
+    entry(
+      'SPEC.md',
+      specMarkdown({
+        version: '2',
+        rows: [
+          {
+            id: 'A001',
+            name: 'implement-login',
+            type: 'execution',
+            status: 'pending',
+            gates: 'No',
+          },
+          { id: 'A099', name: 'review-phase', type: 'review', status: 'complete', gates: 'No' },
+        ],
+      }),
+    ),
+    entry('A/PHASE.md', phaseMarkdown({ status: 'in-progress' })),
+    entry('A/MEMORY.md', briefedMemory),
+    entry(
+      'A/A001-implement-login/TASK.md',
+      taskMarkdown({ id: 'A001', name: 'implement-login', size: 'tiny' }),
+    ),
+    entry('A/A001-implement-login/MEMORY.md', memory),
+    entry(
+      'A/A099-review-phase/TASK.md',
+      taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: 'complete' }),
+    ),
+    entry('A/A099-review-phase/MEMORY.md', memory),
+  ]);
+
+Vitest.describe('Structure.verifySpecTree review overflow and closure', () => {
+  Vitest.it('accepts an autonomous-authorized overflow past the budget', () => {
+    const result = verifyTree(reviewTree(), {
+      series: [
+        {
+          name: 'ship-spec',
+          rounds: [
+            { round: '001', phase: 'A', passed: true },
+            {
+              round: '002',
+              phase: 'A',
+              passed: true,
+              overflow: {
+                reason: 'the user asked for one more',
+                authorized: 'autonomous',
+                rawAuthorized: 'autonomous',
+              },
+            },
+          ],
+        },
+      ],
+      requireRounds: true,
+    });
+    Vitest.expect(result.issues).toStrictEqual([]);
+    Vitest.expect(result.valid).toBe(true);
+  });
+
+  Vitest.it('still errors a round past the budget with no overflow declaration', () => {
+    const result = verifyTree(reviewTree(), {
+      series: [
+        {
+          name: 'ship-spec',
+          rounds: [
+            { round: '001', phase: 'A' },
+            { round: '002', phase: 'A' },
+          ],
+        },
+      ],
+      requireRounds: true,
+    });
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'review.budget-exceeded' }),
+    );
+  });
+
+  Vitest.it('errors the second autonomous overflow as exhausted', () => {
+    const result = verifyTree(reviewTree(), {
+      series: [
+        {
+          name: 'ship-spec',
+          rounds: [
+            { round: '001', phase: 'A' },
+            {
+              round: '002',
+              phase: 'A',
+              overflow: { reason: 'first', authorized: 'autonomous', rawAuthorized: 'autonomous' },
+            },
+            {
+              round: '003',
+              phase: 'A',
+              overflow: { reason: 'second', authorized: 'autonomous', rawAuthorized: 'autonomous' },
+            },
+          ],
+        },
+      ],
+      requireRounds: true,
+    });
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'review.overflow-exhausted' }),
+    );
+  });
+
+  Vitest.it('accepts a minor-deferred closure and refuses a deferred Critical/Major', () => {
+    const accepted = verifyTree(reviewTree(), {
+      series: [
+        {
+          name: 'ship-spec',
+          rounds: [
+            {
+              round: '001',
+              phase: 'A',
+              passed: true,
+              deferral: {
+                disposition: 'minor-deferred',
+                deferred: ['F1'],
+                missing: [],
+                severities: ['Minor'],
+                invalidIds: [],
+                severityInvalid: false,
+                valid: true,
+              },
+            },
+          ],
+        },
+      ],
+      requireRounds: true,
+    });
+    Vitest.expect(accepted.issues).toStrictEqual([]);
+
+    const refused = verifyTree(reviewTree(), {
+      series: [
+        {
+          name: 'ship-spec',
+          rounds: [
+            {
+              round: '001',
+              phase: 'A',
+              passed: false,
+              deferral: {
+                disposition: 'minor-deferred',
+                deferred: ['F1'],
+                missing: [],
+                severities: ['Major'],
+                invalidIds: ['F1'],
+                severityInvalid: true,
+                valid: false,
+              },
+            },
+          ],
+        },
+      ],
+      requireRounds: true,
+    });
+    Vitest.expect(refused.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'review.deferred-severity' }),
+    );
+  });
+});
+
+const row = (id: string, name: string, type: string) => ({
+  id,
+  name,
+  type,
+  status: 'pending',
+  gates: 'No',
+});
+const task = (
+  id: string,
+  name: string,
+  options: {
+    readonly type?: string;
+    readonly writeScope?: string;
+    readonly withoutWriteScope?: boolean;
+    readonly dependsOn?: string;
+  } = {},
+) => entry(`A/${id}-${name}/TASK.md`, taskMarkdown({ id, name, type: 'planning', ...options }));
+const taskMemory = (id: string, name: string) => entry(`A/${id}-${name}/MEMORY.md`, memory);
+
+/** A mechanical stage with one declared scope. */
+const gatesFor = (scope: string) =>
+  [
+    '## Stage 0: Proof (mechanical)',
+    'command: bun run test',
+    `scope: ${scope}`,
+    '',
+    '- [ ] Pass.',
+    '',
+  ].join('\n');
+
+Vitest.describe('Structure.verifySpecTree parallel authoring', () => {
+  Vitest.it('reports two overlapping scopes with no dependency edge', () => {
+    const result = verifyTree(
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            version: '2',
+            rows: [row('A001', 'first', 'planning'), row('A002', 'second', 'planning')],
+          }),
+        ),
+        entry('A/PHASE.md', phaseMarkdown()),
+        entry('A/MEMORY.md', memory),
+        task('A001', 'first', { writeScope: 'app' }),
+        taskMemory('A001', 'first'),
+        task('A002', 'second', { writeScope: 'app/sub' }),
+        taskMemory('A002', 'second'),
+      ]),
+    );
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'phase.write-scope-overlap' }),
+    );
+    Vitest.expect(result.valid).toBe(false);
+  });
+
+  Vitest.it('accepts overlapping scopes joined by a dependency edge', () => {
+    const result = verifyTree(
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            version: '2',
+            rows: [row('A001', 'first', 'planning'), row('A002', 'second', 'planning')],
+          }),
+        ),
+        entry('A/PHASE.md', phaseMarkdown()),
+        entry('A/MEMORY.md', memory),
+        task('A001', 'first', { writeScope: 'app' }),
+        taskMemory('A001', 'first'),
+        task('A002', 'second', { writeScope: 'app', dependsOn: 'A001' }),
+        taskMemory('A002', 'second'),
+      ]),
+    );
+    Vitest.expect(result.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'phase.write-scope-overlap' }),
+    );
+  });
+
+  Vitest.it(
+    'warns on a pending task with no write scope and on an unexplained serial chain',
+    () => {
+      const result = verifyTree(
+        snapshot([
+          entry(
+            'SPEC.md',
+            specMarkdown({
+              version: '2',
+              rows: [
+                row('A001', 'first', 'planning'),
+                row('A002', 'second', 'planning'),
+                row('A003', 'third', 'planning'),
+              ],
+            }),
+          ),
+          entry('A/PHASE.md', phaseMarkdown()),
+          entry('A/MEMORY.md', memory),
+          task('A001', 'first', { withoutWriteScope: true }),
+          taskMemory('A001', 'first'),
+          task('A002', 'second', { dependsOn: 'A001' }),
+          taskMemory('A002', 'second'),
+          task('A003', 'third', { dependsOn: 'A002' }),
+          taskMemory('A003', 'third'),
+        ]),
+      );
+      Vitest.expect(result.issues).toContainEqual(
+        Vitest.expect.objectContaining({ code: 'task.write-scope-missing', severity: 'warning' }),
+      );
+      Vitest.expect(result.issues).toContainEqual(
+        Vitest.expect.objectContaining({
+          code: 'phase.serial-chain-unexplained',
+          severity: 'warning',
+        }),
+      );
+    },
+  );
+
+  Vitest.it('reports a gate scope outside the write scope and a duplicated command', () => {
+    const result = verifyTree(
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            version: '2',
+            rows: [
+              { ...row('A001', 'first', 'execution'), gates: 'Yes' },
+              { ...row('A002', 'second', 'execution'), gates: 'Yes' },
+            ],
+          }),
+        ),
+        entry('A/PHASE.md', phaseMarkdown()),
+        entry('A/MEMORY.md', memory),
+        task('A001', 'first', { type: 'execution', writeScope: 'app' }),
+        taskMemory('A001', 'first'),
+        entry('A/A001-first/GATES.md', gatesFor('repo')),
+        task('A002', 'second', { type: 'execution', writeScope: 'packages/specs' }),
+        taskMemory('A002', 'second'),
+        entry('A/A002-second/GATES.md', gatesFor('packages/specs')),
+      ]),
+    );
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.shared-check-in-task' }),
+    );
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.duplicate-command' }),
+    );
+  });
+
+  Vitest.it('reports a mechanical stage with no resolvable scope', () => {
+    const result = verifyTree(
+      snapshot([
+        entry(
+          'SPEC.md',
+          specMarkdown({
+            version: '2',
+            rows: [{ ...row('A001', 'first', 'execution'), gates: 'Yes' }],
+          }),
+        ),
+        entry('A/PHASE.md', phaseMarkdown()),
+        entry('A/MEMORY.md', memory),
+        task('A001', 'first', { type: 'execution', withoutWriteScope: true }),
+        taskMemory('A001', 'first'),
+        entry(
+          'A/A001-first/GATES.md',
+          ['## Stage 0: Proof (mechanical)', 'command: bun run test', '', '- [ ] Pass.', ''].join(
+            '\n',
+          ),
+        ),
+      ]),
+    );
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({ code: 'gate.scope-missing' }),
+    );
+  });
+});
+
+interface DependencyFixture {
+  readonly id: string;
+  readonly name: string;
+  readonly type?: string;
+  readonly status?: string;
+  readonly dependsOn?: string;
+  readonly relatedTasks?: string;
+}
+
+/** Phase prefix of a task id. */
+const phaseOfId = (id: string): string => id.replace(/\d+$/, '');
+
+/** A v2 tree built from a flat task list, with a review-free phase when none holds a review. */
+const depSnapshot = (tasks: ReadonlyArray<DependencyFixture>) => {
+  const phases = [...new Set(tasks.map((item) => phaseOfId(item.id)))];
+  return snapshot([
+    entry(
+      'SPEC.md',
+      specMarkdown({
+        version: '2',
+        rows: tasks.map((item) => ({
+          id: item.id,
+          name: item.name,
+          type: item.type ?? 'planning',
+          status: item.status ?? 'pending',
+          gates: 'No',
+        })),
+      }),
+    ),
+    ...phases.flatMap((phase) => {
+      const inPhase = tasks.filter((item) => phaseOfId(item.id) === phase);
+      const statuses = inPhase.map((item) => item.status ?? 'pending');
+      const status = statuses.every((value) => value === 'complete')
+        ? 'complete'
+        : statuses.some((value) => value === 'in-progress' || value === 'complete')
+          ? 'in-progress'
+          : statuses.some((value) => value === 'blocked')
+            ? 'blocked'
+            : 'pending';
+      const hasReview = inPhase.some((item) => item.type === 'review');
+      return [
+        entry(
+          `${phase}/PHASE.md`,
+          phaseMarkdown({ id: phase, status, review: hasReview ? 'required' : 'none' }),
+        ),
+        entry(`${phase}/MEMORY.md`, memory),
+      ];
+    }),
+    ...tasks.flatMap((item) => {
+      const phase = phaseOfId(item.id);
+      const base = {
+        id: item.id,
+        name: item.name,
+        type: item.type ?? 'planning',
+        status: item.status ?? 'pending',
+      };
+      const withDepends =
+        item.dependsOn === undefined ? base : { ...base, dependsOn: item.dependsOn };
+      const fixture =
+        item.relatedTasks === undefined
+          ? withDepends
+          : { ...withDepends, relatedTasks: item.relatedTasks };
+      return [
+        entry(`${phase}/${item.id}-${item.name}/TASK.md`, taskMarkdown(fixture)),
+        entry(`${phase}/${item.id}-${item.name}/MEMORY.md`, memory),
+      ];
+    }),
+  ]);
+};
+
+Vitest.describe('Structure.verifySpecTree dependency integrity', () => {
+  Vitest.it('rejects a direct dependency on its own phase review', () => {
+    const result = verifyTree(
+      depSnapshot([
+        { id: 'A001', name: 'work', dependsOn: 'A099' },
+        { id: 'A099', name: 'review-phase', type: 'review' },
+      ]),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({
+        code: 'depends-on.own-phase-review',
+        field: 'task A001',
+        actual: 'A001 -> A099',
+      }),
+    );
+  });
+
+  Vitest.it('reports the same-phase chain that reaches the review', () => {
+    const result = verifyTree(
+      depSnapshot([
+        { id: 'A001', name: 'work', dependsOn: 'A002' },
+        { id: 'A002', name: 'middle', dependsOn: 'A099' },
+        { id: 'A099', name: 'review-phase', type: 'review' },
+      ]),
+    );
+    const found = result.issues.find(
+      (issueFound) =>
+        issueFound.code === 'depends-on.own-phase-review' && issueFound.field === 'task A001',
+    );
+    Vitest.expect(found).toBeDefined();
+    Vitest.expect(found?.actual).toBe('A001 -> A002 -> A099');
+    Vitest.expect(found?.message).toContain('through A002 -> A099');
+    Vitest.expect(found?.fix).toContain("'A002'");
+  });
+
+  Vitest.it('accepts a dependency on an earlier phase review', () => {
+    const result = verifyTree(
+      depSnapshot([
+        { id: 'A099', name: 'review-phase', type: 'review' },
+        { id: 'B001', name: 'work', dependsOn: 'A099' },
+      ]),
+    );
+    Vitest.expect(result.valid).toBe(true);
+    Vitest.expect(result.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'depends-on.own-phase-review' }),
+    );
+  });
+
+  Vitest.it('rejects a complete task whose dependency is not complete', () => {
+    const result = verifyTree(
+      depSnapshot([
+        { id: 'A001', name: 'work', status: 'complete', dependsOn: 'A002' },
+        { id: 'A002', name: 'later' },
+      ]),
+    );
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({
+        code: 'depends-on.complete-before-target',
+        field: 'task A001',
+        actual: 'A002 is pending',
+      }),
+    );
+  });
+
+  Vitest.it('accepts a complete task whose dependency is complete', () => {
+    const result = verifyTree(
+      depSnapshot([
+        { id: 'A001', name: 'work', status: 'complete', dependsOn: 'A002' },
+        { id: 'A002', name: 'earlier', status: 'complete' },
+        { id: 'A003', name: 'remaining' },
+      ]),
+    );
+    Vitest.expect(result.valid).toBe(true);
+    Vitest.expect(result.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'depends-on.complete-before-target' }),
+    );
+  });
+
+  Vitest.it('keeps an unknown dependency as the only finding on a complete task', () => {
+    const result = verifyTree(
+      depSnapshot([{ id: 'A001', name: 'work', status: 'complete', dependsOn: 'A404' }]),
+    );
+    const findings = result.issues.filter((issueFound) => issueFound.field === 'task A001');
+    Vitest.expect(findings).toStrictEqual([
+      Vitest.expect.objectContaining({
+        code: 'depends-on.unknown-target',
+        actual: 'A404 not found',
+      }),
+    ]);
+    Vitest.expect(result.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'depends-on.complete-before-target' }),
+    );
+  });
+
+  Vitest.it('rejects a related-tasks target with no task directory', () => {
+    const result = verifyTree(depSnapshot([{ id: 'A001', name: 'work', relatedTasks: 'A404' }]));
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({
+        code: 'related-tasks.unknown-target',
+        field: 'task A001',
+        actual: 'A404 not found',
+      }),
+    );
+  });
+
+  Vitest.it('rejects a self related-tasks reference', () => {
+    const result = verifyTree(depSnapshot([{ id: 'A001', name: 'work', relatedTasks: 'A001' }]));
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(result.issues).toContainEqual(
+      Vitest.expect.objectContaining({
+        code: 'related-tasks.self-reference',
+        field: 'task A001',
+        actual: 'A001',
+      }),
+    );
+  });
+
+  Vitest.it('accepts a related-tasks target in another phase', () => {
+    const result = verifyTree(
+      depSnapshot([
+        { id: 'A001', name: 'work', relatedTasks: 'B001' },
+        { id: 'B001', name: 'other' },
+      ]),
+    );
+    Vitest.expect(result.valid).toBe(true);
+    Vitest.expect(result.issues).not.toContainEqual(
+      Vitest.expect.objectContaining({ code: 'related-tasks.unknown-target' }),
+    );
+  });
+});
+
+Vitest.describe('Structure.verifySpecTree rigor shape', () => {
+  /** A v2 tree whose SPEC.md records `deep` rigor. */
+  const deepTree = (tasks: ReadonlyArray<DependencyFixture>) => {
+    const base = depSnapshot(tasks);
+    const creation = '\n## Creation\n\n- rigor: deep\n- questions 0/4\n- unresolved: none\n';
+    return {
+      ...base,
+      files: base.files.map((file) =>
+        file.path === 'SPEC.md' ? { ...file, content: `${file.content}${creation}` } : file,
+      ),
+    };
+  };
+
+  Vitest.it('reports a later phase with no dependency path to phase A', () => {
+    const result = verifyTree(
+      deepTree([
+        { id: 'A001', name: 'explore', type: 'exploratory' },
+        { id: 'B001', name: 'build' },
+      ]),
+    );
+    Vitest.expect(result.issues.map((found) => found.code)).toContain('init.exploration-missing');
+  });
+
+  Vitest.it('reports a deep exploratory task outside phase A', () => {
+    const result = verifyTree(
+      deepTree([
+        { id: 'A001', name: 'explore', type: 'exploratory' },
+        { id: 'B001', name: 'look-more', type: 'exploratory', dependsOn: 'A001' },
+      ]),
+    );
+    Vitest.expect(result.issues.map((found) => found.code)).toContain('init.exploration-placement');
+  });
+
+  Vitest.it('reports a later phase that reaches only a non-exploratory phase A task', () => {
+    const result = verifyTree(
+      deepTree([
+        { id: 'A001', name: 'explore', type: 'exploratory' },
+        { id: 'A002', name: 'setup' },
+        { id: 'B001', name: 'build', dependsOn: 'A002' },
+      ]),
+    );
+    Vitest.expect(result.issues.map((found) => found.code)).toContain('init.exploration-missing');
+  });
+
+  Vitest.it(
+    'accepts a later phase that reaches the exploration through a phase A work task',
+    () => {
+      const result = verifyTree(
+        deepTree([
+          { id: 'A001', name: 'explore', type: 'exploratory' },
+          { id: 'A002', name: 'setup', dependsOn: 'A001' },
+          { id: 'B001', name: 'build', dependsOn: 'A002' },
+        ]),
+      );
+      Vitest.expect(result.issues.map((found) => found.code)).not.toContain(
+        'init.exploration-missing',
+      );
+    },
+  );
 });

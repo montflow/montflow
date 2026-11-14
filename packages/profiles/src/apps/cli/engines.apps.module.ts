@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import * as Doctor from '../doctor/index.js';
 import * as Profiles from '../../modules/profiles/index.js';
 import * as SkillCheck from '../../modules/skill-check/index.js';
 import { ProfileStore } from '../../services/index.js';
@@ -342,3 +343,13 @@ export const filterByStatus = (
 
 /** Re-exported so existing callers keep reading the render from the engines module. */
 export { renderVerifyAll } from './renderers.apps.module.js';
+
+/**
+ * Install or verify the packaged profiles in `<cwd>/.agents/@montflow/profiles`.
+ * `check` reports only and never writes.
+ * @param cwd - workspace root owning the profile store
+ * @param check - report only
+ * @returns the doctor outcome
+ */
+export const doctor = (cwd: string, check = false): Effect.Effect<Doctor.DoctorResult> =>
+  Doctor.runDoctor(cwd, { check, invocation: 'mf-profiles doctor' });

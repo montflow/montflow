@@ -128,6 +128,37 @@ export const loadedMatcher = (): ((label: string, query: string) => boolean) | u
   liveLib?.Interactive.matchesFilter;
 
 /**
+ * Names the current answers hide through the package's one visibility
+ * predicate. The component never re-derives a condition: it renders these
+ * names, and the stored values stay untouched.
+ * @param libs - loaded extension runtime
+ * @param variables - declared variables, in order
+ * @param values - collected answers (empty for the editor's default state)
+ * @returns the hidden names
+ */
+export const hiddenVariableNames = (
+  libs: PromptsLib,
+  variables: ReadonlyArray<Prompts.Variable>,
+  values: Readonly<Record<string, string>> = {},
+): ReadonlySet<string> =>
+  new Set(
+    variables
+      .filter((variable) => !libs.Prompts.isVisible(variable.name, variables, values))
+      .map((variable) => variable.name),
+  );
+
+/**
+ * Hidden names for a row the list already decoded, through the live runtime.
+ * Empty before the first load, so an unopened detail never guesses.
+ * @param variables - declared variables, in order
+ * @returns the hidden names, or an empty set before the runtime loads
+ */
+export const currentHiddenVariableNames = (
+  variables: ReadonlyArray<Prompts.Variable>,
+): ReadonlySet<string> =>
+  liveLib === undefined ? new Set<string>() : hiddenVariableNames(liveLib, variables);
+
+/**
  * Require the extension runtime inside flows: load failures become
  * string errors the TUI toasts (install, then retry).
  * @returns Effect resolving to the extension module namespace

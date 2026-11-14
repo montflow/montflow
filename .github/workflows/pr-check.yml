@@ -1,0 +1,55 @@
+# PR shape check.
+#
+# Lightweight and shell-only on purpose: it needs no install, build, or
+# checkout. It reads the pull request from `github.event` and enforces the
+# repo's PR convention — Conventional Commits title, the two required body
+# sections, and `main` as the base — so a malformed PR fails in seconds
+# instead of at merge time. The heavy verification stays in `verify.yml`.
+#
+# Boundary: this workflow never runs tests, lints, or typechecks. Hooks
+# cannot cover a PR title or body (they only see local commits/pushes);
+# `pr-check.yml` only runs on GitHub, never locally.
+name: PR check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+concurrency:
+  group: pr-check-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  check:
+    name: PR shape
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
+    steps:
+      - name: Check base is main
+        run: |
+          if [ "$BASE_REF" != "main" ]; then
+            echo "::error::base must be main, got $BASE_REF" >&2
+            exit 1
+          fi
+
+      - name: Check title is Conventional Commits
+        run: |
+          title_pattern='^(feat|fix|docs|chore|refactor|test|perf|ci|build|revert)(\([a-z0-9-]+\))?!?: [a-z].{9,}$'
+          if ! printf '%s' "$PR_TITLE" | grep -Eq "$title_pattern"; then
+            echo "::error::title must match Conventional Commits: $title_pattern" >&2
+            echo "::error::got: $PR_TITLE" >&2
+            exit 1
+          fi
+
+      - name: Check body sections
+        run: |
+          missing=0
+          printf '%s' "$PR_BODY" | grep -qi '^## Summary' || { echo "::error::body missing ## Summary" >&2; missing=1; }
+          printf '%s' "$PR_BODY" | grep -qi '^## Verification' || { echo "::error::body missing ## Verification" >&2; missing=1; }
+          exit "$missing"

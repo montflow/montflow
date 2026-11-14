@@ -237,7 +237,7 @@ Vitest.describe('Interactive.executeFlow', () => {
         recorder(script),
       ).pipe(Effect.flip);
       Vitest.expect(script.runs).toStrictEqual([]);
-      Vitest.expect(error).toContain('differs from the packaged version');
+      Vitest.expect(error).toContain('differs from the package');
       yield* cleanup(root);
     }),
   );

@@ -14,4 +14,15 @@ Releases: this package is versioned and tagged by changesets but never published
 
 ### Added
 
+- `mf-prompts doctor` reads `payload.json` and checks or repairs every declared skill; `doctor --check` is report-only and `mf-prompts:check` ends with it
 - Initial tracked release of the `mf-prompts` CLI.
+
+### Changed
+
+- **Breaking:** the doctor is manifest-driven and uses the shared `@montflow/payload` engine; a locally edited packaged skill is `stale` and repair overwrites it, while an unlisted skill is user data
+- Doctor statuses are one vocabulary across packages: `ok`/`missing`/`stale`/`mismatched`/`blocked` in check mode and `present`/`installed`/`repaired`/`blocked` in repair mode
+
+### Fixed
+
+- A `skills:` reference resolves only to a store directory containing `SKILL.md`, so an empty directory no longer verifies clean
+- `/mf-prompts verify --strict` parses and threads the flag, so the slash surface can promote an unresolved reference to an error

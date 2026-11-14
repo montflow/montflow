@@ -1,18 +1,29 @@
 # Repo-wide verification gate.
 #
-# Runs on every push, pull request, merge queue entry, and on demand, so a
-# failure is caught before it lands on `main` instead of after.
+# Runs on every pull request, merge queue entry, push to `main`, and on
+# demand, so a failure is caught before it lands on `main` instead of after.
+# Feature-branch pushes only trigger the `pull_request` run (no duplicate
+# `push` run), which halves the runner minutes per PR update.
 #
 # Shape:
 #   install  -> checkout, `bun install`, pack the workspace *including*
-#               `node_modules` into one artifact.
+#               `node_modules` into one artifact (`workspace-installed`).
 #   build    -> restore that artifact, run every package build once, repack
 #               the workspace *including* the build outputs (and Turbo's
-#               local cache) into the same artifact name.
-#   verify   -> matrix of independent checks. Each cell restores the built
+#               local cache) into one artifact (`workspace-built`).
+#   verify-early -> matrix of checks that do not need a build (lint,
+#                   format). Runs off `workspace-installed` right after
+#                   `install`, without waiting for `build`.
+#   verify   -> matrix of the remaining checks. Each cell restores the built
 #               workspace, so install and build happen exactly once per run
 #               instead of once per check. The matrix then runs fully in
 #               parallel.
+#   The `test` check is split into three shards (test-a/b/c) so the
+#   16 packages run on three runners instead of one. Each shard disables
+#   vitest typechecking (`--typecheck.enabled=false`): the separate
+#   `typecheck` cell already runs `ts:check` via `turbo ts:check`, so the
+#   test cells must not typecheck a second time. Local `turbo test` keeps
+#   `--typecheck` for fast local feedback.
 #
 # The workspace travels as a single `tar` (not as loose files) because
 # `node_modules` is full of symlinks and hardlinks, and zip-based artifacts
@@ -36,6 +47,7 @@ name: Verify
 
 on:
   push:
+    branches: [main]
   pull_request:
   merge_group:
   workflow_dispatch:
@@ -81,7 +93,7 @@ jobs:
       - name: Upload installed workspace
         uses: actions/upload-artifact@v4
         with:
-          name: workspace
+          name: workspace-installed
           path: ${{ runner.temp }}/workspace.tar
           retention-days: 1
           if-no-files-found: error
@@ -99,7 +111,7 @@ jobs:
       - name: Download installed workspace
         uses: actions/download-artifact@v4
         with:
-          name: workspace
+          name: workspace-installed
           path: ${{ runner.temp }}
 
       - name: Restore installed workspace
@@ -119,11 +131,10 @@ jobs:
       - name: Upload built workspace
         uses: actions/upload-artifact@v4
         with:
-          name: workspace
+          name: workspace-built
           path: ${{ runner.temp }}/workspace.tar
           retention-days: 1
           if-no-files-found: error
-          overwrite: true
 
   spec-completion:
     name: Spec completion
@@ -186,9 +197,9 @@ jobs:
             echo "::endgroup::"
           done <<< "${trailers}"
 
-  verify:
+  verify-early:
     name: ${{ matrix.target }}
-    needs: [build]
+    needs: [install]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -200,36 +211,69 @@ jobs:
           - target: lint
             script: lint:check
           - target: format
-            script: format:check
+            script: fmt:check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download installed workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-installed
+          path: ${{ runner.temp }}
+
+      - name: Restore installed workspace
+        run: tar -xf "$RUNNER_TEMP/workspace.tar" -C "$GITHUB_WORKSPACE"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.13"
+
+      - name: Run ${{ matrix.target }}
+        run: bun run ${{ matrix.script }}
+
+  verify:
+    name: ${{ matrix.target }}
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
           - target: typecheck
             script: ts:check
-          - target: test
-            script: test
+          - target: test-a
+            script: test:shard-a
+          - target: test-b
+            script: test:shard-b
+          - target: test-c
+            script: test:shard-c
           - target: tui
             script: test:tui
           - target: smoke
             script: smoke
           - target: skills
-            script: mf:check:release-and-skills
+            script: mf-release:check-and-skills
           - target: prompts
-            script: mf:check:prompts
+            script: mf-prompts:check
           - target: specs
-            script: mf:check:specs
+            script: mf-specs:check
           - target: profiles
-            script: mf:check:profiles
+            script: mf-profiles:check
           - target: reviews
-            script: mf:check:reviews
-          - target: naming
-            script: mf:check:naming
+            script: mf-reviews:check
           - target: references
-            script: mf:check:references
+            script: mf-references:check
     steps:
       - uses: actions/checkout@v4
 
       - name: Download built workspace
         uses: actions/download-artifact@v4
         with:
-          name: workspace
+          name: workspace-built
           path: ${{ runner.temp }}
 
       - name: Restore built workspace

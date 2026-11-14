@@ -5,9 +5,18 @@ without touching a real workspace. They live under a realistic root so the
 default `.agents/@montflow/specs` path works when you `cd` into this
 directory.
 
-- `mock-ok` — a fully valid, **pending** phase: execution task with
+- `mock-ok` — a fully valid, **pending** v1 phase tree: execution task with
   `GATES.md`, exploratory task depending on it, and a phase-end `review`
-  task. Passes with 0 issues; derived state `pending`.
+  task. Passes with only `spec.version-outdated` (a v1 record is accepted);
+  derived state `pending`.
+- `mock-v1` — the minimal v1 fixture: phase tree, no `PHASE.md`, no
+  `spec-version`. Verifies with the version warning only.
+- `mock-v2` — the minimal v2 fixture: `spec-version: 2`, `PHASE.md` plus phase
+  `MEMORY.md`, a work task, and a requested review task. Verifies clean.
+- `mock-future` — `spec-version: 3`: a future standard errors
+  (`spec.version-future`).
+- `mock-untransformed` — `spec-version: 2` on a phase tree with no
+  `PHASE.md`: the relabel is rejected (`spec.version-untransformed`).
 - `mock-complete` — a finished, consistent spec: `status: complete`,
   phase A locked, every task complete. Passes; derived state `complete`.
 - `mock-stale` — a bookkeeping contradiction: all tasks complete and phase

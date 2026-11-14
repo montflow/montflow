@@ -11,8 +11,11 @@ import {
   listModels,
   listNameDiagnostic,
   modelsVerifyCommand,
+  diagnostic,
+  readRigor,
   renderDiagnostic,
   sizingConfig,
+  statusReport,
   storeDirOf,
   verifyModels,
 } from '../cli/index.js';
@@ -48,6 +51,11 @@ const Live = Layer.mergeAll(
 export const SpecAuthorInput = Schema.Struct({
   request: Schema.String,
   notes: Schema.optional(Schema.String),
+  rigor: Schema.optional(Schema.String),
+  isolated: Schema.optional(Schema.String),
+  origin: Schema.optional(Schema.String),
+  originBranch: Schema.optional(Schema.String),
+  worktreeName: Schema.optional(Schema.String),
   model: Schema.optional(Schema.String),
 });
 
@@ -65,6 +73,16 @@ export const SpecExecuteInput = Schema.Struct({
 
 /** Decoded `spec_execute` input. */
 export type SpecExecuteInput = typeof SpecExecuteInput.Type;
+
+/** Input for `spec_status`. */
+export const SpecStatusInput = Schema.Struct({
+  name: Schema.optional(Schema.String),
+  focus: Schema.optional(Schema.String),
+  model: Schema.optional(Schema.String),
+});
+
+/** Decoded `spec_status` input. */
+export type SpecStatusInput = typeof SpecStatusInput.Type;
 
 /** What the tool factories need: the workspace and the shared executor. */
 export interface SpecToolOptions {
@@ -103,12 +121,20 @@ const modelOf = (
 export const specAuthorTool = (options: SpecToolOptions): ToolDefinition<SpecAuthorInput> => ({
   name: 'spec_author',
   description:
-    "Render the shipped spec-create prompt for a request, then dispatch it on a native session and return the agent's last reply. The prompt, skills, and doctor gate are the same as `mf-specs author`. Pass a model label to override the session default.",
+    "Render the shipped spec-create prompt for a request, then dispatch it on a native session and return the agent's last reply. The prompt, skills, and doctor gate are the same as `mf-specs author`. Pass `rigor` (trivial, light, standard, deep, or critical) and `isolated` (yes or no) as the user chose them; when isolated, pass `origin` (current, main, or other) and `worktreeName`, plus `originBranch` when origin is other. Pass a model label to override the session default.",
   input: SpecAuthorInput,
   execute: (input) =>
     Effect.gen(function* () {
       const workspace = options.cwd;
-      const loaded = yield* author(workspace, { request: input.request, notes: input.notes }).pipe(
+      const loaded = yield* author(workspace, {
+        request: input.request,
+        notes: input.notes,
+        rigor: input.rigor,
+        isolated: input.isolated,
+        origin: input.origin,
+        originBranch: input.originBranch,
+        worktreeName: input.worktreeName,
+      }).pipe(
         Effect.provide(Live),
         Effect.catchCause((cause) => Effect.fail(failureText(cause, workspace, 'mf-specs author'))),
       );
@@ -142,6 +168,36 @@ export const specExecuteTool = (options: SpecToolOptions): ToolDefinition<SpecEx
         Effect.provide(Live),
         Effect.catchCause((cause) =>
           Effect.fail(failureText(cause, storeDirOf(workspace), 'mf-specs execute')),
+        ),
+      );
+      const model = yield* modelOf(options, input.model);
+      return yield* options.execute({
+        cwd: workspace,
+        name: report.prompt.name,
+        model,
+        text: report.prompt.text,
+        skills: report.prompt.skills,
+      });
+    }),
+});
+
+/** The `spec_status` tool: render `spec-status` and dispatch it on a session. */
+export const specStatusTool = (options: SpecToolOptions): ToolDefinition<SpecStatusInput> => ({
+  name: 'spec_status',
+  description:
+    "Resolve one spec read-only, render the shipped spec-status prompt, then dispatch it on a native session and return the agent's last reply. Omit `name` to resolve the spec from the branch; when that match is absent or ambiguous the failure lists the candidates and says to ask the user, so never pick one yourself. The report is read-only by prompt contract: it quotes state, status, next, check, and review evidence and never edits a record, status, lock, or worktree. Pass a model label to override the session default.",
+  input: SpecStatusInput,
+  execute: (input) =>
+    Effect.gen(function* () {
+      const workspace = options.cwd;
+      const report = yield* statusReport(storeDirOf(workspace), {
+        name: input.name,
+        focus: input.focus,
+        workspace,
+      }).pipe(
+        Effect.provide(Live),
+        Effect.catchCause((cause) =>
+          Effect.fail(failureText(cause, storeDirOf(workspace), 'mf-specs status-report')),
         ),
       );
       const model = yield* modelOf(options, input.model);
@@ -199,6 +255,56 @@ export const SpecSizingInput = Schema.Struct({
 
 /** Decoded `spec_sizing` input. */
 export type SpecSizingInput = typeof SpecSizingInput.Type;
+
+/** Input for `spec_rigor`: the one rigor instruction to read. */
+export const SpecRigorInput = Schema.Struct({
+  rigor: Schema.String,
+});
+
+/** Decoded `spec_rigor` input. */
+export type SpecRigorInput = typeof SpecRigorInput.Type;
+
+/** What `spec_rigor` needs: the workspace that owns the installed rigor files. */
+export interface RigorToolOptions {
+  /** Workspace root the plugin runs in; owns `.agents/`. */
+  readonly cwd: string;
+}
+
+/**
+ * The `spec_rigor` tool: return the installed `<rigor>.md` verbatim, exactly as
+ * `mf-specs rigor <rigor>` prints it. The package copy is compared byte for byte,
+ * so a stale or missing file is the same coded refusal the binary reports and
+ * the tool never falls back to another rigor.
+ */
+export const specRigorTool = (options: RigorToolOptions): ToolDefinition<SpecRigorInput> => ({
+  name: 'spec_rigor',
+  description:
+    'Print one installed rigor instruction file verbatim (trivial, light, standard, deep, or critical). This is the same one read path as `mf-specs rigor <rigor>`: it validates the enum, compares the installed bytes with the packaged copy, and refuses a missing or stale file with the same code and repair. It never selects a default rigor.',
+  input: SpecRigorInput,
+  execute: (input) =>
+    readRigor({ rigor: input.rigor, workspace: options.cwd }).pipe(
+      Effect.provide(Live),
+      Effect.catchTag('@montflow/RigorLoadError', (error) =>
+        Effect.fail(
+          renderDiagnostic(
+            diagnostic({
+              code: error.code,
+              path: error.path,
+              field: 'rigor',
+              problem: error.problem,
+              rerun: `mf-specs rigor ${input.rigor}`,
+              expected: error.expected,
+              actual: error.actual,
+              fix: error.fix,
+            }),
+          ),
+        ),
+      ),
+      Effect.catchCause((cause) =>
+        Effect.fail(failureText(cause, options.cwd, `mf-specs rigor ${input.rigor}`)),
+      ),
+    ),
+});
 
 /** Input for `spec_models`: read the catalogue or verify a spec's config. */
 export const SpecModelsInput = Schema.Struct({

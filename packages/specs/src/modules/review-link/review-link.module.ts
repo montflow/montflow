@@ -23,12 +23,71 @@ export interface TaskEntry {
   readonly type: string;
 }
 
+/** One finding as the review-cycle policy reads it. */
+export interface RoundFinding {
+  /** Stable finding id, e.g. `F1`. */
+  readonly id: string;
+  /** Raw `- Severity:` value; may be empty or unparsable. */
+  readonly severity: string;
+  /** Raw `- Status:` value; may be empty or unparsable. */
+  readonly status: string;
+}
+
+/** The two overflow authorizations a round may declare. */
+export const OVERFLOW_AUTHORIZATIONS = ['autonomous', 'user'] as const;
+
+/** One overflow authorization. */
+export type OverflowAuthorization = (typeof OVERFLOW_AUTHORIZATIONS)[number];
+
+/**
+ * A round's `- Overflow:` declaration. The line's presence is what marks the
+ * round as an intentional overflow; a missing authorization is a broken one,
+ * never a silent pass.
+ */
+export interface RoundOverflow {
+  /** The declared reason, verbatim. */
+  readonly reason: string;
+  /** The parsed authorization when it is one of {@link OVERFLOW_AUTHORIZATIONS}. */
+  readonly authorized?: OverflowAuthorization | undefined;
+  /** The raw authorization token, so a broken value is reportable. */
+  readonly rawAuthorized: string;
+}
+
+/**
+ * A round's `- Disposition: minor-deferred` closure. Deferral is a closure, not
+ * a waiver: it passes only when every named finding exists and is Minor/Nit.
+ */
+export interface RoundDeferral {
+  /** The declared disposition; only `minor-deferred` produces this record. */
+  readonly disposition: string;
+  /** The deferred finding ids named by `- Deferred:`. */
+  readonly deferred: ReadonlyArray<string>;
+  /** Deferred ids with no matching finding in the round. */
+  readonly missing: ReadonlyArray<string>;
+  /** Severity of every deferred finding that exists, in declared order. */
+  readonly severities: ReadonlyArray<string>;
+  /** Deferred ids whose severity is not Minor/Nit (or is unparsable). */
+  readonly invalidIds: ReadonlyArray<string>;
+  /** True when at least one deferred finding is not Minor/Nit. */
+  readonly severityInvalid: boolean;
+  /** True when the closure is structurally valid and every deferred finding is Minor/Nit. */
+  readonly valid: boolean;
+}
+
 /** One round of a review series, with the phase it reviews when attributed. */
 export interface SeriesRoundSnapshot {
   /** Round directory name, e.g. `001`. */
   readonly round: string;
   /** The phase the round reviews, from its `- Phase:` metadata, when set. */
   readonly phase?: string | undefined;
+  /** True when the round's `- Status: closed` metadata marks it as passed. */
+  readonly passed?: boolean | undefined;
+  /** The round's findings, when the caller supplied them. */
+  readonly findings?: ReadonlyArray<RoundFinding> | undefined;
+  /** The round's `minor-deferred` closure, when it declares one. */
+  readonly deferral?: RoundDeferral | undefined;
+  /** The round's overflow declaration, when it carries one. */
+  readonly overflow?: RoundOverflow | undefined;
 }
 
 /** The review series a spec is linked to, as the review store sees it. */
@@ -73,6 +132,12 @@ export const REVIEW_BUDGET_EXCEEDED_CODE = 'review.budget-exceeded';
 /** Stable code for a round whose phase attribution is missing or malformed. */
 export const REVIEW_PHASE_UNATTRIBUTED_CODE = 'review.phase-unattributed';
 
+/** Stable code for a `minor-deferred` closure that defers a Critical/Major. */
+export const REVIEW_DEFERRED_SEVERITY_CODE = 'review.deferred-severity';
+
+/** Stable code for an over-budget round whose overflow authorization is broken. */
+export const REVIEW_OVERFLOW_EXHAUSTED_CODE = 'review.overflow-exhausted';
+
 /** One phase's review-cycle budget, as its task sizes derive it. */
 export interface PhaseBudget {
   /** Phase id, e.g. `A`. */
@@ -81,14 +146,241 @@ export interface PhaseBudget {
   readonly budget: number;
 }
 
-/** The body section a round's phase attribution lives in. */
+/** The body section a round's metadata lives in. */
 const METADATA_HEADING = /^##\s+Metadata\s*$/;
 
 /** Any level-2 heading, which ends a round's metadata section. */
 const ROUND_SECTION_HEADING = /^##\s+\S/;
 
-/** A round's `- Phase: <phase>` metadata line. */
-const PHASE_LINE = /^-\s+Phase:\s*(\S+)\s*$/;
+/** A `- Key: value` line inside a round section. */
+const METADATA_LINE = /^-\s*([^:]+?)\s*:\s*(.*)$/;
+
+/** The `## Metadata` key that declares a deferred closure. */
+export const ROUND_DISPOSITION_FIELD = 'Disposition';
+
+/** The `## Metadata` key that names the deferred finding ids. */
+export const ROUND_DEFERRED_FIELD = 'Deferred';
+
+/** The `## Metadata` key that declares an intentional overflow. */
+export const ROUND_OVERFLOW_FIELD = 'Overflow';
+
+/** The `## Metadata` key that authorizes an intentional overflow. */
+export const ROUND_OVERFLOW_AUTHORIZED_FIELD = 'Overflow-authorized';
+
+/** The disposition that closes a Minor/Nit-only round without another cycle. */
+export const MINOR_DEFERRED_DISPOSITION = 'minor-deferred';
+
+/** The four finding severities, most severe first. */
+export const SEVERITIES = ['Critical', 'Major', 'Minor', 'Nit'] as const;
+
+/** One finding severity. */
+export type Severity = (typeof SEVERITIES)[number];
+
+/**
+ * True when a raw severity is one of the four review severities. An unparsable
+ * severity is never silently a Minor: the policy escalates it instead.
+ * @param value - raw `- Severity:` value
+ * @returns true for a known severity
+ */
+export const isSeverity = (value: string): value is Severity =>
+  SEVERITIES.some((severity) => severity === value);
+
+/** One round's `## Metadata` fields, keyed exactly as written. */
+export type RoundMetadata = Readonly<Record<string, string>>;
+
+/**
+ * The `## Metadata` fields of one round. Only `- Key: value` lines inside the
+ * metadata section count; the section ends at the next level-2 heading.
+ * @param markdown - raw round `REVIEW.md` contents
+ * @returns the fields, first occurrence winning
+ */
+export const roundMetadata = (markdown: string): RoundMetadata => {
+  const entries: Array<readonly [string, string]> = [];
+  const seen = new Set<string>();
+  let inside = false;
+  for (const raw of markdown.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (METADATA_HEADING.test(line)) {
+      inside = true;
+      continue;
+    }
+    if (!inside) continue;
+    if (ROUND_SECTION_HEADING.test(line)) break;
+    const match = METADATA_LINE.exec(line);
+    if (match === null) continue;
+    const key = (match[1] ?? '').trim();
+    if (key === '' || seen.has(key)) continue;
+    seen.add(key);
+    entries.push([key, (match[2] ?? '').trim()]);
+  }
+  return Object.fromEntries(entries);
+};
+
+/** The `## Findings` section name. */
+const FINDINGS_SECTION = 'Findings';
+
+/** A finding heading: `### F1 — title`. */
+const FINDING_HEADING = /^###\s+(F\d+)\b/;
+
+/**
+ * Parse every `### F<n>` finding in a round's `## Findings` section and keep
+ * its raw Severity and Status. Pure and forgiving: a missing field is an empty
+ * string so the policy can escalate it instead of guessing.
+ * @param markdown - raw round `REVIEW.md` contents
+ * @returns the findings in document order
+ */
+export const roundFindings = (markdown: string): ReadonlyArray<RoundFinding> => {
+  const findings: Array<RoundFinding> = [];
+  let section = '';
+  let current:
+    | { id: string; severity?: string | undefined; status?: string | undefined }
+    | undefined;
+  const flush = (): void => {
+    if (current === undefined) return;
+    findings.push({
+      id: current.id,
+      severity: current.severity ?? '',
+      status: current.status ?? '',
+    });
+    current = undefined;
+  };
+  for (const raw of markdown.split(/\r?\n/)) {
+    const line = raw.trim();
+    const heading = /^##\s+(.*)$/.exec(line);
+    if (heading !== null) {
+      flush();
+      section = (heading[1] ?? '').trim();
+      continue;
+    }
+    if (section !== FINDINGS_SECTION) continue;
+    const found = FINDING_HEADING.exec(line);
+    if (found !== null) {
+      flush();
+      current = { id: found[1] ?? '' };
+      continue;
+    }
+    if (current === undefined) continue;
+    const field = METADATA_LINE.exec(line);
+    if (field === null) continue;
+    const key = (field[1] ?? '').trim().toLowerCase();
+    if (key === 'severity' && current.severity === undefined)
+      current.severity = (field[2] ?? '').trim();
+    if (key === 'status' && current.status === undefined) current.status = (field[2] ?? '').trim();
+  }
+  flush();
+  return findings;
+};
+
+/**
+ * True when a finding is still open. Only `Resolved` and `Won't Fix` are
+ * terminal; an unrecognized status stays open so it can never pass silently.
+ * @param finding - one parsed finding
+ * @returns true for a non-terminal finding
+ */
+export const isOpenFinding = (candidate: RoundFinding): boolean =>
+  candidate.status !== 'Resolved' && candidate.status !== "Won't Fix";
+
+/**
+ * Read a round's overflow declaration. The `- Overflow:` line's presence is
+ * what makes the round an intentional overflow; the authorization is read
+ * separately so a missing or misspelled token is reportable.
+ * @param markdown - raw round `REVIEW.md` contents
+ * @returns the declaration, or undefined when the round declares no overflow
+ */
+export const roundOverflow = (markdown: string): RoundOverflow | undefined => {
+  const metadata = roundMetadata(markdown);
+  const reason = metadata[ROUND_OVERFLOW_FIELD];
+  if (reason === undefined) return undefined;
+  const rawAuthorized = metadata[ROUND_OVERFLOW_AUTHORIZED_FIELD] ?? '';
+  const authorized = OVERFLOW_AUTHORIZATIONS.find((value) => value === rawAuthorized);
+  return authorized === undefined
+    ? { reason, rawAuthorized }
+    : { reason, rawAuthorized, authorized };
+};
+
+/**
+ * Read a round's `minor-deferred` closure. The closure is valid only when it
+ * names at least one finding, every named finding exists, and every one is
+ * Minor/Nit. A deferred Critical/Major is never a passing closure.
+ * @param markdown - raw round `REVIEW.md` contents
+ * @returns the closure, or undefined when the round declares no deferral
+ */
+export const roundDeferral = (markdown: string): RoundDeferral | undefined => {
+  const metadata = roundMetadata(markdown);
+  const disposition = (metadata[ROUND_DISPOSITION_FIELD] ?? '').trim().toLowerCase();
+  if (disposition !== MINOR_DEFERRED_DISPOSITION) return undefined;
+  const deferred = [
+    ...new Set((metadata[ROUND_DEFERRED_FIELD] ?? '').match(/F\d+/gu)?.map(String) ?? []),
+  ];
+  const findings = new Map(roundFindings(markdown).map((candidate) => [candidate.id, candidate]));
+  const missing = deferred.filter((id) => !findings.has(id));
+  const severities: Array<string> = [];
+  const invalidIds: Array<string> = [];
+  for (const id of deferred) {
+    const candidate = findings.get(id);
+    if (candidate === undefined) continue;
+    severities.push(candidate.severity);
+    if (candidate.severity !== 'Minor' && candidate.severity !== 'Nit') invalidIds.push(id);
+  }
+  const severityInvalid = invalidIds.length > 0;
+  return {
+    disposition: MINOR_DEFERRED_DISPOSITION,
+    deferred,
+    missing,
+    severities,
+    invalidIds,
+    severityInvalid,
+    valid: deferred.length > 0 && missing.length === 0 && !severityInvalid,
+  };
+};
+
+/**
+ * True when a round is a passing closure: `- Status: closed`, or a valid
+ * `- Disposition: minor-deferred` closure. A round with no status, any other
+ * status, or a broken deferral does not lock its phase.
+ * @param markdown - raw round `REVIEW.md` contents
+ * @returns true when the round passed
+ */
+export const roundPassed = (markdown: string): boolean => {
+  const metadata = roundMetadata(markdown);
+  if ((metadata['Status'] ?? '').toLowerCase() === 'closed') return true;
+  return roundDeferral(markdown)?.valid === true;
+};
+
+/**
+ * The latest round attributed to a phase, by round directory name. Round
+ * numbers are global to the spec, so the highest attributed round is the one
+ * whose findings the cycle policy reads.
+ * @param rounds - one series' rounds
+ * @param phase - the phase id
+ * @returns the latest attributed round, or undefined
+ */
+export const latestRoundForPhase = (
+  rounds: ReadonlyArray<SeriesRoundSnapshot>,
+  phase: string,
+): SeriesRoundSnapshot | undefined => {
+  const attributed = rounds
+    .filter((round) => round.phase === phase)
+    .toSorted((left, right) => left.round.localeCompare(right.round));
+  return attributed[attributed.length - 1];
+};
+
+/**
+ * The phases with at least one passed (`Status: closed`) round attributed to
+ * them across the supplied review series. This is the only source of phase
+ * locks: a complete phase with no passed round stays unlocked.
+ * @param series - the linked review series snapshots
+ * @returns the derived locked phases, in phase-rank order
+ */
+export const passedPhases = (series: ReadonlyArray<SeriesSnapshot>): ReadonlyArray<string> => {
+  const phases = new Set<string>();
+  for (const snapshot of series) {
+    for (const round of snapshot.rounds) {
+      if (round.phase !== undefined && round.passed === true) phases.add(round.phase);
+    }
+  }
+  return [...phases].toSorted((a, b) => phaseRank(a) - phaseRank(b));
+};
 
 /**
  * The phase a review round reviews, read from its `## Metadata` section. A
@@ -99,19 +391,8 @@ const PHASE_LINE = /^-\s+Phase:\s*(\S+)\s*$/;
  * @returns the attributed phase, or undefined
  */
 export const roundPhase = (markdown: string): string | undefined => {
-  let inside = false;
-  for (const line of markdown.split(/\r?\n/)) {
-    if (METADATA_HEADING.test(line.trim())) {
-      inside = true;
-      continue;
-    }
-    if (!inside) continue;
-    if (ROUND_SECTION_HEADING.test(line)) return undefined;
-    const match = PHASE_LINE.exec(line.trim());
-    if (match !== null)
-      return match[1] !== undefined && isValidPhase(match[1]) ? match[1] : undefined;
-  }
-  return undefined;
+  const declared = roundMetadata(markdown)['Phase'];
+  return declared !== undefined && isValidPhase(declared) ? declared : undefined;
 };
 
 /**
@@ -142,16 +423,44 @@ export const verifyBudgets = (
     const snapshot = byName.get(name);
     if (snapshot === undefined) continue;
     for (const { phase, budget } of phases) {
-      const count = snapshot.rounds.filter((round) => round.phase === phase).length;
+      const attributed = snapshot.rounds
+        .filter((round) => round.phase === phase)
+        .toSorted((left, right) => left.round.localeCompare(right.round));
+      const count = attributed.length;
       if (count <= budget) continue;
+      const overflowRounds = attributed.slice(budget);
+      const undeclared = overflowRounds.filter((round) => round.overflow === undefined);
+      if (undeclared.length > 0) {
+        issues.push(
+          finding({
+            code: REVIEW_BUDGET_EXCEEDED_CODE,
+            field: 'review-series',
+            message: `Review series '${name}' holds ${count} rounds attributed to phase '${phase}'; the phase budget is ${budget}.`,
+            expected: `at most ${budget} round${budget === 1 ? '' : 's'} for phase '${phase}'`,
+            actual: `${count} rounds`,
+            fix: `Record the escalation in phase '${phase}' review task's MEMORY.md and ask the user; no further round may be opened in series '${name}'. The budget is the largest non-review task size in phase '${phase}'.`,
+          }),
+        );
+        continue;
+      }
+      const broken = overflowRounds.filter(
+        (round) =>
+          round.overflow !== undefined &&
+          (round.overflow.reason.trim() === '' || round.overflow.authorized === undefined),
+      );
+      const autonomous = overflowRounds.filter(
+        (round) => round.overflow?.authorized === 'autonomous',
+      ).length;
+      if (broken.length === 0 && autonomous <= 1) continue;
       issues.push(
         finding({
-          code: REVIEW_BUDGET_EXCEEDED_CODE,
+          code: REVIEW_OVERFLOW_EXHAUSTED_CODE,
           field: 'review-series',
-          message: `Review series '${name}' holds ${count} rounds attributed to phase '${phase}'; the phase budget is ${budget}.`,
-          expected: `at most ${budget} round${budget === 1 ? '' : 's'} for phase '${phase}'`,
-          actual: `${count} rounds`,
-          fix: `Record the escalation in phase '${phase}' review task's MEMORY.md and ask the user; no further round may be opened in series '${name}'. The budget is the largest non-review task size in phase '${phase}'.`,
+          message: `Review series '${name}' holds ${count} rounds attributed to phase '${phase}' (budget ${budget}) with a broken overflow authorization.`,
+          expected:
+            "one '- Overflow-authorized: autonomous' round past the budget, or a '- Overflow-authorized: user' round for each guided overflow",
+          actual: `${broken.length} overflow round(s) without a valid authorization, ${autonomous} autonomous overflow(s)`,
+          fix: `Give the overflow round a non-empty '- Overflow: <reason>' and '- Overflow-authorized: autonomous|user'; autonomous allows at most one overflow per phase per series (budget + 1 rounds), and guided must have the user authorize every round.`,
         }),
       );
     }
@@ -245,7 +554,7 @@ export const verify = (
         );
         continue;
       }
-      const round = snapshot.rounds.find((candidate) => candidate.phase === phase);
+      const round = latestRoundForPhase(snapshot.rounds, phase);
       if (round === undefined) {
         issues.push(
           issue(
@@ -272,5 +581,46 @@ export const verify = (
     }
   }
 
+  return { valid: noErrors(issues), issues };
+};
+
+/**
+ * Verify deferred closures independently of round presence. A round closed
+ * `minor-deferred` passes only when every deferred finding is Minor/Nit; a
+ * deferred Critical/Major is `review.deferred-severity`. This check runs
+ * whenever a series exists, so a historical spec that legitimately has no
+ * round is unaffected. Pure — no IO.
+ * @param specName - spec directory slug
+ * @param reviewTasks - the spec's `review` tasks
+ * @param series - the review series snapshots supplied by the caller
+ * @returns the result; `valid` is true only with zero issues
+ */
+export const verifyDeferrals = (
+  specName: string,
+  reviewTasks: ReadonlyArray<ReviewTaskEntry>,
+  series: ReadonlyArray<SeriesSnapshot>,
+): Result => {
+  const issues: Array<Issue> = [];
+  const byName = new Map(series.map((snapshot) => [snapshot.name, snapshot]));
+  const checked = new Set<string>();
+  for (const task of reviewTasks) {
+    for (const name of seriesNames(specName, task.profiles)) {
+      const key = `${name}:${task.phase}`;
+      if (checked.has(key)) continue;
+      checked.add(key);
+      const round = latestRoundForPhase(byName.get(name)?.rounds ?? [], task.phase);
+      if (round?.deferral?.severityInvalid !== true) continue;
+      issues.push(
+        finding({
+          code: REVIEW_DEFERRED_SEVERITY_CODE,
+          field: 'review-series',
+          message: `Phase '${task.phase}' round '${round.round}' in series '${name}' defers ${round.deferral.invalidIds.join(', ')} as minor-deferred, but a deferred finding is Critical/Major or has no parsable severity.`,
+          expected: 'every deferred finding to be Minor or Nit',
+          actual: `deferred ${round.deferral.deferred.join(', ')}`,
+          fix: `Fix or escalate the deferred Critical/Major finding, or remove it from '- ${ROUND_DEFERRED_FIELD}:' so the round does not pass.`,
+        }),
+      );
+    }
+  }
   return { valid: noErrors(issues), issues };
 };

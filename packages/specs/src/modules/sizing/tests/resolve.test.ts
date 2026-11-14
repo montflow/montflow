@@ -50,18 +50,21 @@ Vitest.describe('Sizing.resolve runtime', () => {
       target: 'fixture/phase-model#high',
       source: 'phase',
       entry: { model: 'fixture/phase-model', effort: 'high' },
+      verification: 'light',
     });
     Vitest.expect(Sizing.resolve({ repo, spec }, 'tiny')).toStrictEqual({
       size: 'tiny',
       target: 'fixture/spec-model#medium',
       source: 'spec',
       entry: { model: 'fixture/spec-model', effort: 'medium' },
+      verification: 'light',
     });
     Vitest.expect(Sizing.resolve({ repo }, 'tiny')).toStrictEqual({
       size: 'tiny',
       target: 'fixture/repo-model#low',
       source: 'repo',
       entry: { model: 'fixture/repo-model', effort: 'low' },
+      verification: 'light',
     });
   });
 
@@ -71,6 +74,7 @@ Vitest.describe('Sizing.resolve runtime', () => {
       target: 'fixture/spec-model',
       source: 'spec',
       entry: { model: 'fixture/spec-model' },
+      verification: 'light',
     });
   });
 
@@ -78,10 +82,50 @@ Vitest.describe('Sizing.resolve runtime', () => {
     Vitest.expect(Sizing.resolve({ repo, spec, phase: 'A' }, 'large')).toStrictEqual({
       size: 'large',
       target: 'inherit',
+      verification: 'light',
     });
   });
 
   Vitest.it('ignores a phase override when no phase is supplied', () => {
     Vitest.expect(Sizing.resolve({ repo, spec }, 'tiny').source).toBe('spec');
+  });
+
+  Vitest.it('defaults an absent verification to light', () => {
+    Vitest.expect(Sizing.resolve({ repo }, 'tiny').verification).toBe('light');
+    Vitest.expect(Sizing.resolve({ repo, spec, phase: 'A' }, 'large').verification).toBe('light');
+    Vitest.expect(Sizing.DEFAULT_VERIFICATION).toBe('light');
+    Vitest.expect(Sizing.VERIFICATIONS).toStrictEqual(['light', 'full']);
+    Vitest.expect(Sizing.VERIFICATION_HINT).toBe('light, full');
+  });
+
+  Vitest.it('returns the winning whole entry verification across layers', () => {
+    const fullRepo: Sizing.SizingConfig = {
+      sizes: { tiny: { model: 'fixture/repo-model', verification: 'full' } },
+    };
+    const fullSpec: Sizing.SizingConfig = {
+      sizes: { tiny: { model: 'fixture/spec-model', verification: 'full' } },
+      phases: { A: { sizes: { tiny: { model: 'fixture/phase-model' } } } },
+    };
+    // Whole-entry merge: the phase entry has no verification, so the winner
+    // defaults to light instead of inheriting full from a less specific layer.
+    Vitest.expect(
+      Sizing.resolve({ repo: fullRepo, spec: fullSpec, phase: 'A' }, 'tiny'),
+    ).toStrictEqual({
+      size: 'tiny',
+      target: 'fixture/phase-model',
+      source: 'phase',
+      entry: { model: 'fixture/phase-model' },
+      verification: 'light',
+    });
+    Vitest.expect(Sizing.resolve({ repo: fullRepo, spec: fullSpec }, 'tiny').verification).toBe(
+      'full',
+    );
+    Vitest.expect(Sizing.resolve({ repo: fullRepo }, 'tiny').verification).toBe('full');
+    Vitest.expect(Sizing.merge({ repo: fullRepo, spec: fullSpec, phase: 'A' })).toStrictEqual({
+      tiny: { entry: { model: 'fixture/phase-model' }, layer: 'phase' },
+    });
+    Vitest.expect(Sizing.merge({ repo: fullRepo, spec: fullSpec })).toStrictEqual({
+      tiny: { entry: { model: 'fixture/spec-model', verification: 'full' }, layer: 'spec' },
+    });
   });
 });

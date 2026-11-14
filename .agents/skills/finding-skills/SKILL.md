@@ -3,7 +3,7 @@ name: finding-skills
 description: Discovers and surfaces available skills matching user requests. Use when the user asks "what skills do you have", "how do I do X", or wants to find a skill for a specific task.
 id: ed431fe5f6f7a06b
 author: Daniel Montilla
-version: 1.1.0
+version: 1.2.0
 license: MIT
 dependencies:
   - executing-skills
@@ -23,9 +23,24 @@ Use when the user asks "what skills do you have", "how do I do X", or wants to f
 
 User asks about capabilities, how to do something, or what skills exist.
 
-## 2. Search Skills
+## 2. List Skills
 
-Scan `.agents/skills/*/SKILL.md` for matching descriptions using Glob and Grep. Search for keywords matching user intent.
+Try the CLI first — it prints every skill name with its description in one pass:
+
+```
+mf-skills list
+```
+
+Read a full contract with `mf-skills show <skill>`. Where the binary is not on
+`PATH`, use the in-repo form:
+
+```
+bun run --cwd packages/skills cli list --dir "$PWD"
+```
+
+**Fallback**: only when `mf-skills` is unavailable, scan
+`.agents/skills/*/SKILL.md` with Glob and Grep, matching keywords against each
+skill's `name` and `description`. State that the fallback was used.
 
 ## 3. Match Intent to Skill
 

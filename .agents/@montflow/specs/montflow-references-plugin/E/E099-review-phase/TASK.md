@@ -1,0 +1,27 @@
+---
+id: E099
+name: review-phase
+type: review
+originator: user
+size: none
+depends-on:
+related-tasks:
+reviewer-profiles: effect-reviewer, generic-reviewer
+status: complete
+---
+
+# Task E099: Review phase
+
+## Type: review
+
+## Description
+
+Run an independent adversarial review over phase E.
+
+## Requirements
+
+- Findings written to the phase review round in every declared series.
+
+## Completion
+
+- [x] Findings written and reviewed.

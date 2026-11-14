@@ -10,6 +10,10 @@ export interface TaskFixture {
   readonly reviewerProfiles?: string;
   readonly findingRef?: string;
   readonly size?: string;
+  /** Declared `write-scope`; defaults to `none` unless `withoutWriteScope`. */
+  readonly writeScope?: string;
+  /** Omit the `write-scope` line entirely, to exercise the missing-scope rule. */
+  readonly withoutWriteScope?: boolean;
   /** Omit the `size` line entirely, to exercise the missing-size rules. */
   readonly withoutSize?: boolean;
   readonly status?: string;
@@ -35,6 +39,9 @@ export const taskMarkdown = (fixture: TaskFixture): string => {
     front.push(`reviewer-profiles: ${fixture.reviewerProfiles}`);
   }
   if (fixture.findingRef !== undefined) front.push(`finding-ref: ${fixture.findingRef}`);
+  if (fixture.withoutWriteScope !== true) {
+    front.push(`write-scope: ${fixture.writeScope ?? 'none'}`);
+  }
   front.push(`status: ${status}`, '---');
   return [
     ...front,

@@ -143,14 +143,23 @@ for per-file detail. Internal skills (`metadata.internal: true`, e.g.
 
 #### Specs (optional)
 
-Adds a spec tree per planned piece of work: `SPEC.md`, task directories with
-`TASK.md`, `MEMORY.md`, and `GATES.md`, plus the phase review task. Owns the
-store `.agents/@montflow/specs`.
+Adds a spec tree per planned piece of work: `SPEC.md` plus one directory per
+phase (`PHASE.md`, `MEMORY.md`, `BOARD.md`, optional `GATES.md`), with task
+directories (`TASK.md`, `MEMORY.md`, optional `GATES.md`, `MAILBOX.md`) inside
+the phase. Owns the store `.agents/@montflow/specs`.
 
-Install — installs the packaged spec skills into `.agents/skills`:
+Install — installs the packaged spec skills, prompts, and rigor files:
 
 ```bash
 bun run --cwd "$M/packages/specs" cli doctor --dir "$PWD"
+```
+
+Upgrading from the pre-rigor install: the spec store moved from
+`.agents/@montflow/tiers/` to `.agents/@montflow/rigors/`. Doctor never deletes
+a directory it no longer ships, so remove the old store once after upgrading:
+
+```bash
+rm -rf .agents/@montflow/tiers
 ```
 
 Create your first spec:
@@ -203,8 +212,14 @@ while the store does not exist, so create one prompt first.
 Adds reusable agent roles: a description, instructions, and a review checklist.
 Owns the store `.agents/@montflow/profiles`.
 
-Install: `mf-profiles` has no `doctor`. The store is created by the first entry,
-so create one:
+Install — installs the packaged profile payload and creates the store if it is
+missing:
+
+```bash
+bun run --cwd "$M/packages/profiles" cli doctor --dir "$PWD"
+```
+
+Create your first profile:
 
 ```bash
 bun run --cwd "$M/packages/profiles" cli create code-reviewer \
@@ -348,11 +363,12 @@ else
 fi
 
 step profiles
+bun run --cwd "$M/packages/profiles" cli doctor --dir "$PWD"
+installed+=(profiles)
 if [ -d "$PWD/.agents/@montflow/profiles" ]; then
   bun run --cwd "$M/packages/profiles" cli verify --dir "$PWD"
   clean+=(profiles)
 else
-  printf '    no setup command; deferred until the first profile\n'
   deferred+=(profiles)
 fi
 

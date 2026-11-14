@@ -5,6 +5,7 @@ workspace-type: in-place
 author: Daniel Montilla
 created: 2026-10-29
 locked-phases:
+spec-version: 2
 ---
 
 # References TUI panel

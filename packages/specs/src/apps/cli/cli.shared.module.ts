@@ -455,6 +455,7 @@ export const invalidPhaseDiagnostic = (phase: string, rerun: string): SizingDiag
  */
 export const GUARD_RERUN = {
   status: 'mf-specs status --name <spec>',
+  statusReport: 'mf-specs status-report --name <spec>',
   next: 'mf-specs next --name <spec>',
   state: 'mf-specs state --name <spec>',
   check: 'mf-specs check --name <spec>',
@@ -697,12 +698,69 @@ export const csv = (value: string | undefined): ReadonlyArray<string> =>
         .map((part) => part.trim())
         .filter((part) => part !== '');
 
+/** Result of splitting a `--tasks` value: the entries, or one ambiguity refusal. */
+export type ScaffoldTaskSplit =
+  | { readonly ok: true; readonly specs: ReadonlyArray<string> }
+  | { readonly ok: false; readonly problem: string };
+
+/**
+ * Split a `--tasks` value into task specs. `;` always starts a new task. A
+ * comma starts a new task when the current entry has no `scope=` field, so
+ * `first:execution,second:execution` is two tasks. Everything after a `scope=`
+ * field up to the next `;` is that task's scope list, so any number of
+ * comma-separated paths stays in one task (`first:execution:scope=app,lib,docs`,
+ * the same reading `init` and the scope verifier use). The one refused shape is
+ * a comma fragment that carries a `:` — a task-shaped entry after a scope list,
+ * which could be read either way — and the diagnostic names both readings and
+ * the `;` form. `init`'s repeated `--task` flag is unaffected.
+ * @param value - raw `--tasks` value
+ * @returns one raw task spec per entry, or the ambiguity diagnostic
+ */
+export const scaffoldTaskSpecs = (value: string | undefined): ScaffoldTaskSplit => {
+  if (value === undefined || value.trim() === '') return { ok: true, specs: [] };
+  const specs: Array<string> = [];
+  const segments = value
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part !== '');
+  for (const segment of segments) {
+    const fragments = segment
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part !== '');
+    let current = '';
+    let inScope = false;
+    for (const fragment of fragments) {
+      if (current === '') {
+        current = fragment;
+        inScope = fragment.includes('scope=');
+        continue;
+      }
+      if (!inScope) {
+        specs.push(current);
+        current = fragment;
+        inScope = fragment.includes('scope=');
+        continue;
+      }
+      if (fragment.includes(':')) {
+        return {
+          ok: false,
+          problem: `'${current},${fragment}' is ambiguous: '${fragment}' is task-shaped but follows a scope= field, so it could start a new task or the scope list could end before it. Separate tasks with ';' — '${current};${fragment}' — so the boundary is explicit.`,
+        };
+      }
+      current = `${current},${fragment}`;
+    }
+    if (current !== '') specs.push(current);
+  }
+  return { ok: true, specs };
+};
+
 /** Render a caught `Cause` as a failed slash report. */
 export const doctorMark = (payload: PayloadInstall): string =>
   Match.value(payload.status).pipe(
     Match.whenOr('ok', 'present', () => '\u2713'),
     Match.whenOr('installed', 'repaired', () => '+'),
-    Match.whenOr('missing', 'stale', 'blocked', () => '\u2717'),
+    Match.whenOr('missing', 'stale', 'mismatched', 'blocked', () => '\u2717'),
     Match.exhaustive,
   );
 
@@ -720,6 +778,7 @@ export const doctorNote = (payload: PayloadInstall): string =>
     Match.when('repaired', () => `repaired (${payload.detail ?? 'rewritten from the package'})`),
     Match.when('missing', () => payload.detail ?? 'not installed'),
     Match.when('stale', () => payload.detail ?? 'differs from the package'),
+    Match.when('mismatched', () => payload.detail ?? 'installed file set differs from the package'),
     Match.when('blocked', () => {
       const code = payload.failure?.code ?? 'doctor.blocked';
       return `blocked [${code}]: ${payload.failure?.problem ?? payload.detail ?? 'cannot repair'}`;
@@ -775,15 +834,34 @@ export const renderDoctor = (result: DoctorResult): string => {
     Match.when('drifted', () => '\u2717 spec skills and prompts are not current.'),
     Match.exhaustive,
   );
-  const payloads = [...result.skills, ...result.prompts];
+  const payloads = result.payloads;
   const lines = payloads.map((payload) => doctorLine(payload));
-  const failures = payloads.flatMap((payload) => {
-    const found = diagnosticOfDoctorFailure(payload);
-    return found === undefined ? [] : [found];
-  });
+  const manifestFailure = result.manifestFailure;
+  const failures = [
+    ...(manifestFailure === undefined
+      ? []
+      : [
+          diagnostic({
+            code: manifestFailure.code,
+            path: manifestFailure.path,
+            field: manifestFailure.operation,
+            problem: manifestFailure.problem,
+            rerun: 'mf-specs doctor',
+            fix: manifestFailure.fix,
+            cause: manifestFailure.cause,
+          }),
+        ]),
+    ...payloads.flatMap((payload) => {
+      const found = diagnosticOfDoctorFailure(payload);
+      return found === undefined ? [] : [found];
+    }),
+  ];
   const repairable = payloads.some((payload) => repairableStatus(payload.status));
   return [
     head,
+    ...(manifestFailure === undefined
+      ? []
+      : [`\u2717 payload manifest: blocked [${manifestFailure.code}]: ${manifestFailure.problem}`]),
     ...lines,
     ...(failures.length === 0 ? [] : ['', renderDiagnostics(failures)]),
     ...(repairable ? ['Run: mf-specs doctor'] : []),

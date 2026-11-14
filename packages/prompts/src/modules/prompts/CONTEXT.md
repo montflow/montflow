@@ -7,18 +7,23 @@ and annotation are each a single export.
 ## Belongs here
 
 - `Prompt` Class (name, description, template, variables, skills, model) and
-  `Variable` Class (name, label, description, type, required, default)
+  `Variable` Class (name, label, description, type, options, source, internal,
+  required, default, when)
 - `VariableEntry` — the on-disk codec: accepts a bare name or an object,
   resolves defaults, encodes back to the minimal object
 - Trusted constructor with defaults (`make`, `requiredVariable`) and boundary
   codecs (`decodeUnknown`, `encode`, `FromJson`)
 - Slug helpers (`isValidName`, `slugify`, `SLUG_PATTERN`)
-- Value resolution (`resolveValues`, `missingRequired`) and rendering
-  (`renderToString`, `renderPrompt`)
-- Mechanical verification (`verifyPromptFile`, `verifyReport`, `verifyInfoLine`,
-  `VerifyIssue`, `VerifyResult`, `VerifyOptions`) — issues carry a severity, and
-  a caller-supplied `SkillResolution` resolves `skills:` names — and the
-  author-facing rules (`authoringRules`, `templateVariables`, `analyze`)
+- One visibility predicate and its consumers: `isVisible`, `visibleVariables`,
+  `effectiveValue`, `resolveValues`, `missingRequired`. `VariableCondition` is
+  the `when` shape: exactly one of `equals` (select) or `truthy` (confirm) on an
+  earlier discrete controller. A malformed condition fails closed.
+- Rendering (`renderToString`, `renderPrompt`) over the resolved values
+- Mechanical verification (`verifyPrompt`, `verifyPromptFile`, `verifyReport`,
+  `verifyInfoLine`, `VerifyIssue`, `VerifyResult`, `VerifyOptions`) — issues
+  carry a severity, and a caller-supplied `SkillResolution` resolves `skills:`
+  names — and the author-facing rules (`authoringRules`, `templateVariables`,
+  `analyze`)
 
 ## Does not belong here
 
@@ -48,3 +53,11 @@ and annotation are each a single export.
 - **A conditional tests the _effective_ value** — supplied, else `default`,
   else empty. See `authoringRules()` for the consequence, which is the whole
   "user gave me a value, or use my fallback" pattern.
+- **Visibility is derived, never re-implemented.** `isVisible` is the one rule:
+  a variable with no `when` is visible; otherwise its controller must be
+  visible and its effective value must match. `visibleVariables`,
+  `resolveValues`, `missingRequired`, the run dialog, and `inspect` all call it.
+  A hidden variable resolves to `''`, and a malformed condition fails closed.
+- **`when` points strictly backwards.** The verifier rejects an unknown, later,
+  or non-discrete controller, so the visibility walk only follows strictly
+  earlier indices and terminates without cycle tracking.

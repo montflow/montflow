@@ -20,6 +20,12 @@
   "bin": {
     "mf-profiles": "./src/apps/cli/main.ts"
   },
+  "files": [
+    "payload.json",
+    "profiles",
+    "src",
+    "dist"
+  ],
   "type": "module",
   "exports": {
     "./package.json": "./package.json",
@@ -29,7 +35,8 @@
   },
   "scripts": {
     "cli": "bun run src/apps/cli/main.ts",
-    "build:cli": "bun build src/apps/cli/main.ts --compile --outfile dist/mf-profiles",
+    "build:cli": "bun run scripts/generate-embedded-payload.ts && bun build src/apps/cli/main.ts --compile --outfile dist/mf-profiles",
+    "generate:payload": "bun run scripts/generate-embedded-payload.ts",
     "format:check": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "lint:check": "oxlint --deny-warnings .",
@@ -40,6 +47,7 @@
   "dependencies": {
     "@effect/platform-node": "4.0.1",
     "@montflow/opencode": "workspace:*",
+    "@montflow/payload": "workspace:*",
     "@montflow/skills": "workspace:*",
     "@montflow/version": "workspace:*"
   },

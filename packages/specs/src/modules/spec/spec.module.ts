@@ -1,7 +1,7 @@
 import { Schema } from 'effect';
-import { fieldList, fieldString, parseMarkdown } from '../frontmatter/index.js';
+import { fieldString, parseMarkdown } from '../frontmatter/index.js';
 import type { FieldValue } from '../frontmatter/index.js';
-import { type Issue, type Result, hasSection, issue, noErrors } from '../verify/index.js';
+import { type Issue, type Result, finding, hasSection, issue, noErrors } from '../verify/index.js';
 
 // ─── Patterns ─────────────────────────────────────────────────────────
 
@@ -34,6 +34,127 @@ export const WorkspaceType = Schema.Literals(WORKSPACE_TYPES);
 /** How the spec work is isolated from the main workspace. */
 export type WorkspaceType = typeof WorkspaceType.Type;
 
+// ─── Standard version ─────────────────────────────────────────────────
+
+/** SPEC.md frontmatter field naming the artifact-contract version. */
+export const SPEC_VERSION_FIELD = 'spec-version';
+
+/** Current spec-standard version: the contract this package verifies. */
+export const SPEC_STANDARD_VERSION = 2;
+
+/** Previous spec-standard version, still accepted with a warning. */
+export const SPEC_STANDARD_PREVIOUS = 1;
+
+/** Every accepted standard version, current and previous. */
+export const SPEC_STANDARD_VERSIONS = [SPEC_STANDARD_PREVIOUS, SPEC_STANDARD_VERSION] as const;
+
+/** Stable codes for the `spec-version` rules. */
+export const SPEC_VERSION_CODES = {
+  /** The declared value is not a positive decimal integer. */
+  invalid: 'spec.version-invalid',
+  /** A real older standard: accepted, warned. */
+  outdated: 'spec.version-outdated',
+  /** Above the supported standard: an error, never downgraded. */
+  future: 'spec.version-future',
+  /** Declares v2+ while the tree is still the v1 shape. */
+  untransformed: 'spec.version-untransformed',
+} as const;
+
+/** One read of SPEC.md's `spec-version`, with its findings. */
+export interface SpecVersion {
+  /** Effective version: the fallback (1) when the field is invalid. */
+  readonly version: number;
+  /** The value as written, when the field was present and decimal. */
+  readonly declared: number | undefined;
+  /** Findings the read produced; absent field is a warning, not an error. */
+  readonly issues: ReadonlyArray<Issue>;
+}
+
+const VERSION_OUTDATED_FIX =
+  'Run mf-specs migrate --name <spec>, or leave it as a frozen v1 record.';
+
+/**
+ * Read and verify SPEC.md's `spec-version` field.
+ *
+ * Absent reads as the previous standard and warns; the previous standard warns;
+ * the current standard passes; a value above current errors; a non-decimal,
+ * zero, or negative value is invalid and falls back to the previous standard.
+ * @param fields - parsed SPEC.md frontmatter
+ * @returns the effective version, the declared value, and any findings
+ */
+export const readSpecVersion = (fields: Record<string, FieldValue>): SpecVersion => {
+  const raw = fieldString(fields, SPEC_VERSION_FIELD);
+  if (raw === undefined || raw.trim() === '') {
+    return {
+      version: SPEC_STANDARD_PREVIOUS,
+      declared: undefined,
+      issues: [
+        finding({
+          code: SPEC_VERSION_CODES.outdated,
+          severity: 'warning',
+          field: SPEC_VERSION_FIELD,
+          message: `Spec declares no standard version; it reads as version ${SPEC_STANDARD_PREVIOUS} and the current standard is ${SPEC_STANDARD_VERSION}.`,
+          expected: `${SPEC_VERSION_FIELD}: ${SPEC_STANDARD_VERSION}`,
+          actual: 'missing',
+          fix: VERSION_OUTDATED_FIX,
+        }),
+      ],
+    };
+  }
+  const trimmed = raw.trim();
+  const parsed = /^\d+$/.test(trimmed) ? Number(trimmed) : undefined;
+  if (parsed === undefined || parsed < 1) {
+    return {
+      version: SPEC_STANDARD_PREVIOUS,
+      declared: parsed,
+      issues: [
+        finding({
+          code: SPEC_VERSION_CODES.invalid,
+          field: SPEC_VERSION_FIELD,
+          message: `Spec standard version '${trimmed}' is not a positive decimal integer.`,
+          expected: `${SPEC_VERSION_FIELD}: ${SPEC_STANDARD_VERSION}`,
+          actual: trimmed,
+          fix: `Set \`${SPEC_VERSION_FIELD}: ${SPEC_STANDARD_VERSION}\`, or run mf-specs migrate --name <spec>.`,
+        }),
+      ],
+    };
+  }
+  if (parsed > SPEC_STANDARD_VERSION) {
+    return {
+      version: parsed,
+      declared: parsed,
+      issues: [
+        finding({
+          code: SPEC_VERSION_CODES.future,
+          field: SPEC_VERSION_FIELD,
+          message: `Spec declares standard version ${parsed}, above the supported ${SPEC_STANDARD_VERSION}.`,
+          expected: `${SPEC_VERSION_FIELD}: ${SPEC_STANDARD_VERSION}`,
+          actual: String(parsed),
+          fix: `Set ${SPEC_VERSION_FIELD} to ${SPEC_STANDARD_VERSION}, or upgrade mf-specs.`,
+        }),
+      ],
+    };
+  }
+  if (parsed === SPEC_STANDARD_PREVIOUS) {
+    return {
+      version: parsed,
+      declared: parsed,
+      issues: [
+        finding({
+          code: SPEC_VERSION_CODES.outdated,
+          severity: 'warning',
+          field: SPEC_VERSION_FIELD,
+          message: `Spec declares standard version ${parsed}; the current standard is ${SPEC_STANDARD_VERSION}.`,
+          expected: `${SPEC_VERSION_FIELD}: ${SPEC_STANDARD_VERSION}`,
+          actual: String(parsed),
+          fix: VERSION_OUTDATED_FIX,
+        }),
+      ],
+    };
+  }
+  return { version: parsed, declared: parsed, issues: [] };
+};
+
 // ─── Branded ids ──────────────────────────────────────────────────────
 
 /**
@@ -65,8 +186,6 @@ export class Spec extends Schema.Class<Spec>('Spec')({
   author: Schema.NonEmptyString,
   /** ISO creation date (`YYYY-MM-DD`). */
   created: Schema.String.check(Schema.isPattern(ISO_DATE_PATTERN)),
-  /** Phase letters committed and locked; empty until the first phase commit. */
-  lockedPhases: Schema.Array(PhaseId),
 }) {}
 
 /** Normalized spec frontmatter input, before schema validation. */
@@ -76,7 +195,6 @@ const specInput = (fields: Record<string, FieldValue>) => ({
   workspaceType: fieldString(fields, 'workspace-type') ?? '',
   author: fieldString(fields, 'author') ?? '',
   created: fieldString(fields, 'created') ?? '',
-  lockedPhases: fieldList(fields, 'locked-phases'),
 });
 
 /**
@@ -156,7 +274,7 @@ const TASK_STATUS_VALUES = new Set(['pending', 'in-progress', 'complete', 'block
 /**
  * Mechanically verify a SPEC.md file against the spec contract
  * standard: required frontmatter (`name`, `status`, `workspace-type`,
- * `author`, `created`, `locked-phases`; `name` matching the directory)
+ * `author`, `created`; `name` matching the directory)
  * plus the body shape and a well-formed task table. Pure — no IO; the
  * caller supplies the raw file contents.
  * @param dirName - spec directory slug
@@ -209,10 +327,7 @@ export const verifySpecFile = (dirName: string, markdown: string): Result => {
     issues.push(issue('created', 'Must be an ISO date (YYYY-MM-DD).'));
   }
 
-  for (const phase of fieldList(fields, 'locked-phases')) {
-    if (!PHASE_PATTERN.test(phase))
-      issues.push(issue('locked-phases', `'${phase}' is not a phase id.`));
-  }
+  issues.push(...readSpecVersion(fields).issues);
 
   for (const heading of SPEC_SECTIONS) {
     if (!hasSection(body, heading))

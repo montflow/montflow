@@ -421,6 +421,28 @@ export const modifyPrompt = (
     return yield* modifyManual(ui, prompt);
   });
 
+/** Names whose value is non-empty, so a blank supplied value is still asked. */
+const nonEmptyNames = (values: Readonly<Record<string, string>>): ReadonlySet<string> =>
+  new Set(
+    Object.entries(values)
+      .filter(([, value]) => value !== '')
+      .map(([name]) => name),
+  );
+
+/**
+ * Refuse a prompt verification rejects, before any value is collected.
+ *
+ * Render and execute must accept exactly the same files. Without this gate a
+ * malformed `when` renders a stale hidden branch here while `execute` refuses
+ * the identical prompt.
+ * @param prompt - prompt about to be rendered
+ * @returns the fix-oriented verification report when the prompt is invalid
+ */
+const verificationFailure = (prompt: Prompts.Prompt): string | undefined => {
+  const result = Prompts.verifyPrompt(prompt);
+  return result.valid ? undefined : Prompts.verifyReport(prompt.name, result);
+};
+
 /**
  * Render a prompt, prompting for each missing value via dialogs. Variables
  * that already have a value (supplied or defaulted) are not asked for, and an
@@ -436,7 +458,15 @@ export const renderValues = (
   provided: Readonly<Record<string, string>>,
 ): Effect.Effect<string, string> =>
   Effect.gen(function* () {
-    const collected = yield* fillInputs(ui, prompt, provided);
+    const invalid = verificationFailure(prompt);
+    if (invalid !== undefined) return yield* Effect.fail(invalid);
+    const accepted = PromptExecute.resolveInputs(prompt, provided);
+    if (accepted.problems.length > 0) {
+      return yield* Effect.fail(accepted.problems.map((problem) => problem.message).join('\n'));
+    }
+    const collected = yield* fillInputs(ui, prompt, accepted.values, {
+      provided: nonEmptyNames(accepted.values),
+    });
     return yield* Prompts.renderPrompt(prompt, collected);
   });
 
@@ -448,49 +478,141 @@ const findOrFail = (
   return prompt === undefined ? Effect.fail(`Unknown prompt '${name}'.`) : Effect.succeed(prompt);
 };
 
+/** Knobs for {@link fillInputs}. */
+export interface FillOptions {
+  /** Names a caller already supplied (CLI `key=value`); never asked, even as controllers. */
+  readonly provided?: ReadonlySet<string> | undefined;
+}
+
+/** Delete every collected answer that the current answers hide. */
+const dropHidden = (
+  declared: ReadonlyArray<Prompts.Variable>,
+  collected: Record<string, string>,
+): void => {
+  for (const variable of declared) {
+    if (!Prompts.isVisible(variable.name, declared, collected)) delete collected[variable.name];
+  }
+  for (const name of Object.keys(collected)) {
+    if (!declared.some((variable) => variable.name === name)) delete collected[name];
+  }
+};
+
 /**
- * Collect values for every declared variable through numbered dialogs.
+ * Collect values for every visible declared variable through dialogs.
  *
- * Three rules, straight from the variable schema:
+ * Visibility is never re-derived: every question is gated by the shared
+ * {@link Prompts.isVisible}. Three rules follow from the variable schema:
  *
  * - a variable with a `default` is never asked for when the value is blank —
  *   the default is the answer
  * - a `required` variable with no default must get a non-blank answer
- * - an optional variable with no default may be left blank, and renders as
- *   empty (which is what makes an `{{#if}}` guard take its `{{else}}` branch)
+ * - a `select` is offered as a list of its options, never as free text
+ * - a `confirm` is asked as a yes/no dialog, never as free text
  *
- * Blank re-keeps the previous value, so a second pass can change one field
- * without retyping the rest.
+ * Declaration order is the question order. After each answer every answer the
+ * new value hides is deleted, so a controller that flips back cannot resurrect
+ * a stale branch. A controller is always re-asked on a re-fill, which is what
+ * makes yes → no → yes ask the branch again.
  * @param ui - host dialogs
  * @param prompt - prompt descriptor
  * @param initial - previously collected values (re-fill), if any
+ * @param options - values already supplied by a caller
  * @returns Effect resolving to a complete value map
  */
 export const fillInputs = (
   ui: InteractiveUi,
   prompt: Prompts.Prompt,
   initial: Readonly<Record<string, string>>,
+  options: FillOptions = {},
 ): Effect.Effect<Record<string, string>, string> =>
   Effect.gen(function* () {
     const declared = prompt.variables;
+    const provided = options.provided ?? new Set<string>();
+    const controllers = new Set(
+      declared.flatMap((variable) =>
+        variable.when === undefined ? [] : [variable.when.controller],
+      ),
+    );
     const collected = { ...initial };
-    let index = 0;
-    for (const variable of declared) {
+    dropHidden(declared, collected);
+
+    /**
+     * True when this fill still has to ask `variable`, given what it holds now.
+     * An answered variable is skipped; only a controller with an answer worth
+     * changing is re-asked, so a first pass can let a default stand.
+     */
+    const owesQuestion = (variable: Prompts.Variable): boolean => {
       const previous = collected[variable.name] ?? '';
-      if (previous !== '' || variable.default !== '') continue;
-      index++;
-      const hint = variable.required === true ? 'required' : 'optional — leave blank to skip';
-      const entered = yield* Effect.promise(() =>
-        ui.input(
-          `${variable.label} (${index} of ${declared.length})`,
-          previous === '' ? hint : previous,
-        ),
+      return previous !== '' ? controllers.has(variable.name) : variable.default === '';
+    };
+
+    /** Names already asked in this pass, so a re-asked controller counts once. */
+    const asked = new Set<string>();
+
+    /** The questions this fill will still ask, in declaration order. */
+    const pendingQuestions = (): ReadonlyArray<Prompts.Variable> =>
+      declared.filter(
+        (candidate) =>
+          !provided.has(candidate.name) &&
+          !asked.has(candidate.name) &&
+          Prompts.isVisible(candidate.name, declared, collected) &&
+          owesQuestion(candidate),
       );
-      if (entered === undefined) return yield* Effect.fail(CANCELLED);
-      if (entered === '' && variable.required === true) {
-        return yield* Effect.fail(`Value for '${variable.name}' must not be empty.`);
+
+    /** The visible set, used to notice that a branch appeared or disappeared. */
+    const visibleNames = (): string =>
+      Prompts.visibleVariables(declared, collected)
+        .map((entry) => entry.name)
+        .join('\u0000');
+
+    // The counter reports progress through the questions of the current
+    // branch: questions already asked still count, but an answer that changes
+    // the visible set starts a new run, so a controller's answer never
+    // inflates the branch it just revealed. A hidden or answered variable is
+    // never counted, so a re-fill cannot promise questions it will not ask.
+    let askedInRun = 0;
+
+    for (const variable of declared) {
+      if (!Prompts.isVisible(variable.name, declared, collected)) {
+        delete collected[variable.name];
+        continue;
       }
-      collected[variable.name] = entered === '' ? previous : entered;
+      if (provided.has(variable.name) || !owesQuestion(variable)) continue;
+      const previous = collected[variable.name] ?? '';
+
+      const asking = pendingQuestions();
+      const rank = asking.findIndex((entry) => entry.name === variable.name);
+      const position = askedInRun + rank + 1;
+      const title = `${variable.label} (${position} of ${askedInRun + asking.length})`;
+      const visibleBefore = visibleNames();
+      if (variable.type === 'select') {
+        const offered = [...(variable.options ?? [])];
+        const picked = yield* Effect.promise(() => ui.select(title, offered));
+        if (picked === undefined) return yield* Effect.fail(CANCELLED);
+        if (!offered.includes(picked)) {
+          return yield* Effect.fail(PromptExecute.invalidOptionMessage(variable, picked));
+        }
+        collected[variable.name] = picked;
+      } else if (variable.type === 'confirm') {
+        // A confirm is a boolean dialog, never a free-text line. Checked is
+        // the canonical "yes"; unchecked is the canonical "" (the no answer).
+        const confirmed = yield* Effect.promise(() => ui.confirm(title, variable.description));
+        collected[variable.name] = confirmed ? 'yes' : '';
+      } else {
+        const hint = variable.required === true ? 'required' : 'optional — leave blank to skip';
+        const entered = yield* Effect.promise(() =>
+          ui.input(title, previous === '' ? hint : previous),
+        );
+        if (entered === undefined) return yield* Effect.fail(CANCELLED);
+        if (entered === '' && variable.required === true) {
+          return yield* Effect.fail(`Value for '${variable.name}' must not be empty.`);
+        }
+        collected[variable.name] = entered === '' ? previous : entered;
+      }
+      asked.add(variable.name);
+      askedInRun += 1;
+      dropHidden(declared, collected);
+      if (visibleNames() !== visibleBefore) askedInRun = 0;
     }
     return collected;
   });
@@ -530,7 +652,13 @@ export const executeFlow = (
     const gate = yield* Doctor.runDoctor(cwd, { check: true });
     if (!gate.healthy) return yield* Effect.fail(Doctor.doctorGateMessage(gate));
 
-    const values = yield* fillInputs(ui, prompt, initial);
+    const accepted = PromptExecute.resolveInputs(prompt, initial);
+    if (accepted.problems.length > 0) {
+      return yield* Effect.fail(accepted.problems.map((problem) => problem.message).join('\n'));
+    }
+    const values = yield* fillInputs(ui, prompt, accepted.values, {
+      provided: nonEmptyNames(accepted.values),
+    });
     const model =
       prompt.model !== ''
         ? prompt.model
@@ -564,6 +692,8 @@ const renderLoop = (
   initial: Readonly<Record<string, string>>,
 ): Effect.Effect<void, string> =>
   Effect.gen(function* () {
+    const invalid = verificationFailure(prompt);
+    if (invalid !== undefined) return yield* Effect.fail(invalid);
     const values = yield* fillInputs(ui, prompt, initial);
     const rendered = yield* Prompts.renderPrompt(prompt, values);
     yield* Effect.sync(() => ui.notify(rendered, 'info'));

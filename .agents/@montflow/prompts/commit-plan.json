@@ -1,0 +1,15 @@
+{
+  "name": "commit-plan",
+  "description": "Create an approval-ready commit plan with the planning-git-commits skill, without staging or committing.",
+  "template": "Create a commit plan. Load the `planning-git-commits` skill and follow it through step 3 (Present Plan). Plan only: never stage, commit, or push.\n\n{{#if scope}}Plan these files: {{scope}}\n{{else}}Plan the files from the working tree: run `git status --porcelain`.\n{{/if}}\n\n1. Run the skill's step 0 checks before planning.\n2. Group the files into logical conventional commits using the skill's scope rules. Keep subjects imperative and at most 72 characters; mark breaking changes with `!`.\n3. Present the plan in the skill's format: one `### Commit N: <type>(<scope>): <message>` heading followed by its `**Files:**` list.\n4. Ask for approval. Revise on request; do not run `git add`, `git commit`, or `git push`.\n\nStop after approval and hand the plan to the `commit` prompt. Reply with the plan only.",
+  "variables": [
+    {
+      "name": "scope",
+      "label": "Scope",
+      "description": "Files to plan. Leave blank to derive them from the working tree.",
+      "required": false
+    }
+  ],
+  "skills": ["planning-git-commits"],
+  "model": ""
+}

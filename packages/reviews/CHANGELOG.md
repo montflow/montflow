@@ -17,4 +17,11 @@ Releases: this package is versioned and tagged by changesets but never published
 
 ### Added
 
+- `mf-reviews doctor` reads `payload.json` and checks or repairs the review skills; `doctor --check` is report-only and `mf-reviews:check` ends with it
+- The review skills document `mf-specs review decide`, the `minor-deferred` closure (`- Disposition`/`- Deferred`), and authorized overflow (`- Overflow`/`- Overflow-authorized`)
 - Initial tracked release of the `mf-reviews` CLI.
+
+### Changed
+
+- **Breaking:** the doctor is manifest-driven and uses the shared `@montflow/payload` engine; a locally edited packaged skill is `stale` and repair overwrites it, while an unlisted skill is user data
+- Doctor statuses are one vocabulary across packages: `ok`/`missing`/`stale`/`mismatched`/`blocked` in check mode and `present`/`installed`/`repaired`/`blocked` in repair mode

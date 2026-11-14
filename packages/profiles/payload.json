@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "package": "@montflow/profiles",
+  "payloads": [
+    {
+      "kind": "profile",
+      "name": "spec-appraiser",
+      "source": "profiles/spec-appraiser",
+      "target": ".agents/@montflow/profiles/spec-appraiser"
+    },
+    {
+      "kind": "profile",
+      "name": "spec-bookkeeper",
+      "source": "profiles/spec-bookkeeper",
+      "target": ".agents/@montflow/profiles/spec-bookkeeper"
+    },
+    {
+      "kind": "profile",
+      "name": "spec-creation-orchestrator",
+      "source": "profiles/spec-creation-orchestrator",
+      "target": ".agents/@montflow/profiles/spec-creation-orchestrator"
+    },
+    {
+      "kind": "profile",
+      "name": "spec-execution-orchestrator",
+      "source": "profiles/spec-execution-orchestrator",
+      "target": ".agents/@montflow/profiles/spec-execution-orchestrator"
+    },
+    {
+      "kind": "profile",
+      "name": "spec-worker",
+      "source": "profiles/spec-worker",
+      "target": ".agents/@montflow/profiles/spec-worker"
+    },
+    {
+      "kind": "profile",
+      "name": "spec-sizing-orchestrator",
+      "source": "profiles/spec-sizing-orchestrator",
+      "target": ".agents/@montflow/profiles/spec-sizing-orchestrator"
+    }
+  ]
+}

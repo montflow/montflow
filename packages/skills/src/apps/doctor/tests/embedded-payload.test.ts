@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Effect, FileSystem, Layer, Path } from 'effect';
 import * as Vitest from '@effect/vitest';
-import { EMBEDDED_SKILL_PAYLOAD } from '../embedded-payload.generated.js';
+import { EMBEDDED_PAYLOAD } from '../embedded-payload.generated.js';
+
+/** Skills embedded in this package. */
+const EMBEDDED_SKILL_PAYLOAD = EMBEDDED_PAYLOAD.skill ?? {};
 import * as Doctor from '../index.js';
 
 /**

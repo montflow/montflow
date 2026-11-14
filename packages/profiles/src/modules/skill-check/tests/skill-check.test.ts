@@ -73,6 +73,18 @@ Vitest.describe('SkillCheck.resolveSkills', () => {
     }).pipe(Effect.provide(NodeLive), Effect.scoped),
   );
 
+  Vitest.it.effect('does not count a directory without SKILL.md', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+      const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-skill-check-' });
+      yield* fs.makeDirectory(`${dir}/.agents/skills/empty`, { recursive: true });
+      yield* seedSkill(fs, dir, 'effect', '# upstream shape\n');
+
+      const resolution = yield* SkillCheck.resolveSkills(dir);
+      Vitest.expect([...(resolution?.names ?? [])]).toStrictEqual(['effect']);
+    }).pipe(Effect.provide(NodeLive), Effect.scoped),
+  );
+
   Vitest.it.effect('returns undefined when no skills store exists', () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem;

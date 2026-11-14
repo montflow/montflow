@@ -10,10 +10,14 @@ import { memoryMarkdown, taskMarkdown } from '../../../modules/task/tests/helper
 import { SpecStore } from '../../../services/index.js';
 import {
   DEFAULT_ROOT,
+  author as authorEngine,
   diagnoseCause,
+  execute as executeEngine,
   listModels,
   models,
+  readRigor,
   sizingConfig,
+  statusReport as statusReportEngine,
   verifyModels,
 } from '../../cli/index.js';
 import * as Catalogue from '../../../modules/catalogue/index.js';
@@ -22,10 +26,14 @@ import {
   SpecExecuteInput,
   SpecModelsInput,
   SpecSizingInput,
+  SpecRigorInput,
+  SpecStatusInput,
   specAuthorTool,
   specExecuteTool,
   specModelsTool,
   specSizingTool,
+  specRigorTool,
+  specStatusTool,
   type SpecToolOptions,
 } from '../index.js';
 
@@ -65,15 +73,15 @@ const seed = (work: Work, name: string, files: ReadonlyArray<readonly [string, s
 const phaseA = (spec: string): ReadonlyArray<readonly [string, string]> => [
   ['SPEC.md', specMarkdown({ name: spec })],
   [
-    'A001-implement-login/TASK.md',
+    'A/A001-implement-login/TASK.md',
     taskMarkdown({ id: 'A001', name: 'implement-login', size: 'tiny' }),
   ],
-  ['A001-implement-login/MEMORY.md', memoryMarkdown()],
+  ['A/A001-implement-login/MEMORY.md', memoryMarkdown()],
   [
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: 'pending' }),
   ],
-  ['A099-review-phase/MEMORY.md', memoryMarkdown()],
+  ['A/A099-review-phase/MEMORY.md', memoryMarkdown()],
 ];
 
 const branch = (work: Work, name: string) =>
@@ -148,9 +156,13 @@ Vitest.describe('spec_author tool', () => {
       const decoded = yield* Schema.decodeUnknownEffect(SpecAuthorInput)({
         request: 'Ship login',
         notes: 'Be careful',
+        rigor: 'standard',
+        isolated: 'no',
         model: 'fixture/model',
       });
       Vitest.expect(decoded.request).toBe('Ship login');
+      Vitest.expect(decoded.rigor).toBe('standard');
+      Vitest.expect(decoded.isolated).toBe('no');
 
       const failure = yield* Schema.decodeUnknownEffect(SpecAuthorInput)({}).pipe(Effect.flip);
       Vitest.expect(String(failure)).toContain('request');
@@ -169,7 +181,11 @@ Vitest.describe('spec_author tool', () => {
           defaultModel: () => Effect.succeed('fixture/default'),
         }),
       );
-      const reply = yield* runTool(tool, { request: 'Ship login' });
+      const reply = yield* runTool(tool, {
+        request: 'Ship login',
+        rigor: 'standard',
+        isolated: 'no',
+      });
 
       Vitest.expect(reply).toBe('dispatched reply');
       Vitest.expect(fake.runs).toHaveLength(1);
@@ -178,8 +194,88 @@ Vitest.describe('spec_author tool', () => {
       Vitest.expect(run?.model).toBe('fixture/default');
       Vitest.expect(run?.cwd).toBe(work.dir);
       Vitest.expect(run?.text).toContain('Ship login');
-      Vitest.expect(run?.text).toContain('## 4. Size every task');
+      Vitest.expect(run?.text).toContain('Chosen rigor: `standard`');
+      Vitest.expect(run?.text).toContain('## 2. Appraise against the chosen rigor');
       Vitest.expect(run?.skills).toStrictEqual(['montflow-create-specs']);
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('carries every authoring answer and matches the binary engine', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* runDoctor(work.dir);
+      const fake = recorder();
+      const tool = specAuthorTool(options(work, { execute: fake.execute }));
+      const input = {
+        request: 'Ship login',
+        notes: 'Do not touch packages/core.',
+        rigor: 'deep',
+        isolated: 'yes',
+        origin: 'other',
+        originBranch: 'release/2',
+        worktreeName: 'ship-login',
+        model: 'fixture/model',
+      } as const;
+
+      yield* runTool(tool, input);
+      const run = fake.runs[0];
+      Vitest.expect(run?.text).toContain('Do not touch packages/core.');
+      Vitest.expect(run?.text).toContain('Chosen rigor: `deep`');
+      Vitest.expect(run?.text).toContain('from origin `other`');
+      Vitest.expect(run?.text).toContain('at branch `release/2`');
+      Vitest.expect(run?.text).toContain('worktree named `ship-login`');
+
+      const engine = yield* authorEngine(work.dir, {
+        request: input.request,
+        notes: input.notes,
+        rigor: input.rigor,
+        isolated: input.isolated,
+        origin: input.origin,
+        originBranch: input.originBranch,
+        worktreeName: input.worktreeName,
+      }).pipe(Effect.provide(Layer.provide(PromptStore.Default, Platform)));
+      Vitest.expect(run?.text).toBe(engine.text);
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('never renders a hidden isolation answer', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* runDoctor(work.dir);
+      const fake = recorder();
+      const tool = specAuthorTool(options(work, { execute: fake.execute }));
+
+      yield* runTool(tool, {
+        request: 'Ship login',
+        rigor: 'standard',
+        isolated: 'no',
+        origin: 'main',
+        originBranch: 'release/2',
+        worktreeName: 'ship-login',
+        model: 'fixture/model',
+      });
+      const text = fake.runs[0]?.text ?? '';
+      for (const hidden of ['release/2', 'ship-login', 'from origin', 'worktree named']) {
+        Vitest.expect(text).not.toContain(hidden);
+      }
+      Vitest.expect(text).toContain('In-place authoring run');
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('refuses a missing rigor before rendering and never dispatches', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* runDoctor(work.dir);
+      const fake = recorder();
+      const tool = specAuthorTool(options(work, { execute: fake.execute }));
+
+      const failure = yield* runTool(tool, { request: 'Ship login', isolated: 'no' }).pipe(
+        Effect.flip,
+      );
+      Vitest.expect(failure).toContain('code     cli.invalid-argument');
+      Vitest.expect(failure).toContain('field    --rigor');
+      Vitest.expect(failure).toContain('expected one of trivial, light, standard, deep, critical');
+      Vitest.expect(fake.runs).toHaveLength(0);
     }).pipe(Effect.provide(Platform)),
   );
 
@@ -189,7 +285,11 @@ Vitest.describe('spec_author tool', () => {
       const fake = recorder();
       const tool = specAuthorTool(options(work, { execute: fake.execute }));
 
-      const failure = yield* runTool(tool, { request: 'Ship login' }).pipe(Effect.flip);
+      const failure = yield* runTool(tool, {
+        request: 'Ship login',
+        rigor: 'standard',
+        isolated: 'no',
+      }).pipe(Effect.flip);
       Vitest.expect(failure).toContain('code     prompt.missing');
       Vitest.expect(failure).toContain('fix      Run mf-specs doctor');
       Vitest.expect(fake.runs).toHaveLength(0);
@@ -237,7 +337,7 @@ Vitest.describe('spec_execute tool', () => {
       Vitest.expect(run?.model).toBe('fixture/default');
       Vitest.expect(run?.text).toContain('ship-login');
       Vitest.expect(run?.text).toContain('phase A');
-      Vitest.expect(run?.text).toContain('budget is 1');
+      Vitest.expect(run?.text).toContain('is the budget of the phase this session starts on');
       Vitest.expect(run?.text).toContain('Ask only for');
       Vitest.expect(run?.text).toContain('Keep it small');
       Vitest.expect(run?.skills).toStrictEqual([
@@ -245,6 +345,34 @@ Vitest.describe('spec_execute tool', () => {
         'montflow-adversarial-review',
         'montflow-addressing-adversarial-review',
       ]);
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('dispatches the same prompt text and derived phase as the binary engine', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login'));
+      yield* preparePrompts(work);
+      const fake = recorder();
+
+      const tool = specExecuteTool(options(work, { execute: fake.execute }));
+      yield* runTool(tool, { name: 'ship-login', phase: 'A', model: 'fixture/model' });
+
+      const engine = yield* executeEngine(work.path.join(work.dir, DEFAULT_ROOT), {
+        name: 'ship-login',
+        phase: 'A',
+        workspace: work.dir,
+      }).pipe(
+        Effect.provide(
+          Layer.merge(
+            Layer.provide(SpecStore.Default, Platform),
+            Layer.provide(PromptStore.Default, Platform),
+          ),
+        ),
+      );
+      Vitest.expect(fake.runs[0]?.text).toBe(engine.prompt.text);
+      Vitest.expect(engine.phase).toBe('A');
+      Vitest.expect(engine.state).toContain('phase A');
     }).pipe(Effect.provide(Platform)),
   );
 
@@ -380,6 +508,175 @@ Vitest.describe('spec_execute tool', () => {
       Vitest.expect(failure).toContain('No model selected');
       Vitest.expect(failure).toContain('provider/model-id');
       Vitest.expect(fake.runs).toHaveLength(0);
+    }).pipe(Effect.provide(Platform)),
+  );
+});
+
+Vitest.describe('spec_status tool', () => {
+  Vitest.it.effect('decodes the documented input', () =>
+    Effect.gen(function* () {
+      const decoded = yield* Schema.decodeUnknownEffect(SpecStatusInput)({
+        name: 'ship-login',
+        focus: 'review risk',
+        model: 'fixture/model',
+      });
+      Vitest.expect(decoded.name).toBe('ship-login');
+      Vitest.expect(decoded.focus).toBe('review risk');
+      const empty = yield* Schema.decodeUnknownEffect(SpecStatusInput)({});
+      Vitest.expect(empty.name).toBeUndefined();
+    }),
+  );
+
+  Vitest.it.effect('renders spec-status and dispatches it through the shared executor', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login'));
+      yield* runDoctor(work.dir);
+      const fake = recorder();
+
+      const tool = specStatusTool(
+        options(work, {
+          execute: fake.execute,
+          defaultModel: () => Effect.succeed('fixture/default'),
+        }),
+      );
+      const reply = yield* runTool(tool, { name: 'ship-login', focus: 'review risk' });
+
+      Vitest.expect(reply).toBe('dispatched reply');
+      Vitest.expect(fake.runs).toHaveLength(1);
+      const run = fake.runs[0];
+      Vitest.expect(run?.name).toBe('spec-status');
+      Vitest.expect(run?.model).toBe('fixture/default');
+      Vitest.expect(run?.cwd).toBe(work.dir);
+      Vitest.expect(run?.text).toContain('ship-login');
+      Vitest.expect(run?.text).toContain('Focus this report on: review risk');
+      Vitest.expect(run?.text).toContain('Read-only boundary');
+      Vitest.expect(run?.skills).toStrictEqual(['montflow-find-specs']);
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('dispatches the same prompt text as the binary engine', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login'));
+      yield* runDoctor(work.dir);
+      const fake = recorder();
+
+      const tool = specStatusTool(options(work, { execute: fake.execute }));
+      yield* runTool(tool, { name: 'ship-login', model: 'fixture/model' });
+
+      const engine = yield* statusReportEngine(work.path.join(work.dir, DEFAULT_ROOT), {
+        name: 'ship-login',
+        workspace: work.dir,
+      }).pipe(
+        Effect.provide(
+          Layer.merge(
+            Layer.provide(SpecStore.Default, Platform),
+            Layer.provide(PromptStore.Default, Platform),
+          ),
+        ),
+      );
+      Vitest.expect(fake.runs[0]?.text).toBe(engine.prompt.text);
+      Vitest.expect(engine.prompt.name).toBe('spec-status');
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('resolves an omitted name from the branch before dispatching', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login'));
+      yield* branch(work, 'feat/ship-login');
+      yield* runDoctor(work.dir);
+      const fake = recorder();
+
+      const tool = specStatusTool(options(work, { execute: fake.execute }));
+      yield* runTool(tool, { model: 'fixture/explicit' });
+
+      Vitest.expect(fake.runs).toHaveLength(1);
+      Vitest.expect(fake.runs[0]?.model).toBe('fixture/explicit');
+      Vitest.expect(fake.runs[0]?.text).toContain('ship-login');
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('lets an explicit name win over an ambiguous branch', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'spec-one', phaseA('spec-one'));
+      yield* seed(work, 'spec-two', phaseA('spec-two'));
+      yield* branch(work, 'feat/spec');
+      yield* runDoctor(work.dir);
+      const fake = recorder();
+
+      const tool = specStatusTool(options(work, { execute: fake.execute }));
+      yield* runTool(tool, { name: 'spec-one', model: 'fixture/model' });
+
+      Vitest.expect(fake.runs).toHaveLength(1);
+      Vitest.expect(fake.runs[0]?.text).toContain('spec-one');
+      Vitest.expect(fake.runs[0]?.text).not.toContain('spec-two');
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('returns the ambiguous diagnostic and never dispatches', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'spec-one', phaseA('spec-one'));
+      yield* seed(work, 'spec-two', phaseA('spec-two'));
+      yield* branch(work, 'feat/spec');
+      yield* runDoctor(work.dir);
+      const fake = recorder();
+
+      const tool = specStatusTool(options(work, { execute: fake.execute }));
+      const failure = yield* runTool(tool, { model: 'fixture/model' }).pipe(Effect.flip);
+
+      Vitest.expect(failure).toContain('code     SPEC_AMBIGUOUS');
+      Vitest.expect(failure).toContain('--name spec-one');
+      Vitest.expect(failure).toContain('--name spec-two');
+      Vitest.expect(failure).toContain('next     ask the user');
+      Vitest.expect(fake.runs).toHaveLength(0);
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('refuses a malformed name and an unknown spec without dispatching', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login'));
+      yield* runDoctor(work.dir);
+      const fake = recorder();
+
+      const tool = specStatusTool(options(work, { execute: fake.execute }));
+      const malformed = yield* runTool(tool, { name: ' Bad ', model: 'fixture/model' }).pipe(
+        Effect.flip,
+      );
+      Vitest.expect(malformed).toContain('code     cli.invalid-argument');
+      Vitest.expect(malformed).toContain('field    --name');
+      Vitest.expect(malformed).toContain('next     mf-specs status-report --name <spec>');
+
+      const unknown = yield* runTool(tool, { name: 'nope', model: 'fixture/model' }).pipe(
+        Effect.flip,
+      );
+      Vitest.expect(unknown).toContain('code     spec.not-found');
+      Vitest.expect(unknown).toContain('next     mf-specs list');
+      Vitest.expect(fake.runs).toHaveLength(0);
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('writes no spec file while rendering and dispatching', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* seed(work, 'ship-login', phaseA('ship-login'));
+      yield* runDoctor(work.dir);
+      const root = work.path.join(work.root, 'ship-login');
+      const specBefore = yield* work.fs.readFileString(work.path.join(root, 'SPEC.md'));
+      const taskPath = work.path.join(root, 'A/A001-implement-login/TASK.md');
+      const taskBefore = yield* work.fs.readFileString(taskPath);
+
+      const tool = specStatusTool(options(work, { execute: recorder().execute }));
+      yield* runTool(tool, { name: 'ship-login', model: 'fixture/model' });
+
+      Vitest.expect(yield* work.fs.readFileString(work.path.join(root, 'SPEC.md'))).toBe(
+        specBefore,
+      );
+      Vitest.expect(yield* work.fs.readFileString(taskPath)).toBe(taskBefore);
     }).pipe(Effect.provide(Platform)),
   );
 });
@@ -654,6 +951,64 @@ Vitest.describe('spec_models tool', () => {
       // A blank name means "no name", exactly as on the CLI listing path.
       const blank = yield* runTool(tool, { action: 'list', name: '   ' });
       Vitest.expect(blank).toContain('"default": "fixture/known"');
+    }).pipe(Effect.provide(Platform)),
+  );
+});
+
+/** Copy one packaged rigor into a throwaway workspace's installed path. */
+const installRigor = (work: Work, rigor: string) =>
+  Effect.gen(function* () {
+    const shipped = work.path.resolve(import.meta.dirname, '../../../../rigors', `${rigor}.md`);
+    const bytes = yield* work.fs.readFileString(shipped);
+    const target = work.path.join(work.dir, '.agents', '@montflow', 'rigors', `${rigor}.md`);
+    yield* work.fs.makeDirectory(work.path.dirname(target), { recursive: true });
+    yield* work.fs.writeFileString(target, bytes);
+  });
+
+Vitest.describe('spec_rigor tool', () => {
+  Vitest.it.effect('decodes the rigor input', () =>
+    Effect.gen(function* () {
+      const decoded = yield* Schema.decodeUnknownEffect(SpecRigorInput)({ rigor: 'trivial' });
+      Vitest.expect(decoded.rigor).toBe('trivial');
+      const failure = yield* Schema.decodeUnknownEffect(SpecRigorInput)({}).pipe(Effect.flip);
+      Vitest.expect(String(failure)).toContain('rigor');
+    }),
+  );
+
+  Vitest.it.effect('returns the installed rigor verbatim, byte-for-byte with the binary', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* installRigor(work, 'trivial');
+      const tool = specRigorTool({ cwd: work.dir });
+      const reply = yield* runTool(tool, { rigor: 'trivial' });
+      const binary = yield* readRigor({ rigor: 'trivial', workspace: work.dir }).pipe(
+        Effect.provide(Platform),
+      );
+      Vitest.expect(reply).toBe(binary);
+      Vitest.expect(reply).toContain('# Rigor: trivial');
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('refuses an unknown rigor exactly as the binary does', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      yield* installRigor(work, 'trivial');
+      const tool = specRigorTool({ cwd: work.dir });
+      const failure = yield* runTool(tool, { rigor: 'split' }).pipe(Effect.flip);
+      Vitest.expect(failure).toContain('code     rigor.unknown');
+      Vitest.expect(failure).toContain('expected trivial, light, standard, deep, critical');
+      Vitest.expect(failure).toContain('actual   split');
+      Vitest.expect(failure).toContain('next     mf-specs rigor split');
+    }).pipe(Effect.provide(Platform)),
+  );
+
+  Vitest.it.effect('refuses a missing installed file with the doctor repair', () =>
+    Effect.gen(function* () {
+      const work = yield* prepare;
+      const tool = specRigorTool({ cwd: work.dir });
+      const failure = yield* runTool(tool, { rigor: 'standard' }).pipe(Effect.flip);
+      Vitest.expect(failure).toContain('code     rigor.missing');
+      Vitest.expect(failure).toContain('Run mf-specs doctor');
     }).pipe(Effect.provide(Platform)),
   );
 });

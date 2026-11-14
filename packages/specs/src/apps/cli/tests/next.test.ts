@@ -20,7 +20,6 @@ interface TreeOptions {
   readonly a001: string;
   readonly a002: string;
   readonly a099: string;
-  readonly locked?: string;
   readonly specStatus?: string;
   readonly gatesA001?: boolean;
 }
@@ -32,7 +31,6 @@ const tree = (options: TreeOptions): ReadonlyArray<SpecFileEntry> => [
     specMarkdown({
       name: 'ship-spec',
       status: options.specStatus ?? 'in-progress',
-      lockedPhases: options.locked ?? '',
       rows: [
         {
           id: 'A001',
@@ -46,19 +44,19 @@ const tree = (options: TreeOptions): ReadonlyArray<SpecFileEntry> => [
       ],
     }),
   ),
-  entry('A001-build/TASK.md', taskMarkdown({ id: 'A001', name: 'build', status: options.a001 })),
-  entry('A001-build/MEMORY.md', memory),
-  ...(options.gatesA001 === true ? [entry('A001-build/GATES.md', GATES)] : []),
+  entry('A/A001-build/TASK.md', taskMarkdown({ id: 'A001', name: 'build', status: options.a001 })),
+  entry('A/A001-build/MEMORY.md', memory),
+  ...(options.gatesA001 === true ? [entry('A/A001-build/GATES.md', GATES)] : []),
   entry(
-    'A002-wire/TASK.md',
+    'A/A002-wire/TASK.md',
     taskMarkdown({ id: 'A002', name: 'wire', dependsOn: 'A001', status: options.a002 }),
   ),
-  entry('A002-wire/MEMORY.md', memory),
+  entry('A/A002-wire/MEMORY.md', memory),
   entry(
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: options.a099 }),
   ),
-  entry('A099-review-phase/MEMORY.md', memory),
+  entry('A/A099-review-phase/MEMORY.md', memory),
 ];
 
 const layer = (files: ReadonlyArray<SpecFileEntry>) => stubLayer(new Map([['ship-spec', files]]));
@@ -162,7 +160,6 @@ Vitest.describe('Cli.next runtime', () => {
           a001: 'complete',
           a002: 'complete',
           a099: 'complete',
-          locked: 'A',
           specStatus: 'complete',
         }),
       );
@@ -197,12 +194,12 @@ const sizedTree = (options: SizedNextOptions): ReadonlyArray<SpecFileEntry> => [
   ),
   ...(options.specSizing === undefined ? [] : [entry('sizing.json', options.specSizing)]),
   entry(
-    'A001-build/TASK.md',
+    'A/A001-build/TASK.md',
     taskMarkdown({ id: 'A001', name: 'build', size: 'tiny', status: options.a001 }),
   ),
-  entry('A001-build/MEMORY.md', memory),
+  entry('A/A001-build/MEMORY.md', memory),
   entry(
-    'A002-wire/TASK.md',
+    'A/A002-wire/TASK.md',
     taskMarkdown({
       id: 'A002',
       name: 'wire',
@@ -211,9 +208,9 @@ const sizedTree = (options: SizedNextOptions): ReadonlyArray<SpecFileEntry> => [
       status: options.a002,
     }),
   ),
-  entry('A002-wire/MEMORY.md', memory),
+  entry('A/A002-wire/MEMORY.md', memory),
   entry(
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({
       id: 'A099',
       name: 'review-phase',
@@ -222,7 +219,7 @@ const sizedTree = (options: SizedNextOptions): ReadonlyArray<SpecFileEntry> => [
       status: options.a099,
     }),
   ),
-  entry('A099-review-phase/MEMORY.md', memory),
+  entry('A/A099-review-phase/MEMORY.md', memory),
 ];
 
 const runSizedNext = (options: SizedNextOptions) =>

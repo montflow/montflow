@@ -1,6 +1,8 @@
 import { Effect } from 'effect';
 // eslint-disable-next-line montflow/no-node-platform-imports -- the skills store is a platform boundary; the skills store owns its files, this only asks whether it exists.
 import { stat } from 'node:fs/promises';
+// eslint-disable-next-line montflow/no-node-platform-imports -- path join for one skill's manifest under the store.
+import { join } from 'node:path';
 import * as Profiles from '../profiles/index.js';
 
 /**
@@ -69,7 +71,12 @@ export const resolveSkills = (cwd: string): Effect.Effect<Profiles.SkillResoluti
     if (libs === undefined) return undefined;
     const dir = libs.SkillStore.skillsDir(cwd);
     if (!(yield* Effect.promise(() => pathExists(dir)))) return undefined;
-    return { root: cwd, names: new Set(yield* libs.SkillStore.names(cwd)) };
+    const declared = yield* libs.SkillStore.names(cwd);
+    const names = new Set<string>();
+    for (const name of declared) {
+      if (yield* Effect.promise(() => pathExists(join(dir, name, 'SKILL.md')))) names.add(name);
+    }
+    return { root: cwd, names };
   });
 
 /** One declared skill's verify outcome. `issue` is undefined when it passes. */

@@ -3,7 +3,7 @@ name: montflow-create-profiles
 description: Guides the creation, formatting, and refinement of agent profiles (PROFILE.md). Use when the user wants to write a new profile, convert a role description into a profile, or audit an existing profile.
 id: 34d1cf4fc4c93cc8
 author: Daniel Montilla
-version: 1.2.0
+version: 1.3.1
 license: MIT
 groups:
   - profiles
@@ -44,7 +44,7 @@ Field rules:
 - `name`: kebab-case slug, matches the directory name. Must equal the file's directory.
 - `description`: one line saying WHAT the agent is — its role and job. It drives profile selection, so lead with the role.
 - `model`: preferred model as `provider/model-id`, or blank when unset. Never invent a model id.
-- `skills`: names from `SKILL.md` frontmatter `name:` fields. List `.agents/skills/` and read each frontmatter `name:` before referencing — reference existing skills only, otherwise leave skills empty or omit the key. Profiles never activate skills themselves; consumers load them.
+- `skills`: names from `SKILL.md` frontmatter `name:` fields. Discover them with `mf-skills list` — it prints every skill name with its description — and read a full contract with `mf-skills show <skill>`. Reference existing skills only, otherwise leave skills empty or omit the key. Profiles never activate skills themselves; consumers load them. Where the binary is not on `PATH`: `bun run --cwd packages/skills cli list --dir "$PWD"`.
 - `## Instructions`: the custom system prompt. Concrete behavior, focus areas, and avoidances. Short sections and bullets over prose.
 - `## Review Checklist`: at least one verifiable `- [ ]` item the work must satisfy before it is done.
 
@@ -69,8 +69,26 @@ Create `.agents/@montflow/profiles/<name>/PROFILE.md` with the format above. If 
 
 ## 3. Verify
 
-- [ ] Frontmatter parses: `name` matches the directory, `description` is one non-empty line
-- [ ] Every skill in `skills:` exists under `.agents/skills/` (checked via frontmatter `name:`)
+Run the mechanical check first — it validates the file shape and reports the
+skills declared in `skills:`:
+
+```
+mf-profiles verify <name>
+```
+
+Where the binary is not on `PATH`:
+
+```
+bun run --cwd packages/profiles cli verify <name> --dir "$PWD"
+```
+
+It covers the frontmatter, the name/directory match, and the one-line
+description. A declared skill that is not installed is a **warning**, not an
+error: the check prints `1 warning` and still exits 0 (`mf-profiles verify` and
+`mf-prompts verify` behave the same). Treat every warning as a fix item before
+the gate passes — a check mark alone does not validate a declared skill. Judge
+what the verifier cannot:
+
 - [ ] `## Instructions` is non-empty and actionable
 - [ ] `## Review Checklist` has at least one item
 - [ ] Nothing outside the profile directory was modified

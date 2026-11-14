@@ -309,13 +309,23 @@ export const render = (
 ): Effect.Effect<string, string, PromptStore.PromptStore> =>
   Effect.gen(function* () {
     const prompt = yield* load(scope, name);
-    const missing = Prompts.missingRequired(prompt.variables, values);
+    // Render must refuse exactly what execute refuses. A malformed `when`
+    // renders a stale hidden branch otherwise, contradicting the run path.
+    const verified = Prompts.verifyPrompt(prompt);
+    if (!verified.valid) {
+      return yield* Effect.fail(Prompts.verifyReport(prompt.name, verified));
+    }
+    const accepted = PromptExecute.resolveInputs(prompt, values);
+    if (accepted.problems.length > 0) {
+      return yield* Effect.fail(accepted.problems.map((problem) => problem.message).join('\n'));
+    }
+    const missing = Prompts.missingRequired(prompt.variables, accepted.values);
     if (missing.length > 0) {
       return yield* Effect.fail(
         `Missing values for required variable${missing.length === 1 ? '' : 's'}: ${missing.join(', ')}.`,
       );
     }
-    return yield* Prompts.renderPrompt(prompt, values);
+    return yield* Prompts.renderPrompt(prompt, accepted.values);
   });
 
 /** Model resolution plus the skills gate, for one execution. */

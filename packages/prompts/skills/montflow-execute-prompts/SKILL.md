@@ -3,7 +3,7 @@ name: montflow-execute-prompts
 description: Inspects and executes reusable prompt templates stored by @montflow/prompts on a chosen model, then returns the agent's reply. Use when an agent must run a stored prompt — inspect its variables, supply the required ones, pick a model, and execute it.
 id: a7fa5091d2615813
 author: Daniel Montilla
-version: 3.4.2
+version: 3.4.3
 license: MIT
 dependencies:
   - executing-skills
@@ -159,11 +159,11 @@ Do not guess — read the message.
 To see the rendered text _without_ running an agent, use
 `mf-prompts render <name> key=value ...`.
 
-It demands the same required values, and it does **not** verify the prompt:
-`render` will show you the output of a file that `verify` rejects, which is
-useful for seeing what is wrong — but it means never dispatch rendered output
-you have not verified. `execute` refuses anything `verify` would reject,
-undeclared variables included, which would otherwise render as nothing.
+It demands the same required values and runs the same verification as
+`execute`: both refuse anything `verify` would reject, undeclared variables
+included, which would otherwise render as nothing. A malformed `when`
+therefore cannot render a stale hidden branch while `execute` refuses the
+same prompt.
 
 # Reference
 

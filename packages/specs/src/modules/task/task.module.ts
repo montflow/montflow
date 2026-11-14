@@ -1,7 +1,8 @@
 import { Schema } from 'effect';
 import { fieldList, fieldString, parseMarkdown } from '../frontmatter/index.js';
 import type { FieldValue } from '../frontmatter/index.js';
-import { CODES, SIZES, SIZE_HINT, Size, isSize } from '../sizing/index.js';
+import { isScopeToken, normalizeScopeList } from '../scheduler/scope.module.js';
+import { CODES, NONE_SIZE, SIZES, SIZE_HINT, Size, isSize } from '../sizing/index.js';
 import { type Issue, type Result, finding, issue, noErrors } from '../verify/index.js';
 
 // ─── Patterns ─────────────────────────────────────────────────────────
@@ -24,8 +25,14 @@ export const FINDING_REF_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*\/\d{3}\/F\d+$/;
 /** Task frontmatter key listing a `review` task's ordered reviewer profile slugs. */
 export const REVIEWER_PROFILES_FIELD = 'reviewer-profiles';
 
+/** Task frontmatter key declaring the paths a task may write. */
+export const WRITE_SCOPE_FIELD = 'write-scope';
+
 /** Stable code for a complete task whose completion checklist is not checked off. */
 export const COMPLETION_UNCHECKED_CODE = 'task.completion-unchecked';
+
+/** Stable code for a task id listed more than once in `depends-on`. */
+export const DEPENDENCY_DUPLICATE_CODE = 'depends-on.duplicate';
 
 // ─── Enums ────────────────────────────────────────────────────────────
 
@@ -103,6 +110,11 @@ export class Task extends Schema.Class<Task>('SpecTask')({
   /** Adversarial-review finding this task addresses (`<series>/<round>/F<n>`), if any. */
   findingRef: Schema.optionalKey(Schema.String.check(Schema.isPattern(FINDING_REF_PATTERN))),
   /**
+   * Declared write scope: comma-separated repo-root-relative paths, `.` for the
+   * whole repo, or `none`. Absent on a historical task.
+   */
+  writeScope: Schema.optionalKey(Schema.String),
+  /**
    * Declared task size, as written; absent only on historical completed tasks.
    * Decoding deliberately keeps a non-enum value so an unknown size stays a
    * `task.unknown-size` finding instead of deleting the task from every
@@ -130,11 +142,13 @@ interface TaskInput {
   readonly status: string;
   readonly findingRef?: string;
   readonly size?: string;
+  readonly writeScope?: string;
 }
 
 const taskInput = (fields: Record<string, FieldValue>): TaskInput => {
   const findingRef = fieldString(fields, 'finding-ref');
   const size = fieldString(fields, 'size');
+  const writeScope = fieldString(fields, WRITE_SCOPE_FIELD);
   const base: TaskInput = {
     id: fieldString(fields, 'id') ?? '',
     name: fieldString(fields, 'name') ?? '',
@@ -146,7 +160,8 @@ const taskInput = (fields: Record<string, FieldValue>): TaskInput => {
     status: fieldString(fields, 'status') ?? '',
   };
   const withRef = findingRef === undefined || findingRef === '' ? base : { ...base, findingRef };
-  return size === undefined || size === '' ? withRef : { ...withRef, size };
+  const withSize = size === undefined || size === '' ? withRef : { ...withRef, size };
+  return writeScope === undefined || writeScope === '' ? withSize : { ...withSize, writeScope };
 };
 
 /**
@@ -165,13 +180,31 @@ export const parseTaskFile = (markdown: string): Task | undefined => {
 };
 
 /**
- * A parsed task's declared size, or undefined when it declares none or its
- * value is not one of the four sizes.
+ * A parsed task's dispatchable size, or undefined when it declares none, opts
+ * out with `none`, or its value is not one of the four sizes.
  * @param task - parsed task
  * @returns the size every resolver can act on
  */
 export const sizeOf = (task: Task): Size | undefined =>
   task.size === undefined || !isSize(task.size) ? undefined : task.size;
+
+/**
+ * A task's declared write scope, normalized. `.` becomes `repo`; `none` stays a
+ * single `none` token; absent leaves the scope unresolved.
+ * @param task - parsed task
+ * @returns the scope tokens, or undefined when the task declares none
+ */
+export const writeScopeTokens = (task: Task): ReadonlyArray<string> | undefined => {
+  if (task.writeScope === undefined || task.writeScope.trim() === '') return undefined;
+  const tokens = task.writeScope
+    .split(',')
+    .map((token) => token.trim())
+    .filter((token) => token !== '');
+  if (tokens.length === 0) return undefined;
+  const none = tokens.filter((token) => token === 'none');
+  if (none.length > 0) return ['none'];
+  return normalizeScopeList(tokens);
+};
 
 // ─── Directory name ───────────────────────────────────────────────────
 
@@ -193,6 +226,18 @@ export const phaseRank = (phase: string): number => {
   let rank = 0;
   for (const char of phase) rank = rank * 26 + (char.charCodeAt(0) - 64);
   return rank;
+};
+
+/**
+ * The one arithmetic ordering token for a task id across one- and two-letter
+ * phases: `A002` → 1002, `B001` → 2001, `AA001` → 27001. Every ordering that
+ * spans phases uses this, never a string sort.
+ * @param id - a task id
+ * @returns the sortable rank
+ */
+export const sortKey = (id: string): number => {
+  const phase = phaseOf(id);
+  return phaseRank(phase) * 1000 + Number(id.slice(phase.length));
 };
 
 /**
@@ -222,6 +267,21 @@ export const verifyTaskSize = (
   size: string | undefined,
   status: string | undefined,
 ): ReadonlyArray<Issue> => {
+  const expected = `${SIZE_HINT}; or '${NONE_SIZE}' on a complete task`;
+  const fix = `Add \`size: ${NONE_SIZE}\` (record-only, complete tasks) or a real size: ${SIZE_HINT}.`;
+  if (size !== undefined && size.trim() === NONE_SIZE) {
+    if (status === 'complete') return [];
+    return [
+      finding({
+        code: CODES.noneSizeUnfinished,
+        field: 'size',
+        message: `Size '${NONE_SIZE}' is a record opt-out for a complete task; '${status ?? 'unknown'}' work must declare a real size.`,
+        expected,
+        actual: size,
+        fix: `Change \`size: ${NONE_SIZE}\` to one of ${SIZE_HINT}, or finish the task before opting out.`,
+      }),
+    ];
+  }
   if (size === undefined || size.trim() === '') {
     if (status === 'complete') {
       return [
@@ -230,9 +290,9 @@ export const verifyTaskSize = (
           severity: 'warning',
           field: 'size',
           message: 'Completed task declares no size; sizing is advisory for historical work.',
-          expected: SIZE_HINT,
+          expected,
           actual: 'missing',
-          fix: `Add \`size: medium\` to TASK.md frontmatter (${SIZE_HINT}).`,
+          fix,
         }),
       ];
     }
@@ -241,9 +301,9 @@ export const verifyTaskSize = (
         code: CODES.missingSize,
         field: 'size',
         message: `Required frontmatter field is missing; a declared size is required for '${status ?? 'unknown'}' tasks.`,
-        expected: SIZE_HINT,
+        expected,
         actual: 'missing',
-        fix: `Add \`size: medium\` to TASK.md frontmatter (${SIZE_HINT}).`,
+        fix,
       }),
     ];
   }
@@ -253,9 +313,9 @@ export const verifyTaskSize = (
       code: CODES.unknownTaskSize,
       field: 'size',
       message: `Unknown size '${size}'.`,
-      expected: SIZE_HINT,
+      expected,
       actual: size,
-      fix: `Change \`size: ${size}\` to one of ${SIZES.join(', ')}.`,
+      fix: `Change \`size: ${size}\` to one of ${SIZES.join(', ')}, or '${NONE_SIZE}' on a complete task.`,
     }),
   ];
 };
@@ -312,7 +372,8 @@ const censusChecklist = (body: string, heading: string): ChecklistCensus => {
  * The completion rule on its own: a task that claims `complete` must show a
  * checked `## Completion` checklist. An unchecked box is a record contradiction
  * — the status says the work is done and the checklist says it is not — so it
- * is a warning, never an error: historical records keep completing unchanged.
+ * is an error. An unfinished task may carry an unchecked list with no finding;
+ * the checklist is only a contradiction once the status claims completion.
  * @param status - declared status, as written
  * @param body - markdown body (frontmatter already stripped)
  * @returns the findings, in reporting order
@@ -328,7 +389,6 @@ export const verifyTaskCompletion = (
   return [
     finding({
       code: COMPLETION_UNCHECKED_CODE,
-      severity: 'warning',
       field: 'completion',
       message: `Completed task has ${unchecked} unchecked completion ${noun}; the status claims work its checklist does not confirm.`,
       expected: `all ${total} completion ${total === 1 ? 'item' : 'items'} checked \`- [x]\``,
@@ -395,8 +455,32 @@ export const verifyTaskFile = (dirName: string, markdown: string): Result => {
     issues.push(issue('originator', 'Must be `user`, `defect:<task-id>`, or `planner:<task-id>`.'));
   }
 
-  for (const dep of fieldList(fields, 'depends-on')) {
-    if (!TASK_ID_PATTERN.test(dep)) issues.push(issue('depends-on', `'${dep}' is not a task id.`));
+  const dependencies = fieldList(fields, 'depends-on');
+  const dependencyCounts = new Map<string, number>();
+  for (const dep of dependencies) dependencyCounts.set(dep, (dependencyCounts.get(dep) ?? 0) + 1);
+  const seenDependencies = new Set<string>();
+  for (const dep of dependencies) {
+    // One finding per distinct id: a repeat of an invalid id stays the single
+    // malformed-id error, and a repeat of a valid id gets the duplicate error.
+    if (seenDependencies.has(dep)) continue;
+    seenDependencies.add(dep);
+    if (!TASK_ID_PATTERN.test(dep)) {
+      issues.push(issue('depends-on', `'${dep}' is not a task id.`));
+      continue;
+    }
+    const count = dependencyCounts.get(dep) ?? 1;
+    if (count > 1) {
+      issues.push(
+        finding({
+          code: DEPENDENCY_DUPLICATE_CODE,
+          field: 'depends-on',
+          message: `'${dep}' is listed more than once.`,
+          expected: 'each task id at most once',
+          actual: `${dep} listed ${count} times`,
+          fix: `Remove the repeated '${dep}' from 'depends-on:'.`,
+        }),
+      );
+    }
   }
   for (const related of fieldList(fields, 'related-tasks')) {
     if (!TASK_ID_PATTERN.test(related)) {
@@ -421,6 +505,23 @@ export const verifyTaskFile = (dirName: string, markdown: string): Result => {
   const findingRef = fieldString(fields, 'finding-ref');
   if (findingRef !== undefined && findingRef !== '' && !FINDING_REF_PATTERN.test(findingRef)) {
     issues.push(issue('finding-ref', "Must be a finding reference like '<series>/<round>/F1'."));
+  }
+
+  const writeScope = fieldString(fields, WRITE_SCOPE_FIELD);
+  if (writeScope !== undefined && writeScope.trim() !== '') {
+    const tokens = writeScope.split(',').map((token) => token.trim());
+    if (tokens.some((token) => token === '')) {
+      issues.push(issue(WRITE_SCOPE_FIELD, 'Has an empty path between commas.'));
+    } else if (tokens.length > 1 && tokens.some((token) => token === 'none')) {
+      issues.push(issue(WRITE_SCOPE_FIELD, "'none' cannot be combined with a path."));
+    } else if (tokens.some((token) => token !== 'none' && !isScopeToken(token))) {
+      issues.push(
+        issue(
+          WRITE_SCOPE_FIELD,
+          "Must be comma-separated repo-root-relative paths, '.' for the whole repo, or 'none'; no leading '/', '..', glob, or whitespace.",
+        ),
+      );
+    }
   }
 
   const status = fieldString(fields, 'status');

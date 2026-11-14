@@ -1,0 +1,13 @@
+{
+  "sizes": {},
+  "phases": {
+    "J": {
+      "sizes": {
+        "tiny": { "model": "opencode-go/crouton-alpha-free", "effort": "max" },
+        "small": { "model": "opencode-go/crouton-alpha-free", "effort": "max" },
+        "medium": { "model": "opencode-go/crouton-alpha-free", "effort": "max" },
+        "large": { "model": "opencode-go/crouton-alpha-free", "effort": "max" }
+      }
+    }
+  }
+}

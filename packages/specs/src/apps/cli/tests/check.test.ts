@@ -4,6 +4,7 @@ import { Effect, FileSystem, Layer, Path } from 'effect';
 import { CliError } from 'effect/cli';
 import { TestConsole } from 'effect/testing';
 import { specMarkdown } from '../../../modules/spec/tests/helpers.js';
+import { phaseMarkdown } from '../../../modules/phase/tests/helpers.js';
 import { taskMarkdown } from '../../../modules/task/tests/helpers.js';
 import { finding, issue, warning } from '../../../modules/verify/index.js';
 import { SpecStore } from '../../../services/index.js';
@@ -28,13 +29,13 @@ const Platform = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 
 const okFiles = [
   entry('SPEC.md', specMarkdown({ name: 'ok' })),
-  entry('A001-implement-login/TASK.md', taskMarkdown({ id: 'A001', name: 'implement-login' })),
-  entry('A001-implement-login/MEMORY.md', memory),
+  entry('A/A001-implement-login/TASK.md', taskMarkdown({ id: 'A001', name: 'implement-login' })),
+  entry('A/A001-implement-login/MEMORY.md', memory),
   entry(
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
   ),
-  entry('A099-review-phase/MEMORY.md', memory),
+  entry('A/A099-review-phase/MEMORY.md', memory),
 ];
 
 const specs = new Map([
@@ -89,6 +90,7 @@ Vitest.describe('Cli.check runtime', () => {
               'SPEC.md',
               specMarkdown({
                 name: 'reviewed',
+                status: 'complete',
                 rows: [
                   {
                     id: 'A001',
@@ -108,12 +110,12 @@ Vitest.describe('Cli.check runtime', () => {
               }),
             ),
             entry(
-              'A001-implement-login/TASK.md',
+              'A/A001-implement-login/TASK.md',
               taskMarkdown({ id: 'A001', name: 'implement-login', status: 'complete' }),
             ),
-            entry('A001-implement-login/MEMORY.md', memory),
+            entry('A/A001-implement-login/MEMORY.md', memory),
             entry(
-              'A099-review-phase/TASK.md',
+              'A/A099-review-phase/TASK.md',
               taskMarkdown({
                 id: 'A099',
                 name: 'review-phase',
@@ -121,7 +123,7 @@ Vitest.describe('Cli.check runtime', () => {
                 status: 'complete',
               }),
             ),
-            entry('A099-review-phase/MEMORY.md', memory),
+            entry('A/A099-review-phase/MEMORY.md', memory),
           ],
         ],
       ]);
@@ -133,77 +135,148 @@ Vitest.describe('Cli.check runtime', () => {
     }),
   );
 
-  Vitest.it.effect('warns for unchecked completion and an all-unchecked gate, in one group', () =>
+  Vitest.it.effect(
+    'errors for a complete task with unchecked completion and an all-unchecked gate',
+    () =>
+      Effect.gen(function* () {
+        const tree = new Map([
+          [
+            'records',
+            [
+              entry(
+                'SPEC.md',
+                specMarkdown({
+                  name: 'records',
+                  status: 'complete',
+                  rows: [
+                    {
+                      id: 'A001',
+                      name: 'implement-login',
+                      type: 'execution',
+                      status: 'complete',
+                      gates: 'Yes',
+                    },
+                    {
+                      id: 'A099',
+                      name: 'review-phase',
+                      type: 'review',
+                      status: 'complete',
+                      gates: 'No',
+                    },
+                  ],
+                }),
+              ),
+              entry(
+                'A/A001-implement-login/TASK.md',
+                taskMarkdown({
+                  id: 'A001',
+                  name: 'implement-login',
+                  status: 'complete',
+                  completion: ['- [x] Built', '- [ ] Verified'].join('\n'),
+                }),
+              ),
+              entry('A/A001-implement-login/MEMORY.md', memory),
+              entry(
+                'A/A001-implement-login/GATES.md',
+                ['## Stage 0', '', '- [ ] `bun run --cwd packages/apps test`', ''].join('\n'),
+              ),
+              entry(
+                'A/A099-review-phase/TASK.md',
+                taskMarkdown({
+                  id: 'A099',
+                  name: 'review-phase',
+                  type: 'review',
+                  status: 'complete',
+                }),
+              ),
+              entry('A/A099-review-phase/MEMORY.md', memory),
+            ],
+          ],
+        ]);
+        const report = yield* check('.agents/@montflow/specs', { name: 'records' }).pipe(
+          Effect.provide(stubLayer(tree)),
+        );
+        Vitest.expect(report.failed).toBe(1);
+        Vitest.expect(report.issueCount).toBe(2);
+        Vitest.expect(report.warningCount).toBe(1);
+        Vitest.expect(
+          report.specs[0]?.issues
+            .filter((found) => found.severity !== 'warning')
+            .map((found) => found.code),
+        ).toStrictEqual(['task.completion-unchecked', 'gate.unchecked']);
+        Vitest.expect(report.specs[0]?.issues.map((found) => found.code)).toContain(
+          'spec.version-outdated',
+        );
+        const output = renderCheck(report, false);
+        Vitest.expect(output).toContain('task.completion-unchecked');
+        Vitest.expect(output).toContain('gate.unchecked');
+      }),
+  );
+
+  Vitest.it.effect('stays silent for an unfinished task with the same unchecked records', () =>
     Effect.gen(function* () {
       const tree = new Map([
         [
-          'records',
+          'unfinished',
           [
             entry(
               'SPEC.md',
               specMarkdown({
-                name: 'records',
-                status: 'complete',
-                lockedPhases: 'A',
+                name: 'unfinished',
+                status: 'in-progress',
                 rows: [
                   {
                     id: 'A001',
                     name: 'implement-login',
                     type: 'execution',
-                    status: 'complete',
+                    status: 'pending',
                     gates: 'Yes',
                   },
                   {
                     id: 'A099',
                     name: 'review-phase',
                     type: 'review',
-                    status: 'complete',
+                    status: 'pending',
                     gates: 'No',
                   },
                 ],
               }),
             ),
             entry(
-              'A001-implement-login/TASK.md',
+              'A/A001-implement-login/TASK.md',
               taskMarkdown({
                 id: 'A001',
                 name: 'implement-login',
-                status: 'complete',
-                completion: ['- [x] Built', '- [ ] Verified'].join('\n'),
+                status: 'pending',
+                completion: ['- [ ] Built', '- [ ] Verified'].join('\n'),
               }),
             ),
-            entry('A001-implement-login/MEMORY.md', memory),
+            entry('A/A001-implement-login/MEMORY.md', memory),
             entry(
-              'A001-implement-login/GATES.md',
+              'A/A001-implement-login/GATES.md',
               ['## Stage 0', '', '- [ ] `bun run --cwd packages/apps test`', ''].join('\n'),
             ),
             entry(
-              'A099-review-phase/TASK.md',
+              'A/A099-review-phase/TASK.md',
               taskMarkdown({
                 id: 'A099',
                 name: 'review-phase',
                 type: 'review',
-                status: 'complete',
+                status: 'pending',
               }),
             ),
-            entry('A099-review-phase/MEMORY.md', memory),
+            entry('A/A099-review-phase/MEMORY.md', memory),
           ],
         ],
       ]);
-      const report = yield* check('.agents/@montflow/specs', { name: 'records' }).pipe(
+      const report = yield* check('.agents/@montflow/specs', { name: 'unfinished' }).pipe(
         Effect.provide(stubLayer(tree)),
       );
+      Vitest.expect(
+        report.specs[0]?.issues.filter((found) => found.severity !== 'warning'),
+      ).toStrictEqual([]);
       Vitest.expect(report.failed).toBe(0);
-      Vitest.expect(report.warningCount).toBe(2);
-      Vitest.expect(report.specs[0]?.issues.map((found) => found.code)).toStrictEqual([
-        'task.completion-unchecked',
-        'gate.unchecked',
-      ]);
-      const output = renderCheck(report, false);
-      Vitest.expect(output).toContain('task.completion-unchecked \u00d7 1');
-      Vitest.expect(output).toContain('gate.unchecked \u00d7 1');
-      // Both record codes share the spec's single warning line.
-      Vitest.expect(output.split('\n').filter((line) => line.startsWith('  ! '))).toHaveLength(1);
+      Vitest.expect(report.warningCount).toBe(1);
     }),
   );
 
@@ -218,7 +291,6 @@ Vitest.describe('Cli.check runtime', () => {
               specMarkdown({
                 name: 'history',
                 status: 'complete',
-                lockedPhases: 'A',
                 rows: [
                   {
                     id: 'A001',
@@ -238,16 +310,16 @@ Vitest.describe('Cli.check runtime', () => {
               }),
             ),
             entry(
-              'A001-implement-login/TASK.md',
+              'A/A001-implement-login/TASK.md',
               taskMarkdown({ id: 'A001', name: 'implement-login', status: 'complete' }),
             ),
-            entry('A001-implement-login/MEMORY.md', memory),
+            entry('A/A001-implement-login/MEMORY.md', memory),
             entry(
-              'A001-implement-login/GATES.md',
+              'A/A001-implement-login/GATES.md',
               ['## Stage 0', '', '- [x] `bun run --cwd packages/apps test`', ''].join('\n'),
             ),
             entry(
-              'A099-review-phase/TASK.md',
+              'A/A099-review-phase/TASK.md',
               taskMarkdown({
                 id: 'A099',
                 name: 'review-phase',
@@ -255,15 +327,17 @@ Vitest.describe('Cli.check runtime', () => {
                 status: 'complete',
               }),
             ),
-            entry('A099-review-phase/MEMORY.md', memory),
+            entry('A/A099-review-phase/MEMORY.md', memory),
           ],
         ],
       ]);
       const report = yield* check('.agents/@montflow/specs', { name: 'history' }).pipe(
         Effect.provide(stubLayer(tree)),
       );
-      Vitest.expect(report.specs[0]?.issues).toStrictEqual([]);
-      Vitest.expect(report.warningCount).toBe(0);
+      Vitest.expect(
+        report.specs[0]?.issues.filter((found) => found.severity !== 'warning'),
+      ).toStrictEqual([]);
+      Vitest.expect(report.warningCount).toBe(1);
     }),
   );
 
@@ -278,7 +352,6 @@ Vitest.describe('Cli.check runtime', () => {
               specMarkdown({
                 name: 'budgeted',
                 status: 'complete',
-                lockedPhases: 'A',
                 rows: [
                   {
                     id: 'A001',
@@ -298,7 +371,7 @@ Vitest.describe('Cli.check runtime', () => {
               }),
             ),
             entry(
-              'A001-implement-login/TASK.md',
+              'A/A001-implement-login/TASK.md',
               taskMarkdown({
                 id: 'A001',
                 name: 'implement-login',
@@ -306,9 +379,9 @@ Vitest.describe('Cli.check runtime', () => {
                 size: 'tiny',
               }),
             ),
-            entry('A001-implement-login/MEMORY.md', memory),
+            entry('A/A001-implement-login/MEMORY.md', memory),
             entry(
-              'A099-review-phase/TASK.md',
+              'A/A099-review-phase/TASK.md',
               taskMarkdown({
                 id: 'A099',
                 name: 'review-phase',
@@ -317,7 +390,7 @@ Vitest.describe('Cli.check runtime', () => {
                 size: 'tiny',
               }),
             ),
-            entry('A099-review-phase/MEMORY.md', memory),
+            entry('A/A099-review-phase/MEMORY.md', memory),
           ],
         ],
       ]);
@@ -328,7 +401,9 @@ Vitest.describe('Cli.check runtime', () => {
         ),
       );
       Vitest.expect(atBudget.failed).toBe(0);
-      Vitest.expect(atBudget.specs[0]?.issues).toStrictEqual([]);
+      Vitest.expect(
+        atBudget.specs[0]?.issues.filter((found) => found.severity !== 'warning'),
+      ).toStrictEqual([]);
 
       const over = yield* check(root, { name: 'budgeted' }).pipe(
         Effect.provide(
@@ -336,7 +411,9 @@ Vitest.describe('Cli.check runtime', () => {
         ),
       );
       Vitest.expect(over.failed).toBe(1);
-      Vitest.expect(over.specs[0]?.issues).toStrictEqual([
+      Vitest.expect(
+        over.specs[0]?.issues.filter((found) => found.severity !== 'warning'),
+      ).toStrictEqual([
         {
           code: 'review.budget-exceeded',
           field: 'review-series',
@@ -356,8 +433,10 @@ Vitest.describe('Cli.check runtime', () => {
         ),
       );
       Vitest.expect(oneOver.failed).toBe(1);
-      Vitest.expect(oneOver.specs[0]?.issues).toHaveLength(1);
-      Vitest.expect(oneOver.specs[0]?.issues[0]?.actual).toBe('2 rounds');
+      const oneOverIssues =
+        oneOver.specs[0]?.issues.filter((found) => found.severity !== 'warning') ?? [];
+      Vitest.expect(oneOverIssues).toHaveLength(1);
+      Vitest.expect(oneOverIssues[0]?.actual).toBe('2 rounds');
     }),
   );
 });
@@ -384,15 +463,15 @@ const pendingTiny = new Map([
         }),
       ),
       entry(
-        'A001-implement-login/TASK.md',
+        'A/A001-implement-login/TASK.md',
         taskMarkdown({ id: 'A001', name: 'implement-login', size: 'tiny' }),
       ),
-      entry('A001-implement-login/MEMORY.md', memory),
+      entry('A/A001-implement-login/MEMORY.md', memory),
       entry(
-        'A099-review-phase/TASK.md',
+        'A/A099-review-phase/TASK.md',
         taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: 'pending' }),
       ),
-      entry('A099-review-phase/MEMORY.md', memory),
+      entry('A/A099-review-phase/MEMORY.md', memory),
     ],
   ],
 ]);
@@ -451,8 +530,12 @@ Vitest.describe('Cli.review budget dispatch truth runtime', () => {
       });
       const advisory = yield* check(root, { name: 'budgeted' }).pipe(Effect.provide(unattributed));
       Vitest.expect(advisory.failed).toBe(0);
-      Vitest.expect(advisory.warningCount).toBe(3);
-      Vitest.expect(advisory.specs[0]?.issues.map((found) => found.code)).toStrictEqual([
+      Vitest.expect(advisory.warningCount).toBe(4);
+      Vitest.expect(
+        advisory.specs[0]?.issues
+          .filter((found) => found.code !== 'spec.version-outdated')
+          .map((found) => found.code),
+      ).toStrictEqual([
         'review.phase-unattributed',
         'review.phase-unattributed',
         'review.phase-unattributed',
@@ -549,17 +632,17 @@ const groupedReport: CheckReport = {
       issues: [
         codedWarning(
           'task.missing-size',
-          'A001-x/TASK.md: size',
+          'A/A001-x/TASK.md: size',
           'Completed task declares no size.',
         ),
         codedWarning(
           'task.missing-size',
-          'A002-y/TASK.md: size',
+          'A/A002-y/TASK.md: size',
           'Completed task declares no size.',
         ),
         codedWarning(
           'task.completion-unchecked',
-          'A001-x/TASK.md: completion',
+          'A/A001-x/TASK.md: completion',
           'Unchecked completion item.',
         ),
       ],
@@ -570,7 +653,7 @@ const groupedReport: CheckReport = {
       issues: [
         codedWarning(
           'task.missing-size',
-          'B001-z/TASK.md: size',
+          'B/B001-z/TASK.md: size',
           'Completed task declares no size.',
         ),
       ],
@@ -587,9 +670,9 @@ Vitest.describe('Cli.renderCheck warning grouping runtime', () => {
     Vitest.expect(renderCheck(groupedReport, false)).toBe(
       [
         '\u2713 alpha (3 warnings)',
-        '  ! task.completion-unchecked \u00d7 1 \u00b7 alpha/A001-x/TASK.md \u00b7 task.missing-size \u00d7 2 \u00b7 alpha/A001-x/TASK.md',
+        '  ! task.completion-unchecked \u00d7 1 \u00b7 alpha/A/A001-x/TASK.md \u00b7 task.missing-size \u00d7 2 \u00b7 alpha/A/A001-x/TASK.md',
         '\u2713 beta (1 warning)',
-        '  ! task.missing-size \u00d7 1 \u00b7 beta/B001-z/TASK.md',
+        '  ! task.missing-size \u00d7 1 \u00b7 beta/B/B001-z/TASK.md',
         '',
         '2 specs \u00b7 0 failed \u00b7 0 issues \u00b7 4 warnings',
       ].join('\n'),
@@ -600,8 +683,8 @@ Vitest.describe('Cli.renderCheck warning grouping runtime', () => {
     const verbose = renderCheck(groupedReport, true);
     Vitest.expect(verbose.match(/code {5}! task\.missing-size/g)).toHaveLength(3);
     Vitest.expect(verbose).toContain('  code     ! task.completion-unchecked');
-    Vitest.expect(verbose).toContain('  path     alpha/A002-y/TASK.md');
-    Vitest.expect(verbose).toContain('  path     beta/B001-z/TASK.md');
+    Vitest.expect(verbose).toContain('  path     alpha/A/A002-y/TASK.md');
+    Vitest.expect(verbose).toContain('  path     beta/B/B001-z/TASK.md');
     Vitest.expect(verbose).not.toContain('\u00d7');
   });
 
@@ -609,7 +692,7 @@ Vitest.describe('Cli.renderCheck warning grouping runtime', () => {
     const mixed = reduceCheck(
       '.agents/@montflow/specs',
       [
-        { name: 'alpha', issues: [codedWarning('task.missing-size', 'A001-x/TASK.md: size')] },
+        { name: 'alpha', issues: [codedWarning('task.missing-size', 'A/A001-x/TASK.md: size')] },
         {
           name: 'beta',
           issues: [
@@ -626,23 +709,23 @@ Vitest.describe('Cli.renderCheck warning grouping runtime', () => {
     const text = renderCheck(mixed, false);
     Vitest.expect(text).toContain('\u2717 beta (1)');
     Vitest.expect(text).toContain('  code     sizing.malformed-json');
-    Vitest.expect(text).toContain('  ! task.missing-size \u00d7 1 \u00b7 alpha/A001-x/TASK.md');
+    Vitest.expect(text).toContain('  ! task.missing-size \u00d7 1 \u00b7 alpha/A/A001-x/TASK.md');
     Vitest.expect(text).not.toContain('code     ! task.missing-size');
   });
 
   Vitest.it('renders the same group line whatever order the findings arrive in', () => {
     const root = '.agents/@montflow/specs';
     const findings = [
-      codedWarning('task.missing-size', 'A002-y/TASK.md: size'),
-      codedWarning('gate.unchecked', 'A001-x/GATES.md: gate'),
-      codedWarning('task.completion-unchecked', 'A001-x/TASK.md: completion'),
-      codedWarning('task.missing-size', 'A001-x/TASK.md: size'),
+      codedWarning('task.missing-size', 'A/A002-y/TASK.md: size'),
+      codedWarning('gate.unchecked', 'A/A001-x/GATES.md: gate'),
+      codedWarning('task.completion-unchecked', 'A/A001-x/TASK.md: completion'),
+      codedWarning('task.missing-size', 'A/A001-x/TASK.md: size'),
     ];
     const forward = reduceCheck(root, [{ name: 'alpha', issues: findings }], false);
     const reversed = reduceCheck(root, [{ name: 'alpha', issues: findings.toReversed() }], false);
     Vitest.expect(groupLine(reversed)).toBe(groupLine(forward));
     Vitest.expect(groupLine(forward)).toBe(
-      '  ! gate.unchecked \u00d7 1 \u00b7 alpha/A001-x/GATES.md \u00b7 task.completion-unchecked \u00d7 1 \u00b7 alpha/A001-x/TASK.md \u00b7 task.missing-size \u00d7 2 \u00b7 alpha/A001-x/TASK.md',
+      '  ! gate.unchecked \u00d7 1 \u00b7 alpha/A/A001-x/GATES.md \u00b7 task.completion-unchecked \u00d7 1 \u00b7 alpha/A/A001-x/TASK.md \u00b7 task.missing-size \u00d7 2 \u00b7 alpha/A/A001-x/TASK.md',
     );
   });
 
@@ -663,8 +746,8 @@ Vitest.describe('Cli.renderCheck warning grouping runtime', () => {
         {
           name: 'alpha',
           issues: [
-            codedWarning('task.missing-size', 'A001-x/TASK.md: size'),
-            codedWarning('task.missing-size', 'A002-y/TASK.md: size'),
+            codedWarning('task.missing-size', 'A/A001-x/TASK.md: size'),
+            codedWarning('task.missing-size', 'A/A002-y/TASK.md: size'),
           ],
         },
       ],
@@ -768,15 +851,15 @@ Vitest.describe('Cli.check diagnostics runtime', () => {
             entry('SPEC.md', specMarkdown({ name: 'traced' })),
             entry('sizing.json', '{"sizes": {"huge": {"model": "a/b"}}}'),
             entry(
-              'A001-implement-login/TASK.md',
+              'A/A001-implement-login/TASK.md',
               taskMarkdown({ id: 'A001', name: 'implement-login', withoutSize: true }),
             ),
-            entry('A001-implement-login/MEMORY.md', memory),
+            entry('A/A001-implement-login/MEMORY.md', memory),
             entry(
-              'A099-review-phase/TASK.md',
+              'A/A099-review-phase/TASK.md',
               taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
             ),
-            entry('A099-review-phase/MEMORY.md', memory),
+            entry('A/A099-review-phase/MEMORY.md', memory),
           ],
         ],
       ]);
@@ -802,15 +885,15 @@ Vitest.describe('Cli.check diagnostics runtime', () => {
               '{"sizes": {}, "phases": {"A": {"sizes": {"huge": {"model": "a/b"}}}}}',
             ),
             entry(
-              'A001-implement-login/TASK.md',
+              'A/A001-implement-login/TASK.md',
               taskMarkdown({ id: 'A001', name: 'implement-login' }),
             ),
-            entry('A001-implement-login/MEMORY.md', memory),
+            entry('A/A001-implement-login/MEMORY.md', memory),
             entry(
-              'A099-review-phase/TASK.md',
+              'A/A099-review-phase/TASK.md',
               taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review' }),
             ),
-            entry('A099-review-phase/MEMORY.md', memory),
+            entry('A/A099-review-phase/MEMORY.md', memory),
           ],
         ],
       ]);
@@ -1123,14 +1206,16 @@ const profileTree = (reviewerProfiles: string): Map<string, ReadonlyArray<SpecFi
     [
       'ship-spec',
       [
-        entry('SPEC.md', specMarkdown({ name: 'ship-spec' })),
+        entry('SPEC.md', specMarkdown({ name: 'ship-spec', version: '2' })),
+        entry('A/PHASE.md', phaseMarkdown()),
+        entry('A/MEMORY.md', memory),
         entry(
-          'A001-implement-login/TASK.md',
+          'A/A001-implement-login/TASK.md',
           taskMarkdown({ id: 'A001', name: 'implement-login', status: 'pending' }),
         ),
-        entry('A001-implement-login/MEMORY.md', memory),
+        entry('A/A001-implement-login/MEMORY.md', memory),
         entry(
-          'A099-review-phase/TASK.md',
+          'A/A099-review-phase/TASK.md',
           taskMarkdown({
             id: 'A099',
             name: 'review-phase',
@@ -1139,7 +1224,7 @@ const profileTree = (reviewerProfiles: string): Map<string, ReadonlyArray<SpecFi
             reviewerProfiles,
           }),
         ),
-        entry('A099-review-phase/MEMORY.md', memory),
+        entry('A/A099-review-phase/MEMORY.md', memory),
       ],
     ],
   ]);
@@ -1181,7 +1266,7 @@ Vitest.describe('Cli.check reviewer-profile.unknown runtime', () => {
         {
           code: 'reviewer-profile.unknown',
           severity: 'warning',
-          field: 'A099-review-phase/TASK.md: reviewer-profiles',
+          field: 'A/A099-review-phase/TASK.md: reviewer-profiles',
           message:
             "Declared reviewer profile 'ghost-reviewer' was not found under .agents/@montflow/profiles.",
           actual: 'ghost-reviewer',

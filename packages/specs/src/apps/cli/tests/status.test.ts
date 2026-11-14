@@ -18,13 +18,12 @@ import {
 import { REPO_SIZING, SPEC_SIZING, entry, memory, stubLayer } from './helpers.js';
 
 /** Build the two-task spec used across the state cases. */
-const tree = (specStatus: string, lockedPhases: string, a001: string, a099: string) => [
+const tree = (specStatus: string, _lockedPhases: string, a001: string, a099: string) => [
   entry(
     'SPEC.md',
     specMarkdown({
       name: 'ship-spec',
       status: specStatus,
-      lockedPhases,
       rows: [
         { id: 'A001', name: 'implement-login', type: 'execution', status: a001, gates: 'No' },
         { id: 'A099', name: 'review-phase', type: 'review', status: a099, gates: 'No' },
@@ -32,15 +31,15 @@ const tree = (specStatus: string, lockedPhases: string, a001: string, a099: stri
     }),
   ),
   entry(
-    'A001-implement-login/TASK.md',
+    'A/A001-implement-login/TASK.md',
     taskMarkdown({ id: 'A001', name: 'implement-login', status: a001 }),
   ),
-  entry('A001-implement-login/MEMORY.md', memory),
+  entry('A/A001-implement-login/MEMORY.md', memory),
   entry(
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({ id: 'A099', name: 'review-phase', type: 'review', status: a099 }),
   ),
-  entry('A099-review-phase/MEMORY.md', memory),
+  entry('A/A099-review-phase/MEMORY.md', memory),
 ];
 
 const runStatus = (files: ReadonlyArray<SpecFileEntry>) =>
@@ -238,7 +237,6 @@ Vitest.describe('Cli.status lifecycle states runtime', () => {
       Vitest.expect(text).toContain(
         "status: Spec status is 'complete' but 1 task is not complete: A001 (pending).",
       );
-      Vitest.expect(text).toContain('Phase A \u00b7 locked');
     }),
   );
 });
@@ -288,17 +286,17 @@ const sizedTree = (options: SizedTreeOptions = {}): ReadonlyArray<SpecFileEntry>
   ),
   ...(options.specSizing === undefined ? [] : [entry('sizing.json', options.specSizing)]),
   entry(
-    'A001-build/TASK.md',
+    'A/A001-build/TASK.md',
     taskMarkdown({ id: 'A001', name: 'build', size: options.a001Size ?? 'tiny' }),
   ),
-  entry('A001-build/MEMORY.md', memory),
+  entry('A/A001-build/MEMORY.md', memory),
   entry(
-    'A002-wire/TASK.md',
+    'A/A002-wire/TASK.md',
     taskMarkdown({ id: 'A002', name: 'wire', size: options.a002Size ?? 'small' }),
   ),
-  entry('A002-wire/MEMORY.md', memory),
+  entry('A/A002-wire/MEMORY.md', memory),
   entry(
-    'A099-review-phase/TASK.md',
+    'A/A099-review-phase/TASK.md',
     taskMarkdown({
       id: 'A099',
       name: 'review-phase',
@@ -306,7 +304,7 @@ const sizedTree = (options: SizedTreeOptions = {}): ReadonlyArray<SpecFileEntry>
       size: options.a099Size ?? 'medium',
     }),
   ),
-  entry('A099-review-phase/MEMORY.md', memory),
+  entry('A/A099-review-phase/MEMORY.md', memory),
 ];
 
 /** Run status against a sized tree, with an optional repo-level config. */

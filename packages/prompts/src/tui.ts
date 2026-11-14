@@ -1,7 +1,7 @@
 // oxlint-disable-next-line montflow/no-node-platform-imports -- this TUI entry is the composition root for its plugin store.
 import { execFile } from 'node:child_process';
 // oxlint-disable-next-line montflow/no-node-platform-imports -- this TUI entry is the composition root for its plugin store.
-import { access, readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 // oxlint-disable-next-line montflow/no-node-platform-imports -- promisify only wraps the local CLI call below.
 import { promisify } from 'node:util';
 // oxlint-disable-next-line montflow/no-node-platform-imports -- resolve this module's own path for the local CLI.
@@ -12,6 +12,7 @@ import type { TuiPlugin } from '@montflow/opencode';
 import { type PickerContext, registerPicker } from '@montflow/opencode/tui';
 import { Effect, Schema } from 'effect';
 import * as Prompts from './modules/prompts/index.js';
+import * as SpecSource from './modules/spec-source/index.js';
 import { ID, COMMAND_NAME } from './server.js';
 
 const execFileAsync = promisify(execFile);
@@ -54,40 +55,23 @@ const loadPrompts = async (directory: string): Promise<ReadonlyArray<Prompts.Pro
   return (await readPrompts(path.join(directory, ...LEGACY_PROMPTS_DIR))) ?? [];
 };
 
-/** Existing spec slugs under the workspace's specs store, sorted. */
-const loadSpecNames = async (directory: string): Promise<ReadonlyArray<string>> => {
+/** Existing specs under the workspace's specs store, with their declared state. */
+const loadSpecs = async (directory: string): Promise<ReadonlyArray<SpecSource.SpecEntry>> => {
   const root = path.join(directory, '.agents', '@montflow', 'specs');
   const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
-  const names = await Promise.all(
+  const specs = await Promise.all(
     entries
       .filter((entry) => entry.isDirectory())
-      .map(async (entry): Promise<string | undefined> => {
-        const hasSpec = await access(path.join(root, entry.name, 'SPEC.md'))
-          .then(() => true)
-          .catch(() => false);
-        return hasSpec ? entry.name : undefined;
+      .map(async (entry): Promise<SpecSource.SpecEntry | undefined> => {
+        const markdown = await readFile(path.join(root, entry.name, 'SPEC.md'), 'utf8').catch(
+          () => undefined,
+        );
+        if (markdown === undefined) return undefined;
+        return { name: entry.name, state: SpecSource.parseState(markdown) };
       }),
   );
-  return names.filter((name): name is string => name !== undefined).toSorted();
+  return specs.filter((spec): spec is SpecSource.SpecEntry => spec !== undefined);
 };
-
-/** Conventional branch prefixes, mirrored from `mf-specs which`. */
-const BRANCH_PREFIXES = [
-  'feat',
-  'fix',
-  'chore',
-  'docs',
-  'refactor',
-  'test',
-  'perf',
-  'build',
-  'ci',
-  'release',
-  'hotfix',
-] as const;
-
-const normalizeFeature = (value: string): string =>
-  value.toLowerCase().replaceAll('/', '-').replaceAll('_', '-');
 
 /** Read the branch name from a checkout's `.git` directory or worktree file. */
 const readBranch = async (directory: string): Promise<string | undefined> => {
@@ -114,22 +98,15 @@ const readBranch = async (directory: string): Promise<string | undefined> => {
 /** The one spec the current branch names, or undefined when the match is not certain. */
 const currentSpec = async (
   directory: string,
-  names: ReadonlyArray<string>,
+  specs: ReadonlyArray<SpecSource.SpecEntry>,
 ): Promise<string | undefined> => {
   const branch = await readBranch(directory);
-  if (branch === undefined) return undefined;
-  const match = new RegExp(`^(?:${BRANCH_PREFIXES.join('|')})/(.+)$`).exec(branch);
-  const remainder = match?.[1];
-  if (remainder === undefined || remainder.trim() === '') return undefined;
-  const feature = normalizeFeature(remainder);
-  const exact = names.filter((name) => normalizeFeature(name) === feature);
-  if (exact.length === 1) return exact[0];
-  if (exact.length > 1) return undefined;
-  const prefixed = names.filter((name) => {
-    const normalized = normalizeFeature(name);
-    return normalized.startsWith(feature) || feature.startsWith(normalized);
-  });
-  return prefixed.length === 1 ? prefixed[0] : undefined;
+  return branch === undefined
+    ? undefined
+    : SpecSource.guess(
+        specs.map((spec) => spec.name),
+        branch,
+      );
 };
 
 /** One option in a select dialog. */
@@ -178,7 +155,7 @@ export default {
         const values: Record<string, string> = {};
         const directory = pickerContext.location?.directory ?? process.cwd();
         if (prompt.name === 'spec-execute') {
-          const specs = await loadSpecNames(directory);
+          const specs = await loadSpecs(directory);
           if (specs.length === 0) {
             pickerContext.ui.toast.show({
               message: `No specs found under ${path.join(directory, '.agents', '@montflow', 'specs')}.`,
@@ -187,13 +164,12 @@ export default {
             return undefined;
           }
           const current = await currentSpec(directory, specs);
-          const ordered =
-            current === undefined ? specs : [current, ...specs.filter((spec) => spec !== current)];
-          const choices: Array<SelectChoice> = ordered.map((spec) => {
-            const choice: SelectChoice = { title: spec, value: spec };
-            if (spec === current) choice.description = 'current branch';
-            return choice;
-          });
+          const ordered = SpecSource.order(specs, current);
+          const choices: Array<SelectChoice> = ordered.map((spec) => ({
+            title: spec.name,
+            value: spec.name,
+            description: SpecSource.describe(spec, current),
+          }));
           const specOptions = {
             title: 'Spec',
             placeholder: 'Search specs',
@@ -255,18 +231,15 @@ export default {
           }
           if (variable.source === 'specs') {
             // oxlint-disable-next-line no-await-in-loop -- dialogs must be answered in declaration order.
-            const specs = await loadSpecNames(directory);
+            const specs = await loadSpecs(directory);
             // oxlint-disable-next-line no-await-in-loop -- dialogs must be answered in declaration order.
             const current = await currentSpec(directory, specs);
-            const ordered =
-              current === undefined
-                ? specs
-                : [current, ...specs.filter((spec) => spec !== current)];
-            const choices: Array<SelectChoice> = ordered.map((spec) => {
-              const choice: SelectChoice = { title: spec, value: spec };
-              if (spec === current) choice.description = 'current branch';
-              return choice;
-            });
+            const ordered = SpecSource.order(specs, current);
+            const choices: Array<SelectChoice> = ordered.map((spec) => ({
+              title: spec.name,
+              value: spec.name,
+              description: SpecSource.describe(spec, current),
+            }));
             if (!variable.required) choices.push({ title: 'Skip', value: '' });
             if (choices.length === 0) {
               pickerContext.ui.toast.show({

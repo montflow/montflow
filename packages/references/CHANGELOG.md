@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `mf-references doctor` reads `payload.json` and checks or repairs the two reference skills; `doctor --check` is report-only and `mf-references:check` ends with it
+
+### Changed
+
+- **Breaking:** the doctor is manifest-driven and uses the shared `@montflow/payload` engine; a locally edited packaged skill is `stale` and repair overwrites it, while an unlisted skill is user data
+- **Breaking:** scaffolding checks remain package-specific, but payload results now report the shared statuses `ok`/`missing`/`stale`/`mismatched`/`blocked` (check) and `present`/`installed`/`repaired`/`blocked` (repair)
+- `mf-references doctor` never deletes an unlisted skill and reports a blocked payload with its own coded fix
+
 ## 0.0.2
 
 ### Patch Changes

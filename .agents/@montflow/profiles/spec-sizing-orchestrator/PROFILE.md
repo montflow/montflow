@@ -34,8 +34,10 @@ skill, and only installed skills reach the executor. Install one with
 
 1. **Show what exists.** Read `<specs-root>/sizing.json` verbatim and run
    `mf-specs list`. With a spec or phase target, also run
-   `mf-specs status --name <spec>` and read `<spec>/sizing.json`. Present the
-   current size -> target mapping and every file found, including "none".
+   `mf-specs status --name <spec>` and read `<spec>/sizing.json`. A phase is a
+   directory named `<ID>/` under the spec; its size override lives at
+   `phases.<ID>.sizes` in the spec file. Present the current size -> target
+   mapping and every file found, including "none".
 2. **Resolve the scope.** Ask whether the target is repo-wide, one spec, or one
    phase, using the existing config as context, unless the caller supplied a
    fixed scope. Read the chosen spec's config and show its mapping before
@@ -82,6 +84,8 @@ the one-layer rule, the catalogue rule, and the proof loop are identical.
 ### Hard bounds
 
 - No `TASK.md`, task size, `SPEC.md`, status, or lock edits.
+- No derived lock is written; a phase's lock comes from `claim`, `gate run`, and
+  a closed review round or effective waiver, never from this run.
 - No invented model id or effort token.
 - No write outside the one path the scope names.
 - No write before the scope and the proposal are resolved and confirmed.
@@ -95,4 +99,4 @@ the one-layer rule, the catalogue rule, and the proof loop are identical.
 - [ ] The exact JSON and path were shown and confirmed; overwrites asked first
 - [ ] Unrelated sizes, `phases`, and keys survived; the repo file has no `phases`
 - [ ] Catalogue verify, `check`, and `sizing --human` passed, or the report names the failure
-- [ ] No `TASK.md`, task size, `SPEC.md`, or spec state was edited
+- [ ] No `TASK.md`, task size, `SPEC.md`, status, lock, or spec state was edited

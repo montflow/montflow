@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "package": "@montflow/model-fallback",
+  "payloads": [
+    {
+      "kind": "prompt",
+      "name": "model-fallback",
+      "source": "prompts/model-fallback.json",
+      "target": ".agents/@montflow/prompts/model-fallback.json"
+    }
+  ]
+}

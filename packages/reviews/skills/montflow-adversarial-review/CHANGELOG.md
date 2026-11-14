@@ -1,5 +1,11 @@
 # Changelog
 
+## [5.2.0] - 2026-11-03
+
+### Changed
+
+- The round comes from the CLI: `mf-reviews create <name>` scaffolds the next free round, `mf-reviews resume <name>` locates a re-review, and `mf-reviews list --verbose` handles discovery; the highest-existing-plus-one directory scan is gone, and an explicit `- Round:` stays authoritative via `create --round <NNN>`
+
 ## [5.1.1] - 2026-10-22
 
 ### Changed

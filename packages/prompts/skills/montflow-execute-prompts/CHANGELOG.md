@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.4.3] - 2026-11-04
+
+### Changed
+
+- `render` now runs the same verification as `execute`; the skill no longer claims render accepts a prompt `verify` rejects
+
 ## [3.4.2] - 2026-10-22
 
 ### Changed

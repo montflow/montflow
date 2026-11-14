@@ -100,6 +100,8 @@ export const Keybinds = {
   refresh: (): Keybind => ({ key: 'R', action: 'refresh' }),
   /** `m modify` — detail modify entry. */
   modify: (): Keybind => ({ key: 'm', action: 'modify' }),
+  /** `c condition` — prompt-detail condition editor entry. */
+  condition: (): Keybind => ({ key: 'c', action: 'condition' }),
   /** `e execute` — spec-detail execute entry (dispatch the resume session). */
   execute: (): Keybind => ({ key: 'e', action: 'execute' }),
   /** `v view` — detail preview-mode entry. */

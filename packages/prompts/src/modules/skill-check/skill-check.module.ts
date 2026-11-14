@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 // eslint-disable-next-line montflow/no-node-platform-imports -- the skills store lives under `.agents/skills`; this module is its platform boundary.
-import { readdir } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 // eslint-disable-next-line montflow/no-node-platform-imports -- path join for the skills store directory.
 import { join } from 'node:path';
 import * as Prompts from '../prompts/index.js';
@@ -21,10 +21,19 @@ import * as Prompts from '../prompts/index.js';
 export const resolveSkills = (root: string): Effect.Effect<Prompts.SkillResolution | undefined> =>
   Effect.tryPromise({
     try: async (): Promise<Prompts.SkillResolution> => {
-      const entries = await readdir(join(root, '.agents', 'skills'), { withFileTypes: true });
-      const names = new Set(
-        entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name),
+      const base = join(root, '.agents', 'skills');
+      const entries = await readdir(base, { withFileTypes: true });
+      const installed = await Promise.all(
+        entries
+          .filter((entry) => entry.isDirectory())
+          .map((entry) =>
+            stat(join(base, entry.name, 'SKILL.md')).then(
+              () => entry.name,
+              () => undefined,
+            ),
+          ),
       );
+      const names = new Set(installed.filter((name): name is string => name !== undefined));
       return { root, names };
     },
     catch: () => 'no skills store',

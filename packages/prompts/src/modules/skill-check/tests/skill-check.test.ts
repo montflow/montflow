@@ -13,9 +13,14 @@ Vitest.describe('SkillCheck.resolveSkills', () => {
       const fs = yield* FileSystem;
       const root = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-prompts-skill-check-' });
       yield* fs.makeDirectory(`${root}/.agents/skills/effect`, { recursive: true });
+      yield* fs.writeFileString(`${root}/.agents/skills/effect/SKILL.md`, '# effect\n');
       yield* fs.makeDirectory(`${root}/.agents/skills/montflow-typescript-services`, {
         recursive: true,
       });
+      yield* fs.writeFileString(
+        `${root}/.agents/skills/montflow-typescript-services/SKILL.md`,
+        '# services\n',
+      );
 
       const resolution = yield* SkillCheck.resolveSkills(root);
       Vitest.expect(resolution?.root).toBe(root);
@@ -23,6 +28,19 @@ Vitest.describe('SkillCheck.resolveSkills', () => {
         'effect',
         'montflow-typescript-services',
       ]);
+    }).pipe(Effect.provide(NodeLive), Effect.scoped),
+  );
+
+  Vitest.it.effect('does not count a directory without SKILL.md', () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem;
+      const root = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-prompts-skill-check-' });
+      yield* fs.makeDirectory(`${root}/.agents/skills/empty`, { recursive: true });
+      yield* fs.makeDirectory(`${root}/.agents/skills/effect`, { recursive: true });
+      yield* fs.writeFileString(`${root}/.agents/skills/effect/SKILL.md`, '# effect\n');
+
+      const resolution = yield* SkillCheck.resolveSkills(root);
+      Vitest.expect([...(resolution?.names ?? [])]).toStrictEqual(['effect']);
     }).pipe(Effect.provide(NodeLive), Effect.scoped),
   );
 
