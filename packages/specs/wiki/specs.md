@@ -1,6 +1,6 @@
 Find any spec on disk and say what state it is in, in 30 seconds.
 
-A spec is one planned piece of work: `SPEC.md` plus one directory per [phase](./phases.md). The store lives at `.agents/@montflow/specs/<name>/`. Every task lives inside a phase, so a phase is never just the leading letters of a task id.
+A spec is one planned piece of work: `SPEC.md` plus one directory per [phase](./phases.md). The store lives at `.agents/@montflow/specs/<name>/`. Every [task](./task.md) lives inside a phase, so a phase is never just the leading letters of a task id. A spec is created by [authoring](./authoring.md) — `init` or `create`.
 
 ## Store layout
 
@@ -14,11 +14,11 @@ A spec is one planned piece of work: `SPEC.md` plus one directory per [phase](./
     B/
 ```
 
-The spec root holds only `SPEC.md`, optional `sizing.json`, and phase directories. A task directory at the root is an error; run `mf-specs migrate` to move it under its phase.
+The spec root holds only `SPEC.md`, optional [sizing.json](./sizing.md#the-config), and phase directories. A task directory at the root is an error; run `mf-specs migrate` to move it under its phase.
 
 ## `SPEC.md`
 
-Frontmatter: `name`, `status`, `workspace-type`, `author`, `created`, and `spec-version`. The body holds `## Description`, `## Requirements`, and the `## Tasks` table `| ID | Name | Type | Status | Gates |`.
+Frontmatter: `name`, `status`, `workspace-type`, `author`, `created`, and `spec-version`. The body holds `## Description`, `## Requirements`, and the `## Tasks` table `| ID | Name | Type | Status | Gates |`. Each row is one [task](./task.md), and the [rigor](./rigor.md) level lives in the `## Creation` body section.
 
 There is no lock field. A lock is derived from the [phase](./phases.md) records, and `mf-specs lock` only confirms it.
 
@@ -48,10 +48,4 @@ mf-specs state --name ship-login
 mf-specs next --name ship-login
 ```
 
-`status` is the panel, `state` is the one-line derived state, and `next` is the ready set for the active phase. All three read the same verifier; a dispatchable target is never printed for an invalid record.
-
-## See also
-
-- [Phases](./phases.md) — the directory, record, review, and lock rules.
-- [Verbs](./verbs.md) — the generator that writes each field.
-- [Payload](./payload.md) — install the shipped skills and prompts.
+`status` is the panel, `state` is the one-line derived state, and `next` is the ready set for the active phase. All three read the same verifier; a dispatchable target is never printed for an invalid record. To create a spec, see [authoring](./authoring.md); to install the prompts and skills it ships, see [payload](./payload.md).

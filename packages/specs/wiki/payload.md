@@ -1,4 +1,4 @@
-Install or verify the specs payload in 1 minute.
+Install or verify the [specs](./specs.md) payload in 1 minute.
 
 `packages/specs/payload.json` declares every artifact this package ships. `mf-specs doctor` reads that manifest; no hand-written name array exists. The same `@montflow/payload` engine serves every payload package, so the statuses and refusal codes are identical everywhere.
 
@@ -18,7 +18,7 @@ Install or verify the specs payload in 1 minute.
 | `rigor`  | `deep`                  | `.agents/@montflow/rigors/deep.md`            |
 | `rigor`  | `critical`              | `.agents/@montflow/rigors/critical.md`        |
 
-Other packages own the other kinds: one `profile` per spec role is installed by `mf-profiles doctor`, and model-fallback owns one `prompt`. The manifest is the single source of truth for each package.
+Other packages own the other kinds: one [profile](./profiles.md) per spec role is installed by `mf-profiles doctor`, and model-fallback owns one `prompt`. The manifest is the single source of truth for each package. The rigors it ships are the five [rigor](./rigor.md) levels; the prompts load through the [verbs](./verbs.md).
 
 ## Two modes
 
@@ -31,16 +31,10 @@ Report mode statuses are `ok`, `missing`, `stale`, `mismatched`, and `blocked`. 
 
 ## Ownership
 
-A manifest-owned file is package payload. Edit `packages/specs/`, then reinstall; a local edit is `stale` and repair overwrites it. A file the manifest does not name, inside the same store, is user data: doctor never reads, rewrites, or deletes it. An extra file alone never makes a skill stale.
+A manifest-owned file is package payload. Edit `packages/specs/`, then reinstall; a local edit is `stale` and repair overwrites it. A file the manifest does not name, inside the same store, is user data: doctor never reads, rewrites, or deletes it. An extra file alone never makes a skill stale. This is the ownership contract every [spec](./specs.md) store and [phase](./phases.md) follows.
 
 A payload doctor cannot repair is `blocked` with its own coded fix; one blocked payload never aborts the rest of the run.
 
 ## Embedded payload
 
-The payload is embedded in the `mf-specs` binary at build time with `bun run generate:payload`. The package directory wins when present and the embed is the fallback, so a standalone binary can still repair a workspace. `src/modules/doctor/tests/embedded-payload.test.ts` fails when the embed drifts from the package.
-
-## See also
-
-- [Verbs](./verbs.md) — the commands that load the prompts and rigors.
-- [Phases](./phases.md) — what the authoring skill and rigor decide.
-- [Specs](./specs.md) — the store the payload writes into.
+The payload is embedded in the `mf-specs` binary at build time with `bun run generate:payload`. The package directory wins when present and the embed is the fallback, so a standalone binary can still repair a workspace. `src/modules/doctor/tests/embedded-payload.test.ts` fails when the embed drifts from the package. The prompts and skills the binary loads are the [authoring](./authoring.md) and [execute](./verbs.md#generators) surfaces.
