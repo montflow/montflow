@@ -17,6 +17,8 @@
 - Severity: Critical
 - Location: `packages/specs/src/modules/sizing/sizing.module.ts:52,924`, `packages/specs/src/apps/cli/cli.sizing.module.ts:95`
 - Status: Escalated
+- Attempts: 1
+- First Seen: 021
 - Problem: A bare store with no `sizing.json` resolves `inherit` + `light`, so `lock A` passes and `review decide A` is `waived` (`verification.light`).
 - Impact: Any spec without config locks without review.
 - Suggestion: Default absent config/entry to `full`; light requires an explicit opt-in entry.
@@ -34,6 +36,8 @@
 - Severity: Critical
 - Location: `packages/specs/src/apps/cli/cli.sizing.module.ts:95`, `packages/specs/src/modules/phase/phase.module.ts:672`
 - Status: Escalated
+- Attempts: 1
+- First Seen: 021
 - Problem: In a store whose sized tasks carry `verification: "full"`, unsized exploratory/defect tasks still resolve `light`, so `lock A` passes.
 - Impact: A full store can still lock a phase whose work was never sized.
 - Suggestion: Force all-unsized phases to `full`, or require explicit light per phase.
@@ -47,6 +51,8 @@
 - Severity: Major
 - Location: `packages/specs/src/modules/sizing/sizing.module.ts:873-884,929-930`
 - Status: Escalated
+- Attempts: 1
+- First Seen: 021
 - Problem: A phase override carrying only `model`/`effort` discards a repo or spec `verification: "full"` and resolves `light`.
 - Impact: Light is implicit where an explicit full was configured.
 - Suggestion: Preserve the less-specific mode across whole-entry overrides, or require every entry to name its mode.
@@ -60,6 +66,8 @@
 - Severity: Major
 - Location: `packages/specs/src/modules/phase/phase.module.ts:817`
 - Status: Escalated
+- Attempts: 1
+- First Seen: 021
 - Problem: `taskMechanical.every(pass)` on an empty array proves, so a light phase with no task `GATES.md` locks with no mechanical evidence and no review.
 - Impact: Light lock can stand on zero gate proof.
 - Suggestion: Require at least one proven mechanical task gate for a light lock.
@@ -73,6 +81,8 @@
 - Severity: Minor
 - Location: `packages/specs/src/apps/cli/cli.status.module.ts:231`, `packages/specs/src/apps/cli/cli.create.module.ts:131`
 - Status: Escalated
+- Attempts: 1
+- First Seen: 021
 - Problem: Callers that omit sizing default to `NO_SIZING`, which resolves every task light, so `create` scaffolds a light phase by default.
 - Impact: Sizing-less callers inherit light silently.
 - Suggestion: Default the summary path to `full` unless a size entry exists.
@@ -86,6 +96,8 @@
 - Severity: Minor
 - Location: `packages/specs/src/apps/cli/cli.check.module.ts:533-536`
 - Status: Escalated
+- Attempts: 1
+- First Seen: 021
 - Problem: `loadSizing` failure degrades to `NO_SIZING` (light); the run exits 1 via `rootIssues store.error`, so no false green, but the spec verdict is unsafe.
 - Impact: An unreadable sizing file reads as light for downstream derivation.
 - Suggestion: Treat a failed load as `full` for phase derivation.
@@ -99,6 +111,8 @@
 - Severity: Minor
 - Location: `packages/specs/src/apps/cli/cli.status.module.ts:180-184`
 - Status: Escalated
+- Attempts: 1
+- First Seen: 021
 - Problem: The phase line says `review required` for a light phase; only the per-task column shows `light`.
 - Impact: A reader can miss that review is waived in practice.
 - Suggestion: Print the effective verification beside the phase review line.
@@ -112,6 +126,8 @@
 - Severity: Nit
 - Location: `packages/specs/src/apps/cli/cli.apps.module.ts`
 - Status: Escalated
+- Attempts: 1
+- First Seen: 021
 - Problem: `cli.claim`/`cli.review`/`cli.state` import `taskVerifications` from the `cli.apps` barrel that re-exports them (deferred use only, matching existing check style).
 - Impact: A latent import cycle risk.
 - Suggestion: Move the helper to a leaf module both sides can import.
@@ -125,6 +141,8 @@
 - Severity: Minor
 - Location: `packages/specs/src/modules/phase/phase.module.ts`
 - Status: Escalated
+- Attempts: 1
+- First Seen: 021
 - Problem: `lock` trusts recorded passes without re-fingerprinting inputs, and light has no review backstop to catch camouflage.
 - Impact: A stale PASS can lock light.
 - Suggestion: Re-check freshness on the lock path or keep a review backstop for light.
@@ -139,5 +157,8 @@
 - Major: 2
 - Minor: 4
 - Nit: 1
-- Open: 9
+- In Review: 0
+- Resolved: 0
+- Won't Fix: 0
+- Open: 0
 - Escalated: 9
