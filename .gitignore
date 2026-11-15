@@ -254,6 +254,7 @@ $RECYCLE.BIN/
 # --- montflow skills workspace ---
 .agents/@montflow/reviews/*
 !.agents/@montflow/reviews/montflow-spec-standard/
+!.agents/@montflow/reviews/references-update-wizard/
 .agents/@montflow/workspace.json
 .agents/references
 
