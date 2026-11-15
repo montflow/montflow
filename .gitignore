@@ -288,3 +288,6 @@ scratchpad/*
 
 # --- git worktrees (project-local, isolated feature branches) ---
 .worktrees/
+
+# --- git worktrees: feat/ branches (project-local) ---
+feat/
