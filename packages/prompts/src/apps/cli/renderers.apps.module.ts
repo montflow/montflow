@@ -23,16 +23,15 @@ import type * as Engines from './engines.apps.module.js';
  */
 
 /** One-line usage summary. */
-export const USAGE = `mf-prompts — inspect, verify, and execute stored prompt templates.
+export const USAGE = `mf-prompts — inspect, verify, and construct stored prompt templates.
 
 Usage:
   mf-prompts doctor [--check] [--verbose]
   mf-prompts list [--verbose] [--dir <path>]
   mf-prompts inspect <name> [key=value ...] [--dir <path>]
-  mf-prompts execute <name> --model <provider/model-id> [key=value ...] [--dir <path>]
+  mf-prompts construct <name> [key=value ...] [--wizard] [--copy] [--dir <path>]
   mf-prompts show <name> [--dir <path>]
   mf-prompts verify <name>|--all [--strict] [--dir <path>]
-  mf-prompts render <name> [key=value ...] [--dir <path>]
   mf-prompts create <name> --template <text> [--description <d>] [--model <p/m>]
                     [--skills a,b] [--variable name[:flags]] [--dir <path>]
   mf-prompts modify <name> [--template <text>] [--description <d>] [--model <p/m>]
@@ -40,7 +39,9 @@ Usage:
   mf-prompts delete <name> [--dir <path>]
 
 Variable specs for --variable: name, name:o (optional), name:d=<text> (default).
-Values are key=value pairs; every required variable must be supplied.`;
+Values are key=value pairs; every required variable must be supplied.
+--wizard collects the values interactively; --copy also places the output on
+the system clipboard.`;
 
 /** How much detail to print. */
 export interface Verbosity {

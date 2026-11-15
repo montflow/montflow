@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import * as PromptExecute from '../../modules/prompt-execute/index.js';
 import { PromptStore } from '../../services/index.js';
+import * as Interactive from '../interactive/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
 
@@ -28,14 +29,17 @@ export const COMMAND_NAME = 'mf-prompts';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Run the prompts CLI headlessly: doctor, list [--status valid|invalid], inspect, execute, show, verify [<name>|--all] [--strict], render, create, modify, or delete a prompt. Store operations accept --dir to target a workspace root other than the working directory. Type /mf-prompts with no arguments to open the picker.';
+  'Run the prompts CLI headlessly: doctor, list [--status valid|invalid], inspect, construct [--wizard] [--copy], show, verify [<name>|--all] [--strict], create, modify, or delete a prompt. Store operations accept --dir to target a workspace root other than the working directory. Type /mf-prompts with no arguments to open the picker.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE =
-  '/mf-prompts doctor [--check] | list [--status valid|invalid] | inspect <name> [key=value ...] | execute <name> --model p/m [key=value ...] | show <name> | verify [<name>|--all] [--strict] [--dir path] | render <name> [key=value ...] | create <name> --template "text" [--description d] [--model p/m] [--skills a,b] [--variable name[:flags]] [--dir path] | modify <name> [--template "text" ...] [--dir path] | delete <name> | help';
+  '/mf-prompts doctor [--check] | list [--status valid|invalid] | inspect <name> [key=value ...] | construct <name> [key=value ...] [--wizard] [--copy] | show <name> | verify [<name>|--all] [--strict] [--dir path] | create <name> --template "text" [--description d] [--model p/m] [--skills a,b] [--variable name[:flags]] [--dir path] | modify <name> [--template "text" ...] [--dir path] | delete <name> | help';
 
 /** Flags `execute` and `doctor` understand. Anything else is usage. */
-const KNOWN_RUN_FLAGS: ReadonlySet<string> = new Set(['model', 'check']);
+const KNOWN_RUN_FLAGS: ReadonlySet<string> = new Set(['check']);
+
+/** Flags `construct` understands. Anything else is usage. */
+const KNOWN_CONSTRUCT_FLAGS: ReadonlySet<string> = new Set(['wizard', 'copy', 'dir']);
 
 /** Flags `list` understands. Anything else is usage. */
 const KNOWN_LIST_FLAGS: ReadonlySet<string> = new Set(['status']);
@@ -61,10 +65,11 @@ export type CliAction =
       readonly values: Record<string, string>;
     }
   | {
-      readonly kind: 'Execute';
-      readonly name: string;
-      readonly model: string | undefined;
+      readonly kind: 'Construct';
+      readonly name: string | undefined;
       readonly values: Record<string, string>;
+      readonly wizard: boolean;
+      readonly copy: boolean;
     }
   | { readonly kind: 'Show'; readonly name: string }
   | {
@@ -74,7 +79,6 @@ export type CliAction =
       readonly strict: boolean;
       readonly dir: string | undefined;
     }
-  | { readonly kind: 'Render'; readonly name: string; readonly values: Record<string, string> }
   | {
       readonly kind: 'Create';
       readonly name: string;
@@ -192,15 +196,15 @@ export const parseCliArgs = (args: string): CliAction => {
       return tokens[1] === undefined
         ? { kind: 'Help' }
         : { kind: 'Inspect', name: tokens[1], values: Engines.keyValues(tokens.slice(2)) };
-    case 'execute': {
-      if (tokens[1] === undefined) return { kind: 'Help' };
-      const split = splitTokens(tokens.slice(2), KNOWN_RUN_FLAGS);
+    case 'construct': {
+      const split = splitTokens(tokens.slice(1), KNOWN_CONSTRUCT_FLAGS);
       if (split.unknown.length > 0) return { kind: 'Help' };
       return {
-        kind: 'Execute',
-        name: tokens[1],
-        model: one(split.flags['model']),
-        values: Engines.keyValues(split.positionals),
+        kind: 'Construct',
+        name: split.positionals[0],
+        values: Engines.keyValues(split.positionals.slice(1)),
+        wizard: split.flags['wizard'] !== undefined,
+        copy: split.flags['copy'] !== undefined,
       };
     }
     case 'show':
@@ -221,10 +225,9 @@ export const parseCliArgs = (args: string): CliAction => {
         dir: one(split.flags['dir']),
       };
     }
-    case 'render':
-      return tokens[1] === undefined
-        ? { kind: 'Help' }
-        : { kind: 'Render', name: tokens[1], values: Engines.keyValues(tokens.slice(2)) };
+    case 'render': {
+      return { kind: 'Help' };
+    }
     case 'delete': {
       if (tokens[1] === undefined) return { kind: 'Help' };
       const split = splitTokens(tokens.slice(2), KNOWN_EDIT_FLAGS);
@@ -276,7 +279,9 @@ export const run = (
   args: string,
   ui: CliUi,
   cwd: string,
-  execute: PromptExecute.PromptExecutor,
+  // The executor port is retained for call-site stability even though the
+  // headless surface no longer runs an agent (it constructs, never executes).
+  _execute: PromptExecute.PromptExecutor,
 ): Effect.Effect<void, string, PromptStore.PromptStore> => {
   const action = parseCliArgs(args);
   const say = (text: string): Effect.Effect<void> => Effect.sync(() => ui.notify(text, 'info'));
@@ -299,25 +304,17 @@ export const run = (
         const found = yield* Engines.inspect({ cwd }, action.name, action.values);
         return yield* say(Renderers.inspect(found.summary));
       }
-      case 'Execute': {
-        const resolved = yield* Engines.plan(
-          {
-            cwd,
-            model: action.model,
-            values: action.values,
-            invocation: '/mf-prompts execute',
-          },
-          action.name,
-        );
-        if (!resolved.ok) return yield* Effect.fail(resolved.message);
-        const reply = yield* execute({
-          cwd,
-          name: action.name,
-          model: resolved.model,
-          text: resolved.text,
-          skills: resolved.skills,
+      case 'Construct': {
+        if (action.wizard) {
+          // The slash surface is notify-only: no interactive controls, so the
+          // wizard refuses with an actionable message telling the caller to use
+          // the key=value form.
+          return yield* Effect.fail(Interactive.NON_TTY_MESSAGE);
+        }
+        const text = yield* Engines.construct({ cwd }, action.name ?? '', action.values, {
+          invocation: '/mf-prompts construct',
         });
-        return yield* say(reply);
+        return yield* say(text);
       }
       case 'Show': {
         const prompt = yield* Engines.load({ cwd }, action.name);
@@ -370,8 +367,6 @@ export const run = (
         });
         return yield* say(Renderers.saved(prompt));
       }
-      case 'Render':
-        return yield* say(yield* Engines.render({ cwd }, action.name, action.values));
       case 'Delete': {
         yield* Engines.remove({ cwd: action.dir ?? cwd }, action.name);
         return yield* say(Renderers.deleted(action.name));

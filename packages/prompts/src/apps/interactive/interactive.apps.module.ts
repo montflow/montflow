@@ -1,4 +1,5 @@
 import { Effect } from 'effect';
+import { ProfileStore } from '@montflow/profiles';
 import * as Interaction from '../../modules/interaction/index.js';
 import * as PromptExecute from '../../modules/prompt-execute/index.js';
 import * as Prompts from '../../modules/prompts/index.js';
@@ -64,10 +65,9 @@ export type Action =
   | { readonly kind: 'Show'; readonly name: string }
   | { readonly kind: 'Inspect'; readonly name: string; readonly values: Record<string, string> }
   | { readonly kind: 'Modify'; readonly name: string | undefined }
-  | { readonly kind: 'Render'; readonly name: string; readonly values: Record<string, string> }
   | {
-      readonly kind: 'Execute';
-      readonly name: string;
+      readonly kind: 'Construct';
+      readonly name: string | undefined;
       readonly values: Record<string, string>;
     };
 
@@ -123,16 +123,14 @@ export const parseAction = (args: string): Action => {
       return tokens[1] === undefined
         ? { kind: 'Menu' }
         : { kind: 'Inspect', name: tokens[1], values: collectValues(tokens.slice(2)) };
-    case 'execute':
-      return tokens[1] === undefined
-        ? { kind: 'Menu' }
-        : { kind: 'Execute', name: tokens[1], values: collectValues(tokens.slice(2)) };
+    case 'construct':
+      return {
+        kind: 'Construct',
+        name: tokens[1],
+        values: collectValues(tokens.slice(2)),
+      };
     case 'modify':
       return { kind: 'Modify', name: tokens[1] };
-    case 'render':
-      return tokens[1] === undefined
-        ? { kind: 'Menu' }
-        : { kind: 'Render', name: tokens[1], values: collectValues(tokens.slice(2)) };
     case 'help':
     case '--help':
     case '-h':
@@ -678,6 +676,205 @@ export const executeFlow = (
     yield* Effect.sync(() => ui.notify(reply, 'info'));
   });
 
+/** The back-navigation choice offered on every wizard question. */
+export const BACK = '← Back';
+
+/** The explicit "use the prompt's fallback" choice for an optional defaulted variable. */
+export const USE_FALLBACK = 'Use recommended fallback';
+
+/** Actionable refusal when `--wizard` is requested with no interactive controls. */
+export const NON_TTY_MESSAGE =
+  'The --wizard flow needs interactive controls, which this environment does not provide. Use the key=value form instead: mf-prompts construct <name> [key=value ...].';
+
+/** True when a `select` variable is named for a profile (e.g. `profile`). */
+const isProfileVariable = (variable: Prompts.Variable): boolean =>
+  variable.type === 'select' && /profile/iu.test(variable.name);
+
+/**
+ * One wizard step result for a variable.
+ * @internal
+ */
+type WizardAnswer =
+  | { readonly kind: 'answer'; readonly value: string }
+  | { readonly kind: 'back' }
+  | { readonly kind: 'cancel' };
+
+/**
+ * The wizard state: collected values plus the index of the current question.
+ * @internal
+ */
+interface WizardState {
+  values: Record<string, string>;
+  /** Names already answered (including a blank "use fallback" answer). */
+  answered: Set<string>;
+  index: number;
+}
+
+/** Collect a profile variable's selectable options from the profile store. */
+const profileOptions = (
+  cwd: string,
+): Effect.Effect<readonly string[], never, ProfileStore.ProfileStore> =>
+  Effect.gen(function* () {
+    const profiles = yield* ProfileStore.ProfileStore;
+    const listed = yield* profiles.list(cwd);
+    return listed.map((profile) => profile.name);
+  });
+
+/**
+ * Ask one wizard question for a variablecars and return the chosen answer.
+ *
+ * Every control is presented as a picker over the variable's natural choices
+ * plus a trailing `← Back` (and `Use recommended fallback` for an optional
+ * variable that guards a branch): a `select` lists its options (or the profile
+ * store when the variable is profile-shaped), a `confirm` offers yes/no, and
+ * `text`/`textarea` offers an entry that then opens a free-text input. This
+ * uniform menu makes back-navigation and the fallback choice explicit and
+ * testable. Cancelling dismisses the dialog and fails the whole flow.
+ * @internal
+ */
+const askOne = (
+  ui: InteractiveUi,
+  variable: Prompts.Variable,
+  hasFallback: boolean,
+  cwd: string,
+): Effect.Effect<WizardAnswer, string, ProfileStore.ProfileStore> =>
+  Effect.gen(function* () {
+    const offered: Array<string> = [];
+    if (variable.type === 'select') {
+      const listed = isProfileVariable(variable) ? yield* profileOptions(cwd) : [];
+      const base =
+        isProfileVariable(variable) && listed.length > 0 ? listed : [...(variable.options ?? [])];
+      offered.push(...base);
+    } else if (variable.type === 'confirm') {
+      offered.push('yes', 'no');
+    } else {
+      offered.push('Enter a value…');
+    }
+    if (hasFallback) offered.push(USE_FALLBACK);
+    offered.push(BACK);
+
+    const title = variable.label;
+    const picked = yield* Effect.promise(() => ui.select(title, offered));
+    if (picked === undefined) return { kind: 'cancel' };
+    if (picked === BACK) return { kind: 'back' };
+    if (picked === USE_FALLBACK) return { kind: 'answer', value: '' };
+    if (variable.type === 'select') {
+      return { kind: 'answer', value: picked };
+    }
+    if (variable.type === 'confirm') {
+      return { kind: 'answer', value: picked === 'yes' ? 'yes' : '' };
+    }
+    // text / textarea
+    const hint = variable.required === true ? 'required' : 'optional — leave blank to skip';
+    const entered = yield* Effect.promise(() => ui.input(title, hint));
+    if (entered === undefined) return { kind: 'cancel' };
+    if (entered === '' && variable.required === true) {
+      return yield* Effect.fail(`Value for '${variable.name}' must not be empty.`);
+    }
+    return { kind: 'answer', value: entered };
+  });
+
+/**
+ * The ordered variables the wizard can ask: visible and without a declared
+ * default (a defaulted variable is never a question). Answered ones stay in the
+ * list so back-navigation can revisit them; forward traversal skips an answered
+ * variable unless we just came back to it.
+ */
+const askable = (prompt: Prompts.Prompt, values: Record<string, string>) =>
+  prompt.variables.filter(
+    (variable) =>
+      Prompts.isVisible(variable.name, prompt.variables, values) && variable.default === '',
+  );
+
+/** True when a variable guards a branch, so blanking it uses the `{{else}}` fallback. */
+const hasFallback = (prompt: Prompts.Prompt, variable: Prompts.Variable): boolean =>
+  Prompts.analyze(prompt.template).conditionals.includes(variable.name) && !variable.required;
+
+/**
+ * Collect every visible variable through type-matched controls, then render
+ * through the shared {@link PromptExecute.construct} engine and return the
+ * final text.
+ *
+ * With no `name` the flow shows a picker of the workspace prompts; with a name
+ * it skips that picker. Each question offers `← Back` to re-answer a prior
+ * variable and `Use recommended fallback` for an optional variable that guards
+ * a branch; cancellation fails without printing a partial prompt. The flow
+ * reuses `Prompts.isVisible` and the shared `construct` validation — it never
+ * duplicates either. It reads the profile store for a profile-shaped `select`.
+ *
+ * Non-TTY is refused here: pass `options.interactive: false` (the CLI detects
+ * a missing TTY) to get the actionable {@link NON_TTY_MESSAGE} instead of a
+ * hang or partial output.
+ * @param ui - host dialogs
+ * @param cwd - project working directory
+ * @param name - prompt name, or none to pick from the workspace
+ * @param options - wizard knobs (interactive detection)
+ * @returns Effect resolving to the constructed text
+ */
+export const constructWizard = (
+  ui: InteractiveUi,
+  cwd: string,
+  name: string | undefined,
+  options: { readonly interactive?: boolean | undefined } = {},
+): Effect.Effect<string, string, PromptStore.PromptStore | ProfileStore.ProfileStore> =>
+  Effect.gen(function* () {
+    if (options.interactive === false) return yield* Effect.fail(NON_TTY_MESSAGE);
+    const store = yield* PromptStore.PromptStore;
+    const prompts = yield* store.list(cwd).pipe(Effect.mapError((error) => error.message));
+    let resolved = name;
+    if (resolved === undefined) {
+      if (prompts.length === 0) return yield* Effect.fail('No prompts yet — create one first.');
+      const chosen = yield* Effect.promise(() =>
+        ui.select(
+          'Construct prompt',
+          prompts.map((prompt) => prompt.name),
+        ),
+      );
+      if (chosen === undefined) return yield* Effect.fail(CANCELLED);
+      resolved = chosen;
+    }
+    const prompt = prompts.find((candidate) => candidate.name === resolved);
+    if (prompt === undefined) {
+      return yield* Effect.fail(
+        `Unknown prompt '${resolved}'. See the available prompts with: mf-prompts list`,
+      );
+    }
+
+    const state: WizardState = { values: {}, answered: new Set(), index: 0 };
+    const advance = Effect.gen(function* () {
+      let cameFromBack = false;
+      for (;;) {
+        const questions = askable(prompt, state.values);
+        if (state.index >= questions.length) return;
+        const variable = questions[state.index];
+        if (variable === undefined) return;
+        // Forward traversal skips an answered variable (a blank "use fallback"
+        // answer counts as answered, so it is not re-asked); back-navigation
+        // re-asks it so the user can change a prior choice.
+        if (state.answered.has(variable.name) && !cameFromBack) {
+          state.index += 1;
+          continue;
+        }
+        const answer = yield* askOne(ui, variable, hasFallback(prompt, variable), cwd);
+        if (answer.kind === 'cancel') return yield* Effect.fail(CANCELLED);
+        if (answer.kind === 'back') {
+          state.index = Math.max(0, state.index - 1);
+          cameFromBack = true;
+          continue;
+        }
+        state.values[variable.name] = answer.value;
+        state.answered.add(variable.name);
+        state.index += 1;
+        cameFromBack = false;
+      }
+    });
+    yield* advance;
+
+    const result = PromptExecute.construct({ prompt, values: state.values });
+    if (!result.ok) return yield* Effect.fail(result.message);
+    return result.text;
+  });
+
 /**
  * Structured render: fill every input, show the result, offer another pass
  * with the previous values as defaults.
@@ -934,10 +1131,11 @@ export const run = (
         yield* Effect.sync(() => ui.notify(PromptExecute.table(summary), 'info'));
         return;
       }
-      case 'Execute': {
+      case 'Construct': {
         const prompts = yield* loadPrompts(store, cwd);
-        const prompt = yield* findOrFail(prompts, action.name);
-        yield* executeFlow(ui, cwd, prompt, models, action.values, execute, modelPicker);
+        const prompt = yield* findOrFail(prompts, action.name ?? '');
+        const rendered = yield* renderValues(ui, prompt, action.values);
+        yield* Effect.sync(() => ui.notify(rendered, 'info'));
         return;
       }
       case 'Show': {
@@ -950,13 +1148,6 @@ export const run = (
         const prompt = yield* modifyPrompt(ui, prompts, models, modify, action.name, modelPicker);
         yield* store.save(cwd, prompt).pipe(Effect.mapError((error) => error.message));
         yield* Effect.sync(() => ui.notify(`Saved prompt '${prompt.name}'.`, 'info'));
-        return;
-      }
-      case 'Render': {
-        const prompts = yield* loadPrompts(store, cwd);
-        const prompt = yield* findOrFail(prompts, action.name);
-        const rendered = yield* renderValues(ui, prompt, action.values);
-        yield* Effect.sync(() => ui.notify(rendered, 'info'));
         return;
       }
       case 'Menu': {
