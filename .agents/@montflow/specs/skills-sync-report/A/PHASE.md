@@ -1,7 +1,7 @@
 ---
 id: A
 objective: Make mf-skills sync print a concise per-outcome summary of added/updated/unchanged/skipped skills, matching the --check style and the renderer token contract.
-status: pending
+status: complete
 review: waived
 review-reason: light rigor default: every task gate is the review evidence.
 review-evidence: A001:0, A002:0, A003:0

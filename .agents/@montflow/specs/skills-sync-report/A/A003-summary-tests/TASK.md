@@ -7,7 +7,7 @@ size: small
 depends-on: 
 write-scope: packages/skills/src/apps/cli/tests/sync.test.ts,packages/skills/src/apps/sync/tests/sync.test.ts
 related-tasks: A001, A002
-status: pending
+status: complete
 ---
 
 # Task A003: summary-tests
@@ -39,7 +39,7 @@ ends. The engine and the renderer are unchanged; the tests are the proof.
 
 ## Completion
 
-- [ ] Renderer report-byte tests cover all four outcome groups, the footer, and `--verbose`.
-- [ ] Engine tests cover the outcome classification and drift.
-- [ ] Binary and slash end-to-end tests cover write, drift, and current runs.
-- [ ] The summary-tests verification gate passes (see GATES.md).
+- [x] Renderer report-byte tests cover all four outcome groups, the footer, and `--verbose`.
+- [x] Engine tests cover the outcome classification and drift.
+- [x] Binary and slash end-to-end tests cover write, drift, and current runs.
+- [x] The summary-tests verification gate passes (see GATES.md).

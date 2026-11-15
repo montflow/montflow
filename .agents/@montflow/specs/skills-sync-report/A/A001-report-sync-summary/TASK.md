@@ -7,7 +7,7 @@ size: medium
 depends-on: 
 write-scope: packages/skills/src/apps/cli/renderers.apps.module.ts
 related-tasks: A002, A003
-status: pending
+status: complete
 ---
 
 # Task A001: report-sync-summary
@@ -44,7 +44,7 @@ and keep that shape, closing any gap that hides an outcome from a write run.
 
 ## Completion
 
-- [ ] `Renderers.sync` prints the grouped summary and count footer for a write run.
-- [ ] `--verbose` adds per-file detail only, and skipped skills show their reason.
-- [ ] A write run prints the summary without the `--check` verdict line.
-- [ ] The renderer's own verification gate passes (see GATES.md).
+- [x] `Renderers.sync` prints the grouped summary and count footer for a write run.
+- [x] `--verbose` adds per-file detail only, and skipped skills show their reason.
+- [x] A write run prints the summary without the `--check` verdict line.
+- [x] The renderer's own verification gate passes (see GATES.md).

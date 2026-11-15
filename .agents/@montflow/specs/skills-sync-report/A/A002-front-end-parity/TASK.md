@@ -7,7 +7,7 @@ size: small
 depends-on: 
 write-scope: packages/skills/src/apps/cli/binary.apps.module.ts,packages/skills/src/apps/cli/slash.apps.module.ts
 related-tasks: A001, A003
-status: pending
+status: complete
 ---
 
 # Task A002: front-end-parity
@@ -37,7 +37,7 @@ binary, `/mf-skills sync` for the slash). The engine is not changed.
 
 ## Completion
 
-- [ ] Binary and slash handlers both print the A001 summary.
-- [ ] `--check` drift sets a non-zero exit; write and current `--check` stay zero.
-- [ ] The refusal line names the caller's own invocation in each front end.
-- [ ] The front-end parity verification gate passes (see GATES.md).
+- [x] Binary and slash handlers both print the A001 summary.
+- [x] `--check` drift sets a non-zero exit; write and current `--check` stay zero.
+- [x] The refusal line names the caller's own invocation in each front end.
+- [x] The front-end parity verification gate passes (see GATES.md).

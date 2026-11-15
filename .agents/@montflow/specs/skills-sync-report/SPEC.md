@@ -1,6 +1,6 @@
 ---
 name: skills-sync-report
-status: in-progress
+status: complete
 workspace-type: worktree
 author: Daniel Montilla
 created: 2026-11-15
@@ -51,6 +51,6 @@ only adds per-file detail, and failures are never suppressed.
 
 | ID | Name | Type | Status | Gates |
 | --- | --- | --- | --- | --- |
-| A001 | report-sync-summary | execution | pending | Yes |
-| A002 | front-end-parity | execution | pending | Yes |
-| A003 | summary-tests | execution | pending | Yes |
+| A001 | report-sync-summary | execution | complete | Yes |
+| A002 | front-end-parity | execution | complete | Yes |
+| A003 | summary-tests | execution | complete | Yes |
