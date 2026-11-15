@@ -771,6 +771,129 @@ Vitest.describe('GitLifecycle update', () => {
       yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
     }),
   );
+
+  Vitest.it.effect('update --ref pins a commit and leaves the entry uncommitted', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      const second = yield* Effect.promise(() => advanceOrigin(origin.dir));
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'fixture' }));
+        const result = yield* lifecycle.update(root, 'fixture', {
+          ref: second,
+          invocation: 'mf-references',
+        });
+        const raw = yield* store.readRaw(root, 'fixture');
+        const cloneHead = yield* Effect.promise(() =>
+          git(Reference.clonePath(root, 'fixture'), ['rev-parse', 'HEAD']),
+        );
+        const branch = yield* Effect.promise(() =>
+          git(Reference.clonePath(root, 'fixture'), ['rev-parse', '--abbrev-ref', 'HEAD']),
+        );
+        return { result, raw, cloneHead, branch };
+      }).pipe(Effect.provide(realLive));
+
+      Vitest.expect(second).not.toBe(origin.first);
+      Vitest.expect(outcome.result).toMatchObject({ kind: 'updated', slug: 'fixture' });
+      Vitest.expect(outcome.raw).toContain(`ref: ${second}`);
+      Vitest.expect(outcome.cloneHead).toBe(second);
+      Vitest.expect(outcome.branch).toBe('HEAD');
+      if ('entryDiff' in outcome.result && outcome.result.entryDiff !== undefined) {
+        Vitest.expect(outcome.result.entryDiff.new).toBe(second);
+      }
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
+  Vitest.it.effect('update --latest removes the ref line and tracks the branch', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      const second = yield* Effect.promise(() => advanceOrigin(origin.dir));
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'fixture', ref: origin.first }));
+        const result = yield* lifecycle.update(root, 'fixture', {
+          latest: true,
+          invocation: 'mf-references',
+        });
+        const raw = yield* store.readRaw(root, 'fixture');
+        const cloneHead = yield* Effect.promise(() =>
+          git(Reference.clonePath(root, 'fixture'), ['rev-parse', 'HEAD']),
+        );
+        return { result, raw, cloneHead };
+      }).pipe(Effect.provide(realLive));
+
+      Vitest.expect(outcome.result).toMatchObject({ kind: 'updated', slug: 'fixture' });
+      Vitest.expect(outcome.raw).not.toContain('ref:');
+      Vitest.expect(outcome.cloneHead).toBe(second);
+      if ('entryDiff' in outcome.result && outcome.result.entryDiff !== undefined) {
+        Vitest.expect(outcome.result.entryDiff.old).toBe(origin.first);
+        Vitest.expect(outcome.result.entryDiff.new).toBeUndefined();
+      }
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
+  Vitest.it.effect('update refuses an unresolvable --ref without writing', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'fixture' }));
+        const result = yield* lifecycle.update(root, 'fixture', {
+          ref: 'ffffffffffffffffffffffffffffffffffffffff',
+          invocation: 'mf-references',
+        });
+        const raw = yield* store.readRaw(root, 'fixture');
+        return { result, raw };
+      }).pipe(Effect.provide(realLive));
+
+      Vitest.expect(outcome.result).toMatchObject({ kind: 'refused', code: 'ref-unresolvable' });
+      Vitest.expect(outcome.raw).not.toContain('ref:');
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
+  Vitest.it.effect('update refuses --ref and --latest together before any write', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        yield* seed(root, store, entry({ name: 'fixture' }));
+        const result = yield* lifecycle.update(root, 'fixture', {
+          ref: origin.first,
+          latest: true,
+          invocation: 'mf-references',
+        });
+        const raw = yield* store.readRaw(root, 'fixture');
+        return { result, raw };
+      }).pipe(Effect.provide(realLive));
+
+      Vitest.expect(outcome.result).toMatchObject({ kind: 'refused', code: 'usage' });
+      Vitest.expect(outcome.raw).not.toContain('ref:');
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
 });
 
 Vitest.describe('GitLifecycle sync', () => {
@@ -819,8 +942,14 @@ Vitest.describe('GitLifecycle sync', () => {
         return yield* lifecycle.status(root, { fetch: true });
       }).pipe(Effect.provide(realLive));
       if (!('rows' in before)) throw new Error('expected a status report');
-      Vitest.expect(before.rows[0]?.state).toBe('ref-mismatch');
-      Vitest.expect(before.rows[0]?.upstream).toBeUndefined();
+      // git >= 2.45 auto-updates refs/remotes/origin/HEAD on `fetch --prune`,
+      // so a `status --fetch` already heals the rename and reports `present`;
+      // older git leaves the remote HEAD stale and reports `ref-mismatch`.
+      if (before.rows[0]?.state === 'ref-mismatch') {
+        Vitest.expect(before.rows[0]?.upstream).toBeUndefined();
+      } else {
+        Vitest.expect(before.rows[0]?.state).toBe('present');
+      }
 
       const outcome = yield* Effect.gen(function* () {
         const lifecycle = yield* Git.GitLifecycle;

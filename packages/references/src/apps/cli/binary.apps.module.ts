@@ -1,10 +1,13 @@
 import { Console, Effect, Option } from 'effect';
 import { Argument, Command, Flag } from 'effect/cli';
+// oxlint-disable-next-line montflow/no-node-platform-imports -- the binary is the update-wizard composition seam; only it touches stdin.
+import { createInterface } from 'node:readline';
 import packageJson from '../../../package.json' with { type: 'json' };
 import { Cli } from '@montflow/version';
 import type { BuildInfo } from '@montflow/version';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
+import * as UpdateWizard from './update-wizard/index.js';
 
 /** This package's root: three levels up from `src/apps/cli`. */
 export const PACKAGE_ROOT = `${import.meta.dirname}/../../..`;
@@ -26,6 +29,24 @@ export const PACKAGE_IDENTITY = {
 
 /** Collapse an optional flag to `string | undefined`. */
 const opt = (value: Option.Option<string>): string | undefined => Option.getOrUndefined(value);
+
+/** True when stdin is a real terminal, so `update <name>` can auto-wizard. */
+const isInteractiveCli = (): boolean => process.stdin.isTTY ?? false;
+
+/** Read one line from stdin; the binary's sole interactive input seam. */
+const readLineReader: UpdateWizard.WizardInput['readLine'] = (prompt) =>
+  Effect.callback<string, UpdateWizard.WizardCancel>((resume) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(prompt, (line: string) => {
+      rl.close();
+      resume(Effect.succeed(line));
+    });
+    rl.on('SIGINT', () => {
+      rl.close();
+      resume(Effect.fail(new UpdateWizard.WizardCancel('cancel')));
+    });
+    return Effect.void;
+  });
 
 /** Optional string flag. */
 const optionalString = (name: string, description: string) =>
@@ -218,6 +239,9 @@ const updateCommand = Command.make(
     ),
     all: optionalBoolean('all', 'Update every entry, sequentially in slug order.'),
     force: optionalBoolean('force', 'Discard local changes in a proven clone.'),
+    ref: optionalString('ref', 'Pin <commit|tag|branch>, write it, then refresh.'),
+    latest: optionalBoolean('latest', 'Remove the ref pin and follow the tracked branch.'),
+    wizard: optionalBoolean('wizard', 'Prompt interactively for the update target.'),
     human: humanFlag,
     verbose: verboseFlag,
     dir: dirFlag,
@@ -233,9 +257,20 @@ const updateCommand = Command.make(
           `usage: ${INVOCATION} update <name|url> (or ${INVOCATION} update --all)`,
         );
       }
+      const targetFlags = [config.ref, config.latest, config.wizard].filter(Boolean).length;
+      if (targetFlags > 1) {
+        return yield* usage(
+          `usage: --ref, --latest, and --wizard are mutually exclusive; pass one target`,
+        );
+      }
+      if (config.wizard && config.all) {
+        return yield* usage(`usage: --wizard prompts for one entry; pass <name>, not --all`);
+      }
       if (config.all) {
         const reportValue = yield* Engines.updateAll(scope(config.dir), {
           force: config.force,
+          ref: opt(config.ref),
+          latest: config.latest,
           invocation: INVOCATION,
         });
         yield* Console.log(Renderers.updatedAll(reportValue, renderMode(config)));
@@ -243,14 +278,27 @@ const updateCommand = Command.make(
         return;
       }
       if (target === undefined) return;
-      const result = yield* Engines.update(scope(config.dir), target, {
-        force: config.force,
-        invocation: INVOCATION,
-      });
+      const result =
+        config.wizard || (opt(config.ref) === undefined && !config.latest && isInteractiveCli())
+          ? yield* Engines.updateWizard(scope(config.dir), target, {
+              force: config.force,
+              invocation: INVOCATION,
+              readLine: readLineReader,
+            })
+          : yield* Engines.update(scope(config.dir), target, {
+              force: config.force,
+              ref: opt(config.ref),
+              latest: config.latest,
+              invocation: INVOCATION,
+            });
       yield* Console.log(Renderers.updated(result, renderMode(config)));
       if (Renderers.updateFailed(result)) yield* exitFailed;
     }).pipe(Effect.catch(refuse)),
-).pipe(Command.withDescription('Refresh one entry, or --all, by name or URL.'));
+).pipe(
+  Command.withDescription(
+    'Refresh one entry, or --all, by name or URL; pin a ref with --ref, follow latest with --latest, or prompt with --wizard.',
+  ),
+);
 
 const syncCommand = Command.make(
   'sync',

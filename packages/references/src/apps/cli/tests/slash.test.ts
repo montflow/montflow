@@ -81,6 +81,38 @@ Vitest.describe('/mf-references parser', () => {
       all: false,
       force: true,
     });
+    Vitest.expect(Slash.parseCliArgs('update alpha --ref v1')).toMatchObject({
+      kind: 'Update',
+      target: 'alpha',
+      ref: 'v1',
+    });
+    Vitest.expect(Slash.parseCliArgs('update alpha --latest')).toMatchObject({
+      kind: 'Update',
+      target: 'alpha',
+      latest: true,
+    });
+    Vitest.expect(Slash.parseCliArgs('update alpha --wizard')).toMatchObject({
+      kind: 'Update',
+      target: 'alpha',
+      wizard: true,
+    });
+    Vitest.expect(Slash.parseCliArgs('update --all --ref v1')).toMatchObject({
+      kind: 'Update',
+      all: true,
+      ref: 'v1',
+    });
+    Vitest.expect(Slash.parseCliArgs('update alpha --ref v1 --latest')).toMatchObject({
+      kind: 'Usage',
+      message: 'usage: --ref, --latest, and --wizard are mutually exclusive',
+    });
+    Vitest.expect(Slash.parseCliArgs('update alpha --wizard --latest')).toMatchObject({
+      kind: 'Usage',
+      message: 'usage: --ref, --latest, and --wizard are mutually exclusive',
+    });
+    Vitest.expect(Slash.parseCliArgs('update --all --wizard')).toMatchObject({
+      kind: 'Usage',
+      message: 'usage: --wizard prompts for one entry; pass <name>, not --all',
+    });
     Vitest.expect(Slash.parseCliArgs('update --all')).toMatchObject({ kind: 'Update', all: true });
     Vitest.expect(Slash.parseCliArgs('sync alpha')).toMatchObject({ kind: 'Sync', name: 'alpha' });
     Vitest.expect(Slash.parseCliArgs('sync --all')).toMatchObject({ kind: 'Sync', all: true });

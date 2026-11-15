@@ -85,12 +85,14 @@ Do not write a markdown table of references, and do not edit `REFERENCE.md` beyo
   - `show` — one entry's `REFERENCE.md` bytes
   - `verify` — committed bytes, plus clone state with `--clones`; non-zero on issues
   - `add` — register and clone one https URL; a registered URL routes to `update`
-  - `update` — refresh one entry or `--all`, by name or URL (`--force`)
+  - `update` — refresh one entry or `--all`, by name or URL (`--force`); pin a new target with `--ref <commit|tag|branch>`, follow latest on the tracked branch with `--latest`, or choose interactively with `--wizard` (or just `update <name>` in a terminal)
   - `sync` — materialize missing clones or repair checkouts (`<name>` or `--all`)
   - `status` — clone state per entry; `--fetch` adds behind/ahead. It never changes the store, but a missing store root, invalid or unknown name, unreadable clone, failed fetch or ls-remote, foreign clone, or invalid entry exits 1
   - `remove` — unregister one entry; `--keep-clone` keeps the clone
 
-  Every verb takes `--dir <root>` (defaults to the working directory). The default output is agent-first; `--human` renders readable tables and prose, `--verbose` adds detail, and the two compose on every verb that renders rows or a result; `show` prints bytes and takes `--dir` only. `add` also takes `--name`, `--ref`, and `--purpose`; `verify` takes `--all` and `--clones`.
+A `ref:` is **pinned** when it is a commit hash or a tag (`status` prints `pinned to <sha>`), and **tracking** when it is a branch name (`status` prints `tracking <branch>`). `update --ref <commit|tag|branch>` writes the new pin to `REFERENCE.md` and refreshes; `update --latest` removes the `ref:` line so the entry follows the tracked branch. Both leave the `REFERENCE.md` change **uncommitted** for review.
+
+Every verb takes `--dir <root>` (defaults to the working directory). The default output is agent-first; `--human` renders readable tables and prose, `--verbose` adds detail, and the two compose on every verb that renders rows or a result; `show` prints bytes and takes `--dir` only. `add` also takes `--name`, `--ref`, and `--purpose`; `verify` takes `--all` and `--clones`.
 
 - **Binary / slash command**: `mf-references add …` and `/mf-references add …` — the same engine, the same output.
 - **Store contract**: `.agents/@montflow/references/<slug>/REFERENCE.md` (`packages/references/src/modules/reference/reference.module.ts`).

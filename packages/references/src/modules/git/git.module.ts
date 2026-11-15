@@ -170,6 +170,32 @@ export const isTagCandidate = (ref: string): boolean =>
   !COMMIT_PATTERN.test(ref) && !ref.startsWith('refs/heads/');
 
 /**
+ * Classify a recorded `ref:` spelling into a `RefKind` without resolving it.
+ *
+ * A purely-hex spelling is a commit; a tag-shaped candidate is a tag; anything
+ * else is treated as a branch. This is the spelling-only classification B001
+ * surfaces (`tracking <branch>` vs `pinned to <sha>`); resolution may later
+ * correct a false tag/branch guess, but the renderer needs a stable kind from
+ * the raw `ref:` alone.
+ * @param ref - recorded ref value
+ * @returns the classified kind
+ */
+export const classifyRefSpelling = (ref: string): RefKind => {
+  const trimmed = ref.trim();
+  if (COMMIT_PATTERN.test(trimmed)) return 'commit';
+  if (isTagCandidate(trimmed)) return 'tag';
+  return 'branch';
+};
+
+/**
+ * First seven characters of a commit id, or `(none)`.
+ * @param sha - commit id
+ * @returns the short form
+ */
+export const sha7 = (sha: string | undefined): string =>
+  sha === undefined || sha === '' ? '(none)' : sha.slice(0, 7);
+
+/**
  * Resolve the commit a tag-shaped ref names from `ls-remote` rows.
  *
  * The peeled `^{}` row wins for an annotated tag; a lightweight tag has no such
@@ -282,6 +308,11 @@ export interface GitPortImpl {
   readonly currentBranch: (path: string) => Effect.Effect<string | undefined>;
   /** Resolve a recorded ref in B002 §2.6 order. */
   readonly resolveRef: (path: string, ref: string) => Effect.Effect<RefResolution>;
+  /** Commit subject and author date for one sha, for the wizard display. */
+  readonly commitMeta: (
+    path: string,
+    sha: string,
+  ) => Effect.Effect<{ readonly subject: string; readonly date: string } | undefined>;
   /** Remote default branch, with the offline upstream fallback. */
   readonly defaultBranch: (path: string) => Effect.Effect<string | undefined>;
   /** Ahead/behind counts of `HEAD` against one upstream ref. */
@@ -505,6 +536,24 @@ const make = Effect.sync(() => {
     return { ahead, behind } satisfies RefCounts;
   });
 
+  const commitMeta = Effect.fn('Git.commitMeta')(function* (path: string, sha: string) {
+    const result = yield* runGit([
+      '-C',
+      path,
+      'show',
+      '-s',
+      '--format=%s%x1f%aI',
+      '--no-notes',
+      sha,
+    ]);
+    if (!result.ok || result.stdout === '') return undefined;
+    const separator = result.stdout.indexOf('\x1f');
+    const subject = (separator === -1 ? result.stdout : result.stdout.slice(0, separator)).trim();
+    const date = (separator === -1 ? '' : result.stdout.slice(separator + 1)).trim();
+    if (subject === '' && date === '') return undefined;
+    return { subject, date };
+  });
+
   const clone = Effect.fn('Git.clone')(function* (url: string, path: string) {
     return yield* runGit(['clone', '--quiet', '--', url, path], CLONE_TIMEOUT_MS);
   });
@@ -583,6 +632,7 @@ const make = Effect.sync(() => {
     head,
     currentBranch,
     resolveRef,
+    commitMeta,
     defaultBranch,
     counts,
     clone,

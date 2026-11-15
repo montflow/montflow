@@ -6,6 +6,7 @@ import * as Reference from '../../modules/reference/index.js';
 import * as Verifier from '../../modules/verifier/index.js';
 import { CloneProbe, ReferenceStore } from '../../services/index.js';
 import * as DoctorApp from '../doctor/index.js';
+import * as UpdateWizard from './update-wizard/index.js';
 
 /**
  * The operations `mf-references` offers, as plain Effect functions over the
@@ -85,6 +86,8 @@ export interface ReferenceRow {
   readonly purpose: string;
   readonly url: string;
   readonly ref?: string | undefined;
+  /** Classified recorded `ref:` kind, for the `--verbose` ref column. */
+  readonly refKind?: Git.RefKind | undefined;
   readonly installed: boolean;
   readonly entryPath: string;
   readonly path: string;
@@ -145,7 +148,11 @@ export const list = (
       };
       rows.push(
         decoded.kind === 'valid' && !mismatched && decoded.document.reference.ref !== undefined
-          ? { ...row, ref: decoded.document.reference.ref }
+          ? {
+              ...row,
+              ref: decoded.document.reference.ref,
+              refKind: Git.classifyRefSpelling(decoded.document.reference.ref),
+            }
           : row,
       );
     }
@@ -329,6 +336,10 @@ export const add = (
 export interface UpdateOptions {
   readonly force?: boolean | undefined;
   readonly invocation?: string | undefined;
+  /** A commit/tag/branch pin to write to `REFERENCE.md` before the refresh. */
+  readonly ref?: string | undefined;
+  /** Remove the `ref:` line from `REFERENCE.md` and follow the branch. */
+  readonly latest?: boolean | undefined;
 }
 
 /**
@@ -347,7 +358,12 @@ export const update = (
     const lifecycle = yield* Git.GitLifecycle;
     const root = yield* rootOf(scope);
     return yield* lifecycle
-      .update(root, target, { force: options.force, invocation: options.invocation })
+      .update(root, target, {
+        force: options.force,
+        invocation: options.invocation,
+        ref: options.ref,
+        latest: options.latest,
+      })
       .pipe(Effect.mapError(lifecycleError));
   });
 
@@ -389,6 +405,8 @@ export const updateAll = (
         .update(root, slug, {
           force: options.force,
           invocation: options.invocation,
+          ref: options.ref,
+          latest: options.latest,
         })
         .pipe(Effect.mapError(lifecycleError));
       entries.push({ slug, result });
@@ -405,6 +423,85 @@ export const updateAll = (
       summary: `summary total=${entries.length} present=${present} failed=${failed}`,
       failed: failed > 0,
     };
+  });
+
+/** A resolved store entry plus its clone path, for the wizard to address. */
+const wizardClonePath = (root: string, slug: string): string => Reference.clonePath(root, slug);
+
+/**
+ * Run the interactive `update --wizard` prompt and then the chosen update.
+ *
+ * TTY-gated: when `interactive` is false the caller should have routed to the
+ * plain `update` path already (this method still refuses with a usage error).
+ * The prompt is driven through injected io seams so it is headless-testable.
+ * @param scope - store scope
+ * @param target - the entry slug or URL
+ * @param options - `--force`, invocation text, and an interactivity override
+ * @returns the update result for the chosen target, or a refusal
+ */
+export const updateWizard = (
+  scope: StoreScope,
+  target: string,
+  options: UpdateOptions & {
+    readonly interactive?: boolean | undefined;
+    readonly readLine?: UpdateWizard.WizardInput['readLine'] | undefined;
+    readonly write?: UpdateWizard.WizardOutput['write'] | undefined;
+  } = {},
+): Effect.Effect<Git.UpdateResult, string, EngineDeps> =>
+  Effect.gen(function* () {
+    const lifecycle = yield* Git.GitLifecycle;
+    const git = yield* Git.GitPort;
+    const root = yield* rootOf(scope);
+    const invocation = options.invocation ?? DEFAULT_INVOCATION;
+    if (options.interactive === false) {
+      return yield* Effect.fail(
+        `usage: ${invocation} update <name|url> --wizard requires a terminal (stdin is not a TTY)`,
+      );
+    }
+    const store = yield* ReferenceStore.ReferenceStore;
+    const snapshot = yield* store.scan(root).pipe(Effect.mapError(storeError));
+    if (!snapshot.present) return yield* Effect.fail(storeRootMissing(invocation));
+    const entry = snapshot.entries.find((candidate) => candidate.slug === target);
+    if (entry === undefined) return yield* Effect.fail(unknownReference(target, invocation));
+    const clone = wizardClonePath(root, target);
+    const dirty = yield* git.isDirty(clone);
+    const dirtyNow = dirty.ok && dirty.dirty;
+
+    const out: UpdateWizard.WizardOutput = {
+      write: options.write ?? ((text) => Effect.sync(() => process.stdout.write(`${text}\n`))),
+    };
+    if (options.readLine === undefined) {
+      return yield* Effect.fail(
+        `refused: no interactive line reader for ${invocation} update <name|url> --wizard`,
+      );
+    }
+    const input: UpdateWizard.WizardInput = { readLine: options.readLine };
+
+    const chosen = yield* UpdateWizard.runWizard({
+      git,
+      clone,
+      dirty: dirtyNow,
+      out,
+      input,
+    }).pipe(Effect.mapError((cancel) => `refused: ${cancel.message}`));
+
+    const result =
+      chosen.kind === 'latest'
+        ? yield* lifecycle
+            .update(root, target, {
+              force: options.force,
+              latest: true,
+              invocation,
+            })
+            .pipe(Effect.mapError(lifecycleError))
+        : yield* lifecycle
+            .update(root, target, {
+              force: options.force,
+              ref: chosen.ref,
+              invocation,
+            })
+            .pipe(Effect.mapError(lifecycleError));
+    return result;
   });
 
 /** `sync` options; exactly one of `name` or `all` must be set. */
