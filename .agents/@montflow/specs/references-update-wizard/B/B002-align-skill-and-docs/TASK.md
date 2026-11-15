@@ -7,7 +7,7 @@ size: small
 depends-on:
 write-scope: packages/references/skills/montflow-add-reference/,packages/references/README.md,packages/references/src/apps/cli/CONTEXT.md,packages/references/src/apps/cli/binary.apps.module.ts,packages/references/src/apps/cli/slash.apps.module.ts,packages/references/CHANGELOG.md
 related-tasks: B001
-status: pending
+status: complete
 ---
 
 # Task B002: align-skill-and-docs
@@ -36,7 +36,7 @@ and teach that the `REFERENCE.md` change is left uncommitted for review.
 
 ## Completion
 
-- [ ] The `montflow-add-reference` skill teaches `--ref`/`--latest`/`--wizard` and the tracking-vs-pinned vocabulary.
-- [ ] The CLI usage/help text and `CONTEXT.md` reflect the new flags.
-- [ ] The package changelog carries the new feature entries.
-- [ ] The skill's examples use the new flag forms and vocabulary.
+- [x] The `montflow-add-reference` skill teaches `--ref`/`--latest`/`--wizard` and the tracking-vs-pinned vocabulary.
+- [x] The CLI usage/help text and `CONTEXT.md` reflect the new flags.
+- [x] The package changelog carries the new feature entries.
+- [x] The skill's examples use the new flag forms and vocabulary.

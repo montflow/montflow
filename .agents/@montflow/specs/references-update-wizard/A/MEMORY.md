@@ -12,9 +12,9 @@ engine surface.
 
 ## Progress
 
-- A001 engine-update-target: pending
-- A002 wire-cli-flags-and-wizard: pending
-- A003 review-phase: pending
+- A001 engine-update-target: complete
+- A002 wire-cli-flags-and-wizard: complete
+- A003 review-phase: complete (waived)
 
 ## Open Questions
 
@@ -26,7 +26,9 @@ engine surface.
 
 ## Deviations
 
-- None.
+- Phase A review decision: `waived` (`verification.light`) — A003 binds no
+  reviewer profile and the phase gate is mechanical, so `mf-specs review decide`
+  waived the round. Recorded here per the A003 completion checklist.
 
 ## Execution Brief
 

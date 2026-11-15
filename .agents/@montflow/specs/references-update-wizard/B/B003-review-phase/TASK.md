@@ -8,7 +8,7 @@ depends-on: B001, B002
 write-scope: none
 related-tasks:
 reviewer-profiles:
-status: pending
+status: complete
 ---
 
 # Task B003: review-phase
@@ -31,5 +31,5 @@ skill and CLI docs teach the new `--ref`/`--latest`/`--wizard` surface and the
 
 ## Completion
 
-- [ ] A review round for phase B is recorded and every finding resolved.
-- [ ] The phase review decision is recorded in the phase channels.
+- [x] A review round for phase B is recorded and every finding resolved.
+- [x] The phase review decision is recorded in the phase channels.

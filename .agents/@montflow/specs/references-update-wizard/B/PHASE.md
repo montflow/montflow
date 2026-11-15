@@ -1,7 +1,7 @@
 ---
 id: B
 objective: Surface tracking-vs-pinned in status/verify and align the add-reference skill and docs.
-status: pending
+status: complete
 review: required
 gate: none
 ---

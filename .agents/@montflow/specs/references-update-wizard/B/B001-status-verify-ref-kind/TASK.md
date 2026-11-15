@@ -7,7 +7,7 @@ size: small
 depends-on:
 write-scope: packages/references/src/modules/git/lifecycle.module.ts,packages/references/src/modules/git/git.module.ts,packages/references/src/modules/verifier/verifier.module.ts,packages/references/src/apps/cli/renderers.apps.module.ts,packages/references/src/apps/cli/engines.apps.module.ts,packages/references/src/apps/cli/tests/,packages/references/src/modules/git/tests/,packages/references/src/modules/verifier/tests/
 related-tasks: B002
-status: pending
+status: complete
 ---
 
 # Task B001: status-verify-ref-kind
@@ -41,9 +41,9 @@ can also show the distinction in its `--verbose` ref column.
 
 ## Completion
 
-- [ ] `status` reports `tracking <branch>` for a branch `ref:` and `pinned to <sha7>` for a commit/tag.
-- [ ] `verify` attributes ref findings to the classified kind.
-- [ ] The renderers show the distinction in agent and human modes; `--verbose` shows the full pin.
-- [ ] The `list` renderer's `--verbose` ref column shows the distinction.
-- [ ] An abbreviated commit hash is normalized to its full resolved id when reported.
-- [ ] New status/verify/renderer tests pass.
+- [x] `status` reports `tracking <branch>` for a branch `ref:` and `pinned to <sha7>` for a commit/tag.
+- [x] `verify` attributes ref findings to the classified kind.
+- [x] The renderers show the distinction in agent and human modes; `--verbose` shows the full pin.
+- [x] The `list` renderer's `--verbose` ref column shows the distinction.
+- [x] An abbreviated commit hash is normalized to its full resolved id when reported.
+- [x] New status/verify/renderer tests pass.

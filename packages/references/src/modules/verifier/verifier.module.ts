@@ -1,7 +1,7 @@
 import { fieldString } from '../frontmatter/index.js';
 import type { FieldValue } from '../frontmatter/index.js';
 import * as Reference from '../reference/index.js';
-import { compareUnpinned } from '../git/index.js';
+import { compareUnpinned, classifyRefSpelling } from '../git/index.js';
 import type { CloneObservation } from '../git/index.js';
 
 /**
@@ -431,13 +431,20 @@ export const verifyClone = (
     );
   }
   if (reference.ref !== undefined && reference.ref !== '') {
+    const kind = classifyRefSpelling(reference.ref);
+    const relationship = kind === 'branch' ? 'tracking' : 'pinned to';
     if (observation.refResolved === false) {
-      issues.push(issue('ref', `Ref '${reference.ref}' does not resolve in the clone.`));
+      issues.push(
+        issue(
+          'ref',
+          `Ref '${reference.ref}' does not resolve in the clone; expected ${relationship} a resolvable ref.`,
+        ),
+      );
     } else if (!observation.matchesRef) {
       issues.push(
         issue(
           'head',
-          `Clone HEAD ${sha7(observation.head)} does not match ref '${reference.ref}' (${sha7(observation.resolvedRefHead)}).`,
+          `Clone HEAD ${sha7(observation.head)} does not match the ${relationship} ref '${reference.ref}' (${sha7(observation.resolvedRefHead)}).`,
         ),
       );
     }

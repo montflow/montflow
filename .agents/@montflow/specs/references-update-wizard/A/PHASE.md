@@ -1,7 +1,7 @@
 ---
 id: A
 objective: Implement mf-references update target selection: --ref/--latest flags, REFERENCE.md read-modify-write, and the interactive wizard.
-status: pending
+status: complete
 review: required
 gate: mechanical
 ---

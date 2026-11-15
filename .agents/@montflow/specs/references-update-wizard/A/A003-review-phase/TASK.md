@@ -8,7 +8,7 @@ depends-on: A001, A002
 write-scope: none
 related-tasks:
 reviewer-profiles:
-status: pending
+status: complete
 ---
 
 # Task A003: review-phase
@@ -32,5 +32,5 @@ engine and do not drift.
 
 ## Completion
 
-- [ ] A review round for phase A is recorded and every finding resolved.
-- [ ] The phase review decision is recorded in the phase channels.
+- [x] A review round for phase A is recorded and every finding resolved.
+- [x] The phase review decision is recorded in the phase channels.

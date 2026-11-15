@@ -7,7 +7,7 @@ size: large
 depends-on:
 write-scope: packages/references/src/modules/git/lifecycle.module.ts,packages/references/src/modules/git/git.module.ts,packages/references/src/modules/reference/reference.module.ts,packages/references/src/services/reference-store/reference-store.services.module.ts,packages/references/src/modules/git/tests/,packages/references/src/modules/reference/tests/,packages/references/src/services/reference-store/tests/
 related-tasks: A002
-status: pending
+status: complete
 ---
 
 # Task A001: engine-update-target
@@ -67,12 +67,12 @@ atomically via a temp file and rename sidecars. The written file is never
 
 ## Completion
 
-- [ ] `UpdateOptions` carries `ref` and `latest`, mutually exclusive.
-- [ ] `update` with `--ref <commit|tag|branch>` validates the target against the remote before writing `REFERENCE.md`.
-- [ ] `update` with `--latest` removes `ref:` from `REFERENCE.md`.
-- [ ] `update` with an unresolvable ref or branch refuses with `refused:` and writes nothing.
-- [ ] The `REFERENCE.md` change is left uncommitted.
-- [ ] The update result carries the old/new ref for the diff renderer.
-- [ ] Dirty-clone `--force` behaviour is preserved.
-- [ ] Commit metadata (subject + date) is readable at the lifecycle level for the wizard.
-- [ ] New lifecycle/reference/git helpers have unit tests passing.
+- [x] `UpdateOptions` carries `ref` and `latest`, mutually exclusive.
+- [x] `update` with `--ref <commit|tag|branch>` validates the target against the remote before writing `REFERENCE.md`.
+- [x] `update` with `--latest` removes `ref:` from `REFERENCE.md`.
+- [x] `update` with an unresolvable ref or branch refuses with `refused:` and writes nothing.
+- [x] The `REFERENCE.md` change is left uncommitted.
+- [x] The update result carries the old/new ref for the diff renderer.
+- [x] Dirty-clone `--force` behaviour is preserved.
+- [x] Commit metadata (subject + date) is readable at the lifecycle level for the wizard.
+- [x] New lifecycle/reference/git helpers have unit tests passing.

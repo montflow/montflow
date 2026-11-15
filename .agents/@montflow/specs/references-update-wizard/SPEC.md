@@ -1,6 +1,6 @@
 ---
 name: references-update-wizard
-status: in-progress
+status: complete
 workspace-type: worktree
 author: Daniel Montilla
 created: 2026-11-15
@@ -77,9 +77,9 @@ id can tell the difference.
 
 | ID | Name | Type | Status | Gates |
 | --- | --- | --- | --- | --- |
-| A001 | engine-update-target | execution | pending | Yes |
-| A002 | wire-cli-flags-and-wizard | execution | pending | Yes |
-| A003 | review-phase | review | pending | No |
-| B001 | status-verify-ref-kind | execution | pending | Yes |
-| B002 | align-skill-and-docs | execution | pending | Yes |
-| B003 | review-phase | review | pending | No |
+| A001 | engine-update-target | execution | complete | Yes |
+| A002 | wire-cli-flags-and-wizard | execution | complete | Yes |
+| A003 | review-phase | review | complete | No |
+| B001 | status-verify-ref-kind | execution | complete | Yes |
+| B002 | align-skill-and-docs | execution | complete | Yes |
+| B003 | review-phase | review | complete | No |

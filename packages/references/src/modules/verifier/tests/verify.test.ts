@@ -385,7 +385,9 @@ Vitest.describe('verifyClone', () => {
       pinned,
     );
     Vitest.expect(mismatch.issues[0]).toMatchObject({ field: 'head' });
-    Vitest.expect(mismatch.issues[0]?.message).toContain("does not match ref 'cd9a14a");
+    Vitest.expect(mismatch.issues[0]?.message).toContain(
+      "does not match the pinned to ref 'cd9a14a",
+    );
 
     const unresolvable = Verifier.verifyClone(
       observation({

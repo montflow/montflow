@@ -7,7 +7,7 @@ size: medium
 depends-on: A001
 write-scope: packages/references/src/apps/cli/binary.apps.module.ts,packages/references/src/apps/cli/slash.apps.module.ts,packages/references/src/apps/cli/engines.apps.module.ts,packages/references/src/apps/cli/renderers.apps.module.ts,packages/references/src/apps/cli/index.ts,packages/references/src/apps/cli/tests/,packages/references/src/apps/cli/update-wizard/
 related-tasks: A001
-status: pending
+status: complete
 ---
 
 # Task A002: wire-cli-flags-and-wizard
@@ -50,10 +50,10 @@ binary and slash from drifting.
 
 ## Completion
 
-- [ ] `update` on binary and slash accepts `--ref`, `--latest`, and `--wizard`, mutually exclusive.
-- [ ] A `--ref`/`--latest`/`--wizard` update prints the `REFERENCE.md` diff and leaves it uncommitted.
-- [ ] `--wizard` (or TTY with no target flag) prompts for specific-commit or latest, shows subject/date before writing, and states when `--force` is needed.
-- [ ] `--wizard --all` is a usage error.
-- [ ] Non-TTY `update <name>` with no target flag keeps today's behaviour.
-- [ ] The wizard prompt and metadata display are separable for headless tests.
-- [ ] New binary/slash/engine/renderer/wizard tests pass.
+- [x] `update` on binary and slash accepts `--ref`, `--latest`, and `--wizard`, mutually exclusive.
+- [x] A `--ref`/`--latest`/`--wizard` update prints the `REFERENCE.md` diff and leaves it uncommitted.
+- [x] `--wizard` (or TTY with no target flag) prompts for specific-commit or latest, shows subject/date before writing, and states when `--force` is needed.
+- [x] `--wizard --all` is a usage error.
+- [x] Non-TTY `update <name>` with no target flag keeps today's behaviour.
+- [x] The wizard prompt and metadata display are separable for headless tests.
+- [x] New binary/slash/engine/renderer/wizard tests pass.

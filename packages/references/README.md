@@ -47,7 +47,7 @@ mf-references list [--status installed|missing]
 mf-references show <name>                          # the entry's bytes
 mf-references verify [<name>|--all] [--clones]     # CI-safe registry check
 mf-references add <url> [--name <slug>] [--ref <ref>] [--purpose <text>]
-mf-references update <name|url>|--all [--force]
+mf-references update <name|url>|--all [--force] [--ref <commit|tag|branch>|--latest|--wizard]
 mf-references sync <name>|--all
 mf-references status [<name>] [--fetch]
 mf-references remove <name> [--keep-clone]

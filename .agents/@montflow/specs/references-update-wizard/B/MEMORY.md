@@ -11,9 +11,9 @@ teach the new flags and the distinction. Both tasks are small and independent.
 
 ## Progress
 
-- B001 status-verify-ref-kind: pending
-- B002 align-skill-and-docs: pending
-- B003 review-phase: pending
+- B001 status-verify-ref-kind: complete
+- B002 align-skill-and-docs: complete
+- B003 review-phase: complete (waived)
 
 ## Open Questions
 
@@ -25,7 +25,7 @@ teach the new flags and the distinction. Both tasks are small and independent.
 
 ## Deviations
 
-- None.
+- Phase B review decision: `waived` (`verification.light`) — B003 binds no reviewer profile and the phase gate is `none`; `mf-specs review decide` waived the round. Attributed round 002 records the phase.
 
 ## Execution Brief
 
