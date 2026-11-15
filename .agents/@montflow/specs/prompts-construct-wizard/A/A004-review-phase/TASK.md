@@ -8,7 +8,7 @@ depends-on: A001, A002, A003
 write-scope: none
 related-tasks:
 reviewer-profiles:
-status: pending
+status: complete
 ---
 
 # Task A004: review-phase
@@ -45,4 +45,4 @@ verified and the phase is ready to lock.
 
 ## Completion
 
-- [ ] Done.
+- [x] Done.

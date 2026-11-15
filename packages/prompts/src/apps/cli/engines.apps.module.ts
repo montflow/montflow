@@ -328,6 +328,41 @@ export const render = (
     return yield* Prompts.renderPrompt(prompt, accepted.values);
   });
 
+/** Options for the model-free {@link construct} engine. */
+export interface ConstructOptions {
+  /** How this caller spells `construct`, threaded into refusal advice. */
+  readonly invocation?: string | undefined;
+}
+
+/**
+ * Validate, fill, and render a prompt to its final text — the model-free
+ * operation behind `construct`. It requires no model and runs no doctor gate:
+ * a prompt that pins no model still constructs. Missing or invalid inputs
+ * fail with the shared wording (unknown prompts name `list`, a rejected
+ * discrete value names its options).
+ * @param scope - store scope
+ * @param name - prompt name
+ * @param values - supplied `key=value` pairs
+ * @param options - invocation string for the refusal advice
+ * @returns the constructed text, failing with an actionable message
+ */
+export const construct = (
+  scope: StoreScope,
+  name: string,
+  values: ValuesByName = {},
+  options: ConstructOptions = {},
+): Effect.Effect<string, string, PromptStore.PromptStore> =>
+  Effect.gen(function* () {
+    const prompt = yield* load(scope, name);
+    const result = PromptExecute.construct({
+      prompt,
+      values,
+      invocation: options.invocation ?? 'mf-prompts construct',
+    });
+    if (!result.ok) return yield* Effect.fail(result.message);
+    return result.text;
+  });
+
 /** Model resolution plus the skills gate, for one execution. */
 export interface ExecutionOptions extends StoreScope {
   /** `provider/model-id`; falls back to the prompt's own `model`. */

@@ -482,6 +482,166 @@ export const execute = (request: ExecuteRequest): ExecutePlan => {
   };
 };
 
+/** Why a prompt cannot be constructed. */
+export type ConstructProblem =
+  | 'empty-template'
+  | 'invalid-template'
+  | 'invalid-prompt'
+  | 'invalid-values'
+  | 'missing-variables';
+
+/** A prompt that rendered to its final text. */
+export interface ConstructReady {
+  readonly ok: true;
+  readonly prompt: string;
+  /** The rendered text, ready to print or send. */
+  readonly text: string;
+}
+
+/** A prompt that cannot be constructed, with a message written for whoever asked. */
+export interface ConstructBlocked {
+  readonly ok: false;
+  readonly problem: ConstructProblem;
+  /** Self-contained explanation: what is wrong, and the exact command to fix it. */
+  readonly message: string;
+  /** Required variables with no value; empty for every problem but `missing-variables`. */
+  readonly missing: ReadonlyArray<string>;
+}
+
+/** Either a constructible prompt or the reason it is not. */
+export type ConstructResult = ConstructReady | ConstructBlocked;
+
+/** What to construct: a prompt and any values already supplied. */
+export interface ConstructRequest extends InspectRequest {
+  /**
+   * How *this* caller invokes `construct`, used verbatim in the fix-it advice of
+   * every refusal — e.g. `mf-prompts construct` for the binary, or
+   * `/mf-prompts construct` for the OpenCode slash command. Passed in rather than
+   * hardcoded because the two front ends spell the same action differently, and
+   * advice naming a form the reader cannot type is worse than no advice.
+   */
+  readonly invocation?: string | undefined;
+}
+
+/** The invocation string used when a caller does not supply one. */
+export const DEFAULT_CONSTRUCT_INVOCATION = 'mf-prompts construct';
+
+/** `missing-variables` message for `construct`: name each gap and give a runnable command. */
+const constructMissingVariables = (
+  summary: PromptSummary,
+  invocation: string,
+): ConstructBlocked => {
+  const gaps = summary.missing.flatMap((name) => {
+    const variable = summary.variables.find((candidate) => candidate.name === name);
+    return variable === undefined ? [] : [variable];
+  });
+  const pairs = gaps.map((variable) => `  ${variable.name.padEnd(12)}no value and no default`);
+  return {
+    ok: false,
+    problem: 'missing-variables',
+    message: [
+      `Prompt '${summary.name}' needs ${gaps.length} required value${gaps.length === 1 ? '' : 's'}.`,
+      ...pairs,
+      'Do one of these:',
+      `  1. supply them: ${invocation} '${summary.name}' ${gaps
+        .map((variable) => `${example(variable.name)}=<value>`)
+        .join(' ')}`,
+      `  2. make them optional: set "required": false in .agents/@montflow/prompts/${summary.name}.json, and give a "default" or a {{#if}} branch if the text depends on them`,
+    ].join('\n'),
+    missing: gaps.map((variable) => variable.name),
+  };
+};
+
+/** `invalid-values` message for `construct`: name each rejected value and the offered options. */
+const constructInvalidValues = (
+  summary: PromptSummary,
+  problems: ReadonlyArray<ValueProblem>,
+): ConstructBlocked => ({
+  ok: false,
+  problem: 'invalid-values',
+  message: [
+    `Prompt '${summary.name}' got ${problems.length === 1 ? 'a value' : 'values'} it cannot accept.`,
+    ...problems.map((problem) => `  ${problem.message}`),
+    `Run: inspect '${summary.name}'`,
+  ].join('\n'),
+  missing: [],
+});
+
+/**
+ * Validate, fill, and render a prompt to its final text — the model-free
+ * counterpart to {@link execute}.
+ *
+ * `construct` requires no model and runs no doctor gate: a prompt that pins no
+ * model still constructs. It reuses the same shared rules as `execute` — the
+ * template must be present and parse, file-level verification must pass,
+ * rejected values are refused with the shared wording, and every visible
+ * required variable must have a value — but it stops at the rendered text, so
+ * the CLI prints it and the wizard prints it after collecting inputs through
+ * the same engine. The invocation strings in its refusals name `construct`,
+ * not `execute`.
+ *
+ * Pure: no IO, no model, no agent.
+ * @param request - the prompt and any values already supplied
+ * @returns the rendered text, or a blocked result carrying a readable message
+ */
+export const construct = (request: ConstructRequest): ConstructResult => {
+  const { prompt } = request;
+  const values = request.values ?? {};
+  const invocation = request.invocation ?? DEFAULT_CONSTRUCT_INVOCATION;
+
+  if (prompt.template.trim() === '') {
+    return {
+      ok: false,
+      problem: 'empty-template',
+      message: `Prompt '${prompt.name}' has an empty template, so there is nothing to construct. Set "template" in .agents/@montflow/prompts/${prompt.name}.json.`,
+      missing: [],
+    };
+  }
+
+  const templateIssues = Prompts.analyze(prompt.template).issues;
+  if (templateIssues.length > 0) {
+    return {
+      ok: false,
+      problem: 'invalid-template',
+      message: [
+        `Prompt '${prompt.name}' has a template that will not render.`,
+        ...templateIssues.map((issue) => `  ${issue.message}`),
+        `Run: verify '${prompt.name}'`,
+      ].join('\n'),
+      missing: [],
+    };
+  }
+
+  // The full file-level rules, not just the grammar. Without this a template
+  // referencing an undeclared variable rendered anyway, substituting nothing,
+  // and the constructed prompt silently lost the value the author expected.
+  const verified = Prompts.verifyPrompt(prompt);
+  if (!verified.valid) {
+    return {
+      ok: false,
+      problem: 'invalid-prompt',
+      message: [
+        `Prompt '${prompt.name}' does not pass verification, so it will not construct.`,
+        Prompts.verifyReport(prompt.name, verified),
+        `Run: verify '${prompt.name}'`,
+      ].join('\n'),
+      missing: [],
+    };
+  }
+
+  const accepted = resolveInputs(prompt, values);
+  const summary = inspect({ prompt, values: accepted.values });
+  if (accepted.problems.length > 0) return constructInvalidValues(summary, accepted.problems);
+
+  if (summary.missing.length > 0) return constructMissingVariables(summary, invocation);
+
+  return {
+    ok: true,
+    prompt: prompt.name,
+    text: Prompts.renderToString(prompt.template, prompt.variables, accepted.values),
+  };
+};
+
 /** A resolved execution, as handed to whoever runs the agent. */
 export interface ExecutionRequest {
   /** Working directory the run happens in. */

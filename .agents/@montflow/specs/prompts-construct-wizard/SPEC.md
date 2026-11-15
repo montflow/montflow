@@ -1,6 +1,6 @@
 ---
 name: prompts-construct-wizard
-status: in-progress
+status: complete
 workspace-type: worktree
 author: montflow
 created: 2026-11-15
@@ -92,7 +92,7 @@ constructed output on the system clipboard.
 
 | ID   | Name                  | Type      | Status  | Gates |
 | ---- | --------------------- | --------- | ------- | ----- |
-| A001 | construct-engine      | execution | pending | Yes   |
-| A002 | construct-wizard      | execution | pending | Yes   |
-| A003 | wire-construct-command| execution | pending | Yes   |
-| A004 | review-phase          | review    | pending | No    |
+| A001 | construct-engine | execution | complete | Yes |
+| A002 | construct-wizard | execution | complete | Yes |
+| A003 | wire-construct-command | execution | complete | Yes |
+| A004 | review-phase | review | complete | No |

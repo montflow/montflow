@@ -7,7 +7,7 @@ size: medium
 depends-on: 
 write-scope: packages/prompts/src/modules/
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task A001: construct-engine
@@ -57,4 +57,4 @@ write only within `packages/prompts/src/modules/` plus this task's records.
 
 ## Completion
 
-- [ ] Done.
+- [x] Done.

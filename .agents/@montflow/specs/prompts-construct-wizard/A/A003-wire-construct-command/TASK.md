@@ -7,7 +7,7 @@ size: large
 depends-on: A001, A002
 write-scope: packages/prompts/src/apps/cli/,packages/prompts/README.md,guides/
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task A003: wire-construct-command
@@ -59,4 +59,4 @@ write only within `packages/prompts/src/apps/cli/`,
 
 ## Completion
 
-- [ ] Done.
+- [x] Done.

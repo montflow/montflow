@@ -1,11 +1,19 @@
-import { Console, Effect, Option } from 'effect';
+import { Console, Effect, Layer, Option } from 'effect';
+import { NodeFileSystem, NodePath } from '@effect/platform-node';
+import { ProfileStore } from '@montflow/profiles';
 import { Argument, Command, Flag } from 'effect/cli';
 import { PromptStore } from '../../services/index.js';
+import * as Interactive from '../interactive/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
 import { Cli } from '@montflow/version';
 import type { BuildInfo } from '@montflow/version';
 import manifest from '../../../package.json' with { type: 'json' };
+// oxlint-disable-next-line montflow/no-node-platform-imports -- the binary is the composition root; clipboard access shells out to an OS tool.
+import { spawn, spawnSync } from 'node:child_process';
+
+/** Node layers shared by the file-backed stores. */
+const NodeLive = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 
 /**
  * The `mf-prompts` binary's command tree, built with `effect/cli`.
@@ -56,12 +64,6 @@ const valuesArg = Argument.String('values').pipe(
   Argument.withDescription('Variable values, as key=value pairs.'),
 );
 
-/** `--model` for `execute`; the prompt's own model applies when omitted. */
-const modelFlag = optionalString(
-  'model',
-  'Model as provider/model-id. Defaults to the prompt own model.',
-);
-
 /** `--variable` for the editing commands; comma-separated specs allowed. */
 const variableFlag = optionalString(
   'variable',
@@ -103,7 +105,7 @@ const report = <A, R>(
   );
 
 /** How this front end spells the actions, for the fix-it text it emits. */
-const BINARY_EXECUTE_INVOCATION = 'mf-prompts execute';
+const BINARY_CONSTRUCT_INVOCATION = 'mf-prompts construct';
 const BINARY_DOCTOR_INVOCATION = 'mf-prompts doctor';
 
 /** Where the workspace root is for this invocation: `--dir` overrides the cwd. */
@@ -123,6 +125,79 @@ const scope = (dir: Option.Option<string>): Engines.StoreScope => ({
 const exitFailed = Effect.sync(() => {
   process.exitCode = 1;
 });
+
+/**
+ * Interactive UI for `--wizard`, backed by the terminal through
+ * `node:readline/promises`. Only reached in a real TTY (`process.stdout.isTTY`);
+ * a non-TTY run refuses before any dialog opens.
+ */
+const consoleUi = () => {
+  let rl: import('node:readline/promises').Interface | undefined;
+  const line = (prompt: string): Promise<string | undefined> =>
+    // oxlint-disable-next-line montflow/no-node-platform-imports -- the binary is the composition root; --wizard dialogs read the terminal.
+    import('node:readline/promises').then(({ createInterface }) => {
+      rl ??= createInterface({ input: process.stdin, output: process.stdout });
+      return rl.question(`${prompt} `).catch(() => undefined);
+    });
+  const ui: Interactive.InteractiveUi = {
+    select: async (title, options) => {
+      process.stdout.write(`${title}\n`);
+      options.forEach((option, index) => process.stdout.write(`  ${index + 1}) ${option}\n`));
+      const answer = await line('Choice (number, Enter to cancel)');
+      if (answer === undefined) return undefined;
+      const index = Number.parseInt(answer, 10) - 1;
+      return index >= 0 && index < options.length ? options[index] : undefined;
+    },
+    confirm: async (title, message) => {
+      process.stdout.write(`${title} — ${message}\n`);
+      const answer = await line('(y/n)');
+      return answer?.trim().toLowerCase() === 'y';
+    },
+    input: async (title, placeholder) => {
+      process.stdout.write(`${title}\n`);
+      const answer = await line(placeholder ?? '');
+      return answer;
+    },
+    notify: (message) => {
+      process.stdout.write(`${message}\n`);
+    },
+  };
+  return { ui, close: () => rl?.close() };
+};
+
+/**
+ * Best-effort copy of text to the system clipboard, for `--copy`.
+ *
+ * The binary is the composition root, so touching platform tools is justified
+ * here: clipboard access is OS-specific and this package has no clipboard
+ * dependency, so it shells out to the platform tool (`pbcopy`, `xclip`, or
+ * `wl-copy`). It never fails the command: the constructed output is already on
+ * stdout, so an unavailable clipboard tool only means the copy step is skipped.
+ */
+const copyToClipboard = (text: string): Effect.Effect<void> =>
+  Effect.sync(() => {
+    const tools: ReadonlyArray<[string, readonly string[]]> =
+      process.platform === 'darwin'
+        ? [['pbcopy', []]]
+        : // oxlint-disable-next-line montflow/no-process-env -- picking a clipboard tool reads the display server once, at the composition root.
+          process.env.WAYLAND_DISPLAY !== undefined
+          ? [['wl-copy', ['--foreground', '--type', 'text/plain']]]
+          : [
+              ['xclip', ['-selection', 'clipboard']],
+              ['xsel', ['--clipboard', '--input']],
+            ];
+    const available = tools.find(([tool]) => {
+      try {
+        const probe = spawnSync(tool, ['--version'], { stdio: 'ignore' });
+        return probe.error === undefined;
+      } catch {
+        return false;
+      }
+    });
+    if (available === undefined) return;
+    const [tool, args] = available;
+    spawn(tool, args, { stdio: ['pipe', 'ignore', 'ignore'] }).stdin?.end(text);
+  });
 
 const doctorCommand = Command.make(
   'doctor',
@@ -177,37 +252,50 @@ const inspectCommand = Command.make(
   ),
 );
 
-const executeCommand = Command.make(
-  'execute',
-  { dir: dirFlag, model: modelFlag, name: nameArg, values: valuesArg },
+const constructCommand = Command.make(
+  'construct',
+  {
+    dir: dirFlag,
+    name: nameArg.pipe(Argument.optional),
+    values: valuesArg,
+    wizard: optionalBoolean('wizard', 'Collect the values interactively.'),
+    copy: optionalBoolean('copy', 'Also place the constructed output on the system clipboard.'),
+  },
   (config) =>
     Effect.gen(function* () {
-      const resolved = yield* Engines.plan(
-        {
-          ...scope(config.dir),
-          model: opt(config.model),
-          values: config.values,
-          invocation: BINARY_EXECUTE_INVOCATION,
-          doctorInvocation: BINARY_DOCTOR_INVOCATION,
-        },
-        config.name,
-      );
-      // A blocked plan is a refusal, not a crash: print it and exit non-zero
-      // through the same path every other refusal takes.
-      if (!resolved.ok) {
-        return yield* report(Effect.fail(resolved.message), (text: string) => text);
+      const root = opt(config.dir) ?? process.cwd();
+      const name = opt(config.name);
+      if (config.wizard) {
+        // `--wizard` dispatches the shared interactive flow, which collects
+        // every visible variable and renders through the same engine. Without
+        // a TTY (e.g. a piped or CI run) it refuses with an actionable message
+        // instead of hanging or emitting a partial prompt.
+        const console = consoleUi();
+        const text = yield* Interactive.constructWizard(console.ui, root, name, {
+          interactive: process.stdout.isTTY === true,
+        }).pipe(Effect.ensuring(Effect.sync(() => console.close())));
+        yield* Console.log(text);
+        if (config.copy) yield* copyToClipboard(text);
+        return yield* Effect.void;
       }
-      // The binary owns no child-agent runtime: running a prompt needs a
-      // ModelRuntime, which lives in the OpenCode extension. So this validates and
-      // renders end to end, then prints what would be sent — which is what
-      // makes it useful outside an OpenCode session. To actually execute, use
-      // `/mf-prompts execute` or the `prompt_execute` OpenCode tool.
-      yield* Console.log(`Rendered for ${resolved.model}:\n\n${resolved.text}`);
+      if (name === undefined) {
+        return yield* report(
+          Effect.fail(
+            'construct requires a prompt name. Use: mf-prompts construct <name> [key=value ...], or add --wizard to pick one.',
+          ),
+          (text: string) => text,
+        );
+      }
+      const text = yield* Engines.construct(scope(config.dir), name, config.values, {
+        invocation: BINARY_CONSTRUCT_INVOCATION,
+      });
+      yield* Console.log(text);
+      if (config.copy) yield* copyToClipboard(text);
       return yield* Effect.void;
     }).pipe(Effect.catch((message) => Console.log(message).pipe(Effect.andThen(exitFailed)))),
 ).pipe(
   Command.withDescription(
-    'Validate and render a prompt for execution. Prints the rendered text; use /mf-prompts execute or the prompt_execute tool to run it.',
+    'Validate, fill, and render a prompt to its final text. Requires no model. Use --wizard to collect values interactively, or --copy to copy the output to the clipboard.',
   ),
 );
 
@@ -248,12 +336,6 @@ const verifyCommand = Command.make(
 ).pipe(
   Command.withDescription('Mechanically verify one or every prompt file. Non-zero when any fails.'),
 );
-
-const renderCommand = Command.make(
-  'render',
-  { dir: dirFlag, name: nameArg, values: valuesArg },
-  (config) => report(Engines.render(scope(config.dir), config.name, config.values), (text) => text),
-).pipe(Command.withDescription('Render a prompt to text without running an agent.'));
 
 const createCommand = Command.make(
   'create',
@@ -314,22 +396,26 @@ export const PACKAGE_IDENTITY = {
 /** The root command the binary runs. */
 export const rootCommand = Command.make('mf-prompts').pipe(
   Command.withDescription(
-    'Inspect, verify, and execute reusable prompt templates stored in .agents/@montflow/prompts.',
+    'Inspect, verify, and construct reusable prompt templates stored in .agents/@montflow/prompts.',
   ),
   Command.withSubcommands([
     doctorCommand,
     listCommand,
     inspectCommand,
-    executeCommand,
+    constructCommand,
     showCommand,
     verifyCommand,
-    renderCommand,
     createCommand,
     modifyCommand,
     deleteCommand,
     Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
-  Command.provide(PromptStore.Default),
+  Command.provide(
+    Layer.mergeAll(
+      Layer.provide(PromptStore.Default, NodeLive),
+      Layer.provide(ProfileStore.Default, NodeLive),
+    ),
+  ),
 );
 
 /** Version reported by `--version`. Mirrors the package version. */

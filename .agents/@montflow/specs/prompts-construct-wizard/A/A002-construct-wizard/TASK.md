@@ -7,7 +7,7 @@ size: large
 depends-on: A001
 write-scope: packages/prompts/src/apps/interactive/
 related-tasks:
-status: pending
+status: complete
 ---
 
 # Task A002: construct-wizard
@@ -67,4 +67,4 @@ records.
 
 ## Completion
 
-- [ ] Done.
+- [x] Done.

@@ -48,6 +48,7 @@
     "@effect/platform-node": "4.0.1",
     "@montflow/opencode": "workspace:*",
     "@montflow/payload": "workspace:*",
+    "@montflow/profiles": "workspace:*",
     "@montflow/version": "workspace:*",
     "handlebars": "4.7.9"
   },

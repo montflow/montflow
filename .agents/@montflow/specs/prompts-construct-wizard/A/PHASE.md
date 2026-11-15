@@ -1,7 +1,7 @@
 ---
 id: A
 objective: Define and wire the shared construct engine and wizard.
-status: pending
+status: complete
 review: required
 gate: none
 serial-reason: A002 consumes the construct engine (A001), and A003 wires the command that binds both, so the three waves follow a real output-consumption chain.

@@ -20,15 +20,15 @@ const program = Effect.gen(function* () {
   // Look at it first — what does this need?
   yield* Effect.sync(() => console.log(PromptExecute.table(PromptExecute.inspect({ prompt }))));
 
-  // Then resolve a run. `execute` never dispatches; it tells you what is
-  // missing, or hands back the rendered text and the model to use.
-  const plan = PromptExecute.execute({
+  // Then construct the prompt to its final text. `construct` never dispatches
+  // and requires no model: it validates the inputs, applies defaults, and
+  // hands back the rendered text.
+  const text = PromptExecute.construct({
     prompt,
-    model: 'opencode-go/fast',
     values: { files: 'src/' },
   });
-  if (!plan.ok) return yield* Effect.fail(plan.message);
-  return plan.text; // "Review src/, limited to src/.\n"
+  if (!text.ok) return yield* Effect.fail(text.message);
+  return text.text; // "Review src/, limited to src/.\n"
 });
 ```
 
@@ -39,8 +39,8 @@ const program = Effect.gen(function* () {
 mf-prompts doctor [--check]                    # install / verify the skills
 mf-prompts list [--status valid|invalid]
 mf-prompts inspect <name> [key=value ...]     # variables table
-mf-prompts execute <name> --model p/m [key=value ...]
-mf-prompts render <name> [key=value ...]      # text only, no agent
+mf-prompts construct <name> [key=value ...]   # validate, fill, render to text
+                     [--wizard] [--copy]      # interactively, or copy the result
 mf-prompts show | verify | create | modify | delete | help
 ```
 
@@ -48,10 +48,13 @@ Inside OpenCode the same command is spelled `/mf-prompts …`. An agent can also
 call `prompt_inspect` and `prompt_execute` directly; `prompt_execute` runs
 the rendered prompt on a native session.
 
-`execute` runs `doctor` first and refuses when the packaged skills are missing
-or stale — an agent must not act on guidance the verifier no longer enforces.
-It requires a model (from `--model` or the prompt's own `"model"`) and every
-required variable; each refusal names the exact fix.
+`construct` validates the prompt name, demands every visible required variable,
+applies declared defaults, and prints the rendered text. It requires no model and
+never runs an agent. `--wizard` collects the values interactively (offering the
+workspace prompts when no name is given); `--copy` also places the output on the
+system clipboard. Missing or invalid inputs fail with an actionable message that
+names the exact fix — an unknown prompt points at `list`, and a rejected discrete
+value names its offered options.
 
 ## Template grammar
 

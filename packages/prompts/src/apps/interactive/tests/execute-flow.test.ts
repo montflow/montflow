@@ -282,11 +282,19 @@ Vitest.describe('Interactive.executeFlow', () => {
 });
 
 Vitest.describe('Interactive.parseAction', () => {
-  Vitest.it('parses execute with values', () => {
-    Vitest.expect(Interactive.parseAction('execute commit files=src')).toStrictEqual({
-      kind: 'Execute',
+  Vitest.it('parses construct with values', () => {
+    Vitest.expect(Interactive.parseAction('construct commit files=src')).toStrictEqual({
+      kind: 'Construct',
       name: 'commit',
       values: { files: 'src' },
+    });
+  });
+
+  Vitest.it('parses construct with no name', () => {
+    Vitest.expect(Interactive.parseAction('construct')).toStrictEqual({
+      kind: 'Construct',
+      name: undefined,
+      values: {},
     });
   });
 
@@ -298,9 +306,15 @@ Vitest.describe('Interactive.parseAction', () => {
     });
   });
 
-  Vitest.it('opens the menu for a bare execute or inspect', () => {
-    Vitest.expect(Interactive.parseAction('execute')).toStrictEqual({ kind: 'Menu' });
+  Vitest.it('opens the menu for a bare inspect', () => {
     Vitest.expect(Interactive.parseAction('inspect')).toStrictEqual({ kind: 'Menu' });
+  });
+
+  Vitest.it('no longer parses the removed execute and render verbs', () => {
+    Vitest.expect(Interactive.parseAction('execute commit files=src')).toStrictEqual({
+      kind: 'Help',
+    });
+    Vitest.expect(Interactive.parseAction('render commit')).toStrictEqual({ kind: 'Help' });
   });
 
   Vitest.it('still treats a lone unknown token as show', () => {
