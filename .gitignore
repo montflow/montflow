@@ -285,3 +285,6 @@ scratchpad/*
 # --- direnv / nix-direnv (machine-local) ---
 .direnv/
 .envrc
+
+# --- git worktrees (project-local, isolated feature branches) ---
+.worktrees/
