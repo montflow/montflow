@@ -15,6 +15,8 @@ Not for `core`, `format`, `linting`, `stlx` — no CLI, different rules.
 | Package | Binary | Subcommands |
 |---|---|---|
 | `profiles` | `mf-profiles` | `doctor`, `list`, `show`, `verify`, `create`, `modify`, `delete` |
+| `principles` | `mf-principles` | `doctor`, `list`, `show`, `verify` |
+| `playbooks` | `mf-playbooks` | `doctor`, `list`, `show`, `verify` |
 | `prompts` | `mf-prompts` | `doctor`, `list`, `inspect`, `execute`, `show`, `verify`, `render`, `create`, `modify`, `delete` |
 | `reviews` | `mf-reviews` | `doctor`, `list`, `show`, `verify`, `new` |
 | `skills` | `mf-skills` | `doctor`, `list`, `show`, `verify`, `create`, `modify`, `delete`, `sync` |
@@ -39,7 +41,7 @@ Conform every `mf-*` binary to this contract.
 
 | Verb | Meaning | Exit |
 |---|---|---|
-| `doctor [--check]` | install/verify the package `payload.json` (`skill`, `profile`, `prompt`, `tier`); idempotent; `--check` report-only, no write | 1 when unhealthy |
+| `doctor [--check]` | install/verify the package `payload.json` (`skill`, `profile`, `prompt`, `principle`, `playbook`, `tier`); idempotent; `--check` report-only, no write | 1 when unhealthy |
 | `list [--status ...]` | enumerate store entries | 0 |
 | `show <name>` / `status <id>` | one entry: raw file, ledger, or detail panel | 0 |
 | `verify [<name>] [--all]` | mechanical validation of file shape/structure | 1 when any fails |
@@ -82,6 +84,7 @@ Domain verbs extend this; never break it (`mf-skills`: `sync`).
 ### Sanctioned exceptions
 
 - Binary and slash expose the **same verb set**; the slash parser is hand-rolled because the host passes one argument string, not an argv array.
+- `mf-principles` and `mf-playbooks` are harness-agnostic and read-only: binary only (no slash command, no `server.ts`/`tui.ts` plugin face), and no `create`/`modify`/`delete`.
 
 ## Steps
 
@@ -90,7 +93,7 @@ Domain verbs extend this; never break it (`mf-skills`: `sync`).
 3. Write renderers: pure `data -> text`, token-lean default, `--verbose` additive.
 4. Write `binary.apps.module.ts` `rootCommand` with the applicable canonical verbs; add `main.ts` entry.
 5. Write `slash.apps.module.ts` hand-rolled parser + `run` + `register`; reuse engines/renderers; register it on the server plugin entry (`src/server.ts`).
-6. If the package ships artifacts: add `payload.json` (kinds `skill`, `profile`, `prompt`, `tier`), a `doctor` over the shared `@montflow/payload` engine, and the `generate:payload` script wired into `build:cli`.
+6. If the package ships artifacts: add `payload.json` (kinds `skill`, `profile`, `prompt`, `principle`, `playbook`, `tier`), a `doctor` over the shared `@montflow/payload` engine, and the `generate:payload` script wired into `build:cli`.
 7. Add `mf-<domain>:check` root script; add it to `mf:check`.
 
 ## Verify
@@ -116,6 +119,8 @@ to CI, cross-scope changes, or an explicit request.
 | `profiles` | `bun run --cwd packages/profiles cli verify <name> --dir $PWD` | `verify --dir $PWD` |
 | `reviews` | `bun run --cwd packages/reviews cli verify <series> --dir $PWD` | `verify --all --dir $PWD` |
 | `references` | `bun run --cwd packages/references cli verify <slug> --dir $PWD` | `verify --all --dir $PWD` |
+| `principles` | `bun run --cwd packages/principles cli verify <name> --dir $PWD` | `verify --all --dir $PWD` |
+| `playbooks` | `bun run --cwd packages/playbooks cli verify <name> --dir $PWD` | `verify --all --dir $PWD` |
 
 `--dir` is the workspace root, never the store. Keep each CLI's docs to this
 form; do not present `mf:check` as the local check for one artifact.

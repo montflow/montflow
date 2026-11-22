@@ -14,6 +14,8 @@ const PACKAGES = [
   'reviews',
   'references',
   'model-fallback',
+  'principles',
+  'playbooks',
 ] as const;
 
 /** Where a package's generated module lives, accepting both doctor layouts. */

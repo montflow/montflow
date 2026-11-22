@@ -19,7 +19,7 @@
 #               instead of once per check. The matrix then runs fully in
 #               parallel.
 #   The `test` check is split into three shards (test-a/b/c) so the
-#   16 packages run on three runners instead of one. Each shard disables
+#   18 packages run on three runners instead of one. Each shard disables
 #   vitest typechecking (`--typecheck.enabled=false`): the separate
 #   `typecheck` cell already runs `ts:check` via `turbo ts:check`, so the
 #   test cells must not typecheck a second time. Local `turbo test` keeps
@@ -204,6 +204,10 @@ jobs:
             script: mf-reviews:check
           - target: references
             script: mf-references:check
+          - target: principles
+            script: mf-principles:check
+          - target: playbooks
+            script: mf-playbooks:check
     steps:
       - uses: actions/checkout@v4
 

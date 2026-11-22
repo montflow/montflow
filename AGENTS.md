@@ -46,6 +46,8 @@ aliases for frozen records.
 | `mf-profiles` | Profile store truth: `verify`, `doctor`, `list`, and `show`. |
 | `mf-reviews` | Review series truth: `verify`, `doctor`, `list`, `show`, `create`, and `resume`. |
 | `mf-references` | Reference store truth: `verify`, `doctor`, `list`, `show`, `add`, `update`, and `sync`. |
+| `mf-principles` | Principle store truth: `verify`, `doctor`, `list`, and `show`. |
+| `mf-playbooks` | Playbook store truth: `verify`, `doctor`, `list`, and `show`. |
 | `mf-model-fallback` | Model fallback chains: `status`, `doctor`, and `list`. |
 
 ## Verification
@@ -73,7 +75,7 @@ aliases for frozen records.
 ## Shipped artifacts
 
 - Shipped artifacts are package payload declared in each package's
-  `payload.json` (`skill`, `profile`, `prompt`). `mf-<cli> doctor
+  `payload.json` (`skill`, `profile`, `prompt`, `principle`, `playbook`). `mf-<cli> doctor
   --check` reports without writing; `mf-<cli> doctor` repairs; `bun run mf:doctor`
   repairs every payload package. A manifest-owned file edited locally is
   `stale` and repair overwrites it; an unlisted file in the same store is user
@@ -94,11 +96,13 @@ aliases for frozen records.
   `bun run hooks:install`, bypass with `git push --no-verify` or `LEFTHOOK=0`.
 - Utility verifies, each runnable alone: `mf-release:check`,
   `mf-skills:check`, `mf-prompts:check`, `mf-profiles:check`,
-  `mf-model-fallback:check`, `mf-reviews:check`, `mf-references:check`.
+  `mf-model-fallback:check`, `mf-reviews:check`, `mf-references:check`,
+  `mf-principles:check`, `mf-playbooks:check`.
   They verify release metadata (CLI versions, fixed group, tags, changelogs)
   and this repo's own artifacts (`.agents/skills`, `.agents/@montflow/prompts`,
   `.agents/@montflow/profiles`, `.agents/@montflow/reviews`,
-  `.agents/@montflow/references`) plus the `payload.json` manifest of every
+  `.agents/@montflow/references`, `.agents/@montflow/principles`,
+  `.agents/@montflow/playbooks`) plus the `payload.json` manifest of every
   package that ships one. Each artifact family runs its `doctor --check`
   (report-only) and fails on drift; `bun run mf:doctor` is the repair path for
   every payload package.

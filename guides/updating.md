@@ -91,6 +91,30 @@ Prove the update took effect:
 bun run --cwd "$M/packages/reviews" cli version --json
 ```
 
+## mf-principles
+
+```bash
+bun run --cwd "$M/packages/principles" cli version --check
+```
+
+Prove the update took effect:
+
+```bash
+bun run --cwd "$M/packages/principles" cli version --json
+```
+
+## mf-playbooks
+
+```bash
+bun run --cwd "$M/packages/playbooks" cli version --check
+```
+
+Prove the update took effect:
+
+```bash
+bun run --cwd "$M/packages/playbooks" cli version --json
+```
+
 ## Installed stores
 
 A workspace installed with `mf-skills sync` records what it received in

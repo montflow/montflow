@@ -147,7 +147,7 @@ export const checkExit = (verdict: Verdict): 0 | 1 =>
 
 /** The process environment, read once at the binary composition root. */
 const environment = (): Readonly<Record<string, string | undefined>> =>
-  // oxlint-disable-next-line montflow/no-process-env -- the shared binary runner is the composition root for all five CLIs; this is the environment they run under.
+  // oxlint-disable-next-line montflow/no-process-env -- the shared binary runner is the composition root for every mf-* CLI; this is the environment they run under.
   process.env;
 
 /** `version` flag set, shared by the binary and its help text. */

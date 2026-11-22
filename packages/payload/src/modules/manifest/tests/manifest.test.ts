@@ -20,6 +20,8 @@ const PACKAGES = [
   'reviews',
   'references',
   'model-fallback',
+  'principles',
+  'playbooks',
 ] as const;
 
 /** Read a package's `payload.json`, or undefined when it has none. */

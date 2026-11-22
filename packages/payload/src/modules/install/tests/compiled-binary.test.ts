@@ -22,6 +22,8 @@ const PACKAGES = [
   'reviews',
   'references',
   'model-fallback',
+  'principles',
+  'playbooks',
 ] as const;
 
 /** Run a command and return its status and combined output. */
