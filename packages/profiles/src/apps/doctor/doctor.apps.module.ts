@@ -4,7 +4,7 @@ import {
   type PayloadInstall,
   type PayloadDoctorResult,
   loadManifest,
-  nameAt,
+  namesOf,
   runPayloadDoctor,
 } from '@montflow/payload';
 import { EMBEDDED_PAYLOAD } from './embedded-payload.generated.js';
@@ -23,14 +23,7 @@ import manifestJson from '../../../payload.json' with { type: 'json' };
 export const MANIFEST: LoadedManifest = loadManifest(manifestJson, '@montflow/profiles');
 
 /** Profiles shipped with the package and installed into a workspace. */
-export const PROFILE_NAMES = [
-  nameAt(MANIFEST, 'profile', 0),
-  nameAt(MANIFEST, 'profile', 1),
-  nameAt(MANIFEST, 'profile', 2),
-  nameAt(MANIFEST, 'profile', 3),
-  nameAt(MANIFEST, 'profile', 4),
-  nameAt(MANIFEST, 'profile', 5),
-] as const;
+export const PROFILE_NAMES: ReadonlyArray<string> = namesOf(MANIFEST, 'profile');
 
 /** The default way a caller reaches `doctor` when it does not say. */
 export const DEFAULT_DOCTOR_INVOCATION = '/mf-profiles-cli doctor';

@@ -57,6 +57,7 @@ Vitest.describe('profiles doctor', () => {
       const root = freshRoot();
       yield* runDoctor(root);
       const name = PROFILE_NAMES[0];
+      if (name === undefined) return Vitest.expect.fail('expected a shipped profile');
       const file = NodePath.join(profileDir(root, name), 'PROFILE.md');
       const good = Fs.readFileSync(file, 'utf8');
       Fs.writeFileSync(file, 'hand edited\n');
@@ -77,6 +78,7 @@ Vitest.describe('profiles doctor', () => {
       const root = freshRoot();
       yield* runDoctor(root);
       const name = PROFILE_NAMES[0];
+      if (name === undefined) return Vitest.expect.fail('expected a shipped profile');
       const file = NodePath.join(profileDir(root, name), 'PROFILE.md');
       Fs.rmSync(file);
       const checked = yield* runDoctor(root, { check: true });

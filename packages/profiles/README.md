@@ -23,7 +23,7 @@ const program = Effect.gen(function* () {
 
 ## Payload
 
-`packages/profiles/payload.json` declares the six spec-role profiles as
+`packages/profiles/payload.json` declares the six reviewer profiles as
 `profile` payload. `mf-profiles doctor` installs or repairs them under
 `.agents/@montflow/profiles/`; `mf-profiles doctor --check` is report-only and
 is what `mf-profiles:check` runs. A manifest-owned profile edited locally is

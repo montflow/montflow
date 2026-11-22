@@ -4,39 +4,39 @@
   "payloads": [
     {
       "kind": "profile",
-      "name": "spec-appraiser",
-      "source": "profiles/spec-appraiser",
-      "target": ".agents/@montflow/profiles/spec-appraiser"
+      "name": "bookkeeper",
+      "source": "profiles/bookkeeper",
+      "target": ".agents/@montflow/profiles/bookkeeper"
     },
     {
       "kind": "profile",
-      "name": "spec-bookkeeper",
-      "source": "profiles/spec-bookkeeper",
-      "target": ".agents/@montflow/profiles/spec-bookkeeper"
+      "name": "documentation-reviewer",
+      "source": "profiles/documentation-reviewer",
+      "target": ".agents/@montflow/profiles/documentation-reviewer"
     },
     {
       "kind": "profile",
-      "name": "spec-creation-orchestrator",
-      "source": "profiles/spec-creation-orchestrator",
-      "target": ".agents/@montflow/profiles/spec-creation-orchestrator"
+      "name": "effect-reviewer",
+      "source": "profiles/effect-reviewer",
+      "target": ".agents/@montflow/profiles/effect-reviewer"
     },
     {
       "kind": "profile",
-      "name": "spec-execution-orchestrator",
-      "source": "profiles/spec-execution-orchestrator",
-      "target": ".agents/@montflow/profiles/spec-execution-orchestrator"
+      "name": "generic-reviewer",
+      "source": "profiles/generic-reviewer",
+      "target": ".agents/@montflow/profiles/generic-reviewer"
     },
     {
       "kind": "profile",
-      "name": "spec-worker",
-      "source": "profiles/spec-worker",
-      "target": ".agents/@montflow/profiles/spec-worker"
+      "name": "language-quality-reviewer",
+      "source": "profiles/language-quality-reviewer",
+      "target": ".agents/@montflow/profiles/language-quality-reviewer"
     },
     {
       "kind": "profile",
-      "name": "spec-sizing-orchestrator",
-      "source": "profiles/spec-sizing-orchestrator",
-      "target": ".agents/@montflow/profiles/spec-sizing-orchestrator"
+      "name": "pattern-consistency-reviewer",
+      "source": "profiles/pattern-consistency-reviewer",
+      "target": ".agents/@montflow/profiles/pattern-consistency-reviewer"
     }
   ]
 }

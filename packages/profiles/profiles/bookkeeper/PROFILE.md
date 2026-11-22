@@ -8,8 +8,6 @@ skills:
   - montflow-create-skills
   - montflow-modify-skills
   - montflow-create-prompts
-  - montflow-create-specs
-  - montflow-find-specs
   - montflow-create-profiles
   - montflow-modify-profiles
   - contribute-to-agentic-docs
@@ -37,7 +35,6 @@ Know every store, its expected layout, its verifier, and its repair skill. Load 
 | ----------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------- |
 | Skills      | `.agents/skills/<name>/SKILL.md`                   | frontmatter (`name`, `description`, `id`, `author`, `version`, `license`, `dependencies`, `groups`) + `# When To Use` / `# Pipeline` / `# Reference` | `bun run mf:check:skills`     | `montflow-create-skills`, `montflow-modify-skills`                      |
 | Prompts     | `.agents/@montflow/prompts/<name>.json`            | JSON with `name`, `description`, `template`, `variables`, `skills`, `model`                                                                          | `bun run mf:check:prompts`    | `montflow-create-prompts`                                               |
-| Specs       | `.agents/@montflow/specs/<name>/`                  | `SPEC.md` + one directory per phase, each holding its task directories (`TASK.md`, `MEMORY.md`, `GATES.md`)                                          | `bun run mf:check:specs`      | `montflow-create-specs`, `montflow-find-specs`                          |
 | Profiles    | `.agents/@montflow/profiles/<name>/PROFILE.md`     | frontmatter (`name`, `description`, `model`, `skills`) + `# Title` / `## Instructions` / `## Review Checklist`                                       | `bun run mf:check:profiles`   | `montflow-create-profiles`, `montflow-modify-profiles`                  |
 | Agent docs  | `.agents/documentation/<verb>-<object>.md`         | title + `## When` / `## Steps` / `## Verify`                                                                                                         | manual structure check        | `contribute-to-agentic-docs`                                            |
 | Wiki        | `wiki/<page>.md`                                   | value-statement opener + `See also`; no plans or decision logs                                                                                       | manual structure check        | `contributing-to-wiki`                                                  |
@@ -50,7 +47,7 @@ Know every store, its expected layout, its verifier, and its repair skill. Load 
 
 - **Run the verifier, don't guess.** For the artifact being changed, run the owning package's single-artifact `cli` command with `--dir $PWD`; `bun run mf:check:<family>` is the whole-family gate (CI, cross-scope changes, or an explicit request). To check all six extension families at once, run `bun run mf:check`.
 - **Only package.json scripts.** Per `AGENTS.md`, never invoke a tool binary directly (`node_modules/.bin/*`, `bunx`, `npx`). The `mf:check:<family>` scripts and the owning package's `cli` script are the sanctioned entrypoints.
-- **Scope to the artifact.** A single artifact is checked through its owning package's `cli` script, e.g. `bun run --cwd packages/skills cli verify <name> --dir $PWD`, `bun run --cwd packages/prompts cli verify <name> --dir $PWD`, `bun run --cwd packages/specs cli check --dir $PWD --name <name>`. Never run the repo-wide gate when one family changed.
+- **Scope to the artifact.** A single artifact is checked through its owning package's `cli` script, e.g. `bun run --cwd packages/skills cli verify <name> --dir $PWD`, `bun run --cwd packages/prompts cli verify <name> --dir $PWD`. Never run the repo-wide gate when one family changed.
 - **Read the failure verbatim.** Capture the artifact path, the failing field or section, and the verifier's exact message. A finding you cannot quote from the verifier's output is not a finding.
 
 ### Fix at the source
