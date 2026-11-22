@@ -55,18 +55,6 @@ Exit codes: `0` for `current`, `unknown`, `ahead`, or `skipped`; `1` for
 bun run --cwd "$M/packages/skills" cli version --json
 ```
 
-## mf-specs
-
-```bash
-bun run --cwd "$M/packages/specs" cli version --check
-```
-
-Prove the update took effect:
-
-```bash
-bun run --cwd "$M/packages/specs" cli version --json
-```
-
 ## mf-prompts
 
 ```bash

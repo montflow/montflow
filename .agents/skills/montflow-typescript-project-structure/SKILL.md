@@ -91,8 +91,7 @@ then minimally: `writing-jsdoc`.
 
 ## 9. Verify
 
-Run the package scripts named in `AGENTS.md`; run `mf-specs check` for specs
-(module law 9).
+Run the package scripts named in `AGENTS.md` (module law 9).
 
 # Reference
 
@@ -125,8 +124,7 @@ restated here.
    [effect](../effect/SKILL.md) (API) and
    [montflow-typescript-services](../montflow-typescript-services/SKILL.md)
    (house pattern).*
-9. **Verification** — package scripts named in `AGENTS.md`; `mf-specs check` for
-   specs.
+9. **Verification** — package scripts named in `AGENTS.md`.
 
 ## Group registry
 

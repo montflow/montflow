@@ -17,7 +17,6 @@ Point OpenCode at this repo's plugin packages so `/mf-*` commands work.
      "plugins": [
        "./packages/prompts",
        "./packages/skills",
-       "./packages/specs",
        "./packages/profiles",
        "./packages/reviews",
        "./packages/references",

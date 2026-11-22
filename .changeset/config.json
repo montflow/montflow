@@ -6,7 +6,6 @@
   "fixed": [
     [
       "@montflow/skills",
-      "@montflow/specs",
       "@montflow/prompts",
       "@montflow/profiles",
       "@montflow/reviews",

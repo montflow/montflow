@@ -18,7 +18,6 @@ Not for `core`, `format`, `linting`, `stlx` — no CLI, different rules.
 | `prompts` | `mf-prompts` | `doctor`, `list`, `inspect`, `execute`, `show`, `verify`, `render`, `create`, `modify`, `delete` |
 | `reviews` | `mf-reviews` | `doctor`, `list`, `show`, `verify`, `new` |
 | `skills` | `mf-skills` | `doctor`, `list`, `show`, `verify`, `create`, `modify`, `delete`, `sync` |
-| `specs` | `mf-specs` | `doctor`, `check`, `status`, `state`, `next`, `list`, `create`, `migrate`, `init`, `new-phase`, `new-task`, `stamp`, `tier`, `claim`, `lock`, `waiver`, `gate`, `mail`, `review`, `author`, `execute`, `which`, `models`, `resolve`, `sizing`, `sizing-config` |
 
 `opencode` (the adapter) and `workflows` are libraries. No CLI.
 
@@ -43,12 +42,11 @@ Conform every `mf-*` binary to this contract.
 | `doctor [--check]` | install/verify the package `payload.json` (`skill`, `profile`, `prompt`, `tier`); idempotent; `--check` report-only, no write | 1 when unhealthy |
 | `list [--status ...]` | enumerate store entries | 0 |
 | `show <name>` / `status <id>` | one entry: raw file, ledger, or detail panel | 0 |
-| `verify [<name>] [--all]` (`mf-specs` calls it `check`) | mechanical validation of file shape/structure | 1 when any fails |
+| `verify [<name>] [--all]` | mechanical validation of file shape/structure | 1 when any fails |
 | `create` / `modify` / `delete` (`mf-reviews` uses `new`) | CRUD over store files | 1 on refusal |
 | `help` / `--help` | usage | 0 |
 
-Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`/
-`claim`/`gate`/`mail`; `mf-skills`: `sync`).
+Domain verbs extend this; never break it (`mf-skills`: `sync`).
 
 ### Flags
 
@@ -56,7 +54,7 @@ Domain verbs extend this; never break it (`mf-specs`: `state`/`next`/`lock`/
 - `doctor` reads the same root and installs/verifies every entry in the package `payload.json`; `--check` writes nothing, while repair installs or rewrites.
 - `--verbose` adds per-item detail; never hides failures. Default token-lean.
 - `--human` renders readable tables and prose for a person; the default stays agent-first. `--human` and `--verbose` compose.
-- `--status valid|invalid` on `list` for file stores; lifecycle states on `list` for `mf-specs`.
+- `--status valid|invalid` on `list` for file stores.
 - `--check` on `doctor`: report-only, non-zero when unhealthy.
 - `--check` on `sync`: report-only, non-zero on drift.
 - `--source <path>` on `sync`: source checkout to copy from; `--from` is its alias.
@@ -115,7 +113,6 @@ to CI, cross-scope changes, or an explicit request.
 | --- | --- | --- |
 | `skills` | `bun run --cwd packages/skills cli verify <name> --dir $PWD` | `verify --dir $PWD` |
 | `prompts` | `bun run --cwd packages/prompts cli verify <name> --dir $PWD` | `verify --all --dir $PWD` |
-| `specs` | `bun run --cwd packages/specs cli check --name <spec> --dir $PWD` | `check --dir $PWD` |
 | `profiles` | `bun run --cwd packages/profiles cli verify <name> --dir $PWD` | `verify --dir $PWD` |
 | `reviews` | `bun run --cwd packages/reviews cli verify <series> --dir $PWD` | `verify --all --dir $PWD` |
 | `references` | `bun run --cwd packages/references cli verify <slug> --dir $PWD` | `verify --all --dir $PWD` |

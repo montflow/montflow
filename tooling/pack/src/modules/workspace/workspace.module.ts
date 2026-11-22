@@ -12,7 +12,7 @@ export interface Manifest {
 
 /** One package in the workspace, by repo-relative directory. */
 export interface WorkspacePackage {
-  /** Repo-relative, POSIX separators (`packages/specs`). */
+  /** Repo-relative, POSIX separators (`packages/profiles`). */
   readonly dir: string;
   readonly manifest: Manifest;
   readonly manifestPath: string;
