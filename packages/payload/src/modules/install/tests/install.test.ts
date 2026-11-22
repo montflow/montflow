@@ -15,7 +15,7 @@ import {
  * writes, and one blocked payload never aborts the rest of the run.
  */
 
-const EMPTY: EmbeddedPayload = { skill: {}, profile: {}, prompt: {} };
+const EMPTY: EmbeddedPayload = { skill: {}, profile: {}, prompt: {}, principle: {}, playbook: {} };
 
 const MANIFEST: PayloadManifest = {
   schema: 1,
@@ -302,6 +302,54 @@ Vitest.describe('runPayloadDoctor', () => {
     const before = snapshot(root);
     await run(root, pkg, true);
     Vitest.expect(snapshot(root)).toStrictEqual(before);
+    cleanup(root);
+  });
+
+  Vitest.it('installs principle and playbook trees under their own stores', async () => {
+    const root = Fs.mkdtempSync(NodePath.join(Os.tmpdir(), 'mf-payload-mode-'));
+    const pkg = NodePath.join(root, 'package');
+    Fs.mkdirSync(NodePath.join(pkg, 'principles', 'fix-root-causes'), { recursive: true });
+    Fs.writeFileSync(
+      NodePath.join(pkg, 'principles', 'fix-root-causes', 'PRINCIPLE.md'),
+      '# principle\n',
+    );
+    Fs.mkdirSync(NodePath.join(pkg, 'playbooks', 'bug-fix'), { recursive: true });
+    Fs.writeFileSync(NodePath.join(pkg, 'playbooks', 'bug-fix', 'PLAYBOOK.md'), '# playbook\n');
+    const manifest: PayloadManifest = {
+      schema: 1,
+      package: '@fixture/payload',
+      payloads: [
+        {
+          kind: 'principle',
+          name: 'fix-root-causes',
+          source: 'principles/fix-root-causes',
+          target: '.agents/@montflow/principles/fix-root-causes',
+        },
+        {
+          kind: 'playbook',
+          name: 'bug-fix',
+          source: 'playbooks/bug-fix',
+          target: '.agents/@montflow/playbooks/bug-fix',
+        },
+      ],
+    };
+    const result = await runPayloadDoctor(
+      root,
+      { ok: true, manifest },
+      { check: false, packageRoot: pkg, embedded: EMPTY, invocation: 'mf-fixture doctor' },
+    ).pipe(Effect.runPromise);
+    Vitest.expect(result.healthy).toBe(true);
+    Vitest.expect(result.principles.map((payload) => payload.status)).toStrictEqual(['installed']);
+    Vitest.expect(result.playbooks.map((payload) => payload.status)).toStrictEqual(['installed']);
+    Vitest.expect(
+      Fs.readFileSync(
+        installed(root, '.agents/@montflow/principles/fix-root-causes/PRINCIPLE.md'),
+        'utf8',
+      ),
+    ).toBe('# principle\n');
+    Vitest.expect(
+      Fs.readFileSync(installed(root, '.agents/@montflow/playbooks/bug-fix/PLAYBOOK.md'), 'utf8'),
+    ).toBe('# playbook\n');
     cleanup(root);
   });
 });

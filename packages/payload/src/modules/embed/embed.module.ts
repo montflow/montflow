@@ -28,6 +28,8 @@ interface EmbeddedBuckets {
   skill: Record<string, PayloadFiles>;
   profile: Record<string, PayloadFiles>;
   prompt: Record<string, PayloadFiles>;
+  principle: Record<string, PayloadFiles>;
+  playbook: Record<string, PayloadFiles>;
 }
 
 /** Empty buckets for every kind, so the generated module has a stable shape. */
@@ -35,6 +37,8 @@ const emptyBuckets = (): EmbeddedBuckets => ({
   skill: {},
   profile: {},
   prompt: {},
+  principle: {},
+  playbook: {},
 });
 
 /** Options for {@link generateEmbeddedPayload}. */
@@ -129,7 +133,7 @@ export const generateEmbeddedPayload = async (
  *
  * Source: \`payload.json\`
  */
-export const EMBEDDED_PAYLOAD: Readonly<Record<'skill' | 'profile' | 'prompt', Readonly<Record<string, Readonly<Record<string, string>>>>>> = ${JSON.stringify(buckets, null, 2)};
+export const EMBEDDED_PAYLOAD: Readonly<Record<'skill' | 'profile' | 'prompt' | 'principle' | 'playbook', Readonly<Record<string, Readonly<Record<string, string>>>>>> = ${JSON.stringify(buckets, null, 2)};
 `;
   await mkdir(dirname(options.output), { recursive: true });
   await writeFile(options.output, body, 'utf8');
