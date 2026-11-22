@@ -12,6 +12,8 @@
     "**/*.generated.ts",
     "**/scripts/**",
     "tooling/oxlint/anti-slop",
+    "packages/principles/principles",
+    "packages/playbooks/playbooks",
     "pi"
   ]
 }

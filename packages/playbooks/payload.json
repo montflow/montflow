@@ -4,9 +4,135 @@
   "payloads": [
     {
       "kind": "playbook",
+      "name": "authoring-a-skill",
+      "source": "playbooks/authoring-a-skill",
+      "target": ".agents/@montflow/playbooks/authoring-a-skill"
+    },
+    {
+      "kind": "playbook",
+      "name": "autonomous-run",
+      "source": "playbooks/autonomous-run",
+      "target": ".agents/@montflow/playbooks/autonomous-run"
+    },
+    {
+      "kind": "playbook",
+      "name": "autopilot-full",
+      "source": "playbooks/autopilot-full",
+      "target": ".agents/@montflow/playbooks/autopilot-full"
+    },
+    {
+      "kind": "playbook",
+      "name": "autopilot-stack",
+      "source": "playbooks/autopilot-stack",
+      "target": ".agents/@montflow/playbooks/autopilot-stack"
+    },
+    {
+      "kind": "playbook",
+      "name": "babysit",
+      "source": "playbooks/babysit",
+      "target": ".agents/@montflow/playbooks/babysit"
+    },
+    {
+      "kind": "playbook",
+      "name": "bug-fix",
+      "source": "playbooks/bug-fix",
+      "target": ".agents/@montflow/playbooks/bug-fix"
+    },
+    {
+      "kind": "playbook",
+      "name": "eval",
+      "source": "playbooks/eval",
+      "target": ".agents/@montflow/playbooks/eval"
+    },
+    {
+      "kind": "playbook",
+      "name": "feature",
+      "source": "playbooks/feature",
+      "target": ".agents/@montflow/playbooks/feature"
+    },
+    {
+      "kind": "playbook",
+      "name": "hillclimb",
+      "source": "playbooks/hillclimb",
+      "target": ".agents/@montflow/playbooks/hillclimb"
+    },
+    {
+      "kind": "playbook",
+      "name": "investigation",
+      "source": "playbooks/investigation",
+      "target": ".agents/@montflow/playbooks/investigation"
+    },
+    {
+      "kind": "playbook",
+      "name": "multi-phase-plan",
+      "source": "playbooks/multi-phase-plan",
+      "target": ".agents/@montflow/playbooks/multi-phase-plan"
+    },
+    {
+      "kind": "playbook",
       "name": "opening-a-pr",
       "source": "playbooks/opening-a-pr",
       "target": ".agents/@montflow/playbooks/opening-a-pr"
+    },
+    {
+      "kind": "playbook",
+      "name": "pause-safely",
+      "source": "playbooks/pause-safely",
+      "target": ".agents/@montflow/playbooks/pause-safely"
+    },
+    {
+      "kind": "playbook",
+      "name": "perf-issue",
+      "source": "playbooks/perf-issue",
+      "target": ".agents/@montflow/playbooks/perf-issue"
+    },
+    {
+      "kind": "playbook",
+      "name": "prototype",
+      "source": "playbooks/prototype",
+      "target": ".agents/@montflow/playbooks/prototype"
+    },
+    {
+      "kind": "playbook",
+      "name": "refactoring",
+      "source": "playbooks/refactoring",
+      "target": ".agents/@montflow/playbooks/refactoring"
+    },
+    {
+      "kind": "playbook",
+      "name": "runtime-forensics",
+      "source": "playbooks/runtime-forensics",
+      "target": ".agents/@montflow/playbooks/runtime-forensics"
+    },
+    {
+      "kind": "playbook",
+      "name": "session-pickup",
+      "source": "playbooks/session-pickup",
+      "target": ".agents/@montflow/playbooks/session-pickup"
+    },
+    {
+      "kind": "playbook",
+      "name": "shipping",
+      "source": "playbooks/shipping",
+      "target": ".agents/@montflow/playbooks/shipping"
+    },
+    {
+      "kind": "playbook",
+      "name": "trace-forensics",
+      "source": "playbooks/trace-forensics",
+      "target": ".agents/@montflow/playbooks/trace-forensics"
+    },
+    {
+      "kind": "playbook",
+      "name": "visual-parity",
+      "source": "playbooks/visual-parity",
+      "target": ".agents/@montflow/playbooks/visual-parity"
+    },
+    {
+      "kind": "playbook",
+      "name": "worktree-cleanup",
+      "source": "playbooks/worktree-cleanup",
+      "target": ".agents/@montflow/playbooks/worktree-cleanup"
     }
   ]
 }

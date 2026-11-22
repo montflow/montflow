@@ -30,18 +30,23 @@ Vitest.describe('mf-playbooks binary', () => {
 
       const list = run(['list', '--dir', root]);
       Vitest.expect(list.status).toBe(0);
-      Vitest.expect(list.stdout).toMatch(/^opening-a-pr: Open a pull request /);
+      Vitest.expect(list.stdout).toMatch(/^opening-a-pr: /m);
 
       const file = NodePath.join(root, '.agents/@montflow/playbooks/opening-a-pr/PLAYBOOK.md');
       const show = run(['show', 'opening-a-pr', '--dir', root]);
       Vitest.expect(show.stdout).toBe(Fs.readFileSync(file, 'utf8'));
       Vitest.expect(run(['show', 'nope', '--dir', root]).status).toBe(1);
 
-      const verify = run(['verify', '--all', '--dir', root]);
+      const verify = run(['verify', 'opening-a-pr', '--dir', root]);
       Vitest.expect(verify.status).toBe(0);
       Vitest.expect(verify.stdout.trim()).toBe(
         'warn opening-a-pr [body] No list item: number the steps (`1.`) or list the rules (`-`).\nsummary entries=1 issues=0 warnings=1',
       );
+
+      // Playbooks name skills and principles from other stores; a bare workspace has none.
+      const all = run(['verify', '--all', '--dir', root]);
+      Vitest.expect(all.status).toBe(1);
+      Vitest.expect(all.stdout).toMatch(/\[principles\] Principle '[a-z-]+' does not exist/);
 
       Fs.writeFileSync(file, '# no frontmatter\n');
       Vitest.expect(run(['verify', 'opening-a-pr', '--dir', root]).status).toBe(1);

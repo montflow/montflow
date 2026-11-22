@@ -30,7 +30,7 @@ Vitest.describe('mf-principles binary', () => {
 
       const list = run(['list', '--dir', root]);
       Vitest.expect(list.status).toBe(0);
-      Vitest.expect(list.stdout).toMatch(/^fix-root-causes: Apply when debugging\./);
+      Vitest.expect(list.stdout).toMatch(/^fix-root-causes: Apply when debugging\./m);
 
       const file = NodePath.join(root, '.agents/@montflow/principles/fix-root-causes/PRINCIPLE.md');
       const show = run(['show', 'fix-root-causes', '--dir', root]);
@@ -39,7 +39,7 @@ Vitest.describe('mf-principles binary', () => {
 
       const verify = run(['verify', '--all', '--dir', root]);
       Vitest.expect(verify.status).toBe(0);
-      Vitest.expect(verify.stdout.trim()).toBe('summary entries=1 issues=0 warnings=0');
+      Vitest.expect(verify.stdout.trim()).toMatch(/^summary entries=\d+ issues=0 warnings=0$/);
 
       Fs.writeFileSync(file, '# no frontmatter\n');
       Vitest.expect(run(['verify', 'fix-root-causes', '--dir', root]).status).toBe(1);

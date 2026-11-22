@@ -1,6 +1,6 @@
 ---
 name: opening-a-pr
-description: Open a pull request from a clean worktree off trunk, with small landable commits, a typed title, and a short briefing body.
+description: "Open a ready pr from small ordered commits with a conventional commits title and a briefing-style body. invoked at the end of every other playbook."
 ---
 
 # Opening a PR

@@ -4,9 +4,147 @@
   "payloads": [
     {
       "kind": "principle",
+      "name": "attack-the-premise",
+      "source": "principles/attack-the-premise",
+      "target": ".agents/@montflow/principles/attack-the-premise"
+    },
+    {
+      "kind": "principle",
+      "name": "boundary-discipline",
+      "source": "principles/boundary-discipline",
+      "target": ".agents/@montflow/principles/boundary-discipline"
+    },
+    {
+      "kind": "principle",
+      "name": "build-the-lever",
+      "source": "principles/build-the-lever",
+      "target": ".agents/@montflow/principles/build-the-lever"
+    },
+    {
+      "kind": "principle",
+      "name": "encode-lessons-in-structure",
+      "source": "principles/encode-lessons-in-structure",
+      "target": ".agents/@montflow/principles/encode-lessons-in-structure"
+    },
+    {
+      "kind": "principle",
+      "name": "exhaust-the-design-space",
+      "source": "principles/exhaust-the-design-space",
+      "target": ".agents/@montflow/principles/exhaust-the-design-space"
+    },
+    {
+      "kind": "principle",
+      "name": "experience-first",
+      "source": "principles/experience-first",
+      "target": ".agents/@montflow/principles/experience-first"
+    },
+    {
+      "kind": "principle",
+      "name": "explain-the-number",
+      "source": "principles/explain-the-number",
+      "target": ".agents/@montflow/principles/explain-the-number"
+    },
+    {
+      "kind": "principle",
       "name": "fix-root-causes",
       "source": "principles/fix-root-causes",
       "target": ".agents/@montflow/principles/fix-root-causes"
+    },
+    {
+      "kind": "principle",
+      "name": "foundational-thinking",
+      "source": "principles/foundational-thinking",
+      "target": ".agents/@montflow/principles/foundational-thinking"
+    },
+    {
+      "kind": "principle",
+      "name": "guard-the-context-window",
+      "source": "principles/guard-the-context-window",
+      "target": ".agents/@montflow/principles/guard-the-context-window"
+    },
+    {
+      "kind": "principle",
+      "name": "laziness-protocol",
+      "source": "principles/laziness-protocol",
+      "target": ".agents/@montflow/principles/laziness-protocol"
+    },
+    {
+      "kind": "principle",
+      "name": "make-operations-idempotent",
+      "source": "principles/make-operations-idempotent",
+      "target": ".agents/@montflow/principles/make-operations-idempotent"
+    },
+    {
+      "kind": "principle",
+      "name": "migrate-callers-then-delete-legacy-apis",
+      "source": "principles/migrate-callers-then-delete-legacy-apis",
+      "target": ".agents/@montflow/principles/migrate-callers-then-delete-legacy-apis"
+    },
+    {
+      "kind": "principle",
+      "name": "minimize-reader-load",
+      "source": "principles/minimize-reader-load",
+      "target": ".agents/@montflow/principles/minimize-reader-load"
+    },
+    {
+      "kind": "principle",
+      "name": "model-the-domain",
+      "source": "principles/model-the-domain",
+      "target": ".agents/@montflow/principles/model-the-domain"
+    },
+    {
+      "kind": "principle",
+      "name": "never-block-on-the-human",
+      "source": "principles/never-block-on-the-human",
+      "target": ".agents/@montflow/principles/never-block-on-the-human"
+    },
+    {
+      "kind": "principle",
+      "name": "outcome-oriented-execution",
+      "source": "principles/outcome-oriented-execution",
+      "target": ".agents/@montflow/principles/outcome-oriented-execution"
+    },
+    {
+      "kind": "principle",
+      "name": "prove-it-works",
+      "source": "principles/prove-it-works",
+      "target": ".agents/@montflow/principles/prove-it-works"
+    },
+    {
+      "kind": "principle",
+      "name": "redesign-from-first-principles",
+      "source": "principles/redesign-from-first-principles",
+      "target": ".agents/@montflow/principles/redesign-from-first-principles"
+    },
+    {
+      "kind": "principle",
+      "name": "separate-before-serializing-shared-state",
+      "source": "principles/separate-before-serializing-shared-state",
+      "target": ".agents/@montflow/principles/separate-before-serializing-shared-state"
+    },
+    {
+      "kind": "principle",
+      "name": "sequence-verifiable-units",
+      "source": "principles/sequence-verifiable-units",
+      "target": ".agents/@montflow/principles/sequence-verifiable-units"
+    },
+    {
+      "kind": "principle",
+      "name": "subtract-before-you-add",
+      "source": "principles/subtract-before-you-add",
+      "target": ".agents/@montflow/principles/subtract-before-you-add"
+    },
+    {
+      "kind": "principle",
+      "name": "test-behavior-not-implementation",
+      "source": "principles/test-behavior-not-implementation",
+      "target": ".agents/@montflow/principles/test-behavior-not-implementation"
+    },
+    {
+      "kind": "principle",
+      "name": "type-system-discipline",
+      "source": "principles/type-system-discipline",
+      "target": ".agents/@montflow/principles/type-system-discipline"
     }
   ]
 }
