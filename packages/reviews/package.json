@@ -49,7 +49,6 @@
     "@montflow/opencode": "workspace:*",
     "@montflow/payload": "workspace:*",
     "@montflow/profiles": "workspace:*",
-    "@montflow/specs": "workspace:*",
     "@montflow/version": "workspace:*"
   },
   "devDependencies": {

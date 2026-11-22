@@ -5,16 +5,12 @@ import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Effect, Layer } from 'effect';
 import * as Vitest from '@effect/vitest';
 import { ProfileStore } from '@montflow/profiles';
-import { SpecStore } from '@montflow/specs';
 import { ProfileProbe, ReviewStore } from '../../../services/index.js';
 import * as Engines from '../engines.apps.module.js';
 
 const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 const StoreLive = Layer.provide(ReviewStore.Default, NodeLive);
-const SpecProfileLive = Layer.mergeAll(
-  Layer.provide(SpecStore.Default, NodeLive),
-  Layer.provide(ProfileStore.Default, NodeLive),
-);
+const SpecProfileLive = Layer.provide(ProfileStore.Default, NodeLive);
 const Live = Layer.mergeAll(StoreLive, ProfileProbe.Default, SpecProfileLive);
 
 /** Stub probes for the declared-profile path. */

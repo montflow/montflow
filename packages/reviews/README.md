@@ -90,21 +90,7 @@ profile exists and is valid. A profile that fails is an issue; a missing
 profiles extension is a warning, not a failure.
 
 A series is bound to **at most one** profile: pass `profile=<name>` to
-`review_create` (or `--profile <name>` to `create`) to stamp it. A spec phase
-that declares several `reviewer-profiles` gets one series per profile — named
-`<spec>-<profile>` — with the general reviewer always keeping the `<spec>`
-series. See
-[`Migration: multi-reviewer reviews`](../specs/README.md#migration-multi-reviewer-reviews)
-in the `@montflow/specs` README for the full change.
-
-The review cycle itself is decided by `mf-specs review decide --name <spec>
---phase <id>`, not by counting rounds in this store. It reads every expected
-series, the phase budget, and the latest round's findings and returns `start`,
-`pass`, `fix-and-stop`, `rework`, `overflow`, `escalate`, or `waived`. A
-Minor/Nit-only round can close with `- Disposition: minor-deferred` and
-`- Deferred: F1, F3`; a round past the budget needs `- Overflow:` and
-`- Overflow-authorized:`. The binary is read-only, and every rule is documented
-in [`Review cycle decisions`](../specs/README.md#review-cycle-decisions).
+`review_create` (or `--profile <name>` to `create`) to stamp it.
 
 `verify` is pure over the file bytes: it reports every structural problem in one
 pass, each with a `Fix:` line, and for an inconsistent ledger it prints the exact

@@ -1,7 +1,6 @@
 import { Console, Effect, Layer, Option } from 'effect';
 import { Argument, Command, Flag } from 'effect/cli';
 import { ProfileStore } from '@montflow/profiles';
-import { SpecStore } from '@montflow/specs';
 import { ProfileProbe, ReviewStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
@@ -197,14 +196,7 @@ export const rootCommand = Command.make('mf-reviews').pipe(
     resumeCommand,
     Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
-  Command.provide(
-    Layer.mergeAll(
-      ReviewStore.Default,
-      ProfileProbe.Default,
-      SpecStore.Default,
-      ProfileStore.Default,
-    ),
-  ),
+  Command.provide(Layer.mergeAll(ReviewStore.Default, ProfileProbe.Default, ProfileStore.Default)),
 );
 
 /** Version reported by `--version`. Mirrors the package version. */

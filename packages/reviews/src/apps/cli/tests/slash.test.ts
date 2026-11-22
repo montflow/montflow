@@ -5,7 +5,6 @@ import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Effect, Layer } from 'effect';
 import * as Vitest from '@effect/vitest';
 import { ProfileStore } from '@montflow/profiles';
-import { SpecStore } from '@montflow/specs';
 import { ProfileProbe, ReviewStore } from '../../../services/index.js';
 import * as Slash from '../slash.apps.module.js';
 
@@ -13,7 +12,6 @@ const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 const Live = Layer.mergeAll(
   Layer.provide(ReviewStore.Default, NodeLive),
   ProfileProbe.Default,
-  Layer.provide(SpecStore.Default, NodeLive),
   Layer.provide(ProfileStore.Default, NodeLive),
 );
 

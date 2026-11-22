@@ -1,6 +1,5 @@
 import { Effect } from 'effect';
 import type { ProfileStore } from '@montflow/profiles';
-import type { SpecStore } from '@montflow/specs';
 import { ProfileProbe, ReviewStore } from '../../services/index.js';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
@@ -183,10 +182,7 @@ export const run = (
 ): Effect.Effect<
   void,
   string,
-  | ReviewStore.ReviewStore
-  | ProfileProbe.ProfileProbe
-  | SpecStore.SpecStore
-  | ProfileStore.ProfileStore
+  ReviewStore.ReviewStore | ProfileProbe.ProfileProbe | ProfileStore.ProfileStore
 > => {
   const action = parseCliArgs(args);
   const say = (text: string): Effect.Effect<void> => Effect.sync(() => ui.notify(text, 'info'));

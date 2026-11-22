@@ -1,7 +1,6 @@
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { defineTool, entry, type ServerPorts } from '@montflow/opencode';
 import { ProfileStore } from '@montflow/profiles';
-import { SpecStore } from '@montflow/specs';
 import { Effect, Layer, Schema } from 'effect';
 import * as Cli from './apps/cli/index.js';
 import { startReview } from './apps/dispatch/index.js';
@@ -21,15 +20,11 @@ const NodeLive = Layer.merge(NodeFileSystem.layer, NodePath.layer);
 
 /** Every service the headless CLI needs; the probe stays optional at runtime. */
 const Live: Layer.Layer<
-  | ReviewStore.ReviewStore
-  | ProfileProbe.ProfileProbe
-  | ProfileStore.ProfileStore
-  | SpecStore.SpecStore
+  ReviewStore.ReviewStore | ProfileProbe.ProfileProbe | ProfileStore.ProfileStore
 > = Layer.mergeAll(
   Layer.provide(ReviewStore.Default, NodeLive),
   ProfileProbe.Default,
   Layer.provide(ProfileStore.Default, NodeLive),
-  Layer.provide(SpecStore.Default, NodeLive),
 );
 
 /** Log a command result where the server host can see it. */

@@ -78,11 +78,11 @@ bun run --cwd packages/reviews cli resume <name> --dir "$PWD"
 bun run --cwd packages/reviews cli list --verbose --dir "$PWD"
 ```
 
-When an orchestrator dispatches this review (e.g. closing a spec phase), its context names the series and, when the review is bound to a spec phase, also the round, the phase, and the reviewer profile (`- Series:`, `- Round:`, `- Phase:`, `- Profile:`). A spec phase may be backed by **more than one series**, one per declared reviewer profile — the spec's own series (the general reviewer) plus one `<spec>-<profile>` series per profile. Each is a separate reviewer session writing its own series; this skill's job is identical in every one.
+When an orchestrator dispatches this review (e.g. closing a phase), its context names the series and, when the review is bound to a phase, also the round, the phase, and the reviewer profile (`- Series:`, `- Round:`, `- Phase:`, `- Profile:`).
 
 - **An explicit round is authoritative.** When the dispatch names `- Round: <NNN>`, write that exact round in that series. If the round does not exist, scaffold it with `mf-reviews create <name> --round <NNN>`. If the series already holds an _empty_ scaffold at that round, populate it in place; never create a higher round instead, and never overwrite a round that already holds findings. Do not compute "highest existing + 1".
 - **With no explicit round**, let `mf-reviews create <name>` choose the next free round (its default).
-- **When the dispatch names `- Phase: <phase>`** (a spec-phase review), record it as `- Phase:` in the round's `## Metadata`.
+- **When the dispatch names `- Phase: <phase>`**, record it as `- Phase:` in the round's `## Metadata`.
 
 Before reviewing, determine the two path parameters (directory entries only — reading _another_ round's contents is forbidden by the isolation requirement):
 
@@ -193,34 +193,6 @@ Lead with the highest-severity, highest-likelihood bugs. Distinguish confirmed d
 
 **No findings**: If the review finds nothing actionable, do not pad the report. Put a single line in the `## Findings` section — `No defects found.` plus the coverage areas re-checked (e.g. "Re-verified: off-by-one in `parseRange`, null guards on `fetchUser`, race on `cache.set`, encoding edge cases on filename input"). The coverage list evidences that the search was performed; the section must not be left empty, because an empty section reads as a shallow review — itself a defect of the review.
 
-### Cycle policy: never count rounds or severities yourself
-
-The reviewer writes the round; the orchestrator runs the decision verb. Never compute the phase budget, the rounds used, or the open-severity tally by hand — not in prose, not in a receipt, not as a recommendation. For a spec-phase review, after every round the orchestrator runs:
-
-```
-mf-specs review decide --name <spec> --phase <id> --mode guided|autonomous [--json]
-```
-
-It prints `decision`, `rounds <used>/<budget>`, `open <n> (critical a, major b, minor c, nit d)`, `reason <code>`, and the per-series breakdown, and it never writes. Obey its decision (`start | pass | fix-and-stop | rework | overflow | escalate | waived`).
-
-**Deferred closure.** A round whose only open findings are Minor/Nit may close without another full cycle. Add both lines to its `## Metadata`:
-
-```markdown
-- Disposition: minor-deferred
-- Deferred: F1, F3
-```
-
-Every id in `Deferred` must exist in the round and be Minor or Nit, and must carry a terminal disposition (`Won't Fix`, or `Resolved` when it was fixed). A deferred Critical/Major is `review.deferred-severity` and never passes. Deferral is a closure, not a waiver: the findings keep their terminal dispositions in the round, and the orchestrator records the evidence for each deferred fix in the phase `MEMORY.md` and opens a defect task for anything not fixed.
-
-**Intentional overflow.** A round past the phase budget is legal only when it is authorized in its `## Metadata`:
-
-```markdown
-- Overflow: <one-line reason>
-- Overflow-authorized: autonomous | user
-```
-
-Autonomous permits exactly one overflow per phase per series (`budget + 1` rounds). Guided has no fixed cap but requires `- Overflow-authorized: user` on every overflow, because the user authorizes each round. `structure` and `next` accept an authorized overflow; a missing or broken authorization is `review.overflow-exhausted`, and a round past the budget with no overflow declaration is `review.budget-exceeded`.
-
 ### Standard File Structure
 
 Round file (`<name>/<NNN>/REVIEW.md`):
@@ -232,7 +204,7 @@ Round file (`<name>/<NNN>/REVIEW.md`):
 
 - Target: <what was reviewed — file, module, PR, feature>
 - Round: <NNN>
-- Phase: <phase id> # optional; the spec phase this round reviews
+- Phase: <phase id> # optional; the phase this round reviews
 - Type: standalone | re-review
 - Isolation: isolated | non-isolated (<reason>)
 - Max Attempts: 3
@@ -303,7 +275,7 @@ Series ledger (`<name>/REVIEW.md`) — regenerate its tables from every round on
 
 ### Write the Files
 
-1. Write the round to `.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md` using the structure above — a **new** round directory on every pass; never overwrite a prior round. When the dispatch named an explicit round, write that round, populating an existing empty scaffold in place. Record `- Phase: <phase id>` in `## Metadata` when the round reviews a spec phase.
+1. Write the round to `.agents/@montflow/reviews/<name>/<NNN>/REVIEW.md` using the structure above — a **new** round directory on every pass; never overwrite a prior round. When the dispatch named an explicit round, write that round, populating an existing empty scaffold in place. Record `- Phase: <phase id>` in `## Metadata` when the round reviews a phase.
 2. Write or update the series ledger `.agents/@montflow/reviews/<name>/REVIEW.md`: its `Rounds` table and `Findings` index must reflect every round, and `Metadata.Rounds` must equal the number of round directories.
 3. The per-finding `#### Discussion` block starts empty on a standalone review. It is appended to — never rewritten — across passes.
 4. Isolation: do NOT read the _contents_ of any round other than the one being iterated (Step 9). Never read a sibling round's findings.

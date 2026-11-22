@@ -37,14 +37,10 @@ Vitest.describe('adversarial-review skill against the round grammar', () => {
     Vitest.expect(authoringRules()).toContain('- Phase:');
   });
 
-  Vitest.it(
-    'the skill documents the explicit-round and per-profile-series dispatch contract',
-    () => {
-      Vitest.expect(SKILL).toContain('explicit round');
-      Vitest.expect(SKILL).toContain('one per declared reviewer profile');
-      Vitest.expect(SKILL).toContain('mf-reviews create <name> --round <NNN>');
-    },
-  );
+  Vitest.it('the skill documents the explicit-round dispatch contract', () => {
+    Vitest.expect(SKILL).toContain('explicit round');
+    Vitest.expect(SKILL).toContain('mf-reviews create <name> --round <NNN>');
+  });
 
   Vitest.it('takes the round from the CLI instead of a directory scan', () => {
     // All three verbs the workflow needs: discovery, a new round, a re-review.
