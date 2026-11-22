@@ -18,7 +18,7 @@ Every candidate gets the same prompt, so the prompt is the contract.
 
 1. State the artifact each candidate is producing.
 2. Derive the rubric, 3-6 concrete gradeable criteria for what success looks like on *this* task. It is the picker's tool in Phase D. Candidates only see the task.
-3. Pick the runners from the `role-arena-runners` profile's `models`. If it is missing, use the panel default in the Subagents section of the **mf-mode** skill. An `inherit-parent` entry is the parent model, so leave its model unset. If your harness rejects a model, use the nearest model of the same family or drop the seat, keep at least two runners, and say so. A model's family is its vendor and line, such as one vendor's flagship series. Spawn more for multiple design directions, and repeat one model when the work is generation-bound, not judgment-sensitive. Pick each subagent's reasoning level per the Subagents section of the **mf-mode** skill.
+3. Pick the runners with `mf-mode roles resolve arena-runners`: one runner per seat, each on the harness and model it resolves to. An unset role resolves to the panel default in the Subagents section of the **mf-mode** skill. A seat with no available harness is dropped and reported; keep at least two runners, and say so. Spawn more for multiple design directions, and repeat one model when the work is generation-bound, not judgment-sensitive. Pick each subagent's reasoning level per the Subagents section of the **mf-mode** skill.
 4. Give each candidate its own output location (a git worktree where possible, otherwise `/tmp/arena-<slug>/candidate-<n>/`), per the **separate-before-serializing-shared-state** principle skill.
 
 ## Phase B: Fan out
@@ -29,7 +29,7 @@ If a candidate produces no output, proceed with N-1 and note the dropout.
 
 ## Phase C: Cross-judge
 
-After all Phase B candidates complete, spawn one read-only judge from the `role-arena-judges` profile's `models`. The judge is never from the parent's vendor, so use the first entry from another vendor. An `inherit-parent` entry is the parent model. If you do not know the parent's model, use the first entry and say that the vendor check did not run. If your harness rejects a model, use the nearest model of the same family, then the next entry, or skip the judge, and say so. While you read in Phase D, the judge scores each candidate, by path label, on each rubric criterion and recommends a base.
+After all Phase B candidates complete, spawn one read-only judge from `mf-mode roles resolve arena-judges`. The judge is never from the parent's vendor, so take the first seat from another vendor. If you do not know the parent's model, take the first seat and say that the vendor check did not run. If no seat is available, skip the judge, and say so. While you read in Phase D, the judge scores each candidate, by path label, on each rubric criterion and recommends a base.
 
 ## Phase D: Pick a base
 

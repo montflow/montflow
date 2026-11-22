@@ -13,6 +13,8 @@ The text comes from poteto's [pstack](https://github.com/cursor/plugins/tree/mai
 | Routed skills | 31 `mf-mode-*` skills: architect, swarm, arena, interrogate, unslop, no-comments, technical-writing, figure-it-out, how, why and more | `.agents/skills/mf-mode-<name>/SKILL.md` | `/mf-mode-<name>` or a trigger |
 | Principles | 24 short rules, each with when it applies | `.agents/@montflow/principles/<name>/PRINCIPLE.md` | `mf-principles list`, `mf-principles show <name>` |
 | Playbooks | 22 step lists for kinds of task, each naming the skills, principles and playbooks it uses | `.agents/@montflow/playbooks/<name>/PLAYBOOK.md` | `mf-playbooks list`, `mf-playbooks show <name>` |
+| Profiles | `mf-mode-generic-worker` (the generic worker every delegating step spawns) and `mf-mode-comment-sicko` (the comment reviewer) | `.agents/@montflow/profiles/<name>/PROFILE.md` | `mf-profiles show <name>` |
+| Roles | Which harness and model run each kind of subagent, as ordered preferences per seat (planned) | `.agents/@montflow/mode/roles.json`, git-ignored | `mf-mode roles resolve <role>` |
 | Helper scripts | pstack's scripts, such as `watch-pr` and `worktree-audit.sh` | `.agents/skills/mf-mode/scripts/` | the skills that name them |
 
 Skills are plain files in the skill store. Principles and playbooks each have their own store and CLI, so an agent can list them by one line each and read only the ones it needs.
@@ -137,8 +139,102 @@ The chat that receives `/mf-mode` runs the playbook and owns every subagent's wo
 - **Worker brief.** `worker.md` holds the rules a subagent needs: the kickoff's bar is the whole bar, never call a tool that asks a person a question, make any reversible choice and say why, stop only for deploys, deleted data, force-pushes or outside messages, and the PR title and body format.
 - **Fresh by default.** A fix round, retry or follow-up goes to a new subagent with the original brief and the prior report. Resume one only when its state is costly to move.
 - **Review.** The lead reviews each diff and writes its own summary.
-- **Roles.** Each role reads its model from a profile: `role-feature`, `role-bug-fix`, `role-perf-issue`, `role-hillclimb`, `role-judgment`, `role-swarm-workers`, and the panels `role-arena-runners`, `role-arena-judges` and `role-interrogate-reviewers` (`mf-profiles show role-<role>`). A missing profile falls back to the defaults in the Subagents section of `mf-mode`, which name no vendor or model id.
+- **Profiles and roles.** Delegated work runs as the `mf-mode-generic-worker` profile, on the harness and model that `mf-mode roles resolve <role>` returns. See [Agents and roles](#agents-and-roles).
 - **Harnesses.** The text names concepts (spawn a subagent, ask a structured question, keep a todo list, loop until a check passes). [`references/harnesses.md`](../.agents/skills/mf-mode/references/harnesses.md) maps each concept to Claude Code, Codex, OpenCode, Pi and Cursor, and says what to do when a harness lacks it.
+
+## Agents and roles
+
+pstack answers two separate questions when a playbook step spawns a subagent. montflow keeps them separate.
+
+| Question | pstack | montflow | Where it lives |
+| --- | --- | --- | --- |
+| **Who** is the subagent: how it behaves, what it reads first | an *agent* (`poteto-agent`, `comment-sicko`) | a *profile* | `.agents/@montflow/profiles/<name>/PROFILE.md`, shipped and installed by `mf-profiles doctor` |
+| **Which harness and model** run it | a *role* (`bug-fix`, `swarm workers`, …) in a per-user Cursor rule written by `/setup-pstack` | a *role* in a per-user roles file | `.agents/@montflow/mode/roles.json`, git-ignored, managed by `mf-mode roles` |
+
+So the Bug fix playbook's step 3 means: spawn the `mf-mode-generic-worker` profile on whatever the `bug-fix` role resolves to.
+
+### Agents are profiles
+
+| Profile | From pstack | What it does |
+| --- | --- | --- |
+| `mf-mode-generic-worker` | `poteto-agent` | The generic worker. Every playbook step that delegates code-writing or helper work spawns it. It reads the `mf-mode` skill and `worker.md` first, and reads each principle it applies with `mf-principles show`. |
+| `mf-mode-comment-sicko` | `comment-sicko` | The comment reviewer `mf-mode-no-comments` spawns. It deletes every comment outside a short keep list and flags the code that needed a comment as `MUST KILL`. It never writes application code. |
+
+The import writes both from pstack's agent files into `packages/profiles/profiles/`. The body becomes `## Instructions`, and montflow adds a short `## Review Checklist` drawn from the agent's own rules. Neither pins a model: the role decides that.
+
+A role is not a profile. A role holds no instructions, the same persona runs under almost every role, and its model choice is per user and per harness. Shipping roles as profiles would copy the generic worker's instructions into nine files, and `doctor` would overwrite a user's model choice on the next repair.
+
+### Roles
+
+There are nine roles:
+
+| Role | Used for |
+| --- | --- |
+| `feature` | Feature and Refactoring playbooks |
+| `bug-fix` | Bug fix playbook |
+| `perf-issue` | Perf playbook |
+| `hillclimb` | Hillclimb playbook |
+| `judgment` | Prose and judgment calls |
+| `swarm-workers` | Trivial mechanical edits, swarm workers, and every verification |
+| `arena-runners` | `mf-mode-arena` candidates (a panel) |
+| `arena-judges` | `mf-mode-arena`'s cross-judge (a panel the judge is picked from) |
+| `interrogate-reviewers` | `mf-mode-interrogate` adversaries (a panel) |
+
+A role is a list of **seats**. A single role has one seat, a panel has several. Each seat is an **ordered list of candidates**, and a candidate is a harness plus a model and an optional effort. The first candidate whose harness is available wins.
+
+```jsonc
+// .agents/@montflow/mode/roles.json (git-ignored, per user)
+{
+  "version": 1,
+  "roles": {
+    "bug-fix": [
+      [
+        { "harness": "claude-code", "model": "opus", "effort": "xhigh" },
+        { "harness": "codex", "model": "gpt-5.5", "effort": "high" }
+      ]
+    ],
+    "interrogate-reviewers": [
+      [{ "harness": "claude-code", "model": "fable", "effort": "high" }],
+      [
+        { "harness": "codex", "model": "gpt-5.5", "effort": "high" },
+        { "harness": "opencode", "model": "openai/gpt-5.5" }
+      ],
+      [{ "harness": "opencode", "model": "google/gemini-4-neon" }]
+    ]
+  }
+}
+```
+
+A harness is **available** when it is the harness the session runs in, or when its CLI (`claude`, `codex`, `opencode`, `pi`) is installed. A seat that resolves to the current harness runs **natively**: the lead spawns it with its own subagent tool. A seat that resolves to another harness is **dispatched**: `mf-mode dispatch` runs it there headless (`claude -p`, `codex exec`, `opencode run`) and returns its report.
+
+The lead never picks a harness itself. It asks the CLI:
+
+```
+$ mf-mode roles resolve interrogate-reviewers --harness claude-code
+seat 1  claude-code  fable                 high  native
+seat 2  codex        gpt-5.5               high  dispatch
+seat 3  opencode     google/gemini-4-neon        dispatch
+```
+
+```mermaid
+flowchart TD
+    step["playbook step needs role R"] --> resolve["mf-mode roles resolve R --harness {current}"]
+    resolve --> file{"R set in roles.json?"}
+    file -- no --> def["defaults from the mf-mode Subagents section,<br/>on the current harness"]
+    file -- yes --> seat["for each seat: first candidate<br/>whose harness is available"]
+    seat --> none{"any candidate available?"}
+    none -- no --> drop(["seat dropped and reported"])
+    none -- yes --> where{"candidate harness = current?"}
+    where -- yes --> native["native: spawn mf-mode-generic-worker<br/>with the subagent tool"]
+    where -- no --> dispatch["dispatch: mf-mode dispatch<br/>runs it headless on that harness"]
+    def --> native
+```
+
+- **Unset roles.** A role that is not in the file resolves to the defaults in the Subagents section of the `mf-mode` skill, on the current harness. Those defaults name no vendor or model id: the strongest model at high effort, one step lower for trivial edits, three vendors for a panel when the harness offers them.
+- **Dropped seats.** A seat with no available candidate is dropped and reported. A panel keeps going with the seats it has (arena needs at least two runners).
+- **Invalid combinations.** `mf-mode roles verify` checks every candidate against what its harness accepts. Claude Code takes `opus`, `sonnet`, `haiku` or `fable` plus an effort. Codex takes OpenAI models only, so `fable` under `codex` is an error. OpenCode takes `provider/model`. A bad combination fails before anything runs.
+- **Setting roles.** `mf-mode roles set <role> …` writes the file, replacing pstack's `/setup-pstack`. `mf-mode roles` shows what is set.
+- **OpenCode extra.** The OpenCode `model-fallback` plugin, which switches models on quota errors, can later read the same file to build its fallback chains. That stays OpenCode-only; the roles file does not depend on it.
 
 ## The import
 
@@ -166,8 +262,9 @@ What the script does:
 - **Splits pstack three ways.** `principle-*` skills become principles. `poteto-mode/playbooks/*.md` become playbooks. Every other skill becomes `mf-mode-<name>`; `poteto-mode` becomes `mf-mode` and `poteto-help` becomes `mf-mode-help`. `setup-pstack` and `make-bot-ui` are skipped.
 - **Renames in prose.** Skill names, slash commands and `pstack` become their `mf-` forms. Links to imported files point at their installed path; links to other pstack files point at the pinned commit on GitHub.
 - **Writes frontmatter.** Skills get a stable `id` hashed from the name, `author: Lauren Tan`, the pstack version and `license: MIT`. Playbooks get a description from the pstack README table and the `skills`, `principles` and `playbooks` they mention.
-- **Neutralizes harness terms.** Rules rewrite Cursor-specific wording into concepts: `.cursor/skills/` becomes `.agents/skills/`, the todolist tool becomes the todo list, `/loop` becomes your harness's loop, the role lines of `pstack-models.mdc` and configured model slugs become `role-*` profiles, and Cursor's `create-skill` becomes `mf-create-skills`.
+- **Neutralizes harness terms.** Rules rewrite Cursor-specific wording into concepts: `.cursor/skills/` becomes `.agents/skills/`, the todolist tool becomes the todo list, `/loop` becomes your harness's loop, the role lines of `pstack-models.mdc` and configured model slugs become `mf-mode roles resolve <role>`, and Cursor's `create-skill` becomes `mf-create-skills`.
 - **Applies hand edits.** Exact find-and-replace edits and whole-line rewrites (for the `mf-mode` Subagents section and the setup text of `mf-mode-help`) on top of the rename. Each must match exactly once, so an upstream rewording fails the import.
+- **Turns agents into profiles.** `poteto-agent` becomes `mf-mode-generic-worker` and `comment-sicko` becomes `mf-mode-comment-sicko`, written to `packages/profiles/profiles/`. The import owns only the `mf-mode-*` entries of that package's `payload.json`; montflow's own profiles stay as they are.
 - **Adds montflow's own files.** `scripts/mfstack/harnesses.md` ships as `mf-mode/references/harnesses.md`.
 - **Reports what is left.** It prints the harness-specific terms still in the text; the few left name Cursor on purpose, as an example.
 - **Owns its directories.** A file in an imported directory that the import did not write is removed, or reported as `stale` under `--check`.
@@ -180,11 +277,13 @@ Never edit imported text by hand. Change the script, rerun the import, then run 
 
 Not built yet:
 
-- **Roles as profiles.** The text already reads `mf-agent`, `comment-sicko` and the `role-*` profiles; the profiles themselves, with a `models` list for panels, are not shipped yet.
-- **An `mf-mode` CLI.** pstack's scripts (watch-pr, worktree audit, decision log, statechart) ported to Effect.
+- **The `mf-mode` CLI** (`packages/mode`), in Effect, harness-agnostic:
+  - `mf-mode roles`, `roles set`, `roles verify`, `roles resolve`: the roles file described in [Agents and roles](#agents-and-roles).
+  - `mf-mode dispatch`: run a resolved seat headless on another harness.
+  - pstack's scripts (watch-pr, worktree audit, decision log, statechart) ported to Effect.
 - **Harness adapters.** Only where a harness needs one: OpenCode, Pi, Claude Code, Codex. The goal is harness-agnostic text plus CLIs.
 
-Until the profiles ship, a role falls back to the defaults in `mf-mode`. The `opening-a-pr` playbook still mentions `/deslop`, which montflow does not ship.
+Until the `mf-mode` CLI ships, `mf-mode roles resolve` does not exist: every role runs on the defaults in `mf-mode`, natively on the current harness. The `opening-a-pr` playbook still mentions `/deslop`, which montflow does not ship.
 
 ## See also
 

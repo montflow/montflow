@@ -28,24 +28,24 @@ Infer the need from the message and the conversation. A named situation, such as
 
 Check the state that changes the answer, and mention it only when it does:
 
-- No `role-*` profiles in `mf-profiles list` means nobody has chosen models for the roles, so every role uses its default model.
+- No roles set (`mf-mode roles` shows none) means nobody has chosen harnesses and models for the roles, so every role uses its default model on the current harness.
 - No `verify-*` skill or other app harness in the project means agents have no scripted way to drive the app. Mention `/mf-mode-create-verification-skill` when the question is about proving a change works.
 - No formal verification skill in the project means no property is checked past what tests reach. Mention `/mf-mode-create-formal-verification-skill` when the question is about a race, an invariant, or another case tests rarely hit. When one exists and the code it covers changed after the commit it records as last in sync, mention `/mf-mode-maintain-formal-verification-skill` if the question touches that code.
 
 When the model rule is missing and it matters, ask whether the user wants to pick a model for each role and a reasoning budget now. It matters when the user is new, the question is about setup or cost, or the answer depends on which models run. Ask at most once per chat. If the need is also unclear, ask both questions together. Offer two choices:
 
-- Now: walk them through `mf-profiles create role-<role>` for the roles they care about, and answer their question too.
-- Later: answer their question, and add one line saying every role keeps its default model until they add `role-*` profiles.
+- Now: walk them through `mf-mode roles set <role> …` for the roles they care about, and answer their question too.
+- Later: answer their question, and add one line saying every role keeps its default model until they set roles with `mf-mode roles set`.
 
 ## Get set up
 
 1. Install montflow in the repository: the montflow README's quick start syncs the `mf-mode` skills and installs the principles, playbooks and profiles with each CLI's `doctor`.
-2. Optionally choose a model per role with `role-*` profiles (`mf-profiles`). Without them every role uses the defaults in the Subagents section of the **mf-mode** skill. Then offer once each to generate a verification skill (`/mf-mode-create-verification-skill`) and a formal verification skill for the project, unless the project already has one.
+2. Optionally choose, per role, an ordered list of harness and model preferences with `mf-mode roles set`. Without them every role uses the defaults in the Subagents section of the **mf-mode** skill. Then offer once each to generate a verification skill (`/mf-mode-create-verification-skill`) and a formal verification skill for the project, unless the project already has one.
 3. Start a real task with `/mf-mode`, a goal, and a check that can pass or fail.
 
 Installing changes nothing until the user invokes a skill. The montflow README and its wiki page on mf-mode have the details. Offer to word their first prompt with them, per [`references/prompting.md`](references/prompting.md).
 
-If cost is the worry, say where the tokens go and how to spend fewer. mfstack spends extra tokens on subagents and review panels. Point the `role-*` profiles at cheaper models, or set a role to `inherit-parent` so it runs on the chat's model. A shorter panel `models` list runs fewer subagents, one for each entry. Save `/mf-mode` for work that needs rigor.
+If cost is the worry, say where the tokens go and how to spend fewer. mfstack spends extra tokens on subagents and review panels. Point the roles at cheaper models with `mf-mode roles set`. A panel with fewer seats runs fewer subagents, one per seat. Save `/mf-mode` for work that needs rigor.
 
 mfstack is written for any harness that reads Agent Skills: Claude Code, Codex, OpenCode, Pi and Cursor among them. Its text names concepts (spawn a subagent, ask a structured question, keep a todo list), and [the harnesses reference](../mf-mode/references/harnesses.md) maps each one to your harness. A step that needs a feature your harness lacks is skipped with a one-line note.
 
@@ -59,7 +59,7 @@ Whether `/mf-mode` stays on depends on how the user starts it:
 - A harness that can keep a skill on for every turn (Cursor calls this a Custom Mode) keeps `/mf-mode` in context until the user turns it off.
 - Everywhere else, start each new task with `/mf-mode`.
 
-Mid-chat, "new task" makes the mode match a fresh playbook. `/mf-mode` already uses `mf-agent` for the subagents its playbook steps spawn. To get the same style from a subagent of your own, spawn it with the `mf-agent` profile.
+Mid-chat, "new task" makes the mode match a fresh playbook. `/mf-mode` already uses `mf-mode-generic-worker` for the subagents its playbook steps spawn. To get the same style from a subagent of your own, spawn it with the `mf-mode-generic-worker` profile.
 
 ## Pick a skill
 
@@ -95,7 +95,7 @@ The default answer is `/mf-mode`, which runs most of the others when its steps n
 | Vet a performance number before reporting or acting on it | [`/mf-mode-benchmark-checklist`](../mf-mode-benchmark-checklist/SKILL.md) |
 | Run a large or cross-cutting change, or one to review after stepping away | [`/mf-mode-figure-it-out`](../mf-mode-figure-it-out/SKILL.md) |
 | Keep a decision log during a run, and review it afterward | [`/mf-mode-show-me-your-work`](../mf-mode-show-me-your-work/SKILL.md) |
-| Pick a model for each role | `mf-profiles` (`role-*` profiles) |
+| Pick a harness and model for each role | `mf-mode roles set` |
 | Turn their own working habits into a personal mode skill | [`/mf-mode-automate-me`](../mf-mode-automate-me/SKILL.md) |
 | Turn what a finished task taught into skill edits | [`/mf-mode-reflect`](../mf-mode-reflect/SKILL.md) |
 | Stop agents from repeating the same mistakes in this repo | [`/mf-mode-correct`](../mf-mode-correct/SKILL.md) |
@@ -141,7 +141,7 @@ Principles are one-rule documents in the principles store that `/mf-mode` reads 
 |---|---|
 | The mode stopped applying after a few turns | Start each task with `/mf-mode`, or keep it on every turn if your harness can. |
 | A question got treated as the next step of the last task | Say "new task", or say the turn doesn't need the mode. |
-| A new model choice had no effect | Role profiles are read when a subagent is spawned. Check `mf-profiles show role-<role>` and start a new task. |
+| A new model choice had no effect | Roles resolve when a subagent is spawned. Check `mf-mode roles resolve <role>` and start a new task. |
 | Runs cost more than expected | See the cost paragraph under Get set up. |
 | A skill didn't load on its own | mfstack skills load when the user types them or when `/mf-mode` runs them, and it doesn't run every skill. |
 | Parallel agents overwrote each other | Give each agent its own worktree, or run them as cloud agents, which each get their own machine. |

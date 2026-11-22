@@ -14,7 +14,9 @@
  *   packages/principles/principles/<name>/PRINCIPLE.md          (pstack principle-* skills)
  *   packages/playbooks/playbooks/<name>/PLAYBOOK.md             (pstack poteto-mode playbooks)
  *
- * Not imported: setup-pstack (its roles become profiles), make-bot-ui (Cursor-only).
+ * Not imported: setup-pstack (its roles become `mf-mode roles`), make-bot-ui (Cursor-only).
+ * pstack's agents become profiles: poteto-agent is `mf-mode-generic-worker`, comment-sicko is
+ * `mf-mode-comment-sicko`.
  * Links resolve against the installed layout under `.agents/`; links to pstack files
  * that are not imported point at the pinned upstream commit on GitHub.
  */
@@ -168,8 +170,9 @@ const rewriteProse = (text: string): string => {
   );
   out = out.replace(/(?<![a-z0-9-])poteto-mode(?![a-z0-9-])/g, 'mf-mode');
   out = out.replace(/(?<![a-z0-9-])poteto-help(?![a-z0-9-])/g, 'mf-mode-help');
-  out = out.replace(/(?<![a-z0-9-])poteto-agent(?![a-z0-9-])/g, 'mf-agent');
-  out = out.replace(/pstack:mf-agent/g, 'mf-agent');
+  out = out.replace(/pstack:poteto-agent/g, 'poteto-agent');
+  out = out.replace(/(?<![a-z0-9-])poteto-agent(?![a-z0-9-])/g, 'mf-mode-generic-worker');
+  out = out.replace(/(?<![a-z0-9-])comment-sicko(?![a-z0-9-])/g, 'mf-mode-comment-sicko');
   out = out.replace(/(?<![a-z0-9-])pstack(?![a-z0-9-])/g, 'mfstack');
   out = out.replace(/(?<![a-z0-9-])Pstack(?![a-z0-9-])/g, 'MFStack');
   for (const [pattern, replacement] of NEUTRAL) out = out.replace(pattern, replacement as never);
@@ -178,20 +181,20 @@ const rewriteProse = (text: string): string => {
 
 /**
  * pstack's model roles, keyed by the label its `pstack-models` rule used. Each becomes a
- * montflow profile (`mf-profiles show role-<name>`).
+ * montflow role, resolved to a harness and model by `mf-mode roles resolve <role>`.
  */
 const ROLES: Readonly<Record<string, string>> = {
-  'feature, refactoring': 'role-feature',
-  feature: 'role-feature',
-  refactoring: 'role-feature',
-  'bug-fix': 'role-bug-fix',
-  'perf-issue': 'role-perf-issue',
-  hillclimb: 'role-hillclimb',
-  'judgment and prose': 'role-judgment',
-  'arena runners': 'role-arena-runners',
-  'arena cross-judge pool': 'role-arena-judges',
-  'swarm workers': 'role-swarm-workers',
-  'interrogate reviewers': 'role-interrogate-reviewers',
+  'feature, refactoring': 'feature',
+  feature: 'feature',
+  refactoring: 'feature',
+  'bug-fix': 'bug-fix',
+  'perf-issue': 'perf-issue',
+  hillclimb: 'hillclimb',
+  'judgment and prose': 'judgment',
+  'arena runners': 'arena-runners',
+  'arena cross-judge pool': 'arena-judges',
+  'swarm workers': 'swarm-workers',
+  'interrogate reviewers': 'interrogate-reviewers',
 };
 const ROLE_LABELS = Object.keys(ROLES)
   .toSorted((a, b) => b.length - a.length)
@@ -204,18 +207,18 @@ const HARNESSES = 'the harnesses reference of the **mf-mode** skill';
  * text names the concept and leaves the per-harness detail to `mf-mode/references/harnesses.md`.
  */
 const NEUTRAL: ReadonlyArray<readonly [RegExp, string | ((...groups: Array<string>) => string)]> = [
-  // Model roles -> role profiles.
+  // Model roles -> roles resolved by `mf-mode roles resolve`.
   [
     new RegExp(`the \`(${ROLE_LABELS})\` line in \`~/\\.cursor/rules/pstack-models\\.mdc\``, 'g'),
-    (_m, label) => `the \`${ROLES[label ?? '']}\` profile`,
+    (_m, label) => `the \`${ROLES[label ?? '']}\` role (\`mf-mode roles resolve ${ROLES[label ?? '']}\`)`,
   ],
-  [new RegExp(`\`(${ROLE_LABELS})\` line`, 'g'), (_m, label) => `\`${ROLES[label ?? '']}\` profile`],
+  [new RegExp(`\`(${ROLE_LABELS})\` line`, 'g'), (_m, label) => `\`${ROLES[label ?? '']}\` role`],
   [new RegExp(`\`(${ROLE_LABELS})\``, 'g'), (_m, label) => `\`${ROLES[label ?? '']}\``],
   [
     /your configured ([a-z-]+) model \(default `[^`]+`\)/g,
-    (_m, role) => `the \`${ROLES[role ?? ''] ?? `role-${role}`}\` profile's model`,
+    (_m, role) => `the \`${ROLES[role ?? ''] ?? role}\` role's model`,
   ],
-  [/`~\/\.cursor\/rules\/pstack-models\.mdc`/g, 'the role profiles (`mf-profiles list`)'],
+  [/`~\/\.cursor\/rules\/pstack-models\.mdc`/g, 'your roles (`mf-mode roles`)'],
   // Todo lists.
   [/the todolist tool/g, 'the todo list'],
   [/\btodolist\b/g, 'todo list'],
@@ -252,6 +255,7 @@ const NEUTRAL: ReadonlyArray<readonly [RegExp, string | ((...groups: Array<strin
   [/Spawn `Task` with `subagent_type: "([a-z-]+)"`/g, 'Spawn a subagent with the `$1` profile'],
   [/`subagent_type: "([a-z-]+)"`/g, 'the `$1` profile'],
   [/Spawn each adversary as `generalPurpose`/g, 'Spawn each adversary as a general-purpose subagent'],
+  [/Substituting `generalPurpose`/g, 'Substituting a general-purpose subagent'],
   [/each a Cursor cloud agent,/g, 'each an isolated agent (a cloud agent or its own worktree),'],
   [/Each owner is a Cursor cloud agent that/g, 'Each owner is an isolated agent (a cloud agent or its own worktree) that'],
   [/runs on `claude-opus-5-5-medium-fast`/g, 'runs on the cheapest model that can do it'],
@@ -380,6 +384,74 @@ for (const dir of SKILLS) {
   }
 }
 
+// Agents -> profiles. A profile is a persona: `# Title`, `## Instructions`, `## Review Checklist`.
+const AGENTS: ReadonlyArray<{
+  readonly source: string;
+  readonly name: string;
+  readonly title: string;
+  readonly skills: ReadonlyArray<string>;
+  readonly edits: ReadonlyArray<readonly [string, string]>;
+  readonly checklist: ReadonlyArray<string>;
+}> = [
+  {
+    source: 'agents/poteto-agent.md',
+    name: 'mf-mode-generic-worker',
+    title: 'MF mode generic worker',
+    skills: ['mf-mode'],
+    edits: [
+      [
+        "With no path, before any other work, search `~/.cursor/plugins/` for a file whose path ends in `skills/mf-mode/SKILL.md`. If more than one file matches, use the copy whose `.cursor-plugin/plugin.json` has the highest `version`. Your skill catalog hides this skill, so a missing catalog entry does not mean mfstack is absent.",
+        'With no path, use `.agents/skills/mf-mode/SKILL.md` under the workspace root. A skill catalog may hide this skill, so a missing catalog entry does not mean mfstack is absent.',
+      ],
+      [
+        'Navigate to a leaf `principle-*` skill whenever you apply that principle.',
+        'Read a principle in full with `mf-principles show <name>` whenever you apply it.',
+      ],
+      ['every Task spawn', 'every subagent it spawns'],
+    ],
+    checklist: [
+      'Read the mf-mode skill and its worker.md before any other work.',
+      'Read every principle you applied with `mf-principles show` and cited it.',
+      'Stayed inside the scope the kickoff gave, and reported what you verified and how.',
+    ],
+  },
+  {
+    source: 'agents/comment-sicko.md',
+    name: 'mf-mode-comment-sicko',
+    title: 'MF mode comment sicko',
+    skills: ['mf-mode-why'],
+    edits: [],
+    checklist: [
+      'Every comment outside the keep list is deleted.',
+      'Every guilty symbol is flagged `MUST KILL` with one line.',
+      'No application code was written or changed.',
+      'The report names touched files, the deletion count, the flags, and the skips.',
+    ],
+  },
+];
+for (const agent of AGENTS) {
+  const parsed = parseFrontmatter(Fs.readFileSync(Path.join(SOURCE, agent.source), 'utf8'));
+  const installed = `@montflow/profiles/${agent.name}/PROFILE.md`;
+  let body = rewriteDocument(parsed.body.replace(/^\n+/, ''), agent.source, installed);
+  body = body.replace(/^#\s+.*\n+/, '');
+  for (const [find, replace] of agent.edits) {
+    if (body.split(find).length !== 2) throw new Error(`agent edit in ${agent.name} did not match once: ${find.slice(0, 60)}…`);
+    body = body.replace(find, replace);
+  }
+  const description = rewriteProse(unquote(parsed.fields.get('description') ?? ''));
+  write(
+    `packages/profiles/profiles/${agent.name}/PROFILE.md`,
+    `${frontmatter([
+      ['name', agent.name],
+      ['description', quote(description)],
+      ['model', ''],
+      ['skills', agent.skills],
+    ]).replace('model: \n', 'model:\n')}\n# ${agent.title}\n\n## Instructions\n\n${body.trim()}\n\n## Review Checklist\n\n${agent.checklist
+      .map((item) => `- [ ] ${item}`)
+      .join('\n')}\n`,
+  );
+}
+
 // Principles
 for (const name of PRINCIPLES) {
   const rel = `skills/principle-${name}/SKILL.md`;
@@ -478,18 +550,18 @@ for (const edit of EDITS) {
  * is replaced (an empty `replace` drops it). Zero or several matches fail the import.
  */
 const LINE_EDITS: ReadonlyArray<{ readonly file: string; readonly line: string; readonly replace: string }> = [
-  // mf-mode: subagents and models by role profile, not Cursor's Task fields and slugs.
+  // mf-mode: subagents and models by role, not Cursor's Task fields and slugs.
   {
     file: '.agents/skills/mf-mode/SKILL.md',
-    line: '**Use the `mf-agent` profile for any subagent you spawn directly inside a playbook step.**',
+    line: '**Use the `mf-mode-generic-worker` profile for any subagent you spawn directly inside a playbook step.**',
     replace:
-      '**Use the `mf-agent` profile for any subagent you spawn directly inside a playbook step.** The chat that receives `/mf-mode` runs the playbook itself. Routed workflow skills (`mf-mode-interrogate`, `mf-mode-swarm`) pick their own subagents. Respect them. How your harness spawns a subagent, runs it in the background, or gives it its own checkout is in [the harnesses reference](references/harnesses.md).',
+      '**Use the `mf-mode-generic-worker` profile for any subagent you spawn directly inside a playbook step.** The chat that receives `/mf-mode` runs the playbook itself. Routed workflow skills (`mf-mode-interrogate`, `mf-mode-swarm`) pick their own subagents. Respect them. How your harness spawns a subagent, runs it in the background, or gives it its own checkout is in [the harnesses reference](references/harnesses.md).',
   },
   {
     file: '.agents/skills/mf-mode/SKILL.md',
     line: '**Defaults for every `Task` call.**',
     replace:
-      '**Defaults for every subagent.** Run it in the background when your harness can, point it at files instead of inlining context, and give it an explicit model per role. Each role\'s model lives in its profile (`mf-profiles show role-<role>`): `role-feature` (feature and refactoring), `role-bug-fix`, `role-perf-issue`, `role-hillclimb`, `role-judgment` (prose and judgment), `role-swarm-workers` (trivial mechanical edits and verification), and the panels `role-arena-runners`, `role-arena-judges` and `role-interrogate-reviewers`. A role profile overrides the defaults below and the role models in the routed skills (`mf-mode-arena`, `mf-mode-swarm`, `mf-mode-interrogate`). A missing profile keeps the default. A profile set to `inherit-parent`, or with no model, runs the role on the parent model.',
+      '**Defaults for every subagent.** Run it in the background when your harness can, point it at files instead of inlining context, and give it an explicit model per role. Run `mf-mode roles resolve <role>` for a role\'s seats: each is the harness and model that win from your ordered preferences, marked `native` (spawn it here) or `dispatch` (run it on that harness with `mf-mode dispatch`). Never pick another harness yourself. The roles are `feature` (feature and refactoring), `bug-fix`, `perf-issue`, `hillclimb`, `judgment` (prose and judgment), `swarm-workers` (trivial mechanical edits and verification), and the panels `arena-runners`, `arena-judges` and `interrogate-reviewers`. A role you set overrides the defaults below and the role models in the routed skills (`mf-mode-arena`, `mf-mode-swarm`, `mf-mode-interrogate`). An unset role resolves to the defaults below on the current harness.',
   },
   {
     file: '.agents/skills/mf-mode/SKILL.md',
@@ -517,14 +589,14 @@ const LINE_EDITS: ReadonlyArray<{ readonly file: string; readonly line: string; 
     file: '.agents/skills/mf-mode/SKILL.md',
     line: '**Match the model to the job.**',
     replace:
-      '**Match the model to the job.** Start from the role\'s profile or default, keep its family, and set the effort the job needs. Panel seats keep their listed effort. Raise any other role one step for the hardest or subtlest work, lower it one step for judgment, and two or more steps for routine work. No role runs at the maximum effort unless its profile says so. Verification always runs on the `role-swarm-workers` model. If your harness rejects a model, never pass it again: fall back as [the harnesses reference](references/harnesses.md) says, and say so.',
+      '**Match the model to the job.** Start from the role\'s resolved seat or default, keep its family, and set the effort the job needs. Panel seats keep their listed effort. Raise any other role one step for the hardest or subtlest work, lower it one step for judgment, and two or more steps for routine work. No role runs at the maximum effort unless its seat says so. Verification always runs on the `swarm-workers` model. If your harness rejects a model, never pass it again: fall back as [the harnesses reference](references/harnesses.md) says, and say so.',
   },
-  // Routed skills: role profiles and the harnesses reference.
+  // Routed skills: roles and the harnesses reference.
   {
     file: '.agents/skills/mf-mode-swarm/SKILL.md',
-    line: '3. Pick the worker model from the `role-swarm-workers` profile.',
+    line: '3. Pick the worker model from the `swarm-workers` role',
     replace:
-      '3. Pick the worker model from the `role-swarm-workers` profile. If it is missing, use the trivial-edits default in the Subagents section of the **mf-mode** skill. For `inherit-parent`, or a profile with no model, leave the model unset so the workers run on the parent model. If your harness rejects a model, fall back as its harnesses reference says, and say so. For a model race, name each arm\'s model up front. Pick each subagent\'s reasoning level for the job, per the Subagents section of the **mf-mode** skill.',
+      '3. Pick the worker seat with `mf-mode roles resolve swarm-workers`. An unset role resolves to the trivial-edits default in the Subagents section of the **mf-mode** skill, on the current harness. If your harness rejects a model, fall back as its harnesses reference says, and say so. For a model race, name each arm\'s harness and model up front. Pick each subagent\'s reasoning level for the job, per the Subagents section of the **mf-mode** skill.',
   },
   {
     file: '.agents/skills/mf-mode-swarm/SKILL.md',
@@ -534,15 +606,15 @@ const LINE_EDITS: ReadonlyArray<{ readonly file: string; readonly line: string; 
   },
   {
     file: '.agents/skills/mf-mode-arena/SKILL.md',
-    line: '3. Pick the runners from the `role-arena-runners` profile,',
+    line: '3. Pick the runners from the `arena-runners` role',
     replace:
-      '3. Pick the runners from the `role-arena-runners` profile\'s `models`. If it is missing, use the panel default in the Subagents section of the **mf-mode** skill. An `inherit-parent` entry is the parent model, so leave its model unset. If your harness rejects a model, use the nearest model of the same family or drop the seat, keep at least two runners, and say so. A model\'s family is its vendor and line, such as one vendor\'s flagship series. Spawn more for multiple design directions, and repeat one model when the work is generation-bound, not judgment-sensitive. Pick each subagent\'s reasoning level per the Subagents section of the **mf-mode** skill.',
+      '3. Pick the runners with `mf-mode roles resolve arena-runners`: one runner per seat, each on the harness and model it resolves to. An unset role resolves to the panel default in the Subagents section of the **mf-mode** skill. A seat with no available harness is dropped and reported; keep at least two runners, and say so. Spawn more for multiple design directions, and repeat one model when the work is generation-bound, not judgment-sensitive. Pick each subagent\'s reasoning level per the Subagents section of the **mf-mode** skill.',
   },
   {
     file: '.agents/skills/mf-mode-arena/SKILL.md',
     line: 'After all Phase B candidates complete, spawn one readonly judge',
     replace:
-      'After all Phase B candidates complete, spawn one read-only judge from the `role-arena-judges` profile\'s `models`. The judge is never from the parent\'s vendor, so use the first entry from another vendor. An `inherit-parent` entry is the parent model. If you do not know the parent\'s model, use the first entry and say that the vendor check did not run. If your harness rejects a model, use the nearest model of the same family, then the next entry, or skip the judge, and say so. While you read in Phase D, the judge scores each candidate, by path label, on each rubric criterion and recommends a base.',
+      'After all Phase B candidates complete, spawn one read-only judge from `mf-mode roles resolve arena-judges`. The judge is never from the parent\'s vendor, so take the first seat from another vendor. If you do not know the parent\'s model, take the first seat and say that the vendor check did not run. If no seat is available, skip the judge, and say so. While you read in Phase D, the judge scores each candidate, by path label, on each rubric criterion and recommends a base.',
   },
   {
     file: '.agents/skills/mf-mode-recall/SKILL.md',
@@ -560,21 +632,21 @@ const LINE_EDITS: ReadonlyArray<{ readonly file: string; readonly line: string; 
   },
   {
     file: '.agents/skills/mf-mode-help/SKILL.md',
-    line: '- No the role profiles (`mf-profiles list`) means',
+    line: '- No your roles (`mf-mode roles`) means',
     replace:
-      '- No `role-*` profiles in `mf-profiles list` means nobody has chosen models for the roles, so every role uses its default model.',
+      '- No roles set (`mf-mode roles` shows none) means nobody has chosen harnesses and models for the roles, so every role uses its default model on the current harness.',
   },
   {
     file: '.agents/skills/mf-mode-help/SKILL.md',
     line: '- Now: give them `/setup-pstack` to type',
     replace:
-      '- Now: walk them through `mf-profiles create role-<role>` for the roles they care about, and answer their question too.',
+      '- Now: walk them through `mf-mode roles set <role> …` for the roles they care about, and answer their question too.',
   },
   {
     file: '.agents/skills/mf-mode-help/SKILL.md',
     line: '- Later: answer their question, and add one line',
     replace:
-      '- Later: answer their question, and add one line saying every role keeps its default model until they add `role-*` profiles.',
+      '- Later: answer their question, and add one line saying every role keeps its default model until they set roles with `mf-mode roles set`.',
   },
   {
     file: '.agents/skills/mf-mode-help/SKILL.md',
@@ -586,7 +658,7 @@ const LINE_EDITS: ReadonlyArray<{ readonly file: string; readonly line: string; 
     file: '.agents/skills/mf-mode-help/SKILL.md',
     line: '2. Run [`/setup-pstack`]',
     replace:
-      '2. Optionally choose a model per role with `role-*` profiles (`mf-profiles`). Without them every role uses the defaults in the Subagents section of the **mf-mode** skill. Then offer once each to generate a verification skill (`/mf-mode-create-verification-skill`) and a formal verification skill for the project, unless the project already has one.',
+      '2. Optionally choose, per role, an ordered list of harness and model preferences with `mf-mode roles set`. Without them every role uses the defaults in the Subagents section of the **mf-mode** skill. Then offer once each to generate a verification skill (`/mf-mode-create-verification-skill`) and a formal verification skill for the project, unless the project already has one.',
   },
   {
     file: '.agents/skills/mf-mode-help/SKILL.md',
@@ -598,7 +670,7 @@ const LINE_EDITS: ReadonlyArray<{ readonly file: string; readonly line: string; 
     file: '.agents/skills/mf-mode-help/SKILL.md',
     line: 'If cost is the worry,',
     replace:
-      'If cost is the worry, say where the tokens go and how to spend fewer. mfstack spends extra tokens on subagents and review panels. Point the `role-*` profiles at cheaper models, or set a role to `inherit-parent` so it runs on the chat\'s model. A shorter panel `models` list runs fewer subagents, one for each entry. Save `/mf-mode` for work that needs rigor.',
+      'If cost is the worry, say where the tokens go and how to spend fewer. mfstack spends extra tokens on subagents and review panels. Point the roles at cheaper models with `mf-mode roles set`. A panel with fewer seats runs fewer subagents, one per seat. Save `/mf-mode` for work that needs rigor.',
   },
   {
     file: '.agents/skills/mf-mode-help/SKILL.md',
@@ -626,12 +698,12 @@ const LINE_EDITS: ReadonlyArray<{ readonly file: string; readonly line: string; 
     file: '.agents/skills/mf-mode-help/SKILL.md',
     line: "Link [Cursor's skills docs]",
     replace:
-      'Mid-chat, "new task" makes the mode match a fresh playbook. `/mf-mode` already uses `mf-agent` for the subagents its playbook steps spawn. To get the same style from a subagent of your own, spawn it with the `mf-agent` profile.',
+      'Mid-chat, "new task" makes the mode match a fresh playbook. `/mf-mode` already uses `mf-mode-generic-worker` for the subagents its playbook steps spawn. To get the same style from a subagent of your own, spawn it with the `mf-mode-generic-worker` profile.',
   },
   {
     file: '.agents/skills/mf-mode-help/SKILL.md',
     line: '| Pick a model for each role and a reasoning budget |',
-    replace: '| Pick a model for each role | `mf-profiles` (`role-*` profiles) |',
+    replace: '| Pick a harness and model for each role | `mf-mode roles set` |',
   },
   {
     file: '.agents/skills/mf-mode-help/SKILL.md',
@@ -671,7 +743,7 @@ const LINE_EDITS: ReadonlyArray<{ readonly file: string; readonly line: string; 
   {
     file: '.agents/skills/mf-mode-help/SKILL.md',
     line: '| A new model choice had no effect |',
-    replace: '| A new model choice had no effect | Role profiles are read when a subagent is spawned. Check `mf-profiles show role-<role>` and start a new task. |',
+    replace: '| A new model choice had no effect | Roles resolve when a subagent is spawned. Check `mf-mode roles resolve <role>` and start a new task. |',
   },
   {
     file: '.agents/skills/mf-mode-help/SKILL.md',
@@ -734,10 +806,29 @@ const manifest = (pkg: string, kind: string, store: string, names: ReadonlyArray
 write('packages/principles/payload.json', manifest('@montflow/principles', 'principle', 'principles', PRINCIPLES));
 write('packages/playbooks/payload.json', manifest('@montflow/playbooks', 'playbook', 'playbooks', PLAYBOOKS));
 
+// The profiles manifest also lists montflow's own profiles: keep those, own only the mf-mode-* entries.
+{
+  const path = Path.join(OUT, 'packages/profiles/payload.json');
+  const current = Fs.existsSync(path)
+    ? (JSON.parse(Fs.readFileSync(path, 'utf8')) as { schema: number; package: string; payloads: Array<{ kind: string; name: string; source: string; target: string }> })
+    : { schema: 1, package: '@montflow/profiles', payloads: [] };
+  const kept = current.payloads.filter((entry) => !(entry.kind === 'profile' && entry.name.startsWith('mf-mode-')));
+  const ours = AGENTS.map((agent) => ({
+    kind: 'profile',
+    name: agent.name,
+    source: `profiles/${agent.name}`,
+    target: `.agents/@montflow/profiles/${agent.name}`,
+  }));
+  const profiles = [...kept.filter((entry) => entry.kind === 'profile'), ...ours].toSorted((a, b) => a.name.localeCompare(b.name));
+  const others = kept.filter((entry) => entry.kind !== 'profile');
+  write('packages/profiles/payload.json', `${JSON.stringify({ ...current, payloads: [...profiles, ...others] }, null, 2)}\n`);
+}
+
 /** Directories whose contents this import owns entirely; anything else in them is stale. */
 const OWNED = [
   'packages/principles/principles',
   'packages/playbooks/playbooks',
+  ...AGENTS.map((agent) => `packages/profiles/profiles/${agent.name}`),
   ...Fs.existsSync(Path.join(OUT, '.agents/skills'))
     ? Fs.readdirSync(Path.join(OUT, '.agents/skills'))
         .filter((name) => name === 'mf-mode' || name.startsWith('mf-mode-'))

@@ -10,7 +10,7 @@ disable-model-invocation: true
 
 # MF mode
 
-Bundled skills live at `../mf-mode-<name>/SKILL.md` from this file, principles in the principles store (`mf-principles`), and playbooks in the playbooks store (`mf-playbooks`), so put this file's absolute path in every `mf-agent` prompt.
+Bundled skills live at `../mf-mode-<name>/SKILL.md` from this file, principles in the principles store (`mf-principles`), and playbooks in the playbooks store (`mf-playbooks`), so put this file's absolute path in every `mf-mode-generic-worker` prompt.
 
 ## Non-negotiables
 
@@ -19,7 +19,7 @@ The Principles section below grounds every trigger. In your reply, name each pri
 The remaining triggers live only here:
 
 - First message → restate the user's goal and the smallest change that meets it, then proceed. Open each subagent brief, PR `## Why`, and final report with the goal.
-- Starting any agent, whether a Task subagent or a Project worker → the first line of its kickoff is `Read <path>/worker.md before anything else.`, with `<path>` the absolute path of this skill's folder. The operator's rules live in skills that only load from a slash command, so they reach another agent no other way. Keep the rest of the kickoff to the goal and the task, plus this file's absolute path for a `mf-agent`.
+- Starting any agent, whether a Task subagent or a Project worker → the first line of its kickoff is `Read <path>/worker.md before anything else.`, with `<path>` the absolute path of this skill's folder. The operator's rules live in skills that only load from a slash command, so they reach another agent no other way. Keep the rest of the kickoff to the goal and the task, plus this file's absolute path for a `mf-mode-generic-worker`.
 - A fork you could settle by running something → prototype it per `mf-playbooks show prototype` instead of asking.
 - Code → name the data shape first. Across a function boundary → **mf-mode-architect**. Fan-out → **mf-mode-swarm**. Bakeoff → **mf-mode-arena**. Contested design → **mf-mode-interrogate**.
 - Prose, your reply included → **mf-mode-unslop**. Docs, PR descriptions, commit messages → **mf-mode-technical-writing**.
@@ -85,9 +85,9 @@ Read the principle in full with `mf-principles show <name>` before you apply it.
 
 ## Subagents
 
-**Use the `mf-agent` profile for any subagent you spawn directly inside a playbook step.** The chat that receives `/mf-mode` runs the playbook itself. Routed workflow skills (`mf-mode-interrogate`, `mf-mode-swarm`) pick their own subagents. Respect them. How your harness spawns a subagent, runs it in the background, or gives it its own checkout is in [the harnesses reference](references/harnesses.md).
+**Use the `mf-mode-generic-worker` profile for any subagent you spawn directly inside a playbook step.** The chat that receives `/mf-mode` runs the playbook itself. Routed workflow skills (`mf-mode-interrogate`, `mf-mode-swarm`) pick their own subagents. Respect them. How your harness spawns a subagent, runs it in the background, or gives it its own checkout is in [the harnesses reference](references/harnesses.md).
 
-**Defaults for every subagent.** Run it in the background when your harness can, point it at files instead of inlining context, and give it an explicit model per role. Each role's model lives in its profile (`mf-profiles show role-<role>`): `role-feature` (feature and refactoring), `role-bug-fix`, `role-perf-issue`, `role-hillclimb`, `role-judgment` (prose and judgment), `role-swarm-workers` (trivial mechanical edits and verification), and the panels `role-arena-runners`, `role-arena-judges` and `role-interrogate-reviewers`. A role profile overrides the defaults below and the role models in the routed skills (`mf-mode-arena`, `mf-mode-swarm`, `mf-mode-interrogate`). A missing profile keeps the default. A profile set to `inherit-parent`, or with no model, runs the role on the parent model.
+**Defaults for every subagent.** Run it in the background when your harness can, point it at files instead of inlining context, and give it an explicit model per role. Run `mf-mode roles resolve <role>` for a role's seats: each is the harness and model that win from your ordered preferences, marked `native` (spawn it here) or `dispatch` (run it on that harness with `mf-mode dispatch`). Never pick another harness yourself. The roles are `feature` (feature and refactoring), `bug-fix`, `perf-issue`, `hillclimb`, `judgment` (prose and judgment), `swarm-workers` (trivial mechanical edits and verification), and the panels `arena-runners`, `arena-judges` and `interrogate-reviewers`. A role you set overrides the defaults below and the role models in the routed skills (`mf-mode-arena`, `mf-mode-swarm`, `mf-mode-interrogate`). An unset role resolves to the defaults below on the current harness.
 
 - Code, prose, and judgment: the strongest model your harness offers, at its highest effort short of the maximum.
 - Trivial mechanical edits: the same model one effort step lower.
@@ -95,7 +95,7 @@ Read the principle in full with `mf-principles show <name>` before you apply it.
 
 **The most expensive model is an exception.** It runs outside a panel only when the user named it for this task or two runs of the default model on the same brief failed its check. Say which. Difficulty alone never qualifies.
 
-**Match the model to the job.** Start from the role's profile or default, keep its family, and set the effort the job needs. Panel seats keep their listed effort. Raise any other role one step for the hardest or subtlest work, lower it one step for judgment, and two or more steps for routine work. No role runs at the maximum effort unless its profile says so. Verification always runs on the `role-swarm-workers` model. If your harness rejects a model, never pass it again: fall back as [the harnesses reference](references/harnesses.md) says, and say so.
+**Match the model to the job.** Start from the role's resolved seat or default, keep its family, and set the effort the job needs. Panel seats keep their listed effort. Raise any other role one step for the hardest or subtlest work, lower it one step for judgment, and two or more steps for routine work. No role runs at the maximum effort unless its seat says so. Verification always runs on the `swarm-workers` model. If your harness rejects a model, never pass it again: fall back as [the harnesses reference](references/harnesses.md) says, and say so.
 
 You own every subagent's work. Review the diff and write your own summary. A second opinion is the same prompt on another vendor's model.
 
