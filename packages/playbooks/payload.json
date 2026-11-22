@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "package": "@montflow/playbooks",
+  "payloads": [
+    {
+      "kind": "playbook",
+      "name": "opening-a-pr",
+      "source": "playbooks/opening-a-pr",
+      "target": ".agents/@montflow/playbooks/opening-a-pr"
+    }
+  ]
+}

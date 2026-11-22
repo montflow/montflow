@@ -1,0 +1,9 @@
+package: '@montflow/playbooks'
+kinds:
+  - kind: playbooks
+    sourceDir: 'playbooks/'
+    targetDir: '.agents/@montflow/playbooks/'
+    naming: 'by-directory'
+    compare: contents
+    installPolicy: repair
+    required: true

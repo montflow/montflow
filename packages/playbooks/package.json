@@ -1,0 +1,63 @@
+{
+  "name": "@montflow/playbooks",
+  "version": "0.0.2",
+  "private": true,
+  "description": "Effect-first playbook primitives (PLAYBOOK.md store) and the mf-playbooks CLI",
+  "keywords": [
+    "effect",
+    "playbooks"
+  ],
+  "bugs": {
+    "url": "https://github.com/montflow/montflow/issues"
+  },
+  "license": "MIT",
+  "author": "Daniel Montilla",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/montflow/montflow.git",
+    "directory": "packages/playbooks"
+  },
+  "bin": {
+    "mf-playbooks": "./src/apps/cli/main.ts"
+  },
+  "files": [
+    "LICENSE-pstack",
+    "payload.json",
+    "playbooks",
+    "src",
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "cli": "bun run src/apps/cli/main.ts",
+    "build:cli": "bun run scripts/generate-embedded-payload.ts && bun build src/apps/cli/main.ts --compile --outfile dist/mf-playbooks",
+    "generate:payload": "bun run scripts/generate-embedded-payload.ts",
+    "format:check": "oxfmt --check .",
+    "format:fix": "oxfmt .",
+    "lint:check": "oxlint --deny-warnings .",
+    "lint:fix": "oxlint . --fix",
+    "test": "vitest run --typecheck",
+    "ts:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@effect/platform-node": "4.0.1",
+    "@montflow/payload": "workspace:*",
+    "@montflow/version": "workspace:*"
+  },
+  "devDependencies": {
+    "@effect/vitest": "4.0.1",
+    "@types/node": "^26.1.2",
+    "effect": "4.0.1",
+    "oxfmt": "0.63.0",
+    "oxlint": "1.78.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  },
+  "peerDependencies": {
+    "effect": "4.0.1"
+  }
+}
