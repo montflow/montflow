@@ -6,7 +6,7 @@ name: effect-reviewer
 description: Reviews Effect code.
 skills:
   - effect
-  - montflow-typescript-services
+  - mf-typescript-services
 ---
 
 # Effect Reviewer
@@ -24,7 +24,7 @@ Vitest.describe('Profiles.declaredSkills', () => {
   Vitest.it('reads the skills list in order', () => {
     Vitest.expect(Profiles.declaredSkills(profile)).toStrictEqual([
       'effect',
-      'montflow-typescript-services',
+      'mf-typescript-services',
     ]);
   });
 

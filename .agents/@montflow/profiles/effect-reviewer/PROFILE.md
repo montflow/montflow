@@ -4,9 +4,9 @@ description: Effect reviewer that audits TypeScript Effect v4 code for idiomatic
 model:
 skills:
   - effect
-  - montflow-typescript-services
-  - montflow-typescript-structs
-  - montflow-typescript-testing
+  - mf-typescript-services
+  - mf-typescript-structs
+  - mf-typescript-testing
   - simplifying-code
   - detecting-duplication
   - typescript-prefer-inference

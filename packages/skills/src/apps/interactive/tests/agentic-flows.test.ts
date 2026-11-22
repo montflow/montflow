@@ -43,8 +43,8 @@ const testSkillEffect = Skill.decodeUnknown({
 });
 
 const authoringSkillEffect = Skill.decodeUnknown({
-  id: 'montflow-create-skills',
-  name: 'montflow-create-skills',
+  id: 'mf-create-skills',
+  name: 'mf-create-skills',
   description: 'Guides skill creation.',
   groups: [],
   dependencies: [],

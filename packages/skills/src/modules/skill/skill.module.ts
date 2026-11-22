@@ -72,15 +72,15 @@ export const slugify = (name: string): string =>
     .replace(/^-+|-+$/g, '');
 
 /** Skills an agentic creation run needs injected to author well. */
-export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-create-skills'];
+export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['mf-create-skills'];
 
 /** Skills an agentic modification run needs injected to edit well. */
-export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['montflow-modify-skills'];
+export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['mf-modify-skills'];
 
 /** Skills an agentic format-transform run needs injected to fix well. */
 export const TRANSFORM_REQUIREMENTS: ReadonlyArray<string> = [
-  'montflow-create-skills',
-  'montflow-modify-skills',
+  'mf-create-skills',
+  'mf-modify-skills',
 ];
 
 /** Default frontmatter author when a flow cannot infer one. */
@@ -254,20 +254,20 @@ export type SkillKind = 'montflow' | 'normal';
 
 /**
  * Namespace marking a montflow-owned skill. House rules and montflow
- * tooling skills are prefixed `montflow-`; generic and vendored skills
+ * tooling skills are prefixed `mf-`; generic and vendored skills
  * keep their own name.
  */
-export const MONTFLOW_PREFIX = 'montflow-';
+export const MF_PREFIX = 'mf-';
 
 /**
  * Classify a skill by directory name. Montflow-owned skills carry the
- * `montflow-` namespace and are held to the full standard; every other
+ * `mf-` namespace and are held to the full standard; every other
  * skill is generic/vendored and only has to exist.
  * @param name - skill directory slug
  * @returns the ownership class
  */
 export const kindOf = (name: string): SkillKind =>
-  name.startsWith(MONTFLOW_PREFIX) ? 'montflow' : 'normal';
+  name.startsWith(MF_PREFIX) ? 'montflow' : 'normal';
 
 /** True when the skill is montflow-owned (held to the full standard). */
 export const isMontflow = (name: string): boolean => kindOf(name) === 'montflow';
@@ -365,7 +365,7 @@ export const verifyStandardSkillFile = (dirName: string, markdown: string): Veri
 
 /**
  * Mechanically verify one `SKILL.md`, dispatching on ownership. Montflow
- * skills (`montflow-*`) are held to the full standard
+ * skills (`mf-*`) are held to the full standard
  * ({@link verifyStandardSkillFile}); generic and vendored skills only
  * have to exist, so they verify as long as the caller read the file.
  * @param dirName - skill directory slug (the skill id)

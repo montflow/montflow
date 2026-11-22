@@ -158,16 +158,16 @@ Vitest.describe('Doctor.doctorGateMessage', () => {
       message: '',
       skills: [
         {
-          name: 'montflow-execute-prompts',
+          name: 'mf-execute-prompts',
           status: 'stale',
-          source: '/pkg/skills/montflow-execute-prompts',
-          target: '/repo/.agents/skills/montflow-execute-prompts',
+          source: '/pkg/skills/mf-execute-prompts',
+          target: '/repo/.agents/skills/mf-execute-prompts',
           detail: 'SKILL.md differs from the packaged version',
         },
       ],
     });
     Vitest.expect(message.split('\n').length).toBe(2);
-    Vitest.expect(message).toContain('montflow-execute-prompts');
+    Vitest.expect(message).toContain('mf-execute-prompts');
     Vitest.expect(message).toContain('SKILL.md differs');
     Vitest.expect(message).toContain('/mf-prompts doctor');
   });

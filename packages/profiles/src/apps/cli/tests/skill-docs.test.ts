@@ -25,7 +25,7 @@ const SKILLS_DIR = resolve(
 
 const read = (name: string): string => readFileSync(resolve(SKILLS_DIR, name, 'SKILL.md'), 'utf8');
 
-const SKILL_NAMES = ['montflow-create-profiles', 'montflow-modify-profiles'] as const;
+const SKILL_NAMES = ['mf-create-profiles', 'mf-modify-profiles'] as const;
 
 Vitest.describe('profile authoring skills', () => {
   Vitest.it.each(SKILL_NAMES)('%s: discovers skills with mf-skills list', (name) => {
@@ -40,7 +40,7 @@ Vitest.describe('profile authoring skills', () => {
   Vitest.it('keeps the subjective checklist beside the mechanical check', () => {
     // The verifier cannot judge the instructions or the checklist quality, so
     // each skill keeps its own judgement step after the CLI gate.
-    Vitest.expect(read('montflow-create-profiles')).toContain('## Review Checklist');
-    Vitest.expect(read('montflow-modify-profiles')).toContain('GATES.md');
+    Vitest.expect(read('mf-create-profiles')).toContain('## Review Checklist');
+    Vitest.expect(read('mf-modify-profiles')).toContain('GATES.md');
   });
 });

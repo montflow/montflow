@@ -180,8 +180,8 @@ For error codes, see [ERRORS.md](ERRORS.md).
 
 The skill `name` equals the directory and must signal **ownership** before **subject**:
 
-- **Montflow-owned code rules** — prefix `montflow-<language>-<subject>`: `montflow-typescript-modules`, `montflow-typescript-file-structure`, `montflow-typescript-services`. The language segment leaves room for other languages later.
-- **Montflow platform tooling** — `montflow-<verb>-<noun>` for skills that drive the montflow CLIs: `montflow-add-reference`, `montflow-create-prompts`.
+- **Montflow-owned code rules** — prefix `mf-<language>-<subject>`: `mf-typescript-modules`, `mf-typescript-file-structure`, `mf-typescript-services`. The language segment leaves room for other languages later.
+- **Montflow platform tooling** — `mf-<verb>-<noun>` for skills that drive the montflow CLIs: `mf-add-reference`, `mf-create-prompts`.
 - **Generic / reusable skills** keep their own namespace and take no prefix: `applying-solid`, `grilling`, `writing-jsdoc`, `typescript-prefer-inference`.
 - **Vendored upstream skills** keep the upstream name: `effect` (from `kitlangton/skills@effect`).
 
@@ -194,15 +194,15 @@ The `groups` field in frontmatter categorizes skills for discovery. Each skill s
 | Group | Purpose | Example Skills |
 |---|---|---|
 | `planning` | Design-phase activities: scoping, spec writing, plan review | grilling |
-| `scaffolding` | Code generation and project/package/module setup | montflow-typescript-package-setup, montflow-typescript-modules |
+| `scaffolding` | Code generation and project/package/module setup | mf-typescript-package-setup, mf-typescript-modules |
 | `refactoring` | Code improvement, restructuring, and cleanup | applying-solid, detecting-duplication, simplifying-code |
 | `documentation` | Doc/rule/schema authoring | writing-jsdoc, authoring-rules |
-| `workflow` | Process-oriented git and reference operations | planning-git-commits, using-git-worktrees, montflow-find-reference |
+| `workflow` | Process-oriented git and reference operations | planning-git-commits, using-git-worktrees, mf-find-reference |
 | `skills` | Meta-skills about the skill system itself | authoring-skills, finding-skills, executing-skills |
-| `typescript` | TypeScript-specific | montflow-typescript-project-structure, montflow-typescript-modules |
+| `typescript` | TypeScript-specific | mf-typescript-project-structure, mf-typescript-modules |
 | `javascript` | JavaScript-specific | simplifying-code, detecting-duplication |
 | `conventions` | Code style and convention enforcement | leaving-it-cleaner, favoring-composition |
-| `testing` | Testing infrastructure and review | montflow-typescript-testing |
-| `git` | Git operations | planning-git-commits, montflow-add-reference |
-| `references` | Reference code management | montflow-find-reference, montflow-add-reference |
-| `effect` | Effect TS ecosystem | effect, montflow-typescript-services, montflow-typescript-testing, montflow-typescript-structs |
+| `testing` | Testing infrastructure and review | mf-typescript-testing |
+| `git` | Git operations | planning-git-commits, mf-add-reference |
+| `references` | Reference code management | mf-find-reference, mf-add-reference |
+| `effect` | Effect TS ecosystem | effect, mf-typescript-services, mf-typescript-testing, mf-typescript-structs |

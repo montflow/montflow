@@ -21,7 +21,7 @@ const seed = (root: string): Effect.Effect<void, string> =>
     yield* Engines.create(
       { cwd: root },
       {
-        name: 'montflow-good',
+        name: 'mf-good',
         description: 'A skill that verifies clean.',
         body: BODY,
         author: undefined,
@@ -31,12 +31,12 @@ const seed = (root: string): Effect.Effect<void, string> =>
         dependencies: [],
       },
     );
-    const dir = join(root, '.agents', 'skills', 'montflow-bad');
+    const dir = join(root, '.agents', 'skills', 'mf-bad');
     yield* Effect.promise(() => mkdir(dir, { recursive: true }));
     yield* Effect.promise(() =>
       writeFile(
         join(dir, 'SKILL.md'),
-        '---\nname: montflow-bad\ndescription: A skill missing the required sections.\n---\n\nno sections here\n',
+        '---\nname: mf-bad\ndescription: A skill missing the required sections.\n---\n\nno sections here\n',
       ),
     );
   });
@@ -55,10 +55,7 @@ Vitest.describe('Engines.list status filter', () => {
     withRoot((root) =>
       Effect.gen(function* () {
         const skills = yield* Engines.list({ cwd: root });
-        Vitest.expect(skills.map((skill) => skill.id)).toStrictEqual([
-          'montflow-bad',
-          'montflow-good',
-        ]);
+        Vitest.expect(skills.map((skill) => skill.id)).toStrictEqual(['mf-bad', 'mf-good']);
       }),
     ),
   );
@@ -67,7 +64,7 @@ Vitest.describe('Engines.list status filter', () => {
     withRoot((root) =>
       Effect.gen(function* () {
         const skills = yield* Engines.list({ cwd: root }, { status: 'valid' });
-        Vitest.expect(skills.map((skill) => skill.id)).toStrictEqual(['montflow-good']);
+        Vitest.expect(skills.map((skill) => skill.id)).toStrictEqual(['mf-good']);
       }),
     ),
   );
@@ -76,7 +73,7 @@ Vitest.describe('Engines.list status filter', () => {
     withRoot((root) =>
       Effect.gen(function* () {
         const skills = yield* Engines.list({ cwd: root }, { status: 'invalid' });
-        Vitest.expect(skills.map((skill) => skill.id)).toStrictEqual(['montflow-bad']);
+        Vitest.expect(skills.map((skill) => skill.id)).toStrictEqual(['mf-bad']);
       }),
     ),
   );

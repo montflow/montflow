@@ -132,7 +132,7 @@ const writeProfile = async (root: string, name: string, model: string): Promise<
       `description: ${name} reviewer`,
       `model: ${model}`,
       'skills:',
-      '  - montflow-adversarial-review',
+      '  - mf-adversarial-review',
       '---',
       '',
       `# ${name}`,
@@ -208,7 +208,7 @@ Vitest.describe('reviews server plugin', () => {
       Vitest.expect(session?.prompt).toContain('- Round: 003');
       Vitest.expect(session?.prompt).toContain('- Phase: C');
       Vitest.expect(session?.prompt).toContain(
-        "Load the 'montflow-adversarial-review' skill before starting.",
+        "Load the 'mf-adversarial-review' skill before starting.",
       );
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }),

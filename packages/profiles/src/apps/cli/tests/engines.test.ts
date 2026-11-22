@@ -80,13 +80,13 @@ Vitest.describe('Engines.verifyAll', () => {
       const skills = `${dir}/.agents/skills`;
       yield* fs.makeDirectory(`${root}/effect-reviewer`, { recursive: true });
       yield* fs.makeDirectory(`${skills}/effect`, { recursive: true });
-      yield* fs.makeDirectory(`${skills}/montflow-bad`, { recursive: true });
+      yield* fs.makeDirectory(`${skills}/mf-bad`, { recursive: true });
       yield* fs.writeFileString(
         `${root}/effect-reviewer/PROFILE.md`,
-        `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - montflow-bad\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
+        `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - mf-bad\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
       );
       yield* fs.writeFileString(`${skills}/effect/SKILL.md`, '# upstream shape, no frontmatter\n');
-      yield* fs.writeFileString(`${skills}/montflow-bad/SKILL.md`, '# no frontmatter\n');
+      yield* fs.writeFileString(`${skills}/mf-bad/SKILL.md`, '# no frontmatter\n');
 
       const report = yield* Engines.verifyAll(dir).pipe(Effect.provide(TestLive));
       Vitest.expect(report.entries[0]?.result.valid).toBe(false);
@@ -95,7 +95,7 @@ Vitest.describe('Engines.verifyAll', () => {
       Vitest.expect(messages).toContain(
         `Skill 'missing-skill' is not installed under ${dir}/.agents/skills/.`,
       );
-      Vitest.expect(messages).toContain("'montflow-bad' failed verification");
+      Vitest.expect(messages).toContain("'mf-bad' failed verification");
       Vitest.expect(messages).not.toContain("'effect'");
       Vitest.expect(report.warnings).toStrictEqual([]);
     }).pipe(Effect.provide(NodeLive), Effect.scoped),

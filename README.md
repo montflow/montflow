@@ -12,7 +12,7 @@ global installs, no network beyond the initial clone.
 
 ## Install
 
-Run the [`montflow-agentic-setup`](.agents/skills/montflow-agentic-setup/SKILL.md) skill.
+Run the [`mf-agentic-setup`](.agents/skills/mf-agentic-setup/SKILL.md) skill.
 
 ## Acknowledgments
 

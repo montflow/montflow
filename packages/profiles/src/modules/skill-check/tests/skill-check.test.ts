@@ -30,16 +30,14 @@ Vitest.describe('SkillCheck.checkSkills', () => {
     Effect.gen(function* () {
       const fs = yield* FileSystem;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-skill-check-' });
-      yield* seedSkill(fs, dir, 'montflow-bad', '# no frontmatter\n');
+      yield* seedSkill(fs, dir, 'mf-bad', '# no frontmatter\n');
 
-      const check = yield* SkillCheck.checkSkills(dir, ['montflow-bad', 'effect', 'montflow-bad']);
+      const check = yield* SkillCheck.checkSkills(dir, ['mf-bad', 'effect', 'mf-bad']);
       Vitest.expect(check.verdicts.map((verdict) => verdict.name)).toStrictEqual([
-        'montflow-bad',
+        'mf-bad',
         'effect',
       ]);
-      Vitest.expect(check.verdicts[0]?.issue?.message).toContain(
-        "'montflow-bad' failed verification",
-      );
+      Vitest.expect(check.verdicts[0]?.issue?.message).toContain("'mf-bad' failed verification");
       Vitest.expect(check.verdicts[1]?.issue?.message).toContain(
         "'effect' is not installed under .agents/skills/.",
       );
@@ -62,14 +60,11 @@ Vitest.describe('SkillCheck.resolveSkills', () => {
       const fs = yield* FileSystem;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-skill-check-' });
       yield* seedSkill(fs, dir, 'effect', '# upstream shape\n');
-      yield* seedSkill(fs, dir, 'montflow-bad', '# no frontmatter\n');
+      yield* seedSkill(fs, dir, 'mf-bad', '# no frontmatter\n');
 
       const resolution = yield* SkillCheck.resolveSkills(dir);
       Vitest.expect(resolution?.root).toBe(dir);
-      Vitest.expect([...(resolution?.names ?? [])].toSorted()).toStrictEqual([
-        'effect',
-        'montflow-bad',
-      ]);
+      Vitest.expect([...(resolution?.names ?? [])].toSorted()).toStrictEqual(['effect', 'mf-bad']);
     }).pipe(Effect.provide(NodeLive), Effect.scoped),
   );
 

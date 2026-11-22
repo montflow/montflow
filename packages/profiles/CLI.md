@@ -49,7 +49,7 @@ One directory per profile, one file per profile:
 - `list --status valid|invalid` keeps only profiles whose `PROFILE.md` passes
   (`valid`) or fails (`invalid`) mechanical verification; absent lists every profile.
 - `verify [<name>...]` checks the `PROFILE.md` shape **and** every declared skill
-  against `.agents/skills/`. Montflow skills (`montflow-*`) must satisfy the
+  against `.agents/skills/`. Montflow skills (`mf-*`) must satisfy the
   full skill standard; generic and vendored skills only have to exist. Name one
   or more profiles to narrow the check; omit names for the whole store. A named
   profile with no file is reported as `Profile not found.` Fails with the issue
@@ -67,7 +67,7 @@ Examples:
 
 ```text
 /mf-profiles create code-reviewer --description "Senior reviewer focused on security" --instructions "Be strict. Cite files." --checklist "Security issues flagged; Tests cover changes"
-/mf-profiles modify code-reviewer --model anthropic/claude-sonnet-4-5 --skills montflow-create-profiles
+/mf-profiles modify code-reviewer --model anthropic/claude-sonnet-4-5 --skills mf-create-profiles
 /mf-profiles show code-reviewer
 ```
 
@@ -106,7 +106,7 @@ skills:
 
 ## Standards
 
-`.agents/skills/montflow-create-profiles/SKILL.md` (repo `montflow/montflow`;
+`.agents/skills/mf-create-profiles/SKILL.md` (repo `montflow/montflow`;
 sync it from a checkout with
 `bun run --cwd "$M/packages/skills" cli sync --source "$M" --target <root>` — see
 `guides/installation.md`) holds authoring standards. Installed → follow it;

@@ -2,7 +2,7 @@
 
 Verify the skills a profile declares. Delegates to the skills `verify`
 engine — the same engine the `mf-skills` CLI runs — so a profile and the
-skills CLI cannot disagree. Montflow skills (`montflow-*`) are held to the
+skills CLI cannot disagree. Montflow skills (`mf-*`) are held to the
 full standard; generic and vendored skills only have to exist.
 
 ## Belongs here

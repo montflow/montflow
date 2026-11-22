@@ -62,7 +62,7 @@ export const reviewerPrompt = (
     ...(skillLines.length === 0 ? [] : ['']),
     `Run one pass of the adversarial review series '${input.name}'.`,
     '',
-    'Load and execute the `montflow-adversarial-review` skill for this series. Write the next',
+    'Load and execute the `mf-adversarial-review` skill for this series. Write the next',
     'round under `.agents/@montflow/reviews/` and update the series ledger — the skill owns the',
     'exact format and the finding lifecycle.',
     '',

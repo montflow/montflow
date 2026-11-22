@@ -4,15 +4,15 @@
   "payloads": [
     {
       "kind": "skill",
-      "name": "montflow-adversarial-review",
-      "source": "skills/montflow-adversarial-review",
-      "target": ".agents/skills/montflow-adversarial-review"
+      "name": "mf-adversarial-review",
+      "source": "skills/mf-adversarial-review",
+      "target": ".agents/skills/mf-adversarial-review"
     },
     {
       "kind": "skill",
-      "name": "montflow-addressing-adversarial-review",
-      "source": "skills/montflow-addressing-adversarial-review",
-      "target": ".agents/skills/montflow-addressing-adversarial-review"
+      "name": "mf-addressing-adversarial-review",
+      "source": "skills/mf-addressing-adversarial-review",
+      "target": ".agents/skills/mf-addressing-adversarial-review"
     }
   ]
 }

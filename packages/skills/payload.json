@@ -4,15 +4,15 @@
   "payloads": [
     {
       "kind": "skill",
-      "name": "montflow-create-skills",
-      "source": "skills/montflow-create-skills",
-      "target": ".agents/skills/montflow-create-skills"
+      "name": "mf-create-skills",
+      "source": "skills/mf-create-skills",
+      "target": ".agents/skills/mf-create-skills"
     },
     {
       "kind": "skill",
-      "name": "montflow-modify-skills",
-      "source": "skills/montflow-modify-skills",
-      "target": ".agents/skills/montflow-modify-skills"
+      "name": "mf-modify-skills",
+      "source": "skills/mf-modify-skills",
+      "target": ".agents/skills/mf-modify-skills"
     }
   ]
 }

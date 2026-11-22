@@ -18,7 +18,7 @@ const packagedSkill = readFileSync(
     '..',
     '..',
     'skills',
-    'montflow-create-prompts',
+    'mf-create-prompts',
     'SKILL.md',
   ),
   'utf8',

@@ -32,7 +32,7 @@ const program = Effect.gen(function* () {
    `encodeSkillFile` handle the whole `SKILL.md` file.
 3. `isValidName(name)` — slug check. `slugify(raw)` — display name → slug.
 4. `verifySkillFile(dirName, markdown)` — ownership-aware shape check
-   (`mf-skills verify`): `montflow-*` skills must satisfy the full standard
+   (`mf-skills verify`): `mf-*` skills must satisfy the full standard
    (`verifyStandardSkillFile`); generic and vendored skills only have to exist.
 5. `mf-skills` (binary) / `/mf-skills` (OpenCode) — `doctor`, `list`, `show`,
    `verify`, `create`, `modify`, `delete` over `.agents/skills/`.
@@ -40,7 +40,7 @@ const program = Effect.gen(function* () {
    create, show, modify, delete, re-verify.
    Agentic sessions dispatch through the adapter's `SessionDispatchPort`;
    `doctor` installs the
-   `montflow-create-skills` / `montflow-modify-skills` authoring skills.
+   `mf-create-skills` / `mf-modify-skills` authoring skills.
 
 Storage paths and file shape are documented separately — see [storage](./storage.md) and [format](./format.md).
 

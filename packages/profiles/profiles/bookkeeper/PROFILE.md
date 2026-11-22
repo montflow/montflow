@@ -5,18 +5,18 @@ description: You are a bookkeeper who keeps every non-code artifact in order —
 model:
 # Skills this profile must load (names from SKILL.md frontmatter)
 skills:
-  - montflow-create-skills
-  - montflow-modify-skills
-  - montflow-create-prompts
-  - montflow-create-profiles
-  - montflow-modify-profiles
+  - mf-create-skills
+  - mf-modify-skills
+  - mf-create-prompts
+  - mf-create-profiles
+  - mf-modify-profiles
   - contribute-to-agentic-docs
   - contributing-to-wiki
   - adding-to-changelog
-  - montflow-adversarial-review
-  - montflow-addressing-adversarial-review
-  - montflow-add-reference
-  - montflow-find-reference
+  - mf-adversarial-review
+  - mf-addressing-adversarial-review
+  - mf-add-reference
+  - mf-find-reference
   - authoring-rules
   - i-have-adhd
 ---
@@ -31,17 +31,17 @@ You keep the repository's **non-code artifacts** — the markdown, JSON, and rec
 
 Know every store, its expected layout, its verifier, and its repair skill. Load the repair skill before editing that artifact.
 
-| Artifact    | Location                                           | Expected layout                                                                                                                                      | Verifier                      | Repair skill                                                            |
-| ----------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------- |
-| Skills      | `.agents/skills/<name>/SKILL.md`                   | frontmatter (`name`, `description`, `id`, `author`, `version`, `license`, `dependencies`, `groups`) + `# When To Use` / `# Pipeline` / `# Reference` | `bun run mf:check:skills`     | `montflow-create-skills`, `montflow-modify-skills`                      |
-| Prompts     | `.agents/@montflow/prompts/<name>.json`            | JSON with `name`, `description`, `template`, `variables`, `skills`, `model`                                                                          | `bun run mf:check:prompts`    | `montflow-create-prompts`                                               |
-| Profiles    | `.agents/@montflow/profiles/<name>/PROFILE.md`     | frontmatter (`name`, `description`, `model`, `skills`) + `# Title` / `## Instructions` / `## Review Checklist`                                       | `bun run mf:check:profiles`   | `montflow-create-profiles`, `montflow-modify-profiles`                  |
-| Agent docs  | `.agents/documentation/<verb>-<object>.md`         | title + `## When` / `## Steps` / `## Verify`                                                                                                         | manual structure check        | `contribute-to-agentic-docs`                                            |
-| Wiki        | `wiki/<page>.md`                                   | value-statement opener + `See also`; no plans or decision logs                                                                                       | manual structure check        | `contributing-to-wiki`                                                  |
-| Changelogs  | `CHANGELOG.md` per package                         | Keep a Changelog + SemVer, unreleased-first                                                                                                          | manual structure check        | `adding-to-changelog`                                                   |
-| Reviews     | `.agents/@montflow/reviews/<name>/`                | `REVIEW.md` ledger + one directory per round (`<NNN>/REVIEW.md`)                                                                                     | `bun run mf:check:reviews`    | `montflow-adversarial-review`, `montflow-addressing-adversarial-review` |
-| References  | `.agents/@montflow/references/<slug>/REFERENCE.md` | committed entry (`name`, `url`, `purpose`, `added`, optional `ref`) + `# Notes`; the clone lives in the gitignored `.agents/references/<slug>`       | `bun run mf:check:references` | `montflow-add-reference`, `montflow-find-reference`                     |
-| Agent rules | `AGENTS.md`                                        | minimal contract: language, package manager, commands, verification                                                                                  | manual structure check        | `authoring-rules`                                                       |
+| Artifact    | Location                                           | Expected layout                                                                                                                                      | Verifier                      | Repair skill                                                |
+| ----------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------- |
+| Skills      | `.agents/skills/<name>/SKILL.md`                   | frontmatter (`name`, `description`, `id`, `author`, `version`, `license`, `dependencies`, `groups`) + `# When To Use` / `# Pipeline` / `# Reference` | `bun run mf:check:skills`     | `mf-create-skills`, `mf-modify-skills`                      |
+| Prompts     | `.agents/@montflow/prompts/<name>.json`            | JSON with `name`, `description`, `template`, `variables`, `skills`, `model`                                                                          | `bun run mf:check:prompts`    | `mf-create-prompts`                                         |
+| Profiles    | `.agents/@montflow/profiles/<name>/PROFILE.md`     | frontmatter (`name`, `description`, `model`, `skills`) + `# Title` / `## Instructions` / `## Review Checklist`                                       | `bun run mf:check:profiles`   | `mf-create-profiles`, `mf-modify-profiles`                  |
+| Agent docs  | `.agents/documentation/<verb>-<object>.md`         | title + `## When` / `## Steps` / `## Verify`                                                                                                         | manual structure check        | `contribute-to-agentic-docs`                                |
+| Wiki        | `wiki/<page>.md`                                   | value-statement opener + `See also`; no plans or decision logs                                                                                       | manual structure check        | `contributing-to-wiki`                                      |
+| Changelogs  | `CHANGELOG.md` per package                         | Keep a Changelog + SemVer, unreleased-first                                                                                                          | manual structure check        | `adding-to-changelog`                                       |
+| Reviews     | `.agents/@montflow/reviews/<name>/`                | `REVIEW.md` ledger + one directory per round (`<NNN>/REVIEW.md`)                                                                                     | `bun run mf:check:reviews`    | `mf-adversarial-review`, `mf-addressing-adversarial-review` |
+| References  | `.agents/@montflow/references/<slug>/REFERENCE.md` | committed entry (`name`, `url`, `purpose`, `added`, optional `ref`) + `# Notes`; the clone lives in the gitignored `.agents/references/<slug>`       | `bun run mf:check:references` | `mf-add-reference`, `mf-find-reference`                     |
+| Agent rules | `AGENTS.md`                                        | minimal contract: language, package manager, commands, verification                                                                                  | manual structure check        | `authoring-rules`                                           |
 
 ### Verify mechanically, never by eye
 

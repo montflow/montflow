@@ -19,7 +19,7 @@ Subcommands: `doctor`, `list`, `show`, `verify [name]`, `create`, `modify`,
 `delete`, `sync`. `list` accepts `--status valid|invalid` to keep only skills
 whose `SKILL.md` passes or fails verification. `verify` checks each `SKILL.md`
 against its ownership class (`Skill.verifySkillFile`): montflow skills
-(`montflow-*`) must satisfy the full standard, while generic and vendored
+(`mf-*`) must satisfy the full standard, while generic and vendored
 skills only have to exist. It exits non-zero when a skill fails. Store commands
 accept `--dir` to target a workspace root other than the working directory;
 `sync` instead takes `--source`/`--target` (see below).
@@ -60,8 +60,8 @@ mf-skills sync --source <checkout> --target <workspace-root> [--check] [--verbos
 `doctor` installs two skills into the repo's `.agents/skills/` so an agent can
 author skills without shelling out:
 
-- `montflow-create-skills`
-- `montflow-modify-skills`
+- `mf-create-skills`
+- `mf-modify-skills`
 
 Agentic sessions inject these (`Skill.GENERATION_REQUIREMENTS` /
 `MODIFICATION_REQUIREMENTS`). The package ships them under `skills/` and embeds

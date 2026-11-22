@@ -18,7 +18,7 @@ Effect `Schema.Class` identifier.
 - Frontmatter parser (`parseSkillFile`, `fieldString`, `fieldStrings`) — one
   grammar shared by the store and the verifier
 - Mechanical verification (`verifySkillFile`, `verifyStandardSkillFile`,
-  `verifyInfoLine`, `kindOf`): montflow skills (`montflow-*`) must satisfy the
+  `verifyInfoLine`, `kindOf`): montflow skills (`mf-*`) must satisfy the
   full standard (required frontmatter `name`, `description`, `id`, `author`,
   `version` plus the `# When To Use` / `# Pipeline` / `# Reference` body
   shape); generic and vendored skills only have to exist. Style stays a
@@ -30,7 +30,7 @@ Effect `Schema.Class` identifier.
   `MODIFICATION_REQUIREMENTS`, `TRANSFORM_REQUIREMENTS`, `checkRequirements`,
   `missingRequirements`, `findInstalled`, `resolveInjection`,
   `formatInjectedSkills`) — pure, adapter-agnostic. They name the shipped
-  skills: `montflow-create-skills` / `montflow-modify-skills`.
+  skills: `mf-create-skills` / `mf-modify-skills`.
 
 ## Does not belong here
 

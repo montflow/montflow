@@ -20,5 +20,5 @@ in `make` and hidden behind `Default` — consumers only see `PromptStore`.
 
 ## Note
 
-The repo `montflow-typescript-services` skill prescribes `Context.Service` for
+The repo `mf-typescript-services` skill prescribes `Context.Service` for
 service tags, so the tag here extends `Context.Service` directly.

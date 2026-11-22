@@ -69,7 +69,7 @@ The interactive `/mf-skills` browse opens each skill's detail menu with the
 same verdict: `✓ verified` or `✗ not verified — N issues`. What "verified"
 means depends on ownership:
 
-- **Montflow skills** (`montflow-*`) are held to the full standard
+- **Montflow skills** (`mf-*`) are held to the full standard
   (`Skill.verifyStandardSkillFile`): required frontmatter fields, `name`
   matching the directory, and the three body sections above.
 - **Generic and vendored skills** keep their own name and only have to exist —

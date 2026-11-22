@@ -3,8 +3,8 @@
 Reference-code management for OpenCode — a committed registry of third-party
 repositories, plain git clones kept out of every commit, the `mf-references` CLI
 (a binary, and the same command in the host as `/mf-references`), the
-`reference_add` / `reference_find` tools, and the `montflow-add-reference` /
-`montflow-find-reference` skills, shipped as package payload and installed by
+`reference_add` / `reference_find` tools, and the `mf-add-reference` /
+`mf-find-reference` skills, shipped as package payload and installed by
 `doctor`.
 
 ```typescript
@@ -85,9 +85,9 @@ session. The TUI entry mounts nothing, matching every other plugin package.
 Two skills ship with the package and `doctor` installs them into
 `.agents/skills/`, keeping them byte-identical to the package:
 
-- `montflow-add-reference` — the add flow: resolve the slug, register with
+- `mf-add-reference` — the add flow: resolve the slug, register with
   `mf-references add`, read the result, never hand-edit the registry
-- `montflow-find-reference` — the lookup flow: list, show, offer to sync a
+- `mf-find-reference` — the lookup flow: list, show, offer to sync a
   missing clone, then report path, purpose, URL, and ref
 
 ```bash
@@ -98,10 +98,10 @@ mf-references doctor
 
 The two generic workspace skills that used to own this surface are retired:
 
-| Retired              | Replacement                                                          |
-| -------------------- | -------------------------------------------------------------------- |
-| `adding-references`  | `montflow-add-reference` + `mf-references add`                       |
-| `finding-references` | `montflow-find-reference` + `mf-references list` / `show` / `status` |
+| Retired              | Replacement                                                    |
+| -------------------- | -------------------------------------------------------------- |
+| `adding-references`  | `mf-add-reference` + `mf-references add`                       |
+| `finding-references` | `mf-find-reference` + `mf-references list` / `show` / `status` |
 
 The 14-row registry table that lived in `finding-references/SKILL.md` is gone;
 each row is now one `REFERENCE.md` under `.agents/@montflow/references/<slug>/`.

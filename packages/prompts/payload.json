@@ -4,15 +4,15 @@
   "payloads": [
     {
       "kind": "skill",
-      "name": "montflow-create-prompts",
-      "source": "skills/montflow-create-prompts",
-      "target": ".agents/skills/montflow-create-prompts"
+      "name": "mf-create-prompts",
+      "source": "skills/mf-create-prompts",
+      "target": ".agents/skills/mf-create-prompts"
     },
     {
       "kind": "skill",
-      "name": "montflow-execute-prompts",
-      "source": "skills/montflow-execute-prompts",
-      "target": ".agents/skills/montflow-execute-prompts"
+      "name": "mf-execute-prompts",
+      "source": "skills/mf-execute-prompts",
+      "target": ".agents/skills/mf-execute-prompts"
     }
   ]
 }

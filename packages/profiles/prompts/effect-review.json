@@ -13,9 +13,9 @@
   ],
   "skills": [
     "effect",
-    "montflow-typescript-services",
-    "montflow-typescript-structs",
-    "montflow-typescript-testing",
+    "mf-typescript-services",
+    "mf-typescript-structs",
+    "mf-typescript-testing",
     "simplifying-code",
     "detecting-duplication",
     "typescript-prefer-inference"

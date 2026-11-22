@@ -4,15 +4,15 @@
   "payloads": [
     {
       "kind": "skill",
-      "name": "montflow-add-reference",
-      "source": "skills/montflow-add-reference",
-      "target": ".agents/skills/montflow-add-reference"
+      "name": "mf-add-reference",
+      "source": "skills/mf-add-reference",
+      "target": ".agents/skills/mf-add-reference"
     },
     {
       "kind": "skill",
-      "name": "montflow-find-reference",
-      "source": "skills/montflow-find-reference",
-      "target": ".agents/skills/montflow-find-reference"
+      "name": "mf-find-reference",
+      "source": "skills/mf-find-reference",
+      "target": ".agents/skills/mf-find-reference"
     }
   ]
 }

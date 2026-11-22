@@ -33,7 +33,7 @@ const writeProfile = async (root: string, name: string, model = ''): Promise<voi
     `description: ${name} reviewer`,
     `model: ${model}`,
     'skills:',
-    '  - montflow-adversarial-review',
+    '  - mf-adversarial-review',
     '---',
     '',
     `# ${name}`,
@@ -104,18 +104,16 @@ Vitest.describe('review dispatch', () => {
         round: '003',
         phase: 'C',
       },
-      ['montflow-adversarial-review'],
+      ['mf-adversarial-review'],
     );
     Vitest.expect(prompt).toContain("series 'ship-spec-a'");
-    Vitest.expect(prompt).toContain('montflow-adversarial-review');
+    Vitest.expect(prompt).toContain('mf-adversarial-review');
     Vitest.expect(prompt).toContain('- Spec: ship-spec');
     Vitest.expect(prompt).toContain('- Profile: a');
     Vitest.expect(prompt).toContain('- Round: 003');
     Vitest.expect(prompt).toContain('- Phase: C');
     Vitest.expect(prompt).toContain('- Workspace root: /repo');
-    Vitest.expect(prompt).toContain(
-      "Load the 'montflow-adversarial-review' skill before starting.",
-    );
+    Vitest.expect(prompt).toContain("Load the 'mf-adversarial-review' skill before starting.");
   });
 
   Vitest.it.effect('ensures the series, then dispatches a reviewer session', () =>
@@ -343,7 +341,7 @@ Vitest.describe('review dispatch', () => {
       Vitest.expect(dispatched[0]?.prompt).toContain('- Phase: C');
       Vitest.expect(dispatched[0]?.prompt).toContain('- Profile: effect-reviewer');
       Vitest.expect(dispatched[0]?.prompt).toContain(
-        "Load the 'montflow-adversarial-review' skill before starting.",
+        "Load the 'mf-adversarial-review' skill before starting.",
       );
       const firstLedger = yield* Effect.promise(() =>
         readFile(ledgerPath(root, 'demo-effect-reviewer'), 'utf8'),

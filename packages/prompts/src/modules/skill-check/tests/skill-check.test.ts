@@ -14,11 +14,11 @@ Vitest.describe('SkillCheck.resolveSkills', () => {
       const root = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-prompts-skill-check-' });
       yield* fs.makeDirectory(`${root}/.agents/skills/effect`, { recursive: true });
       yield* fs.writeFileString(`${root}/.agents/skills/effect/SKILL.md`, '# effect\n');
-      yield* fs.makeDirectory(`${root}/.agents/skills/montflow-typescript-services`, {
+      yield* fs.makeDirectory(`${root}/.agents/skills/mf-typescript-services`, {
         recursive: true,
       });
       yield* fs.writeFileString(
-        `${root}/.agents/skills/montflow-typescript-services/SKILL.md`,
+        `${root}/.agents/skills/mf-typescript-services/SKILL.md`,
         '# services\n',
       );
 
@@ -26,7 +26,7 @@ Vitest.describe('SkillCheck.resolveSkills', () => {
       Vitest.expect(resolution?.root).toBe(root);
       Vitest.expect([...(resolution?.names ?? [])].toSorted()).toStrictEqual([
         'effect',
-        'montflow-typescript-services',
+        'mf-typescript-services',
       ]);
     }).pipe(Effect.provide(NodeLive), Effect.scoped),
   );

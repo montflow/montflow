@@ -49,16 +49,16 @@ const testProfileEffect = Profiles.decodeUnknown({
 });
 
 const authoringProfiles: Interactive.InstalledSkill = {
-  id: 'montflow-create-profiles',
-  name: 'montflow-create-profiles',
+  id: 'mf-create-profiles',
+  name: 'mf-create-profiles',
   description: 'Guides profile authoring.',
   dependencies: [],
   body: 'Authoring body.',
 };
 
 const modifyingProfiles: Interactive.InstalledSkill = {
-  id: 'montflow-modify-profiles',
-  name: 'montflow-modify-profiles',
+  id: 'mf-modify-profiles',
+  name: 'mf-modify-profiles',
   description: 'Guides profile modification.',
   dependencies: [],
   body: 'Modifying body.',
@@ -109,7 +109,7 @@ Vitest.describe('Interactive.createAgentic with loading', () => {
     }),
   );
 
-  Vitest.it.effect('injects montflow-create-profiles behind the picked-model message', () =>
+  Vitest.it.effect('injects mf-create-profiles behind the picked-model message', () =>
     Effect.gen(function* () {
       const profile = yield* testProfileEffect;
       const messages: Array<string> = [];
@@ -143,7 +143,7 @@ Vitest.describe('Interactive.createAgentic with loading', () => {
 });
 
 Vitest.describe('Interactive.ensureRequirements install', () => {
-  Vitest.it.effect('installs montflow-create-profiles then continues with it checked', () =>
+  Vitest.it.effect('installs mf-create-profiles then continues with it checked', () =>
     Effect.gen(function* () {
       const installed: Array<Interactive.InstalledSkill> = [];
       const installedNames: Array<ReadonlyArray<string>> = [];
@@ -166,9 +166,9 @@ Vitest.describe('Interactive.ensureRequirements install', () => {
         Profiles.GENERATION_REQUIREMENTS,
         'agentic profile creation',
       );
-      Vitest.expect(installedNames).toStrictEqual([['montflow-create-profiles']]);
+      Vitest.expect(installedNames).toStrictEqual([['mf-create-profiles']]);
       Vitest.expect(result).toStrictEqual([authoringProfiles]);
-      Vitest.expect(notifies).toStrictEqual(['Installed montflow-create-profiles.']);
+      Vitest.expect(notifies).toStrictEqual(['Installed mf-create-profiles.']);
     }),
   );
 });
@@ -241,9 +241,7 @@ Vitest.describe('Interactive.run menu status', () => {
         () => Effect.fail('unused'),
         () => Effect.fail('unused'),
       );
-      Vitest.expect(installedNames).toStrictEqual([
-        ['montflow-create-profiles', 'montflow-modify-profiles'],
-      ]);
+      Vitest.expect(installedNames).toStrictEqual([['mf-create-profiles', 'mf-modify-profiles']]);
       Vitest.expect(titles[0]).toBe('Profiles');
       Vitest.expect(options[0]).toStrictEqual([
         'Browse profiles',

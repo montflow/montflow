@@ -9,7 +9,7 @@ Vitest.describe('Skills extension loader', () => {
       const second = yield* Skills.loadSkills();
       Vitest.expect(second).toBe(first);
       Vitest.expect(first.Interactive.CANCELLED).toBe('Cancelled.');
-      Vitest.expect(first.Skill.GENERATION_REQUIREMENTS).toContain('montflow-create-skills');
+      Vitest.expect(first.Skill.GENERATION_REQUIREMENTS).toContain('mf-create-skills');
     }),
   );
 
