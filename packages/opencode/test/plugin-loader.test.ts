@@ -42,7 +42,6 @@ const targetOf = (name: string) => ({
   name: `@montflow/${name}`,
 });
 
-const specsTarget = targetOf('specs');
 const promptsTarget = targetOf('prompts');
 const profilesTarget = targetOf('profiles');
 const reviewsTarget = targetOf('reviews');
@@ -343,7 +342,7 @@ const makeTuiHost = (directory: string) => {
 };
 
 test('Host.resolve prefers the ./server entrypoint over the root export', () => {
-  const entries = Host.resolve(specsTarget);
+  const entries = Host.resolve(promptsTarget);
   expect(entries.server?.endsWith('/src/server.ts')).toBe(true);
   expect(entries.tui?.endsWith('/src/tui.ts')).toBe(true);
   expect(entries.rpc).toBeUndefined();
@@ -364,21 +363,13 @@ test('Host.resolve never executes plugin code', async () => {
 });
 
 test('Host.load yields { id, effect } for ./server and { id, setup } for ./tui', async () => {
-  const entries = Host.resolve(specsTarget);
+  const entries = Host.resolve(promptsTarget);
   const server = await load<ServerModule>(entries.server, 'server');
   const tui = await load<TuiModule>(entries.tui, 'tui');
-  expect(server.default.id).toBe('specs');
+  expect(server.default.id).toBe('prompts');
   expect(server.default.effect).toBeTypeOf('function');
-  expect(tui.default.id).toBe('specs');
+  expect(tui.default.id).toBe('prompts');
   expect(tui.default.setup).toBeTypeOf('function');
-});
-
-test('the /specs slash command registers in the host command transform', async () => {
-  const entries = Host.resolve(specsTarget);
-  const server = await load<ServerModule>(entries.server, 'server');
-  const host = makeHost(process.cwd());
-  await run(server, host.context);
-  expect(host.commands).toEqual(['specs']);
 });
 
 test('prompts, profiles, reviews, and skills expose native server and TUI faces', async () => {
