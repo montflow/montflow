@@ -16,7 +16,6 @@ const REPO_ROOT = NodePath.resolve(import.meta.dirname, '..', '..', '..', '..', 
 const PACKAGES = [
   'skills',
   'prompts',
-  'specs',
   'profiles',
   'reviews',
   'references',
@@ -91,18 +90,18 @@ Vitest.describe('loadManifest', () => {
           target: '.agents/@montflow/profiles/demo',
         },
         {
-          kind: 'tier',
-          name: 'micro',
-          source: 'tiers/micro.md',
-          target: '.agents/@montflow/tiers/micro.md',
+          kind: 'prompt',
+          name: 'demo',
+          source: 'prompts/demo.json',
+          target: '.agents/@montflow/prompts/demo.json',
         },
       ]),
       '@fixture/payload',
     );
     Vitest.expect(namesOf(loaded, 'profile')).toStrictEqual(['demo']);
-    Vitest.expect(namesOf(loaded, 'tier')).toStrictEqual(['micro']);
-    Vitest.expect(nameAt(loaded, 'tier', 0)).toBe('micro');
-    Vitest.expect(() => nameAt(loaded, 'tier', 1)).toThrow();
+    Vitest.expect(namesOf(loaded, 'prompt')).toStrictEqual(['demo']);
+    Vitest.expect(nameAt(loaded, 'prompt', 0)).toBe('demo');
+    Vitest.expect(() => nameAt(loaded, 'prompt', 1)).toThrow();
   });
 
   Vitest.it('rejects an empty manifest so a broken package is never healthy', () => {
@@ -166,10 +165,10 @@ Vitest.describe('loadManifest', () => {
     const loaded = loadManifest(
       raw([
         {
-          kind: 'tier',
-          name: 'micro',
-          source: 'tiers/standard.md',
-          target: '.agents/@montflow/tiers/micro.md',
+          kind: 'prompt',
+          name: 'demo',
+          source: 'prompts/other.json',
+          target: '.agents/@montflow/prompts/demo.json',
         },
       ]),
       '@fixture/payload',
@@ -178,21 +177,21 @@ Vitest.describe('loadManifest', () => {
   });
 });
 
-Vitest.describe('tier kinds in a manifest', () => {
-  Vitest.it('accepts a tier entry and finds its installed root', () => {
+Vitest.describe('prompt kinds in a manifest', () => {
+  Vitest.it('accepts a prompt entry and finds its installed root', () => {
     const loaded = loadManifest(
       raw([
         {
-          kind: 'tier',
-          name: 'micro',
-          source: 'tiers/micro.md',
-          target: '.agents/@montflow/tiers/micro.md',
+          kind: 'prompt',
+          name: 'demo',
+          source: 'prompts/demo.json',
+          target: '.agents/@montflow/prompts/demo.json',
         },
       ]),
       '@fixture/payload',
     );
     Vitest.expect(loaded.ok).toBe(true);
-    Vitest.expect(expectedTarget('tier', 'micro')).toBe('.agents/@montflow/tiers/micro.md');
-    Vitest.expect(namesOf(loaded, 'tier')).toStrictEqual(['micro']);
+    Vitest.expect(expectedTarget('prompt', 'demo')).toBe('.agents/@montflow/prompts/demo.json');
+    Vitest.expect(namesOf(loaded, 'prompt')).toStrictEqual(['demo']);
   });
 });

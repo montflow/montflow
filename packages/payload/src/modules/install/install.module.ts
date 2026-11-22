@@ -133,10 +133,6 @@ export interface PayloadDoctorResult {
   readonly profiles: ReadonlyArray<PayloadInstall>;
   /** Payloads of kind `prompt`. */
   readonly prompts: ReadonlyArray<PayloadInstall>;
-  /** Payloads of kind `tier`. */
-  readonly tiers: ReadonlyArray<PayloadInstall>;
-  /** Payloads of kind `rigor`. */
-  readonly rigors: ReadonlyArray<PayloadInstall>;
   /** A manifest that could not be read is a blocked run, never an empty success. */
   readonly manifestFailure?: DoctorError;
   /** Human-readable report. */
@@ -960,8 +956,6 @@ export const runPayloadDoctor = (
         skills: EMPTY_PAYLOADS,
         profiles: EMPTY_PAYLOADS,
         prompts: EMPTY_PAYLOADS,
-        tiers: EMPTY_PAYLOADS,
-        rigors: EMPTY_PAYLOADS,
         manifestFailure: failure,
       };
       return { ...result, message: payloadDoctorMessage(result, invocation) };
@@ -1016,8 +1010,6 @@ export const runPayloadDoctor = (
       skills: payloads.filter((payload) => payload.kind === 'skill'),
       profiles: payloads.filter((payload) => payload.kind === 'profile'),
       prompts: payloads.filter((payload) => payload.kind === 'prompt'),
-      tiers: payloads.filter((payload) => payload.kind === 'tier'),
-      rigors: payloads.filter((payload) => payload.kind === 'rigor'),
     };
     return { ...result, message: payloadDoctorMessage(result, invocation) };
   }).pipe(Effect.provide(NodeLive));

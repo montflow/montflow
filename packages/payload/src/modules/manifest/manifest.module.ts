@@ -11,7 +11,7 @@ import { Result, Schema } from 'effect';
  */
 
 /** Every artifact kind doctor knows how to install. */
-export const PAYLOAD_KINDS = ['skill', 'profile', 'prompt', 'tier', 'rigor'] as const;
+export const PAYLOAD_KINDS = ['skill', 'profile', 'prompt'] as const;
 
 /** One artifact kind. Closed union: adding a kind is a code change. */
 export type PayloadKind = (typeof PAYLOAD_KINDS)[number];
@@ -48,8 +48,6 @@ export const PAYLOAD_FORMS = {
   skill: 'tree',
   profile: 'tree',
   prompt: 'file',
-  tier: 'file',
-  rigor: 'file',
 } satisfies Record<PayloadKind, PayloadForm>;
 
 /** The file a tree kind must ship, or undefined for file kinds. */
@@ -57,8 +55,6 @@ export const REQUIRED_TREE_FILE = {
   skill: 'SKILL.md',
   profile: 'PROFILE.md',
   prompt: undefined,
-  tier: undefined,
-  rigor: undefined,
 } satisfies Record<PayloadKind, string | undefined>;
 
 /** The extension a file kind installs with, or undefined for tree kinds. */
@@ -66,8 +62,6 @@ export const FILE_EXTENSION = {
   skill: undefined,
   profile: undefined,
   prompt: '.json',
-  tier: '.md',
-  rigor: '.md',
 } satisfies Record<PayloadKind, string | undefined>;
 
 /** The workspace directory each kind installs under. */
@@ -75,8 +69,6 @@ export const INSTALL_ROOT = {
   skill: '.agents/skills',
   profile: '.agents/@montflow/profiles',
   prompt: '.agents/@montflow/prompts',
-  tier: '.agents/@montflow/tiers',
-  rigor: '.agents/@montflow/rigors',
 } satisfies Record<PayloadKind, string>;
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

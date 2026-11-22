@@ -12,7 +12,6 @@ const REPO_ROOT = NodePath.resolve(import.meta.dirname, '..', '..', '..', '..', 
 const MANIFEST_PACKAGES = [
   'skills',
   'prompts',
-  'specs',
   'profiles',
   'reviews',
   'references',
