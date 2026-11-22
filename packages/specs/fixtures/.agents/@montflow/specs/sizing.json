@@ -1,6 +1,0 @@
-{
-  "sizes": {
-    "tiny": { "model": "fixture/repo-model", "effort": "low" },
-    "small": { "model": "fixture/repo-model", "effort": "low" }
-  }
-}
