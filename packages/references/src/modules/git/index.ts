@@ -27,4 +27,5 @@ export type {
   UpdatePresent,
   UpdateResult,
   UpdateUpdated,
+  ReferenceDiff,
 } from './lifecycle.module.js';

@@ -9,12 +9,13 @@ import type { StoreError } from '../../services/reference-store/reference-store.
 import {
   GitPort,
   branchName,
+  classifyRefSpelling,
   compareUnpinned,
   isTagCandidate,
   resolveRemoteRef,
   tagName,
 } from './git.module.js';
-import type { RefResolution } from './git.module.js';
+import type { RefKind, RefResolution } from './git.module.js';
 
 /**
  * The git lifecycle operations behind `add`, `update`, `sync`, and `status`.
@@ -80,6 +81,8 @@ export interface UpdateCreated {
   readonly origin?: string | undefined;
   /** Upstream branch or recorded ref, printed by `--verbose`. */
   readonly upstream?: string | undefined;
+  /** The `REFERENCE.md` pin change, when `--ref`/`--latest` rewrote it. */
+  readonly entryDiff?: ReferenceDiff | undefined;
   readonly message: string;
 }
 
@@ -91,6 +94,8 @@ export interface UpdatePresent {
   readonly origin?: string | undefined;
   /** Upstream branch or recorded ref, printed by `--verbose`. */
   readonly upstream?: string | undefined;
+  /** The `REFERENCE.md` pin change, when `--ref`/`--latest` rewrote it. */
+  readonly entryDiff?: ReferenceDiff | undefined;
   readonly message: string;
 }
 
@@ -104,7 +109,15 @@ export interface UpdateUpdated {
   readonly origin?: string | undefined;
   /** Upstream branch or recorded ref, printed by `--verbose`. */
   readonly upstream?: string | undefined;
+  /** The `REFERENCE.md` pin change, when `--ref`/`--latest` rewrote it. */
+  readonly entryDiff?: ReferenceDiff | undefined;
   readonly message: string;
+}
+
+/** The `REFERENCE.md` `ref:` change from one `update --ref`/`--latest` run. */
+export interface ReferenceDiff {
+  readonly old?: string | undefined;
+  readonly new?: string | undefined;
 }
 
 /** Everything `update` can return. */
@@ -114,6 +127,10 @@ export type UpdateResult = UpdateCreated | UpdatePresent | UpdateUpdated | Lifec
 export interface UpdateOptions {
   readonly force?: boolean | undefined;
   readonly invocation?: string | undefined;
+  /** A commit/tag/branch pin to write to `REFERENCE.md` before the refresh. */
+  readonly ref?: string | undefined;
+  /** Remove the `ref:` line from `REFERENCE.md` and follow the branch. */
+  readonly latest?: boolean | undefined;
 }
 
 /** One entry's `sync` outcome. */
@@ -158,6 +175,10 @@ export interface StatusRow {
   readonly head?: string | undefined;
   /** Upstream branch, printed by `--verbose`. */
   readonly upstream?: string | undefined;
+  /** Classified recorded `ref:` kind, for `tracking` vs `pinned` rendering. */
+  readonly refKind?: RefKind | undefined;
+  /** The resolved pin commit id, full 40-hex, when the entry is pinned. */
+  readonly pin?: string | undefined;
 }
 
 /** Whole `status` report, summary line last. */
@@ -723,7 +744,65 @@ const make = Effect.gen(function* () {
       );
     }
 
-    const ref = reference.ref?.trim() ?? '';
+    // A `--ref`/`--latest` target selection: validate against the remote,
+    // rewrite the `REFERENCE.md` `ref:` pin (uncommitted), then refresh the
+    // entry to the new target. The write happens only after validation.
+    const wantsRef = options.ref !== undefined && options.ref !== '';
+    const wantsLatest = options.latest === true;
+    if (wantsRef && wantsLatest) {
+      return failureWithSlug(
+        'refused',
+        'usage',
+        reference.name,
+        `refused: --ref and --latest are mutually exclusive for ${reference.name}; pass one target`,
+      );
+    }
+    let effectiveReference = reference;
+    let refDiff: ReferenceDiff | undefined;
+    if (wantsRef || wantsLatest) {
+      const newRef = wantsRef ? (options.ref?.trim() ?? '') : '';
+      if (wantsRef && !Reference.isValidRef(newRef)) {
+        return failureWithSlug(
+          'refused',
+          'invalid-ref',
+          reference.name,
+          `refused: invalid ref '${newRef}': must be a branch, tag, or 7-40 char commit id`,
+        );
+      }
+      if (wantsRef) {
+        const targetOutcome = yield* resolveTarget(clone, newRef, true);
+        if (!targetOutcome.ok) {
+          return failureWithSlug(
+            'refused',
+            'ref-unresolvable',
+            reference.name,
+            unresolvableMessage(reference.name, newRef, reference.url),
+          );
+        }
+        const expanded = targetOutcome.resolution.sha ?? newRef;
+        const document = Reference.decodeReferenceFileDetailed(
+          yield* store.readRaw(root, reference.name),
+        );
+        if (document.kind === 'valid') {
+          const mutated = Reference.withRef(document.document, expanded);
+          yield* store.write(root, mutated.reference, mutated.body);
+          effectiveReference = mutated.reference;
+        }
+        refDiff = { old: reference.ref, new: expanded };
+      } else {
+        const document = Reference.decodeReferenceFileDetailed(
+          yield* store.readRaw(root, reference.name),
+        );
+        if (document.kind === 'valid') {
+          const mutated = Reference.withRef(document.document, undefined);
+          yield* store.write(root, mutated.reference, mutated.body);
+          effectiveReference = mutated.reference;
+        }
+        refDiff = { old: reference.ref, new: undefined };
+      }
+    }
+
+    const ref = effectiveReference.ref?.trim() ?? '';
     if (ref !== '') {
       const targetOutcome = yield* resolveTarget(clone, ref, true);
       if (!targetOutcome.ok) {
@@ -785,6 +864,7 @@ const make = Effect.gen(function* () {
             head: applied.sha,
             origin: reference.url,
             upstream: ref,
+            entryDiff: refDiff,
             message: `updated ${reference.name} head=${sha7(applied.sha)}`,
           } satisfies UpdateResult;
         }
@@ -794,6 +874,7 @@ const make = Effect.gen(function* () {
         slug: reference.name,
         origin: reference.url,
         upstream: ref,
+        entryDiff: refDiff,
         message: `present ${reference.name}`,
       } satisfies UpdateResult;
     }
@@ -888,6 +969,7 @@ const make = Effect.gen(function* () {
           branch,
           origin: reference.url,
           upstream: `origin/${branch}`,
+          entryDiff: refDiff,
           message: `updated ${reference.name} head=${sha7(after)}`,
         } satisfies UpdateResult;
       }
@@ -896,6 +978,7 @@ const make = Effect.gen(function* () {
         slug: reference.name,
         origin: reference.url,
         upstream: `origin/${branch}`,
+        entryDiff: refDiff,
         message: `present ${reference.name}`,
       } satisfies UpdateResult;
     }
@@ -953,6 +1036,7 @@ const make = Effect.gen(function* () {
       branch,
       origin: reference.url,
       upstream: `origin/${branch}`,
+      entryDiff: refDiff,
       message: `updated ${reference.name} head=${sha7(after)}`,
     } satisfies UpdateResult;
   });
@@ -1485,7 +1569,14 @@ const make = Effect.gen(function* () {
             refused: false,
           };
         } else {
-          row = { slug, state: 'present', message: `present ${slug}`, refused: false };
+          row = {
+            slug,
+            state: 'present',
+            message: `present ${slug}`,
+            refused: false,
+            refKind: classifyRefSpelling(ref),
+            pin: observed.resolvedRefHead,
+          };
         }
       } else {
         const branch = observed.defaultBranch;

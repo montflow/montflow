@@ -1,8 +1,11 @@
 import type { ServerPorts } from '@montflow/opencode';
 import { Effect } from 'effect';
 import type { Scope } from 'effect';
+// oxlint-disable-next-line montflow/no-node-platform-imports -- the slash command is the update-wizard composition seam; only it touches stdin.
+import { createInterface } from 'node:readline';
 import * as Engines from './engines.apps.module.js';
 import * as Renderers from './renderers.apps.module.js';
+import * as UpdateWizard from './update-wizard/index.js';
 
 /**
  * The `/mf-references` slash-command front end: a hand-rolled parser over the
@@ -18,7 +21,7 @@ export const COMMAND_NAME = 'mf-references';
 
 /** Help text shown for the command and the `help` action. */
 export const COMMAND_DESCRIPTION =
-  'Run the mf-references CLI headlessly: doctor [--check], list [--status installed|missing], show <name>, verify [<name>|--all] [--clones], add <url> [--name <slug>] [--ref <ref>] [--purpose <text>], update <name|url>|--all [--force], sync <name>|--all, status [<name>] [--fetch], remove <name> [--keep-clone], or help. Every verb accepts --dir to target a workspace root; the row- and result-rendering verbs also accept --human and --verbose; show prints bytes and takes --dir only.';
+  'Run the mf-references CLI headlessly: doctor [--check], list [--status installed|missing], show <name>, verify [<name>|--all] [--clones], add <url> [--name <slug>] [--ref <ref>] [--purpose <text>], update <name|url>|--all [--force] [--ref <ref>|--latest|--wizard], sync <name>|--all, status [<name>] [--fetch], remove <name> [--keep-clone], or help. Every verb accepts --dir to target a workspace root; the row- and result-rendering verbs also accept --human and --verbose; show prints bytes and takes --dir only.';
 
 /** Usage line notified by the `help` action. */
 export const USAGE = `/mf-references doctor [--check] [--human] [--verbose] [--dir path]
@@ -26,7 +29,7 @@ export const USAGE = `/mf-references doctor [--check] [--human] [--verbose] [--d
 /mf-references show <name> [--dir path]
 /mf-references verify [<name>|--all] [--clones] [--human] [--verbose] [--dir path]
 /mf-references add <url> [--name slug] [--ref ref] [--purpose text] [--human] [--verbose] [--dir path]
-/mf-references update <name|url>|--all [--force] [--human] [--verbose] [--dir path]
+/mf-references update <name|url>|--all [--force] [--ref <ref>|--latest|--wizard] [--human] [--verbose] [--dir path]
 /mf-references sync <name>|--all [--human] [--verbose] [--dir path]
 /mf-references status [<name>] [--fetch] [--human] [--verbose] [--dir path]
 /mf-references remove <name> [--keep-clone] [--human] [--verbose] [--dir path]
@@ -97,6 +100,9 @@ export type CliAction =
       readonly target: string | undefined;
       readonly all: boolean;
       readonly force: boolean;
+      readonly ref: string | undefined;
+      readonly latest: boolean;
+      readonly wizard: boolean;
       readonly human: boolean;
       readonly verbose: boolean;
       readonly dir: string | undefined;
@@ -361,13 +367,24 @@ export const parseCliArgs = (args: string): CliAction => {
       };
     }
     case 'update': {
-      const split = splitTokens(tokens.slice(1), withFlags(OUTPUT_FLAGS, [], ['all', 'force']));
+      const split = splitTokens(
+        tokens.slice(1),
+        withFlags(OUTPUT_FLAGS, ['ref'], ['all', 'force', 'latest', 'wizard']),
+      );
       const bad = flagProblem('update', split);
       if (bad !== undefined) return bad;
       if (split.positionals.length > 1)
         return usage('usage: /mf-references update <name|url>|--all');
       const target = split.positionals[0];
       const all = split.toggles['all'] === true;
+      const ref = one(split.flags['ref']);
+      const latest = split.toggles['latest'] === true;
+      const wizard = split.toggles['wizard'] === true;
+      const targetFlags = [ref, latest, wizard].filter(Boolean).length;
+      if (targetFlags > 1)
+        return usage('usage: --ref, --latest, and --wizard are mutually exclusive');
+      if (wizard && all)
+        return usage('usage: --wizard prompts for one entry; pass <name>, not --all');
       if (target !== undefined && all)
         return usage('usage: pass either <name|url> or --all, not both');
       if (target === undefined && !all) {
@@ -378,6 +395,9 @@ export const parseCliArgs = (args: string): CliAction => {
         target,
         all,
         force: split.toggles['force'] === true,
+        ref,
+        latest,
+        wizard,
         human: split.toggles['human'] === true,
         verbose: split.toggles['verbose'] === true,
         dir: one(split.flags['dir']),
@@ -455,6 +475,24 @@ const renderMode = (action: {
   readonly human: boolean;
   readonly verbose: boolean;
 }): Renderers.RenderOptions => ({ human: action.human, verbose: action.verbose });
+
+/** True when stdin is a real terminal, so a bare `update <name>` can auto-wizard. */
+const isTtyNow = (): boolean => process.stdin.isTTY ?? false;
+
+/** Read one line from stdin; the slash command's sole interactive input seam. */
+const readLineReader: UpdateWizard.WizardInput['readLine'] = (prompt) =>
+  Effect.callback<string, UpdateWizard.WizardCancel>((resume) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(prompt, (line: string) => {
+      rl.close();
+      resume(Effect.succeed(line));
+    });
+    rl.on('SIGINT', () => {
+      rl.close();
+      resume(Effect.fail(new UpdateWizard.WizardCancel('cancel')));
+    });
+    return Effect.void;
+  });
 
 /**
  * Run one parsed args string end to end: parse, execute, render, notify.
@@ -538,6 +576,8 @@ export const run = (
             { cwd, dir: action.dir },
             {
               force: action.force,
+              ref: action.ref,
+              latest: action.latest,
               invocation: INVOCATION,
             },
           );
@@ -547,10 +587,19 @@ export const run = (
         }
         if (action.target === undefined)
           return yield* Effect.fail('usage: update requires a target');
-        const result = yield* Engines.update({ cwd, dir: action.dir }, action.target, {
-          force: action.force,
-          invocation: INVOCATION,
-        });
+        const result =
+          action.wizard || (action.ref === undefined && !action.latest && isTtyNow())
+            ? yield* Engines.updateWizard({ cwd, dir: action.dir }, action.target, {
+                force: action.force,
+                invocation: INVOCATION,
+                readLine: readLineReader,
+              })
+            : yield* Engines.update({ cwd, dir: action.dir }, action.target, {
+                force: action.force,
+                ref: action.ref,
+                latest: action.latest,
+                invocation: INVOCATION,
+              });
         yield* say(Renderers.updated(result, renderMode(action)));
         if (Renderers.updateFailed(result)) return yield* Effect.fail(result.message);
         return;

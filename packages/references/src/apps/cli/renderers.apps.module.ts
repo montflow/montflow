@@ -20,7 +20,7 @@ Usage:
   mf-references show <name> [--dir <path>]
   mf-references verify [<name>|--all] [--clones] [--human] [--verbose] [--dir <path>]
   mf-references add <url> [--name <slug>] [--ref <ref>] [--purpose <text>] [--human] [--verbose] [--dir <path>]
-  mf-references update <name|url>|--all [--force] [--human] [--verbose] [--dir <path>]
+  mf-references update <name|url>|--all [--force] [--ref <ref>|--latest|--wizard] [--human] [--verbose] [--dir <path>]
   mf-references sync <name>|--all [--human] [--verbose] [--dir <path>]
   mf-references status [<name>] [--fetch] [--human] [--verbose] [--dir <path>]
   mf-references remove <name> [--keep-clone] [--human] [--verbose] [--dir <path>]
@@ -65,6 +65,30 @@ const table = (
 
 const sha7 = (sha: string | undefined): string =>
   sha === undefined || sha === '' ? '(none)' : sha.slice(0, 7);
+
+/** The classified ref for the `list --verbose` ref column: `commit:abc1234`. */
+const listRef = (row: Engines.ReferenceRow): string => {
+  if (row.ref === undefined || row.ref === '') return '-';
+  const kind = row.refKind ?? (row.ref.match(/^[0-9a-f]{7,40}$/) ? 'commit' : 'branch');
+  return `${kind}:${row.ref}`;
+};
+
+/** The `tracking <branch>` vs `pinned to <sha>` suffix for one status row. */
+const refKindSuffix = (row: Git.StatusRow, verbose: boolean): string => {
+  if (row.refKind === undefined) return '';
+  if (row.refKind === 'branch') {
+    const branch = row.upstream === undefined ? (row.pin ?? '') : branchFromUpstream(row.upstream);
+    return branch === '' ? '' : ` tracking ${branch}`;
+  }
+  const id = verbose ? (row.pin ?? '(none)') : sha7(row.pin);
+  return ` pinned to ${id}`;
+};
+
+/** The branch a `refs/remotes/origin/<b>` upstream names, or the raw value. */
+const branchFromUpstream = (upstream: string): string =>
+  upstream.startsWith('refs/remotes/origin/')
+    ? upstream.slice('refs/remotes/origin/'.length)
+    : upstream.replace(/^origin\//, '');
 
 const markOf = (state: string): string => {
   if (state === 'installed' || state === 'present' || state === 'ok') return '✓';
@@ -153,7 +177,7 @@ export const list = (
     if (options.verbose) headers.push('URL', 'REF', 'PATH');
     const body = rows.map((row) => {
       const cells = [markOf(row.installed ? 'installed' : 'missing'), row.slug, row.purpose];
-      if (options.verbose) cells.push(row.url, row.ref ?? '-', row.path);
+      if (options.verbose) cells.push(row.url, listRef(row), row.path);
       return cells;
     });
     return [table(headers, body), summary].filter((part) => part !== '').join('\n');
@@ -162,7 +186,7 @@ export const list = (
     const head = `${row.installed ? 'installed' : 'missing'} ${row.slug}  ${row.purpose}`;
     if (!options.verbose) return head;
     const detail = [`url=${row.url}`];
-    if (row.ref !== undefined && row.ref !== '') detail.push(`ref=${row.ref}`);
+    if (row.ref !== undefined && row.ref !== '') detail.push(`ref=${listRef(row)}`);
     return `${head} ${detail.join(' ')}\n  path: ${row.path}`;
   });
   lines.push(summary);
@@ -274,6 +298,13 @@ export const added = (result: Git.AddResult, options: RenderOptions = AGENT): st
 export const updateFailed = (result: Git.UpdateResult): boolean =>
   result.kind === 'refused' || result.kind === 'failed';
 
+/** Render the `REFERENCE.md` `ref:` change a `--ref`/`--latest` run wrote. */
+const refDiff = (diff: Git.ReferenceDiff): string => {
+  const oldLine = diff.old === undefined ? '' : `-ref: ${diff.old}`;
+  const newLine = diff.new === undefined ? '' : `+ref: ${diff.new}`;
+  return [oldLine, newLine].filter((line) => line !== '').join('\n');
+};
+
 /**
  * One `update` result.
  * @param result - result from `engines.update`
@@ -306,16 +337,25 @@ export const updated = (result: Git.UpdateResult, options: RenderOptions = AGENT
       }
       lines.push(`  path: ${relativeClone(result.slug)}`);
     }
+    if (result.entryDiff !== undefined) {
+      lines.push(`REFERENCE.md:`);
+      lines.push(refDiff(result.entryDiff));
+    }
     return lines.join('\n');
   }
-  if (!options.verbose) return result.message;
+  if (!options.verbose) {
+    return result.entryDiff === undefined
+      ? result.message
+      : `${result.message}\n${refDiff(result.entryDiff)}`;
+  }
   const detail: Array<string> = [];
   if (result.origin !== undefined && result.origin !== '') detail.push(`origin=${result.origin}`);
   if (result.upstream !== undefined && result.upstream !== '') {
     detail.push(`upstream=${result.upstream}`);
   }
   detail.push(`path=${relativeClone(result.slug)}`);
-  return `${result.message} ${detail.join(' ')}`;
+  const diffText = result.entryDiff === undefined ? '' : `\n${refDiff(result.entryDiff)}`;
+  return `${result.message} ${detail.join(' ')}${diffText}`;
 };
 
 /**
@@ -408,7 +448,7 @@ export const status = (report: Git.StatusReport, options: RenderOptions = AGENT)
         markOf(row.state),
         row.state,
         row.slug,
-        withoutPrefix(row.message, `${row.state} ${row.slug}`),
+        `${withoutPrefix(row.message, `${row.state} ${row.slug}`)}${refKindSuffix(row, options.verbose)}`,
       ];
       if (options.verbose) {
         cells.push(row.path ?? `-`, row.origin ?? '-', sha7(row.head), row.upstream ?? '-');
@@ -426,7 +466,7 @@ export const status = (report: Git.StatusReport, options: RenderOptions = AGENT)
   const lines: Array<string> = [];
   for (const row of report.rows) {
     if (!options.verbose) {
-      lines.push(row.message);
+      lines.push(`${row.message}${refKindSuffix(row, options.verbose)}`);
     } else {
       const detail = [`path=${row.path ?? relativeClone(row.slug)}`];
       if (row.origin !== undefined && row.origin !== '') detail.push(`origin=${row.origin}`);
@@ -434,7 +474,7 @@ export const status = (report: Git.StatusReport, options: RenderOptions = AGENT)
       if (row.upstream !== undefined && row.upstream !== '') {
         detail.push(`upstream=${row.upstream}`);
       }
-      lines.push(`${row.message} ${detail.join(' ')}`);
+      lines.push(`${row.message}${refKindSuffix(row, options.verbose)} ${detail.join(' ')}`);
     }
     if (row.failure !== undefined) lines.push(row.failure.message);
   }

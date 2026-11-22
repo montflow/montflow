@@ -462,6 +462,33 @@ export const decodeReferenceFile = (markdown: string): ReferenceDocument | undef
 };
 
 /**
+ * A reference document with its `ref` field set to one value (or removed).
+ *
+ * The body notes are preserved verbatim, so the caller can re-encode the
+ * document with {@link encodeReferenceFile} and only the `ref:` line moves.
+ * @param document - the decoded entry to mutate
+ * @param ref - the new pin value, or `undefined` to remove the `ref:` line
+ * @returns a new document sharing the body, never mutating the input
+ */
+export const withRef = (
+  document: ReferenceDocument,
+  ref: string | undefined,
+): ReferenceDocument => {
+  const fields = {
+    name: document.reference.name,
+    url: document.reference.url,
+    purpose: document.reference.purpose,
+    added: document.reference.added,
+  };
+  const trimmed = ref?.trim();
+  const reference =
+    trimmed === undefined || trimmed === ''
+      ? Reference.make(fields)
+      : Reference.make({ ...fields, ref: trimmed });
+  return { reference, body: document.body };
+};
+
+/**
  * Encode a `Reference` plus body into canonical `REFERENCE.md` bytes: the five
  * fields in authoring order, `ref` omitted when absent, then the body verbatim.
  * @param document - reference metadata plus the body notes to preserve
