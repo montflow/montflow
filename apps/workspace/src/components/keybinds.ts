@@ -102,8 +102,6 @@ export const Keybinds = {
   modify: (): Keybind => ({ key: 'm', action: 'modify' }),
   /** `c condition` — prompt-detail condition editor entry. */
   condition: (): Keybind => ({ key: 'c', action: 'condition' }),
-  /** `e execute` — spec-detail execute entry (dispatch the resume session). */
-  execute: (): Keybind => ({ key: 'e', action: 'execute' }),
   /** `v view` — detail preview-mode entry. */
   showFull: (): Keybind => ({ key: 'v', action: 'view' }),
   /** `v preview` — detail full-view entry. */

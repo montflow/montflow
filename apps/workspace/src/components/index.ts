@@ -1,7 +1,4 @@
 export * from './detail-actions.tsx';
-export * from './spec-detail.tsx';
-export * from './spec-markers.js';
-export * from './specs-panel.tsx';
 export * from './info-panel.tsx';
 export * from './keybind-banner.tsx';
 export * from './keybinds.ts';

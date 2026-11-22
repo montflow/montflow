@@ -1,12 +1,6 @@
 import { QueryClient } from '@tanstack/solid-query';
 import { Effect } from 'effect';
 import {
-  specsInstalled,
-  fetchSpecs,
-  type SpecSummary,
-  type SpecsPhase,
-} from '../specs/specs.services.module.js';
-import {
   fetchProfiles,
   type ProfileSummary,
   type ProfileVerify,
@@ -73,19 +67,6 @@ export interface PromptsList {
  * completions update the UI through the cache, never signals.
  */
 export const promptsKey = ['prompts'] as const;
-
-/** Cached specs-list snapshot behind the `specs` query key. */
-export interface SpecsList {
-  readonly installed: boolean;
-  readonly rows: ReadonlyArray<SpecSummary>;
-}
-
-/**
- * Query key for the workspace specs list. Mirrors `skillsKey` —
- * the specs panel is read-only, so this key only fetches and
- * invalidates.
- */
-export const specsKey = ['specs'] as const;
 
 /**
  * TUI-tuned client: cache-first (`staleTime` infinity — the list only
@@ -201,34 +182,6 @@ export const fetchPromptsList = (
       }
       onPhase('prompts');
       return fetchPrompts(root).pipe(
-        Effect.map((rows) => ({ installed, rows })),
-        Effect.mapError((message) => new Error(message)),
-      );
-    }),
-    Effect.runPromise,
-  );
-
-/**
- * Specs-list query bridge: same staged boot as `fetchSkillsList`
- * (directory check, then the verify/analyze read) as one TanStack
- * query. Read-only — there is no create/delete/install flow.
- * @param root - workspace root (specs directory owner)
- * @param onPhase - Loader stage reporter (`extension`, then `specs`)
- * @returns Promise resolving to the list snapshot
- */
-export const fetchSpecsList = (
-  root: string,
-  onPhase: (phase: SpecsPhase) => void,
-): Promise<SpecsList> =>
-  specsInstalled(root).pipe(
-    Effect.flatMap((installed) => {
-      onPhase('extension');
-      if (!installed) {
-        const empty: SpecsList = { installed, rows: [] };
-        return Effect.succeed(empty);
-      }
-      onPhase('specs');
-      return fetchSpecs(root).pipe(
         Effect.map((rows) => ({ installed, rows })),
         Effect.mapError((message) => new Error(message)),
       );

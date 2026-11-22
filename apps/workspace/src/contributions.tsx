@@ -25,7 +25,7 @@ export const WorkspaceCommand = (props: ContributionProps) => {
       {
         id: 'workspace.open',
         title: 'Open the workspace grid',
-        description: 'Montflow dashboard: info, skills, prompts, profiles, and specs',
+        description: 'Montflow dashboard: info, skills, prompts, and profiles',
         group: 'Workspace',
         slash: { name: 'workspace' },
         bind: 'ctrl+w',
