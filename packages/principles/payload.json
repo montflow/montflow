@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "package": "@montflow/principles",
+  "payloads": [
+    {
+      "kind": "principle",
+      "name": "fix-root-causes",
+      "source": "principles/fix-root-causes",
+      "target": ".agents/@montflow/principles/fix-root-causes"
+    }
+  ]
+}
