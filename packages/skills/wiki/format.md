@@ -51,7 +51,7 @@ Write each defect with a code path, an input, and a state.
 Links to files in the skill directory the agent can look up on demand.
 ```
 
-1. `# When To Use`, `# Pipeline`, `# Reference` — all three required.
+1. `# When To Use`, `# Pipeline`, `# Reference` — the conventional layout for hand-written skills; not checked, so vendored skills keep their own shape.
 2. Short sections with concrete steps — inputs, outputs, edge cases.
 3. No filler — the body loads into agent context on every use.
 

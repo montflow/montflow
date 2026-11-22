@@ -298,8 +298,8 @@ const issue = (field: string, message: string): VerifyIssue => ({ field, message
 /**
  * Mechanically verify a `SKILL.md` file against the full montflow
  * standard: required frontmatter (`name`, `description`, `id`, `author`,
- * `version`; `name` matching the directory) plus the expected body shape
- * (`# When To Use`, `# Pipeline`, `# Reference`). Pure — no IO; the
+ * `version`; `name` matching the directory) and a non-empty body. The body
+ * shape is free, so vendored skills keep their own layout. Pure — no IO; the
  * caller supplies the raw file contents. Style (third person, trigger
  * terms, no filler) stays a human/agent review concern.
  * @param dirName - skill directory slug (the skill id)
@@ -352,13 +352,6 @@ export const verifyStandardSkillFile = (dirName: string, markdown: string): Veri
   }
   if (body === '') {
     issues.push(issue('body', 'Body instructions are missing or empty.'));
-  } else {
-    if (!/^#\s+When To Use\s*$/m.test(body))
-      issues.push(issue('body', 'Missing `# When To Use` section.'));
-    if (!/^#\s+Pipeline\s*$/m.test(body))
-      issues.push(issue('body', 'Missing `# Pipeline` section.'));
-    if (!/^#\s+Reference\s*$/m.test(body))
-      issues.push(issue('body', 'Missing `# Reference` section.'));
   }
   return { valid: issues.length === 0, issues };
 };

@@ -80,7 +80,7 @@ const csv = (value: string | undefined): ReadonlyArray<string> =>
 const editFlags = {
   dir: dirFlag,
   description: optionalString('description', 'One or two sentences saying when to use the skill.'),
-  body: optionalString('body', 'Markdown body: `# When To Use`, `# Pipeline`, `# Reference`.'),
+  body: optionalString('body', 'Markdown body.'),
   author: optionalString('author', 'Maintainer name. Defaults to montflow.'),
   version: optionalString('version', 'SemVer version. Defaults to 1.0.0.'),
   license: optionalString('license', 'License name. Defaults to MIT.'),

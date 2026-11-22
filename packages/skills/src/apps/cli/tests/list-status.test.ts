@@ -6,7 +6,7 @@ import * as Vitest from '@effect/vitest';
 import * as Engines from '../engines.apps.module.js';
 import * as Renderers from '../renderers.apps.module.js';
 
-/** A body carrying the three sections the verifier requires. */
+/** A body in the conventional three-section layout. */
 const BODY = '# When To Use\n\ndemo.\n\n# Pipeline\n\n1. do it.\n\n# Reference\n\n- none.\n';
 
 /** A throwaway workspace root. */

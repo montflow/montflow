@@ -12,7 +12,7 @@ const freshRoot = (): Promise<string> => mkdtemp(join(tmpdir(), 'mf-skills-eng-'
 const cleanup = (root: string): Effect.Effect<void> =>
   Effect.promise(() => rm(root, { recursive: true, force: true }));
 
-/** A body carrying the three sections the verifier requires. */
+/** A body in the conventional three-section layout. */
 const BODY = '# When To Use\n\ndemo.\n\n# Pipeline\n\n1. do it.\n\n# Reference\n\n- none.\n';
 
 Vitest.describe('Engines.create', () => {

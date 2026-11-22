@@ -20,8 +20,7 @@ Effect `Schema.Class` identifier.
 - Mechanical verification (`verifySkillFile`, `verifyStandardSkillFile`,
   `verifyInfoLine`, `kindOf`): montflow skills (`mf-*`) must satisfy the
   full standard (required frontmatter `name`, `description`, `id`, `author`,
-  `version` plus the `# When To Use` / `# Pipeline` / `# Reference` body
-  shape); generic and vendored skills only have to exist. Style stays a
+  `version` plus a non-empty body, in any shape); generic and vendored skills only have to exist. Style stays a
   review concern.
 - Slug helpers for skill names (`isValidName`, `slugify`)
 - New-skill defaults (`generateSkillId`, `DEFAULT_AUTHOR`, `DEFAULT_VERSION`,

@@ -69,12 +69,25 @@ Vitest.describe('Skill.verifySkillFile', () => {
     Vitest.expect(result.valid).toBe(false);
     Vitest.expect(result.issues.map((found) => found.field).toSorted()).toStrictEqual([
       'author',
-      'body',
-      'body',
-      'body',
       'id',
       'version',
     ]);
+  });
+
+  Vitest.it('accepts a montflow file whose body is free-form', () => {
+    const result = Skill.verifySkillFile(
+      'mf-test-skill',
+      validFile.replace(/# When To Use[\s\S]*/, '# Test Skill\n\nApply when testing.\n'),
+    );
+    Vitest.expect(result.issues).toStrictEqual([]);
+  });
+
+  Vitest.it('flags an empty body', () => {
+    const result = Skill.verifySkillFile(
+      'mf-test-skill',
+      validFile.replace(/# When To Use[\s\S]*/, ''),
+    );
+    Vitest.expect(result.issues.map((found) => found.field)).toStrictEqual(['body']);
   });
 
   Vitest.it('flags a malformed id and version', () => {

@@ -89,7 +89,7 @@ export const TRANSFORM_PREPROMPT =
   'name (matching the directory), description (1-2 sentences saying WHEN to use the skill), ' +
   'id (keep the existing 16-hex value unchanged), author, version (SemVer), ' +
   'plus groups/dependencies lists when non-empty; ' +
-  'the body must have `# When To Use`, `# Pipeline`, and `# Reference` sections. ' +
+  'the body must not be empty. ' +
   'Do not rename the skill directory. Do not touch anything outside that skill directory.';
 
 /**
@@ -1021,7 +1021,7 @@ export const TRANSFORM_INSTRUCTION =
   'ensure frontmatter has name (matching the directory), description (1-2 sentences, WHEN to use), ' +
   'id (keep the existing 16-hex value unchanged), author, version (SemVer), ' +
   'plus groups/dependencies lists when non-empty; ' +
-  'ensure the body has `# When To Use`, `# Pipeline`, and `# Reference` sections. ' +
+  'ensure the body is not empty. ' +
   'Do not rename the skill directory. Do not touch anything outside that skill directory.';
 
 /**

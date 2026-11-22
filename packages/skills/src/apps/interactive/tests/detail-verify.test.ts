@@ -135,7 +135,7 @@ Vitest.describe('Interactive.detail verify panel', () => {
       Vitest.expect(seen).toStrictEqual([
         {
           title: "Skill 'mf-test-skill'",
-          info: ['✗ not verified — 6 issues'],
+          info: ['✗ not verified — 3 issues'],
           options: ['Show', 'Modify', 'Re-verify', 'Delete', 'Transform to standard', 'Back'],
         },
       ]);
@@ -185,7 +185,7 @@ Vitest.describe('Interactive.detail verify panel', () => {
       );
       Vitest.expect(seen.length).toBe(2);
       Vitest.expect(notifies.length).toBe(1);
-      Vitest.expect(notifies[0]).toContain("✗ 'mf-test-skill' has 6 issues:");
+      Vitest.expect(notifies[0]).toContain("✗ 'mf-test-skill' has 3 issues:");
       Vitest.expect(notifies[0]).toContain('[id]');
     }),
   );
