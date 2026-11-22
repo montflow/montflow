@@ -2,6 +2,7 @@
 name: eval
 description: "Test how a skill or prompt change affects agent behavior, blinded."
 skills:
+  - mf-mode
   - mf-mode-arena
 ---
 
@@ -24,9 +25,9 @@ skills:
 1. **Frame.** State what variant is under test and what behavior counts as success. Write the rubric (3-6 concrete criteria) for the judge only. Hold it back from candidates.
 2. **Set up sanitized environments.** Per-candidate working dir with the variant in place. Plant any context an organic task would have: a project skeleton, the skills the candidate would naturally read.
 3. **Author one organic prompt.** What a user would type. No leakage of what's being measured.
-4. **Spawn N parallel candidates** on different models per the **mf-mode-arena** skill's Phase B. Each works in its own sanitized dir. Same prompt to each. Pick each subagent's reasoning level for the job, per the Subagents section. An agent that only dispatches, polls, or packs results runs on `claude-opus-5-5-medium-fast`.
+4. **Spawn N parallel candidates** on different models per the **mf-mode-arena** skill's Phase B. Each works in its own sanitized dir. Same prompt to each. Pick each subagent's reasoning level for the job, per the Subagents section. An agent that only dispatches, polls, or packs results runs on the cheapest model that can do it.
 5. **Spawn one blinded judge** on a different model family per the **mf-mode-arena** skill's Phase C. Judge sees outputs by sanitized label and the rubric, never a model name.
-6. **Verify the chain from transcripts, not self-report.** Read each candidate's local transcript under the active workspace's `agent-transcripts/` directory (the system prompt names this path). Do not glob across `~/.cursor/projects/*/`. That crosses workspace boundaries and reads private chats from unrelated projects. Look at which files each candidate actually opened. Grade chain-following from the files it really read plus the shape of the code, never from the candidate's own claims.
+6. **Verify the chain from transcripts, not self-report.** Read each candidate's local transcript under the active workspace's transcript directory (the harnesses reference of the **mf-mode** skill names it. ). Do not glob across other workspaces' transcript folders. That crosses workspace boundaries and reads private chats from unrelated projects. Look at which files each candidate actually opened. Grade chain-following from the files it really read plus the shape of the code, never from the candidate's own claims.
 7. **Read every candidate output yourself** end to end. Compare to the judge's verdict. Disagreement means a model is biased or the rubric is ambiguous. Synthesize.
 
 ## Reply

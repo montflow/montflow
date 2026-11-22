@@ -172,11 +172,106 @@ const rewriteProse = (text: string): string => {
   out = out.replace(/pstack:mf-agent/g, 'mf-agent');
   out = out.replace(/(?<![a-z0-9-])pstack(?![a-z0-9-])/g, 'mfstack');
   out = out.replace(/(?<![a-z0-9-])Pstack(?![a-z0-9-])/g, 'MFStack');
-  for (const term of ['setup-pstack', 'pstack-models', 'poteto', 'Poteto', '.cursor/', 'Bugbot', 'AskQuestion', 'generalPurpose']) {
-    noteResidual(term, out.split(term).length - 1);
-  }
+  for (const [pattern, replacement] of NEUTRAL) out = out.replace(pattern, replacement as never);
   return out;
 };
+
+/**
+ * pstack's model roles, keyed by the label its `pstack-models` rule used. Each becomes a
+ * montflow profile (`mf-profiles show role-<name>`).
+ */
+const ROLES: Readonly<Record<string, string>> = {
+  'feature, refactoring': 'role-feature',
+  feature: 'role-feature',
+  refactoring: 'role-feature',
+  'bug-fix': 'role-bug-fix',
+  'perf-issue': 'role-perf-issue',
+  hillclimb: 'role-hillclimb',
+  'judgment and prose': 'role-judgment',
+  'arena runners': 'role-arena-runners',
+  'arena cross-judge pool': 'role-arena-judges',
+  'swarm workers': 'role-swarm-workers',
+  'interrogate reviewers': 'role-interrogate-reviewers',
+};
+const ROLE_LABELS = Object.keys(ROLES)
+  .toSorted((a, b) => b.length - a.length)
+  .map((label) => label.replace(/[-]/g, '\\-'))
+  .join('|');
+const HARNESSES = 'the harnesses reference of the **mf-mode** skill';
+
+/**
+ * Harness-neutral wording: pstack names Cursor's tools, paths and model slugs; montflow's
+ * text names the concept and leaves the per-harness detail to `mf-mode/references/harnesses.md`.
+ */
+const NEUTRAL: ReadonlyArray<readonly [RegExp, string | ((...groups: Array<string>) => string)]> = [
+  // Model roles -> role profiles.
+  [
+    new RegExp(`the \`(${ROLE_LABELS})\` line in \`~/\\.cursor/rules/pstack-models\\.mdc\``, 'g'),
+    (_m, label) => `the \`${ROLES[label ?? '']}\` profile`,
+  ],
+  [new RegExp(`\`(${ROLE_LABELS})\` line`, 'g'), (_m, label) => `\`${ROLES[label ?? '']}\` profile`],
+  [new RegExp(`\`(${ROLE_LABELS})\``, 'g'), (_m, label) => `\`${ROLES[label ?? '']}\``],
+  [
+    /your configured ([a-z-]+) model \(default `[^`]+`\)/g,
+    (_m, role) => `the \`${ROLES[role ?? ''] ?? `role-${role}`}\` profile's model`,
+  ],
+  [/`~\/\.cursor\/rules\/pstack-models\.mdc`/g, 'the role profiles (`mf-profiles list`)'],
+  // Todo lists.
+  [/the todolist tool/g, 'the todo list'],
+  [/\btodolist\b/g, 'todo list'],
+  // Skill directories.
+  [/~\/\.cursor\/skills\//g, '~/.agents/skills/'],
+  [/\.cursor\/skills\//g, '.agents/skills/'],
+  // Transcripts.
+  [/`~\/\.cursor\/projects\/\*\/`/g, "other workspaces' transcript folders"],
+  [
+    /The system prompt names the workspace's `agent-transcripts\/` directory\. Use only that path\./g,
+    `${HARNESSES.replace(/^t/, 'T')} names where your harness keeps this workspace's transcripts. Use only that path.`,
+  ],
+  [
+    /the active workspace's `agent-transcripts\/` directory \(the system prompt names (?:the|this) path\.? ?/g,
+    `the active workspace's transcript directory (${HARNESSES} names it. `,
+  ],
+  [/the active workspace's `agent-transcripts\/` directory/g, "the active workspace's transcript directory"],
+  // Loops and wake-ups.
+  [/Cursor's `\/loop` command \(a built-in, not a mfstack skill\)/g, `your harness's loop or wake-up mechanism (${HARNESSES} lists them)`],
+  [/Cursor's `\/loop` command/g, "your harness's loop or wake-up mechanism"],
+  [/`\/loop 1h`/g, 'an hourly loop'],
+  [/`\/loop`/g, 'a loop'],
+  [/(?<![\w/])\/loop until/g, 'loop until'],
+  // Questions.
+  [/the `AskQuestion` tool \(structured multi-choice\)/g, "your harness's structured question tool (multi-choice)"],
+  [/`AskQuestion`/g, "your harness's question tool"],
+  // Authoring skills: montflow's own skill tooling replaces Cursor's built-in.
+  [/the \*\*create-skill\*\* skill \(Cursor's built-in for authoring SKILL\.md files\)/g, 'the **mf-create-skills** skill'],
+  [/Cursor's built-in `create-skill` skill/g, 'the **mf-create-skills** skill'],
+  [/Cursor's built-in `create-skill`/g, 'the **mf-create-skills** skill'],
+  [/, not Cursor's built-in babysit skill/g, ''],
+  // Subagents.
+  [/Spawn one Task subagent with `subagent_type: generalPurpose` and `readonly: true`/g, 'Spawn one read-only, general-purpose subagent'],
+  [/Spawn `Task` with `subagent_type: "([a-z-]+)"`/g, 'Spawn a subagent with the `$1` profile'],
+  [/`subagent_type: "([a-z-]+)"`/g, 'the `$1` profile'],
+  [/Spawn each adversary as `generalPurpose`/g, 'Spawn each adversary as a general-purpose subagent'],
+  [/each a Cursor cloud agent,/g, 'each an isolated agent (a cloud agent or its own worktree),'],
+  [/Each owner is a Cursor cloud agent that/g, 'Each owner is an isolated agent (a cloud agent or its own worktree) that'],
+  [/runs on `claude-opus-5-5-medium-fast`/g, 'runs on the cheapest model that can do it'],
+];
+
+const RESIDUAL_TERMS = [
+  'setup-pstack',
+  'pstack-models',
+  '.cursor/',
+  'AskQuestion',
+  'generalPurpose',
+  'subagent_type',
+  '`Task`',
+  'Custom Mode',
+  'Cursor',
+  'cursor.com',
+  '-fast`',
+  'gemini-',
+  '/loop',
+];
 
 /** Rewrite a markdown document: link targets by path, prose by name. */
 const rewriteDocument = (text: string, fromSource: string, fromInstalled: string): string => {
@@ -378,6 +473,242 @@ for (const edit of EDITS) {
   written.set(edit.file, current.replace(edit.find, edit.replace));
 }
 
+/**
+ * Whole-line rewrites for harness-specific passages: the one line starting with `line`
+ * is replaced (an empty `replace` drops it). Zero or several matches fail the import.
+ */
+const LINE_EDITS: ReadonlyArray<{ readonly file: string; readonly line: string; readonly replace: string }> = [
+  // mf-mode: subagents and models by role profile, not Cursor's Task fields and slugs.
+  {
+    file: '.agents/skills/mf-mode/SKILL.md',
+    line: '**Use the `mf-agent` profile for any subagent you spawn directly inside a playbook step.**',
+    replace:
+      '**Use the `mf-agent` profile for any subagent you spawn directly inside a playbook step.** The chat that receives `/mf-mode` runs the playbook itself. Routed workflow skills (`mf-mode-interrogate`, `mf-mode-swarm`) pick their own subagents. Respect them. How your harness spawns a subagent, runs it in the background, or gives it its own checkout is in [the harnesses reference](references/harnesses.md).',
+  },
+  {
+    file: '.agents/skills/mf-mode/SKILL.md',
+    line: '**Defaults for every `Task` call.**',
+    replace:
+      '**Defaults for every subagent.** Run it in the background when your harness can, point it at files instead of inlining context, and give it an explicit model per role. Each role\'s model lives in its profile (`mf-profiles show role-<role>`): `role-feature` (feature and refactoring), `role-bug-fix`, `role-perf-issue`, `role-hillclimb`, `role-judgment` (prose and judgment), `role-swarm-workers` (trivial mechanical edits and verification), and the panels `role-arena-runners`, `role-arena-judges` and `role-interrogate-reviewers`. A role profile overrides the defaults below and the role models in the routed skills (`mf-mode-arena`, `mf-mode-swarm`, `mf-mode-interrogate`). A missing profile keeps the default. A profile set to `inherit-parent`, or with no model, runs the role on the parent model.',
+  },
+  {
+    file: '.agents/skills/mf-mode/SKILL.md',
+    line: '- Code, prose, and judgment: `claude-opus-5-5-xhigh-fast`.',
+    replace: '- Code, prose, and judgment: the strongest model your harness offers, at its highest effort short of the maximum.',
+  },
+  {
+    file: '.agents/skills/mf-mode/SKILL.md',
+    line: '- Trivial mechanical edits: `claude-opus-5-5-high-fast`.',
+    replace: '- Trivial mechanical edits: the same model one effort step lower.',
+  },
+  {
+    file: '.agents/skills/mf-mode/SKILL.md',
+    line: '- Diverse review and design panels:',
+    replace:
+      '- Diverse review and design panels: one runner on each of three vendors\' models when your harness offers them, otherwise three runs of the strongest model with different briefs.',
+  },
+  {
+    file: '.agents/skills/mf-mode/SKILL.md',
+    line: '**Fable 5.2 is an exception.**',
+    replace:
+      '**The most expensive model is an exception.** It runs outside a panel only when the user named it for this task or two runs of the default model on the same brief failed its check. Say which. Difficulty alone never qualifies.',
+  },
+  {
+    file: '.agents/skills/mf-mode/SKILL.md',
+    line: '**Match the model to the job.**',
+    replace:
+      '**Match the model to the job.** Start from the role\'s profile or default, keep its family, and set the effort the job needs. Panel seats keep their listed effort. Raise any other role one step for the hardest or subtlest work, lower it one step for judgment, and two or more steps for routine work. No role runs at the maximum effort unless its profile says so. Verification always runs on the `role-swarm-workers` model. If your harness rejects a model, never pass it again: fall back as [the harnesses reference](references/harnesses.md) says, and say so.',
+  },
+  // Routed skills: role profiles and the harnesses reference.
+  {
+    file: '.agents/skills/mf-mode-swarm/SKILL.md',
+    line: '3. Pick the worker model from the `role-swarm-workers` profile.',
+    replace:
+      '3. Pick the worker model from the `role-swarm-workers` profile. If it is missing, use the trivial-edits default in the Subagents section of the **mf-mode** skill. For `inherit-parent`, or a profile with no model, leave the model unset so the workers run on the parent model. If your harness rejects a model, fall back as its harnesses reference says, and say so. For a model race, name each arm\'s model up front. Pick each subagent\'s reasoning level for the job, per the Subagents section of the **mf-mode** skill.',
+  },
+  {
+    file: '.agents/skills/mf-mode-swarm/SKILL.md',
+    line: 'Spawn all N workers in one message with',
+    replace:
+      'Spawn all N workers at once as general-purpose subagents, each isolated in its own checkout and running in the background where your harness allows (the harnesses reference of the **mf-mode** skill maps both), with the step 3 model. Run a worker in the shared checkout only when it needs something on the user\'s computer.',
+  },
+  {
+    file: '.agents/skills/mf-mode-arena/SKILL.md',
+    line: '3. Pick the runners from the `role-arena-runners` profile,',
+    replace:
+      '3. Pick the runners from the `role-arena-runners` profile\'s `models`. If it is missing, use the panel default in the Subagents section of the **mf-mode** skill. An `inherit-parent` entry is the parent model, so leave its model unset. If your harness rejects a model, use the nearest model of the same family or drop the seat, keep at least two runners, and say so. A model\'s family is its vendor and line, such as one vendor\'s flagship series. Spawn more for multiple design directions, and repeat one model when the work is generation-bound, not judgment-sensitive. Pick each subagent\'s reasoning level per the Subagents section of the **mf-mode** skill.',
+  },
+  {
+    file: '.agents/skills/mf-mode-arena/SKILL.md',
+    line: 'After all Phase B candidates complete, spawn one readonly judge',
+    replace:
+      'After all Phase B candidates complete, spawn one read-only judge from the `role-arena-judges` profile\'s `models`. The judge is never from the parent\'s vendor, so use the first entry from another vendor. An `inherit-parent` entry is the parent model. If you do not know the parent\'s model, use the first entry and say that the vendor check did not run. If your harness rejects a model, use the nearest model of the same family, then the next entry, or skip the judge, and say so. While you read in Phase D, the judge scores each candidate, by path label, on each rubric criterion and recommends a base.',
+  },
+  {
+    file: '.agents/skills/mf-mode-recall/SKILL.md',
+    line: 'Transcripts live at `~/.cursor/projects/',
+    replace:
+      'Transcripts live where your harness keeps them; the harnesses reference of the **mf-mode** skill names the folder and its naming rule for each harness. Read only this workspace\'s transcripts. Every line is one chat message.',
+  },
+  // mf-mode-help: montflow setup instead of Cursor's plugin install and setup-pstack.
+  { file: '.agents/skills/mf-mode-help/SKILL.md', line: '# Poteto help', replace: '# MF mode help' },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: 'A message that asks for work, such as "use mfstack to fix this bug", is not a help question.',
+    replace:
+      'A message that asks for work, such as "use mfstack to fix this bug", is not a help question. Read [`mf-mode`](../mf-mode/SKILL.md) and do the work under it.',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: '- No the role profiles (`mf-profiles list`) means',
+    replace:
+      '- No `role-*` profiles in `mf-profiles list` means nobody has chosen models for the roles, so every role uses its default model.',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: '- Now: give them `/setup-pstack` to type',
+    replace:
+      '- Now: walk them through `mf-profiles create role-<role>` for the roles they care about, and answer their question too.',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: '- Later: answer their question, and add one line',
+    replace:
+      '- Later: answer their question, and add one line saying every role keeps its default model until they add `role-*` profiles.',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: '1. Install with `/add-plugin mfstack`',
+    replace:
+      "1. Install montflow in the repository: the montflow README's quick start syncs the `mf-mode` skills and installs the principles, playbooks and profiles with each CLI's `doctor`.",
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: '2. Run [`/setup-pstack`]',
+    replace:
+      '2. Optionally choose a model per role with `role-*` profiles (`mf-profiles`). Without them every role uses the defaults in the Subagents section of the **mf-mode** skill. Then offer once each to generate a verification skill (`/mf-mode-create-verification-skill`) and a formal verification skill for the project, unless the project already has one.',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: 'Installing changes nothing until the user invokes a skill.',
+    replace:
+      'Installing changes nothing until the user invokes a skill. The montflow README and its wiki page on mf-mode have the details. Offer to word their first prompt with them, per [`references/prompting.md`](references/prompting.md).',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: 'If cost is the worry,',
+    replace:
+      'If cost is the worry, say where the tokens go and how to spend fewer. mfstack spends extra tokens on subagents and review panels. Point the `role-*` profiles at cheaper models, or set a role to `inherit-parent` so it runs on the chat\'s model. A shorter panel `models` list runs fewer subagents, one for each entry. Save `/mf-mode` for work that needs rigor.',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: 'mfstack is built for Cursor,',
+    replace:
+      'mfstack is written for any harness that reads Agent Skills: Claude Code, Codex, OpenCode, Pi and Cursor among them. Its text names concepts (spawn a subagent, ask a structured question, keep a todo list), and [the harnesses reference](../mf-mode/references/harnesses.md) maps each one to your harness. A step that needs a feature your harness lacks is skipped with a one-line note.',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: 'Other tools can read the skills,',
+    replace: '',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: '- Option+Enter on Mac or Alt+Enter on Windows,',
+    replace:
+      '- A harness that can keep a skill on for every turn (Cursor calls this a Custom Mode) keeps `/mf-mode` in context until the user turns it off.',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: "- Cursor's docs list Custom Modes",
+    replace: '- Everywhere else, start each new task with `/mf-mode`.',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: "Link [Cursor's skills docs]",
+    replace:
+      'Mid-chat, "new task" makes the mode match a fresh playbook. `/mf-mode` already uses `mf-agent` for the subagents its playbook steps spawn. To get the same style from a subagent of your own, spawn it with the `mf-agent` profile.',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: '| Pick a model for each role and a reasoning budget |',
+    replace: '| Pick a model for each role | `mf-profiles` (`role-*` profiles) |',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: '- `/deslop`, `control-cli`, and `control-ui` ship in the `cursor-team-kit` plugin.',
+    replace: '- `/deslop`, `control-cli`, and `control-ui` belong to other Cursor plugins; montflow does not ship them.',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: '- a loop and `/create-skill` are Cursor built-ins.',
+    replace:
+      "- Loops and wake-ups come from your harness (the harnesses reference lists them). Skill authoring is the **mf-create-skills** skill.",
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: 'Without `/mf-mode`, a phrase such as "babysit this pr"',
+    replace:
+      'Without `/mf-mode`, a phrase such as "babysit this pr" can start your harness\'s own skill for the same job instead. `mf-playbooks list` lists every playbook.',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: "mfstack has no planning skill. Cursor's Plan Mode works alongside it.",
+    replace:
+      "mfstack has no planning skill. Your harness's plan mode, if it has one, works alongside it. For work that spans phases or stacked PRs, asking `/mf-mode` for a plan runs the [Multi-phase plan playbook](../../@montflow/playbooks/multi-phase-plan/PLAYBOOK.md), which writes the plan and doesn't implement it. For a design question, the Prototype playbook or `/mf-mode-architect` settles it in code first.",
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: 'Principles are one-rule skills that `/mf-mode` reads',
+    replace:
+      'Principles are one-rule documents in the principles store that `/mf-mode` reads and cites in its replies. The user rarely asks for one. They steer with the names instead, as in "apply prove it works. show me the real output." `mf-principles list` lists them, and `mf-principles show <name>` prints one.',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: '| The mode stopped applying after a few turns |',
+    replace:
+      '| The mode stopped applying after a few turns | Start each task with `/mf-mode`, or keep it on every turn if your harness can. |',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: '| A new model choice had no effect |',
+    replace: '| A new model choice had no effect | Role profiles are read when a subagent is spawned. Check `mf-profiles show role-<role>` and start a new task. |',
+  },
+  {
+    file: '.agents/skills/mf-mode-help/SKILL.md',
+    line: "| A skill didn't load on its own |",
+    replace:
+      "| A skill didn't load on its own | mfstack skills load when the user types them or when `/mf-mode` runs them, and it doesn't run every skill. |",
+  },
+];
+for (const edit of LINE_EDITS) {
+  const current = written.get(edit.file);
+  if (typeof current !== 'string') throw new Error(`line edit target missing: ${edit.file}`);
+  const lines = current.split('\n');
+  const hits = lines.flatMap((text, index) => (text.startsWith(edit.line) ? [index] : []));
+  if (hits.length !== 1) throw new Error(`line edit in ${edit.file} matched ${hits.length} lines: ${edit.line.slice(0, 60)}…`);
+  const index = hits[0] ?? 0;
+  if (edit.replace === '') {
+    lines.splice(index, lines[index + 1] === '' ? 2 : 1);
+  } else {
+    lines[index] = edit.replace;
+  }
+  written.set(edit.file, lines.join('\n'));
+}
+
+// Harness-specific terms left in the imported text after every rewrite (harnesses.md and the
+// review-bot reference name them on purpose).
+for (const [file, content] of written) {
+  if (typeof content !== 'string' || !file.endsWith('.md')) continue;
+  if (file.includes('/scripts/') || file.endsWith('bugbot-triage.md')) continue;
+  for (const term of RESIDUAL_TERMS) noteResidual(term, content.split(term).length - 1);
+}
+
+// montflow's own harness map ships inside the mf-mode skill.
+write(
+  '.agents/skills/mf-mode/references/harnesses.md',
+  Fs.readFileSync(Path.join(ROOT, 'scripts/mfstack/harnesses.md')),
+);
+
 // License notice travels with every store that carries pstack text.
 const license = Fs.readFileSync(Path.join(SOURCE, 'LICENSE'));
 for (const dir of ['packages/principles', 'packages/playbooks', '.agents/skills/mf-mode']) {
@@ -449,6 +780,6 @@ console.log(
 );
 if (missingDescriptions.length > 0) console.log(`playbooks without a README description: ${missingDescriptions.join(', ')}`);
 console.log(
-  `residual terms (need a patch): ${[...residuals].map(([term, count]) => `${term}=${count}`).join(' ') || 'none'}`,
+  `harness-specific terms left: ${[...residuals].map(([term, count]) => `${term}=${count}`).join(' ') || 'none'}`,
 );
 if (check && drift > 0) process.exitCode = 1;

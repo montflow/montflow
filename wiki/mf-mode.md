@@ -137,7 +137,8 @@ The chat that receives `/mf-mode` runs the playbook and owns every subagent's wo
 - **Worker brief.** `worker.md` holds the rules a subagent needs: the kickoff's bar is the whole bar, never call a tool that asks a person a question, make any reversible choice and say why, stop only for deploys, deleted data, force-pushes or outside messages, and the PR title and body format.
 - **Fresh by default.** A fix round, retry or follow-up goes to a new subagent with the original brief and the prior report. Resume one only when its state is costly to move.
 - **Review.** The lead reviews each diff and writes its own summary.
-- **Roles.** The entry skill assigns a model per role: code, prose and judgment; mechanical edits; review panels. The role names and model slugs are pstack's today. See [Planned](#planned).
+- **Roles.** Each role reads its model from a profile: `role-feature`, `role-bug-fix`, `role-perf-issue`, `role-hillclimb`, `role-judgment`, `role-swarm-workers`, and the panels `role-arena-runners`, `role-arena-judges` and `role-interrogate-reviewers` (`mf-profiles show role-<role>`). A missing profile falls back to the defaults in the Subagents section of `mf-mode`, which name no vendor or model id.
+- **Harnesses.** The text names concepts (spawn a subagent, ask a structured question, keep a todo list, loop until a check passes). [`references/harnesses.md`](../.agents/skills/mf-mode/references/harnesses.md) maps each concept to Claude Code, Codex, OpenCode, Pi and Cursor, and says what to do when a harness lacks it.
 
 ## The import
 
@@ -165,7 +166,10 @@ What the script does:
 - **Splits pstack three ways.** `principle-*` skills become principles. `poteto-mode/playbooks/*.md` become playbooks. Every other skill becomes `mf-mode-<name>`; `poteto-mode` becomes `mf-mode` and `poteto-help` becomes `mf-mode-help`. `setup-pstack` and `make-bot-ui` are skipped.
 - **Renames in prose.** Skill names, slash commands and `pstack` become their `mf-` forms. Links to imported files point at their installed path; links to other pstack files point at the pinned commit on GitHub.
 - **Writes frontmatter.** Skills get a stable `id` hashed from the name, `author: Lauren Tan`, the pstack version and `license: MIT`. Playbooks get a description from the pstack README table and the `skills`, `principles` and `playbooks` they mention.
-- **Applies hand edits.** A short list of exact find-and-replace edits on top of the rename. Each must match once, so an upstream rewording fails the import.
+- **Neutralizes harness terms.** Rules rewrite Cursor-specific wording into concepts: `.cursor/skills/` becomes `.agents/skills/`, the todolist tool becomes the todo list, `/loop` becomes your harness's loop, the role lines of `pstack-models.mdc` and configured model slugs become `role-*` profiles, and Cursor's `create-skill` becomes `mf-create-skills`.
+- **Applies hand edits.** Exact find-and-replace edits and whole-line rewrites (for the `mf-mode` Subagents section and the setup text of `mf-mode-help`) on top of the rename. Each must match exactly once, so an upstream rewording fails the import.
+- **Adds montflow's own files.** `scripts/mfstack/harnesses.md` ships as `mf-mode/references/harnesses.md`.
+- **Reports what is left.** It prints the harness-specific terms still in the text; the few left name Cursor on purpose, as an example.
 - **Owns its directories.** A file in an imported directory that the import did not write is removed, or reported as `stale` under `--check`.
 
 Drift is caught twice. `mfstack:check` compares the committed sources with a fresh import. `mf-principles:check` and `mf-playbooks:check` run `doctor --check`, which compares the installed stores with the packages. Both are in `mf:check` and in CI.
@@ -176,11 +180,11 @@ Never edit imported text by hand. Change the script, rerun the import, then run 
 
 Not built yet:
 
-- **Roles as profiles.** pstack's agents and model roles become `mf-profiles` profiles.
+- **Roles as profiles.** The text already reads `mf-agent`, `comment-sicko` and the `role-*` profiles; the profiles themselves, with a `models` list for panels, are not shipped yet.
 - **An `mf-mode` CLI.** pstack's scripts (watch-pr, worktree audit, decision log, statechart) ported to Effect.
 - **Harness adapters.** Only where a harness needs one: OpenCode, Pi, Claude Code, Codex. The goal is harness-agnostic text plus CLIs.
 
-Until then, some imported text still names pstack's harness: the `mf-agent` subagent type, `/setup-pstack`, Cursor model slugs, and `/deslop` from `cursor-team-kit`.
+Until the profiles ship, a role falls back to the defaults in `mf-mode`. The `opening-a-pr` playbook still mentions `/deslop`, which montflow does not ship.
 
 ## See also
 

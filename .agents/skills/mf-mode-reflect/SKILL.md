@@ -18,4 +18,4 @@ Keep a finding only if it will still hold in six months, would change what a fut
 
 Present Accepted (problem, proposal, skill), Rejected (reason) and Backlog, and wait for approval before editing any skill.
 
-Never edit a skill under `plugins/cache/`. Before approval, show its destination, `.cursor/skills/<skill>/` or `~/.cursor/skills/<skill>/`. After approval, copy the skill folder there and edit the copy. Never open a PR or push.
+Never edit a skill under `plugins/cache/`. Before approval, show its destination, `.agents/skills/<skill>/` or `~/.agents/skills/<skill>/`. After approval, copy the skill folder there and edit the copy. Never open a PR or push.

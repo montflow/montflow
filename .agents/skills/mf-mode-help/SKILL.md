@@ -8,11 +8,11 @@ license: MIT
 disable-model-invocation: true
 ---
 
-# Poteto help
+# MF mode help
 
 Answer the user's question about mfstack, hand them a prompt they can send, and link the file the answer came from. For a help question, don't start the work. The user asked how, and a mfstack run spends real tokens, so let them send the prompt.
 
-A message that asks for work, such as "use mfstack to fix this bug", is not a help question. Read [`mf-mode`](../mf-mode/SKILL.md), do the work under it, and mention once that a Custom Mode keeps it on.
+A message that asks for work, such as "use mfstack to fix this bug", is not a help question. Read [`mf-mode`](../mf-mode/SKILL.md) and do the work under it.
 
 This file maps questions to the skills and guide pages that hold the answers. Those files own the details. Read the file you route to before you quote it, and trust it when it disagrees with this map. The links here point into the installed plugin, which the user may not be able to open, so give the user the file's public copy: `https://github.com/cursor/plugins/blob/main/mfstack/` followed by its path.
 
@@ -28,28 +28,26 @@ Infer the need from the message and the conversation. A named situation, such as
 
 Check the state that changes the answer, and mention it only when it does:
 
-- No `~/.cursor/rules/pstack-models.mdc` means `/setup-pstack` hasn't run for this user, so every role uses its default model.
+- No `role-*` profiles in `mf-profiles list` means nobody has chosen models for the roles, so every role uses its default model.
 - No `verify-*` skill or other app harness in the project means agents have no scripted way to drive the app. Mention `/mf-mode-create-verification-skill` when the question is about proving a change works.
 - No formal verification skill in the project means no property is checked past what tests reach. Mention `/mf-mode-create-formal-verification-skill` when the question is about a race, an invariant, or another case tests rarely hit. When one exists and the code it covers changed after the commit it records as last in sync, mention `/mf-mode-maintain-formal-verification-skill` if the question touches that code.
 
 When the model rule is missing and it matters, ask whether the user wants to pick a model for each role and a reasoning budget now. It matters when the user is new, the question is about setup or cost, or the answer depends on which models run. Ask at most once per chat. If the need is also unclear, ask both questions together. Offer two choices:
 
-- Now: give them `/setup-pstack` to type, and answer their question too.
-- Later: answer their question, and add one line saying every role keeps its default model until they run `/setup-pstack`.
+- Now: walk them through `mf-profiles create role-<role>` for the roles they care about, and answer their question too.
+- Later: answer their question, and add one line saying every role keeps its default model until they add `role-*` profiles.
 
 ## Get set up
 
-1. Install with `/add-plugin mfstack` in chat, or from Customize in the sidebar.
-2. Run [`/setup-pstack`](https://github.com/cursor/plugins/blob/7a583913eb1b8d1a0ee76753d1a2cf072e7b54f9/pstack/skills/setup-pstack/SKILL.md). It asks for a reasoning budget, maps a model to each role, and writes a rule. The rule applies to new chats. Then it offers once each to generate a verification skill and a formal verification skill for the project, unless the project already has one.
+1. Install montflow in the repository: the montflow README's quick start syncs the `mf-mode` skills and installs the principles, playbooks and profiles with each CLI's `doctor`.
+2. Optionally choose a model per role with `role-*` profiles (`mf-profiles`). Without them every role uses the defaults in the Subagents section of the **mf-mode** skill. Then offer once each to generate a verification skill (`/mf-mode-create-verification-skill`) and a formal verification skill for the project, unless the project already has one.
 3. Start a real task with `/mf-mode`, a goal, and a check that can pass or fail.
 
-Installing changes nothing until the user invokes a skill. Only `/setup-pstack` loads from the user's words. The [README](https://github.com/cursor/plugins/blob/7a583913eb1b8d1a0ee76753d1a2cf072e7b54f9/pstack/README.md) and [guide page 1](https://github.com/cursor/plugins/blob/7a583913eb1b8d1a0ee76753d1a2cf072e7b54f9/pstack/docs/guide/01-setup.md) have the details. Offer to word their first prompt with them, per [`references/prompting.md`](references/prompting.md).
+Installing changes nothing until the user invokes a skill. The montflow README and its wiki page on mf-mode have the details. Offer to word their first prompt with them, per [`references/prompting.md`](references/prompting.md).
 
-If cost is the worry, say where the tokens go and how to spend fewer. mfstack spends extra tokens on subagents and review panels. Rerun `/setup-pstack` and pick a smaller budget or cheaper models. A role set to `auto` or `inherit-parent` runs on the chat's model, which saves tokens when the chat runs on Auto or a cheaper model. A shorter panel list runs fewer subagents, one for each entry. Save `/mf-mode` for work that needs rigor.
+If cost is the worry, say where the tokens go and how to spend fewer. mfstack spends extra tokens on subagents and review panels. Point the `role-*` profiles at cheaper models, or set a role to `inherit-parent` so it runs on the chat's model. A shorter panel `models` list runs fewer subagents, one for each entry. Save `/mf-mode` for work that needs rigor.
 
-mfstack is built for Cursor, and it also installs in Claude Code with `/plugin marketplace add cursor/plugins`, then `/plugin install mfstack@cursor-plugins`. There, each command takes a `mfstack:` prefix, such as `/mf-mode`. The [Claude Code adapter](https://github.com/cursor/plugins/blob/7a583913eb1b8d1a0ee76753d1a2cf072e7b54f9/pstack/docs/harness/claude-code.md) maps the Cursor names, and a step that needs a Cursor-only feature, such as Bugbot or Automations, is skipped with a one-line note.
-
-Other tools can read the skills, because they use the Agent Skills format. But most workflow skills, including `/mf-mode`, `/mf-mode-how`, and `/mf-mode-teach`, spawn Cursor subagents, some with per-role models, and Custom Modes and `/loop` are Cursor features, so those parts may not work there.
+mfstack is written for any harness that reads Agent Skills: Claude Code, Codex, OpenCode, Pi and Cursor among them. Its text names concepts (spawn a subagent, ask a structured question, keep a todo list), and [the harnesses reference](../mf-mode/references/harnesses.md) maps each one to your harness. A step that needs a feature your harness lacks is skipped with a one-line note.
 
 ## Start a task with `/mf-mode`
 
@@ -58,10 +56,10 @@ Other tools can read the skills, because they use the Agent Skills format. But m
 Whether `/mf-mode` stays on depends on how the user starts it:
 
 - Enter on `/mf-mode` attaches the skill to one message. It fades as the chat moves on.
-- Option+Enter on Mac or Alt+Enter on Windows, or Use as Mode from the skill entry, makes it a Custom Mode. It stays in context every turn until the user exits the mode, and it stays out of casual turns.
-- Cursor's docs list Custom Modes in the Agents Window and the CLI. Elsewhere, start each new task with `/mf-mode`.
+- A harness that can keep a skill on for every turn (Cursor calls this a Custom Mode) keeps `/mf-mode` in context until the user turns it off.
+- Everywhere else, start each new task with `/mf-mode`.
 
-Link [Cursor's skills docs](https://cursor.com/docs/skills) when this comes up. Mid-chat, "new task" makes the mode match a fresh playbook. `/mf-mode` already uses `mf-agent` for the subagents its playbook steps spawn. To get the same style from a subagent of your own, spawn it with `subagent_type: "mf-agent"`.
+Mid-chat, "new task" makes the mode match a fresh playbook. `/mf-mode` already uses `mf-agent` for the subagents its playbook steps spawn. To get the same style from a subagent of your own, spawn it with the `mf-agent` profile.
 
 ## Pick a skill
 
@@ -97,7 +95,7 @@ The default answer is `/mf-mode`, which runs most of the others when its steps n
 | Vet a performance number before reporting or acting on it | [`/mf-mode-benchmark-checklist`](../mf-mode-benchmark-checklist/SKILL.md) |
 | Run a large or cross-cutting change, or one to review after stepping away | [`/mf-mode-figure-it-out`](../mf-mode-figure-it-out/SKILL.md) |
 | Keep a decision log during a run, and review it afterward | [`/mf-mode-show-me-your-work`](../mf-mode-show-me-your-work/SKILL.md) |
-| Pick a model for each role and a reasoning budget | [`/setup-pstack`](https://github.com/cursor/plugins/blob/7a583913eb1b8d1a0ee76753d1a2cf072e7b54f9/pstack/skills/setup-pstack/SKILL.md) |
+| Pick a model for each role | `mf-profiles` (`role-*` profiles) |
 | Turn their own working habits into a personal mode skill | [`/mf-mode-automate-me`](../mf-mode-automate-me/SKILL.md) |
 | Turn what a finished task taught into skill edits | [`/mf-mode-reflect`](../mf-mode-reflect/SKILL.md) |
 | Stop agents from repeating the same mistakes in this repo | [`/mf-mode-correct`](../mf-mode-correct/SKILL.md) |
@@ -116,8 +114,8 @@ Close calls:
 
 Not in mfstack:
 
-- `/deslop`, `control-cli`, and `control-ui` ship in the `cursor-team-kit` plugin.
-- `/loop` and `/create-skill` are Cursor built-ins.
+- `/deslop`, `control-cli`, and `control-ui` belong to other Cursor plugins; montflow does not ship them.
+- Loops and wake-ups come from your harness (the harnesses reference lists them). Skill authoring is the **mf-create-skills** skill.
 - mfstack has no `/orchestrate` skill. If the slash menu shows `/orchestrate`, another plugin provides it.
 
 ## Playbooks and principles
@@ -131,23 +129,23 @@ Playbooks are step lists inside `/mf-mode`, not skills, so they have no slash co
 - "full autopilot on this queue" runs Autopilot-full. "autopilot, don't merge" runs Autopilot-stack.
 - "run the eval playbook" runs Eval.
 
-Without `/mf-mode`, a phrase such as "babysit this pr" can start Cursor's own skill for the same job instead. The Playbooks section of [`mf-mode`](../mf-mode/SKILL.md) lists every playbook. [Guide page 6](https://github.com/cursor/plugins/blob/7a583913eb1b8d1a0ee76753d1a2cf072e7b54f9/pstack/docs/guide/06-verify-and-ship.md) covers opening, babysitting, and landing a PR.
+Without `/mf-mode`, a phrase such as "babysit this pr" can start your harness's own skill for the same job instead. `mf-playbooks list` lists every playbook.
 
-mfstack has no planning skill. Cursor's Plan Mode works alongside it. For work that spans phases or stacked PRs, asking `/mf-mode` for a plan runs the [Multi-phase plan playbook](../../@montflow/playbooks/multi-phase-plan/PLAYBOOK.md), which writes the plan and doesn't implement it. For a design question, the Prototype playbook or `/mf-mode-architect` settles it in code first.
+mfstack has no planning skill. Your harness's plan mode, if it has one, works alongside it. For work that spans phases or stacked PRs, asking `/mf-mode` for a plan runs the [Multi-phase plan playbook](../../@montflow/playbooks/multi-phase-plan/PLAYBOOK.md), which writes the plan and doesn't implement it. For a design question, the Prototype playbook or `/mf-mode-architect` settles it in code first.
 
-Principles are one-rule skills that `/mf-mode` reads and cites in its replies. The user rarely invokes one. They steer with the names instead, as in "apply prove it works. show me the real output." Typing `/principle-<name>` still loads one on demand. [Guide page 8](https://github.com/cursor/plugins/blob/7a583913eb1b8d1a0ee76753d1a2cf072e7b54f9/pstack/docs/guide/08-principles.md) lists them.
+Principles are one-rule documents in the principles store that `/mf-mode` reads and cites in its replies. The user rarely asks for one. They steer with the names instead, as in "apply prove it works. show me the real output." `mf-principles list` lists them, and `mf-principles show <name>` prints one.
 
 ## Fix a run that went wrong
 
 | Symptom | Fix |
 |---|---|
-| The mode stopped applying after a few turns | It was started with Enter. Start it as a Custom Mode, or start each task with `/mf-mode`. |
+| The mode stopped applying after a few turns | Start each task with `/mf-mode`, or keep it on every turn if your harness can. |
 | A question got treated as the next step of the last task | Say "new task", or say the turn doesn't need the mode. |
-| A new model choice had no effect | The rule from `/setup-pstack` applies to new chats. Start one. |
+| A new model choice had no effect | Role profiles are read when a subagent is spawned. Check `mf-profiles show role-<role>` and start a new task. |
 | Runs cost more than expected | See the cost paragraph under Get set up. |
-| A skill didn't load on its own | Only `/setup-pstack` loads from the user's words. The others load when the user types them or when `/mf-mode` runs them, and it doesn't run every skill. |
+| A skill didn't load on its own | mfstack skills load when the user types them or when `/mf-mode` runs them, and it doesn't run every skill. |
 | Parallel agents overwrote each other | Give each agent its own worktree, or run them as cloud agents, which each get their own machine. |
-| An overnight run moved but finished nothing | `/loop` needs a check that can pass or fail, not a duration. See [guide page 7](https://github.com/cursor/plugins/blob/7a583913eb1b8d1a0ee76753d1a2cf072e7b54f9/pstack/docs/guide/07-overnight.md). |
+| An overnight run moved but finished nothing | a loop needs a check that can pass or fail, not a duration. See [guide page 7](https://github.com/cursor/plugins/blob/7a583913eb1b8d1a0ee76753d1a2cf072e7b54f9/pstack/docs/guide/07-overnight.md). |
 | The reply claims success from a green build | Ask for the real command, flow, stored value, or profile. That's the prove-it-works principle. |
 
 For a run that drifts, [`references/prompting.md`](references/prompting.md) has one-line steers. [Guide page 10](https://github.com/cursor/plugins/blob/7a583913eb1b8d1a0ee76753d1a2cf072e7b54f9/pstack/docs/guide/10-recipes-and-pitfalls.md) has more pitfalls and the recipes worth copying.

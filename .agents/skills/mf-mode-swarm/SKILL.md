@@ -12,7 +12,7 @@ disable-model-invocation: true
 
 ## Start
 
-Open a todolist with one entry per phase before launching anything.
+Open a todo list with one entry per phase before launching anything.
 
 1. Frame
 2. Fan out
@@ -23,12 +23,12 @@ Open a todolist with one entry per phase before launching anything.
 
 1. State the done predicate and the artifact or report the swarm must return.
 2. Choose the shape. Partition into slices, race N workers on identical briefs, or mix both. For a race or mixed shape, declare `first pass`, `rank all`, or `best-of` before spawning.
-3. Pick the worker model from the `swarm workers` line in `~/.cursor/rules/pstack-models.mdc`. If the rule or that line is missing, use `claude-opus-5-5-high-fast`. For `auto` or `inherit-parent`, omit `model` so the workers run on the parent model. If the Task tool rejects a slug, use the default and say so. If it rejects the default, use the closest valid slug of the same family from its error message. For a model race, name each arm's model up front. Pick each subagent's reasoning level for the job, per the Subagents section of the **mf-mode** skill.
+3. Pick the worker model from the `role-swarm-workers` profile. If it is missing, use the trivial-edits default in the Subagents section of the **mf-mode** skill. For `inherit-parent`, or a profile with no model, leave the model unset so the workers run on the parent model. If your harness rejects a model, fall back as its harnesses reference says, and say so. For a model race, name each arm's model up front. Pick each subagent's reasoning level for the job, per the Subagents section of the **mf-mode** skill.
 4. Give each worker its own writable output when it writes. When workers verify or measure commits, each brief names the exact SHAs. A measurement brief also names the method (sample count, what one sample is, order). The worker records both in its result.
 
 ## Phase B: Fan out
 
-Spawn all N workers in one message with `subagent_type: generalPurpose`, `environment: "cloud"`, `run_in_background: true`, and the step 3 model, left unset for `auto` or `inherit-parent`. Use `environment: "local"` only when the worker needs access to something on the user's computer.
+Spawn all N workers at once as general-purpose subagents, each isolated in its own checkout and running in the background where your harness allows (the harnesses reference of the **mf-mode** skill maps both), with the step 3 model. Run a worker in the shared checkout only when it needs something on the user's computer.
 
 When a worker must start from a non-default pushed branch, pass `cloud_base_branch`.
 

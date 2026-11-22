@@ -26,7 +26,7 @@ The remaining triggers live only here:
 - Before commit → `/deslop` from the `cursor-team-kit` plugin. Before review → **mf-mode-no-comments**.
 - Shipping UI / IDE / CLI → `control-ui` or `control-cli` from `cursor-team-kit`.
 - A number you measured → **mf-mode-benchmark-checklist**.
-- PR status → the **Babysit** playbook, not Cursor's built-in babysit skill. Landing a green stack → the **Shipping** playbook.
+- PR status → the **Babysit** playbook. Landing a green stack → the **Shipping** playbook.
 - Bot review comments → judge each on its merits.
 - Long or unattended work → **mf-mode-show-me-your-work**.
 
@@ -85,17 +85,17 @@ Read the principle in full with `mf-principles show <name>` before you apply it.
 
 ## Subagents
 
-**Use `subagent_type: "mf-agent"` for any subagent you spawn directly inside a playbook step.** The chat that receives `/mf-mode` runs the playbook itself. Routed workflow skills (`mf-mode-interrogate`, `mf-mode-swarm`) set their own `subagent_type`. Respect it.
+**Use the `mf-agent` profile for any subagent you spawn directly inside a playbook step.** The chat that receives `/mf-mode` runs the playbook itself. Routed workflow skills (`mf-mode-interrogate`, `mf-mode-swarm`) pick their own subagents. Respect them. How your harness spawns a subagent, runs it in the background, or gives it its own checkout is in [the harnesses reference](references/harnesses.md).
 
-**Defaults for every `Task` call.** `run_in_background: true`, agent mode (readonly strips MCP), file pointers not inlined context, and an explicit model per role, Project workers included. `/setup-pstack` writes `~/.cursor/rules/pstack-models.mdc`, whose per-role lines override the defaults below and the role models in the routed skills (`mf-mode-arena`, `mf-mode-swarm`, `mf-mode-interrogate`). A role with no line keeps its default. A line of `inherit-parent` or `auto` runs the role on the parent model, so omit `model` and spawn `generalPurpose`, because `mf-agent` defaults to Opus 5.5. Each code playbook reads its own line (`feature, refactoring`, `bug-fix`, `perf-issue`, or `hillclimb`), prose and judgment read `judgment and prose`, and trivial mechanical edits read `swarm workers`. If the rule has no `# defaults: 3` line, an older setup wrote it. Keep honoring its lines, and tell the user once per session to rerun `/setup-pstack`.
+**Defaults for every subagent.** Run it in the background when your harness can, point it at files instead of inlining context, and give it an explicit model per role. Each role's model lives in its profile (`mf-profiles show role-<role>`): `role-feature` (feature and refactoring), `role-bug-fix`, `role-perf-issue`, `role-hillclimb`, `role-judgment` (prose and judgment), `role-swarm-workers` (trivial mechanical edits and verification), and the panels `role-arena-runners`, `role-arena-judges` and `role-interrogate-reviewers`. A role profile overrides the defaults below and the role models in the routed skills (`mf-mode-arena`, `mf-mode-swarm`, `mf-mode-interrogate`). A missing profile keeps the default. A profile set to `inherit-parent`, or with no model, runs the role on the parent model.
 
-- Code, prose, and judgment: `claude-opus-5-5-xhigh-fast`.
-- Trivial mechanical edits: `claude-opus-5-5-high-fast`.
-- Diverse review and design panels: one runner each on `claude-fable-5-2-high`, `claude-opus-5-5-high-fast`, and `gemini-4-neon-xhigh`.
+- Code, prose, and judgment: the strongest model your harness offers, at its highest effort short of the maximum.
+- Trivial mechanical edits: the same model one effort step lower.
+- Diverse review and design panels: one runner on each of three vendors' models when your harness offers them, otherwise three runs of the strongest model with different briefs.
 
-**Fable 5.2 is an exception.** It runs outside a panel only when the user named it for this task or two Opus 5.5 xhigh runs of the same brief failed its check. Say which. Difficulty alone never qualifies.
+**The most expensive model is an exception.** It runs outside a panel only when the user named it for this task or two runs of the default model on the same brief failed its check. Say which. Difficulty alone never qualifies.
 
-**Match the model to the job.** Start from the role's line or default, keep its family, and set the level the job needs. The `/setup-pstack` budget sets each role's starting level. Panel seats keep their listed level. Raise any other role one step, up to xhigh, for the hardest or subtlest work, lower it one step for judgment, and two or more steps for routine work. No role runs above xhigh. Opus 5.5 always runs its `-fast` slug. Verification always runs on the `swarm workers` model, `claude-opus-5-5-high-fast` by default. A Gemini seat runs at `gemini-4-neon-xhigh` unless its line names another level. If the Task tool rejects a slug, never pass it again. Fall back to the role's line or default, then the calling skill's fallback, then the closest valid slug of the same family, then omit `model`. Say so.
+**Match the model to the job.** Start from the role's profile or default, keep its family, and set the effort the job needs. Panel seats keep their listed effort. Raise any other role one step for the hardest or subtlest work, lower it one step for judgment, and two or more steps for routine work. No role runs at the maximum effort unless its profile says so. Verification always runs on the `role-swarm-workers` model. If your harness rejects a model, never pass it again: fall back as [the harnesses reference](references/harnesses.md) says, and say so.
 
 You own every subagent's work. Review the diff and write your own summary. A second opinion is the same prompt on another vendor's model.
 
@@ -107,6 +107,6 @@ Write short declarative sentences with no long dash and no colon as a connector.
 
 ## Playbooks
 
-Match the task to a playbook and open its steps with `mf-playbooks show <name>`, the title in kebab case. `mf-playbooks list` prints every playbook with what it is for. Copy its steps into the todolist tool first. Large, cross-cutting, or unattended work, or a task no playbook fits, routes to the **mf-mode-figure-it-out** skill.
+Match the task to a playbook and open its steps with `mf-playbooks show <name>`, the title in kebab case. `mf-playbooks list` prints every playbook with what it is for. Copy its steps into the todo list first. Large, cross-cutting, or unattended work, or a task no playbook fits, routes to the **mf-mode-figure-it-out** skill.
 
 Investigation, Bug fix, Perf issue, Hillclimb, Runtime forensics, Trace forensics, Feature, Refactoring, Prototype, Visual parity, Authoring a skill, Eval, Babysit, Shipping, Autonomous run, Autopilot-full, Autopilot-stack, Session pickup, Pause safely, Multi-phase plan, Worktree cleanup, Opening a PR.
