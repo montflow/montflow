@@ -94,7 +94,7 @@ Vitest.describe('BuildInfo.describe runtime', () => {
   Vitest.it.effect('marks a checkout with an edited file dirty', () =>
     withSandbox((sandbox) =>
       Effect.gen(function* () {
-        yield* Effect.promise(() => writeManifest(sandbox.root, '@montflow/specs', '0.4.0'));
+        yield* Effect.promise(() => writeManifest(sandbox.root, '@montflow/prompts', '0.4.0'));
         yield* Effect.promise(() => initRepo(sandbox.root, 'README.md', '# clean\n'));
         yield* Effect.promise(() => writeFile(join(sandbox.root, 'README.md'), '# edited\n'));
 

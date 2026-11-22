@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 import * as Vitest from '@effect/vitest';
 
 /**
- * The cross-package invariant: every one of the five `mf-*` binaries reports
+ * The cross-package invariant: every one of the four `mf-*` binaries reports
  * the version its own `package.json` declares, through both `--version` and
  * `version --json`.
  *
@@ -16,7 +16,7 @@ import * as Vitest from '@effect/vitest';
  */
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../../../../..');
-const CLI_PACKAGES = ['skills', 'specs', 'prompts', 'profiles', 'reviews'] as const;
+const CLI_PACKAGES = ['skills', 'prompts', 'profiles', 'reviews'] as const;
 
 interface Manifest {
   readonly name: string;
@@ -51,7 +51,7 @@ const withWorkspace = <A, E>(use: (root: string) => Effect.Effect<A, E>): Effect
     (root) => Effect.promise(() => rm(root, { recursive: true, force: true })),
   );
 
-Vitest.describe('version across all five CLIs runtime', () => {
+Vitest.describe('version across all four CLIs runtime', () => {
   Vitest.it(
     'every binary reports the version in its own package.json',
     async () => {
