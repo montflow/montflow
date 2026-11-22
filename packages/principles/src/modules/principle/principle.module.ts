@@ -28,8 +28,10 @@ export const FILE = 'PRINCIPLE.md';
 /** The store, relative to the workspace root. */
 export const STORE_DIR = ['.agents', '@montflow', 'principles'] as const;
 
-/** Every description opens with this condition. */
-export const DESCRIPTION_PREFIX = 'Apply when';
+/** Every description opens with its trigger: `Apply when …`, `Apply before …`, `Apply to …`. */
+export const DESCRIPTION_PREFIX = 'Apply';
+
+const TRIGGER_PATTERN = new RegExp(`^${DESCRIPTION_PREFIX}\\b`);
 
 /** A body longer than this many lines draws a warning: principles are meant to be short. */
 export const MAX_BODY_LINES = 60;
@@ -175,8 +177,13 @@ export const verifyFile = (dirName: string, markdown: string): VerifyResult => {
   const description = (fieldString(parsed.fields, 'description') ?? '').trim();
   if (description === '') {
     issues.push(error('description', 'Required frontmatter field is missing or empty.'));
-  } else if (!description.startsWith(DESCRIPTION_PREFIX)) {
-    issues.push(error('description', `Must start with '${DESCRIPTION_PREFIX}'.`));
+  } else if (!TRIGGER_PATTERN.test(description)) {
+    issues.push(
+      error(
+        'description',
+        `Must open with its trigger ('${DESCRIPTION_PREFIX} when …', '${DESCRIPTION_PREFIX} before …').`,
+      ),
+    );
   }
   const titles = titlesOf(parsed.body);
   if (titles.length === 0) issues.push(error('body', 'Missing `# Title` heading.'));

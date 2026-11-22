@@ -66,10 +66,10 @@ Vitest.describe('engines and renderers', () => {
       Vitest.expect(all.entries.map((entry) => entry.name)).toStrictEqual(['alpha', 'broken']);
       Vitest.expect(all.issueCount).toBe(1);
       Vitest.expect(Renderers.verify(all)).toBe(
-        "error broken [description] Must start with 'Apply when'.\nsummary entries=2 issues=1 warnings=0",
+        "error broken [description] Must open with its trigger ('Apply when …', 'Apply before …').\nsummary entries=2 issues=1 warnings=0",
       );
       Vitest.expect(Renderers.verify(all, { human: true, verbose: true })).toBe(
-        "✓ alpha\n✗ broken [description] Must start with 'Apply when'.\nentries 2 · errors 1 · warnings 0",
+        "✓ alpha\n✗ broken [description] Must open with its trigger ('Apply when …', 'Apply before …').\nentries 2 · errors 1 · warnings 0",
       );
       const one = yield* Engines.verify(root, { name: 'alpha', invocation: 'mf-principles' });
       Vitest.expect(one.issueCount).toBe(0);

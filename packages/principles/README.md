@@ -27,7 +27,7 @@ description: 'Apply when debugging. Trace each symptom back to the first place t
 
 `verify` fails on a missing or unreadable frontmatter block, a `name` that is
 not kebab-case or not the directory name, an empty `description` or one that
-does not start with `Apply when`, anything but exactly one `# Title`, and an
+does not open with its `Apply …` trigger (`Apply when`, `Apply before`, `Apply to`), anything but exactly one `# Title`, and an
 empty body after it. A body longer than 60 lines is a warning.
 
 ## Commands

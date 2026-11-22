@@ -69,8 +69,23 @@ Vitest.describe('Principle.verifyFile', () => {
       file('name: demo\ndescription: Fix the fault.', GOOD_BODY),
     );
     Vitest.expect(messages(unconditioned)).toStrictEqual([
-      "error description: Must start with 'Apply when'.",
+      "error description: Must open with its trigger ('Apply when …', 'Apply before …').",
     ]);
+  });
+
+  Vitest.it('accepts every upstream trigger form and rejects a lookalike word', () => {
+    for (const trigger of ['Apply when x.', 'Apply before x.', 'Apply to x.', 'Apply after x.']) {
+      const result = Principle.verifyFile(
+        'demo',
+        file(`name: demo\ndescription: ${trigger}`, GOOD_BODY),
+      );
+      Vitest.expect(messages(result)).toStrictEqual([]);
+    }
+    const lookalike = Principle.verifyFile(
+      'demo',
+      file('name: demo\ndescription: Applying x.', GOOD_BODY),
+    );
+    Vitest.expect(messages(lookalike)).toHaveLength(1);
   });
 
   Vitest.it('requires exactly one H1, ignoring headings inside code fences', () => {
