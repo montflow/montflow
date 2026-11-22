@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 1,
   "workspaces": {
     "": {
       "name": "@montflow/root",
@@ -104,7 +105,7 @@
       "name": "@montflow/model-fallback",
       "version": "0.0.1",
       "bin": {
-        "mf-model-fallback": "./src/apps/cli/main.ts"
+        "mf-model-fallback": "./src/apps/cli/main.ts",
       },
       "dependencies": {
         "@effect/platform-node": "4.0.1",
@@ -176,7 +177,7 @@
       "name": "@montflow/profiles",
       "version": "0.0.2",
       "bin": {
-        "mf-profiles": "./src/apps/cli/main.ts"
+        "mf-profiles": "./src/apps/cli/main.ts",
       },
       "dependencies": {
         "@effect/platform-node": "4.0.1",
@@ -202,7 +203,7 @@
       "name": "@montflow/prompts",
       "version": "0.0.2",
       "bin": {
-        "mf-prompts": "./src/apps/cli/main.ts"
+        "mf-prompts": "./src/apps/cli/main.ts",
       },
       "dependencies": {
         "@effect/platform-node": "4.0.1",
@@ -228,7 +229,7 @@
       "name": "@montflow/references",
       "version": "0.0.2",
       "bin": {
-        "mf-references": "./src/apps/cli/main.ts"
+        "mf-references": "./src/apps/cli/main.ts",
       },
       "dependencies": {
         "@effect/platform-node": "4.0.1",
@@ -254,7 +255,7 @@
       "name": "@montflow/reviews",
       "version": "0.0.2",
       "bin": {
-        "mf-reviews": "./src/apps/cli/main.ts"
+        "mf-reviews": "./src/apps/cli/main.ts",
       },
       "dependencies": {
         "@effect/platform-node": "4.0.1",
@@ -285,7 +286,7 @@
       "name": "@montflow/skills",
       "version": "0.0.2",
       "bin": {
-        "mf-skills": "./src/apps/cli/main.ts"
+        "mf-skills": "./src/apps/cli/main.ts",
       },
       "dependencies": {
         "@effect/platform-node": "4.0.1",
@@ -310,7 +311,7 @@
       "name": "@montflow/specs",
       "version": "0.0.2",
       "bin": {
-        "mf-specs": "./src/apps/cli/main.ts"
+        "mf-specs": "./src/apps/cli/main.ts",
       },
       "dependencies": {
         "@effect/platform-node": "4.0.1",
@@ -399,7 +400,7 @@
       "name": "@montflow/tooling-pack",
       "version": "0.1.0",
       "bin": {
-        "mf-pack": "./src/main.ts"
+        "mf-pack": "./src/main.ts",
       },
       "devDependencies": {
         "@types/bun": "^1.4.2",
@@ -416,8 +417,8 @@
     },
   },
   "overrides": {
-    "effect": "4.0.1",
     "@effect/platform-node-shared": "4.0.1",
+    "effect": "4.0.1",
   },
   "packages": {
     "@ai-sdk/provider": ["@ai-sdk/provider@3.0.8", "", { "dependencies": { "json-schema": "^0.4.0" } }, "sha512-oGMAgGoQdBXbZqNG0Ze56CHjDZ1IDYOwGYxYjO5KLSlz5HiNQ9udIXsPZ61VWaHGZ5XW/jyjmr6t2xz2jGVwbQ=="],
