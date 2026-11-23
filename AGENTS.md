@@ -79,6 +79,12 @@ aliases for frozen records.
   repairs every payload package. A manifest-owned file edited locally is
   `stale` and repair overwrites it; an unlisted file in the same store is user
   data and is never deleted.
+- mf-mode playbooks and principles: change one through the extension store,
+  `.agents/@montflow/mf-mode/extensions/{playbooks,principles}/<name>/`,
+  never the shipped copy. The consumer owns and commits it; doctor never
+  touches it and `.gitignore` never ignores it. Agents read both only through
+  `mf-mode playbooks show` / `mf-mode principles show`, which resolve the
+  extension first.
 - Source of truth is `packages/mf-<cli>/`. The installed copies under
   `.agents/` are git-ignored (generated block in `.gitignore`: `bun run
   mf:ignore`, checked by `mf-ignore:check`) and filled by `postinstall`

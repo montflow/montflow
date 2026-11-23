@@ -217,6 +217,10 @@ Installing them is `mf-mode doctor`.
 .agents/@montflow/playbooks/<name>/PLAYBOOK.md
 ```
 
+Agents read both only through `mf-mode principles show` and
+`mf-mode playbooks show`, never by path, so a repository can change what they
+read without editing the shipped copies (see [Extensions](#extensions)).
+
 A **principle** is a short conditional rule ("Apply when debugging. Fix the
 fault, not where it surfaced."): frontmatter `name` (kebab-case, equal to the
 directory) and `description` (opens with `Apply when`, `Apply before` or
@@ -235,16 +239,58 @@ A **playbook** is a procedure run end to end: frontmatter `name` and
 
 ```bash
 mf-mode principles list [--human] [--verbose] [--dir <root>]  # `<name>: <description>`
-mf-mode principles show <name> [--dir <root>]                 # the PRINCIPLE.md bytes
+mf-mode principles show <name> [--dir <root>]                 # a source= line, then the resolved PRINCIPLE.md
 mf-mode principles verify [<name>] [--all] [--human] [--verbose] [--dir <root>]
 mf-mode playbooks list [--human] [--verbose] [--dir <root>]
-mf-mode playbooks show <name> [--dir <root>]                  # the PLAYBOOK.md bytes
+mf-mode playbooks show <name> [--dir <root>]                  # a source= line, then the resolved PLAYBOOK.md
 mf-mode playbooks verify [<name>] [--all] [--human] [--verbose] [--dir <root>]
 ```
 
 A locally edited shipped file is `stale` and `doctor` overwrites it; a
 principle or playbook the package does not ship is user data and is never
 touched.
+
+### Extensions
+
+A repository that uses mf-mode changes a shipped playbook or principle, or adds
+its own, in an extension store it owns and commits:
+
+```
+.agents/@montflow/mf-mode/extensions/playbooks/<name>/PLAYBOOK.md
+.agents/@montflow/mf-mode/extensions/principles/<name>/PRINCIPLE.md
+```
+
+`doctor` never writes, repairs or deletes anything there, and the generated
+`.gitignore` block never ignores it. `list`, `show`, `verify` and playbook
+reference resolution read the extension store first, then the shipped store.
+
+| Extension frontmatter | What `show <name>` prints                                                                                                                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| no `extends`          | The extension alone. It replaces the shipped entry of the same name (`source=extension replaces=<name>`), or adds a new one (`source=extension`).                                                    |
+| `extends: <shipped>`  | The shipped entry, its `skills`, `principles` and `playbooks` lists unioned with the extension's, and the extension body appended under `## Local additions` (`source=extension extends=<shipped>`). |
+
+`show` always prints the `source=` line first, and `list` appends it to every
+row that does not come from the shipped store. A shipped entry prints
+`source=shipped`.
+
+```markdown
+---
+name: feature
+description: 'New or changed behavior, built from a named data shape.'
+extends: feature
+principles:
+  - our-release-rule
+---
+
+- Run `make e2e` before opening the PR.
+```
+
+`verify` holds each extension to the same PLAYBOOK.md or PRINCIPLE.md standard,
+checked on what `show` prints, plus `extends` naming a shipped entry and every
+reference resolving. An `extends` extension adds no `# Title` of its own. The
+shipped copies keep the byte-exact `doctor --check`, so a local edit under
+`.agents/@montflow/playbooks/` or `principles/` still fails it: change the
+behavior through an extension instead.
 
 ### Commands
 
