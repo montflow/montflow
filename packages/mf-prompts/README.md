@@ -154,8 +154,8 @@ coverage is wrong. `Prompts.verifyReport` renders it for an agent;
 Two skills ship with the package and `doctor` installs them into
 `.agents/skills/`, keeping them byte-identical to the package:
 
-- `mf-create-prompts` — authoring, modifying, and verifying a prompt
-- `mf-execute-prompts` — inspecting and executing a stored prompt
+- `mf-prompts-create` — authoring, modifying, and verifying a prompt
+- `mf-prompts-execute` — inspecting and executing a stored prompt
 
 ```bash
 /mf-prompts verify review

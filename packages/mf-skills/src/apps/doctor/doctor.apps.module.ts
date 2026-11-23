@@ -27,7 +27,11 @@ import manifestJson from '../../../payload.json' with { type: 'json' };
 export const MANIFEST: LoadedManifest = loadManifest(manifestJson, '@montflow/skills');
 
 /** Skills shipped with the package and installed into a repo. */
-export const SKILL_NAMES = [nameAt(MANIFEST, 'skill', 0), nameAt(MANIFEST, 'skill', 1)] as const;
+export const SKILL_NAMES = [
+  nameAt(MANIFEST, 'skill', 0),
+  nameAt(MANIFEST, 'skill', 1),
+  nameAt(MANIFEST, 'skill', 2),
+] as const;
 
 /** The default way a caller reaches `doctor` when it does not say. */
 export const DEFAULT_DOCTOR_INVOCATION = '/mf-skills doctor';

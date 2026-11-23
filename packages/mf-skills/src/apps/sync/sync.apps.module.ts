@@ -1,5 +1,5 @@
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
-import { Clock, Effect, FileSystem, Layer, Path } from 'effect';
+import { Clock, Effect, FileSystem, Layer, Path, Result, Schema } from 'effect';
 
 /**
  * `mf-skills sync` — copy this checkout's public skills into a workspace
@@ -10,7 +10,10 @@ import { Clock, Effect, FileSystem, Layer, Path } from 'effect';
  * reads argv, resolves the working directory, or writes to the console.
  *
  * Public means a `SKILL.md` frontmatter without `metadata.internal: true`.
- * Internal skills are reported as `skipped` and never copied.
+ * Internal skills are reported as `skipped` and never copied. So are
+ * CLI-owned skills: any skill a package lists in its `payload.json` ships
+ * through that CLI's `doctor`, never through sync, so a workspace only gets
+ * it when it installs that CLI.
  */
 
 const NodeLive = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
@@ -289,6 +292,43 @@ const directoryNames = (
   dir: string,
 ): Effect.Effect<ReadonlyArray<string>, string> =>
   entriesUnder(fs, path, dir, { type: 'Directory' });
+
+/** The part of a `payload.json` sync reads: which skills a package ships. */
+const PayloadSkills = Schema.fromJsonString(
+  Schema.Struct({
+    payloads: Schema.Array(Schema.Struct({ kind: Schema.String, name: Schema.String })),
+  }),
+);
+
+/**
+ * Every skill some CLI ships through its `doctor`: the `skill` entries of
+ * each `<checkout>/packages/*\/payload.json`. A manifest that cannot be read
+ * or decoded contributes nothing; `mf:check` validates the manifests.
+ * @param checkout - the montflow checkout sync copies from
+ * @returns the skill names sync must leave to their CLI
+ */
+const cliOwnedSkills = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  checkout: string,
+): Effect.Effect<ReadonlySet<string>> =>
+  Effect.gen(function* () {
+    const packages = path.join(checkout, 'packages');
+    const names = yield* fs.readDirectory(packages).pipe(Effect.orElseSucceed(() => []));
+    const owned = new Set<string>();
+    for (const name of names) {
+      const raw = yield* fs
+        .readFileString(path.join(packages, name, 'payload.json'))
+        .pipe(Effect.orElseSucceed(() => undefined));
+      if (raw === undefined) continue;
+      const decoded = Schema.decodeUnknownResult(PayloadSkills)(raw);
+      if (Result.isFailure(decoded)) continue;
+      for (const entry of decoded.success.payloads) {
+        if (entry.kind === 'skill') owned.add(entry.name);
+      }
+    }
+    return owned;
+  });
 
 /** Sorted relative paths of every file under `dir`, recursively. */
 const filesUnder = (
@@ -670,6 +710,7 @@ const syncSkill = (
   targetRoot: string,
   store: StoreRoot,
   check: boolean,
+  owned: ReadonlySet<string>,
 ): Effect.Effect<SyncSkillStatus | undefined, string> =>
   Effect.gen(function* () {
     const source = path.join(sourceRoot, name);
@@ -683,6 +724,16 @@ const syncSkill = (
         source,
         target,
         reason: 'internal',
+        files: [],
+      };
+    }
+    if (owned.has(name)) {
+      return {
+        name,
+        outcome: 'skipped' as const,
+        source,
+        target,
+        reason: 'cli-owned',
         files: [],
       };
     }
@@ -772,10 +823,11 @@ export const runSync = (options: SyncOptions = {}): Effect.Effect<SyncResult, st
 
     const names = yield* directoryNames(fs, path, source);
     const store = yield* storeRootOf(fs, path, target);
+    const owned = yield* cliOwnedSkills(fs, path, sourceRoot);
     const skills: Array<SyncSkillStatus> = [];
     const applied: Array<SyncSkillStatus> = [];
     for (const name of names) {
-      const status = yield* syncSkill(fs, path, name, source, target, store, check).pipe(
+      const status = yield* syncSkill(fs, path, name, source, target, store, check, owned).pipe(
         Effect.mapError((message) => failureReport(message, applied, name)),
       );
       if (status === undefined) continue;

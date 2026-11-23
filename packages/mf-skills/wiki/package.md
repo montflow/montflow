@@ -40,7 +40,7 @@ const program = Effect.gen(function* () {
    create, show, modify, delete, re-verify.
    Agentic sessions dispatch through the adapter's `SessionDispatchPort`;
    `doctor` installs the
-   `mf-create-skills` / `mf-modify-skills` authoring skills.
+   `mf-skills-create` / `mf-skills-modify` authoring skills.
 
 Storage paths and file shape are documented separately — see [storage](./storage.md) and [format](./format.md).
 

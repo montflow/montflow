@@ -33,7 +33,7 @@ const writeProfile = async (root: string, name: string, model = ''): Promise<voi
     `description: ${name} reviewer`,
     `model: ${model}`,
     'skills:',
-    '  - mf-adversarial-review',
+    '  - mf-reviews-adversarial',
     '---',
     '',
     `# ${name}`,
@@ -104,16 +104,16 @@ Vitest.describe('review dispatch', () => {
         round: '003',
         phase: 'C',
       },
-      ['mf-adversarial-review'],
+      ['mf-reviews-adversarial'],
     );
     Vitest.expect(prompt).toContain("series 'ship-spec-a'");
-    Vitest.expect(prompt).toContain('mf-adversarial-review');
+    Vitest.expect(prompt).toContain('mf-reviews-adversarial');
     Vitest.expect(prompt).toContain('- Spec: ship-spec');
     Vitest.expect(prompt).toContain('- Profile: a');
     Vitest.expect(prompt).toContain('- Round: 003');
     Vitest.expect(prompt).toContain('- Phase: C');
     Vitest.expect(prompt).toContain('- Workspace root: /repo');
-    Vitest.expect(prompt).toContain("Load the 'mf-adversarial-review' skill before starting.");
+    Vitest.expect(prompt).toContain("Load the 'mf-reviews-adversarial' skill before starting.");
   });
 
   Vitest.it.effect('ensures the series, then dispatches a reviewer session', () =>
@@ -171,14 +171,14 @@ Vitest.describe('review dispatch', () => {
       const dispatched: Array<Dispatched> = [];
       const error = yield* Dispatch.startReview(makePorts(dispatched), {
         root,
-        name: 'demo-effect-reviewer',
-        profile: 'effect-reviewer',
+        name: 'demo-mf-profiles-effect-reviewer',
+        profile: 'mf-profiles-effect-reviewer',
       }).pipe(Effect.flip);
       Vitest.expect(error).toBe(
-        "Cannot dispatch review series 'demo-effect-reviewer': profile 'effect-reviewer' was not found under .agents/@montflow/profiles.",
+        "Cannot dispatch review series 'demo-mf-profiles-effect-reviewer': profile 'mf-profiles-effect-reviewer' was not found under .agents/@montflow/profiles.",
       );
       const exists = yield* Effect.promise(() =>
-        readFile(ledgerPath(root, 'demo-effect-reviewer'), 'utf8').then(
+        readFile(ledgerPath(root, 'demo-mf-profiles-effect-reviewer'), 'utf8').then(
           () => true,
           () => false,
         ),
@@ -192,15 +192,15 @@ Vitest.describe('review dispatch', () => {
   Vitest.it.effect('rejects a profile name that does not compose the series (with a spec)', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
-      yield* Effect.promise(() => writeProfile(root, 'effect-reviewer'));
+      yield* Effect.promise(() => writeProfile(root, 'mf-profiles-effect-reviewer'));
       const error = yield* Dispatch.startReview(makePorts([]), {
         root,
-        name: 'demo-generic-reviewer',
+        name: 'demo-mf-profiles-generic-reviewer',
         spec: 'demo',
-        profile: 'effect-reviewer',
+        profile: 'mf-profiles-effect-reviewer',
       }).pipe(Effect.flip);
       Vitest.expect(error).toBe(
-        "Cannot dispatch review series 'demo-generic-reviewer': profile 'effect-reviewer' belongs to series 'demo-effect-reviewer'.",
+        "Cannot dispatch review series 'demo-mf-profiles-generic-reviewer': profile 'mf-profiles-effect-reviewer' belongs to series 'demo-mf-profiles-effect-reviewer'.",
       );
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }).pipe(Effect.provide(Live)),
@@ -209,22 +209,22 @@ Vitest.describe('review dispatch', () => {
   Vitest.it.effect('rejects a name without the profile suffix (no spec)', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
-      yield* Effect.promise(() => writeProfile(root, 'effect-reviewer'));
+      yield* Effect.promise(() => writeProfile(root, 'mf-profiles-effect-reviewer'));
       const error = yield* Dispatch.startReview(makePorts([]), {
         root,
-        name: 'spec-effect-reviewer',
-        profile: 'generic-reviewer',
+        name: 'spec-mf-profiles-effect-reviewer',
+        profile: 'mf-profiles-generic-reviewer',
       }).pipe(Effect.flip);
-      // `generic-reviewer` is not on disk, so resolve fails first — write it too.
-      Vitest.expect(error).toContain('generic-reviewer');
-      yield* Effect.promise(() => writeProfile(root, 'generic-reviewer'));
+      // `mf-profiles-generic-reviewer` is not on disk, so resolve fails first — write it too.
+      Vitest.expect(error).toContain('mf-profiles-generic-reviewer');
+      yield* Effect.promise(() => writeProfile(root, 'mf-profiles-generic-reviewer'));
       const mismatch = yield* Dispatch.startReview(makePorts([]), {
         root,
-        name: 'spec-effect-reviewer',
-        profile: 'generic-reviewer',
+        name: 'spec-mf-profiles-effect-reviewer',
+        profile: 'mf-profiles-generic-reviewer',
       }).pipe(Effect.flip);
       Vitest.expect(mismatch).toBe(
-        "Cannot dispatch review series 'spec-effect-reviewer': profile 'generic-reviewer' is not the series-name suffix.",
+        "Cannot dispatch review series 'spec-mf-profiles-effect-reviewer': profile 'mf-profiles-generic-reviewer' is not the series-name suffix.",
       );
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }).pipe(Effect.provide(Live)),
@@ -233,15 +233,21 @@ Vitest.describe('review dispatch', () => {
   Vitest.it.effect('stamps a pre-created unstamped ledger and is idempotent', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
-      yield* Effect.promise(() => writeProfile(root, 'effect-reviewer'));
+      yield* Effect.promise(() => writeProfile(root, 'mf-profiles-effect-reviewer'));
       // Pre-create the series without a profile (as `mf-reviews create` would).
       yield* Effect.promise(async () => {
-        const dir = join(root, '.agents', '@montflow', 'reviews', 'demo-effect-reviewer');
+        const dir = join(
+          root,
+          '.agents',
+          '@montflow',
+          'reviews',
+          'demo-mf-profiles-effect-reviewer',
+        );
         await mkdir(dir, { recursive: true });
         await writeFile(
-          ledgerPath(root, 'demo-effect-reviewer'),
+          ledgerPath(root, 'demo-mf-profiles-effect-reviewer'),
           [
-            '# Review Series: demo-effect-reviewer',
+            '# Review Series: demo-mf-profiles-effect-reviewer',
             '',
             '## Metadata',
             '- Target: demo',
@@ -265,13 +271,13 @@ Vitest.describe('review dispatch', () => {
       });
       yield* Dispatch.startReview(makePorts([]), {
         root,
-        name: 'demo-effect-reviewer',
-        profile: 'effect-reviewer',
+        name: 'demo-mf-profiles-effect-reviewer',
+        profile: 'mf-profiles-effect-reviewer',
       });
       const ledger = yield* Effect.promise(() =>
-        readFile(ledgerPath(root, 'demo-effect-reviewer'), 'utf8'),
+        readFile(ledgerPath(root, 'demo-mf-profiles-effect-reviewer'), 'utf8'),
       );
-      Vitest.expect(ledger).toContain('- Profile: effect-reviewer');
+      Vitest.expect(ledger).toContain('- Profile: mf-profiles-effect-reviewer');
       Vitest.expect(ledger).toContain('- Target: demo');
       Vitest.expect(ledger).toContain('- Created: 2026-10-01');
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
@@ -281,24 +287,30 @@ Vitest.describe('review dispatch', () => {
   Vitest.it.effect('refuses to rebind a ledger already bound to another profile', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
-      yield* Effect.promise(() => writeProfile(root, 'effect-reviewer'));
-      yield* Effect.promise(() => writeProfile(root, 'generic-reviewer'));
+      yield* Effect.promise(() => writeProfile(root, 'mf-profiles-effect-reviewer'));
+      yield* Effect.promise(() => writeProfile(root, 'mf-profiles-generic-reviewer'));
       yield* Effect.promise(async () => {
-        const dir = join(root, '.agents', '@montflow', 'reviews', 'demo-effect-reviewer');
+        const dir = join(
+          root,
+          '.agents',
+          '@montflow',
+          'reviews',
+          'demo-mf-profiles-effect-reviewer',
+        );
         await mkdir(dir, { recursive: true });
         await writeFile(
-          ledgerPath(root, 'demo-effect-reviewer'),
-          "# Review Series: demo-effect-reviewer\n\n## Metadata\n- Target: demo\n- Status: open\n- Rounds: 0\n- Profile: generic-reviewer\n- Created: 2026-10-01\n\n## Rounds\n\n| Round | Status | Open | In Review | Resolved | Won't Fix | Escalated |\n| ----- | ------ | ---- | --------- | -------- | --------- | --------- |\n\n## Findings\n\n| Round | ID | Severity | Status | Title |\n| ----- | -- | -------- | ------ | ----- |\n",
+          ledgerPath(root, 'demo-mf-profiles-effect-reviewer'),
+          "# Review Series: demo-mf-profiles-effect-reviewer\n\n## Metadata\n- Target: demo\n- Status: open\n- Rounds: 0\n- Profile: mf-profiles-generic-reviewer\n- Created: 2026-10-01\n\n## Rounds\n\n| Round | Status | Open | In Review | Resolved | Won't Fix | Escalated |\n| ----- | ------ | ---- | --------- | -------- | --------- | --------- |\n\n## Findings\n\n| Round | ID | Severity | Status | Title |\n| ----- | -- | -------- | ------ | ----- |\n",
           'utf8',
         );
       });
       const error = yield* Dispatch.startReview(makePorts([]), {
         root,
-        name: 'demo-effect-reviewer',
-        profile: 'effect-reviewer',
+        name: 'demo-mf-profiles-effect-reviewer',
+        profile: 'mf-profiles-effect-reviewer',
       }).pipe(Effect.flip);
       Vitest.expect(error).toBe(
-        "Series 'demo-effect-reviewer' is already bound to profile 'generic-reviewer'; refusing to dispatch profile 'effect-reviewer'.",
+        "Series 'demo-mf-profiles-effect-reviewer' is already bound to profile 'mf-profiles-generic-reviewer'; refusing to dispatch profile 'mf-profiles-effect-reviewer'.",
       );
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }).pipe(Effect.provide(Live)),
@@ -307,46 +319,48 @@ Vitest.describe('review dispatch', () => {
   Vitest.it.effect('dispatches one session per profile with the profile model applied', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
-      yield* Effect.promise(() => writeProfile(root, 'effect-reviewer', 'anthropic/claude-x'));
-      yield* Effect.promise(() => writeProfile(root, 'generic-reviewer', ''));
+      yield* Effect.promise(() =>
+        writeProfile(root, 'mf-profiles-effect-reviewer', 'anthropic/claude-x'),
+      );
+      yield* Effect.promise(() => writeProfile(root, 'mf-profiles-generic-reviewer', ''));
       const dispatched: Array<Dispatched> = [];
       const labels: Array<string> = [];
       const ports = makePorts(dispatched, labels);
 
       const first = yield* Dispatch.startReview(ports, {
         root,
-        name: 'demo-effect-reviewer',
+        name: 'demo-mf-profiles-effect-reviewer',
         spec: 'demo',
-        profile: 'effect-reviewer',
+        profile: 'mf-profiles-effect-reviewer',
         model: 'openai/gpt-z',
         round: '003',
         phase: 'C',
       });
       const second = yield* Dispatch.startReview(ports, {
         root,
-        name: 'demo-generic-reviewer',
+        name: 'demo-mf-profiles-generic-reviewer',
         spec: 'demo',
-        profile: 'generic-reviewer',
+        profile: 'mf-profiles-generic-reviewer',
         model: 'openai/gpt-z',
         round: '003',
         phase: 'C',
       });
 
-      Vitest.expect(first.series).toBe('demo-effect-reviewer');
-      Vitest.expect(second.series).toBe('demo-generic-reviewer');
+      Vitest.expect(first.series).toBe('demo-mf-profiles-effect-reviewer');
+      Vitest.expect(second.series).toBe('demo-mf-profiles-generic-reviewer');
       Vitest.expect(dispatched).toHaveLength(2);
       // A non-blank profile model overrides the request pin; a blank one falls back.
       Vitest.expect(labels).toStrictEqual(['anthropic/claude-x', 'openai/gpt-z']);
       Vitest.expect(dispatched[0]?.prompt).toContain('- Round: 003');
       Vitest.expect(dispatched[0]?.prompt).toContain('- Phase: C');
-      Vitest.expect(dispatched[0]?.prompt).toContain('- Profile: effect-reviewer');
+      Vitest.expect(dispatched[0]?.prompt).toContain('- Profile: mf-profiles-effect-reviewer');
       Vitest.expect(dispatched[0]?.prompt).toContain(
-        "Load the 'mf-adversarial-review' skill before starting.",
+        "Load the 'mf-reviews-adversarial' skill before starting.",
       );
       const firstLedger = yield* Effect.promise(() =>
-        readFile(ledgerPath(root, 'demo-effect-reviewer'), 'utf8'),
+        readFile(ledgerPath(root, 'demo-mf-profiles-effect-reviewer'), 'utf8'),
       );
-      Vitest.expect(firstLedger).toContain('- Profile: effect-reviewer');
+      Vitest.expect(firstLedger).toContain('- Profile: mf-profiles-effect-reviewer');
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }).pipe(Effect.provide(Live)),
   );

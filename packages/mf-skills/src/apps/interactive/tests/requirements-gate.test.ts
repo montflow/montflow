@@ -31,13 +31,13 @@ const skillInput = (id: string, dependencies: ReadonlyArray<string> = []) => ({
   body: `${id} body.`,
 });
 
-const required = ['mf-create-skills'];
+const required = ['mf-skills-create'];
 
 Vitest.describe('Interactive.ensureRequirements', () => {
   Vitest.it.effect('returns installed skills with dependencies first', () =>
     Effect.gen(function* () {
       const authoring = yield* Skill.decodeUnknown(
-        skillInput('mf-create-skills', ['executing-skills']),
+        skillInput('mf-skills-create', ['executing-skills']),
       );
       const executing = yield* Skill.decodeUnknown(skillInput('executing-skills'));
       const ui = scriptedUi({ selects: ['Continue with checked skills'] });
@@ -56,16 +56,16 @@ Vitest.describe('Interactive.ensureRequirements', () => {
       );
       Vitest.expect(injected.map((skill) => skill.id)).toStrictEqual([
         'executing-skills',
-        'mf-create-skills',
+        'mf-skills-create',
       ]);
     }),
   );
 
   Vitest.it.effect('unchecking skips injection', () =>
     Effect.gen(function* () {
-      const authoring = yield* Skill.decodeUnknown(skillInput('mf-create-skills'));
+      const authoring = yield* Skill.decodeUnknown(skillInput('mf-skills-create'));
       const ui = scriptedUi({
-        selects: ['✓ mf-create-skills — installed, will inject', 'Continue with checked skills'],
+        selects: ['✓ mf-skills-create — installed, will inject', 'Continue with checked skills'],
       });
       const store: Interactive.SkillStore = {
         list: () => Effect.succeed([authoring]),
@@ -86,7 +86,7 @@ Vitest.describe('Interactive.ensureRequirements', () => {
 
   Vitest.it.effect('installs missing skills before continuing', () =>
     Effect.gen(function* () {
-      const authoring = yield* Skill.decodeUnknown(skillInput('mf-create-skills'));
+      const authoring = yield* Skill.decodeUnknown(skillInput('mf-skills-create'));
       const installed: Array<Skill.Skill> = [];
       const installedNames: Array<ReadonlyArray<string>> = [];
       const notifies: Array<string> = [];
@@ -111,9 +111,9 @@ Vitest.describe('Interactive.ensureRequirements', () => {
         required,
         'agentic skill creation',
       );
-      Vitest.expect(installedNames).toStrictEqual([['mf-create-skills']]);
-      Vitest.expect(injected.map((skill) => skill.id)).toStrictEqual(['mf-create-skills']);
-      Vitest.expect(notifies).toStrictEqual(['Installed mf-create-skills.']);
+      Vitest.expect(installedNames).toStrictEqual([['mf-skills-create']]);
+      Vitest.expect(injected.map((skill) => skill.id)).toStrictEqual(['mf-skills-create']);
+      Vitest.expect(notifies).toStrictEqual(['Installed mf-skills-create.']);
     }),
   );
 
@@ -121,7 +121,7 @@ Vitest.describe('Interactive.ensureRequirements', () => {
     Effect.gen(function* () {
       const notifies: Array<string> = [];
       const ui = scriptedUi({
-        selects: ['✗ mf-create-skills — not installed', 'Continue with checked skills'],
+        selects: ['✗ mf-skills-create — not installed', 'Continue with checked skills'],
         notifies,
       });
       const store: Interactive.SkillStore = {
@@ -139,7 +139,7 @@ Vitest.describe('Interactive.ensureRequirements', () => {
       );
       Vitest.expect(injected).toStrictEqual([]);
       Vitest.expect(notifies).toStrictEqual([
-        "'mf-create-skills' is not installed — install missing skills first.",
+        "'mf-skills-create' is not installed — install missing skills first.",
       ]);
     }),
   );
@@ -167,7 +167,7 @@ Vitest.describe('Interactive.ensureRequirements', () => {
       Vitest.expect(options).toStrictEqual([
         [
           'Continue with checked skills',
-          '✗ mf-create-skills — not installed',
+          '✗ mf-skills-create — not installed',
           'Install missing skills',
         ],
       ]);

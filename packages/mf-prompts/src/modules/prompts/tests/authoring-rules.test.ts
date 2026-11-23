@@ -18,7 +18,7 @@ const packagedSkill = readFileSync(
     '..',
     '..',
     'skills',
-    'mf-create-prompts',
+    'mf-prompts-create',
     'SKILL.md',
   ),
   'utf8',

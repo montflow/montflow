@@ -33,7 +33,7 @@ const INSTALLED_SKILLS_DIR = resolve(
 );
 
 /** Every skill this package ships. */
-const SKILL_NAMES = ['mf-create-skills', 'mf-modify-skills'] as const;
+const SKILL_NAMES = ['mf-skills-create', 'mf-skills-modify', 'mf-skills-sync'] as const;
 
 const read = (dir: string, name: string, file: string): string =>
   readFileSync(resolve(dir, name, file), 'utf8');

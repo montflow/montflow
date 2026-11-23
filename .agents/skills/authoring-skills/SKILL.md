@@ -181,7 +181,7 @@ For error codes, see [ERRORS.md](ERRORS.md).
 The skill `name` equals the directory and must signal **ownership** before **subject**:
 
 - **Montflow-owned code rules** — prefix `mf-<language>-<subject>`: `mf-typescript-modules`, `mf-typescript-file-structure`, `mf-typescript-services`. The language segment leaves room for other languages later.
-- **Montflow platform tooling** — `mf-<verb>-<noun>` for skills that drive the montflow CLIs: `mf-add-reference`, `mf-create-prompts`.
+- **Montflow platform tooling** — `mf-<verb>-<noun>` for skills that drive the montflow CLIs: `mf-references-add`, `mf-prompts-create`.
 - **Generic / reusable skills** keep their own namespace and take no prefix: `applying-solid`, `grilling`, `writing-jsdoc`, `typescript-prefer-inference`.
 - **Vendored upstream skills** keep the upstream name: `effect` (from `kitlangton/skills@effect`).
 
@@ -197,12 +197,12 @@ The `groups` field in frontmatter categorizes skills for discovery. Each skill s
 | `scaffolding` | Code generation and project/package/module setup | mf-typescript-package-setup, mf-typescript-modules |
 | `refactoring` | Code improvement, restructuring, and cleanup | applying-solid, detecting-duplication, simplifying-code |
 | `documentation` | Doc/rule/schema authoring | writing-jsdoc, authoring-rules |
-| `workflow` | Process-oriented git and reference operations | planning-git-commits, using-git-worktrees, mf-find-reference |
+| `workflow` | Process-oriented git and reference operations | planning-git-commits, using-git-worktrees, mf-references-find |
 | `skills` | Meta-skills about the skill system itself | authoring-skills, finding-skills, executing-skills |
 | `typescript` | TypeScript-specific | mf-typescript-project-structure, mf-typescript-modules |
 | `javascript` | JavaScript-specific | simplifying-code, detecting-duplication |
 | `conventions` | Code style and convention enforcement | leaving-it-cleaner, favoring-composition |
 | `testing` | Testing infrastructure and review | mf-typescript-testing |
-| `git` | Git operations | planning-git-commits, mf-add-reference |
-| `references` | Reference code management | mf-find-reference, mf-add-reference |
+| `git` | Git operations | planning-git-commits, mf-references-add |
+| `references` | Reference code management | mf-references-find, mf-references-add |
 | `effect` | Effect TS ecosystem | effect, mf-typescript-services, mf-typescript-testing, mf-typescript-structs |

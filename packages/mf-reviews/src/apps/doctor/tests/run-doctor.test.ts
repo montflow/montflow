@@ -113,16 +113,16 @@ Vitest.describe('Doctor.doctorGateMessage', () => {
       message: '',
       skills: [
         {
-          name: 'mf-adversarial-review',
+          name: 'mf-reviews-adversarial',
           status: 'stale',
-          source: '/pkg/skills/mf-adversarial-review',
-          target: '/repo/.agents/skills/mf-adversarial-review',
+          source: '/pkg/skills/mf-reviews-adversarial',
+          target: '/repo/.agents/skills/mf-reviews-adversarial',
           detail: 'SKILL.md differs from the packaged version',
         },
       ],
     });
     Vitest.expect(message.split('\n').length).toBe(2);
-    Vitest.expect(message).toContain('mf-adversarial-review');
+    Vitest.expect(message).toContain('mf-reviews-adversarial');
     Vitest.expect(message).toContain('/mf-reviews doctor');
   });
 });

@@ -4,39 +4,51 @@
   "payloads": [
     {
       "kind": "profile",
-      "name": "bookkeeper",
-      "source": "profiles/bookkeeper",
-      "target": ".agents/@montflow/profiles/bookkeeper"
+      "name": "mf-profiles-bookkeeper",
+      "source": "profiles/mf-profiles-bookkeeper",
+      "target": ".agents/@montflow/profiles/mf-profiles-bookkeeper"
     },
     {
       "kind": "profile",
-      "name": "documentation-reviewer",
-      "source": "profiles/documentation-reviewer",
-      "target": ".agents/@montflow/profiles/documentation-reviewer"
+      "name": "mf-profiles-documentation-reviewer",
+      "source": "profiles/mf-profiles-documentation-reviewer",
+      "target": ".agents/@montflow/profiles/mf-profiles-documentation-reviewer"
     },
     {
       "kind": "profile",
-      "name": "effect-reviewer",
-      "source": "profiles/effect-reviewer",
-      "target": ".agents/@montflow/profiles/effect-reviewer"
+      "name": "mf-profiles-effect-reviewer",
+      "source": "profiles/mf-profiles-effect-reviewer",
+      "target": ".agents/@montflow/profiles/mf-profiles-effect-reviewer"
     },
     {
       "kind": "profile",
-      "name": "generic-reviewer",
-      "source": "profiles/generic-reviewer",
-      "target": ".agents/@montflow/profiles/generic-reviewer"
+      "name": "mf-profiles-generic-reviewer",
+      "source": "profiles/mf-profiles-generic-reviewer",
+      "target": ".agents/@montflow/profiles/mf-profiles-generic-reviewer"
     },
     {
       "kind": "profile",
-      "name": "language-quality-reviewer",
-      "source": "profiles/language-quality-reviewer",
-      "target": ".agents/@montflow/profiles/language-quality-reviewer"
+      "name": "mf-profiles-language-quality-reviewer",
+      "source": "profiles/mf-profiles-language-quality-reviewer",
+      "target": ".agents/@montflow/profiles/mf-profiles-language-quality-reviewer"
     },
     {
       "kind": "profile",
-      "name": "pattern-consistency-reviewer",
-      "source": "profiles/pattern-consistency-reviewer",
-      "target": ".agents/@montflow/profiles/pattern-consistency-reviewer"
+      "name": "mf-profiles-pattern-consistency-reviewer",
+      "source": "profiles/mf-profiles-pattern-consistency-reviewer",
+      "target": ".agents/@montflow/profiles/mf-profiles-pattern-consistency-reviewer"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-profiles-create",
+      "source": "skills/mf-profiles-create",
+      "target": ".agents/skills/mf-profiles-create"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-profiles-modify",
+      "source": "skills/mf-profiles-modify",
+      "target": ".agents/skills/mf-profiles-modify"
     }
   ]
 }

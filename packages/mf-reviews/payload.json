@@ -4,15 +4,15 @@
   "payloads": [
     {
       "kind": "skill",
-      "name": "mf-adversarial-review",
-      "source": "skills/mf-adversarial-review",
-      "target": ".agents/skills/mf-adversarial-review"
+      "name": "mf-reviews-adversarial",
+      "source": "skills/mf-reviews-adversarial",
+      "target": ".agents/skills/mf-reviews-adversarial"
     },
     {
       "kind": "skill",
-      "name": "mf-addressing-adversarial-review",
-      "source": "skills/mf-addressing-adversarial-review",
-      "target": ".agents/skills/mf-addressing-adversarial-review"
+      "name": "mf-reviews-address",
+      "source": "skills/mf-reviews-address",
+      "target": ".agents/skills/mf-reviews-address"
     }
   ]
 }

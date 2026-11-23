@@ -78,12 +78,12 @@ Vitest.describe('Engines.verifyAll', () => {
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-verify-' });
       const root = `${dir}/.agents/@montflow/profiles`;
       const skills = `${dir}/.agents/skills`;
-      yield* fs.makeDirectory(`${root}/effect-reviewer`, { recursive: true });
+      yield* fs.makeDirectory(`${root}/mf-profiles-effect-reviewer`, { recursive: true });
       yield* fs.makeDirectory(`${skills}/effect`, { recursive: true });
       yield* fs.makeDirectory(`${skills}/mf-bad`, { recursive: true });
       yield* fs.writeFileString(
-        `${root}/effect-reviewer/PROFILE.md`,
-        `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - mf-bad\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
+        `${root}/mf-profiles-effect-reviewer/PROFILE.md`,
+        `---\nname: mf-profiles-effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - mf-bad\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
       );
       yield* fs.writeFileString(`${skills}/effect/SKILL.md`, '# upstream shape, no frontmatter\n');
       yield* fs.writeFileString(`${skills}/mf-bad/SKILL.md`, '# no frontmatter\n');
@@ -107,12 +107,12 @@ Vitest.describe('Engines.verifyAll', () => {
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-verify-' });
       const root = `${dir}/.agents/@montflow/profiles`;
       const skills = `${dir}/.agents/skills`;
-      yield* fs.makeDirectory(`${root}/effect-reviewer`, { recursive: true });
+      yield* fs.makeDirectory(`${root}/mf-profiles-effect-reviewer`, { recursive: true });
       yield* fs.makeDirectory(`${skills}/effect`, { recursive: true });
       yield* fs.writeFileString(`${skills}/effect/SKILL.md`, '# upstream shape, no frontmatter\n');
       yield* fs.writeFileString(
-        `${root}/effect-reviewer/PROFILE.md`,
-        `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
+        `${root}/mf-profiles-effect-reviewer/PROFILE.md`,
+        `---\nname: mf-profiles-effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
       );
 
       const report = yield* Engines.verifyAll(dir).pipe(Effect.provide(TestLive));
@@ -129,10 +129,10 @@ Vitest.describe('Engines.verifyAll', () => {
       const fs = yield* FileSystem;
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-verify-' });
       const root = `${dir}/.agents/@montflow/profiles`;
-      yield* fs.makeDirectory(`${root}/effect-reviewer`, { recursive: true });
+      yield* fs.makeDirectory(`${root}/mf-profiles-effect-reviewer`, { recursive: true });
       yield* fs.writeFileString(
-        `${root}/effect-reviewer/PROFILE.md`,
-        `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
+        `${root}/mf-profiles-effect-reviewer/PROFILE.md`,
+        `---\nname: mf-profiles-effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
       );
 
       const report = yield* Engines.verifyAll(dir).pipe(Effect.provide(TestLive));
@@ -148,12 +148,12 @@ Vitest.describe('Engines.verifyAll', () => {
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-verify-' });
       const root = `${dir}/.agents/@montflow/profiles`;
       const skills = `${dir}/.agents/skills`;
-      yield* fs.makeDirectory(`${root}/effect-reviewer`, { recursive: true });
+      yield* fs.makeDirectory(`${root}/mf-profiles-effect-reviewer`, { recursive: true });
       yield* fs.makeDirectory(`${skills}/effect`, { recursive: true });
       yield* fs.writeFileString(`${skills}/effect/SKILL.md`, '# upstream shape, no frontmatter\n');
       yield* fs.writeFileString(
-        `${root}/effect-reviewer/PROFILE.md`,
-        `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
+        `${root}/mf-profiles-effect-reviewer/PROFILE.md`,
+        `---\nname: mf-profiles-effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
       );
 
       const lenient = yield* Engines.verifyAll(dir).pipe(Effect.provide(TestLive));
@@ -212,22 +212,24 @@ Vitest.describe('Engines.filterByStatus', () => {
       const dir = yield* fs.makeTempDirectoryScoped({ prefix: 'mf-profiles-list-' });
       const root = `${dir}/.agents/@montflow/profiles`;
       const skills = `${dir}/.agents/skills`;
-      yield* fs.makeDirectory(`${root}/effect-reviewer`, { recursive: true });
+      yield* fs.makeDirectory(`${root}/mf-profiles-effect-reviewer`, { recursive: true });
       yield* fs.makeDirectory(`${skills}/effect`, { recursive: true });
       yield* fs.writeFileString(`${skills}/effect/SKILL.md`, '# upstream shape, no frontmatter\n');
       yield* fs.writeFileString(
-        `${root}/effect-reviewer/PROFILE.md`,
-        `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
+        `${root}/mf-profiles-effect-reviewer/PROFILE.md`,
+        `---\nname: mf-profiles-effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
       );
 
       const profiles = yield* Engines.list(dir).pipe(Effect.provide(TestLive));
       const valid = yield* Engines.filterByStatus(dir, profiles, 'valid').pipe(
         Effect.provide(TestLive),
       );
-      Vitest.expect(valid.map((entry) => entry.profile.name)).toStrictEqual(['effect-reviewer']);
+      Vitest.expect(valid.map((entry) => entry.profile.name)).toStrictEqual([
+        'mf-profiles-effect-reviewer',
+      ]);
       Vitest.expect(valid[0]?.warningCount).toBe(1);
       // The list surface must show the warning, not present the entry as clean.
-      Vitest.expect(Renderers.list(valid)).toContain('effect-reviewer');
+      Vitest.expect(Renderers.list(valid)).toContain('mf-profiles-effect-reviewer');
       Vitest.expect(Renderers.list(valid)).toContain('(1 warning)');
     }).pipe(Effect.provide(NodeLive), Effect.scoped),
   );

@@ -128,7 +128,7 @@ Vitest.describe('Cli.run', () => {
       yield* withTempDir((dir) =>
         Effect.gen(function* () {
           yield* Cli.run(
-            'create code-reviewer --description "Reviews code" --model anthropic/m --skills mf-create-profiles --instructions "Be strict." --checklist "Flag issues; Cite files"',
+            'create code-reviewer --description "Reviews code" --model anthropic/m --skills mf-profiles-create --instructions "Be strict." --checklist "Flag issues; Cite files"',
             ui,
             dir,
           );
@@ -142,7 +142,7 @@ Vitest.describe('Cli.run', () => {
       Vitest.expect(notifies[0]).toBe("Saved profile 'code-reviewer'.");
       Vitest.expect(notifies[1]).toContain('code-reviewer — Reviews code');
       Vitest.expect(notifies[1]).toContain('model: anthropic/m');
-      Vitest.expect(notifies[1]).toContain('skills: mf-create-profiles');
+      Vitest.expect(notifies[1]).toContain('skills: mf-profiles-create');
       Vitest.expect(notifies[2]).toBe("Saved profile 'code-reviewer'.");
       Vitest.expect(notifies[3]).toContain('• code-reviewer — Reviews code fast');
       Vitest.expect(notifies[4]).toBe("Deleted profile 'code-reviewer'.");
@@ -284,12 +284,12 @@ Vitest.describe('Cli list --status', () => {
             const fs = yield* FileSystem;
             const root = join(dir, '.agents', '@montflow', 'profiles');
             const skills = join(dir, '.agents', 'skills');
-            yield* fs.makeDirectory(join(root, 'effect-reviewer'), { recursive: true });
+            yield* fs.makeDirectory(join(root, 'mf-profiles-effect-reviewer'), { recursive: true });
             yield* fs.makeDirectory(join(skills, 'effect'), { recursive: true });
             yield* fs.writeFileString(join(skills, 'effect', 'SKILL.md'), '# effect\n');
             yield* fs.writeFileString(
-              join(root, 'effect-reviewer', 'PROFILE.md'),
-              `---\nname: effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
+              join(root, 'mf-profiles-effect-reviewer', 'PROFILE.md'),
+              `---\nname: mf-profiles-effect-reviewer\ndescription: Reviews Effect code.\nskills:\n  - effect\n  - missing-skill\n---\n\n# Effect Reviewer\n\n## Instructions\n\nReview.\n\n## Review Checklist\n\n- [ ] Done\n`,
             );
           }).pipe(
             Effect.mapError((error) => String(error)),
@@ -298,7 +298,7 @@ Vitest.describe('Cli list --status', () => {
 
           const shown: Array<string> = [];
           yield* Cli.run('list --status valid', scriptedUi(shown), dir);
-          Vitest.expect(shown.join('\n')).toContain('effect-reviewer');
+          Vitest.expect(shown.join('\n')).toContain('mf-profiles-effect-reviewer');
           Vitest.expect(shown.join('\n')).toContain('(1 warning)');
         }),
       ),

@@ -15,6 +15,10 @@ Releases: this package is versioned and tagged by changesets but never published
 
 ## Unreleased
 
+### Changed
+
+- Skills renamed after the CLI: `mf-adversarial-review` → `mf-reviews-adversarial`, `mf-addressing-adversarial-review` → `mf-reviews-address`
+
 ### Added
 
 - `mf-reviews doctor` reads `payload.json` and checks or repairs the review skills; `doctor --check` is report-only and `mf-reviews:check` ends with it

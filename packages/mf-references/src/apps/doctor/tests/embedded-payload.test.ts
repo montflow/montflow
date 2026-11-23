@@ -108,7 +108,7 @@ Vitest.describe('packaged skill contract', () => {
   });
 
   Vitest.it('the add skill documents that a registered reference routes to update', () => {
-    const skill = readFromDisk('mf-add-reference')['SKILL.md'] ?? '';
+    const skill = readFromDisk('mf-references-add')['SKILL.md'] ?? '';
     Vitest.expect(skill).toContain('routed add -> update');
     Vitest.expect(skill).toContain('notice, not a completed add');
     Vitest.expect(skill).toContain('exit 0');

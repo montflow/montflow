@@ -4,15 +4,15 @@
   "payloads": [
     {
       "kind": "skill",
-      "name": "mf-create-prompts",
-      "source": "skills/mf-create-prompts",
-      "target": ".agents/skills/mf-create-prompts"
+      "name": "mf-prompts-create",
+      "source": "skills/mf-prompts-create",
+      "target": ".agents/skills/mf-prompts-create"
     },
     {
       "kind": "skill",
-      "name": "mf-execute-prompts",
-      "source": "skills/mf-execute-prompts",
-      "target": ".agents/skills/mf-execute-prompts"
+      "name": "mf-prompts-execute",
+      "source": "skills/mf-prompts-execute",
+      "target": ".agents/skills/mf-prompts-execute"
     }
   ]
 }

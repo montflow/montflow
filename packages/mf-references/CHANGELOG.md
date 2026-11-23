@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Skills renamed after the CLI: `mf-add-reference` → `mf-references-add`, `mf-find-reference` → `mf-references-find`
+
 ### Added
 
 - `add` adopts an existing clone at `.agents/references/<slug>` whose `origin` is the same URL, pinning it at its HEAD (or `--ref`) instead of refusing, so a workspace can register the checkout it was bootstrapped from

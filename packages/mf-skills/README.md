@@ -45,7 +45,7 @@ mf-skills sync --source <checkout> --target <workspace-root> [--check] [--verbos
 - `--from` and `--dir` remain aliases for `--source` and `--target`; when both
   a canonical flag and its alias are given, the canonical one wins.
 - Public means the `SKILL.md` frontmatter does not carry
-  `metadata.internal: true`. Internal skills (e.g. `syncing-skills`) are
+  `metadata.internal: true`. Internal skills (e.g. `mf-skills-sync`) are
   skipped, reported, and never copied.
 - Each skill directory is copied whole — `SKILL.md`, plus `CHANGELOG.md`,
   `GATES.md`, and any other file when present — and unrelated skills at the
@@ -60,8 +60,8 @@ mf-skills sync --source <checkout> --target <workspace-root> [--check] [--verbos
 `doctor` installs two skills into the repo's `.agents/skills/` so an agent can
 author skills without shelling out:
 
-- `mf-create-skills`
-- `mf-modify-skills`
+- `mf-skills-create`
+- `mf-skills-modify`
 
 Agentic sessions inject these (`Skill.GENERATION_REQUIREMENTS` /
 `MODIFICATION_REQUIREMENTS`). The package ships them under `skills/` and embeds

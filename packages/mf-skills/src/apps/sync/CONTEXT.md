@@ -45,6 +45,10 @@ this engine; neither front end owns a domain rule.
   source survive; sync only adds and overwrites.
 - **`check` mode writes nothing.** It computes the same outcomes and reports
   `drifted`; the front end turns that into exit code `1`.
+- **CLI-owned skills are never synced.** A skill named as a `skill` entry in any
+  `<checkout>/packages/*/payload.json` ships through that CLI's `doctor`; sync
+  reports it `skipped` with reason `cli-owned`, so a workspace gets it only by
+  installing that CLI.
 - **Public means no `metadata.internal: true`.** The nested mapping is parsed
   directly because `Skill.parseSkillFile` flattens indented keys, so a
   top-level `internal` is not the same flag.

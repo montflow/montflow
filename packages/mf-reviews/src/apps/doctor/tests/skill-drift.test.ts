@@ -21,7 +21,7 @@ const SKILLS_DIR = resolve(
   'skills',
 );
 
-const SKILL = readFileSync(resolve(SKILLS_DIR, 'mf-adversarial-review', 'SKILL.md'), 'utf8');
+const SKILL = readFileSync(resolve(SKILLS_DIR, 'mf-reviews-adversarial', 'SKILL.md'), 'utf8');
 
 Vitest.describe('adversarial-review skill against the round grammar', () => {
   Vitest.it.each(ROUND_META_FIELDS)(

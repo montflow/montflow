@@ -29,7 +29,7 @@ Effect `Schema.Class` identifier.
   `MODIFICATION_REQUIREMENTS`, `TRANSFORM_REQUIREMENTS`, `checkRequirements`,
   `missingRequirements`, `findInstalled`, `resolveInjection`,
   `formatInjectedSkills`) — pure, adapter-agnostic. They name the shipped
-  skills: `mf-create-skills` / `mf-modify-skills`.
+  skills: `mf-skills-create` / `mf-skills-modify`.
 
 ## Does not belong here
 

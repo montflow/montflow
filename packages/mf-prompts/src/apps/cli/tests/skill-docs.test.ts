@@ -38,14 +38,14 @@ const INSTALLED_SKILLS_DIR = resolve(
 );
 
 /** Every skill this package ships. */
-const SKILL_NAMES = ['mf-create-prompts', 'mf-execute-prompts'] as const;
+const SKILL_NAMES = ['mf-prompts-create', 'mf-prompts-execute'] as const;
 
 /** Read one file out of a skill directory. */
 const read = (dir: string, name: string, file: string): string =>
   readFileSync(resolve(dir, name, file), 'utf8');
 
 /** The packaged execute skill — the one carrying a verified output sample. */
-const executeSkill = (): string => read(PACKAGE_SKILLS_DIR, 'mf-execute-prompts', 'SKILL.md');
+const executeSkill = (): string => read(PACKAGE_SKILLS_DIR, 'mf-prompts-execute', 'SKILL.md');
 
 /**
  * The fenced block following a `<!-- verified-output:<name> -->` marker.
@@ -109,7 +109,7 @@ Vitest.describe('packaged skills', () => {
   });
 });
 
-Vitest.describe('mf-execute-prompts documented output', () => {
+Vitest.describe('mf-prompts-execute documented output', () => {
   Vitest.it('shows the exact bytes inspect produces for the sample prompt', () => {
     const documented = documentedBlock('inspect');
     Vitest.expect(documented).toBeDefined();
@@ -119,7 +119,7 @@ Vitest.describe('mf-execute-prompts documented output', () => {
   });
 });
 
-Vitest.describe('mf-execute-prompts claims', () => {
+Vitest.describe('mf-prompts-execute claims', () => {
   Vitest.it('only names subcommands the named surface actually implements', () => {
     // The skill names the CLI two ways — `mf-prompts x` for the binary and
     // `/mf-prompts x` for the slash form — and a third surface, the menu,
@@ -195,8 +195,8 @@ Vitest.describe('mf-execute-prompts claims', () => {
   });
 });
 
-Vitest.describe('mf-create-prompts claims', () => {
-  const createSkill = (): string => read(PACKAGE_SKILLS_DIR, 'mf-create-prompts', 'SKILL.md');
+Vitest.describe('mf-prompts-create claims', () => {
+  const createSkill = (): string => read(PACKAGE_SKILLS_DIR, 'mf-prompts-create', 'SKILL.md');
 
   Vitest.it('works its own example: the prompt it teaches verifies clean', () => {
     const raw = JSON.stringify({

@@ -48,8 +48,8 @@ const envFor = (
 Vitest.describe('Interactive.run menu status', () => {
   Vitest.it.effect('annotates installed dependencies without an install entry', () =>
     Effect.gen(function* () {
-      const authoring = yield* Skill.decodeUnknown(skillInput('mf-create-skills'));
-      const modifying = yield* Skill.decodeUnknown(skillInput('mf-modify-skills'));
+      const authoring = yield* Skill.decodeUnknown(skillInput('mf-skills-create'));
+      const modifying = yield* Skill.decodeUnknown(skillInput('mf-skills-modify'));
       const titles: Array<string> = [];
       const options: Array<ReadonlyArray<string>> = [];
       const ui = scriptedUi({ selects: ['Exit'], titles, options });
@@ -73,8 +73,8 @@ Vitest.describe('Interactive.run menu status', () => {
 
   Vitest.it.effect('offers install when missing, then reopens annotated clean', () =>
     Effect.gen(function* () {
-      const authoring = yield* Skill.decodeUnknown(skillInput('mf-create-skills'));
-      const modifying = yield* Skill.decodeUnknown(skillInput('mf-modify-skills'));
+      const authoring = yield* Skill.decodeUnknown(skillInput('mf-skills-create'));
+      const modifying = yield* Skill.decodeUnknown(skillInput('mf-skills-modify'));
       const installed: Array<Skill.Skill> = [authoring];
       const installedNames: Array<ReadonlyArray<string>> = [];
       const titles: Array<string> = [];
@@ -107,7 +107,7 @@ Vitest.describe('Interactive.run menu status', () => {
         () => Effect.fail('unused'),
         () => Effect.fail('unused'),
       );
-      Vitest.expect(installedNames).toStrictEqual([['mf-modify-skills']]);
+      Vitest.expect(installedNames).toStrictEqual([['mf-skills-modify']]);
       Vitest.expect(titles[0]).toBe('Skills');
       Vitest.expect(options[0]).toStrictEqual([
         'Browse skills',
@@ -122,7 +122,7 @@ Vitest.describe('Interactive.run menu status', () => {
 
   Vitest.it.effect('renders the TUI menu with the info panel when injected', () =>
     Effect.gen(function* () {
-      const authoring = yield* Skill.decodeUnknown(skillInput('mf-create-skills'));
+      const authoring = yield* Skill.decodeUnknown(skillInput('mf-skills-create'));
       const seen: Array<{
         readonly title: string;
         readonly info: ReadonlyArray<string>;
@@ -158,8 +158,8 @@ Vitest.describe('Interactive.run menu status', () => {
 
   Vitest.it.effect('renders a generic installed line in the info panel', () =>
     Effect.gen(function* () {
-      const authoring = yield* Skill.decodeUnknown(skillInput('mf-create-skills'));
-      const modifying = yield* Skill.decodeUnknown(skillInput('mf-modify-skills'));
+      const authoring = yield* Skill.decodeUnknown(skillInput('mf-skills-create'));
+      const modifying = yield* Skill.decodeUnknown(skillInput('mf-skills-modify'));
       const seen: Array<{
         readonly title: string;
         readonly info: ReadonlyArray<string>;

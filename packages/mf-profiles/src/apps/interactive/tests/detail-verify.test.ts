@@ -245,11 +245,13 @@ Vitest.describe('Interactive.detail verify panel', () => {
   Vitest.it('renders a warning-only re-verify result as a warning, not clean', () => {
     const notifies: Array<string> = [];
     const ui = scriptedUi({ notifies });
-    Interactive.notifyVerifyResult(ui, 'effect-reviewer', {
+    Interactive.notifyVerifyResult(ui, 'mf-profiles-effect-reviewer', {
       valid: true,
       issues: [{ field: 'skills', message: 'Missing skill.', severity: 'warning' }],
     }).pipe(Effect.runSync);
-    Vitest.expect(notifies[0]).toBe("✓ 'effect-reviewer' matches the standard format — 1 warning.");
+    Vitest.expect(notifies[0]).toBe(
+      "✓ 'mf-profiles-effect-reviewer' matches the standard format — 1 warning.",
+    );
   });
 
   Vitest.it.effect('names a broken skill reference in the detail panel instead of silence', () =>

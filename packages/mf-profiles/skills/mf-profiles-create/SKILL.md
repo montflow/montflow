@@ -1,0 +1,107 @@
+---
+name: mf-profiles-create
+description: Guides the creation, formatting, and refinement of agent profiles (PROFILE.md). Use when the user wants to write a new profile, convert a role description into a profile, or audit an existing profile.
+id: 34d1cf4fc4c93cc8
+author: Daniel Montilla
+version: 1.3.1
+license: MIT
+groups:
+  - profiles
+dependencies:
+  - executing-skills
+---
+
+# When To Use
+
+Use when the user asks to create a new agent profile, convert a role description into a profile, or audit/improve an existing profile. A profile is a named agent definition: one line saying what the agent is, plus the system-prompt instructions and review checklist it runs with.
+
+# Profile Format
+
+A profile is one directory, `.agents/@montflow/profiles/<name>/`, holding a single `PROFILE.md`:
+
+```markdown
+---
+name: <kebab-case-name>
+description: <one line: the agent's role and what it does>
+model: <provider/model-id, or blank when unset>
+skills:
+  - <skill-name>
+---
+
+# <Profile Name>
+
+## Instructions
+
+<Custom system-prompt instructions. How the agent should behave, what to focus on, what to avoid.>
+
+## Review Checklist
+
+- [ ] <What the reviewer must verify before the work is done>
+```
+
+Field rules:
+
+- `name`: kebab-case slug, matches the directory name. Must equal the file's directory.
+- `description`: one line saying WHAT the agent is — its role and job. It drives profile selection, so lead with the role.
+- `model`: preferred model as `provider/model-id`, or blank when unset. Never invent a model id.
+- `skills`: names from `SKILL.md` frontmatter `name:` fields. Discover them with `mf-skills list` — it prints every skill name with its description — and read a full contract with `mf-skills show <skill>`. Reference existing skills only, otherwise leave skills empty or omit the key. Profiles never activate skills themselves; consumers load them. Where the binary is not on `PATH`: `bun run --cwd packages/mf-skills cli list --dir "$PWD"`.
+- `## Instructions`: the custom system prompt. Concrete behavior, focus areas, and avoidances. Short sections and bullets over prose.
+- `## Review Checklist`: at least one verifiable `- [ ]` item the work must satisfy before it is done.
+
+# Pipeline
+
+## 1. Gather Requirements
+
+Check what the user already provided. Only ask for what's missing:
+
+- [ ] **Profile name**: kebab-case, fits the role (e.g. `code-reviewer`, `security-auditor`)
+- [ ] **Role**: what the agent is and what it does (one line — becomes the description)
+- [ ] **Instructions**: how it should behave, what to focus on, what to avoid
+- [ ] **Checklist**: what must be verified before the work is done
+- [ ] **Model**: preferred `provider/model-id`, if any (blank otherwise)
+- [ ] **Skills**: which workspace skills it must load, if any
+
+If anything is still unclear, **ask the user** before proceeding.
+
+## 2. Scaffold
+
+Create `.agents/@montflow/profiles/<name>/PROFILE.md` with the format above. If a profile with that name already exists, pick a fresh name instead. Do not touch anything outside `.agents/@montflow/profiles/`.
+
+## 3. Verify
+
+Run the mechanical check first — it validates the file shape and reports the
+skills declared in `skills:`:
+
+```
+mf-profiles verify <name>
+```
+
+Where the binary is not on `PATH`:
+
+```
+bun run --cwd packages/mf-profiles cli verify <name> --dir "$PWD"
+```
+
+It covers the frontmatter, the name/directory match, and the one-line
+description. A declared skill that is not installed is a **warning**, not an
+error: the check prints `1 warning` and still exits 0 (`mf-profiles verify` and
+`mf-prompts verify` behave the same). Treat every warning as a fix item before
+the gate passes — a check mark alone does not validate a declared skill. Judge
+what the verifier cannot:
+
+- [ ] `## Instructions` is non-empty and actionable
+- [ ] `## Review Checklist` has at least one item
+- [ ] Nothing outside the profile directory was modified
+
+# Reference
+
+- **Store**: `.agents/@montflow/profiles/<name>/PROFILE.md` — the frontmatter and sections above are the whole contract; author the file directly.
+- **Modifying an existing profile**: skill [mf-profiles-modify](../mf-profiles-modify/SKILL.md)
+- **Format source**: `packages/mf-profiles/src/modules/profile/` (internal module name) (`parseProfileFile`, `verifyProfileFile`)
+
+# What a Profile Never Does
+
+1. Never activates itself — a consumer loads it.
+2. Never runs code — `PROFILE.md` is data (frontmatter plus markdown), no tools or commands.
+3. Never switches models itself — `model` is a preference the consumer reads.
+4. Never resolves its own skill dependencies — consumers load those.

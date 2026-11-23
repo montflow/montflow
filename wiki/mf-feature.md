@@ -46,7 +46,7 @@ flowchart LR
     play -.-> princ
 ```
 
-- The mode package ships the `mf-feature` and `mf-feature-*` skills and both profiles; `mf-feature doctor` installs them. `mf-skills sync` copies montflow's other public skills.
+- The mode package ships the `mf-feature` and `mf-feature-*` skills and both profiles; `mf-feature doctor` installs them. `mf-skills sync` copies only standalone skills: it skips every skill a package lists in its `payload.json`.
 - Each package's `doctor` installs what its `payload.json` lists, nested folders such as a skill's `references/` and `scripts/` included. `doctor --check` reports drift and writes nothing.
 - `mf-playbooks verify` fails when a playbook names a skill, principle or playbook that is not installed. Sync the skills before you verify the playbooks.
 - In a repository that uses montflow, the `mf-*` names are not on `PATH`. Run them as `bun run --cwd <checkout>/packages/<pkg> cli <verb> --dir "$PWD"`. An agent can also read the store file directly.
@@ -300,7 +300,7 @@ What the script does:
 - **Splits pstack three ways.** `principle-*` skills become principles. `poteto-mode/playbooks/*.md` become playbooks. Every other skill becomes `mf-feature-<name>`; `poteto-mode` becomes `mf-feature` and `poteto-help` becomes `mf-feature-help`. `setup-pstack` and `make-bot-ui` are skipped.
 - **Renames in prose.** Skill names, slash commands and `pstack` become their `mf-` forms. Links to imported files point at their installed path; links to other pstack files point at the pinned commit on GitHub.
 - **Writes frontmatter.** Skills get a stable `id` hashed from the name, `author: Lauren Tan`, the pstack version and `license: MIT`. Playbooks get a description from the pstack README table and the `skills`, `principles` and `playbooks` they mention.
-- **Neutralizes harness terms.** Rules rewrite Cursor-specific wording into concepts: `.cursor/skills/` becomes `.agents/skills/`, the todolist tool becomes the todo list, `/loop` becomes your harness's loop, the role lines of `pstack-models.mdc` and configured model slugs become `mf-feature roles resolve <role>`, and Cursor's `create-skill` becomes `mf-create-skills`.
+- **Neutralizes harness terms.** Rules rewrite Cursor-specific wording into concepts: `.cursor/skills/` becomes `.agents/skills/`, the todolist tool becomes the todo list, `/loop` becomes your harness's loop, the role lines of `pstack-models.mdc` and configured model slugs become `mf-feature roles resolve <role>`, and Cursor's `create-skill` becomes `mf-skills-create`.
 - **Applies hand edits.** Exact find-and-replace edits and whole-line rewrites (for the `mf-feature` Subagents section and the setup text of `mf-feature-help`) on top of the rename. Each must match exactly once, so an upstream rewording fails the import.
 - **Turns agents into profiles.** `poteto-agent` becomes `mf-feature-generic-worker` and `comment-sicko` becomes `mf-feature-comment-sicko`, written to `packages/mf-feature/profiles/`.
 - **Ships everything through the mode package.** Skills go to `packages/mf-feature/skills/`, and the import writes `packages/mf-feature/payload.json` listing every skill and profile. Upstream test suites (`scripts/test/`) are left out.

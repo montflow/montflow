@@ -648,7 +648,7 @@ Vitest.describe('CLI engines security and failure paths', () => {
       Vitest.expect(clean.issueCount).toBe(0);
 
       const skillsDir = yield* Effect.promise(freshRoot);
-      for (const name of ['mf-add-reference', 'mf-find-reference']) {
+      for (const name of ['mf-references-add', 'mf-references-find']) {
         yield* Effect.promise(() => mkdir(join(skillsDir, name), { recursive: true }));
         yield* Effect.promise(() =>
           writeFile(join(skillsDir, name, 'SKILL.md'), '---\nname: broken\n---\n'),

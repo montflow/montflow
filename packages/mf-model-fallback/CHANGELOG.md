@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- The setup prompt is `mf-model-fallback-setup` (`.agents/@montflow/prompts/mf-model-fallback-setup.json`), formerly `model-fallback`
+
 ### Added
 
 - `payload.json` declaring the `model-fallback` prompt as a `prompt` payload installed into `.agents/@montflow/prompts/model-fallback.json`

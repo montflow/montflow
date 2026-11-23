@@ -7,11 +7,11 @@ by resuming after the failure — and records a visible note in the model histor
 
 Three faces, one store:
 
-| Face                    | Use it for                                                             |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `mf-model-fallback` CLI | Agents and scripts: status, show, set, migrate, verify, remove, doctor |
-| `model-fallback` prompt | Agentic setup: the agent presents live model choices and asks          |
-| `/mf-fallback`          | In-session dialogs: show, pick a chain, or remove it                   |
+| Face                             | Use it for                                                             |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| `mf-model-fallback` CLI          | Agents and scripts: status, show, set, migrate, verify, remove, doctor |
+| `mf-model-fallback-setup` prompt | Agentic setup: the agent presents live model choices and asks          |
+| `/mf-fallback`                   | In-session dialogs: show, pick a chain, or remove it                   |
 
 ## Configuration
 
@@ -102,7 +102,7 @@ lead the ranking, followed by the cheapest tools-capable model per provider.
 ## Agentic setup
 
 `mf-model-fallback doctor` installs the packaged prompt into
-`.agents/@montflow/prompts/model-fallback.json`. Run that prompt and the agent
+`.agents/@montflow/prompts/mf-model-fallback-setup.json`. Run that prompt and the agent
 checks `status`, lists the live choices, asks which models you want and in what
 order, writes the store, verifies it, and reports the result.
 

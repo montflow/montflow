@@ -14,6 +14,11 @@ Releases: this package is versioned and tagged by changesets but never published
 
 ## Unreleased
 
+### Changed
+
+- Profiles renamed after the CLI: `bookkeeper` → `mf-profiles-bookkeeper`, and likewise for the five reviewers
+- Ships `mf-profiles-create` and `mf-profiles-modify` (formerly the root `mf-create-profiles` and `mf-modify-profiles`) through `doctor`
+
 ### Added
 
 - `mf-feature-generic-worker` and `mf-feature-comment-sicko` moved to `@montflow/feature`, which ships and installs them

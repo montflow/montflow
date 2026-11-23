@@ -248,9 +248,9 @@ const NEUTRAL: ReadonlyArray<readonly [RegExp, string | ((...groups: Array<strin
   [/the `AskQuestion` tool \(structured multi-choice\)/g, "your harness's structured question tool (multi-choice)"],
   [/`AskQuestion`/g, "your harness's question tool"],
   // Authoring skills: montflow's own skill tooling replaces Cursor's built-in.
-  [/the \*\*create-skill\*\* skill \(Cursor's built-in for authoring SKILL\.md files\)/g, 'the **mf-create-skills** skill'],
-  [/Cursor's built-in `create-skill` skill/g, 'the **mf-create-skills** skill'],
-  [/Cursor's built-in `create-skill`/g, 'the **mf-create-skills** skill'],
+  [/the \*\*create-skill\*\* skill \(Cursor's built-in for authoring SKILL\.md files\)/g, 'the **mf-skills-create** skill'],
+  [/Cursor's built-in `create-skill` skill/g, 'the **mf-skills-create** skill'],
+  [/Cursor's built-in `create-skill`/g, 'the **mf-skills-create** skill'],
   [/, not Cursor's built-in babysit skill/g, ''],
   // Subagents.
   [/Spawn one Task subagent with `subagent_type: generalPurpose` and `readonly: true`/g, 'Spawn one read-only, general-purpose subagent'],
@@ -730,7 +730,7 @@ const LINE_EDITS: ReadonlyArray<{ readonly file: string; readonly line: string; 
     file: '.agents/skills/mf-feature-help/SKILL.md',
     line: '- a loop and `/create-skill` are Cursor built-ins.',
     replace:
-      "- Loops and wake-ups come from your harness (the harnesses reference lists them). Skill authoring is the **mf-create-skills** skill.",
+      "- Loops and wake-ups come from your harness (the harnesses reference lists them). Skill authoring is the **mf-skills-create** skill.",
   },
   {
     file: '.agents/skills/mf-feature-help/SKILL.md',

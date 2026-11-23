@@ -82,6 +82,13 @@ aliases for frozen records.
   repairs every payload package. A manifest-owned file edited locally is
   `stale` and repair overwrites it; an unlisted file in the same store is user
   data and is never deleted.
+- Source of truth is `packages/mf-<cli>/`. The installed copies under
+  `.agents/` are git-ignored (generated block in `.gitignore`: `bun run
+  mf:ignore`, checked by `mf-ignore:check`) and filled by `postinstall`
+  (`mf:doctor`). Edit the package source, never the copy.
+- Name every CLI-owned artifact after its CLI: `mf-<cli>-<name>`
+  (`mf-skills-create`, `mf-profiles-bookkeeper`). Standalone skills in
+  `.agents/skills/` must work without any CLI.
 
 ## Verification gate
 

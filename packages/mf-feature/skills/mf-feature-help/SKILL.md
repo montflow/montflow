@@ -115,7 +115,7 @@ Close calls:
 Not in mfstack:
 
 - `/deslop`, `control-cli`, and `control-ui` belong to other Cursor plugins; montflow does not ship them.
-- Loops and wake-ups come from your harness (the harnesses reference lists them). Skill authoring is the **mf-create-skills** skill.
+- Loops and wake-ups come from your harness (the harnesses reference lists them). Skill authoring is the **mf-skills-create** skill.
 - mfstack has no `/orchestrate` skill. If the slash menu shows `/orchestrate`, another plugin provides it.
 
 ## Playbooks and principles

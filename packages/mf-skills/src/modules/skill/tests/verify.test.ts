@@ -49,7 +49,7 @@ Vitest.describe('Skill.verifySkillFile', () => {
   Vitest.it('classifies ownership from the name', () => {
     Vitest.expect(Skill.kindOf('mf-typescript-services')).toBe('montflow');
     Vitest.expect(Skill.kindOf('effect')).toBe('normal');
-    Vitest.expect(Skill.isMontflow('mf-create-profiles')).toBe(true);
+    Vitest.expect(Skill.isMontflow('mf-profiles-create')).toBe(true);
     Vitest.expect(Skill.isMontflow('simplifying-code')).toBe(false);
   });
 

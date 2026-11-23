@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- `sync` skips CLI-owned skills (any `skill` in a `packages/*/payload.json`), reported `skipped` with reason `cli-owned`: those install only through their CLI's `doctor`
+- Skills renamed after the CLI: `mf-create-skills` → `mf-skills-create`, `mf-modify-skills` → `mf-skills-modify`; `syncing-skills` moved into the package as `mf-skills-sync`
+
 ## 0.0.2
 
 ### Patch Changes

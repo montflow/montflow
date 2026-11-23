@@ -109,14 +109,14 @@ Vitest.describe('review CLI engines', () => {
       yield* Engines.scaffold({
         cwd: root,
         name: 'demo-effect-reviewer',
-        profile: 'effect-reviewer',
+        profile: 'mf-profiles-effect-reviewer',
       });
       const ledger = yield* Engines.show({ cwd: root }, 'demo-effect-reviewer');
-      Vitest.expect(ledger).toContain('- Profile: effect-reviewer');
+      Vitest.expect(ledger).toContain('- Profile: mf-profiles-effect-reviewer');
       // A later scaffold without the flag must not clear the stamp.
       yield* Engines.scaffold({ cwd: root, name: 'demo-effect-reviewer' });
       const after = yield* Engines.show({ cwd: root }, 'demo-effect-reviewer');
-      Vitest.expect(after).toContain('- Profile: effect-reviewer');
+      Vitest.expect(after).toContain('- Profile: mf-profiles-effect-reviewer');
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }).pipe(Effect.provide(Live)),
   );
@@ -127,16 +127,16 @@ Vitest.describe('review CLI engines', () => {
       yield* Engines.scaffold({
         cwd: root,
         name: 'demo-effect-reviewer',
-        profile: 'effect-reviewer',
+        profile: 'mf-profiles-effect-reviewer',
       });
       const failure = yield* Engines.scaffold({
         cwd: root,
         name: 'demo-effect-reviewer',
-        profile: 'generic-reviewer',
+        profile: 'mf-profiles-generic-reviewer',
       }).pipe(Effect.flip);
-      Vitest.expect(failure).toContain("already bound to profile 'effect-reviewer'");
+      Vitest.expect(failure).toContain("already bound to profile 'mf-profiles-effect-reviewer'");
       const ledger = yield* Engines.show({ cwd: root }, 'demo-effect-reviewer');
-      Vitest.expect(ledger).toContain('- Profile: effect-reviewer');
+      Vitest.expect(ledger).toContain('- Profile: mf-profiles-effect-reviewer');
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }).pipe(Effect.provide(Live)),
   );
@@ -172,7 +172,7 @@ Vitest.describe('review CLI engines', () => {
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
       yield* Engines.scaffold({ cwd: root, name: 'demo' });
-      yield* Effect.promise(() => declareProfile(root, 'demo', 'effect-reviewer'));
+      yield* Effect.promise(() => declareProfile(root, 'demo', 'mf-profiles-effect-reviewer'));
       const report = yield* Engines.verifyAll({ cwd: root });
       Vitest.expect(report.issueCount).toBe(1);
       Vitest.expect(report.entries[0]?.result.issues[0]?.field).toBe('profile');
@@ -184,7 +184,7 @@ Vitest.describe('review CLI engines', () => {
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
       yield* Engines.scaffold({ cwd: root, name: 'demo' });
-      yield* Effect.promise(() => declareProfile(root, 'demo', 'effect-reviewer'));
+      yield* Effect.promise(() => declareProfile(root, 'demo', 'mf-profiles-effect-reviewer'));
       const report = yield* Engines.verifyAll({ cwd: root });
       Vitest.expect(report.issueCount).toBe(0);
       Vitest.expect(report.warnings).toHaveLength(1);

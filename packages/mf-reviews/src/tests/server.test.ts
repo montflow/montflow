@@ -132,7 +132,7 @@ const writeProfile = async (root: string, name: string, model: string): Promise<
       `description: ${name} reviewer`,
       `model: ${model}`,
       'skills:',
-      '  - mf-adversarial-review',
+      '  - mf-reviews-adversarial',
       '---',
       '',
       `# ${name}`,
@@ -190,25 +190,29 @@ Vitest.describe('reviews server plugin', () => {
   Vitest.it.effect('forwards profile, round, phase, and the profile model into dispatch', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);
-      yield* Effect.promise(() => writeProfile(root, 'effect-reviewer', 'anthropic/claude-x'));
+      yield* Effect.promise(() =>
+        writeProfile(root, 'mf-profiles-effect-reviewer', 'anthropic/claude-x'),
+      );
       const { host, tool } = yield* register(root);
       const result = yield* invoke(tool, {
-        name: 'demo-effect-reviewer',
+        name: 'demo-mf-profiles-effect-reviewer',
         spec: 'demo',
-        profile: 'effect-reviewer',
+        profile: 'mf-profiles-effect-reviewer',
         round: '003',
         phase: 'C',
         model: 'openai/gpt-z',
       });
-      Vitest.expect(result.content).toBe("Started review 'demo-effect-reviewer' in session ses_1.");
+      Vitest.expect(result.content).toBe(
+        "Started review 'demo-mf-profiles-effect-reviewer' in session ses_1.",
+      );
       Vitest.expect(host.dispatched).toHaveLength(1);
       const session = host.dispatched[0];
-      Vitest.expect(session?.title).toBe('Review: demo-effect-reviewer');
-      Vitest.expect(session?.prompt).toContain('- Profile: effect-reviewer');
+      Vitest.expect(session?.title).toBe('Review: demo-mf-profiles-effect-reviewer');
+      Vitest.expect(session?.prompt).toContain('- Profile: mf-profiles-effect-reviewer');
       Vitest.expect(session?.prompt).toContain('- Round: 003');
       Vitest.expect(session?.prompt).toContain('- Phase: C');
       Vitest.expect(session?.prompt).toContain(
-        "Load the 'mf-adversarial-review' skill before starting.",
+        "Load the 'mf-reviews-adversarial' skill before starting.",
       );
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }),
@@ -219,10 +223,10 @@ Vitest.describe('reviews server plugin', () => {
       const root = yield* Effect.promise(freshRoot);
       const { host, tool } = yield* register(root);
       const error = yield* invoke(tool, {
-        name: 'demo-effect-reviewer',
-        profile: 'effect-reviewer',
+        name: 'demo-mf-profiles-effect-reviewer',
+        profile: 'mf-profiles-effect-reviewer',
       }).pipe(Effect.flip);
-      Vitest.expect(error.message).toContain("profile 'effect-reviewer' was not found");
+      Vitest.expect(error.message).toContain("profile 'mf-profiles-effect-reviewer' was not found");
       Vitest.expect(host.dispatched).toStrictEqual([]);
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }),

@@ -23,6 +23,7 @@
   "files": [
     "payload.json",
     "profiles",
+    "skills",
     "src",
     "dist"
   ],

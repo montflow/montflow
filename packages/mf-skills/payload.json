@@ -4,15 +4,21 @@
   "payloads": [
     {
       "kind": "skill",
-      "name": "mf-create-skills",
-      "source": "skills/mf-create-skills",
-      "target": ".agents/skills/mf-create-skills"
+      "name": "mf-skills-create",
+      "source": "skills/mf-skills-create",
+      "target": ".agents/skills/mf-skills-create"
     },
     {
       "kind": "skill",
-      "name": "mf-modify-skills",
-      "source": "skills/mf-modify-skills",
-      "target": ".agents/skills/mf-modify-skills"
+      "name": "mf-skills-modify",
+      "source": "skills/mf-skills-modify",
+      "target": ".agents/skills/mf-skills-modify"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-skills-sync",
+      "source": "skills/mf-skills-sync",
+      "target": ".agents/skills/mf-skills-sync"
     }
   ]
 }

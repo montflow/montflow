@@ -4,7 +4,7 @@ Effect-first adversarial review primitives for OpenCode — the review _series_
 and _round_ format, pure mechanical verification of a review file, a
 `mf-reviews` CLI (a binary, and the same command in the host as
 `/mf-reviews`), the `review_create` tool, and the
-`mf-adversarial-review` / `mf-addressing-adversarial-review`
+`mf-reviews-adversarial` / `mf-reviews-address`
 skills, shipped as package payload and installed by `doctor`.
 
 ```typescript
@@ -73,7 +73,7 @@ review_create  name=<series>  [target=<what>]  [spec=<spec-slug>]  [profile=<nam
 A **phase review** names `round=<NNN>` and `phase=<id>` so the review lands on the same round in every expected series and the round records which phase it reviews (`- Phase:`); without them the reviewer starts on the series' next free round with no phase attribution.
 
 It ensures the series ledger exists, creates a native OpenCode session, and
-prompts it with the `mf-adversarial-review` instructions, returning the
+prompts it with the `mf-reviews-adversarial` instructions, returning the
 session id. A dispatched profile also pins the session model, prepends the
 profile's skills, and stamps the ledger. The review then runs in that session;
 its outcome is the session's own execution event, so nothing montflow-owned
@@ -101,8 +101,8 @@ table to paste.
 Two skills ship with the package and `doctor` installs them into
 `.agents/skills/`, keeping them byte-identical to the package:
 
-- `mf-adversarial-review` — the reviewer half: writes a new round per pass
-- `mf-addressing-adversarial-review` — the fixer half: resolves findings in the latest round
+- `mf-reviews-adversarial` — the reviewer half: writes a new round per pass
+- `mf-reviews-address` — the fixer half: resolves findings in the latest round
 
 ```bash
 mf-reviews doctor

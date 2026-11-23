@@ -26,12 +26,12 @@ const recordingUi = (messages: Array<string>): Slash.CliUi => ({
 Vitest.describe('/mf-reviews parser', () => {
   Vitest.it('parses a `--profile` flag on create', () => {
     Vitest.expect(
-      Slash.parseCliArgs('create demo-effect-reviewer --profile effect-reviewer'),
+      Slash.parseCliArgs('create demo-effect-reviewer --profile mf-profiles-effect-reviewer'),
     ).toEqual({
       kind: 'Create',
       name: 'demo-effect-reviewer',
       target: undefined,
-      profile: 'effect-reviewer',
+      profile: 'mf-profiles-effect-reviewer',
       round: undefined,
       dir: undefined,
     });
@@ -46,7 +46,7 @@ Vitest.describe('/mf-reviews parser', () => {
       const root = yield* Effect.promise(freshRoot);
       const messages: Array<string> = [];
       yield* Slash.run(
-        `create demo-effect-reviewer --profile effect-reviewer --dir ${root}`,
+        `create demo-effect-reviewer --profile mf-profiles-effect-reviewer --dir ${root}`,
         recordingUi(messages),
         root,
       );
@@ -56,7 +56,7 @@ Vitest.describe('/mf-reviews parser', () => {
           'utf8',
         ),
       );
-      Vitest.expect(ledger).toContain('- Profile: effect-reviewer');
+      Vitest.expect(ledger).toContain('- Profile: mf-profiles-effect-reviewer');
       Vitest.expect(messages.join('\n')).toContain("series 'demo-effect-reviewer'");
       yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
     }).pipe(Effect.provide(Live)),

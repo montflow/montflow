@@ -119,7 +119,7 @@ Vitest.describe('renderers agent default', () => {
     });
     Vitest.expect(clean).toBe('summary entries=0 issues=0 warnings=0');
 
-    const skills = ['mf-add-reference', 'mf-find-reference'].map((name) => ({
+    const skills = ['mf-references-add', 'mf-references-find'].map((name) => ({
       path: `packages/mf-references/skills/${name}/SKILL.md`,
       valid: true,
       issues: [],

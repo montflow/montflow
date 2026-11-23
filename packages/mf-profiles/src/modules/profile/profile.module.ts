@@ -92,15 +92,15 @@ export const titleFromName = (name: string): string =>
     .join(' ');
 
 /** Skills an agentic creation session needs injected to author well. */
-export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['mf-create-profiles'];
+export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['mf-profiles-create'];
 
 /** Skills an agentic modification session needs injected to edit well. */
-export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['mf-modify-profiles'];
+export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['mf-profiles-modify'];
 
 /** Skills an agentic format-fix session needs injected to fix well. */
 export const TRANSFORM_REQUIREMENTS: ReadonlyArray<string> = [
-  'mf-create-profiles',
-  'mf-modify-profiles',
+  'mf-profiles-create',
+  'mf-profiles-modify',
 ];
 
 /**
@@ -186,7 +186,7 @@ export const declaredSkills = (markdown: string): ReadonlyArray<string> => {
 };
 
 /**
- * Mechanically verify a `PROFILE.md` file against the mf-create-profiles
+ * Mechanically verify a `PROFILE.md` file against the mf-profiles-create
  * standard: frontmatter `name` (valid slug, matching the directory) +
  * non-empty `description`, plus body `# Title`, `## Instructions`, and
  * `## Review Checklist` with at least one item. When `options.skills` is

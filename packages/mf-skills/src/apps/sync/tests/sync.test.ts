@@ -195,6 +195,47 @@ Vitest.describe('Sync.resolveDefaultSource', () => {
 });
 
 Vitest.describe('Sync.runSync', () => {
+  Vitest.it.effect('leaves a skill a package ships to that CLI, reported as cli-owned', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          Promise.all([
+            writeSkill(sandbox.checkout, 'alpha'),
+            writeSkill(sandbox.checkout, 'mf-tool-run'),
+            write(
+              sandbox.checkout,
+              'packages/mf-tool/payload.json',
+              JSON.stringify({
+                schema: 1,
+                package: '@montflow/tool',
+                payloads: [
+                  {
+                    kind: 'skill',
+                    name: 'mf-tool-run',
+                    source: 'skills/mf-tool-run',
+                    target: '.agents/skills/mf-tool-run',
+                  },
+                ],
+              }),
+            ),
+          ]),
+        );
+        const result = yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        Vitest.expect(
+          result.skills.map((skill) => [skill.name, skill.outcome, skill.reason]),
+        ).toStrictEqual([
+          ['alpha', 'added', undefined],
+          ['mf-tool-run', 'skipped', 'cli-owned'],
+        ]);
+        Vitest.expect(
+          yield* Effect.promise(() =>
+            readAt(sandbox.workspace, '.agents/skills/mf-tool-run/SKILL.md'),
+          ),
+        ).toBeUndefined();
+      }),
+    ),
+  );
+
   Vitest.it.effect(
     'copies public skills, reports internal ones as skipped, and ignores non-skills',
     () =>

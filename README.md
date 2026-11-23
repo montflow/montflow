@@ -62,7 +62,7 @@ up a fresh clone of your repository.
 flowchart TD
     clone[".agents/references/montflow<br/>(git-ignored clone)"] --> setup["scripts/setup.ts [--only …] [--check]"]
     setup --> reg["mf-references add montflow<br/>adopts the clone, pinned at HEAD<br/>mf-references doctor: .gitignore"]
-    reg --> sync["mf-skills sync<br/>montflow's public skills → .agents/skills"]
+    reg --> sync["mf-skills sync<br/>standalone skills → .agents/skills"]
     sync --> doctors["each utility's doctor<br/>feature, profiles, prompts, principles,<br/>playbooks, reviews, references, model-fallback"]
     doctors --> verify["each utility's verify"]
     verify --> summary(["summary … failed=0"])
@@ -70,20 +70,33 @@ flowchart TD
 
 | Utility | Installs | Into |
 | --- | --- | --- |
-| `skills` | montflow's public skills (`mf-skills sync`) | `.agents/skills/` |
+| `skills` | montflow's standalone skills (`mf-skills sync`), plus `mf-skills-create`, `mf-skills-modify`, `mf-skills-sync` | `.agents/skills/` |
 | `feature` | the `mf-feature` and `mf-feature-*` skills, the `mf-feature-generic-worker` and `mf-feature-comment-sicko` profiles | `.agents/skills/`, `.agents/@montflow/profiles/` |
-| `profiles` | six reviewer profiles (mf-profiles-bookkeeper, mf-profiles-effect-reviewer, …) | `.agents/@montflow/profiles/` |
+| `profiles` | six reviewer profiles (`mf-profiles-bookkeeper`, `mf-profiles-effect-reviewer`, …), `mf-profiles-create`, `mf-profiles-modify` | `.agents/@montflow/profiles/`, `.agents/skills/` |
 | `prompts` | `mf-prompts-create`, `mf-prompts-execute` | `.agents/skills/` |
 | `principles` | 24 principles | `.agents/@montflow/principles/` |
 | `playbooks` | 22 playbooks | `.agents/@montflow/playbooks/` |
 | `reviews` | `mf-reviews-adversarial`, `mf-reviews-address` | `.agents/skills/` |
 | `references` | `mf-references-add`, `mf-references-find` (montflow itself is always registered) | `.agents/skills/` |
-| `model-fallback` | the model-fallback setup prompt (the plugin itself is OpenCode-only) | `.agents/@montflow/prompts/` |
+| `model-fallback` | the `mf-model-fallback-setup` prompt (the plugin itself is OpenCode-only) | `.agents/@montflow/prompts/` |
 
 The `mf-*` names are not on your `PATH`. Run each CLI as
 `bun run --cwd .agents/references/montflow/packages/<pkg> cli <verb> --dir "$PWD"`,
 and wrap the ones you use in `package.json` scripts. To update montflow, see
 [guides/updating.md](guides/updating.md), then run the setup script again.
+
+### Standalone and CLI-owned artifacts
+
+Every artifact is one of two kinds:
+
+- **Standalone** skills live in montflow's `.agents/skills/` and work without
+  any CLI (`i-have-adhd`, `executing-skills`, `grilling`, …).
+  `mf-skills sync` copies these.
+- **CLI-owned** artifacts live in the package that needs them, under
+  `packages/mf-<cli>/{skills,profiles,prompts,principles,playbooks}`, and are
+  named after it (`mf-skills-create`, `mf-profiles-bookkeeper`,
+  `mf-feature-arena`). Only that CLI's `doctor` installs them, so a repository
+  gets them only when it installs that utility.
 
 ### Start a task
 

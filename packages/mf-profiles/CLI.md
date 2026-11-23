@@ -67,7 +67,7 @@ Examples:
 
 ```text
 /mf-profiles create code-reviewer --description "Senior reviewer focused on security" --instructions "Be strict. Cite files." --checklist "Security issues flagged; Tests cover changes"
-/mf-profiles modify code-reviewer --model anthropic/claude-sonnet-4-5 --skills mf-create-profiles
+/mf-profiles modify code-reviewer --model anthropic/claude-sonnet-4-5 --skills mf-profiles-create
 /mf-profiles show code-reviewer
 ```
 
@@ -106,7 +106,7 @@ skills:
 
 ## Standards
 
-`.agents/skills/mf-create-profiles/SKILL.md` (repo `montflow/montflow`;
+`.agents/skills/mf-profiles-create/SKILL.md` (repo `montflow/montflow`;
 sync it from a checkout with
 `bun run --cwd "$M/packages/mf-skills" cli sync --source "$M" --target <root>` — see
 `guides/installation.md`) holds authoring standards. Installed → follow it;

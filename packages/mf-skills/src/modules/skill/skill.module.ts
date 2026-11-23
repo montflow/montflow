@@ -72,15 +72,15 @@ export const slugify = (name: string): string =>
     .replace(/^-+|-+$/g, '');
 
 /** Skills an agentic creation run needs injected to author well. */
-export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['mf-create-skills'];
+export const GENERATION_REQUIREMENTS: ReadonlyArray<string> = ['mf-skills-create'];
 
 /** Skills an agentic modification run needs injected to edit well. */
-export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['mf-modify-skills'];
+export const MODIFICATION_REQUIREMENTS: ReadonlyArray<string> = ['mf-skills-modify'];
 
 /** Skills an agentic format-transform run needs injected to fix well. */
 export const TRANSFORM_REQUIREMENTS: ReadonlyArray<string> = [
-  'mf-create-skills',
-  'mf-modify-skills',
+  'mf-skills-create',
+  'mf-skills-modify',
 ];
 
 /** Default frontmatter author when a flow cannot infer one. */

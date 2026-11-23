@@ -43,8 +43,8 @@ const testSkillEffect = Skill.decodeUnknown({
 });
 
 const authoringSkillEffect = Skill.decodeUnknown({
-  id: 'mf-create-skills',
-  name: 'mf-create-skills',
+  id: 'mf-skills-create',
+  name: 'mf-skills-create',
   description: 'Guides skill creation.',
   groups: [],
   dependencies: [],

@@ -4,9 +4,9 @@
   "payloads": [
     {
       "kind": "prompt",
-      "name": "model-fallback",
-      "source": "prompts/model-fallback.json",
-      "target": ".agents/@montflow/prompts/model-fallback.json"
+      "name": "mf-model-fallback-setup",
+      "source": "prompts/mf-model-fallback-setup.json",
+      "target": ".agents/@montflow/prompts/mf-model-fallback-setup.json"
     }
   ]
 }

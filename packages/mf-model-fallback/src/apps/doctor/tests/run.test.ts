@@ -28,7 +28,7 @@ Vitest.describe('Doctor.run runtime', () => {
 
         Vitest.expect(result.healthy).toBe(false);
         Vitest.expect(result.artifacts).toHaveLength(1);
-        Vitest.expect(result.artifacts[0]?.name).toBe('model-fallback');
+        Vitest.expect(result.artifacts[0]?.name).toBe('mf-model-fallback-setup');
         Vitest.expect(result.artifacts[0]?.status).toBe('missing');
         Vitest.expect(result.artifacts[0]?.detail).toBe('not installed');
         Vitest.expect(existsSync(installedPrompt(root, promptName))).toBe(false);

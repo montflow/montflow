@@ -44,7 +44,7 @@
     "mf-feature:check": "bun run --cwd packages/mf-feature cli roles verify --dir $PWD && bun run --cwd packages/mf-feature cli doctor --check --dir $PWD",
     "mf:doctor": "bun run --cwd packages/mf-skills cli doctor --dir $PWD && bun run --cwd packages/mf-prompts cli doctor --dir $PWD && bun run --cwd packages/mf-profiles cli doctor --dir $PWD && bun run --cwd packages/mf-reviews cli doctor --dir $PWD && bun run --cwd packages/mf-references cli doctor --dir $PWD && bun run --cwd packages/mf-principles cli doctor --dir $PWD && bun run --cwd packages/mf-playbooks cli doctor --dir $PWD && bun run --cwd packages/mf-feature cli doctor --dir $PWD && bun run --cwd packages/mf-model-fallback cli doctor --dir $PWD",
     "mf-release:check-and-skills": "bun run mf-release:check && bun run mf-skills:check",
-    "mf:check": "bun run mf-release:check && bun run mf-skills:check && bun run mf-prompts:check && bun run mf-profiles:check && bun run mf-model-fallback:check && bun run mf-reviews:check && bun run mf-references:check && bun run mf-principles:check && bun run mf-playbooks:check && bun run mf-feature:check",
+    "mf:check": "bun run mf-release:check && bun run mf-ignore:check && bun run mf-skills:check && bun run mf-prompts:check && bun run mf-profiles:check && bun run mf-model-fallback:check && bun run mf-reviews:check && bun run mf-references:check && bun run mf-principles:check && bun run mf-playbooks:check && bun run mf-feature:check",
     "mf:check:release": "bun run mf-release:check",
     "mf:check:release-and-skills": "bun run mf-release:check-and-skills",
     "mf:check:skills": "bun run mf-skills:check",
@@ -59,7 +59,9 @@
     "mf:gate:fast": "bun run lint:check && bun run fmt:check && bun run ts:check && bun run mf:check",
     "mf:gate": "bun run lint:check && bun run fmt:check && bun run ts:check && bun run test && bun run test:tui && bun run smoke && bun run mf:check",
     "hooks:install": "lefthook install",
-    "postinstall": "lefthook install"
+    "postinstall": "lefthook install && bun run mf:doctor >/dev/null",
+    "mf:ignore": "bun run scripts/payload-ignore.ts",
+    "mf-ignore:check": "bun run scripts/payload-ignore.ts --check"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",

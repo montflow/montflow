@@ -12,6 +12,10 @@ Releases: this package is versioned and tagged by changesets but never published
 
 ## Unreleased
 
+### Changed
+
+- Skills renamed after the CLI: `mf-create-prompts` → `mf-prompts-create`, `mf-execute-prompts` → `mf-prompts-execute`
+
 ### Added
 
 - `mf-prompts doctor` reads `payload.json` and checks or repairs every declared skill; `doctor --check` is report-only and `mf-prompts:check` ends with it
