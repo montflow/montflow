@@ -1,3 +1,4 @@
+import * as Extension from '../../modules/extension/index.js';
 import * as Principle from '../../modules/principle/index.js';
 import type * as Engines from './principle-engines.apps.module.js';
 
@@ -42,14 +43,16 @@ const table = (
   ].join('\n');
 };
 
-/** Store-relative path of one principle file. */
-const pathOf = (name: string): string =>
-  `${Principle.STORE_DIR.join('/')}/${name}/${Principle.FILE}`;
+/** Workspace-relative path of one principle file: the extension store's for an extension. */
+const pathOf = (row: Engines.ListRow): string =>
+  `${(row.source.kind === 'shipped' ? Principle.STORE_DIR : Principle.EXTENSION_DIR).join('/')}/${row.name}/${Principle.FILE}`;
 
 /**
  * The store index: one `<name>: <description>` line per principle. This is
- * the line agents read to decide which principle applies. `--verbose` adds the
- * file path; `--human` is a table with a count.
+ * the line agents read to decide which principle applies. A row from the
+ * extension store ends in its `source=`; a shipped row carries none.
+ * `--verbose` adds the file path; `--human` is a table with a SOURCE column
+ * and a count.
  * @param rows - rows from `Engines.list`
  * @param options - output modes
  * @returns the rendered index
@@ -60,21 +63,27 @@ export const list = (
 ): string => {
   if (rows.length === 0) return 'No principles.';
   if (options.human) {
-    const headers = ['NAME', 'DESCRIPTION'];
+    const headers = ['NAME', 'DESCRIPTION', 'SOURCE'];
     if (options.verbose) headers.push('PATH');
-    const body = rows.map((row) =>
-      options.verbose ? [row.name, row.description, pathOf(row.name)] : [row.name, row.description],
-    );
+    const body = rows.map((row) => {
+      const cells = [
+        row.name,
+        row.description,
+        Extension.provenance(row.source, row.name).replace(/^source=/, ''),
+      ];
+      return options.verbose ? [...cells, pathOf(row)] : cells;
+    });
     return [table(headers, body), `${rows.length} principle${rows.length === 1 ? '' : 's'}`].join(
       '\n',
     );
   }
   return rows
-    .map((row) =>
-      options.verbose
-        ? `${row.name}: ${row.description} path=${pathOf(row.name)}`
-        : `${row.name}: ${row.description}`,
-    )
+    .map((row) => {
+      const source =
+        row.source.kind === 'shipped' ? '' : ` ${Extension.provenance(row.source, row.name)}`;
+      const path = options.verbose ? ` path=${pathOf(row)}` : '';
+      return `${row.name}: ${row.description}${source}${path}`;
+    })
     .join('\n');
 };
 

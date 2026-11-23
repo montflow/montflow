@@ -6,7 +6,8 @@ import * as Vitest from '@effect/vitest';
 
 /**
  * The real binary, spawned: exit codes are set inside the handlers, `show`
- * prints bytes unchanged, and the verbs compose over one workspace root.
+ * prints a `source=` line then the bytes unchanged, and the verbs compose over
+ * one workspace root.
  */
 
 const MAIN = NodePath.resolve(import.meta.dirname, '..', 'main.ts');
@@ -34,7 +35,7 @@ Vitest.describe('mf-mode playbooks binary', () => {
 
       const file = NodePath.join(root, '.agents/@montflow/playbooks/opening-a-pr/PLAYBOOK.md');
       const show = run(['playbooks', 'show', 'opening-a-pr', '--dir', root]);
-      Vitest.expect(show.stdout).toBe(Fs.readFileSync(file, 'utf8'));
+      Vitest.expect(show.stdout).toBe(`source=shipped\n${Fs.readFileSync(file, 'utf8')}`);
       Vitest.expect(run(['playbooks', 'show', 'nope', '--dir', root]).status).toBe(1);
 
       const verify = run(['playbooks', 'verify', 'opening-a-pr', '--dir', root]);

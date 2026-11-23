@@ -42,7 +42,7 @@ Flags come before the task, as in `/mf-mode --observe --report <task>`, and hold
 
 ## Principles
 
-Read the principle in full with `mf-mode principles show <name>` before you apply it. Each entry names when it applies. The name is the title in kebab case, hyphens kept and other punctuation dropped, unless the entry gives its name. `mf-mode principles list` prints every principle with when it applies.
+Get each principle with `mf-mode principles show <name>` and read it in full before you apply it. Never open a principle file by path: the CLI is the only reader, and a repo's own extension of a principle wins over the shipped copy. The first line names where it came from (`source=shipped`, `source=extension replaces=<name>`, `source=extension extends=<name>`). Each entry names when it applies. The name is the title in kebab case, hyphens kept and other punctuation dropped, unless the entry gives its name. `mf-mode principles list` prints every principle with when it applies.
 
 **Core**
 
@@ -117,6 +117,6 @@ Write short declarative sentences with no long dash and no colon as a connector.
 
 ## Playbooks
 
-Match the task to a playbook and open its steps with `mf-mode playbooks show <name>`, the title in kebab case. `mf-mode playbooks list` prints every playbook with what it is for. Copy its steps into the todo list first. Large, cross-cutting, or unattended work, or a task no playbook fits, routes to the **mf-mode-figure-it-out** skill.
+Match the task to a playbook and get its steps with `mf-mode playbooks show <name>`, the title in kebab case. Never open a playbook file by path: the CLI is the only reader, and a repo's own extension of a playbook wins over the shipped copy, as its first `source=` line says. `mf-mode playbooks list` prints every playbook with what it is for. Copy its steps into the todo list first. Large, cross-cutting, or unattended work, or a task no playbook fits, routes to the **mf-mode-figure-it-out** skill.
 
 Investigation, Bug fix, Perf issue, Hillclimb, Runtime forensics, Trace forensics, Feature, Refactoring, Prototype, Visual parity, Authoring a skill, Eval, Babysit, Shipping, Autonomous run, Autopilot-full, Autopilot-stack, Session pickup, Pause safely, Multi-phase plan, Worktree cleanup, Opening a PR.

@@ -10,8 +10,16 @@ no plugin face, no dialog. Verbs: `doctor`, `verify` (roles, principles, playboo
 - `engines.apps.module.ts` — every decision: the current harness, the loaded
   and verified file, the resolution, the dispatch plan. Structured in, data
   out, failures as a displayable string naming the fix
-- `principle-engines.apps.module.ts`, `playbook-engines.apps.module.ts` — `list`, `show`, `verify` over one markdown store; `show` prints bytes unchanged
-- `principle-renderers.apps.module.ts`, `playbook-renderers.apps.module.ts` — pure `data -> text` for those stores
+- `principle-engines.apps.module.ts`, `playbook-engines.apps.module.ts` — `list`,
+  `show`, `verify` over one markdown store, the repo's extensions
+  (`.agents/@montflow/mf-mode/extensions/<store>/`) over the shipped copies.
+  `show` prints a `source=` provenance line, then the resolved document (file
+  bytes unchanged unless it `extends`). `list` rows carry their source.
+  `verify` checks the shipped entries as before and each extension, as
+  `extension/<name>`, to the same standard on its resolved document
+- `principle-renderers.apps.module.ts`, `playbook-renderers.apps.module.ts` — pure
+  `data -> text` for those stores; a `list` row not shipped ends in its
+  `source=`, and `--human` adds a SOURCE column
 - `renderers.apps.module.ts` — pure `data -> text`; agent-first `key=value`
   lines, each seat ending in `next=`; `--human` tables; `--verbose` additive
 - `binary.apps.module.ts` — the `Command` tree, `rootCommand`, and `COMMANDS`
@@ -29,3 +37,7 @@ no plugin face, no dialog. Verbs: `doctor`, `verify` (roles, principles, playboo
 - **`dispatch` never runs a native or dropped seat.** It refuses and says what
   to do instead.
 - **A non-zero exit is set inside the handler**, never `process.exit`.
+- **Agents read playbooks and principles through the CLI.** The binary test
+  fails when shipped skill, playbook, principle, or profile text points at a
+  store file (`@montflow/playbooks/`, `.../PLAYBOOK.md`) instead of
+  `mf-mode playbooks show <name>`, since only the CLI applies extensions.

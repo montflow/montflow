@@ -141,7 +141,7 @@ The [mf-mode README](packages/mf-mode/README.md) explains it in full, with diagr
 | `mf-profiles` | `.agents/@montflow/profiles` | `doctor`, `list`, `show`, `verify`, `create`, `modify`, `delete`, `version` |
 | `mf-reviews` | `.agents/@montflow/reviews` | `doctor`, `list`, `show`, `verify`, `create` (`new`), `resume`, `version` |
 | `mf-references` | `.agents/@montflow/references` | `doctor`, `list`, `show`, `verify`, `add`, `update`, `sync`, `status`, `remove`, `version` |
-| `mf-mode` | `.agents/@montflow/principles`, `.agents/@montflow/playbooks`, `.agents/@montflow/mode/roles.json` (per user, git-ignored) | `doctor`, `verify`, `principles` (`list`, `show`, `verify`), `playbooks` (`list`, `show`, `verify`), `roles` (`show`, `set`, `unset`, `verify`, `resolve`), `dispatch`, `version` |
+| `mf-mode` | `.agents/@montflow/principles`, `.agents/@montflow/playbooks`, `.agents/@montflow/mf-mode/extensions` (repo-owned, committed), `.agents/@montflow/mode/roles.json` (per user, git-ignored) | `doctor`, `verify`, `principles` (`list`, `show`, `verify`), `playbooks` (`list`, `show`, `verify`), `roles` (`show`, `set`, `unset`, `verify`, `resolve`), `dispatch`, `version` |
 | `mf-model-fallback` | model fallback chains | `status`, `show`, `models`, `set`, `migrate`, `verify`, `doctor`, `remove` |
 
 Each CLI prints its own usage: `bun run --cwd packages/<pkg> cli --help`.

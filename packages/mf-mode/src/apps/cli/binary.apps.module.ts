@@ -194,7 +194,7 @@ export const writeRaw = (text: string): Effect.Effect<void> =>
     process.stdout.write(text);
   });
 
-interface StoreCommandSpec<Report, Services> {
+interface StoreCommandSpec<Row, Report, Services> {
   /** Singular noun, for descriptions: `principle`, `playbook`. */
   readonly noun: string;
   /** The store's name, which is also the subcommand: `principles`, `playbooks`. */
@@ -202,9 +202,7 @@ interface StoreCommandSpec<Report, Services> {
   /** Caller form named in fix-it text. */
   readonly invocation: string;
   readonly engines: {
-    readonly list: (
-      root: string,
-    ) => Effect.Effect<ReadonlyArray<{ name: string; description: string }>, string, Services>;
+    readonly list: (root: string) => Effect.Effect<ReadonlyArray<Row>, string, Services>;
     readonly show: (
       root: string,
       name: string,
@@ -217,7 +215,7 @@ interface StoreCommandSpec<Report, Services> {
   };
   readonly renderers: {
     readonly list: (
-      rows: ReadonlyArray<{ name: string; description: string }>,
+      rows: ReadonlyArray<Row>,
       options: { human: boolean; verbose: boolean },
     ) => string;
     readonly verify: (report: Report, options: { human: boolean; verbose: boolean }) => string;
@@ -227,8 +225,9 @@ interface StoreCommandSpec<Report, Services> {
 /**
  * The `list`, `show`, and `verify` subcommands of one markdown store. The
  * principle and playbook stores differ only in their engines and renderers.
+ * Each reads the repo's extension store first, then the shipped store.
  */
-const storeCommand = <Report, Services>(spec: StoreCommandSpec<Report, Services>) => {
+const storeCommand = <Row, Report, Services>(spec: StoreCommandSpec<Row, Report, Services>) => {
   const nameArgument = Argument.String('name').pipe(
     Argument.withDescription(
       `${spec.noun[0]?.toUpperCase()}${spec.noun.slice(1)} name (the directory slug).`,
@@ -246,14 +245,18 @@ const storeCommand = <Report, Services>(spec: StoreCommandSpec<Report, Services>
       ),
   ).pipe(
     Command.withDescription(
-      `Print the index: one \`<name>: <description>\` line per ${spec.noun}.`,
+      `Print the index: one \`<name>: <description>\` line per ${spec.noun}. A row from the extension store ends in its \`source=\`.`,
     ),
   );
   const showSub = Command.make('show', { name: nameArgument, dir: dirFlag }, (config) =>
     spec.engines
       .show(rootOf(config.dir), config.name, spec.invocation)
       .pipe(Effect.matchEffect({ onFailure: refuse, onSuccess: writeRaw })),
-  ).pipe(Command.withDescription(`Print one ${spec.noun}’s file bytes, unchanged.`));
+  ).pipe(
+    Command.withDescription(
+      `Print one ${spec.noun}: a \`source=\` line naming where it came from, then the document. The repo's extension in .agents/@montflow/mf-mode/extensions/${spec.name} wins over the shipped copy.`,
+    ),
+  );
   const verifySub = Command.make(
     'verify',
     {
@@ -263,7 +266,7 @@ const storeCommand = <Report, Services>(spec: StoreCommandSpec<Report, Services>
         ),
         Argument.optional,
       ),
-      all: optionalBoolean('all', `Verify every ${spec.noun} in the store.`),
+      all: optionalBoolean('all', `Verify every ${spec.noun}, shipped and extension.`),
       human: humanFlag,
       verbose: verboseFlag,
       dir: dirFlag,
@@ -279,10 +282,14 @@ const storeCommand = <Report, Services>(spec: StoreCommandSpec<Report, Services>
         // Warnings do not fail: only an error-severity finding does.
         if (report.issueCount > 0) yield* exitFailed;
       }).pipe(Effect.catch(refuse)),
-  ).pipe(Command.withDescription(`Mechanically verify ${spec.noun} files. Non-zero on any error.`));
+  ).pipe(
+    Command.withDescription(
+      `Mechanically verify ${spec.noun} files, shipped and extension. Non-zero on any error.`,
+    ),
+  );
   return Command.make(spec.name).pipe(
     Command.withDescription(
-      `Inspect and verify the ${spec.name} in .agents/@montflow/${spec.name}: \`list\`, \`show\`, \`verify\`.`,
+      `Inspect and verify the ${spec.name}: the repo's extensions in .agents/@montflow/mf-mode/extensions/${spec.name} first, then the shipped copies in .agents/@montflow/${spec.name}. \`list\`, \`show\`, \`verify\`.`,
     ),
     Command.withSubcommands([listSub, showSub, verifySub]),
   );

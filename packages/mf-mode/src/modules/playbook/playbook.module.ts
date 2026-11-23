@@ -1,9 +1,12 @@
 import { Effect, Schema } from 'effect';
+import * as Extension from '../extension/index.js';
 import { type FieldValue, fieldString, parseMarkdown } from '../frontmatter/index.js';
 
 /**
  * A playbook: a procedure an agent runs end to end. Stored as
- * `.agents/@montflow/playbooks/<name>/PLAYBOOK.md`.
+ * `.agents/@montflow/playbooks/<name>/PLAYBOOK.md`. A consumer repo extends or
+ * replaces one at `.agents/@montflow/mf-mode/extensions/playbooks/<name>/PLAYBOOK.md`
+ * (see `../extension/`).
  *
  * Frontmatter holds `name`, `description`, and three optional reference lists:
  * `skills` (directories under `.agents/skills`), `principles` (entries in the
@@ -35,8 +38,14 @@ export const FILE = 'PLAYBOOK.md';
 /** The store, relative to the workspace root. */
 export const STORE_DIR = ['.agents', '@montflow', 'playbooks'] as const;
 
+/** The repo's extension store, read before the shipped one. */
+export const EXTENSION_DIR = [...Extension.STORE_ROOT, 'playbooks'] as const;
+
 /** The principles store a `principles:` entry resolves against. */
 export const PRINCIPLES_DIR = ['.agents', '@montflow', 'principles'] as const;
+
+/** The principles extension store a `principles:` entry also resolves against. */
+export const PRINCIPLE_EXTENSION_DIR = [...Extension.STORE_ROOT, 'principles'] as const;
 
 /** The file a principle directory holds. */
 export const PRINCIPLE_FILE = 'PRINCIPLE.md';
@@ -55,6 +64,9 @@ export const REFERENCE_FIELDS = ['skills', 'principles', 'playbooks'] as const;
 
 /** One reference list. */
 export type ReferenceField = (typeof REFERENCE_FIELDS)[number];
+
+/** How an `extends` extension merges: every reference list unions. */
+export const KIND: Extension.Kind = { noun: 'playbook', lists: REFERENCE_FIELDS };
 
 /** Slug pattern: lowercase alphanumeric groups joined by single hyphens. */
 export const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -95,9 +107,9 @@ export interface References {
   readonly root: string;
   /** Directories under `.agents/skills` that hold a `SKILL.md`. */
   readonly skills?: ReadonlySet<string> | undefined;
-  /** Directories under `.agents/@montflow/principles` that hold a `PRINCIPLE.md`. */
+  /** Principle directories, shipped or extension, that hold a `PRINCIPLE.md`. */
   readonly principles?: ReadonlySet<string> | undefined;
-  /** Directories under `.agents/@montflow/playbooks` that hold a `PLAYBOOK.md`. */
+  /** Playbook directories, shipped or extension, that hold a `PLAYBOOK.md`. */
   readonly playbooks?: ReadonlySet<string> | undefined;
   /** Workspace-relative files under `.agents/skills/<skill>/scripts/`. */
   readonly scripts: ReadonlySet<string>;
