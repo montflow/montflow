@@ -84,6 +84,7 @@ The default answer is `/mf-mode`, which runs most of the others when its steps n
 | Fix a bug test-first when a cheap local test exists | [`/mf-mode-tdd`](../mf-mode-tdd/SKILL.md) |
 | Apply TypeScript rules to `.ts` or `.tsx` work | [`/mf-mode-typescript-best-practices`](../mf-mode-typescript-best-practices/SKILL.md) |
 | Strip comments before review, using a reviewer that didn't write them | [`/mf-mode-no-comments`](../mf-mode-no-comments/SKILL.md) |
+| Strip AI slop from the code a diff adds, before commit, in any harness | [`/mf-mode-deslop`](../mf-mode-deslop/SKILL.md) |
 | Clean AI tells out of prose | [`/mf-mode-unslop`](../mf-mode-unslop/SKILL.md) |
 | Write docs, an RFC, a README, a PR description, or a commit message to a standard | [`/mf-mode-technical-writing`](../mf-mode-technical-writing/SKILL.md) |
 | Write a PR body a reviewer reads at a glance, with screenshots, and check it before publishing | `mf-mode pr template`, `mf-mode pr attach`, `mf-mode pr check` |
@@ -116,7 +117,7 @@ Close calls:
 
 Not in mfstack:
 
-- `/deslop`, `control-cli`, and `control-ui` belong to other Cursor plugins; montflow does not ship them.
+- `control-cli` and `control-ui` belong to other Cursor plugins; montflow does not ship them. Cursor's `/deslop` does the same pass as `/mf-mode-deslop`.
 - Loops and wake-ups come from your harness (the harnesses reference lists them). Skill authoring is the **mf-skills-create** skill.
 - mfstack has no `/orchestrate` skill. If the slash menu shows `/orchestrate`, another plugin provides it.
 

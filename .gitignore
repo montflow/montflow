@@ -353,6 +353,7 @@ feat/
 /.agents/skills/mf-mode-correct/
 /.agents/skills/mf-mode-create-formal-verification-skill/
 /.agents/skills/mf-mode-create-verification-skill/
+/.agents/skills/mf-mode-deslop/
 /.agents/skills/mf-mode-figure-it-out/
 /.agents/skills/mf-mode-help/
 /.agents/skills/mf-mode-how/

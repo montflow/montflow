@@ -324,7 +324,7 @@ Reply must contain: where the prior agent stopped, what you inherited vs redid (
 
 **The last step of nearly every other playbook.**
 
-Work from a worktree off trunk → rebase into small landable commits → run `/deslop` → conventional-commits title → a body from `mf-mode pr template` (Summary, What changed, Decisions, Proof, Blast Radius, Verification, Follow-ups), proof attached with `mf-mode pr attach`, no error from `mf-mode pr check` → open the PR ready, not draft.
+Work from a worktree off trunk → rebase into small landable commits → run `/mf-mode-deslop` → conventional-commits title → a body from `mf-mode pr template` (Summary, What changed, Decisions, Proof, Blast Radius, Verification, Follow-ups), proof attached with `mf-mode pr attach`, no error from `mf-mode pr check` → open the PR ready, not draft.
 
 Opening a PR does not start a babysit.
 
