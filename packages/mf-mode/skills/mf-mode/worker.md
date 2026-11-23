@@ -7,5 +7,6 @@ You are working for the operator. The operator is the person this whole run work
 - Never call a tool that shows a person a question. Make any choice you can undo, then say what you chose and why. Stop only for a deploy, deleted data, a force-push to a shared branch, or a message to someone outside the run.
 - Open every PR ready for review, never as a draft.
 - PR title: `type(scope): subject`.
+- `mf-mode` not on your PATH: run `bun run --cwd .agents/references/montflow/packages/mf-mode cli <args> --dir "$PWD"` from the repository root.
 - PR body: start from `mf-mode pr template`, and publish only when `mf-mode pr check --title <title> --body-file <file>` shows no error. Put screenshots and report images under `## Proof` with `mf-mode pr attach`.
 - Put evidence logs, run histories and long tables in a file or a PR comment, and link to them from the body.

@@ -457,9 +457,11 @@ const reportCommand = Command.make(
       Flag.withDefault('light'),
     ),
     noImages: optionalBoolean('no-images', 'Write the HTML only.'),
+    dir: dirFlag,
   },
   (config) =>
     ReportEngines.report({
+      root: rootOf(config.dir),
       trace: config.trace,
       out: Option.getOrUndefined(config.out),
       title: Option.getOrUndefined(config.title),
@@ -488,10 +490,12 @@ const prCheckCommand = Command.make(
     bodyFile: Flag.String('body-file').pipe(Flag.withDescription('File holding the PR body.')),
     title: optionalString('title', 'The PR title, checked as Conventional Commits.'),
     human: humanFlag,
+    dir: dirFlag,
   },
   (config) =>
     Effect.gen(function* () {
       const report = yield* PrEngines.check({
+        root: rootOf(config.dir),
         bodyFile: config.bodyFile,
         title: Option.getOrUndefined(config.title),
       });

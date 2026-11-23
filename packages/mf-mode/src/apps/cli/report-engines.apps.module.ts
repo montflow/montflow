@@ -15,6 +15,8 @@ export const THEMES = ['light', 'dark'] as const;
 export type Theme = (typeof THEMES)[number];
 
 export interface ReportOptions {
+  /** Workspace root: a relative trace or out path resolves against it. */
+  readonly root: string;
   readonly trace: string;
   /** Directory for the outputs; the trace's directory when undefined. */
   readonly out: string | undefined;
@@ -183,9 +185,10 @@ export const report = (options: ReportOptions) =>
         "Unknown theme '" + options.theme + "'. Themes: " + THEMES.join(', ') + '.',
       );
     }
+    const tracePath = path.resolve(options.root, options.trace);
     const source = yield* fs
-      .readFileString(options.trace)
-      .pipe(Effect.mapError((error) => 'Cannot read ' + options.trace + ': ' + error.message));
+      .readFileString(tracePath)
+      .pipe(Effect.mapError((error) => 'Cannot read ' + tracePath + ': ' + error.message));
     const trace = Trace.parseTrace(source);
     if (trace.events.length === 0) {
       return yield* Effect.fail(
@@ -197,7 +200,7 @@ export const report = (options: ReportOptions) =>
       );
     }
     const model = Trace.buildModel(trace, options.title);
-    const dir = path.resolve(options.out ?? path.dirname(options.trace));
+    const dir = path.resolve(options.root, options.out ?? path.dirname(tracePath));
     const stem = path.basename(options.trace).replace(/\.jsonl?$/i, '');
     const html = path.join(dir, stem + '.report.html');
     yield* fs

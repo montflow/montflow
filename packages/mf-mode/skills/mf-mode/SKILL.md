@@ -12,6 +12,8 @@ disable-model-invocation: true
 
 Bundled skills live at `../mf-mode-<name>/SKILL.md` from this file, principles in the principles store (`mf-mode principles`), and playbooks in the playbooks store (`mf-mode playbooks`), so put this file's absolute path in every `mf-mode-generic-worker` prompt.
 
+`mf-mode` is montflow's CLI. When it is not on your PATH, run it from the repository root as `bun run --cwd .agents/references/montflow/packages/mf-mode cli <args> --dir "$PWD"`, and run `bun install --cwd .agents/references/montflow --ignore-scripts` once if it fails on a missing module.
+
 ## Non-negotiables
 
 The Principles section below grounds every trigger. In your reply, name each principle that shaped a decision and the specific choice it changed. Cite only principles whose leaf SKILL.md you read this session.

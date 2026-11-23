@@ -22,6 +22,7 @@ const failure = <A>(exit: Exit.Exit<A, string>): string =>
   Exit.isFailure(exit) ? String(Cause.squash(exit.cause)) : '';
 
 const options = (dir: string, overrides: Partial<ReportEngines.ReportOptions> = {}) => ({
+  root: dir,
   trace: EXAMPLE,
   out: dir,
   title: undefined,
@@ -86,6 +87,28 @@ Vitest.describe('report engine', () => {
       ),
     );
   });
+
+  Vitest.it.effect(
+    'resolves a relative trace and out against --dir, not the process directory',
+    () => {
+      const root = fresh();
+      Fs.mkdirSync(NodePath.join(root, 'scratch'));
+      Fs.copyFileSync(EXAMPLE, NodePath.join(root, 'scratch/run.jsonl'));
+      Fs.writeFileSync(NodePath.join(root, 'body.md'), '## Summary\nx\n');
+      return Effect.gen(function* () {
+        const result = yield* ReportEngines.report({
+          ...options(root),
+          trace: 'scratch/run.jsonl',
+          out: 'reports',
+          images: false,
+        });
+        Vitest.expect(result.html).toBe(NodePath.join(root, 'reports/run.report.html'));
+        Vitest.expect(Fs.existsSync(result.html)).toBe(true);
+        const checked = yield* PrEngines.check({ root, bodyFile: 'body.md', title: undefined });
+        Vitest.expect(checked.errors).toBeGreaterThan(0);
+      }).pipe(Effect.provide(Layer.mergeAll(Platform, Host.fake({}))));
+    },
+  );
 
   Vitest.it.effect('refuses a missing trace, an empty trace and an unknown theme', () => {
     const dir = fresh();

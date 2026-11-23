@@ -15,12 +15,18 @@ import { Host } from '../../services/index.js';
  * Check a PR body file, and the title when given.
  * @param options - the body file and the title
  */
-export const check = (options: { readonly bodyFile: string; readonly title: string | undefined }) =>
+export const check = (options: {
+  readonly root: string;
+  readonly bodyFile: string;
+  readonly title: string | undefined;
+}) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const bodyFile = path.resolve(options.root, options.bodyFile);
     const body = yield* fs
-      .readFileString(options.bodyFile)
-      .pipe(Effect.mapError((error) => 'Cannot read ' + options.bodyFile + ': ' + error.message));
+      .readFileString(bodyFile)
+      .pipe(Effect.mapError((error) => 'Cannot read ' + bodyFile + ': ' + error.message));
     return Pr.check({ body, title: options.title });
   });
 
