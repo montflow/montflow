@@ -1,1 +1,1 @@
-export { default } from "../../../packages/prompts/src/tui.ts";
+export { default } from "../../../packages/mf-prompts/src/tui.ts";

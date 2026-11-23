@@ -2,8 +2,8 @@
 name: perf-issue
 description: "Trace a measured slowness and improve it against a baseline."
 skills:
-  - mf-mode-architect
-  - mf-mode-benchmark-checklist
+  - mf-feature-architect
+  - mf-feature-benchmark-checklist
 principles:
   - sequence-verifiable-units
 playbooks:
@@ -14,7 +14,7 @@ playbooks:
 
 **You own the measurement story. Plan, review, verify the numbers.** Tie every fix to a measurement, don't read source instead of measuring.
 
-1. Capture a baseline trace via the matching control skill. Vet the baseline, and each later number, with the **mf-mode-benchmark-checklist** skill.
+1. Capture a baseline trace via the matching control skill. Vet the baseline, and each later number, with the **mf-feature-benchmark-checklist** skill.
 2. Trace the code to ground hypotheses. Don't claim a perf ceiling without running it first.
    Try the performance mantras in order, cheapest first:
    1. Don't do it. Stop work whose result nothing uses rather than cheapening it.
@@ -26,7 +26,7 @@ playbooks:
    7. Do it cheaper.
 
    When an earlier mantra meets the target, stop.
-3. Plan the fix from the trace. If it crosses a function boundary, `mf-mode-architect` first. Delegate implementation to a subagent using the `perf-issue` role's model. Pick each subagent's reasoning level for the job, per the Subagents section. Review the diff. Capture a post-fix trace.
+3. Plan the fix from the trace. If it crosses a function boundary, `mf-feature-architect` first. Delegate implementation to a subagent using the `perf-issue` role's model. Pick each subagent's reasoning level for the job, per the Subagents section. Review the diff. Capture a post-fix trace.
    Apply the **sequence-verifiable-units** principle skill, verifying each attempt before trying the next.
 4. Parse and compare the artifacts (JSON to sqlite, diff). "Inconclusive" or wrong-surface is not a pass. Flag it.
 5. Cite the measurement in the PR.

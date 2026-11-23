@@ -43,7 +43,7 @@ mf-references add <url> --purpose "<one sentence>" [--name <slug>] [--ref <branc
 - `--ref` is a branch, tag, or 7–40 character commit id. Omit it to track the default branch.
 - Every verb is agent-first: the default output is compact and parseable. Pass `--human` for a readable table when a person will read the result, and `--verbose` for additive detail; `--human --verbose` composes. A routed add refuses a `--ref` it cannot apply rather than dropping it.
 - `add` creates `.agents/references/`, its `.gitkeep`, and the `.gitignore` entry itself. Never run `mkdir`, `touch`, `git clone`, or edit `.gitignore` for it.
-- When the binary is not on `PATH` but the montflow monorepo is the workspace, the equivalent local form is `bun run --cwd packages/references cli add … --dir "$PWD"`.
+- When the binary is not on `PATH` but the montflow monorepo is the workspace, the equivalent local form is `bun run --cwd packages/mf-references cli add … --dir "$PWD"`.
 
 ## 3. Read the result
 
@@ -93,7 +93,7 @@ Do not write a markdown table of references, and do not edit `REFERENCE.md` beyo
   Every verb takes `--dir <root>` (defaults to the working directory). The default output is agent-first; `--human` renders readable tables and prose, `--verbose` adds detail, and the two compose on every verb that renders rows or a result; `show` prints bytes and takes `--dir` only. `add` also takes `--name`, `--ref`, and `--purpose`; `verify` takes `--all` and `--clones`.
 
 - **Binary / slash command**: `mf-references add …` and `/mf-references add …` — the same engine, the same output.
-- **Store contract**: `.agents/@montflow/references/<slug>/REFERENCE.md` (`packages/references/src/modules/reference/reference.module.ts`).
+- **Store contract**: `.agents/@montflow/references/<slug>/REFERENCE.md` (`packages/mf-references/src/modules/reference/reference.module.ts`).
 - **Lifecycle**: `.agents/references/<slug>` is a plain clone; ownership, dirty state, and ref pins are `status`/`verify` jobs, not this skill's.
 - **In-host tool**: `reference_add` performs the same registration; it returns the created/routed/refused lines plus the entry path, so read the first line and the outcome, not byte parity with the CLI.
 - **Changelog and migration**: [CHANGELOG.md](CHANGELOG.md).

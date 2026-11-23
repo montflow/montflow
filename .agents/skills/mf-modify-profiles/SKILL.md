@@ -74,7 +74,7 @@ mf-profiles verify <name>
 Where the binary is not on `PATH`:
 
 ```
-bun run --cwd packages/profiles cli verify <name> --dir "$PWD"
+bun run --cwd packages/mf-profiles cli verify <name> --dir "$PWD"
 ```
 
 A declared skill that is not installed is a **warning**, not an error: the check

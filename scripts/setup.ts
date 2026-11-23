@@ -49,55 +49,55 @@ const doctor = (dir: string, check: boolean): ReadonlyArray<string> => [
 /** Every utility, in install order: skills first, then what verifies against them. */
 const UTILITIES: Readonly<Record<string, Utility>> = {
   skills: {
-    pkg: 'skills',
+    pkg: 'mf-skills',
     cli: 'mf-skills',
     install: (dir, check) => ['sync', '--source', MONTFLOW, '--target', dir, ...(check ? ['--check'] : [])],
     verify: (dir) => [['verify', '--dir', dir]],
   },
-  mode: {
-    pkg: 'mode',
-    cli: 'mf-mode',
+  feature: {
+    pkg: 'mf-feature',
+    cli: 'mf-feature',
     install: doctor,
     verify: (dir) => [['roles', 'verify', '--dir', dir]],
   },
   profiles: {
-    pkg: 'profiles',
+    pkg: 'mf-profiles',
     cli: 'mf-profiles',
     install: doctor,
     verify: (dir) => [['verify', '--dir', dir]],
   },
   prompts: {
-    pkg: 'prompts',
+    pkg: 'mf-prompts',
     cli: 'mf-prompts',
     install: doctor,
     verify: (dir) => [['verify', '--all', '--dir', dir]],
   },
   principles: {
-    pkg: 'principles',
+    pkg: 'mf-principles',
     cli: 'mf-principles',
     install: doctor,
     verify: (dir) => [['verify', '--all', '--dir', dir]],
   },
   playbooks: {
-    pkg: 'playbooks',
+    pkg: 'mf-playbooks',
     cli: 'mf-playbooks',
     install: doctor,
     verify: (dir) => [['verify', '--all', '--dir', dir]],
   },
   reviews: {
-    pkg: 'reviews',
+    pkg: 'mf-reviews',
     cli: 'mf-reviews',
     install: doctor,
     verify: (dir) => [['verify', '--all', '--dir', dir]],
   },
   references: {
-    pkg: 'references',
+    pkg: 'mf-references',
     cli: 'mf-references',
     install: doctor,
     verify: (dir) => [['verify', '--dir', dir]],
   },
   'model-fallback': {
-    pkg: 'model-fallback',
+    pkg: 'mf-model-fallback',
     cli: 'mf-model-fallback',
     install: doctor,
     verify: () => [],
@@ -149,7 +149,7 @@ const run = (step: string, utility: string, pkg: string, args: ReadonlyArray<str
     env: { ...process.env, MONTFLOW_NO_UPDATE_CHECK: '1' },
   });
   const ok = result.status === 0;
-  console.log(`step=${step} utility=${utility} status=${ok ? 'ok' : 'failed'} command="mf-${pkg} ${args.map((arg) => (arg === dir ? '<repo>' : arg === MONTFLOW ? '<montflow>' : arg.includes(' ') ? JSON.stringify(arg).replaceAll('"', "'") : arg)).join(' ')}"`);
+  console.log(`step=${step} utility=${utility} status=${ok ? 'ok' : 'failed'} command="${UTILITIES[utility]?.cli ?? pkg} ${args.map((arg) => (arg === dir ? '<repo>' : arg === MONTFLOW ? '<montflow>' : arg.includes(' ') ? JSON.stringify(arg).replaceAll('"', "'") : arg)).join(' ')}"`);
   if (!ok) {
     failures += 1;
     const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim().split('\n').slice(-15);
@@ -166,9 +166,9 @@ if (Fs.existsSync(entry)) {
   failures += 1;
   console.log('step=register utility=references status=missing note="montflow is not registered"');
 } else {
-  run('register', 'references', 'references', ['add', URL, '--name', 'montflow', '--purpose', PURPOSE, '--dir', dir]);
+  run('register', 'references', 'mf-references', ['add', URL, '--name', 'montflow', '--purpose', PURPOSE, '--dir', dir]);
 }
-run('register', 'references', 'references', doctor(dir, check));
+run('register', 'references', 'mf-references', doctor(dir, check));
 
 // 2. Install, then 3. verify, each utility.
 for (const name of utilities) {
@@ -188,7 +188,7 @@ console.log(
 );
 if (failures === 0 && !check) {
   console.log(
-    'next: commit .gitignore and the .agents/ files this run wrote (never .agents/references/); run `mf-mode roles set` to choose harnesses and models per role',
+    'next: commit .gitignore and the .agents/ files this run wrote (never .agents/references/); run `mf-feature roles set` to choose harnesses and models per role',
   );
 }
 process.exitCode = failures === 0 ? 0 : 1;

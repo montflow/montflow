@@ -100,11 +100,11 @@
         "vitest": "^5.0.4",
       },
     },
-    "packages/mode": {
-      "name": "@montflow/mode",
+    "packages/mf-feature": {
+      "name": "@montflow/feature",
       "version": "0.0.2",
       "bin": {
-        "mf-mode": "./src/apps/cli/main.ts",
+        "mf-feature": "./src/apps/cli/main.ts",
       },
       "dependencies": {
         "@effect/platform-node": "4.0.1",
@@ -124,7 +124,7 @@
         "effect": "4.0.1",
       },
     },
-    "packages/model-fallback": {
+    "packages/mf-model-fallback": {
       "name": "@montflow/model-fallback",
       "version": "0.0.1",
       "bin": {
@@ -157,6 +157,183 @@
         "@opentui/solid": ">=0.5.12",
         "effect": "4.0.1",
         "solid-js": ">=1.9.0",
+      },
+    },
+    "packages/mf-playbooks": {
+      "name": "@montflow/playbooks",
+      "version": "0.0.2",
+      "bin": {
+        "mf-playbooks": "./src/apps/cli/main.ts",
+      },
+      "dependencies": {
+        "@effect/platform-node": "4.0.1",
+        "@montflow/payload": "workspace:*",
+        "@montflow/version": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/vitest": "4.0.1",
+        "@types/node": "^26.1.2",
+        "effect": "4.0.1",
+        "oxfmt": "0.63.0",
+        "oxlint": "1.78.0",
+        "typescript": "^7.0.2",
+        "vitest": "^5.0.4",
+      },
+      "peerDependencies": {
+        "effect": "4.0.1",
+      },
+    },
+    "packages/mf-principles": {
+      "name": "@montflow/principles",
+      "version": "0.0.2",
+      "bin": {
+        "mf-principles": "./src/apps/cli/main.ts",
+      },
+      "dependencies": {
+        "@effect/platform-node": "4.0.1",
+        "@montflow/payload": "workspace:*",
+        "@montflow/version": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/vitest": "4.0.1",
+        "@types/node": "^26.1.2",
+        "effect": "4.0.1",
+        "oxfmt": "0.63.0",
+        "oxlint": "1.78.0",
+        "typescript": "^7.0.2",
+        "vitest": "^5.0.4",
+      },
+      "peerDependencies": {
+        "effect": "4.0.1",
+      },
+    },
+    "packages/mf-profiles": {
+      "name": "@montflow/profiles",
+      "version": "0.0.2",
+      "bin": {
+        "mf-profiles": "./src/apps/cli/main.ts",
+      },
+      "dependencies": {
+        "@effect/platform-node": "4.0.1",
+        "@montflow/opencode": "workspace:*",
+        "@montflow/payload": "workspace:*",
+        "@montflow/skills": "workspace:*",
+        "@montflow/version": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/vitest": "4.0.1",
+        "@types/node": "^26.1.2",
+        "effect": "4.0.1",
+        "oxfmt": "0.63.0",
+        "oxlint": "1.78.0",
+        "typescript": "^7.0.2",
+        "vitest": "^5.0.4",
+      },
+      "peerDependencies": {
+        "effect": "4.0.1",
+      },
+    },
+    "packages/mf-prompts": {
+      "name": "@montflow/prompts",
+      "version": "0.0.2",
+      "bin": {
+        "mf-prompts": "./src/apps/cli/main.ts",
+      },
+      "dependencies": {
+        "@effect/platform-node": "4.0.1",
+        "@montflow/opencode": "workspace:*",
+        "@montflow/payload": "workspace:*",
+        "@montflow/version": "workspace:*",
+        "handlebars": "4.7.9",
+      },
+      "devDependencies": {
+        "@effect/vitest": "4.0.1",
+        "@types/node": "^26.1.2",
+        "effect": "4.0.1",
+        "oxfmt": "0.63.0",
+        "oxlint": "1.78.0",
+        "typescript": "^7.0.2",
+        "vitest": "^5.0.4",
+      },
+      "peerDependencies": {
+        "effect": "4.0.1",
+      },
+    },
+    "packages/mf-references": {
+      "name": "@montflow/references",
+      "version": "0.0.2",
+      "bin": {
+        "mf-references": "./src/apps/cli/main.ts",
+      },
+      "dependencies": {
+        "@effect/platform-node": "4.0.1",
+        "@montflow/opencode": "workspace:*",
+        "@montflow/payload": "workspace:*",
+        "@montflow/skills": "workspace:*",
+        "@montflow/version": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/vitest": "4.0.1",
+        "@types/node": "^26.1.2",
+        "effect": "4.0.1",
+        "oxfmt": "0.63.0",
+        "oxlint": "1.78.0",
+        "typescript": "^7.0.2",
+        "vitest": "^5.0.4",
+      },
+      "peerDependencies": {
+        "effect": "4.0.1",
+      },
+    },
+    "packages/mf-reviews": {
+      "name": "@montflow/reviews",
+      "version": "0.0.2",
+      "bin": {
+        "mf-reviews": "./src/apps/cli/main.ts",
+      },
+      "dependencies": {
+        "@effect/platform-node": "4.0.1",
+        "@montflow/opencode": "workspace:*",
+        "@montflow/payload": "workspace:*",
+        "@montflow/profiles": "workspace:*",
+        "@montflow/version": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/vitest": "4.0.1",
+        "@types/node": "^26.1.2",
+        "effect": "4.0.1",
+        "oxfmt": "0.63.0",
+        "oxlint": "1.78.0",
+        "typescript": "^7.0.2",
+        "vitest": "^5.0.4",
+      },
+      "peerDependencies": {
+        "effect": "4.0.1",
+      },
+    },
+    "packages/mf-skills": {
+      "name": "@montflow/skills",
+      "version": "0.0.2",
+      "bin": {
+        "mf-skills": "./src/apps/cli/main.ts",
+      },
+      "dependencies": {
+        "@effect/platform-node": "4.0.1",
+        "@montflow/opencode": "workspace:*",
+        "@montflow/payload": "workspace:*",
+        "@montflow/version": "workspace:*",
+      },
+      "devDependencies": {
+        "@effect/vitest": "4.0.1",
+        "@types/node": "^26.1.2",
+        "effect": "4.0.1",
+        "oxfmt": "0.63.0",
+        "oxlint": "1.78.0",
+        "typescript": "^7.0.2",
+        "vitest": "^5.0.4",
+      },
+      "peerDependencies": {
+        "effect": "4.0.1",
       },
     },
     "packages/opencode": {
@@ -196,186 +373,9 @@
         "effect": "4.0.1",
       },
     },
-    "packages/playbooks": {
-      "name": "@montflow/playbooks",
-      "version": "0.0.2",
-      "bin": {
-        "mf-playbooks": "./src/apps/cli/main.ts",
-      },
-      "dependencies": {
-        "@effect/platform-node": "4.0.1",
-        "@montflow/payload": "workspace:*",
-        "@montflow/version": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/vitest": "4.0.1",
-        "@types/node": "^26.1.2",
-        "effect": "4.0.1",
-        "oxfmt": "0.63.0",
-        "oxlint": "1.78.0",
-        "typescript": "^7.0.2",
-        "vitest": "^5.0.4",
-      },
-      "peerDependencies": {
-        "effect": "4.0.1",
-      },
-    },
-    "packages/principles": {
-      "name": "@montflow/principles",
-      "version": "0.0.2",
-      "bin": {
-        "mf-principles": "./src/apps/cli/main.ts",
-      },
-      "dependencies": {
-        "@effect/platform-node": "4.0.1",
-        "@montflow/payload": "workspace:*",
-        "@montflow/version": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/vitest": "4.0.1",
-        "@types/node": "^26.1.2",
-        "effect": "4.0.1",
-        "oxfmt": "0.63.0",
-        "oxlint": "1.78.0",
-        "typescript": "^7.0.2",
-        "vitest": "^5.0.4",
-      },
-      "peerDependencies": {
-        "effect": "4.0.1",
-      },
-    },
-    "packages/profiles": {
-      "name": "@montflow/profiles",
-      "version": "0.0.2",
-      "bin": {
-        "mf-profiles": "./src/apps/cli/main.ts",
-      },
-      "dependencies": {
-        "@effect/platform-node": "4.0.1",
-        "@montflow/opencode": "workspace:*",
-        "@montflow/payload": "workspace:*",
-        "@montflow/skills": "workspace:*",
-        "@montflow/version": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/vitest": "4.0.1",
-        "@types/node": "^26.1.2",
-        "effect": "4.0.1",
-        "oxfmt": "0.63.0",
-        "oxlint": "1.78.0",
-        "typescript": "^7.0.2",
-        "vitest": "^5.0.4",
-      },
-      "peerDependencies": {
-        "effect": "4.0.1",
-      },
-    },
-    "packages/prompts": {
-      "name": "@montflow/prompts",
-      "version": "0.0.2",
-      "bin": {
-        "mf-prompts": "./src/apps/cli/main.ts",
-      },
-      "dependencies": {
-        "@effect/platform-node": "4.0.1",
-        "@montflow/opencode": "workspace:*",
-        "@montflow/payload": "workspace:*",
-        "@montflow/version": "workspace:*",
-        "handlebars": "4.7.9",
-      },
-      "devDependencies": {
-        "@effect/vitest": "4.0.1",
-        "@types/node": "^26.1.2",
-        "effect": "4.0.1",
-        "oxfmt": "0.63.0",
-        "oxlint": "1.78.0",
-        "typescript": "^7.0.2",
-        "vitest": "^5.0.4",
-      },
-      "peerDependencies": {
-        "effect": "4.0.1",
-      },
-    },
-    "packages/references": {
-      "name": "@montflow/references",
-      "version": "0.0.2",
-      "bin": {
-        "mf-references": "./src/apps/cli/main.ts",
-      },
-      "dependencies": {
-        "@effect/platform-node": "4.0.1",
-        "@montflow/opencode": "workspace:*",
-        "@montflow/payload": "workspace:*",
-        "@montflow/skills": "workspace:*",
-        "@montflow/version": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/vitest": "4.0.1",
-        "@types/node": "^26.1.2",
-        "effect": "4.0.1",
-        "oxfmt": "0.63.0",
-        "oxlint": "1.78.0",
-        "typescript": "^7.0.2",
-        "vitest": "^5.0.4",
-      },
-      "peerDependencies": {
-        "effect": "4.0.1",
-      },
-    },
-    "packages/reviews": {
-      "name": "@montflow/reviews",
-      "version": "0.0.2",
-      "bin": {
-        "mf-reviews": "./src/apps/cli/main.ts",
-      },
-      "dependencies": {
-        "@effect/platform-node": "4.0.1",
-        "@montflow/opencode": "workspace:*",
-        "@montflow/payload": "workspace:*",
-        "@montflow/profiles": "workspace:*",
-        "@montflow/version": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/vitest": "4.0.1",
-        "@types/node": "^26.1.2",
-        "effect": "4.0.1",
-        "oxfmt": "0.63.0",
-        "oxlint": "1.78.0",
-        "typescript": "^7.0.2",
-        "vitest": "^5.0.4",
-      },
-      "peerDependencies": {
-        "effect": "4.0.1",
-      },
-    },
     "packages/shared": {
       "name": "@montflow/shared",
       "version": "0.0.0",
-    },
-    "packages/skills": {
-      "name": "@montflow/skills",
-      "version": "0.0.2",
-      "bin": {
-        "mf-skills": "./src/apps/cli/main.ts",
-      },
-      "dependencies": {
-        "@effect/platform-node": "4.0.1",
-        "@montflow/opencode": "workspace:*",
-        "@montflow/payload": "workspace:*",
-        "@montflow/version": "workspace:*",
-      },
-      "devDependencies": {
-        "@effect/vitest": "4.0.1",
-        "@types/node": "^26.1.2",
-        "effect": "4.0.1",
-        "oxfmt": "0.63.0",
-        "oxlint": "1.78.0",
-        "typescript": "^7.0.2",
-        "vitest": "^5.0.4",
-      },
-      "peerDependencies": {
-        "effect": "4.0.1",
-      },
     },
     "packages/stlx": {
       "name": "@montflow/stlx",
@@ -661,33 +661,33 @@
 
     "@montflow/core": ["@montflow/core@workspace:packages/core"],
 
+    "@montflow/feature": ["@montflow/feature@workspace:packages/mf-feature"],
+
     "@montflow/format": ["@montflow/format@workspace:packages/format"],
 
     "@montflow/linting": ["@montflow/linting@workspace:packages/linting"],
 
-    "@montflow/mode": ["@montflow/mode@workspace:packages/mode"],
-
-    "@montflow/model-fallback": ["@montflow/model-fallback@workspace:packages/model-fallback"],
+    "@montflow/model-fallback": ["@montflow/model-fallback@workspace:packages/mf-model-fallback"],
 
     "@montflow/opencode": ["@montflow/opencode@workspace:packages/opencode"],
 
     "@montflow/payload": ["@montflow/payload@workspace:packages/payload"],
 
-    "@montflow/playbooks": ["@montflow/playbooks@workspace:packages/playbooks"],
+    "@montflow/playbooks": ["@montflow/playbooks@workspace:packages/mf-playbooks"],
 
-    "@montflow/principles": ["@montflow/principles@workspace:packages/principles"],
+    "@montflow/principles": ["@montflow/principles@workspace:packages/mf-principles"],
 
-    "@montflow/profiles": ["@montflow/profiles@workspace:packages/profiles"],
+    "@montflow/profiles": ["@montflow/profiles@workspace:packages/mf-profiles"],
 
-    "@montflow/prompts": ["@montflow/prompts@workspace:packages/prompts"],
+    "@montflow/prompts": ["@montflow/prompts@workspace:packages/mf-prompts"],
 
-    "@montflow/references": ["@montflow/references@workspace:packages/references"],
+    "@montflow/references": ["@montflow/references@workspace:packages/mf-references"],
 
-    "@montflow/reviews": ["@montflow/reviews@workspace:packages/reviews"],
+    "@montflow/reviews": ["@montflow/reviews@workspace:packages/mf-reviews"],
 
     "@montflow/shared": ["@montflow/shared@workspace:packages/shared"],
 
-    "@montflow/skills": ["@montflow/skills@workspace:packages/skills"],
+    "@montflow/skills": ["@montflow/skills@workspace:packages/mf-skills"],
 
     "@montflow/stlx": ["@montflow/stlx@workspace:packages/stlx"],
 
@@ -1763,9 +1763,9 @@
 
     "@manypkg/get-packages/fs-extra": ["fs-extra@8.1.0", "", { "dependencies": { "graceful-fs": "^4.2.0", "jsonfile": "^4.0.0", "universalify": "^0.1.0" } }, "sha512-yhlQgA6mnOJUKOsRUFsgJdQCvkKhcz8tlZG5HBQfReYZy46OwLcY+Zia0mtdHsOo9y/hP+CxMN0TU9QxoOtG4g=="],
 
-    "@montflow/linting/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
+    "@montflow/feature/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 
-    "@montflow/mode/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
+    "@montflow/linting/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 
     "@montflow/model-fallback/typescript": ["typescript@7.0.2", "", { "optionalDependencies": { "@typescript/typescript-aix-ppc64": "7.0.2", "@typescript/typescript-darwin-arm64": "7.0.2", "@typescript/typescript-darwin-x64": "7.0.2", "@typescript/typescript-freebsd-arm64": "7.0.2", "@typescript/typescript-freebsd-x64": "7.0.2", "@typescript/typescript-linux-arm": "7.0.2", "@typescript/typescript-linux-arm64": "7.0.2", "@typescript/typescript-linux-loong64": "7.0.2", "@typescript/typescript-linux-mips64el": "7.0.2", "@typescript/typescript-linux-ppc64": "7.0.2", "@typescript/typescript-linux-riscv64": "7.0.2", "@typescript/typescript-linux-s390x": "7.0.2", "@typescript/typescript-linux-x64": "7.0.2", "@typescript/typescript-netbsd-arm64": "7.0.2", "@typescript/typescript-netbsd-x64": "7.0.2", "@typescript/typescript-openbsd-arm64": "7.0.2", "@typescript/typescript-openbsd-x64": "7.0.2", "@typescript/typescript-sunos-x64": "7.0.2", "@typescript/typescript-win32-arm64": "7.0.2", "@typescript/typescript-win32-x64": "7.0.2" }, "bin": { "tsc": "bin/tsc" } }, "sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA=="],
 

@@ -1,0 +1,210 @@
+{
+  "schema": 1,
+  "package": "@montflow/feature",
+  "payloads": [
+    {
+      "kind": "skill",
+      "name": "mf-feature",
+      "source": "skills/mf-feature",
+      "target": ".agents/skills/mf-feature"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-architect",
+      "source": "skills/mf-feature-architect",
+      "target": ".agents/skills/mf-feature-architect"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-arena",
+      "source": "skills/mf-feature-arena",
+      "target": ".agents/skills/mf-feature-arena"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-automate-me",
+      "source": "skills/mf-feature-automate-me",
+      "target": ".agents/skills/mf-feature-automate-me"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-benchmark-checklist",
+      "source": "skills/mf-feature-benchmark-checklist",
+      "target": ".agents/skills/mf-feature-benchmark-checklist"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-blast-radius",
+      "source": "skills/mf-feature-blast-radius",
+      "target": ".agents/skills/mf-feature-blast-radius"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-bro",
+      "source": "skills/mf-feature-bro",
+      "target": ".agents/skills/mf-feature-bro"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-correct",
+      "source": "skills/mf-feature-correct",
+      "target": ".agents/skills/mf-feature-correct"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-create-formal-verification-skill",
+      "source": "skills/mf-feature-create-formal-verification-skill",
+      "target": ".agents/skills/mf-feature-create-formal-verification-skill"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-create-verification-skill",
+      "source": "skills/mf-feature-create-verification-skill",
+      "target": ".agents/skills/mf-feature-create-verification-skill"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-figure-it-out",
+      "source": "skills/mf-feature-figure-it-out",
+      "target": ".agents/skills/mf-feature-figure-it-out"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-help",
+      "source": "skills/mf-feature-help",
+      "target": ".agents/skills/mf-feature-help"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-how",
+      "source": "skills/mf-feature-how",
+      "target": ".agents/skills/mf-feature-how"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-in-your-own-words",
+      "source": "skills/mf-feature-in-your-own-words",
+      "target": ".agents/skills/mf-feature-in-your-own-words"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-interrogate",
+      "source": "skills/mf-feature-interrogate",
+      "target": ".agents/skills/mf-feature-interrogate"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-ketchup",
+      "source": "skills/mf-feature-ketchup",
+      "target": ".agents/skills/mf-feature-ketchup"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-ketchup-video",
+      "source": "skills/mf-feature-ketchup-video",
+      "target": ".agents/skills/mf-feature-ketchup-video"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-maintain-formal-verification-skill",
+      "source": "skills/mf-feature-maintain-formal-verification-skill",
+      "target": ".agents/skills/mf-feature-maintain-formal-verification-skill"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-maintain-verification-skill",
+      "source": "skills/mf-feature-maintain-verification-skill",
+      "target": ".agents/skills/mf-feature-maintain-verification-skill"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-no-comments",
+      "source": "skills/mf-feature-no-comments",
+      "target": ".agents/skills/mf-feature-no-comments"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-recall",
+      "source": "skills/mf-feature-recall",
+      "target": ".agents/skills/mf-feature-recall"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-reflect",
+      "source": "skills/mf-feature-reflect",
+      "target": ".agents/skills/mf-feature-reflect"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-sharpen",
+      "source": "skills/mf-feature-sharpen",
+      "target": ".agents/skills/mf-feature-sharpen"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-show-me-your-work",
+      "source": "skills/mf-feature-show-me-your-work",
+      "target": ".agents/skills/mf-feature-show-me-your-work"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-statechart",
+      "source": "skills/mf-feature-statechart",
+      "target": ".agents/skills/mf-feature-statechart"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-swarm",
+      "source": "skills/mf-feature-swarm",
+      "target": ".agents/skills/mf-feature-swarm"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-tdd",
+      "source": "skills/mf-feature-tdd",
+      "target": ".agents/skills/mf-feature-tdd"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-teach",
+      "source": "skills/mf-feature-teach",
+      "target": ".agents/skills/mf-feature-teach"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-technical-writing",
+      "source": "skills/mf-feature-technical-writing",
+      "target": ".agents/skills/mf-feature-technical-writing"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-typescript-best-practices",
+      "source": "skills/mf-feature-typescript-best-practices",
+      "target": ".agents/skills/mf-feature-typescript-best-practices"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-unslop",
+      "source": "skills/mf-feature-unslop",
+      "target": ".agents/skills/mf-feature-unslop"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-feature-why",
+      "source": "skills/mf-feature-why",
+      "target": ".agents/skills/mf-feature-why"
+    },
+    {
+      "kind": "profile",
+      "name": "mf-feature-comment-sicko",
+      "source": "profiles/mf-feature-comment-sicko",
+      "target": ".agents/@montflow/profiles/mf-feature-comment-sicko"
+    },
+    {
+      "kind": "profile",
+      "name": "mf-feature-generic-worker",
+      "source": "profiles/mf-feature-generic-worker",
+      "target": ".agents/@montflow/profiles/mf-feature-generic-worker"
+    }
+  ]
+}

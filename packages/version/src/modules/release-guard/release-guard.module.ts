@@ -7,7 +7,7 @@ export const CLIS = [
   '@montflow/references',
   '@montflow/principles',
   '@montflow/playbooks',
-  '@montflow/mode',
+  '@montflow/feature',
 ] as const;
 
 /** Sentence every CLI CHANGELOG must carry about releases versus checkouts. */

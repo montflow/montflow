@@ -89,7 +89,7 @@ Domain verbs extend this; never break it (`mf-skills`: `sync`).
 ## Steps
 
 1. Scaffold `packages/<domain>`. Add `bin`, `cli`, `build:cli` scripts.
-2. Write engines: structured args in, data or displayable-string failure out. No argv, no output. Pattern: [prompts CLI CONTEXT](../../packages/prompts/src/apps/cli/CONTEXT.md).
+2. Write engines: structured args in, data or displayable-string failure out. No argv, no output. Pattern: [prompts CLI CONTEXT](../../packages/mf-prompts/src/apps/cli/CONTEXT.md).
 3. Write renderers: pure `data -> text`, token-lean default, `--verbose` additive.
 4. Write `binary.apps.module.ts` `rootCommand` with the applicable canonical verbs; add `main.ts` entry.
 5. Write `slash.apps.module.ts` hand-rolled parser + `run` + `register`; reuse engines/renderers; register it on the server plugin entry (`src/server.ts`).
@@ -114,13 +114,13 @@ to CI, cross-scope changes, or an explicit request.
 
 | Package | Single artifact | Whole store |
 | --- | --- | --- |
-| `skills` | `bun run --cwd packages/skills cli verify <name> --dir $PWD` | `verify --dir $PWD` |
-| `prompts` | `bun run --cwd packages/prompts cli verify <name> --dir $PWD` | `verify --all --dir $PWD` |
-| `profiles` | `bun run --cwd packages/profiles cli verify <name> --dir $PWD` | `verify --dir $PWD` |
-| `reviews` | `bun run --cwd packages/reviews cli verify <series> --dir $PWD` | `verify --all --dir $PWD` |
-| `references` | `bun run --cwd packages/references cli verify <slug> --dir $PWD` | `verify --all --dir $PWD` |
-| `principles` | `bun run --cwd packages/principles cli verify <name> --dir $PWD` | `verify --all --dir $PWD` |
-| `playbooks` | `bun run --cwd packages/playbooks cli verify <name> --dir $PWD` | `verify --all --dir $PWD` |
+| `skills` | `bun run --cwd packages/mf-skills cli verify <name> --dir $PWD` | `verify --dir $PWD` |
+| `prompts` | `bun run --cwd packages/mf-prompts cli verify <name> --dir $PWD` | `verify --all --dir $PWD` |
+| `profiles` | `bun run --cwd packages/mf-profiles cli verify <name> --dir $PWD` | `verify --dir $PWD` |
+| `reviews` | `bun run --cwd packages/mf-reviews cli verify <series> --dir $PWD` | `verify --all --dir $PWD` |
+| `references` | `bun run --cwd packages/mf-references cli verify <slug> --dir $PWD` | `verify --all --dir $PWD` |
+| `principles` | `bun run --cwd packages/mf-principles cli verify <name> --dir $PWD` | `verify --all --dir $PWD` |
+| `playbooks` | `bun run --cwd packages/mf-playbooks cli verify <name> --dir $PWD` | `verify --all --dir $PWD` |
 
 `--dir` is the workspace root, never the store. Keep each CLI's docs to this
 form; do not present `mf:check` as the local check for one artifact.

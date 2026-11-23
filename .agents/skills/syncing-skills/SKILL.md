@@ -78,10 +78,10 @@ Name the source and the target before writing anything:
 
 ```bash
 # into the current workspace, from the checkout the CLI runs from
-bun run --cwd "$S/packages/skills" cli sync --target "$PWD"
+bun run --cwd "$S/packages/mf-skills" cli sync --target "$PWD"
 
 # explicit source and target
-bun run --cwd "$S/packages/skills" cli sync --source "$S" --target "$PWD"
+bun run --cwd "$S/packages/mf-skills" cli sync --source "$S" --target "$PWD"
 ```
 
 Sync is idempotent and leaves unrelated skills untouched. The report groups
@@ -92,7 +92,7 @@ count line beneath.
 ## 4. Verify
 
 ```bash
-bun run --cwd "$S/packages/skills" cli sync --source "$S" --target "$PWD" --check
+bun run --cwd "$S/packages/mf-skills" cli sync --source "$S" --target "$PWD" --check
 ```
 
 `--check` reports the same outcomes, writes nothing, and exits `1` on drift. A

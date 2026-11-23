@@ -44,7 +44,7 @@ Field rules:
 - `name`: kebab-case slug, matches the directory name. Must equal the file's directory.
 - `description`: one line saying WHAT the agent is — its role and job. It drives profile selection, so lead with the role.
 - `model`: preferred model as `provider/model-id`, or blank when unset. Never invent a model id.
-- `skills`: names from `SKILL.md` frontmatter `name:` fields. Discover them with `mf-skills list` — it prints every skill name with its description — and read a full contract with `mf-skills show <skill>`. Reference existing skills only, otherwise leave skills empty or omit the key. Profiles never activate skills themselves; consumers load them. Where the binary is not on `PATH`: `bun run --cwd packages/skills cli list --dir "$PWD"`.
+- `skills`: names from `SKILL.md` frontmatter `name:` fields. Discover them with `mf-skills list` — it prints every skill name with its description — and read a full contract with `mf-skills show <skill>`. Reference existing skills only, otherwise leave skills empty or omit the key. Profiles never activate skills themselves; consumers load them. Where the binary is not on `PATH`: `bun run --cwd packages/mf-skills cli list --dir "$PWD"`.
 - `## Instructions`: the custom system prompt. Concrete behavior, focus areas, and avoidances. Short sections and bullets over prose.
 - `## Review Checklist`: at least one verifiable `- [ ]` item the work must satisfy before it is done.
 
@@ -79,7 +79,7 @@ mf-profiles verify <name>
 Where the binary is not on `PATH`:
 
 ```
-bun run --cwd packages/profiles cli verify <name> --dir "$PWD"
+bun run --cwd packages/mf-profiles cli verify <name> --dir "$PWD"
 ```
 
 It covers the frontmatter, the name/directory match, and the one-line
@@ -97,7 +97,7 @@ what the verifier cannot:
 
 - **Store**: `.agents/@montflow/profiles/<name>/PROFILE.md` — the frontmatter and sections above are the whole contract; author the file directly.
 - **Modifying an existing profile**: skill [mf-modify-profiles](../mf-modify-profiles/SKILL.md)
-- **Format source**: `packages/profiles/src/modules/profile/` (internal module name) (`parseProfileFile`, `verifyProfileFile`)
+- **Format source**: `packages/mf-profiles/src/modules/profile/` (internal module name) (`parseProfileFile`, `verifyProfileFile`)
 
 # What a Profile Never Does
 

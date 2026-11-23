@@ -1,1 +1,1 @@
-export { default } from "../../../packages/prompts/src/server.ts";
+export { default } from "../../../packages/mf-prompts/src/server.ts";

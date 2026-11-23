@@ -8,15 +8,15 @@ import { type PayloadManifest, generateEmbeddedPayload, loadManifest } from '../
 const REPO_ROOT = NodePath.resolve(import.meta.dirname, '..', '..', '..', '..', '..', '..');
 
 const PACKAGES = [
-  'skills',
-  'prompts',
-  'profiles',
-  'reviews',
-  'references',
-  'model-fallback',
-  'principles',
-  'playbooks',
-  'mode',
+  'mf-skills',
+  'mf-prompts',
+  'mf-profiles',
+  'mf-reviews',
+  'mf-references',
+  'mf-model-fallback',
+  'mf-principles',
+  'mf-playbooks',
+  'mf-feature',
 ] as const;
 
 /** Where a package's generated module lives, accepting both doctor layouts. */
@@ -42,7 +42,7 @@ Vitest.describe('generateEmbeddedPayload', () => {
       const raw: unknown = JSON.parse(
         Fs.readFileSync(NodePath.join(packageRoot, 'payload.json'), 'utf8'),
       );
-      const loaded = loadManifest(raw, `@montflow/${pkg}`);
+      const loaded = loadManifest(raw, `@montflow/${pkg.replace(/^mf-/, '')}`);
       Vitest.expect(loaded.ok, `${pkg} manifest`).toBe(true);
       if (!loaded.ok) continue;
       const root = Fs.mkdtempSync(NodePath.join(Os.tmpdir(), 'mf-payload-embed-'));

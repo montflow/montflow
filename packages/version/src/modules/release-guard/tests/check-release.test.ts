@@ -14,7 +14,7 @@ import { CLIS } from '../index.js';
 const PACKAGE_ROOT = resolve(import.meta.dirname, '../../../..');
 const SCRIPT = join(PACKAGE_ROOT, 'scripts/check-release.ts');
 
-const cliDir = (name: string): string => `packages/${name.replace('@montflow/', '')}`;
+const cliDir = (name: string): string => `packages/mf-${name.replace('@montflow/', '')}`;
 
 /** Copy the guarded files into a throwaway root. */
 const fixture = async (): Promise<string> => {

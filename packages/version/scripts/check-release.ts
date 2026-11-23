@@ -34,7 +34,7 @@ const root = resolve(rootValue);
 const failures: string[] = [];
 
 const manifestPath = (name: string): string =>
-  join(root, 'packages', name.replace('@montflow/', ''), 'package.json');
+  join(root, 'packages', `mf-${name.replace('@montflow/', '')}`, 'package.json');
 
 const readJson = (file: string): Record<string, unknown> => {
   try {
@@ -106,7 +106,7 @@ for (const name of CLIS) {
   if (guide !== '' && !guide.includes(`## ${cli}`)) {
     failures.push(`guides/updating.md: no '## ${cli}' heading for the notice anchor`);
   }
-  const changelog = join(root, 'packages', name.replace('@montflow/', ''), 'CHANGELOG.md');
+  const changelog = join(root, 'packages', `mf-${name.replace('@montflow/', '')}`, 'CHANGELOG.md');
   if (!existsSync(changelog)) {
     failures.push(`${name}: CHANGELOG.md is missing`);
     continue;

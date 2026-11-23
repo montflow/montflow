@@ -15,12 +15,12 @@ Point OpenCode at this repo's plugin packages so `/mf-*` commands work.
    ```jsonc
    {
      "plugins": [
-       "./packages/prompts",
-       "./packages/skills",
-       "./packages/profiles",
-       "./packages/reviews",
-       "./packages/references",
-       "./packages/model-fallback",
+       "./packages/mf-prompts",
+       "./packages/mf-skills",
+       "./packages/mf-profiles",
+       "./packages/mf-reviews",
+       "./packages/mf-references",
+       "./packages/mf-model-fallback",
        "./apps/workspace"
      ]
    }
@@ -29,7 +29,7 @@ Point OpenCode at this repo's plugin packages so `/mf-*` commands work.
 2. Consuming repo: point entries at the reference checkout instead:
 
    ```jsonc
-   "./.agents/references/montflow/packages/prompts",
+   "./.agents/references/montflow/packages/mf-prompts",
    "./.agents/references/montflow/apps/workspace"
    ```
 

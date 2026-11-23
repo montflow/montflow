@@ -94,7 +94,7 @@ Never claim git state you did not read:
 
   Every verb takes `--dir <root>` (defaults to the working directory). The default output is agent-first; `--human` renders readable tables and prose, `--verbose` adds detail, and the two compose on every verb that renders rows or a result; `show` prints bytes and takes `--dir` only.
 
-- **Binary / slash command**: `mf-references` and `/mf-references`; `list`, `show`, `sync`, and `status` are the verbs this pipeline uses. In the montflow monorepo, `bun run --cwd packages/references cli <verb>` is the same engine.
+- **Binary / slash command**: `mf-references` and `/mf-references`; `list`, `show`, `sync`, and `status` are the verbs this pipeline uses. In the montflow monorepo, `bun run --cwd packages/mf-references cli <verb>` is the same engine.
 - **Store contract**: `.agents/@montflow/references/<slug>/REFERENCE.md` is the registry; clones live at `.agents/references/<slug>` and are gitignored.
 - **In-host tool**: `reference_find` matches a query against slug, URL, purpose, and notes, and reports the clone path with a `sync` hint when it is missing.
 - **Changelog and migration**: [CHANGELOG.md](CHANGELOG.md).

@@ -18,6 +18,7 @@ const MANIFEST_PACKAGES = [
   'model-fallback',
   'principles',
   'playbooks',
+  'feature',
 ] as const;
 
 interface RootManifest {
@@ -60,7 +61,7 @@ Vitest.describe('root scripts', () => {
     const command = scripts()['mf:doctor'];
     Vitest.expect(command).toBeDefined();
     for (const pkg of MANIFEST_PACKAGES) {
-      Vitest.expect(command).toContain(`packages/${pkg}`);
+      Vitest.expect(command).toContain(`packages/mf-${pkg}`);
     }
     Vitest.expect(command).not.toContain('--check');
   });

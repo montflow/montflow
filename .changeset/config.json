@@ -12,7 +12,7 @@
       "@montflow/references",
       "@montflow/principles",
       "@montflow/playbooks",
-      "@montflow/mode"
+      "@montflow/feature"
     ]
   ],
   "access": "public",

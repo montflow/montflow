@@ -38,7 +38,7 @@ const patchedResolve: typeof Bun.resolveSync = (specifier, parent) => {
 Bun.resolveSync = patchedResolve;
 
 const targetOf = (name: string) => ({
-  directory: fileURLToPath(new URL(`../../${name}`, import.meta.url)),
+  directory: fileURLToPath(new URL(`../../mf-${name}`, import.meta.url)),
   name: `@montflow/${name}`,
 });
 

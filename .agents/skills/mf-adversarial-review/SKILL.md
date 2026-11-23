@@ -73,9 +73,9 @@ Start and continue the series through the CLI — never by listing directories a
 Where the binary is not on `PATH`, use the in-repo form:
 
 ```
-bun run --cwd packages/reviews cli create <name> --dir "$PWD"
-bun run --cwd packages/reviews cli resume <name> --dir "$PWD"
-bun run --cwd packages/reviews cli list --verbose --dir "$PWD"
+bun run --cwd packages/mf-reviews cli create <name> --dir "$PWD"
+bun run --cwd packages/mf-reviews cli resume <name> --dir "$PWD"
+bun run --cwd packages/mf-reviews cli list --verbose --dir "$PWD"
 ```
 
 When an orchestrator dispatches this review (e.g. closing a phase), its context names the series and, when the review is bound to a phase, also the round, the phase, and the reviewer profile (`- Series:`, `- Round:`, `- Phase:`, `- Profile:`).

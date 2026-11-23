@@ -198,8 +198,8 @@ instead of opening the file manually. Reference existing skills only, otherwise
 leave `skills` empty. Where the binary is not on `PATH`, use the in-repo form:
 
 ```
-bun run --cwd packages/skills cli list --dir "$PWD"
-bun run --cwd packages/skills cli show <skill> --dir "$PWD"
+bun run --cwd packages/mf-skills cli list --dir "$PWD"
+bun run --cwd packages/mf-skills cli show <skill> --dir "$PWD"
 ```
 
 Set `model` to `provider/model-id` to pin one, or `""` to make it a per-run
@@ -217,7 +217,7 @@ mf-prompts verify <name>
 Where the binary is not on `PATH`:
 
 ```
-bun run --cwd packages/prompts cli verify <name> --dir "$PWD"
+bun run --cwd packages/mf-prompts cli verify <name> --dir "$PWD"
 ```
 
 The ten rules it measures:
@@ -247,11 +247,11 @@ Finish with the same mandatory gate as creation:
 mf-prompts verify <name>
 ```
 
-(or `bun run --cwd packages/prompts cli verify <name> --dir "$PWD"` when the
+(or `bun run --cwd packages/mf-prompts cli verify <name> --dir "$PWD"` when the
 binary is not on `PATH`).
 
 # Reference
 
-- **Grammar and analysis**: `TemplateEngine` in `packages/prompts/src/modules/template-engine/`
-- **Verifier**: `Prompts.verifyPromptFile` and `Prompts.verifyReport` in `packages/prompts/src/modules/prompts/prompts.module.ts`
+- **Grammar and analysis**: `TemplateEngine` in `packages/mf-prompts/src/modules/template-engine/`
+- **Verifier**: `Prompts.verifyPromptFile` and `Prompts.verifyReport` in `packages/mf-prompts/src/modules/prompts/prompts.module.ts`
 - **Inspecting and executing a prompt**: skill `mf-execute-prompts`

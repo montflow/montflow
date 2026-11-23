@@ -66,4 +66,4 @@ mf-skills verify <name>          # the binary, scriptable
 
 - **Skill format**: `.agents/skills/<name>/SKILL.md` — one directory per skill.
 - **Creation standard**: [mf-create-skills](../mf-create-skills/SKILL.md).
-- **Contract source**: `packages/skills/src/modules/skill/skill.module.ts` (`verifySkillFile`).
+- **Contract source**: `packages/mf-skills/src/modules/skill/skill.module.ts` (`verifySkillFile`).

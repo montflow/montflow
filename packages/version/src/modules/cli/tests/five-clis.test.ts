@@ -17,13 +17,13 @@ import * as Vitest from '@effect/vitest';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../../../../..');
 const CLI_PACKAGES = [
-  'skills',
-  'prompts',
-  'profiles',
-  'reviews',
-  'principles',
-  'playbooks',
-  'mode',
+  'mf-skills',
+  'mf-prompts',
+  'mf-profiles',
+  'mf-reviews',
+  'mf-principles',
+  'mf-playbooks',
+  'mf-feature',
 ] as const;
 
 interface Manifest {
@@ -96,7 +96,7 @@ Vitest.describe('version across every listed CLI runtime', () => {
         const store = join(root, '.agents', 'skills');
         yield* Effect.promise(() => mkdir(store, { recursive: true }));
 
-        const unmanaged = run('skills', ['version', '--json', '--dir', root]);
+        const unmanaged = run('mf-skills', ['version', '--json', '--dir', root]);
         const unmanagedIdentity: unknown = JSON.parse(unmanaged.stdout.trim());
         Vitest.expect(unmanagedIdentity).toMatchObject({ store: { status: 'unmanaged' } });
 
@@ -112,7 +112,7 @@ Vitest.describe('version across every listed CLI runtime', () => {
           ),
         );
 
-        const managed = run('skills', ['version', '--json', '--dir', root]);
+        const managed = run('mf-skills', ['version', '--json', '--dir', root]);
         const managedIdentity: unknown = JSON.parse(managed.stdout.trim());
         Vitest.expect(managedIdentity).toMatchObject({
           store: { status: 'managed', version: '7.6.5', commit: 'd'.repeat(40) },
@@ -128,18 +128,18 @@ Vitest.describe('compiled binary runtime', () => {
     async () => {
       const root = await mkdtemp(join(tmpdir(), 'mf-version-compiled-'));
       try {
-        const manifest = await manifestOf('profiles');
+        const manifest = await manifestOf('mf-profiles');
         const artifact = join(root, 'mf-profiles');
         const build = spawnSync(
           'bun',
           [
             'build',
-            join(packageDir('profiles'), 'src/apps/cli/main.ts'),
+            join(packageDir('mf-profiles'), 'src/apps/cli/main.ts'),
             '--compile',
             '--outfile',
             artifact,
           ],
-          { cwd: packageDir('profiles'), encoding: 'utf8' },
+          { cwd: packageDir('mf-profiles'), encoding: 'utf8' },
         );
         Vitest.expect(build.status, build.stderr).toBe(0);
 

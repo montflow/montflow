@@ -14,14 +14,14 @@ import {
 const REPO_ROOT = NodePath.resolve(import.meta.dirname, '..', '..', '..', '..', '..', '..');
 
 const PACKAGES = [
-  'skills',
-  'prompts',
-  'profiles',
-  'reviews',
-  'references',
-  'model-fallback',
-  'principles',
-  'playbooks',
+  'mf-skills',
+  'mf-prompts',
+  'mf-profiles',
+  'mf-reviews',
+  'mf-references',
+  'mf-model-fallback',
+  'mf-principles',
+  'mf-playbooks',
 ] as const;
 
 /** Read a package's `payload.json`, or undefined when it has none. */
@@ -50,7 +50,7 @@ Vitest.describe('loadManifest', () => {
       const parsed: unknown = JSON.parse(text ?? '');
       // SAFETY: the fixture is a package.json this repository owns; a malformed
       // one fails the assertion above instead of being trusted.
-      const manifest = loadManifest(parsed, `@montflow/${pkg}`);
+      const manifest = loadManifest(parsed, `@montflow/${pkg.replace(/^mf-/, '')}`);
       Vitest.expect(manifest.ok, `${pkg} manifest validates`).toBe(true);
       const count = manifest.ok ? manifest.manifest.payloads.length : 0;
       Vitest.expect(count).toBeGreaterThan(0);
@@ -71,7 +71,7 @@ Vitest.describe('loadManifest', () => {
     for (const pkg of PACKAGES) {
       const text = manifestText(pkg);
       const parsed: unknown = JSON.parse(text ?? '');
-      const loaded = loadManifest(parsed, `@montflow/${pkg}`);
+      const loaded = loadManifest(parsed, `@montflow/${pkg.replace(/^mf-/, '')}`);
       Vitest.expect(loaded.ok).toBe(true);
       if (!loaded.ok) continue;
       for (const entry of loaded.manifest.payloads) {

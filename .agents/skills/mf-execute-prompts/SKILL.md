@@ -36,9 +36,9 @@ session, returning the reply. The `/mf-prompts` slash command does the same in
 the host. The **binary** has no model runtime, so its `execute` validates,
 renders, and stops there.
 
-Build it once with `bun run --cwd packages/prompts build:cli`, which emits
+Build it once with `bun run --cwd packages/mf-prompts build:cli`, which emits
 `dist/mf-prompts` as a self-contained executable. Or run it from source with
-`bun packages/prompts/src/apps/cli/main.ts` from the repository root, so the
+`bun packages/mf-prompts/src/apps/cli/main.ts` from the repository root, so the
 working directory is the one holding `.agents/@montflow/prompts`. The binary
 carries the prompt skills inside itself, so every subcommand below works from a
 compiled binary with no package checkout present.
@@ -169,19 +169,19 @@ same prompt.
 
 - **Engines** — `list`, `load`, `verify`, `inspect`, `render`, `plan`, `doctor`,
   `create`, `modify`, `remove` — plus the input grammars both front ends share:
-  `packages/prompts/src/apps/cli/engines.apps.module.ts`
+  `packages/mf-prompts/src/apps/cli/engines.apps.module.ts`
 - **Renderers** and the token contract (lean by default, `--verbose` only adds,
   failures never suppressed):
-  `packages/prompts/src/apps/cli/renderers.apps.module.ts`
+  `packages/mf-prompts/src/apps/cli/renderers.apps.module.ts`
 - **Binary command tree** (`effect/cli`) and `main.ts`:
-  `packages/prompts/src/apps/cli/binary.apps.module.ts`
+  `packages/mf-prompts/src/apps/cli/binary.apps.module.ts`
 - **Slash parser** (registered as `/mf-prompts`):
-  `packages/prompts/src/apps/cli/slash.apps.module.ts`
+  `packages/mf-prompts/src/apps/cli/slash.apps.module.ts`
 - **Interactive engines** (dialogs and menus; the plugin does not register them
-  yet): `packages/prompts/src/apps/interactive/interactive.apps.module.ts`
+  yet): `packages/mf-prompts/src/apps/interactive/interactive.apps.module.ts`
 - **Programmatic**: `PromptExecute.inspect`, `PromptExecute.table`,
   `PromptExecute.execute` in
-  `packages/prompts/src/modules/prompt-execute/prompt-execute.module.ts`
+  `packages/mf-prompts/src/modules/prompt-execute/prompt-execute.module.ts`
 - **Tools**: `prompt_inspect` (`name`, optional `values` as a record) and
   `prompt_execute` (`name`, optional `model`, optional `values`) — an agent can
   call these instead of either command
