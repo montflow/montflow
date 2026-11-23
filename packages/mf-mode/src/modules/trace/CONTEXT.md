@@ -4,8 +4,10 @@ The mf-mode-observe trace: one JSON event per line, appended by the lead and
 its workers through the observe skill's `emit.sh`. `parseTrace` decodes each
 line at the boundary with Schema; a bad line becomes a `Problem`, never a
 crash. `buildModel` folds the events into the `RunModel` the report renders:
-spans paired by `span`, lanes, worker stats, the paths graph and the headline
-numbers. Pure, no IO.
+spans paired by `span`, lanes, worker stats, the `Story` the paths diagram
+tells and the headline numbers. The `Story` is the playbook, the lead's steps
+in order, the workers under each, and what each produced. It holds no
+positions. Pure, no IO.
 
 ## Rules
 
