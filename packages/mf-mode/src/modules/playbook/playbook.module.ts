@@ -99,9 +99,8 @@ export interface VerifyResult {
 }
 
 /**
- * The names each reference list resolves against, gathered by the caller
- * (which owns the IO) from the same workspace root. A field left out skips
- * its resolution.
+ * The installed references, gathered by the caller from the same workspace
+ * root. An omitted frontmatter reference list skips its resolution.
  */
 export interface References {
   /** Workspace root the stores were read from, named in findings. */
@@ -112,6 +111,8 @@ export interface References {
   readonly principles?: ReadonlySet<string> | undefined;
   /** Playbook directories, shipped or extension, that hold a `PLAYBOOK.md`. */
   readonly playbooks?: ReadonlySet<string> | undefined;
+  /** Workspace-relative files under `.agents/skills/<skill>/scripts/`. */
+  readonly scripts: ReadonlySet<string>;
 }
 
 /**
@@ -157,6 +158,14 @@ const proseLines = (body: string): ReadonlyArray<string> => {
   }
   return lines;
 };
+
+/** Script paths in inline code spans, including commands with arguments. */
+export const scriptPathsOf = (body: string): ReadonlyArray<string> =>
+  proseLines(body).flatMap((line) =>
+    Array.from(line.matchAll(/(?<!`)(`+)([^`]+)\1(?!`)/g), ([, , code]) =>
+      (code?.match(/[^\s"'<>|;&]+/g) ?? []).filter((token) => /(?:^|\/)scripts\/.+/.test(token)),
+    ).flat(),
+  );
 
 /**
  * The `# ` headings in a body, outside fenced code.
@@ -242,11 +251,12 @@ const NOUN_OF = {
  * `name` a slug equal to the directory, a non-empty `description`, exactly one
  * `# Title`, a non-empty body after it, a non-empty `## Reply` when one is
  * present, and every `skills`/`principles`/`playbooks` entry resolved against
- * `references`. A body with no list item is a warning: most playbooks number
- * their steps, but some are prose. Pure — the caller gathers the references.
+ * `references`. Inline script paths must start at `.agents/skills/<skill>/scripts/`
+ * and resolve when `references` is provided. A body with no list item is a
+ * warning. The caller gathers the references.
  * @param dirName - playbook directory slug
  * @param markdown - raw PLAYBOOK.md contents
- * @param references - names each reference list resolves against
+ * @param references - installed names and script paths
  * @returns the result; `valid` is true only with zero error issues
  */
 export const verifyFile = (
@@ -292,6 +302,15 @@ export const verifyFile = (
           key,
           `${NOUN_OF[key]} '${entry}' does not exist at ${references.root}/${STORE_OF[key].replace('<name>', entry)}.`,
         ),
+      );
+    }
+  }
+  for (const script of scriptPathsOf(parsed.body)) {
+    if (!/^\.agents\/skills\/[^/]+\/scripts\//.test(script)) {
+      issues.push(error('scripts', `Anchor '${script}' at .agents/skills/<skill>/scripts/.`));
+    } else if (references !== undefined && !references.scripts.has(script)) {
+      issues.push(
+        error('scripts', `Script '${script}' does not exist at ${references.root}/${script}.`),
       );
     }
   }

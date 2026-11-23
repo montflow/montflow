@@ -84,7 +84,7 @@ Vitest.describe('PlaybookStore', () => {
 });
 
 Vitest.describe('PlaybookStore.references', () => {
-  Vitest.it.effect('reads entry names from every store under the same root', () =>
+  Vitest.it.effect('reads entry names from every store and discovers installed scripts', () =>
     Effect.gen(function* () {
       const store = yield* PlaybookStore.PlaybookStore;
       const root = freshRoot();
@@ -95,6 +95,12 @@ Vitest.describe('PlaybookStore.references', () => {
         Fs.writeFileSync(NodePath.join(root, ...parts, file), 'x');
       };
       entry(['.agents', 'skills', 'mf-mode-why'], 'SKILL.md');
+      entry(['.agents', 'skills', 'mf-mode-why', 'scripts', 'nested'], 'run.sh');
+      entry(['.agents', 'skills', 'mf-mode-why', 'scripts', '.nested'], '.run.sh');
+      entry(
+        ['.agents', 'skills', 'mf-mode-why', 'scripts', 'node_modules', 'dependency'],
+        'cli.js',
+      );
       entry(['.agents', '@montflow', 'principles', 'fix-root-causes'], 'PRINCIPLE.md');
       entry(
         ['.agents', '@montflow', 'mf-mode', 'extensions', 'principles', 'local-rule'],
@@ -113,8 +119,15 @@ Vitest.describe('PlaybookStore.references', () => {
         'demo',
         'local-flow',
       ]);
-      const bare = yield* store.references(freshRoot());
+      Vitest.expect(references.scripts).toStrictEqual(
+        new Set([
+          '.agents/skills/mf-mode-why/scripts/nested/run.sh',
+          '.agents/skills/mf-mode-why/scripts/.nested/.run.sh',
+        ]),
+      );
+      const bare = yield* store.references(NodePath.join(root, 'missing'));
       Vitest.expect(bare.skills?.size).toBe(0);
+      Vitest.expect(bare.scripts.size).toBe(0);
       Fs.rmSync(root, { recursive: true, force: true });
     }).pipe(Effect.provide(TestLive)),
   );

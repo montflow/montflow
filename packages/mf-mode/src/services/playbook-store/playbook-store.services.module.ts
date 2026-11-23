@@ -53,15 +53,37 @@ const make = Effect.gen(function* () {
     return Extension.resolve(shipped, extensions, Playbook.KIND);
   });
 
-  /**
-   * The names a playbook's `skills`, `principles`, and `playbooks` lists
-   * resolve against, read from the same workspace root: skill directories
-   * holding a `SKILL.md`, principle directories holding a `PRINCIPLE.md`, and
-   * playbook directories holding a `PLAYBOOK.md`, shipped or extension. Read
-   * by path, never through another package, so the stores stay independent.
-   * @param root - workspace root
-   * @returns the reference sets
-   */
+  const readEntries = (dir: string) => fs.readDirectory(dir).pipe(Effect.orElseSucceed(() => []));
+
+  const scriptFiles = (dir: string): Effect.Effect<ReadonlyArray<string>> =>
+    Effect.gen(function* () {
+      const entries = yield* readEntries(dir);
+      const children = yield* Effect.forEach(
+        entries.filter((entry) => entry !== 'node_modules'),
+        Effect.fnUntraced(function* (entry) {
+          const child = path.join(dir, entry);
+          const type = yield* fs.stat(child).pipe(
+            Effect.map((info) => info.type),
+            Effect.orElseSucceed(() => undefined),
+          );
+          if (type === 'File') return [child];
+          if (type !== 'Directory') return [];
+          const isLink = yield* fs.readLink(child).pipe(Effect.isSuccess);
+          return isLink ? [] : yield* scriptFiles(child);
+        }),
+      );
+      return children.flat();
+    });
+
+  const installedScripts = Effect.fn('PlaybookStore.installedScripts')(function* (root: string) {
+    const dir = path.join(root, ...Playbook.SKILLS_DIR);
+    const skills = yield* readEntries(dir);
+    const files = yield* Effect.forEach(skills, (skill) =>
+      scriptFiles(path.join(dir, skill, 'scripts')),
+    );
+    return new Set(files.flat().map((file) => path.relative(root, file).split(path.sep).join('/')));
+  });
+
   const references = Effect.fn('PlaybookStore.references')(function* (root: string) {
     const under = (dirs: ReadonlyArray<ReadonlyArray<string>>, file: string) =>
       MarkdownStore.entryNames(
@@ -70,12 +92,13 @@ const make = Effect.gen(function* () {
         dirs.map((dir) => path.join(root, ...dir)),
         file,
       );
-    const [skills, principles, playbooks] = yield* Effect.all([
+    const [skills, principles, playbooks, scripts] = yield* Effect.all([
       under([Playbook.SKILLS_DIR], Playbook.SKILL_FILE),
       under([Playbook.PRINCIPLES_DIR, Playbook.PRINCIPLE_EXTENSION_DIR], Playbook.PRINCIPLE_FILE),
       under([Playbook.STORE_DIR, Playbook.EXTENSION_DIR], Playbook.FILE),
+      installedScripts(root),
     ]);
-    const resolved: Playbook.References = { root, skills, principles, playbooks };
+    const resolved: Playbook.References = { root, skills, principles, playbooks, scripts };
     return resolved;
   });
 
