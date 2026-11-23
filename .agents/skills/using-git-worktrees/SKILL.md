@@ -6,7 +6,7 @@ description: >-
   or before executing implementation plans.
 id: f0a3ce02dd486fc5
 author: montflow
-version: 1.5.0
+version: 1.6.0
 license: MIT
 dependencies:
   - executing-skills
@@ -125,11 +125,31 @@ Only proceed to Step 2b if no native worktree tool available.
 
 **Only use if Step 2a does not apply** — no native worktree tool available. Create worktree manually using git.
 
+#### Layout Selection
+
+Git's common dir tells you which layout the repo uses:
+
+```bash
+case "$GIT_COMMON" in
+  */.bare) LAYOUT=bare ;;   # <root>/.bare/ holds git data; worktrees sit beside it
+  *)       LAYOUT=plain ;;  # ordinary checkout; use Directory Selection below
+esac
+ROOT=$(dirname "$GIT_COMMON")   # bare layout only
+```
+
+**Bare layout** (`<root>/.bare/` plus sibling worktrees, e.g. `<root>/main/`, `<root>/feat/my-feature/`):
+
+- Normal work: `LOCATION=$ROOT`, path `$ROOT/$BRANCH` (e.g. `$ROOT/feat/my-feature`).
+- **mf-mode work:** `LOCATION=$ROOT/mf`, path `$ROOT/mf/$BRANCH`. Run in mf-mode when the task was started with `/mf-mode` or a calling skill says so. Keeping mf-mode trees under `mf/` separates them from feature branches.
+- No `.worktrees/` directory and no ignore check are needed: the worktrees live outside the `.bare/` git data, not inside another checkout.
+
+**Plain layout:** follow Directory Selection below.
+
 #### Directory Selection
 
 Follow priority order. Explicit user preference always beats observed filesystem state.
 
-1. **Check instructions for declared worktree directory preference.** If user specified one, set `WORKTREE_LOCATION` accordingly.
+1. **Check instructions for declared worktree directory preference.** If user specified one, set `WORKTREE_LOCATION` accordingly. Bare-layout rules above count as declared preference.
 
 2. **Check for existing project-local worktree directory:**
    ```bash
@@ -176,6 +196,10 @@ git worktree add "$path" -b "$BRANCH" "$BASE"
 cd "$path"
 ```
 
+For the bare layout, `LOCATION` is `$ROOT` or `$ROOT/mf` as set by Layout Selection, so `$path` is the `$ROOT/$BRANCH` or `$ROOT/mf/$BRANCH` path above.
+
+**Agents commit and push from inside the worktree.** Git keeps each worktree's index and HEAD under `<common-dir>/worktrees/<name>`, so an agent working in the worktree also writes to the shared git dir. Grant write access to the worktree folder and to `<common-dir>` (`$ROOT/.bare/` in the bare layout). Do not relocate git data to dodge a sandbox denial; report the denial instead.
+
 **Sandbox fallback:** If `git worktree add` fails with permission error (sandbox denial), tell user sandbox blocked worktree creation, work in current directory instead. Then run setup and baseline tests in place.
 
 ## Step 3: Push Branch (optional)
@@ -188,9 +212,35 @@ git push -u origin "$BRANCH"
 
 If push fails (no remote, auth, rejected), report the error and ask whether to continue locally without pushing. Do not block the rest of the pipeline — the worktree exists either way.
 
-## Step 4: Project Setup
+## Step 6: Open Herdr Space (last, when herdr is present)
 
-Initialize the worktree environment. If the agent does not already know the correct setup procedure, ask the user with a recommended option "let agent figure it out." If that option is chosen, explore project conventions (AGENTS.md, README.md, package.json, scripts/) to determine the correct setup command. Do not hardcode to any specific tool or package manager.
+[Herdr](https://herdr.dev) is a terminal workspace manager for coding agents. Its *spaces* are herdr workspaces. Open a space only after Step 5, so the first agent in it finds a ready worktree. When herdr is available, open one for the new worktree:
+
+```bash
+if [ -n "$HERDR_ENV" ] || { command -v herdr >/dev/null 2>&1 && herdr workspace list >/dev/null 2>&1; }; then
+  herdr workspace create --cwd "$path" --label "$BRANCH" --no-focus
+fi
+```
+
+- `HERDR_ENV` is set when this shell already runs inside herdr. Otherwise the CLI must reach a running herdr server.
+- `--no-focus` keeps focus on the current agent. Drop it only when the user wants to switch to the new space.
+- Herdr absent: skip silently. Herdr command fails: report the error and continue; the worktree exists either way.
+
+## Step 4: Project Setup (gate: before any agent starts)
+
+The worktree is not ready until its environment is set up. Finish this step before Step 5, and before any agent, in this worktree or a herdr space, starts work.
+
+1. **direnv:** if `$path/.envrc` exists, allow it inside the worktree. direnv approves each `.envrc` path separately, so run it there, not from the main checkout:
+   ```bash
+   if [ -f "$path/.envrc" ]; then
+     command -v direnv >/dev/null 2>&1 || { echo "direnv not installed: .envrc not loaded"; exit 1; }
+     (cd "$path" && direnv allow .)
+   fi
+   ```
+2. **Dependencies:** run the project's install command from the worktree. Read AGENTS.md, README.md, package.json, and scripts/ first. When `.envrc` exists, run it inside direnv's environment: `(cd "$path" && direnv exec . <install command>)`.
+3. **Confirm:** every command exits 0. If one fails, report the command and its error, and do not hand the worktree to an agent.
+
+If the agent does not already know the correct setup procedure, ask the user with a recommended option "let agent figure it out." If that option is chosen, explore project conventions to determine the setup command. Do not hardcode to any specific tool or package manager.
 
 Typical patterns (may vary):
 ```bash
@@ -241,6 +291,11 @@ Ready to implement <feature-name>
 | Native worktree tool available | Use it (Step 2a) |
 | No native tool | Git worktree fallback (Step 2b) |
 | Push requested | `git push -u origin "$BRANCH"` (Step 3) |
+| `.envrc` present | `direnv allow` in the worktree, then install (Step 4) |
+| Setup not finished | Do not start agents; report the failing command (Step 4) |
+| Herdr detected | Open a workspace for the worktree, `--no-focus`, after setup (Step 6) |
+| Bare layout (`<root>/.bare/`) | Worktree at `<root>/$BRANCH` (Layout Selection) |
+| mf-mode task, bare layout | Worktree at `<root>/mf/$BRANCH` (Layout Selection) |
 | `.worktrees/` exists | Use it (verify ignored) |
 | `worktrees/` exists | Use it (verify ignored) |
 | Both exist | Use `.worktrees/` |
@@ -290,6 +345,9 @@ Ready to implement <feature-name>
 - Skip Step 2a by jumping straight to Step 2b git commands
 - Create a worktree without a resolved type, name, and origin (Step 1)
 - Push the branch to origin unless the user asked for it (`PUSH=true`)
+- Put a bare-layout worktree anywhere but `<root>/$BRANCH` (or `<root>/mf/$BRANCH` for mf-mode)
+- Move git data out of `<common-dir>` to work around a sandbox denial
+- Start an agent, or open a herdr space, before Step 4 setup has finished
 - Create worktree without verifying it is ignored (project-local)
 - Skip baseline test verification
 - Proceed with failing tests without asking
