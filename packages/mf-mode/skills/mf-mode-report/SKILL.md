@@ -1,6 +1,6 @@
 ---
 name: mf-mode-report
-description: "Render an mf-mode-observe trace with mf-mode report into a self-contained HTML report, a PNG of its summary and a PDF: headline numbers, a timeline with a lane for the lead, each worker and CI, a paths diagram of issues, workers and PRs, per-worker stats, friction, checks, decisions and what is left for the operator. Turned on by /mf-mode --report."
+description: "Render an mf-mode-observe trace with mf-mode report into a self-contained HTML report, a PNG of its summary and a PDF: headline numbers, a timeline with a lane for the lead, each worker and CI, a paths diagram of the playbook, its steps, the workers and what each produced, per-worker stats, friction, checks, decisions and what is left for the operator. Turned on by /mf-mode --report."
 id: 539c2ab2c30be200
 author: Daniel Montilla
 version: 1.0.0
@@ -27,7 +27,7 @@ Turn the run's trace into a page the operator reads in a minute, and a picture o
 | --- | --- |
 | Headline numbers | Wall clock from the first event to the last. Workers, the most at once, and busy time against one-after-another time. Lead round-trips from `run.end`, else the sum over the lead's `phase.end` events. Checks, friction (seconds and wasted calls), PRs and operator items. |
 | Timeline | A lane for the lead, each worker, any other actor, and CI. Bars are phase, worker and CI spans. Marks are checks, friction with a strip for the time lost, and decisions. A vertical line marks each PR's first mention. |
-| Paths | Issues, workers and PRs. A worker's start refs point into it and its end refs out of it. Each `link` event adds an edge labeled with its summary. Without any refs, the lead's phases in order. |
+| Paths | The run's story. The playbook from `run.start` heads a spine of the lead's top-level phases in order, each with the skill or playbook it routed to, its time and its outcome. To the right of each step are the workers it spawned and what it produced. A worker sits in the step it started in, or the one its `phase` attr names, and lists its playbook and the branches, PRs and commits it produced. A PR shows its CI state. A ref belongs to whoever produced it first. A `link` between two of them adds an edge labeled with its summary, and a `link` to a new ref makes it an output, red when its status is `fail`. Workers and outputs outside any step hang off the playbook. |
 | Workers | Per worker: task, model, wall clock, round-trips, checks passed and failed, friction, result and outputs. |
 | Friction, Checks, Decisions, Left for the operator, Phases | One row per event or span. |
 | Event log | Every event, folded. |
