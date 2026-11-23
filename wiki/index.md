@@ -15,4 +15,3 @@ Learn how montflow works across packages in 5 minutes. Pick the page you need.
 ## See also
 
 - [AGENTS.md](../AGENTS.md) for the commands and gates used to develop montflow.
-- [author-mf-utility-cli.md](../.agents/documentation/author-mf-utility-cli.md) for the contract every `mf-*` CLI follows.

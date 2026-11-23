@@ -64,8 +64,7 @@ aliases for frozen records.
   - package scope: `turbo <task> --filter=<package>` from the root, or
     `bun run --cwd <pkg-path> <script>` (e.g. `bun run --cwd packages/core test`).
   - single artifact: the owning package's CLI in its single-artifact form with
-    `--dir $PWD` — see the scoped-invocation table in
-    `.agents/documentation/author-mf-utility-cli.md`.
+    `--dir $PWD` (`mf-<cli> verify <name>`).
   - single test file: `bun run --cwd <pkg-path> test -- <path-to-test-file>`
     (vitest treats the positional arg as a filename filter).
   - lint/format are package-scoped by design (`oxlint .`, `oxfmt .` cover the

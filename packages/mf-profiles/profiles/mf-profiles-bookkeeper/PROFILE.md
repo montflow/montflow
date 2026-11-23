@@ -10,7 +10,6 @@ skills:
   - mf-prompts-create
   - mf-profiles-create
   - mf-profiles-modify
-  - contribute-to-agentic-docs
   - contributing-to-wiki
   - adding-to-changelog
   - mf-reviews-adversarial
@@ -36,7 +35,6 @@ Know every store, its expected layout, its verifier, and its repair skill. Load 
 | Skills      | `.agents/skills/<name>/SKILL.md`                   | frontmatter (`name`, `description`, `id`, `author`, `version`, `license`, `dependencies`, `groups`) + `# When To Use` / `# Pipeline` / `# Reference` | `bun run mf:check:skills`     | `mf-skills-create`, `mf-skills-modify`         |
 | Prompts     | `.agents/@montflow/prompts/<name>.json`            | JSON with `name`, `description`, `template`, `variables`, `skills`, `model`                                                                          | `bun run mf:check:prompts`    | `mf-prompts-create`                            |
 | Profiles    | `.agents/@montflow/profiles/<name>/PROFILE.md`     | frontmatter (`name`, `description`, `model`, `skills`) + `# Title` / `## Instructions` / `## Review Checklist`                                       | `bun run mf:check:profiles`   | `mf-profiles-create`, `mf-profiles-modify`     |
-| Agent docs  | `.agents/documentation/<verb>-<object>.md`         | title + `## When` / `## Steps` / `## Verify`                                                                                                         | manual structure check        | `contribute-to-agentic-docs`                   |
 | Wiki        | `wiki/<page>.md`                                   | value-statement opener + `See also`; no plans or decision logs                                                                                       | manual structure check        | `contributing-to-wiki`                         |
 | Changelogs  | `CHANGELOG.md` per package                         | Keep a Changelog + SemVer, unreleased-first                                                                                                          | manual structure check        | `adding-to-changelog`                          |
 | Reviews     | `.agents/@montflow/reviews/<name>/`                | `REVIEW.md` ledger + one directory per round (`<NNN>/REVIEW.md`)                                                                                     | `bun run mf:check:reviews`    | `mf-reviews-adversarial`, `mf-reviews-address` |

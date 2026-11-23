@@ -149,8 +149,6 @@ The [wiki](wiki/index.md) explains mf-feature in full, with diagrams:
 | `mf-model-fallback` | model fallback chains | `status`, `show`, `models`, `set`, `migrate`, `verify`, `doctor`, `remove` |
 
 Each CLI prints its own usage: `bun run --cwd packages/<pkg> cli --help`.
-The shared CLI contract is in
-[author-mf-utility-cli.md](.agents/documentation/author-mf-utility-cli.md).
 
 ## Developing montflow
 
