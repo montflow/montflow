@@ -1,9 +1,13 @@
 import { Effect, Schema } from 'effect';
+import * as Extension from '../extension/index.js';
 import { type FieldValue, fieldString, parseMarkdown } from '../frontmatter/index.js';
 
 /**
  * A principle: a short conditional rule an agent applies in one situation.
- * Stored as `.agents/@montflow/principles/<name>/PRINCIPLE.md`.
+ * Stored as `.agents/@montflow/principles/<name>/PRINCIPLE.md`. A consumer repo
+ * extends or replaces one, or adds its own, at
+ * `.agents/@montflow/mf-mode/extensions/principles/<name>/PRINCIPLE.md` (see
+ * `../extension/`).
  *
  * Frontmatter holds `name` and `description`; the description is the index
  * line agents read from `mf-mode principles list`, so it opens with the condition
@@ -27,6 +31,12 @@ export const FILE = 'PRINCIPLE.md';
 
 /** The store, relative to the workspace root. */
 export const STORE_DIR = ['.agents', '@montflow', 'principles'] as const;
+
+/** The repo's extension store, read before the shipped one. */
+export const EXTENSION_DIR = [...Extension.STORE_ROOT, 'principles'] as const;
+
+/** How an `extends` extension merges: a principle has no lists to union. */
+export const KIND: Extension.Kind = { noun: 'principle', lists: [] };
 
 /** Every description opens with its trigger: `Apply when …`, `Apply before …`, `Apply to …`. */
 export const DESCRIPTION_PREFIX = 'Apply';

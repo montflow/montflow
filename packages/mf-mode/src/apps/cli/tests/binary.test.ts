@@ -53,6 +53,15 @@ const SOURCES = (): ReadonlyArray<string> => [
   NodePath.join(REPO, 'packages/mf-mode/README.md'),
 ];
 
+/** The markdown mf-mode ships to agents: its skills, playbooks, principles, and profiles. */
+const SHIPPED_TEXT = (): ReadonlyArray<string> =>
+  ['skills', 'playbooks', 'principles', 'profiles'].flatMap((dir) =>
+    markdown(NodePath.join(REPO, 'packages/mf-mode', dir)),
+  );
+
+/** A path into the playbook or principle store, which agents must read through the CLI. */
+const STORE_FILE = /@montflow\/(?:playbooks|principles)\/|\/(?:PLAYBOOK|PRINCIPLE)\.md\b/;
+
 /** `mf-mode <word> [<word>]` in inline code or on a `$ ` command line. */
 const INVOCATION = /(?:`|^\$ )mf-mode ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?/gm;
 
@@ -89,6 +98,24 @@ Vitest.describe('mf-mode binary', () => {
     Vitest.expect(unknown).toEqual([]);
     Vitest.expect(found).toBeGreaterThan(0);
   });
+
+  Vitest.it(
+    'shipped text reads playbooks and principles through the CLI, never a store file',
+    () => {
+      const files = SHIPPED_TEXT();
+      const offenders = files.flatMap((file) =>
+        Fs.readFileSync(file, 'utf8')
+          .split('\n')
+          .flatMap((line, index) =>
+            STORE_FILE.test(line)
+              ? [`${NodePath.relative(REPO, file)}:${index + 1}: ${line.trim()}`]
+              : [],
+          ),
+      );
+      Vitest.expect(offenders).toStrictEqual([]);
+      Vitest.expect(files.length).toBeGreaterThan(0);
+    },
+  );
 
   Vitest.it('verify covers roles, principles, and playbooks in one run', () => {
     const root = Fs.mkdtempSync(NodePath.join(Os.tmpdir(), 'mf-mode-verify-'));

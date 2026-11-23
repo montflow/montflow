@@ -12,11 +12,14 @@ The playbook model and its mechanical standard. Pure: no IO.
   and every reference resolved against the `References` the caller gathered.
   A body with no list item (`1.` or `-`) is a warning, because some upstream
   playbooks are prose
-- Store constants (`FILE`, `STORE_DIR`, and the skills and principles paths a
-  reference resolves against)
+- Store constants (`FILE`, `STORE_DIR`, `EXTENSION_DIR`, and the skills and
+  principles paths, shipped and extension, a reference resolves against)
+- `KIND` — how an `extends` extension merges a playbook: every reference list
+  unions
 
 ## Does not belong here
 
 - Reading any store — that is the `PlaybookStore` service
   (`../../services/playbook-store/`), which also gathers `References`
 - The frontmatter grammar — that is `../frontmatter/`
+- Resolving extensions over shipped playbooks — that is `../extension/`

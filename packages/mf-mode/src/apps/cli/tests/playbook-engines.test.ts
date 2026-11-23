@@ -14,11 +14,20 @@ const TestLive = Layer.provide(
 const freshRoot = (): string =>
   Fs.mkdtempSync(NodePath.join(Os.tmpdir(), 'mf-mode-playbooks-cli-'));
 
-const write = (root: string, name: string, text: string): void => {
-  const dir = NodePath.join(root, '.agents', '@montflow', 'playbooks', name);
+const SHIPPED = ['.agents', '@montflow', 'playbooks'];
+const EXTENSIONS = ['.agents', '@montflow', 'mf-mode', 'extensions'];
+
+const put = (root: string, parts: ReadonlyArray<string>, file: string, text: string): void => {
+  const dir = NodePath.join(root, ...parts);
   Fs.mkdirSync(dir, { recursive: true });
-  Fs.writeFileSync(NodePath.join(dir, 'PLAYBOOK.md'), text);
+  Fs.writeFileSync(NodePath.join(dir, file), text);
 };
+
+const write = (root: string, name: string, text: string): void =>
+  put(root, [...SHIPPED, name], 'PLAYBOOK.md', text);
+
+const extend = (root: string, name: string, text: string): void =>
+  put(root, [...EXTENSIONS, 'playbooks', name], 'PLAYBOOK.md', text);
 
 const GOOD = (name: string): string =>
   `---\nname: ${name}\ndescription: Run ${name}.\n---\n\n# T\n\n1. Step.\n`;
@@ -37,17 +46,20 @@ Vitest.describe('engines and renderers', () => {
       Vitest.expect(Renderers.list(rows, VERBOSE)).toContain(
         'path=.agents/@montflow/playbooks/alpha/PLAYBOOK.md',
       );
-      Vitest.expect(Renderers.list(rows, HUMAN)).toMatch(/^NAME {2,}DESCRIPTION\n/);
+      Vitest.expect(Renderers.list(rows, HUMAN)).toMatch(/^NAME {2,}DESCRIPTION {2,}SOURCE\n/);
+      Vitest.expect(Renderers.list(rows, HUMAN)).toMatch(/^alpha {2,}Run alpha\. {2,}shipped$/m);
       Vitest.expect(Renderers.list([])).toBe('No playbooks.');
       Fs.rmSync(root, { recursive: true, force: true });
     }).pipe(Effect.provide(TestLive)),
   );
 
-  Vitest.it.effect('show returns exact bytes and refuses an unknown name with a fix', () =>
+  Vitest.it.effect('show prints the source line, then exact bytes; refuses an unknown name', () =>
     Effect.gen(function* () {
       const root = freshRoot();
       write(root, 'alpha', GOOD('alpha'));
-      Vitest.expect(yield* Engines.show(root, 'alpha', 'mf-mode playbooks')).toBe(GOOD('alpha'));
+      Vitest.expect(yield* Engines.show(root, 'alpha', 'mf-mode playbooks')).toBe(
+        `source=shipped\n${GOOD('alpha')}`,
+      );
       const refusal = yield* Engines.show(root, 'nope', 'mf-mode playbooks').pipe(Effect.flip);
       Vitest.expect(refusal).toBe(
         "Unknown playbook 'nope'. Run `mf-mode playbooks list` to see the store.",
@@ -96,6 +108,76 @@ Vitest.describe('engines and renderers', () => {
         invocation: 'mf-mode playbooks',
       }).pipe(Effect.flip);
       Vitest.expect(both).toContain('not both');
+      Fs.rmSync(root, { recursive: true, force: true });
+    }).pipe(Effect.provide(TestLive)),
+  );
+  Vitest.it.effect('extensions extend, replace, and add; list, show, and verify read them', () =>
+    Effect.gen(function* () {
+      const root = freshRoot();
+      write(root, 'alpha', GOOD('alpha'));
+      write(root, 'beta', GOOD('beta'));
+      write(root, 'kept', GOOD('kept'));
+      extend(
+        root,
+        'alpha',
+        '---\nname: alpha\nextends: alpha\nprinciples:\n  - local-rule\n---\n\n- Also check.\n',
+      );
+      extend(root, 'beta', GOOD('beta').replace('Run beta.', 'Ours.'));
+      extend(root, 'gamma', GOOD('gamma'));
+      // A principle that only exists as an extension still resolves a reference.
+      put(root, [...EXTENSIONS, 'principles', 'local-rule'], 'PRINCIPLE.md', 'x');
+
+      const rows = yield* Engines.list(root);
+      Vitest.expect(Renderers.list(rows)).toBe(
+        [
+          'alpha: Run alpha. source=extension extends=alpha',
+          'beta: Ours. source=extension replaces=beta',
+          'gamma: Run gamma. source=extension',
+          'kept: Run kept.',
+        ].join('\n'),
+      );
+      Vitest.expect(Renderers.list(rows, VERBOSE)).toContain(
+        'gamma: Run gamma. source=extension path=.agents/@montflow/mf-mode/extensions/playbooks/gamma/PLAYBOOK.md',
+      );
+      Vitest.expect(Renderers.list(rows, HUMAN)).toMatch(
+        /^beta {2,}Ours\. {2,}extension replaces=beta$/m,
+      );
+
+      Vitest.expect(yield* Engines.show(root, 'alpha', 'mf-mode playbooks')).toBe(
+        'source=extension extends=alpha\n---\nname: alpha\ndescription: "Run alpha."\nprinciples:\n  - local-rule\n---\n\n# T\n\n1. Step.\n\n## Local additions\n\n- Also check.\n',
+      );
+      Vitest.expect(yield* Engines.show(root, 'beta', 'mf-mode playbooks')).toBe(
+        `source=extension replaces=beta\n${GOOD('beta').replace('Run beta.', 'Ours.')}`,
+      );
+
+      const clean = yield* Engines.verify(root, { invocation: 'mf-mode playbooks' });
+      Vitest.expect(clean.entries.map((entry) => entry.name)).toStrictEqual([
+        'alpha',
+        'beta',
+        'kept',
+        'extension/alpha',
+        'extension/beta',
+        'extension/gamma',
+      ]);
+      Vitest.expect(clean.issueCount).toBe(0);
+
+      extend(root, 'alpha', '---\nname: alpha\nextends: alpha\n---\n\n# Second\n\n- x\n');
+      extend(root, 'delta', '---\nname: delta\nextends: ghost\n---\n');
+      const broken = yield* Engines.verify(root, { invocation: 'mf-mode playbooks' });
+      Vitest.expect(Renderers.verify(broken)).toBe(
+        [
+          'error extension/alpha [body] Expected one `# Title` heading, found 2.',
+          "error extension/delta [extends] Must name a shipped playbook; 'ghost' is not one.",
+          'summary entries=7 issues=2 warnings=0',
+        ].join('\n'),
+      );
+      const one = yield* Engines.verify(root, { name: 'alpha', invocation: 'mf-mode playbooks' });
+      Vitest.expect(one.entries.map((entry) => entry.name)).toStrictEqual([
+        'alpha',
+        'extension/alpha',
+      ]);
+      const refusal = yield* Engines.show(root, 'delta', 'mf-mode playbooks').pipe(Effect.flip);
+      Vitest.expect(refusal).toContain("Unknown playbook 'delta'.");
       Fs.rmSync(root, { recursive: true, force: true });
     }).pipe(Effect.provide(TestLive)),
   );
