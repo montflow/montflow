@@ -32,7 +32,7 @@
     "format:fix": "oxfmt .",
     "lint:check": "oxlint --deny-warnings .",
     "lint:fix": "oxlint . --fix",
-    "test": "vitest run --typecheck --passWithNoTests",
+    "test": "vitest run --typecheck",
     "test:tui": "bun test .test.tsx",
     "ts:check": "tsc --noEmit"
   },
