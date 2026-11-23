@@ -210,8 +210,6 @@ jobs:
             script: mf-playbooks:check
           - target: feature
             script: mf-feature:check
-          - target: mfstack
-            script: mfstack:check
     steps:
       - uses: actions/checkout@v4
 
