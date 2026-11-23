@@ -2,9 +2,15 @@ import {
   formatClock,
   formatDuration,
   plural,
+  refLabel,
+  refType,
   type Kind,
   type RunModel,
   type Status,
+  type Story,
+  type StoryLane,
+  type StoryOutput,
+  type StoryWorker,
   type TraceEvent,
 } from '../trace/index.js';
 
@@ -31,6 +37,29 @@ const DOT = ' \u{b7} ';
 
 const clip = (value: string, max: number): string =>
   value.length > max ? value.slice(0, max - 1).trimEnd() + ELLIPSIS : value;
+
+/** A glyph's rough advance in em for the report's system sans, erring wide. */
+const advance = (char: string): number => {
+  if (/[ijlI.,:;'|!]/.test(char)) return 0.28;
+  if (/[ frt()[\]{}/\\"-]/.test(char)) return 0.37;
+  if (/[MW@%]/.test(char)) return 0.92;
+  if (/[mw]/.test(char)) return 0.78;
+  if (/[A-Z0-9#&]/.test(char)) return 0.66;
+  return (char.codePointAt(0) ?? 0) >= 0x2000 ? 1 : 0.585;
+};
+
+const ems = (text: string): number =>
+  Array.from(text).reduce((sum, char) => sum + advance(char), 0);
+
+/** Clip text with an ellipsis so its estimated width at fontPx fits in px. */
+const fit = (text: string, px: number, fontPx: number, bold = false): string => {
+  const room = px / (fontPx * (bold ? 1.04 : 1));
+  if (ems(text) <= room) return text;
+  const chars = Array.from(text);
+  let width = ems(text) + advance(ELLIPSIS);
+  while (chars.length > 0 && width > room) width -= advance(chars.pop() ?? '');
+  return chars.join('').trimEnd() + ELLIPSIS;
+};
 
 const num = (value: number): string => String(Math.round(value * 10) / 10);
 
@@ -107,7 +136,7 @@ const timeline = (model: RunModel): string => {
         '" class="lane" text-anchor="end"><title>' +
         escape(lane.label) +
         '</title>' +
-        escape(clip(lane.label, 20)) +
+        escape(fit(lane.label, gutter - 16, 12, true)) +
         '</text>',
       '<line x1="' +
         gutter +
@@ -121,7 +150,7 @@ const timeline = (model: RunModel): string => {
     );
   }
 
-  for (const interval of model.intervals) {
+  for (const [index, interval] of model.intervals.entries()) {
     const y0 = laneY.get(interval.lane);
     if (y0 === undefined) continue;
     const inset = Math.min(interval.depth, 2) * 7;
@@ -163,15 +192,27 @@ const timeline = (model: RunModel): string => {
         ]) +
         '/>',
     );
-    const room = Math.floor((w - 12) / 6.4);
-    if (interval.family === 'phase' && room >= 6 && laneHeight - inset * 2 >= 16) {
+    const room = w - 12;
+    if (interval.family === 'phase' && room >= 36 && laneHeight - inset * 2 >= 16) {
       parts.push(
-        '<text x="' +
+        '<clipPath id="bar' +
+          index +
+          '"><rect x="' +
+          num(x0) +
+          '" y="' +
+          (y0 + inset) +
+          '" width="' +
+          num(w - 6) +
+          '" height="' +
+          (laneHeight - inset * 2) +
+          '"/></clipPath><text x="' +
           num(x0 + 6) +
           '" y="' +
           (y0 + laneHeight / 2 + 4) +
-          '" class="in-label">' +
-          escape(clip(interval.label, room)) +
+          '" class="in-label" clip-path="url(#bar' +
+          index +
+          ')">' +
+          escape(fit(interval.label, room, 11)) +
           '</text>',
       );
     }
@@ -293,7 +334,13 @@ const timeline = (model: RunModel): string => {
         '" y="' +
         y +
         '" class="tick" text-anchor="middle">' +
-        escape(milestone.label) +
+        escape(
+          fit(
+            milestone.label,
+            Math.min(180, 2 * Math.min(x(milestone.at), width - x(milestone.at)) - 8),
+            11,
+          ),
+        ) +
         '</text>',
     );
   });
@@ -320,42 +367,183 @@ const marker = (id: string, cls: string) =>
 const swatch = (style: string, label: string, cls = '') =>
   '<span><i class="sw' + cls + '" style="' + style + '"></i>' + label + '</span>';
 
-const paths = (model: RunModel): string => {
-  if (model.nodes.length === 0) {
-    return '<p class="empty">No issues, pull requests or phases to draw.</p>';
-  }
-  const nodeWidth = 180;
-  const nodeHeight = 46;
-  const columnWidth = 250;
-  const rowHeight = 64;
-  const margin = 12;
-  const columns = Math.max(...model.nodes.map((n) => n.layer)) + 1;
-  const rows = Math.max(...model.nodes.map((n) => n.row)) + 1;
-  const sameLayer = model.edges.some((e) => {
-    const a = model.nodes.find((n) => n.id === e.from);
-    const b = model.nodes.find((n) => n.id === e.to);
-    return a !== undefined && b !== undefined && a.layer === b.layer;
+/** One node of the Paths grid: column 0 is the spine, 1 a lane head, 2 a worker's output. */
+interface Box {
+  readonly id: string;
+  readonly col: number;
+  readonly row: number;
+  readonly cls: string;
+  readonly label: string;
+  readonly sub: string;
+  readonly tip: ReadonlyArray<string | undefined>;
+}
+
+interface Wire {
+  readonly from: string;
+  readonly to: string;
+  readonly kind: 'spine' | 'lane' | 'link';
+  readonly fail: boolean;
+  readonly label: string;
+}
+
+const OUTPUT_TYPES = new Set(['pr', 'branch', 'commit', 'issue', 'url']);
+
+/** Joins the parts of a node id that is not a ref, so it never equals one. */
+const SEP = '\u{0}';
+const PLAYBOOK = SEP + 'playbook';
+
+const skillName = (name: string | undefined): string | undefined => name?.replace(/^mf-mode-/, '');
+
+const join = (bits: ReadonlyArray<string | undefined>): string =>
+  bits.filter((bit): bit is string => bit !== undefined && bit !== '').join(DOT);
+
+const nodeState = (status: Status | undefined, open: boolean): string =>
+  (open ? ' open' : '') + (status === 'fail' ? ' fail' : '');
+
+/** Lay the story out on a grid: the playbook and its steps down column 0, each one's lanes to its right. */
+const storyGrid = (story: Story) => {
+  const boxes: Array<Box> = [];
+  const wires: Array<Wire> = [];
+  const output = (out: StoryOutput, col: number, row: number, from: string) => {
+    const type = refType(out.ref);
+    boxes.push({
+      id: out.ref,
+      col,
+      row,
+      cls: OUTPUT_TYPES.has(type) ? type : 'ref',
+      label: refLabel(out.ref),
+      sub: out.note === '' ? type : out.note,
+      tip: [out.ref, out.note],
+    });
+    wires.push({ from, to: out.ref, kind: 'lane', fail: out.fail, label: '' });
+  };
+  const worker = (w: StoryWorker, row: number, from: string) => {
+    const id = 'worker' + SEP + boxes.length;
+    boxes.push({
+      id,
+      col: 1,
+      row,
+      cls: 'worker' + nodeState(w.status, w.open),
+      label: join([w.id, w.playbook]),
+      sub: join([skillName(w.via), w.task]),
+      tip: [
+        'worker ' + w.id,
+        w.task,
+        w.playbook !== undefined ? 'playbook ' + w.playbook : undefined,
+        w.via !== undefined ? 'spawned by ' + w.via : undefined,
+        w.model,
+        formatDuration(w.to - w.from) + (w.open ? ', still running' : ''),
+        statusWord(w.status),
+        w.inputs.length > 0 ? 'inputs: ' + w.inputs.map(refLabel).join(', ') : undefined,
+      ],
+    });
+    wires.push({ from, to: id, kind: 'lane', fail: false, label: '' });
+    w.outputs.forEach((out, index) => output(out, 2, row + index, id));
+    return Math.max(1, w.outputs.length);
+  };
+  /** Draws a spine node's lanes from its own row down; returns the rows they take. */
+  const lanes = (lane: StoryLane, top: number, from: string): number => {
+    let row = top;
+    for (const out of lane.outputs) {
+      output(out, 1, row, from);
+      row += 1;
+    }
+    for (const w of lane.workers) row += worker(w, row, from);
+    return Math.max(1, row - top);
+  };
+
+  boxes.push({
+    id: PLAYBOOK,
+    col: 0,
+    row: 0,
+    cls: 'playbook',
+    label: story.playbook === undefined ? 'no playbook recorded' : 'playbook ' + story.playbook,
+    sub: story.goal,
+    tip: [
+      story.goal,
+      story.inputs.length > 0 ? 'inputs: ' + story.inputs.map(refLabel).join(', ') : undefined,
+    ],
   });
-  const width = margin * 2 + (columns - 1) * columnWidth + nodeWidth + (sameLayer ? 130 : 0);
-  const height = margin * 2 + (rows - 1) * rowHeight + nodeHeight + 24;
+  let row = lanes(story.loose, 0, PLAYBOOK);
+  let previous = PLAYBOOK;
+  story.steps.forEach((step, index) => {
+    const id = 'step' + SEP + index;
+    const took = formatDuration(step.to - step.from);
+    boxes.push({
+      id,
+      col: 0,
+      row,
+      cls: 'phase' + nodeState(step.status, step.open),
+      label: index + 1 + '. ' + step.label,
+      sub: join([skillName(step.via), took, statusWord(step.status, step.open)]),
+      tip: [
+        'step ' + (index + 1) + ': ' + step.label,
+        step.via !== undefined ? 'via ' + step.via : undefined,
+        formatClock(step.from) + ' to ' + formatClock(step.to) + ' (' + took + ')',
+        statusWord(step.status, step.open),
+      ],
+    });
+    wires.push({ from: previous, to: id, kind: 'spine', fail: false, label: '' });
+    previous = id;
+    row += lanes(step, row, id);
+  });
+  for (const link of story.links) {
+    wires.push({ from: link.from, to: link.to, kind: 'link', fail: link.fail, label: link.label });
+  }
+  return { boxes, wires, rows: row };
+};
+
+/** Fit a node title to px; a URL loses the middle of its path, so its host and its last segments stay. */
+const fitLabel = (box: Box, px: number): string => {
+  const fitted = fit(box.label, px, 12.5, true);
+  if (box.cls !== 'url' || fitted === box.label) return fitted;
+  const [host = '', ...segments] = box.label.split('/');
+  let tail = '';
+  for (const segment of segments.toReversed()) {
+    const next = host + '/' + ELLIPSIS + '/' + segment + tail;
+    if (fit(next, px, 12.5, true) !== next) break;
+    tail = '/' + segment + tail;
+  }
+  return tail === '' ? fitted : host + '/' + ELLIPSIS + tail;
+};
+
+const paths = (model: RunModel): string => {
+  if (model.events.length === 0) return '<p class="empty">No events to draw.</p>';
+  const { boxes, wires, rows } = storyGrid(model.story);
+  const nodeWidth = 240;
+  const nodeHeight = 46;
+  const columnWidth = 296;
+  const rowHeight = 62;
+  const margin = 12;
   const at = new Map(
-    model.nodes.map((n) => [
-      n.id,
-      { x: margin + n.layer * columnWidth, y: margin + n.row * rowHeight },
+    boxes.map((box) => [
+      box.id,
+      { x: margin + box.col * columnWidth, y: margin + box.row * rowHeight },
     ]),
   );
+  const sameColumn = wires.some(
+    (wire) => wire.kind === 'link' && at.get(wire.from)?.x === at.get(wire.to)?.x,
+  );
+  const columns = Math.max(...boxes.map((box) => box.col)) + 1;
+  const width = margin * 2 + (columns - 1) * columnWidth + nodeWidth + (sameColumn ? 130 : 0);
+  const height = margin * 2 + (rows - 1) * rowHeight + nodeHeight + 24;
   const parts: Array<string> = [];
   const labels: Array<string> = [];
   const labelled = new Set<string>();
-  for (const edge of model.edges) {
-    const a = at.get(edge.from);
-    const b = at.get(edge.to);
+  for (const wire of wires) {
+    const a = at.get(wire.from);
+    const b = at.get(wire.to);
     if (a === undefined || b === undefined) continue;
     let d: string;
     let mx: number;
     let my: number;
     let anchor = 'middle';
-    if (b.x === a.x) {
+    if (wire.kind === 'spine') {
+      const x1 = a.x + nodeWidth / 2;
+      d = 'M' + x1 + ',' + (a.y + nodeHeight) + ' L' + x1 + ',' + (b.y - 2);
+      mx = x1;
+      my = b.y;
+    } else if (b.x === a.x) {
       const x1 = a.x + nodeWidth;
       const y1 = a.y + nodeHeight / 2;
       const y2 = b.y + nodeHeight / 2;
@@ -377,7 +565,7 @@ const paths = (model: RunModel): string => {
         (x1 + 2) +
         ',' +
         y2;
-      mx = reach - 4;
+      mx = x1 + (reach - x1) * 0.75 + 6;
       my = (y1 + y2) / 2 + 9;
       anchor = 'start';
     } else if (b.x > a.x) {
@@ -419,14 +607,16 @@ const paths = (model: RunModel): string => {
       '<path d="' +
         d +
         '" class="edge' +
-        (edge.fail ? ' fail' : '') +
+        (wire.fail ? ' fail' : '') +
         '" marker-end="url(#arrow' +
-        (edge.fail ? '-fail' : '') +
+        (wire.fail ? '-fail' : '') +
         ')"/>',
     );
-    const labelKey = JSON.stringify([edge.from, edge.label]);
-    if (edge.label !== '' && !labelled.has(labelKey)) {
+    const labelKey = JSON.stringify([wire.from, wire.label]);
+    if (wire.label !== '' && !labelled.has(labelKey)) {
       labelled.add(labelKey);
+      const room =
+        anchor === 'start' ? width - mx - 4 : Math.min(150, 2 * Math.min(mx, width - mx) - 8);
       labels.push(
         '<text x="' +
           num(mx) +
@@ -435,22 +625,21 @@ const paths = (model: RunModel): string => {
           '" class="edge-label" text-anchor="' +
           anchor +
           '"' +
-          tip([edge.from + ' to ' + edge.to, edge.label]) +
+          tip([refLabel(wire.from) + ' to ' + refLabel(wire.to), wire.label]) +
           '>' +
-          (edge.fail ? CROSS + ' ' : '') +
-          escape(clip(edge.label, 30)) +
+          escape(fit((wire.fail ? CROSS + ' ' : '') + wire.label, room, 11)) +
           '</text>',
       );
     }
   }
-  for (const n of model.nodes) {
-    const p = at.get(n.id);
+  for (const [index, box] of boxes.entries()) {
+    const p = at.get(box.id);
     if (p === undefined) continue;
     parts.push(
       '<g class="node ' +
-        escape(n.type) +
+        escape(box.cls) +
         '"' +
-        tip([n.id, n.sub]) +
+        tip(box.tip) +
         '><rect x="' +
         p.x +
         '" y="' +
@@ -459,21 +648,32 @@ const paths = (model: RunModel): string => {
         nodeWidth +
         '" height="' +
         nodeHeight +
-        '" rx="8"/>' +
-        '<text x="' +
+        '" rx="8"/><clipPath id="node' +
+        index +
+        '"><rect x="' +
+        (p.x + 6) +
+        '" y="' +
+        p.y +
+        '" width="' +
+        (nodeWidth - 12) +
+        '" height="' +
+        nodeHeight +
+        '"/></clipPath><g clip-path="url(#node' +
+        index +
+        ')"><text x="' +
         (p.x + 12) +
         '" y="' +
         (p.y + 19) +
         '" class="nt">' +
-        escape(clip(n.label, 24)) +
+        escape(fitLabel(box, nodeWidth - 24)) +
         '</text>' +
         '<text x="' +
         (p.x + 12) +
         '" y="' +
         (p.y + 35) +
         '" class="ns">' +
-        escape(clip(n.sub, 30)) +
-        '</text></g>',
+        escape(fit(box.sub, nodeWidth - 24, 11)) +
+        '</text></g></g>',
     );
   }
   return (
@@ -483,7 +683,7 @@ const paths = (model: RunModel): string => {
     height +
     '" style="max-width:' +
     width +
-    'px" role="img" aria-label="Paths: issues, workers and pull requests"><defs>' +
+    'px" role="img" aria-label="Paths: the playbook, its steps in order, the workers and what each produced"><defs>' +
     marker('arrow', 'arrow') +
     marker('arrow-fail', 'arrow fail') +
     '</defs>' +
@@ -528,7 +728,7 @@ const when = (at: number): string => '<span class="when">' + formatClock(at) + '
 const DARK =
   'color-scheme:dark;--page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink-2:#c3c2b7;' +
   '--muted:#898781;--grid:#2c2c2a;--axis:#383835;--border:rgba(255,255,255,.10);--phase:#3987e5;' +
-  '--worker:#199e70;--good:#0ca30c;--good-text:#0ca30c;--serious:#ec835a;--critical:#d03b3b';
+  '--worker:#199e70;--pr:#a371f7;--branch:#d4a72c;--good:#0ca30c;--good-text:#0ca30c;--serious:#ec835a;--critical:#d03b3b';
 
 const STYLE = [
   '.viz-root{' + DARK + '}',
@@ -554,8 +754,11 @@ const STYLE = [
   '.in-label{fill:#fff;font-size:11px;pointer-events:none}.glyph{font-size:13px;font-weight:700}.glyph.good{fill:var(--good-text)}.glyph.critical{fill:var(--critical)}',
   '.mile{stroke:var(--ink-2);stroke-width:1;opacity:.5}',
   '.node{outline:none}.node rect{fill:var(--surface);stroke:var(--axis);stroke-width:1.2}',
-  '.node.pr rect{stroke:var(--phase);stroke-width:2}.node.worker rect{stroke:var(--worker);stroke-width:2}',
-  '.node.issue rect{stroke-dasharray:4 3}.node:hover rect,.node:focus rect{stroke:var(--ink)}',
+  '.node.playbook rect{fill:var(--grid);stroke:var(--ink-2);stroke-width:2}.node.phase rect{stroke:var(--phase);stroke-width:2}',
+  '.node.worker rect{stroke:var(--worker);stroke-width:2}.node.pr rect{stroke:var(--pr);stroke-width:2}',
+  '.node.branch rect{stroke:var(--branch);stroke-width:1.6}.node.commit rect,.node.url rect{stroke:var(--muted)}',
+  '.node.issue rect{stroke-dasharray:4 3}.node.open rect{stroke-dasharray:6 4}.node.open text{opacity:.75}',
+  '.node.fail rect{stroke:var(--critical)}.node:hover rect,.node:focus rect{stroke:var(--ink)}',
   '.nt{fill:var(--ink);font-size:12.5px;font-weight:600}.ns{fill:var(--ink-2);font-size:11px}',
   '.edge{fill:none;stroke:var(--muted);stroke-width:1.4}.edge.fail{stroke:var(--critical);stroke-dasharray:5 3}',
   '.arrow{fill:var(--muted)}.arrow.fail{fill:var(--critical)}',
@@ -731,9 +934,14 @@ export const renderReport = (model: RunModel, source: string): string => {
     '<div class="card">' +
       paths(model) +
       '<div class="legend">' +
-      swatch('border-color:var(--axis);border-style:dashed', 'issue', ' box') +
+      swatch('border-color:var(--ink-2);background:var(--grid)', 'playbook', ' box') +
+      swatch('border-color:var(--phase)', 'step', ' box') +
       swatch('border-color:var(--worker)', 'worker', ' box') +
-      swatch('border-color:var(--phase)', 'pull request', ' box') +
+      swatch('border-color:var(--pr)', 'pull request', ' box') +
+      swatch('border-color:var(--branch)', 'branch', ' box') +
+      swatch('border-color:var(--axis);border-style:dashed', 'issue', ' box') +
+      swatch('border-color:var(--muted);border-style:dashed', 'still running', ' box') +
+      swatch('border-color:var(--critical)', 'failed', ' box') +
       swatch(
         'background:var(--critical)',
         CROSS + ' a finding that breaks or changes its target',
