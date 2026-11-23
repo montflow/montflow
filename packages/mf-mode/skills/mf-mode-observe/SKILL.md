@@ -46,7 +46,7 @@ An append never costs a round-trip of its own. Chain it onto a command you are a
 | `calls` | number, optional | Tool round-trips, counted as below. |
 | `secs` | number, optional | Seconds it cost, on `friction` and `check`. |
 | `note` | string, optional | The second line: a check's command, a decision's reason, a friction's fix. |
-| `attrs` | string map, optional | Extras such as `harness`, `model`, `effort` and `playbook`. |
+| `attrs` | string map, optional | Extras: `harness`, `model` and `effort`, the `playbook` a run, step or worker follows, the `skill` a step routes to or that spawned a worker, and the `phase` a worker belongs to. |
 
 [`references/example.trace.jsonl`](references/example.trace.jsonl) is a real three-worker run rebuilt event by event with this script.
 
@@ -54,11 +54,11 @@ An append never costs a round-trip of its own. Chain it onto a command you are a
 
 | When | Kind | Fields |
 | --- | --- | --- |
-| Your first message | `run.start` | Summary is the goal. Attrs `harness`, `model`, `playbook`. |
-| A playbook step or stretch of work begins | `phase.start` | Span is a short phase id. |
-| It ends | `phase.end` | The same span, a status, and calls spent in the phase. |
-| Before you spawn a worker | `worker.start` | Span is the worker id. Refs name its issue and branch. Attrs `harness`, `model`, `effort`. |
-| Its report comes in | `worker.end` | The same span, a status, refs to the PR it opened, calls from its report. |
+| Your first message | `run.start` | Summary is the goal. Refs name the issue it works. Attrs `harness`, `model`, `playbook`. The paths diagram starts from the playbook. |
+| A playbook step or stretch of work begins | `phase.start` | Span is a short phase id. Attr `skill` when the step routes to a skill (`mf-mode-arena`, `mf-mode-swarm`, `mf-mode-interrogate`), or `playbook` when it runs another playbook (`opening-a-pr`). |
+| It ends | `phase.end` | The same span, a status, and calls spent in the phase. Refs to what the step produced: a branch, a PR, a commit. |
+| Before you spawn a worker | `worker.start` | Span is the worker id. Summary is its task. Refs name its issue and branch. Attrs `harness`, `model`, `effort`, the `playbook` it runs and the `skill` that spawned it. Add `phase` with a phase id when you spawn it outside the phase that is open. |
+| Its report comes in | `worker.end` | The same span, a status, refs to the branch and PR it produced, calls from its report. |
 | You trigger CI or start waiting on it | `ci.start` | Span is the CI run id. Refs name the PR. |
 | CI finishes | `ci.end` | The same span and a status. |
 | A test, build, lint or claim check runs | `check` | A status, and the command as the note. |
