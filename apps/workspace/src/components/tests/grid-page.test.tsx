@@ -157,7 +157,6 @@ describe('workspace grid page', () => {
     expect(frame).toContain('[i] Info');
     expect(frame).toContain('[s] Skills');
     expect(frame).toContain('[p] Prompts');
-    expect(frame).toContain('[e] Specs');
     expect(frame).toContain('[f] Profiles');
     expect(frame).toContain('Sessions render on the native list.');
     expect(frame).toContain('workspace');
@@ -167,7 +166,7 @@ describe('workspace grid page', () => {
     const { layers } = await renderPage(Dashboard.DEFAULT_LAYOUT);
     const ids = layers.flatMap((layer) => layer.commands?.map((command) => command.id) ?? []);
     expect(ids).toContain('workspace.panel.skills');
-    expect(ids).toContain('workspace.panel.specs');
+    expect(ids).toContain('workspace.panel.profiles');
     expect(ids).toContain('workspace.search');
     expect(ids).toContain('workspace.row.open');
     expect(ids).toContain('workspace.refresh');

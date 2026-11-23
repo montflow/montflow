@@ -42,4 +42,4 @@ displayable message and a retry re-imports (load failures clear the cache;
   `components/`
 - Filtering — the `skill-filter` module owns query matching
 - Authoring and execution — `/mf-prompts`, `prompt_execute`, and the
-  `montflow-create-prompts` / `montflow-execute-prompts` skills own them
+  `mf-prompts-create` / `mf-prompts-execute` skills own them

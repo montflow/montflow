@@ -43,7 +43,6 @@
     "@montflow/prompts": "workspace:*",
     "@montflow/reviews": "workspace:*",
     "@montflow/skills": "workspace:*",
-    "@montflow/specs": "workspace:*",
     "@tanstack/solid-query": "^5.102.8",
     "effect": "4.0.1",
     "fuse.js": "^7.5.0"

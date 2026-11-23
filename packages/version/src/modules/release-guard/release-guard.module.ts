@@ -1,11 +1,11 @@
 /** The six private CLIs that share one version and one fixed group. */
 export const CLIS = [
   '@montflow/skills',
-  '@montflow/specs',
   '@montflow/prompts',
   '@montflow/profiles',
   '@montflow/reviews',
   '@montflow/references',
+  '@montflow/mode',
 ] as const;
 
 /** Sentence every CLI CHANGELOG must carry about releases versus checkouts. */

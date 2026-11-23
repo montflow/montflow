@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 /**
- * Release guard: the five `mf-*` CLIs must share one version, stay in one
+ * Release guard: the eight `mf-*` CLIs must share one version, stay in one
  * changesets fixed group, and keep their release-versus-checkout note.
  *
  * Run from the repo root (`mf-release:check`) or with `--root <dir>`. Exits 1
@@ -34,7 +34,7 @@ const root = resolve(rootValue);
 const failures: string[] = [];
 
 const manifestPath = (name: string): string =>
-  join(root, 'packages', name.replace('@montflow/', ''), 'package.json');
+  join(root, 'packages', `mf-${name.replace('@montflow/', '')}`, 'package.json');
 
 const readJson = (file: string): Record<string, unknown> => {
   try {
@@ -65,7 +65,7 @@ for (const name of CLIS) {
 const distinct = new Set(versions.values());
 if (distinct.size > 1) {
   failures.push(
-    `the five CLI versions disagree: ${[...versions.entries()]
+    `the CLI versions disagree: ${[...versions.entries()]
       .map(([name, version]) => `${name}=${version}`)
       .join(', ')}`,
   );
@@ -78,7 +78,7 @@ if (fixedGroups.length !== 1 || !Array.isArray(fixedGroups[0])) {
 }
 const fixed = Array.isArray(fixedGroups[0]) ? fixedGroups[0] : [];
 if (fixed.length !== CLIS.length) {
-  failures.push('.changeset/config.json: the fixed group must hold exactly the five CLIs');
+  failures.push('.changeset/config.json: the fixed group must hold exactly the eight CLIs');
 }
 for (const name of CLIS) {
   if (!fixed.includes(name)) failures.push(`.changeset/config.json: fixed group is missing ${name}`);
@@ -106,7 +106,7 @@ for (const name of CLIS) {
   if (guide !== '' && !guide.includes(`## ${cli}`)) {
     failures.push(`guides/updating.md: no '## ${cli}' heading for the notice anchor`);
   }
-  const changelog = join(root, 'packages', name.replace('@montflow/', ''), 'CHANGELOG.md');
+  const changelog = join(root, 'packages', `mf-${name.replace('@montflow/', '')}`, 'CHANGELOG.md');
   if (!existsSync(changelog)) {
     failures.push(`${name}: CHANGELOG.md is missing`);
     continue;

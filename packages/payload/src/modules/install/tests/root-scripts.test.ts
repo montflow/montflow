@@ -12,11 +12,11 @@ const REPO_ROOT = NodePath.resolve(import.meta.dirname, '..', '..', '..', '..', 
 const MANIFEST_PACKAGES = [
   'skills',
   'prompts',
-  'specs',
   'profiles',
   'reviews',
   'references',
   'model-fallback',
+  'mode',
 ] as const;
 
 interface RootManifest {
@@ -59,7 +59,7 @@ Vitest.describe('root scripts', () => {
     const command = scripts()['mf:doctor'];
     Vitest.expect(command).toBeDefined();
     for (const pkg of MANIFEST_PACKAGES) {
-      Vitest.expect(command).toContain(`packages/${pkg}`);
+      Vitest.expect(command).toContain(`packages/mf-${pkg}`);
     }
     Vitest.expect(command).not.toContain('--check');
   });

@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "package": "@montflow/references",
+  "payloads": [
+    {
+      "kind": "skill",
+      "name": "mf-references-add",
+      "source": "skills/mf-references-add",
+      "target": ".agents/skills/mf-references-add"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-references-find",
+      "source": "skills/mf-references-find",
+      "target": ".agents/skills/mf-references-find"
+    }
+  ]
+}

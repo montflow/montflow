@@ -45,63 +45,67 @@ the lockfile. The guide never asks for a global install or an npm package.
 Check on demand:
 
 ```bash
-bun run --cwd "$M/packages/skills" cli version --check
+bun run --cwd "$M/packages/mf-skills" cli version --check
 ```
 
 Exit codes: `0` for `current`, `unknown`, `ahead`, or `skipped`; `1` for
 `behind` or `diverged`. Prove the update took effect:
 
 ```bash
-bun run --cwd "$M/packages/skills" cli version --json
-```
-
-## mf-specs
-
-```bash
-bun run --cwd "$M/packages/specs" cli version --check
-```
-
-Prove the update took effect:
-
-```bash
-bun run --cwd "$M/packages/specs" cli version --json
+bun run --cwd "$M/packages/mf-skills" cli version --json
 ```
 
 ## mf-prompts
 
 ```bash
-bun run --cwd "$M/packages/prompts" cli version --check
+bun run --cwd "$M/packages/mf-prompts" cli version --check
 ```
 
 Prove the update took effect:
 
 ```bash
-bun run --cwd "$M/packages/prompts" cli version --json
+bun run --cwd "$M/packages/mf-prompts" cli version --json
 ```
 
 ## mf-profiles
 
 ```bash
-bun run --cwd "$M/packages/profiles" cli version --check
+bun run --cwd "$M/packages/mf-profiles" cli version --check
 ```
 
 Prove the update took effect:
 
 ```bash
-bun run --cwd "$M/packages/profiles" cli version --json
+bun run --cwd "$M/packages/mf-profiles" cli version --json
 ```
 
 ## mf-reviews
 
 ```bash
-bun run --cwd "$M/packages/reviews" cli version --check
+bun run --cwd "$M/packages/mf-reviews" cli version --check
 ```
 
 Prove the update took effect:
 
 ```bash
-bun run --cwd "$M/packages/reviews" cli version --json
+bun run --cwd "$M/packages/mf-reviews" cli version --json
 ```
+
+## mf-mode
+
+```bash
+bun run --cwd "$M/packages/mf-mode" cli version --check
+```
+
+Prove the update took effect:
+
+```bash
+bun run --cwd "$M/packages/mf-mode" cli version --json
+```
+
+`mf-mode` also ships the principle and playbook stores, which `mf-mode doctor`
+refreshes. The roles file is per user and never touched by an update. Run `mf-mode roles verify` after updating, since a new version may
+reject a model the old one accepted.
 
 ## Installed stores
 
@@ -112,7 +116,7 @@ version, sync time, and a version plus content hash per skill.
 Report the store from any checkout:
 
 ```bash
-bun run --cwd "$M/packages/skills" cli version --dir "$PWD"
+bun run --cwd "$M/packages/mf-skills" cli version --dir "$PWD"
 ```
 
 A managed store prints `store <version> (<commit>)`; a store without a manifest
@@ -123,7 +127,7 @@ treated as unmanaged.
 Re-sync and inspect drift before writing:
 
 ```bash
-bun run --cwd "$M/packages/skills" cli sync --source "$M" --target "$PWD" --check
+bun run --cwd "$M/packages/mf-skills" cli sync --source "$M" --target "$PWD" --check
 ```
 
 Each skill reports `current`, `stale`, `diverged`, or `unmanaged` (internal
@@ -135,7 +139,7 @@ corrupt or unsupported manifest is a non-zero error, not a blessing. An
 Apply an update:
 
 ```bash
-bun run --cwd "$M/packages/skills" cli sync --source "$M" --target "$PWD"
+bun run --cwd "$M/packages/mf-skills" cli sync --source "$M" --target "$PWD"
 ```
 
 A normal sync overwrites `stale` skills, prunes files the source deleted, and
@@ -144,13 +148,13 @@ to overwrite a skill marked `diverged` (someone edited it locally). Review the
 named files, then pass `--force` to replace them:
 
 ```bash
-bun run --cwd "$M/packages/skills" cli sync --source "$M" --target "$PWD" --force
+bun run --cwd "$M/packages/mf-skills" cli sync --source "$M" --target "$PWD" --force
 ```
 
 Prove the store is current:
 
 ```bash
-bun run --cwd "$M/packages/skills" cli sync --source "$M" --target "$PWD" --check
+bun run --cwd "$M/packages/mf-skills" cli sync --source "$M" --target "$PWD" --check
 ```
 
 It is updated when every skill reports `current` and the exit code is `0`.
@@ -170,11 +174,11 @@ turns staleness into a non-zero exit.
 ## mf-references
 
 ```bash
-bun run --cwd "$M/packages/references" cli version --check
+bun run --cwd "$M/packages/mf-references" cli version --check
 ```
 
 Prove the update took effect:
 
 ```bash
-bun run --cwd "$M/packages/references" cli version --json
+bun run --cwd "$M/packages/mf-references" cli version --json
 ```

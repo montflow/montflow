@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "package": "@montflow/reviews",
+  "payloads": [
+    {
+      "kind": "skill",
+      "name": "mf-reviews-adversarial",
+      "source": "skills/mf-reviews-adversarial",
+      "target": ".agents/skills/mf-reviews-adversarial"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-reviews-address",
+      "source": "skills/mf-reviews-address",
+      "target": ".agents/skills/mf-reviews-address"
+    }
+  ]
+}

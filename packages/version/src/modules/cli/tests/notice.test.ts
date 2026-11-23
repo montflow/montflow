@@ -16,7 +16,7 @@ import * as Cli from '../index.js';
  */
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../../../../..');
-const MAIN = join(REPO_ROOT, 'packages/skills/src/apps/cli/main.ts');
+const MAIN = join(REPO_ROOT, 'packages/mf-skills/src/apps/cli/main.ts');
 const TOPLEVEL = spawnSync('git', ['rev-parse', '--show-toplevel'], {
   cwd: REPO_ROOT,
   encoding: 'utf8',
@@ -26,7 +26,7 @@ const HEAD = spawnSync('git', ['rev-parse', 'HEAD'], {
   encoding: 'utf8',
 }).stdout.trim();
 const VERSION: string = JSON.parse(
-  spawnSync('cat', [`${REPO_ROOT}/packages/skills/package.json`], { encoding: 'utf8' }).stdout,
+  spawnSync('cat', [`${REPO_ROOT}/packages/mf-skills/package.json`], { encoding: 'utf8' }).stdout,
 ).version;
 const KEY = UpdateCheck.cacheKey(
   '@montflow/skills',
@@ -242,7 +242,7 @@ Vitest.describe('notice anchors runtime', () => {
       const guide = yield* Effect.promise(() =>
         readFile(join(REPO_ROOT, 'guides/updating.md'), 'utf8'),
       );
-      for (const cli of ['mf-skills', 'mf-specs', 'mf-prompts', 'mf-profiles', 'mf-reviews']) {
+      for (const cli of ['mf-skills', 'mf-prompts', 'mf-profiles', 'mf-reviews', 'mf-mode']) {
         Vitest.expect(guide, cli).toContain(`## ${cli}`);
       }
     }),

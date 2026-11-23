@@ -14,7 +14,7 @@ import { CLIS } from '../index.js';
 const PACKAGE_ROOT = resolve(import.meta.dirname, '../../../..');
 const SCRIPT = join(PACKAGE_ROOT, 'scripts/check-release.ts');
 
-const cliDir = (name: string): string => `packages/${name.replace('@montflow/', '')}`;
+const cliDir = (name: string): string => `packages/mf-${name.replace('@montflow/', '')}`;
 
 /** Copy the guarded files into a throwaway root. */
 const fixture = async (): Promise<string> => {
@@ -66,7 +66,7 @@ Vitest.describe('release guard runtime', () => {
   Vitest.it('fails when the five versions disagree', async () => {
     const root = await fixture();
     try {
-      await editManifest(root, '@montflow/specs', (manifest) => {
+      await editManifest(root, '@montflow/prompts', (manifest) => {
         manifest.version = '9.9.9';
       });
       const result = runGuard(root);
@@ -122,7 +122,7 @@ Vitest.describe('release guard drift branches runtime', () => {
     const root = await fixture();
     try {
       await editConfig(root, (config) => {
-        config.fixed = [['@montflow/skills', '@montflow/specs']];
+        config.fixed = [['@montflow/skills', '@montflow/prompts']];
       });
       Vitest.expect(runGuard(root).status).toBe(1);
     } finally {
@@ -137,7 +137,6 @@ Vitest.describe('release guard drift branches runtime', () => {
         config.fixed = [
           [
             '@montflow/skills',
-            '@montflow/specs',
             '@montflow/prompts',
             '@montflow/profiles',
             '@montflow/reviews',

@@ -46,7 +46,7 @@ export default defineConfig({
 
     // Anti-slop Effect group: service constructors stay local to their owning
     // capability modules — runtime callers import the Layer and yield the
-    // contextual service. Direct enforcement of the effect-reviewer profile's
+    // contextual service. Direct enforcement of the mf-profiles-effect-reviewer profile's
     // layer-hygiene requirement.
     'anti-slop-effect/no-service-constructor-imports': 'error',
 
@@ -61,7 +61,7 @@ export default defineConfig({
     'anti-slop/no-unknown-parameters': 'warn',
     'anti-slop/no-unsafe-dictionary-type': 'warn',
 
-    // Montflow Effect rules: mechanical subset of the effect-reviewer profile.
+    // Montflow Effect rules: mechanical subset of the mf-profiles-effect-reviewer profile.
     // Source: packages/linting/ (`@montflow/linting`).
     'montflow/no-chained-pipe': 'error',
     'montflow/no-clock-access': 'error',

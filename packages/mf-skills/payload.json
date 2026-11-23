@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "package": "@montflow/skills",
+  "payloads": [
+    {
+      "kind": "skill",
+      "name": "mf-skills-create",
+      "source": "skills/mf-skills-create",
+      "target": ".agents/skills/mf-skills-create"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-skills-modify",
+      "source": "skills/mf-skills-modify",
+      "target": ".agents/skills/mf-skills-modify"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-skills-sync",
+      "source": "skills/mf-skills-sync",
+      "target": ".agents/skills/mf-skills-sync"
+    }
+  ]
+}

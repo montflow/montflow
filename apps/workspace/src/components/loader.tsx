@@ -6,9 +6,9 @@ import { palette } from './palette.js';
  * Loader stage. `extension` covers the lazy runtime import;
  * `skills` covers the skill-list read that follows it; `profiles`
  * covers the profile-list read; `prompts` covers the prompt-list read;
- * `sessions` covers the session-list read; `specs` covers the spec-list
- * read; `installing` covers the store install. One variant per loading
- * stage so the panel can narrate boot step by step.
+ * `sessions` covers the session-list read; `installing` covers the store
+ * install. One variant per loading stage so the panel can narrate boot step
+ * by step.
  */
 export type LoaderVariant =
   | 'extension'
@@ -16,7 +16,6 @@ export type LoaderVariant =
   | 'profiles'
   | 'prompts'
   | 'sessions'
-  | 'specs'
   | 'installing';
 
 /** One-line copy per loader stage. */
@@ -26,7 +25,6 @@ export const LOADER_MESSAGES = {
   profiles: 'Loading Profiles…',
   prompts: 'Loading Prompts…',
   sessions: 'Loading Sessions…',
-  specs: 'Loading Specs…',
   installing: 'Installing skills…',
 } satisfies Record<LoaderVariant, string>;
 

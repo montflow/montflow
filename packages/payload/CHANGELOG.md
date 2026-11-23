@@ -4,6 +4,7 @@
 
 ### Added
 
+- Tree payloads may hold nested folders (a skill's `references/` and `scripts/`): files are keyed by `/`-separated paths, embedded, compared and installed with their directories
 - Manifest-driven payload support shared by every `mf-*` CLI: `PayloadManifest`, `loadManifest`, `namesOf`, `nameAt`, `entriesOf`, `expectedTarget`, and the five kinds `skill`, `profile`, `prompt`, `tier`, and `rigor`; `tier` is kept only so an older manifest still decodes and reads, and no package ships a tier payload
 - One compare/install engine (`runPayloadDoctor`) with report-only and repair modes, atomic writes, symlinked-tree blocking, and a coded fix for a payload that cannot be repaired; `PayloadDoctorResult` now carries `rigors` beside `skills`, `profiles`, `prompts`, and the legacy `tiers`
 - One embedded-payload generator (`generateEmbeddedPayload`) replacing the per-package copies, so a compiled binary keeps a working `doctor`

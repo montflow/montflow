@@ -9,7 +9,7 @@ Vitest.describe('Profiles extension loader', () => {
       const second = yield* Profiles.loadProfiles();
       Vitest.expect(second).toBe(first);
       Vitest.expect(first.Interactive.CANCELLED).toBe('Cancelled.');
-      Vitest.expect(first.Profiles.GENERATION_REQUIREMENTS).toContain('montflow-create-profiles');
+      Vitest.expect(first.Profiles.GENERATION_REQUIREMENTS).toContain('mf-profiles-create');
     }),
   );
 

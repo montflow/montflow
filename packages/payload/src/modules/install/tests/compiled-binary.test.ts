@@ -16,13 +16,13 @@ import * as Vitest from '@effect/vitest';
 const REPO_ROOT = NodePath.resolve(import.meta.dirname, '..', '..', '..', '..', '..', '..');
 
 const PACKAGES = [
-  'skills',
-  'prompts',
-  'specs',
-  'profiles',
-  'reviews',
-  'references',
-  'model-fallback',
+  'mf-skills',
+  'mf-prompts',
+  'mf-profiles',
+  'mf-reviews',
+  'mf-references',
+  'mf-model-fallback',
+  'mf-mode',
 ] as const;
 
 /** Run a command and return its status and combined output. */

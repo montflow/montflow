@@ -6,7 +6,7 @@ import { Effect } from 'effect';
 import * as Vitest from '@effect/vitest';
 
 /**
- * The cross-package invariant: every one of the five `mf-*` binaries reports
+ * The cross-package invariant: every listed `mf-*` binary reports
  * the version its own `package.json` declares, through both `--version` and
  * `version --json`.
  *
@@ -16,7 +16,7 @@ import * as Vitest from '@effect/vitest';
  */
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../../../../..');
-const CLI_PACKAGES = ['skills', 'specs', 'prompts', 'profiles', 'reviews'] as const;
+const CLI_PACKAGES = ['mf-skills', 'mf-prompts', 'mf-profiles', 'mf-reviews', 'mf-mode'] as const;
 
 interface Manifest {
   readonly name: string;
@@ -51,7 +51,7 @@ const withWorkspace = <A, E>(use: (root: string) => Effect.Effect<A, E>): Effect
     (root) => Effect.promise(() => rm(root, { recursive: true, force: true })),
   );
 
-Vitest.describe('version across all five CLIs runtime', () => {
+Vitest.describe('version across every listed CLI runtime', () => {
   Vitest.it(
     'every binary reports the version in its own package.json',
     async () => {
@@ -88,7 +88,7 @@ Vitest.describe('version across all five CLIs runtime', () => {
         const store = join(root, '.agents', 'skills');
         yield* Effect.promise(() => mkdir(store, { recursive: true }));
 
-        const unmanaged = run('skills', ['version', '--json', '--dir', root]);
+        const unmanaged = run('mf-skills', ['version', '--json', '--dir', root]);
         const unmanagedIdentity: unknown = JSON.parse(unmanaged.stdout.trim());
         Vitest.expect(unmanagedIdentity).toMatchObject({ store: { status: 'unmanaged' } });
 
@@ -104,7 +104,7 @@ Vitest.describe('version across all five CLIs runtime', () => {
           ),
         );
 
-        const managed = run('skills', ['version', '--json', '--dir', root]);
+        const managed = run('mf-skills', ['version', '--json', '--dir', root]);
         const managedIdentity: unknown = JSON.parse(managed.stdout.trim());
         Vitest.expect(managedIdentity).toMatchObject({
           store: { status: 'managed', version: '7.6.5', commit: 'd'.repeat(40) },
@@ -120,18 +120,18 @@ Vitest.describe('compiled binary runtime', () => {
     async () => {
       const root = await mkdtemp(join(tmpdir(), 'mf-version-compiled-'));
       try {
-        const manifest = await manifestOf('profiles');
+        const manifest = await manifestOf('mf-profiles');
         const artifact = join(root, 'mf-profiles');
         const build = spawnSync(
           'bun',
           [
             'build',
-            join(packageDir('profiles'), 'src/apps/cli/main.ts'),
+            join(packageDir('mf-profiles'), 'src/apps/cli/main.ts'),
             '--compile',
             '--outfile',
             artifact,
           ],
-          { cwd: packageDir('profiles'), encoding: 'utf8' },
+          { cwd: packageDir('mf-profiles'), encoding: 'utf8' },
         );
         Vitest.expect(build.status, build.stderr).toBe(0);
 

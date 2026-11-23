@@ -11,15 +11,12 @@ import {
   InfoPanel,
   KeybindBanner,
   Keybinds,
-  Loader,
   Panel,
   PanelMessage,
   ProfileDetail,
   ProfilesPanel,
   PromptDetail,
   PromptsPanel,
-  SpecDetail,
-  SpecsPanel,
   SkillDetail,
   SkillsPanel,
   StatusBar,
@@ -27,11 +24,11 @@ import {
   palette,
 } from './components/index.js';
 import { Dashboard, SkillFilter, Workspace } from './modules/index.js';
-import { GitInfo, Prompts, Profiles, Query, Specs, Skills } from './services/index.js';
+import { GitInfo, Prompts, Profiles, Query, Skills } from './services/index.js';
 
 /** Panels the grid page renders itself; `sessions` belongs to the native list. */
 /** Detail views the page can open: sorted so the map stays honest. */
-type DetailKind = 'skills' | 'profiles' | 'prompts' | 'specs';
+type DetailKind = 'skills' | 'profiles' | 'prompts';
 
 /** One open detail: which list row, how it is presented, and how far it is scrolled. */
 interface DetailState {
@@ -94,7 +91,6 @@ const actionsFor = (kind: DetailKind, mode: 'preview' | 'view'): ReadonlyArray<D
     hint: 'v',
   };
   const back: DetailAction = { id: 'back', label: 'Back', hint: 'esc' };
-  if (kind === 'specs') return [toggle, back];
   return [toggle, { id: 'delete', label: 'Delete', hint: 'd' }, back];
 };
 
@@ -125,8 +121,6 @@ const WorkspacePage = (props: WorkspacePageProps) => {
       : Dashboard.firstPanel(layout),
   );
   const [detail, setDetail] = createSignal<DetailState | undefined>(undefined);
-  const [specDetail, setSpecDetail] = createSignal<Specs.SpecDetail | undefined>(undefined);
-  const [specLoading, setSpecLoading] = createSignal(false);
   const [info, setInfo] = createSignal<Workspace.Info>(
     Workspace.make({ name: Workspace.basename(root), root, branch: '…', clean: true }),
   );
@@ -147,32 +141,23 @@ const WorkspacePage = (props: WorkspacePageProps) => {
     queryKey: Query.promptsKey,
     queryFn: () => Query.fetchPromptsList(root, setPromptsPhase),
   }));
-  const [specsPhase, setSpecsPhase] = createSignal<Specs.SpecsPhase>('extension');
-  const specsQuery = createQuery(() => ({
-    queryKey: Query.specsKey,
-    queryFn: () => Query.fetchSpecsList(root, setSpecsPhase),
-  }));
 
   const skillRows = createMemo(() => skillsQuery.data?.rows ?? []);
   const profileRows = createMemo(() => profilesQuery.data?.rows ?? []);
   const promptRows = createMemo(() => promptsQuery.data?.rows ?? []);
-  const specRows = createMemo(() => specsQuery.data?.rows ?? []);
 
   const [skillQuery, setSkillQuery] = createSignal('');
   const [profileQuery, setProfileQuery] = createSignal('');
   const [promptQuery, setPromptQuery] = createSignal('');
-  const [specQuery, setSpecQuery] = createSignal('');
   const [skillHighlight, setSkillHighlight] = createSignal(0);
   const [profileHighlight, setProfileHighlight] = createSignal(0);
   const [promptHighlight, setPromptHighlight] = createSignal(0);
-  const [specHighlight, setSpecHighlight] = createSignal(0);
 
   const filteredSkills = createMemo(() => SkillFilter.filterByQuery(skillRows(), skillQuery()));
   const filteredProfiles = createMemo(() =>
     SkillFilter.filterByQuery(profileRows(), profileQuery()),
   );
   const filteredPrompts = createMemo(() => SkillFilter.filterByQuery(promptRows(), promptQuery()));
-  const filteredSpecs = createMemo(() => SkillFilter.filterByQuery(specRows(), specQuery()));
 
   /** Grid rows: terminal height minus the top pad and the one-row status bar. */
   const gridRows = createMemo(() => Math.max(1, dimensions().height - 2));
@@ -203,7 +188,6 @@ const WorkspacePage = (props: WorkspacePageProps) => {
   const skillWindow = windowed(filteredSkills, skillHighlight, () => rowBudget('skills'));
   const profileWindow = windowed(filteredProfiles, profileHighlight, () => rowBudget('profiles'));
   const promptWindow = windowed(filteredPrompts, promptHighlight, () => rowBudget('prompts'));
-  const specWindow = windowed(filteredSpecs, specHighlight, () => rowBudget('specs'));
 
   /** Visible rows in the open detail's body. */
   const detailBodyLines = createMemo(() => Math.max(1, gridRows() - DETAIL_RESERVED_LINES));
@@ -240,16 +224,13 @@ const WorkspacePage = (props: WorkspacePageProps) => {
       ? profileHighlight()
       : panel === 'prompts'
         ? promptHighlight()
-        : panel === 'specs'
-          ? specHighlight()
-          : panel === 'skills'
-            ? skillHighlight()
-            : 0;
+        : panel === 'skills'
+          ? skillHighlight()
+          : 0;
 
   const setHighlight = (panel: string, index: number): void => {
     if (panel === 'profiles') setProfileHighlight(index);
     else if (panel === 'prompts') setPromptHighlight(index);
-    else if (panel === 'specs') setSpecHighlight(index);
     else if (panel === 'skills') setSkillHighlight(index);
   };
 
@@ -258,9 +239,7 @@ const WorkspacePage = (props: WorkspacePageProps) => {
       ? filteredProfiles()
       : panel === 'prompts'
         ? filteredPrompts()
-        : panel === 'specs'
-          ? filteredSpecs()
-          : filteredSkills();
+        : filteredSkills();
 
   /** Filter text of a store-backed list; other panels have no query. */
   const queryOf = (panel: string): string =>
@@ -268,16 +247,13 @@ const WorkspacePage = (props: WorkspacePageProps) => {
       ? profileQuery()
       : panel === 'prompts'
         ? promptQuery()
-        : panel === 'specs'
-          ? specQuery()
-          : panel === 'skills'
-            ? skillQuery()
-            : '';
+        : panel === 'skills'
+          ? skillQuery()
+          : '';
 
   const setQuery = (panel: string, value: string): void => {
     if (panel === 'profiles') setProfileQuery(value);
     else if (panel === 'prompts') setPromptQuery(value);
-    else if (panel === 'specs') setSpecQuery(value);
     else if (panel === 'skills') setSkillQuery(value);
     else return;
     setHighlight(panel, 0);
@@ -294,30 +270,11 @@ const WorkspacePage = (props: WorkspacePageProps) => {
 
   /** Invalidate every store query so the grid re-reads from disk. */
   const refreshAll = (): void => {
-    for (const key of [Query.skillsKey, Query.profilesKey, Query.promptsKey, Query.specsKey]) {
+    for (const key of [Query.skillsKey, Query.profilesKey, Query.promptsKey]) {
       void queryClient.invalidateQueries({ queryKey: key });
     }
     loadInfo();
     notify('Refreshed.');
-  };
-
-  /** Load a spec's phases and tasks into the detail view. */
-  const loadSpec = (id: string): void => {
-    setSpecLoading(true);
-    void Specs.loadSpec(root, id)
-      .pipe(Effect.runPromise)
-      .then(
-        (data) => {
-          if (detail()?.id !== id) return;
-          setSpecDetail(data);
-          setSpecLoading(false);
-        },
-        (error) => {
-          if (detail()?.id !== id) return;
-          setSpecLoading(false);
-          notify(`Spec detail failed: ${String(error)}`, 'error');
-        },
-      );
   };
 
   /** Open the highlighted row, or explain the empty store. */
@@ -332,15 +289,11 @@ const WorkspacePage = (props: WorkspacePageProps) => {
     }
     const next: DetailState = { kind: panel, id: row.id, mode: 'preview', scroll: 0, action: 0 };
     setDetail(next);
-    setSpecDetail(undefined);
-    if (panel === 'specs') loadSpec(row.id);
   };
 
   /** Close the detail sub-view and forget its scroll/action state. */
   const closeDetail = (): void => {
     setDetail(undefined);
-    setSpecDetail(undefined);
-    setSpecLoading(false);
   };
 
   /** Scroll the open detail in full view. */
@@ -371,7 +324,7 @@ const WorkspacePage = (props: WorkspacePageProps) => {
   /** Delete the open row after a host confirmation, then refetch its list. */
   const removeOpen = async (): Promise<void> => {
     const current = detail();
-    if (current === undefined || current.kind === 'specs') return;
+    if (current === undefined) return;
     const row = rowsOf(current.kind).find((candidate) => candidate.id === current.id);
     if (row === undefined) return;
     const confirmed = await ports.interaction
@@ -629,7 +582,6 @@ const WorkspacePage = (props: WorkspacePageProps) => {
         Keybinds.menuNavigate(),
         Keybinds.selectRow(),
         ...(current.mode === 'view' ? [Keybinds.scroll()] : []),
-        ...(current.kind === 'specs' ? [] : [Keybinds.remove()]),
         ...(current.kind === 'prompts' ? [Keybinds.condition()] : []),
         Keybinds.showFull(),
         Keybinds.back(),
@@ -741,19 +693,6 @@ const WorkspacePage = (props: WorkspacePageProps) => {
                               capacity={promptWindow.capacity()}
                               selected={selected() === 'prompts'}
                             />
-                          ) : cell.panel === 'specs' ? (
-                            <SpecsPanel
-                              loading={specsQuery.isPending}
-                              loadingVariant={specsPhase()}
-                              installed={specsQuery.data?.installed ?? false}
-                              rows={specWindow.rows()}
-                              highlight={specWindow.highlight()}
-                              total={filteredSpecs().length}
-                              query={specQuery()}
-                              searching={false}
-                              capacity={specWindow.capacity()}
-                              selected={selected() === 'specs'}
-                            />
                           ) : (
                             <PanelMessage message="Sessions render on the native list." />
                           )}
@@ -817,19 +756,6 @@ const WorkspacePage = (props: WorkspacePageProps) => {
                           />
                         )}
                       </Match>
-                      <Match when={specDetail()}>
-                        {(spec: Accessor<Specs.SpecDetail>) => (
-                          <SpecDetail
-                            detail={spec()}
-                            mode={current().mode}
-                            scrollOffset={current().scroll}
-                            maxBodyLines={detailBodyLines()}
-                          />
-                        )}
-                      </Match>
-                      <Match when={specLoading()}>
-                        <Loader variant="specs" />
-                      </Match>
                     </Switch>
                   </Panel>
                 </box>
@@ -852,14 +778,13 @@ const WorkspacePage = (props: WorkspacePageProps) => {
 
 /** Keys that address one of the store-backed lists. */
 const isDetailPanel = (panel: string): panel is DetailKind =>
-  panel === 'skills' || panel === 'profiles' || panel === 'prompts' || panel === 'specs';
+  panel === 'skills' || panel === 'profiles' || panel === 'prompts';
 
 /** Copy for an action that needs rows but has none. */
 const emptyHint = (panel: DetailKind): string => {
   if (panel === 'skills') return 'No skills yet — run /mf-skills create in a session.';
   if (panel === 'profiles') return 'No profiles yet — run /mf-profiles create in a session.';
-  if (panel === 'prompts') return 'No prompts yet — run /mf-prompts create in a session.';
-  return 'No specs yet — author one under .agents/@montflow/specs.';
+  return 'No prompts yet — run /mf-prompts create in a session.';
 };
 
 /**

@@ -28,8 +28,8 @@ interface EmbeddedBuckets {
   skill: Record<string, PayloadFiles>;
   profile: Record<string, PayloadFiles>;
   prompt: Record<string, PayloadFiles>;
-  tier: Record<string, PayloadFiles>;
-  rigor: Record<string, PayloadFiles>;
+  principle: Record<string, PayloadFiles>;
+  playbook: Record<string, PayloadFiles>;
 }
 
 /** Empty buckets for every kind, so the generated module has a stable shape. */
@@ -37,8 +37,8 @@ const emptyBuckets = (): EmbeddedBuckets => ({
   skill: {},
   profile: {},
   prompt: {},
-  tier: {},
-  rigor: {},
+  principle: {},
+  playbook: {},
 });
 
 /** Options for {@link generateEmbeddedPayload}. */
@@ -51,22 +51,22 @@ export interface GenerateEmbeddedPayloadOptions {
   readonly output: string;
 }
 
-/** Resolve every file of a flat tree artifact. */
-const readTree = async (dir: string): Promise<PayloadFiles> => {
+/**
+ * Resolve every file of a tree artifact, nested directories included. Keys are
+ * `/`-separated paths relative to the tree root (`references/notes.md`).
+ * Dot entries are skipped at every level.
+ */
+const readTree = async (dir: string, prefix = ''): Promise<PayloadFiles> => {
   const entries = (await readdir(dir)).filter((entry) => !entry.startsWith('.')).toSorted();
   const resolved = await Promise.all(
-    entries.map(async (entry): Promise<readonly [string, string]> => {
+    entries.map(async (entry): Promise<ReadonlyArray<readonly [string, string]>> => {
       const path = join(dir, entry);
       const info = await stat(path);
-      if (info.isDirectory()) {
-        throw new Error(
-          `payload tree '${dir}' contains directory '${entry}'; only flat files ship`,
-        );
-      }
-      return [entry, await readFile(path, 'utf8')] as const;
+      if (info.isDirectory()) return Object.entries(await readTree(path, `${prefix}${entry}/`));
+      return [[`${prefix}${entry}`, await readFile(path, 'utf8')] as const];
     }),
   );
-  return Object.fromEntries(resolved);
+  return Object.fromEntries(resolved.flat());
 };
 
 /** Resolve one manifest entry to its files, refusing an incomplete tree. */
@@ -133,7 +133,7 @@ export const generateEmbeddedPayload = async (
  *
  * Source: \`payload.json\`
  */
-export const EMBEDDED_PAYLOAD: Readonly<Record<'skill' | 'profile' | 'prompt' | 'tier' | 'rigor', Readonly<Record<string, Readonly<Record<string, string>>>>>> = ${JSON.stringify(buckets, null, 2)};
+export const EMBEDDED_PAYLOAD: Readonly<Record<'skill' | 'profile' | 'prompt' | 'principle' | 'playbook', Readonly<Record<string, Readonly<Record<string, string>>>>>> = ${JSON.stringify(buckets, null, 2)};
 `;
   await mkdir(dirname(options.output), { recursive: true });
   await writeFile(options.output, body, 'utf8');

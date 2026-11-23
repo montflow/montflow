@@ -13,11 +13,11 @@ import { noTimersRule } from './rules/no-timers.ts';
 /**
  * Montflow oxlint plugin for custom lint rules.
  *
- * These rules mechanically enforce the parts of the effect-reviewer profile
+ * These rules mechanically enforce the parts of the mf-profiles-effect-reviewer profile
  * that do not need human judgment — platform services over raw imports and
  * Effect modules over hand-rolled branching. Anything requiring judgment
  * (error-boundary placement, retry idempotency, layer shape) stays with the
- * reviewer. See `.agents/@montflow/profiles/effect-reviewer/PROFILE.md`.
+ * reviewer. See `.agents/@montflow/profiles/mf-profiles-effect-reviewer/PROFILE.md`.
  *
  * Add rules under `src/rules/` and register them here.
  * See vendored anti-slop at `tooling/oxlint/anti-slop/` for rule authoring

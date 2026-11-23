@@ -133,5 +133,5 @@ If a task spans several branches, read all matching files before editing.
 
 ### Related
 
-- **Structure entry point**: [montflow-typescript-project-structure](../montflow-typescript-project-structure/SKILL.md)
-- **Montflow service pattern**: [montflow-typescript-services](../montflow-typescript-services/SKILL.md)
+- **Structure entry point**: [mf-typescript-project-structure](../mf-typescript-project-structure/SKILL.md)
+- **Montflow service pattern**: [mf-typescript-services](../mf-typescript-services/SKILL.md)

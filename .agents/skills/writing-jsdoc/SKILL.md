@@ -61,4 +61,4 @@ Do not annotate every construct. A module's public surface gets at most the few 
 
 ### Related
 
-- **Structure entry point**: [montflow-typescript-project-structure](../montflow-typescript-project-structure/SKILL.md)
+- **Structure entry point**: [mf-typescript-project-structure](../mf-typescript-project-structure/SKILL.md)

@@ -25,7 +25,7 @@ it prints every skill name with its description; load
 Where the binary is not on `PATH`, use the in-repo form:
 
 ```
-bun run --cwd packages/skills cli list --dir "$PWD"
+bun run --cwd packages/mf-skills cli list --dir "$PWD"
 ```
 
 **Fallback**: only when `mf-skills` is unavailable, search `.agents/skills/`

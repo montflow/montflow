@@ -24,7 +24,7 @@ const PARSE_SETTLE_MS = 800;
 /** Profile with wrapping prose: markdown renders taller than its source
  * lines, which is what used to spill the body over the panel footer. */
 const profile: Profiles.ProfileSummary = {
-  id: 'effect-reviewer',
+  id: 'mf-profiles-effect-reviewer',
   name: 'Effect Reviewer',
   description: 'Adversarial Effect v4 reviewer profile',
   model: 'anthropic/claude-sonnet-4',
@@ -77,7 +77,7 @@ const renderDetail = async (body: () => JSX.Element): Promise<Setup> => {
 /** Rows the detail owns above its body: the body spilling upwards ate these. */
 const CHROME_ROWS = [
   'Adversarial Effect v4 reviewer profile',
-  'id effect-reviewer',
+  'id mf-profiles-effect-reviewer',
   'model anthropic',
   'skills effect-v4',
 ];

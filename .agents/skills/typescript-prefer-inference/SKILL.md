@@ -51,4 +51,4 @@ Only allow when:
 
 # Reference
 
-- **TS structure entry point**: [montflow-typescript-project-structure](../montflow-typescript-project-structure/SKILL.md)
+- **TS structure entry point**: [mf-typescript-project-structure](../mf-typescript-project-structure/SKILL.md)

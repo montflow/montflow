@@ -8,13 +8,13 @@ import { type PayloadManifest, generateEmbeddedPayload, loadManifest } from '../
 const REPO_ROOT = NodePath.resolve(import.meta.dirname, '..', '..', '..', '..', '..', '..');
 
 const PACKAGES = [
-  'skills',
-  'prompts',
-  'specs',
-  'profiles',
-  'reviews',
-  'references',
-  'model-fallback',
+  'mf-skills',
+  'mf-prompts',
+  'mf-profiles',
+  'mf-reviews',
+  'mf-references',
+  'mf-model-fallback',
+  'mf-mode',
 ] as const;
 
 /** Where a package's generated module lives, accepting both doctor layouts. */
@@ -40,7 +40,7 @@ Vitest.describe('generateEmbeddedPayload', () => {
       const raw: unknown = JSON.parse(
         Fs.readFileSync(NodePath.join(packageRoot, 'payload.json'), 'utf8'),
       );
-      const loaded = loadManifest(raw, `@montflow/${pkg}`);
+      const loaded = loadManifest(raw, `@montflow/${pkg.replace(/^mf-/, '')}`);
       Vitest.expect(loaded.ok, `${pkg} manifest`).toBe(true);
       if (!loaded.ok) continue;
       const root = Fs.mkdtempSync(NodePath.join(Os.tmpdir(), 'mf-payload-embed-'));
@@ -58,28 +58,28 @@ Vitest.describe('generateEmbeddedPayload', () => {
     }
   });
 
-  Vitest.it('embeds the tier kind', async () => {
-    const root = Fs.mkdtempSync(NodePath.join(Os.tmpdir(), 'mf-payload-tier-'));
-    Fs.mkdirSync(NodePath.join(root, 'tiers'));
-    Fs.writeFileSync(NodePath.join(root, 'tiers', 'micro.md'), '# micro\n');
+  Vitest.it('embeds the prompt kind', async () => {
+    const root = Fs.mkdtempSync(NodePath.join(Os.tmpdir(), 'mf-payload-prompt-'));
+    Fs.mkdirSync(NodePath.join(root, 'prompts'));
+    Fs.writeFileSync(NodePath.join(root, 'prompts', 'demo.json'), '{"name":"demo"}\n');
     const manifest: PayloadManifest = {
       schema: 1,
       package: '@fixture/payload',
       payloads: [
         {
-          kind: 'tier',
-          name: 'micro',
-          source: 'tiers/micro.md',
-          target: '.agents/@montflow/tiers/micro.md',
+          kind: 'prompt',
+          name: 'demo',
+          source: 'prompts/demo.json',
+          target: '.agents/@montflow/prompts/demo.json',
         },
       ],
     };
     const output = NodePath.join(root, 'generated.ts');
     await generateEmbeddedPayload({ packageRoot: root, manifest, output });
     const text = Fs.readFileSync(output, 'utf8');
-    Vitest.expect(text).toContain('"tier"');
-    Vitest.expect(text).toContain('"micro"');
-    Vitest.expect(text).toContain('# micro');
+    Vitest.expect(text).toContain('"prompt"');
+    Vitest.expect(text).toContain('"demo"');
+    Vitest.expect(text).toContain('name');
     Fs.rmSync(root, { recursive: true, force: true });
   });
 });

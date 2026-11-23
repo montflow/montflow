@@ -12,7 +12,7 @@
           {
             "reviewer": {
               "type": "profile",
-              "name": "pattern-consistency-reviewer",
+              "name": "mf-profiles-pattern-consistency-reviewer",
               "model": "opencode-go/ox-alpha-free",
               "fallbackModel": "opencode-go/deepseek-v4-flash"
             }
@@ -20,7 +20,7 @@
           {
             "reviewer": {
               "type": "profile",
-              "name": "documentation-reviewer",
+              "name": "mf-profiles-documentation-reviewer",
               "model": "opencode-go/ox-alpha-free",
               "fallbackModel": "opencode/deepseek-v4-flash"
             }
@@ -28,7 +28,7 @@
           {
             "reviewer": {
               "type": "profile",
-              "name": "language-quality-reviewer",
+              "name": "mf-profiles-language-quality-reviewer",
               "model": "opencode-go/hy3",
               "fallbackModel": "opencode-go/ox-alpha-free"
             }
@@ -57,7 +57,7 @@
       "model": "opencode-go/ox-alpha-free",
       "fallbackModel": "opencode-go/deepseek-v4-flash"
     },
-    "bookkeeper": {
+    "mf-profiles-bookkeeper": {
       "model": "opencode-go/ox-alpha-free",
       "fallbackModel": "opencode-go/deepseek-v4-flash"
     }

@@ -1,8 +1,0 @@
-{
-  "sizes": {
-    "tiny": { "model": "amd/DeepSeek-V4-Flash" },
-    "small": { "model": "amd/DeepSeek-V4-Flash" },
-    "medium": { "model": "amd/DeepSeek-V4-Flash" },
-    "large": { "model": "amd/DeepSeek-V4-Flash" }
-  }
-}

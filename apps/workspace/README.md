@@ -7,7 +7,7 @@ server-side workspace report.
 
 - `@montflow/workspace/server` — registers the `workspace_info` tool and the
   `/mf-workspace` command. Both report native store counts (skills, profiles,
-  prompts, specs) for the plugin directory.
+  prompts) for the plugin directory.
 - `@montflow/workspace/tui` — registers the `workspace` route page, an `app`
   slot claim that binds `/workspace` and `ctrl+w`, and a
   `home.footer.status` chip fed by the host's live session list.
@@ -33,8 +33,7 @@ as placeholders under their own id.
   keymap overlay.
 
 Authoring happens in the native faces: `/mf-skills`, `/mf-profiles`, and
-`/mf-prompts` create or modify artifacts through their plugin tools. Spec work
-runs through `mf-specs` and subagent sessions.
+`/mf-prompts` create or modify artifacts through their plugin tools.
 
 ## Status
 

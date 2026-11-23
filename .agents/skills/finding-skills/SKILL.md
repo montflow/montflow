@@ -35,7 +35,7 @@ Read a full contract with `mf-skills show <skill>`. Where the binary is not on
 `PATH`, use the in-repo form:
 
 ```
-bun run --cwd packages/skills cli list --dir "$PWD"
+bun run --cwd packages/mf-skills cli list --dir "$PWD"
 ```
 
 **Fallback**: only when `mf-skills` is unavailable, scan

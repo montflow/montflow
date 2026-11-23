@@ -1,7 +1,7 @@
 import { defineTool, entry } from '@montflow/opencode';
 import { Effect, Schema } from 'effect';
 import { Workspace } from './modules/index.js';
-import { GitInfo, Prompts, Profiles, Skills, Specs } from './services/index.js';
+import { GitInfo, Prompts, Profiles, Skills } from './services/index.js';
 
 /** Plugin id shared by the server and TUI entries. */
 export const ID = 'workspace';
@@ -33,12 +33,11 @@ export const summarize = (root: string): Effect.Effect<string> =>
     const skills = yield* countOf(Skills.fetchSkills(root));
     const profiles = yield* countOf(Profiles.fetchProfiles(root));
     const prompts = yield* countOf(Prompts.fetchPrompts(root));
-    const specs = yield* countOf(Specs.fetchSpecs(root));
     return [
       Workspace.title(info),
       `root ${info.root}`,
       `branch ${info.branch} ${info.clean ? '✓ clean' : '✗ dirty'}`,
-      `stores skills ${skills} · profiles ${profiles} · prompts ${prompts} · specs ${specs}`,
+      `stores skills ${skills} · profiles ${profiles} · prompts ${prompts}`,
       'The grid is the TUI route page `/workspace` (ctrl+w).',
     ].join('\n');
   });
@@ -54,7 +53,7 @@ export default entry(ID, (ports) =>
       defineTool({
         name: 'workspace_info',
         description:
-          'Report the montflow workspace: root, git branch, clean/dirty state, and how many skills, profiles, prompts, and specs are stored. Read-only; use it before pointing a user at the dashboard or a store path.',
+          'Report the montflow workspace: root, git branch, clean/dirty state, and how many skills, profiles, and prompts are stored. Read-only; use it before pointing a user at the dashboard or a store path.',
         input: Schema.Struct({}),
         execute: () => summarize(root),
       }),

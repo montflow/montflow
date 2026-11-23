@@ -133,10 +133,10 @@ export interface PayloadDoctorResult {
   readonly profiles: ReadonlyArray<PayloadInstall>;
   /** Payloads of kind `prompt`. */
   readonly prompts: ReadonlyArray<PayloadInstall>;
-  /** Payloads of kind `tier`. */
-  readonly tiers: ReadonlyArray<PayloadInstall>;
-  /** Payloads of kind `rigor`. */
-  readonly rigors: ReadonlyArray<PayloadInstall>;
+  /** Payloads of kind `principle`. */
+  readonly principles: ReadonlyArray<PayloadInstall>;
+  /** Payloads of kind `playbook`. */
+  readonly playbooks: ReadonlyArray<PayloadInstall>;
   /** A manifest that could not be read is a blocked run, never an empty success. */
   readonly manifestFailure?: DoctorError;
   /** Human-readable report. */
@@ -174,7 +174,38 @@ const readIfPresent = (
 ): Effect.Effect<string | undefined> =>
   fs.readFileString(file).pipe(Effect.orElseSucceed(() => undefined));
 
-/** Read every file of a flat tree, or undefined when it is not a complete tree. */
+/**
+ * Every file under a directory as a `/`-separated path relative to it, dot
+ * entries skipped at every level, or undefined when a directory cannot be
+ * listed or an entry is neither a file nor a directory.
+ */
+const listTreeFiles = (
+  fs: FileSystem.FileSystem,
+  path: Path.Path,
+  dir: string,
+  prefix = '',
+): Effect.Effect<ReadonlyArray<string> | undefined> =>
+  Effect.gen(function* () {
+    const listed = yield* fs.readDirectory(dir).pipe(Effect.result);
+    if (Result.isFailure(listed)) return undefined;
+    const files: Array<string> = [];
+    for (const entry of listed.success.filter((name) => !name.startsWith('.')).toSorted()) {
+      const info = yield* fs.stat(path.join(dir, entry)).pipe(Effect.result);
+      if (Result.isFailure(info)) return undefined;
+      if (info.success.type === 'Directory') {
+        const nested = yield* listTreeFiles(fs, path, path.join(dir, entry), `${prefix}${entry}/`);
+        if (nested === undefined) return undefined;
+        files.push(...nested);
+      } else if (info.success.type === 'File') {
+        files.push(`${prefix}${entry}`);
+      } else {
+        return undefined;
+      }
+    }
+    return files;
+  });
+
+/** Read every file of a tree, nested directories included, or undefined when it is not a complete tree. */
 const readTreeFromPackage = (
   fs: FileSystem.FileSystem,
   path: Path.Path,
@@ -182,14 +213,11 @@ const readTreeFromPackage = (
   required: string | undefined,
 ): Effect.Effect<PayloadFiles | undefined> =>
   Effect.gen(function* () {
-    const listed = yield* fs.readDirectory(dir).pipe(Effect.result);
-    if (Result.isFailure(listed)) return undefined;
-    const names = listed.success.filter((entry) => !entry.startsWith('.')).toSorted();
+    const names = yield* listTreeFiles(fs, path, dir);
+    if (names === undefined) return undefined;
     if (required !== undefined && !names.includes(required)) return undefined;
     const files: Record<string, string> = {};
     for (const name of names) {
-      const info = yield* fs.stat(path.join(dir, name)).pipe(Effect.result);
-      if (Result.isFailure(info) || info.success.type !== 'File') return undefined;
       const text = yield* readIfPresent(fs, path.join(dir, name));
       if (text === undefined) return undefined;
       files[name] = text;
@@ -275,21 +303,20 @@ const readInstalledTree = (
         }),
       };
     }
-    const listed = yield* fs.readDirectory(target).pipe(Effect.result);
-    if (Result.isFailure(listed)) {
+    const listed = yield* listTreeFiles(fs, path, target);
+    if (listed === undefined) {
       return {
         kind: 'unusable',
         failure: doctorError({
           code: 'doctor.read',
           path: target,
           operation: 'readDirectory',
-          problem: `cannot read '${target}': ${reasonOf(listed.failure)}`,
-          cause: listed.failure,
+          problem: `cannot read '${target}' or one of its subdirectories`,
           fix: `Make '${target}' readable, or remove it and re-run doctor.`,
         }),
       };
     }
-    const names = listed.success.filter((entry) => !entry.startsWith('.')).toSorted();
+    const names = listed;
     const files: Record<string, string> = {};
     const failures: Record<string, DoctorError> = {};
     for (const entry of names) {
@@ -655,6 +682,23 @@ const installTree = (
         const written: Array<string> = [];
         for (const [name, text] of Object.entries(packaged.files)) {
           const file = path.join(target, name);
+          // Nested files (`references/notes.md`) need their directory first.
+          const parent = yield* fs
+            .makeDirectory(path.dirname(file), { recursive: true })
+            .pipe(Effect.result);
+          if (Result.isFailure(parent)) {
+            return blocked(
+              identity,
+              doctorError({
+                code: 'doctor.create',
+                path: path.dirname(file),
+                operation: 'makeDirectory',
+                problem: `cannot create '${path.dirname(file)}': ${reasonOf(parent.failure)}`,
+                cause: parent.failure,
+                fix: `Remove the file at '${path.dirname(file)}' (or fix its permissions) and re-run doctor.`,
+              }),
+            );
+          }
           const wrote = yield* writeAtomically(fs, path, file, text).pipe(Effect.result);
           if (Result.isFailure(wrote)) {
             return blocked(
@@ -960,8 +1004,8 @@ export const runPayloadDoctor = (
         skills: EMPTY_PAYLOADS,
         profiles: EMPTY_PAYLOADS,
         prompts: EMPTY_PAYLOADS,
-        tiers: EMPTY_PAYLOADS,
-        rigors: EMPTY_PAYLOADS,
+        principles: EMPTY_PAYLOADS,
+        playbooks: EMPTY_PAYLOADS,
         manifestFailure: failure,
       };
       return { ...result, message: payloadDoctorMessage(result, invocation) };
@@ -1016,8 +1060,8 @@ export const runPayloadDoctor = (
       skills: payloads.filter((payload) => payload.kind === 'skill'),
       profiles: payloads.filter((payload) => payload.kind === 'profile'),
       prompts: payloads.filter((payload) => payload.kind === 'prompt'),
-      tiers: payloads.filter((payload) => payload.kind === 'tier'),
-      rigors: payloads.filter((payload) => payload.kind === 'rigor'),
+      principles: payloads.filter((payload) => payload.kind === 'principle'),
+      playbooks: payloads.filter((payload) => payload.kind === 'playbook'),
     };
     return { ...result, message: payloadDoctorMessage(result, invocation) };
   }).pipe(Effect.provide(NodeLive));

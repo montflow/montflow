@@ -16,7 +16,7 @@ package automatically:
 
 - `montflow/*` — **error**. Our own plugin, implemented in
   `packages/linting/` (`@montflow/linting`), enforcing the mechanical
-  subset of the effect-reviewer profile (Effect services over platform
+  subset of the mf-profiles-effect-reviewer profile (Effect services over platform
   globals, `Match` over `switch`-on-`_tag`). See that package's README.
 - `anti-slop/*` — **error** (low-evidence patterns, see below)
 - `anti-slop-effect/*` — **error** (Effect service-constructor hygiene)
