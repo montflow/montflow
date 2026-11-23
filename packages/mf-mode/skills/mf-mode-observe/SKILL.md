@@ -88,4 +88,4 @@ A worker sandboxed away from the trace's directory skips appending. Its report s
 
 ## End
 
-Append `run.end`. With `--report` on, run the **mf-mode-report** skill. Name the trace path in your reply.
+Append `run.end` once the work is done, after the PR is open and its checks have settled. With `--report` on, run the **mf-mode-report** skill. Name the trace path in your reply.

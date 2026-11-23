@@ -86,6 +86,7 @@ type Rule =
   | 'duplicate-section'
   | 'empty-section'
   | 'placeholder'
+  | 'attribution'
   | 'too-long'
   | 'verification-evidence'
   | 'order'
@@ -104,6 +105,7 @@ const ERRORS: ReadonlySet<Rule> = new Set<Rule>([
   'duplicate-section',
   'empty-section',
   'placeholder',
+  'attribution',
   'too-long',
   'verification-evidence',
 ]);
@@ -144,6 +146,9 @@ const HEADING = /^ {0,3}(#{1,6})[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/;
 const BULLET = /^\s*(?:[-*+]|\d+[.)])\s+/;
 const TOP_BULLET = /^ ?(?:[-*+]|\d+[.)])\s+/;
 const TOKEN = /\b(TODO|TBD|FIXME)\b/;
+/** A tool's byline: the robot footer, "Generated with/by <tool>", or a co-author trailer. */
+const ATTRIBUTION =
+  /^\s*🤖|\bgenerated (?:with|by)\b.*\b(?:claude|codex|cursor|copilot|chatgpt|gemini|opencode|devin|aider)\b|^\s*co-authored-by:/iu;
 const INLINE_CODE = /`[^`]+`/;
 const INLINE_CODES = /`[^`]+`/g;
 const LINK = /\[[^\]]*\]\([^)]+\)|<https?:\/\/[^>\s]+>|https?:\/\/\S+/;
@@ -522,6 +527,18 @@ const placeholderToken = (body: Body): ReadonlyArray<Finding> =>
         ];
   });
 
+const attribution = (body: Body): ReadonlyArray<Finding> =>
+  body.blocks
+    .filter((block) => block.lines.some((line) => !line.fenced && ATTRIBUTION.test(line.text)))
+    .map((block) =>
+      finding(
+        'attribution',
+        sectionOf(block),
+        `A tool-attribution line is left ${whereOf(block)}.`,
+        `Delete the "Generated with" or co-author line ${whereOf(block)}; a PR body carries no tool byline.`,
+      ),
+    );
+
 const tooLong = (body: Body): ReadonlyArray<Finding> => {
   const count = body.lines.filter(filled).length;
   return count > MAX_LINES
@@ -711,6 +728,7 @@ const RULES: ReadonlyArray<(body: Body) => ReadonlyArray<Finding>> = [
   emptySection,
   placeholderComment,
   placeholderToken,
+  attribution,
   tooLong,
   verificationEvidence,
   order,

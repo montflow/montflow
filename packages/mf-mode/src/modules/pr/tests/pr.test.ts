@@ -138,6 +138,23 @@ Vitest.describe('check', () => {
         'placeholder:Blast Radius',
       ],
       [
+        'a generated-with footer',
+        replacing(
+          'Verification',
+          (CONTENT.get('Verification') ?? '') +
+            '\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)',
+        ),
+        'attribution:Verification',
+      ],
+      [
+        'a co-author trailer',
+        replacing(
+          'Follow-ups',
+          (CONTENT.get('Follow-ups') ?? '') + '\n\nCo-Authored-By: Claude <noreply@anthropic.com>',
+        ),
+        'attribution:Follow-ups',
+      ],
+      [
         'more than the line limit',
         replacing(
           'Verification',

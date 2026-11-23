@@ -18,7 +18,7 @@ Turn the run's trace into a page the operator reads in a minute, and a picture o
 2. Run `mf-mode report <trace>`. It writes `<name>.report.html` next to the trace, and with a Chromium-family browser also `<name>.report.png` (the summary: headline numbers, timeline, paths) and `<name>.report.pdf` (the whole page). `--out <dir>` moves them, `--title` sets the title, `--theme dark` darkens the PNG, and `--browser <path>` picks the browser.
 3. Exit 1 means there was nothing to render. A missing browser is not a failure: the output says `images=skipped` and why, and the HTML is still written. The run never waits on the report.
 4. Read the `problem` lines, also listed under Trace health in the page. Fix how you append next time. Never edit the trace.
-5. When the run opens or updates a PR, run `mf-mode pr attach <png> <pdf>` and paste the lines it prints under `## Proof` in the PR body.
+5. When the run opened a PR, the report goes in last, so it covers the PR and its CI. Run `mf-mode pr attach <png> <pdf>`, paste the lines it prints under `## Proof` in the body file, run `mf-mode pr check` on it, then `gh pr edit <number> --body-file <file>`.
 6. Reply with the report path, the trace path and the headline numbers.
 
 ## What it shows
