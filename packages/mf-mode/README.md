@@ -2,9 +2,7 @@
 
 **mf-mode** is a way of working you switch an agent into: `/mf-mode <task>`.
 The agent states the goal, picks a playbook, follows its steps, delegates to
-subagents, checks its own work, and replies in a fixed format. The text comes
-from poteto's [pstack](https://github.com/cursor/plugins/tree/main/pstack)
-(Lauren Tan, MIT), imported and renamed by montflow.
+subagents, checks its own work, and replies in a fixed format.
 
 This package ships everything mf-mode needs, and the `mf-mode` CLI that makes its
 mechanical decisions and reads its principle and playbook stores:
@@ -15,7 +13,7 @@ mechanical decisions and reads its principle and playbook stores:
 | `mf-mode-generic-worker`, the subagent every delegating step spawns | `.agents/@montflow/profiles/`                            | `mf-mode doctor`    |
 | `mf-mode-comment-sicko`, the comment reviewer                       | `.agents/@montflow/profiles/`                            | `mf-mode doctor`    |
 | 24 principles                                                       | `.agents/@montflow/principles/`                          | `mf-mode doctor`    |
-| 22 playbooks                                                        | `.agents/@montflow/playbooks/`                           | `mf-mode doctor`    |
+| 22 playbooks ([index](PLAYBOOKS.md))                                | `.agents/@montflow/playbooks/`                           | `mf-mode doctor`    |
 | Your roles: which harness and model run each kind of subagent       | `.agents/@montflow/mode/roles.json` (yours, git-ignored) | `mf-mode roles set` |
 
 Installing montflow with the [setup prompt](../../README.md#setup-prompt) installs
@@ -210,9 +208,7 @@ mf-mode playbooks verify [<name>] [--all] [--human] [--verbose] [--dir <root>]
 
 A locally edited shipped file is `stale` and `doctor` overwrites it; a
 principle or playbook the package does not ship is user data and is never
-touched. The shipped ones are adapted from
-[pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan, MIT
-licensed; the notice is in `LICENSE-pstack`.
+touched.
 
 ### Commands
 
@@ -288,12 +284,17 @@ harnesses, is a refusal that asks for `--harness`: the CLI never guesses.
 
 `bun run mf-mode:check` runs `verify` and `doctor --check` on this
 checkout. The binary test also scans every `mf-mode` skill, playbook,
-principle, profile, the harnesses reference and the wiki for
+principle, profile, the harnesses reference and `PLAYBOOKS.md` for
 `` `mf-mode <command>` `` and fails on a command this binary does not have.
 
 ### Where the files come from
 
-`skills/` and `profiles/` are montflow's own, forked from pstack 0.15.46 and
+`skills/`, `profiles/`, `principles/` and `playbooks/` are montflow's own and are
 edited directly. After changing one, run `bun run generate:payload` here and
-`bun run mf:doctor` at the root. See [wiki/mf-mode.md](../../wiki/mf-mode.md)
-for the origin and the full design.
+`bun run mf:doctor` at the root. See [PLAYBOOKS.md](PLAYBOOKS.md) for every playbook.
+
+## Acknowledgements
+
+mf-mode began as a fork of poteto's
+[pstack](https://github.com/cursor/plugins/tree/main/pstack) (Lauren Tan, MIT)
+0.15.46, imported and renamed by montflow. The notice is in `LICENSE-pstack`.

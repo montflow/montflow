@@ -129,8 +129,8 @@ mf-mode is a loop an agent runs over those stores:
 6. Verify, reply in the house style, and finish with the `opening-a-pr`
    playbook.
 
-The [wiki](wiki/index.md) explains mf-mode in full, with diagrams:
-[mf-mode](wiki/mf-mode.md).
+The [mf-mode README](packages/mf-mode/README.md) explains it in full, with diagrams, and
+[PLAYBOOKS](packages/mf-mode/PLAYBOOKS.md) indexes every playbook.
 
 ## CLIs
 

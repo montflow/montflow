@@ -25,6 +25,7 @@
   },
   "files": [
     "LICENSE-pstack",
+    "PLAYBOOKS.md",
     "payload.json",
     "skills",
     "profiles",
