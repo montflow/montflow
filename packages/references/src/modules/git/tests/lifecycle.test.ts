@@ -294,6 +294,50 @@ Vitest.describe('GitLifecycle add', () => {
     }),
   );
 
+  Vitest.it.effect('adopts an existing clone of the same URL, pinned at its HEAD', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(makeWorkspace);
+      const origin = yield* Effect.promise(makeOrigin);
+      const dir = yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      const head = yield* Effect.promise(() => git(dir, ['rev-parse', 'HEAD']));
+      const calls = counters();
+      const outcome = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        const store = yield* ReferenceStore.ReferenceStore;
+        const result = yield* lifecycle.add(root, { url: URL, purpose: PURPOSE });
+        return { result, raw: yield* store.readRaw(root, 'fixture') };
+      }).pipe(Effect.provide(cloningLive(origin.dir, calls)));
+
+      Vitest.expect(outcome.result).toMatchObject({ kind: 'created', slug: 'fixture', ref: head });
+      Vitest.expect(outcome.raw).toContain(`ref: ${head}`);
+      Vitest.expect(calls.clone).toEqual([]);
+      Vitest.expect(yield* Effect.promise(() => readOrEmpty(join(root, '.gitignore')))).toContain(
+        '.agents/references',
+      );
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
+  Vitest.it.effect('still refuses an existing clone of another URL', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(makeWorkspace);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() =>
+        makeClone(root, 'fixture', origin.dir, 'https://example.com/other/fixture.git'),
+      );
+      const result = yield* Effect.gen(function* () {
+        const lifecycle = yield* Git.GitLifecycle;
+        return yield* lifecycle.add(root, { url: URL, purpose: PURPOSE });
+      }).pipe(Effect.provide(cloningLive(origin.dir, counters())));
+      Vitest.expect(result).toMatchObject({ kind: 'refused' });
+
+      yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+      yield* Effect.promise(() => rm(origin.dir, { recursive: true, force: true }));
+    }),
+  );
+
   Vitest.it.effect('checks out a recorded tag on add', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(makeWorkspace);

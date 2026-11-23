@@ -4,6 +4,7 @@
 
 ### Added
 
+- `add` adopts an existing clone at `.agents/references/<slug>` whose `origin` is the same URL, pinning it at its HEAD (or `--ref`) instead of refusing, so a workspace can register the checkout it was bootstrapped from
 - `mf-references doctor` reads `payload.json` and checks or repairs the two reference skills; `doctor --check` is report-only and `mf-references:check` ends with it
 
 ### Changed

@@ -1071,12 +1071,69 @@ const make = Effect.gen(function* () {
     const clone = Reference.clonePath(root, slug);
     const link = yield* fs.readLink(clone).pipe(Effect.option);
     const exists = yield* fs.exists(clone);
-    if (exists || Option.isSome(link)) {
+    // An existing clone of the same URL is adopted, pinned at its HEAD: this is
+    // how a workspace registers the checkout it was bootstrapped from.
+    const existingOrigin = exists && Option.isNone(link) ? yield* git.origin(clone) : undefined;
+    const adopt =
+      existingOrigin !== undefined &&
+      Reference.normalizeUrl(existingOrigin) === Reference.normalizeUrl(url);
+    if ((exists || Option.isSome(link)) && !adopt) {
       return failure('refused', 'orphan-path', entryExistsMessage(slug, invocation));
     }
 
     const scaffolded = yield* scaffold(root);
     if (scaffolded !== undefined) return scaffolded;
+
+    if (adopt) {
+      const head = yield* git.head(clone);
+      const pin = input.ref?.trim() || head;
+      if (pin === undefined || pin === '') {
+        return failure(
+          'failed',
+          'clone-failure',
+          `failed: cannot read HEAD of the existing clone at ${relativeClone(slug)}`,
+        );
+      }
+      if (input.ref !== undefined && input.ref.trim() !== '') {
+        const resolution = yield* resolveTarget(clone, pin, true);
+        if (!resolution.ok) {
+          return failure(
+            'refused',
+            'ref-unresolvable',
+            `refused: ${slug} ref '${pin}' does not resolve in the existing clone; nothing was written`,
+          );
+        }
+        const applied = yield* applyTarget(clone, resolution.resolution, false);
+        if (!applied.ok)
+          return failure('failed', 'checkout-failure', applyFailureMessage(slug, pin, applied));
+      }
+      const now = yield* Clock.currentTimeMillis;
+      const reference = Reference.Reference.make({
+        name: slug,
+        url,
+        purpose,
+        added: new Date(now).toISOString().slice(0, 10),
+        ref: pin,
+      });
+      const written = yield* store
+        .write(root, reference, '\n# Notes\n')
+        .pipe(Effect.match({ onFailure: (error) => error, onSuccess: () => undefined }));
+      if (written !== undefined) {
+        return failure(
+          'failed',
+          'write-failure',
+          `failed: could not write ${Reference.STORE_DIR}/${slug}/${Reference.ENTRY_FILE}: ${written.reason}; the clone was left in place`,
+        );
+      }
+      return {
+        kind: 'created',
+        slug,
+        url,
+        ref: pin,
+        head: yield* git.head(clone),
+        message: `adopted ${slug} ${url} at ${pin}`,
+      } satisfies AddResult;
+    }
 
     const cloned = yield* git.clone(url, clone);
     if (!cloned.ok) {

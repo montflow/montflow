@@ -14,7 +14,8 @@
     "tooling/oxlint/anti-slop",
     "packages/principles/principles",
     "packages/playbooks/playbooks",
-    "packages/profiles/profiles/mf-mode-*",
+    "packages/mode/skills",
+    "packages/mode/profiles",
     "pi"
   ]
 }

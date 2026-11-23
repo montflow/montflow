@@ -10,7 +10,9 @@
  * `--source`, `--out` and `--commit` override the defaults (tests and dry runs).
  *
  * Writes, relative to --out:
- *   .agents/skills/mf-mode/, .agents/skills/mf-mode-<name>/   (every pstack skill but the below)
+ *   packages/mode/skills/mf-mode/, packages/mode/skills/mf-mode-<name>/   (every pstack skill but the below)
+ *   packages/mode/profiles/mf-mode-<agent>/PROFILE.md            (pstack agents)
+ *   packages/mode/payload.json                                   (installed by `mf-mode doctor`)
  *   packages/principles/principles/<name>/PRINCIPLE.md          (pstack principle-* skills)
  *   packages/playbooks/playbooks/<name>/PLAYBOOK.md             (pstack poteto-mode playbooks)
  *
@@ -334,6 +336,18 @@ const frontmatter = (entries: ReadonlyArray<readonly [string, string | ReadonlyA
 // ---------------------------------------------------------------------------
 
 const written = new Map<string, Buffer | string>();
+/**
+ * Where a logical path lands in the checkout. Skills and edits are addressed by their
+ * installed path (`.agents/skills/<name>/…`); the mode package ships them, so they are
+ * written under `packages/mode/` and `mf-mode doctor` installs them.
+ */
+const placed = (relative: string): string =>
+  relative.startsWith('.agents/skills/')
+    ? `packages/mode/skills/${relative.slice('.agents/skills/'.length)}`
+    : relative.startsWith('packages/profiles/profiles/mf-mode-')
+      ? `packages/mode/profiles/${relative.slice('packages/profiles/profiles/'.length)}`
+      : relative;
+
 const write = (relative: string, content: Buffer | string): void => {
   written.set(relative, content);
 };
@@ -354,6 +368,8 @@ for (const dir of SKILLS) {
   for (const file of walk(sourceDir)) {
     const rel = Path.relative(Path.join(SOURCE), file).split(Path.sep).join('/');
     if (dir === 'poteto-mode' && rel.startsWith('skills/poteto-mode/playbooks/')) continue;
+    // Upstream test suites (statechart's is ~4 MB of fixtures) are not part of a skill an agent runs.
+    if (/^skills\/[^/]+\/scripts\/test\//.test(rel)) continue;
     const installed = installedPath(rel);
     if (installed === undefined) continue;
     const target = `.agents/${installed}`;
@@ -783,7 +799,7 @@ write(
 
 // License notice travels with every store that carries pstack text.
 const license = Fs.readFileSync(Path.join(SOURCE, 'LICENSE'));
-for (const dir of ['packages/principles', 'packages/playbooks', '.agents/skills/mf-mode']) {
+for (const dir of ['packages/principles', 'packages/playbooks', 'packages/mode', '.agents/skills/mf-mode']) {
   write(`${dir}/LICENSE-pstack`, license);
 }
 
@@ -806,34 +822,39 @@ const manifest = (pkg: string, kind: string, store: string, names: ReadonlyArray
 write('packages/principles/payload.json', manifest('@montflow/principles', 'principle', 'principles', PRINCIPLES));
 write('packages/playbooks/payload.json', manifest('@montflow/playbooks', 'playbook', 'playbooks', PLAYBOOKS));
 
-// The profiles manifest also lists montflow's own profiles: keep those, own only the mf-mode-* entries.
+// The mode package ships every mf-mode skill and profile.
+{
+  const skills = [...new Set([...written.keys()].filter((key) => key.startsWith('.agents/skills/')).map((key) => key.split('/')[2] ?? ''))].toSorted();
+  const payloads = [
+    ...skills.map((name) => ({ kind: 'skill', name, source: `skills/${name}`, target: `.agents/skills/${name}` })),
+    ...AGENTS.map((agent) => agent.name).toSorted().map((name) => ({ kind: 'profile', name, source: `profiles/${name}`, target: `.agents/@montflow/profiles/${name}` })),
+  ];
+  write('packages/mode/payload.json', `${JSON.stringify({ schema: 1, package: '@montflow/mode', payloads }, null, 2)}\n`);
+}
+
+// The profiles manifest lists montflow's own profiles; the mf-mode-* ones moved to the mode package.
 {
   const path = Path.join(OUT, 'packages/profiles/payload.json');
   const current = Fs.existsSync(path)
     ? (JSON.parse(Fs.readFileSync(path, 'utf8')) as { schema: number; package: string; payloads: Array<{ kind: string; name: string; source: string; target: string }> })
     : { schema: 1, package: '@montflow/profiles', payloads: [] };
   const kept = current.payloads.filter((entry) => !(entry.kind === 'profile' && entry.name.startsWith('mf-mode-')));
-  const ours = AGENTS.map((agent) => ({
-    kind: 'profile',
-    name: agent.name,
-    source: `profiles/${agent.name}`,
-    target: `.agents/@montflow/profiles/${agent.name}`,
-  }));
-  const profiles = [...kept.filter((entry) => entry.kind === 'profile'), ...ours].toSorted((a, b) => a.name.localeCompare(b.name));
+  const profiles = kept.filter((entry) => entry.kind === 'profile').toSorted((a, b) => a.name.localeCompare(b.name));
   const others = kept.filter((entry) => entry.kind !== 'profile');
   write('packages/profiles/payload.json', `${JSON.stringify({ ...current, payloads: [...profiles, ...others] }, null, 2)}\n`);
 }
+
+// Every logical path lands where its package ships it.
+const placedWritten = new Map([...written].map(([key, value]) => [placed(key), value]));
+written.clear();
+for (const [key, value] of placedWritten) written.set(key, value);
 
 /** Directories whose contents this import owns entirely; anything else in them is stale. */
 const OWNED = [
   'packages/principles/principles',
   'packages/playbooks/playbooks',
-  ...AGENTS.map((agent) => `packages/profiles/profiles/${agent.name}`),
-  ...Fs.existsSync(Path.join(OUT, '.agents/skills'))
-    ? Fs.readdirSync(Path.join(OUT, '.agents/skills'))
-        .filter((name) => name === 'mf-mode' || name.startsWith('mf-mode-'))
-        .map((name) => `.agents/skills/${name}`)
-    : [],
+  'packages/mode/skills',
+  'packages/mode/profiles',
 ];
 const stale = OWNED.flatMap((dir) =>
   Fs.existsSync(Path.join(OUT, dir))

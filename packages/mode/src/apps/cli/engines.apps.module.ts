@@ -1,5 +1,6 @@
 import { Effect, Layer } from 'effect';
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
+import * as Doctor from '../doctor/index.js';
 import * as Dispatch from '../../modules/dispatch/index.js';
 import * as Roles from '../../modules/roles/index.js';
 import { Host, RolesStore } from '../../services/index.js';
@@ -81,6 +82,14 @@ export const currentHarness = (
           `${detected.reason} Pass --harness <${choices}>: the harness you are running in.`,
         );
   });
+
+/**
+ * Install or check the packaged mf-mode skills and profiles.
+ * @param root - workspace root
+ * @param check - report only; write nothing
+ */
+export const doctor = (root: string, check: boolean): Effect.Effect<Doctor.DoctorResult> =>
+  Doctor.runDoctor(root, { check, invocation: `${INVOCATION} doctor` });
 
 // ---------------------------------------------------------------------------
 // roles show / verify / set / unset

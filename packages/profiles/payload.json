@@ -34,18 +34,6 @@
     },
     {
       "kind": "profile",
-      "name": "mf-mode-comment-sicko",
-      "source": "profiles/mf-mode-comment-sicko",
-      "target": ".agents/@montflow/profiles/mf-mode-comment-sicko"
-    },
-    {
-      "kind": "profile",
-      "name": "mf-mode-generic-worker",
-      "source": "profiles/mf-mode-generic-worker",
-      "target": ".agents/@montflow/profiles/mf-mode-generic-worker"
-    },
-    {
-      "kind": "profile",
       "name": "pattern-consistency-reviewer",
       "source": "profiles/pattern-consistency-reviewer",
       "target": ".agents/@montflow/profiles/pattern-consistency-reviewer"

@@ -24,16 +24,18 @@ Skills are plain files in the skill store. Principles and playbooks each have th
 ```mermaid
 flowchart LR
     subgraph checkout["montflow checkout"]
-        skillsSrc[".agents/skills/mf-mode*"]
+        modePkg["packages/mode<br/>skills/ + profiles/ + payload.json"]
         princPkg["packages/principles<br/>principles/ + payload.json"]
         playPkg["packages/playbooks<br/>playbooks/ + payload.json"]
     end
     subgraph workspace["your repository: .agents/"]
         skills[".agents/skills/<br/>mf-mode, mf-mode-*"]
+        profiles[".agents/@montflow/profiles/<br/>mf-mode-generic-worker, mf-mode-comment-sicko"]
         princ[".agents/@montflow/principles/"]
         play[".agents/@montflow/playbooks/"]
     end
-    skillsSrc -- "mf-skills sync" --> skills
+    modePkg -- "mf-mode doctor" --> skills
+    modePkg -- "mf-mode doctor" --> profiles
     princPkg -- "mf-principles doctor" --> princ
     playPkg -- "mf-playbooks doctor" --> play
     agent(["agent in /mf-mode"])
@@ -44,8 +46,8 @@ flowchart LR
     play -.-> princ
 ```
 
-- `mf-skills sync --source <checkout> --target <repo>` copies every public skill, `mf-mode` and the `mf-mode-*` skills included.
-- Each package's `doctor` installs what its `payload.json` lists. `doctor --check` reports drift and writes nothing.
+- The mode package ships the `mf-mode` and `mf-mode-*` skills and both profiles; `mf-mode doctor` installs them. `mf-skills sync` copies montflow's other public skills.
+- Each package's `doctor` installs what its `payload.json` lists, nested folders such as a skill's `references/` and `scripts/` included. `doctor --check` reports drift and writes nothing.
 - `mf-playbooks verify` fails when a playbook names a skill, principle or playbook that is not installed. Sync the skills before you verify the playbooks.
 - In a repository that uses montflow, the `mf-*` names are not on `PATH`. Run them as `bun run --cwd <checkout>/packages/<pkg> cli <verb> --dir "$PWD"`. An agent can also read the store file directly.
 
@@ -160,7 +162,7 @@ So the Bug fix playbook's step 3 means: spawn the `mf-mode-generic-worker` profi
 | `mf-mode-generic-worker` | `poteto-agent` | The generic worker. Every playbook step that delegates code-writing or helper work spawns it. It reads the `mf-mode` skill and `worker.md` first, and reads each principle it applies with `mf-principles show`. |
 | `mf-mode-comment-sicko` | `comment-sicko` | The comment reviewer `mf-mode-no-comments` spawns. It deletes every comment outside a short keep list and flags the code that needed a comment as `MUST KILL`. It never writes application code. |
 
-The import writes both from pstack's agent files into `packages/profiles/profiles/`. The body becomes `## Instructions`, and montflow adds a short `## Review Checklist` drawn from the agent's own rules. Neither pins a model: the role decides that.
+The import writes both from pstack's agent files into `packages/mode/profiles/`, and `mf-mode doctor` installs them. The body becomes `## Instructions`, and montflow adds a short `## Review Checklist` drawn from the agent's own rules. Neither pins a model: the role decides that.
 
 A role is not a profile. A role holds no instructions, the same persona runs under almost every role, and its model choice is per user and per harness. Shipping roles as profiles would copy the generic worker's instructions into nine files, and `doctor` would overwrite a user's model choice on the next repair.
 
@@ -278,10 +280,11 @@ flowchart TD
     pin[".agents/@montflow/references/plugins/REFERENCE.md<br/>ref: {commit}"] --> sync["mf-references sync plugins"]
     sync --> clone[".agents/references/plugins/pstack<br/>git-ignored clone at the pinned commit"]
     clone --> script["scripts/import-mfstack.ts"]
-    script --> s1[".agents/skills/mf-mode/<br/>.agents/skills/mf-mode-{name}/"]
+    script --> s1["packages/mode/skills/mf-mode{-name}/<br/>packages/mode/profiles/mf-mode-*/<br/>packages/mode/payload.json"]
     script --> s2["packages/principles/principles/{name}/PRINCIPLE.md<br/>packages/principles/payload.json"]
     script --> s3["packages/playbooks/playbooks/{name}/PLAYBOOK.md<br/>packages/playbooks/payload.json"]
-    script --> lic["LICENSE-pstack in mf-mode,<br/>packages/principles, packages/playbooks"]
+    script --> lic["LICENSE-pstack in packages/mode, the mf-mode skill,<br/>packages/principles, packages/playbooks"]
+    s1 -- "mf-mode doctor" --> i1[".agents/skills/mf-mode*<br/>.agents/@montflow/profiles/mf-mode-*"]
     s2 -- "mf-principles doctor" --> i2[".agents/@montflow/principles/"]
     s3 -- "mf-playbooks doctor" --> i3[".agents/@montflow/playbooks/"]
     script -.->|"--check"| drift{"drift?"}
@@ -289,7 +292,7 @@ flowchart TD
     drift -- no --> ok(["exit 0"])
 ```
 
-`bun run mfstack:import` runs `mf-references sync plugins`, then the script. `bun run mfstack:check` runs the same with `--check`.
+`bun run mfstack:import` runs `mf-references sync plugins`, the script, then each package's `generate:payload` (mode, profiles, principles, playbooks), so the embedded copies the compiled CLIs carry stay current. `bun run mfstack:check` runs the same with `--check`.
 
 What the script does:
 
@@ -299,7 +302,8 @@ What the script does:
 - **Writes frontmatter.** Skills get a stable `id` hashed from the name, `author: Lauren Tan`, the pstack version and `license: MIT`. Playbooks get a description from the pstack README table and the `skills`, `principles` and `playbooks` they mention.
 - **Neutralizes harness terms.** Rules rewrite Cursor-specific wording into concepts: `.cursor/skills/` becomes `.agents/skills/`, the todolist tool becomes the todo list, `/loop` becomes your harness's loop, the role lines of `pstack-models.mdc` and configured model slugs become `mf-mode roles resolve <role>`, and Cursor's `create-skill` becomes `mf-create-skills`.
 - **Applies hand edits.** Exact find-and-replace edits and whole-line rewrites (for the `mf-mode` Subagents section and the setup text of `mf-mode-help`) on top of the rename. Each must match exactly once, so an upstream rewording fails the import.
-- **Turns agents into profiles.** `poteto-agent` becomes `mf-mode-generic-worker` and `comment-sicko` becomes `mf-mode-comment-sicko`, written to `packages/profiles/profiles/`. The import owns only the `mf-mode-*` entries of that package's `payload.json`; montflow's own profiles stay as they are.
+- **Turns agents into profiles.** `poteto-agent` becomes `mf-mode-generic-worker` and `comment-sicko` becomes `mf-mode-comment-sicko`, written to `packages/mode/profiles/`.
+- **Ships everything through the mode package.** Skills go to `packages/mode/skills/`, and the import writes `packages/mode/payload.json` listing every skill and profile. Upstream test suites (`scripts/test/`) are left out.
 - **Adds montflow's own files.** `scripts/mfstack/harnesses.md` ships as `mf-mode/references/harnesses.md`.
 - **Reports what is left.** It prints the harness-specific terms still in the text; the few left name Cursor on purpose, as an example.
 - **Owns its directories.** A file in an imported directory that the import did not write is removed, or reported as `stale` under `--check`.

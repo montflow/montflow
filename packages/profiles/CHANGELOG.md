@@ -16,6 +16,7 @@ Releases: this package is versioned and tagged by changesets but never published
 
 ### Added
 
+- `mf-mode-generic-worker` and `mf-mode-comment-sicko` moved to `@montflow/mode`, which ships and installs them
 - The six spec-role profiles (`spec-appraiser`, `spec-bookkeeper`, `spec-creation-orchestrator`, `spec-execution-orchestrator`, `spec-sizing-orchestrator`, `spec-worker`) ship as installed `profile` payload and are repaired by `mf-profiles doctor`
 - `mf-profiles doctor` reads `payload.json` and checks or repairs every declared profile; `doctor --check` is report-only and `mf-profiles:check` ends with it
 - Initial tracked release of the `mf-profiles` CLI.

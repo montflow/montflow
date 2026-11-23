@@ -31,6 +31,7 @@ export const INVOCATION = Engines.INVOCATION;
  * name these; a test holds the text and the tree to this list.
  */
 export const COMMANDS = [
+  'doctor',
   'roles',
   'roles show',
   'roles set',
@@ -164,6 +165,24 @@ const rolesCommand = Command.make('roles', showConfig, showHandler).pipe(
   Command.withSubcommands([showCommand, setCommand, unsetCommand, verifyCommand, resolveCommand]),
 );
 
+const doctorCommand = Command.make(
+  'doctor',
+  {
+    check: optionalBoolean('check', 'Report only; write nothing. Non-zero when unhealthy.'),
+    dir: dirFlag,
+  },
+  (config) =>
+    Effect.gen(function* () {
+      const result = yield* Engines.doctor(rootOf(config.dir), config.check);
+      yield* Console.log(result.message);
+      if (!result.healthy) yield* exitFailed;
+    }),
+).pipe(
+  Command.withDescription(
+    'Install or verify the mf-mode skills (.agents/skills) and profiles (.agents/@montflow/profiles).',
+  ),
+);
+
 const dispatchCommand = Command.make(
   'dispatch',
   {
@@ -214,6 +233,7 @@ export const rootCommand = Command.make(INVOCATION).pipe(
     'mf-mode roles and dispatch: which harness and model run delegated work.',
   ),
   Command.withSubcommands([
+    doctorCommand,
     rolesCommand,
     dispatchCommand,
     Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
