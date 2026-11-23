@@ -2,21 +2,17 @@
 
 Skills, stores and CLIs for agentic development, checked by machines.
 
-## What montflow is
-
-montflow is a Bun and Turbo monorepo on Effect v4. Each utility package owns a
-store under `.agents/` in the repository that uses it, and ships an `mf-<domain>`
-CLI that lists, shows and verifies that store. On top of those stores sits
-**mfstack**: poteto's [pstack](https://github.com/cursor/plugins/tree/main/pstack),
-imported and renamed into the `mf-` namespace. Its entry point is the
-**mf-feature** skill, an agent style built from skills, principles and playbooks.
-Everything is project-local. There are no npm packages and no global installs.
-
 ## Setup
 
-You need `git` and `bun`. Everything montflow installs is project-local: a
-git-ignored checkout at `.agents/references/montflow`, and stores under
-`.agents/` that you commit.
+Everything montflow installs is project-local: a git-ignored checkout at
+`.agents/references/montflow`, and stores under `.agents/` that you commit.
+
+### Prerequisites
+
+- `git`
+- `bun` 1.3.13, the version montflow pins
+- Optional: Nix with flakes, for a dev shell that provides both. See
+  [guides/flake.md](guides/flake.md).
 
 ### Setup prompt
 
@@ -76,12 +72,12 @@ flowchart TD
 | --- | --- | --- |
 | `skills` | montflow's public skills (`mf-skills sync`) | `.agents/skills/` |
 | `feature` | the `mf-feature` and `mf-feature-*` skills, the `mf-feature-generic-worker` and `mf-feature-comment-sicko` profiles | `.agents/skills/`, `.agents/@montflow/profiles/` |
-| `profiles` | six reviewer profiles (bookkeeper, effect-reviewer, …) | `.agents/@montflow/profiles/` |
-| `prompts` | `mf-create-prompts`, `mf-execute-prompts` | `.agents/skills/` |
+| `profiles` | six reviewer profiles (mf-profiles-bookkeeper, mf-profiles-effect-reviewer, …) | `.agents/@montflow/profiles/` |
+| `prompts` | `mf-prompts-create`, `mf-prompts-execute` | `.agents/skills/` |
 | `principles` | 24 principles | `.agents/@montflow/principles/` |
 | `playbooks` | 22 playbooks | `.agents/@montflow/playbooks/` |
-| `reviews` | `mf-adversarial-review`, `mf-addressing-adversarial-review` | `.agents/skills/` |
-| `references` | `mf-add-reference`, `mf-find-reference` (montflow itself is always registered) | `.agents/skills/` |
+| `reviews` | `mf-reviews-adversarial`, `mf-reviews-address` | `.agents/skills/` |
+| `references` | `mf-references-add`, `mf-references-find` (montflow itself is always registered) | `.agents/skills/` |
 | `model-fallback` | the model-fallback setup prompt (the plugin itself is OpenCode-only) | `.agents/@montflow/prompts/` |
 
 The `mf-*` names are not on your `PATH`. Run each CLI as
@@ -151,37 +147,15 @@ Read [AGENTS.md](AGENTS.md) first. The main commands:
 bun install
 bun run mf:gate:fast   # lint, format, typecheck, every mf check
 bun run mf:gate        # the above plus tests, the TUI suite and the smoke
-bun run mf:check       # every store and the mfstack drift check
+bun run mf:check       # every store and the pstack import check
 bun run mf:doctor      # repair every payload package
 ```
 
 Scope checks to what you touched. `AGENTS.md` lists the per-package forms.
 
-### Updating pstack
-
-The imported text is generated. Change it only through
-`scripts/import-mfstack.ts`, never by hand.
-
-1. Set `ref:` in
-   [.agents/@montflow/references/plugins/REFERENCE.md](.agents/@montflow/references/plugins/REFERENCE.md)
-   to the new `cursor/plugins` commit.
-2. Run `bun run mfstack:import`. It moves the clone to the pin and rewrites the
-   skills, principles, playbooks and payload manifests.
-3. Regenerate the embedded payloads the compiled CLIs carry:
-   `bun run --cwd packages/mf-principles generate:payload` and
-   `bun run --cwd packages/mf-playbooks generate:payload`.
-4. Run `bun run mf:doctor` to refresh the installed stores, then
-   `bun run mf:check`.
-5. Commit the result.
-
-`bun run mfstack:check` fails when the committed files differ from a fresh
-import. It runs in `mf:check` and as its own CI cell.
-
 ## Acknowledgments
 
-mfstack is [pstack](https://github.com/cursor/plugins/tree/main/pstack) by
-Lauren Tan (poteto), from `cursor/plugins`, under the MIT license. Its notice
-ships as `LICENSE-pstack` in [packages/mf-principles](packages/mf-principles/LICENSE-pstack),
-[packages/mf-playbooks](packages/mf-playbooks/LICENSE-pstack) and
-[.agents/skills/mf-feature](.agents/skills/mf-feature/LICENSE-pstack). montflow is
-also inspired by [Effect](https://github.com/effect-ts/effect).
+Inspired by:
+
+- [pstack](https://github.com/cursor/plugins/tree/main/pstack) by Lauren Tan (poteto)
+- [Effect](https://github.com/effect-ts/effect)
