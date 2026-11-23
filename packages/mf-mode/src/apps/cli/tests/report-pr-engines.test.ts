@@ -28,7 +28,6 @@ const options = (dir: string, overrides: Partial<ReportEngines.ReportOptions> = 
   title: undefined,
   browser: 'fake-chrome',
   images: true,
-  theme: 'light',
   ...overrides,
 });
 
@@ -51,7 +50,7 @@ Vitest.describe('report engine', () => {
     const dir = fresh();
     const calls: Array<ReadonlyArray<string>> = [];
     return Effect.gen(function* () {
-      const result = yield* ReportEngines.report(options(dir, { theme: 'dark' }));
+      const result = yield* ReportEngines.report(options(dir));
       Vitest.expect(result.html).toBe(NodePath.join(dir, 'example.trace.report.html'));
       Vitest.expect(result.png).toBe(NodePath.join(dir, 'example.trace.report.png'));
       Vitest.expect(result.pdf).toBe(NodePath.join(dir, 'example.trace.report.pdf'));
@@ -65,7 +64,7 @@ Vitest.describe('report engine', () => {
       ]);
       const shot = calls.find((args) => args.some((arg) => arg.startsWith('--screenshot=')));
       Vitest.expect(shot).toContain('--window-size=1200,777');
-      Vitest.expect(shot?.at(-1)).toMatch(/report\.html#card&theme=dark$/);
+      Vitest.expect(shot?.at(-1)).toMatch(/report\.html#card$/);
       Vitest.expect(calls.every((args) => args.includes('--headless'))).toBe(true);
     }).pipe(Effect.provide(Layer.mergeAll(Platform, fakeBrowser(calls))));
   });
@@ -110,7 +109,7 @@ Vitest.describe('report engine', () => {
     },
   );
 
-  Vitest.it.effect('refuses a missing trace, an empty trace and an unknown theme', () => {
+  Vitest.it.effect('refuses a missing trace and an empty trace', () => {
     const dir = fresh();
     const empty = NodePath.join(dir, 'empty.jsonl');
     Fs.writeFileSync(empty, 'not json\n');
@@ -121,7 +120,6 @@ Vitest.describe('report engine', () => {
         'Cannot read',
       );
       Vitest.expect(failure(yield* run({ trace: empty }))).toContain('No valid events');
-      Vitest.expect(failure(yield* run({ theme: 'sepia' }))).toContain("Unknown theme 'sepia'");
     }).pipe(Effect.provide(Layer.mergeAll(Platform, Host.fake({}))));
   });
 

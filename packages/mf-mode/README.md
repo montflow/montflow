@@ -258,7 +258,7 @@ mf-mode roles unset <role>                               # back to the defaults
 mf-mode roles verify [--human] [--dir <root>]            # non-zero on any error; no file is valid
 mf-mode roles resolve <role> [--harness <h>] [--human] [--verbose]
 mf-mode dispatch <role> --seat <n> --brief <file> [--profile <name>|none] [--read-only] [--harness <h>] [--dry-run]
-mf-mode report <trace> [--out <dir>] [--title <t>] [--theme light|dark] [--browser <path>] [--no-images]
+mf-mode report <trace> [--out <dir>] [--title <t>] [--browser <path>] [--no-images] [--dir <root>]
 mf-mode pr template                                     # the PR body skeleton
 mf-mode pr check --body-file <file> [--title <t>] [--human]   # errors exit non-zero; hints never do
 mf-mode pr attach <file>... [--branch <b>] [--remote <r>] [--repo owner/name]

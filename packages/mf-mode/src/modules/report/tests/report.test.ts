@@ -21,13 +21,14 @@ const HAND = [
 ].join('\n');
 
 Vitest.describe('report', () => {
-  Vitest.it('renders a self-contained page with both themes, every lane and escaped text', () => {
+  Vitest.it('renders a self-contained dark page with every lane and escaped text', () => {
     const trace =
       HAND +
       '\n{"v":1,"ts":"2026-01-01T10:20:00Z","actor":"lead","kind":"note","summary":"<script>alert(1)</script>"}';
     const html = renderReport(buildModel(parseTrace(trace)), 'trace.jsonl');
     Vitest.expect(html).not.toMatch(/<(link|img|iframe)\b|\ssrc=|@import|url\((?!#)|https?:\/\//i);
-    Vitest.expect(html).toContain('prefers-color-scheme:dark');
+    Vitest.expect(html).toContain('<meta name="color-scheme" content="dark">');
+    Vitest.expect(html).not.toMatch(/color-scheme:light|prefers-color-scheme|#fcfcfb/);
     Vitest.expect(html).not.toContain('<script>alert');
     Vitest.expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     for (const lane of ['lead', 'a', 'b']) Vitest.expect(html).toContain('>' + lane + '</text>');

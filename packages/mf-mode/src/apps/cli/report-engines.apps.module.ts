@@ -11,9 +11,6 @@ import { Host } from '../../services/index.js';
  * returned.
  */
 
-export const THEMES = ['light', 'dark'] as const;
-export type Theme = (typeof THEMES)[number];
-
 export interface ReportOptions {
   /** Workspace root: a relative trace or out path resolves against it. */
   readonly root: string;
@@ -23,7 +20,6 @@ export interface ReportOptions {
   readonly title: string | undefined;
   readonly browser: string | undefined;
   readonly images: boolean;
-  readonly theme: string;
 }
 
 export interface ReportResult {
@@ -58,8 +54,6 @@ const APP_BROWSERS = [
 ] as const;
 
 const PLAYWRIGHT_CACHES = ['Library/Caches/ms-playwright', '.cache/ms-playwright'] as const;
-
-const isTheme = (value: string): value is Theme => THEMES.some((theme) => theme === value);
 
 const firstLine = (text: string): string => text.trim().split('\n')[0] ?? '';
 
@@ -117,7 +111,6 @@ const capture = (options: {
   readonly html: string;
   readonly png: string;
   readonly pdf: string;
-  readonly theme: Theme;
 }) =>
   Effect.gen(function* () {
     const host = yield* Host.Host;
@@ -131,7 +124,7 @@ const capture = (options: {
       '--no-default-browser-check',
       '--user-data-dir=' + profile,
     ];
-    const card = '#card&theme=' + options.theme;
+    const card = '#card';
     const probe = options.html.replace(/\.html$/, '') + '.probe.html';
     const page = yield* fs.readFileString(options.html);
     yield* fs.writeFileString(probe, page.replace('</body>', PROBE + '</body>'));
@@ -180,11 +173,6 @@ export const report = (options: ReportOptions) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    if (!isTheme(options.theme)) {
-      return yield* Effect.fail(
-        "Unknown theme '" + options.theme + "'. Themes: " + THEMES.join(', ') + '.',
-      );
-    }
     const tracePath = path.resolve(options.root, options.trace);
     const source = yield* fs
       .readFileString(tracePath)
@@ -229,7 +217,7 @@ export const report = (options: ReportOptions) =>
     }
     const png = path.join(dir, stem + '.report.png');
     const pdf = path.join(dir, stem + '.report.pdf');
-    const failed = yield* capture({ browser, html, png, pdf, theme: options.theme });
+    const failed = yield* capture({ browser, html, png, pdf });
     return failed === undefined
       ? { ...result, png, pdf, browser }
       : { ...result, browser, skipped: failed };

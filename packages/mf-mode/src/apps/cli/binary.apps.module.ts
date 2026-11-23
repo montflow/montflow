@@ -452,10 +452,6 @@ const reportCommand = Command.make(
       'browser',
       'Chromium-family browser for the PNG and PDF. Found when omitted: MF_MODE_BROWSER, PATH, a Playwright headless shell, then /Applications.',
     ),
-    theme: Flag.String('theme').pipe(
-      Flag.withDescription(`Theme of the PNG: ${ReportEngines.THEMES.join(', ')}.`),
-      Flag.withDefault('light'),
-    ),
     noImages: optionalBoolean('no-images', 'Write the HTML only.'),
     dir: dirFlag,
   },
@@ -467,7 +463,6 @@ const reportCommand = Command.make(
       title: Option.getOrUndefined(config.title),
       browser: Option.getOrUndefined(config.browser),
       images: !config.noImages,
-      theme: config.theme,
     }).pipe(
       Effect.matchEffect({
         onFailure: refuse,

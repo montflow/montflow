@@ -15,7 +15,7 @@ Turn the run's trace into a page the operator reads in a minute, and a picture o
 ## Render
 
 1. Append `run.end` to the trace, per the **mf-mode-observe** skill.
-2. Run `mf-mode report <trace>` (the **mf-mode** skill says how to run `mf-mode` when it is not on your PATH). It writes `<name>.report.html` next to the trace, and with a Chromium-family browser also `<name>.report.png` (the summary: headline numbers, timeline, paths) and `<name>.report.pdf` (the whole page). `--out <dir>` moves them, `--title` sets the title, `--theme dark` darkens the PNG, and `--browser <path>` picks the browser.
+2. Run `mf-mode report <trace>` (the **mf-mode** skill says how to run `mf-mode` when it is not on your PATH). It writes `<name>.report.html` next to the trace, and with a Chromium-family browser also `<name>.report.png` (the summary: headline numbers, timeline, paths) and `<name>.report.pdf` (the whole page). `--out <dir>` moves them, `--title` sets the title, and `--browser <path>` picks the browser.
 3. Exit 1 means there was nothing to render. A missing browser is not a failure: the output says `images=skipped` and why, and the HTML is still written. The run never waits on the report.
 4. Read the `problem` lines, also listed under Trace health in the page. Fix how you append next time. Never edit the trace.
 5. When the run opened a PR, the report goes in last, so it covers the PR and its CI. Run `mf-mode pr attach <png> <pdf>`, paste the lines it prints under `## Proof` in the body file, run `mf-mode pr check` on it, then `gh pr edit <number> --body-file <file>`.
@@ -32,4 +32,4 @@ Turn the run's trace into a page the operator reads in a minute, and a picture o
 | Friction, Checks, Decisions, Left for the operator, Phases | One row per event or span. |
 | Event log | Every event, folded. |
 
-The page loads nothing over the network: styles, SVG and the tooltip script are inline. It follows the system theme, and `#theme=dark` or `#theme=light` at the end of the URL overrides it. `#card` shows the summary alone, which is what the PNG captures. Printing uses the light theme.
+The page loads nothing over the network: styles, SVG and the tooltip script are inline. It is dark only, on screen, in the PNG and in the PDF. `#card` at the end of the URL shows the summary alone, which is what the PNG captures.

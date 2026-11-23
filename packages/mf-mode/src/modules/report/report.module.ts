@@ -11,8 +11,8 @@ import {
 /**
  * The run report: one self-contained HTML page from a {@link RunModel}. Inline
  * styles, inline SVG and a few lines of inline script; nothing loads over the
- * network. `#theme=dark` or `#theme=light` overrides the system theme, and `#card`
- * hides everything below the paths diagram, which is what the PNG captures.
+ * network. Dark only, on screen and in print. `#card` hides everything below
+ * the paths diagram, which is what the PNG captures.
  * Pure: model in, string out.
  */
 
@@ -525,21 +525,13 @@ const badge = (status: Status | undefined, open = false): string => {
 
 const when = (at: number): string => '<span class="when">' + formatClock(at) + '</span>';
 
-const LIGHT =
-  'color-scheme:light;--page:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;' +
-  '--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--border:rgba(11,11,11,.10);--phase:#2a78d6;' +
-  '--worker:#1baf7a;--good:#0ca30c;--good-text:#006300;--serious:#ec835a;--critical:#d03b3b';
 const DARK =
   'color-scheme:dark;--page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink-2:#c3c2b7;' +
   '--muted:#898781;--grid:#2c2c2a;--axis:#383835;--border:rgba(255,255,255,.10);--phase:#3987e5;' +
   '--worker:#199e70;--good:#0ca30c;--good-text:#0ca30c;--serious:#ec835a;--critical:#d03b3b';
 
 const STYLE = [
-  '.viz-root{' + LIGHT + '}',
-  '@media screen and (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])) .viz-root{' +
-    DARK +
-    '}}',
-  '@media screen{:root[data-theme="dark"] .viz-root{' + DARK + '}}',
+  '.viz-root{' + DARK + '}',
   '*{box-sizing:border-box}body{margin:0}',
   '.viz-root{background:var(--page);color:var(--ink);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}',
   'main{max-width:1100px;margin:0 auto;padding:40px 24px 72px}',
@@ -587,12 +579,12 @@ const STYLE = [
   'footer{margin-top:40px;color:var(--muted);font-size:12px}',
   '#tip{position:fixed;z-index:9;pointer-events:none;max-width:360px;padding:8px 10px;border-radius:8px;background:var(--ink);color:var(--surface);font-size:12.5px;line-height:1.45;white-space:pre-line;box-shadow:0 4px 16px rgba(0,0,0,.18);display:none}',
   '.viz-root.card [data-detail]{display:none}.viz-root.card main{padding-bottom:24px}',
-  '@media print{.viz-root{background:#fff;min-height:0}main{padding:0}.card,.kpi,tr{break-inside:avoid}h2{break-after:avoid}#tip{display:none!important}}',
+  '@media print{.viz-root{-webkit-print-color-adjust:exact;print-color-adjust:exact;min-height:0}main{padding:28px 32px}.card,.kpi,tr{break-inside:avoid}h2{break-after:avoid}#tip{display:none!important}}',
+  '@page{margin:0;background:#0d0d0d}html{background:#0d0d0d}',
 ].join('\n');
 
 const SCRIPT = [
   '(function(){',
-  "var m=/theme=(light|dark)/.exec(location.hash);if(m)document.documentElement.setAttribute('data-theme',m[1]);",
   "if(/(^#|&)card(&|$)/.test(location.hash))document.querySelector('.viz-root').classList.add('card');",
   "var t=document.getElementById('tip');",
   "function hide(){t.style.display='none'}",
@@ -696,7 +688,7 @@ export const renderReport = (model: RunModel, source: string): string => {
     '<!doctype html>',
     '<html lang="en"><head><meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    '<meta name="color-scheme" content="light dark">',
+    '<meta name="color-scheme" content="dark">',
     '<title>' + escape(clip(model.title, 120)) + ' - mf-mode report</title>',
     '<style>' + STYLE + '</style></head>',
     '<body><div class="viz-root"><main>',
@@ -794,7 +786,7 @@ export const renderReport = (model: RunModel, source: string): string => {
       '</details></div>',
     '<footer>Rendered by mf-mode-report from <code>' +
       escape(source) +
-      '</code>. Self-contained, no network. Add <code>#theme=dark</code> or <code>#theme=light</code> to the URL to override the system theme, or <code>#card</code> for the summary alone.</footer>',
+      '</code>. Self-contained, no network. Add <code>#card</code> to the URL for the summary alone.</footer>',
     '</div>',
     '</main></div><div id="tip" role="tooltip"></div><script>' + SCRIPT + '</script></body></html>',
     '',
