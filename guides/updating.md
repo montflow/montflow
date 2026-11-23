@@ -91,44 +91,20 @@ Prove the update took effect:
 bun run --cwd "$M/packages/mf-reviews" cli version --json
 ```
 
-## mf-principles
+## mf-mode
 
 ```bash
-bun run --cwd "$M/packages/mf-principles" cli version --check
+bun run --cwd "$M/packages/mf-mode" cli version --check
 ```
 
 Prove the update took effect:
 
 ```bash
-bun run --cwd "$M/packages/mf-principles" cli version --json
+bun run --cwd "$M/packages/mf-mode" cli version --json
 ```
 
-## mf-playbooks
-
-```bash
-bun run --cwd "$M/packages/mf-playbooks" cli version --check
-```
-
-Prove the update took effect:
-
-```bash
-bun run --cwd "$M/packages/mf-playbooks" cli version --json
-```
-
-## mf-feature
-
-```bash
-bun run --cwd "$M/packages/mf-feature" cli version --check
-```
-
-Prove the update took effect:
-
-```bash
-bun run --cwd "$M/packages/mf-feature" cli version --json
-```
-
-`mf-feature` ships no store: the roles file is per user and never touched by an
-update. Run `mf-feature roles verify` after updating, since a new version may
+`mf-mode` also ships the principle and playbook stores, which `mf-mode doctor`
+refreshes. The roles file is per user and never touched by an update. Run `mf-mode roles verify` after updating, since a new version may
 reject a model the old one accepted.
 
 ## Installed stores

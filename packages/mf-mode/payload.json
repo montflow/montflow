@@ -1,0 +1,486 @@
+{
+  "schema": 1,
+  "package": "@montflow/mode",
+  "payloads": [
+    {
+      "kind": "skill",
+      "name": "mf-mode",
+      "source": "skills/mf-mode",
+      "target": ".agents/skills/mf-mode"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-architect",
+      "source": "skills/mf-mode-architect",
+      "target": ".agents/skills/mf-mode-architect"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-arena",
+      "source": "skills/mf-mode-arena",
+      "target": ".agents/skills/mf-mode-arena"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-automate-me",
+      "source": "skills/mf-mode-automate-me",
+      "target": ".agents/skills/mf-mode-automate-me"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-benchmark-checklist",
+      "source": "skills/mf-mode-benchmark-checklist",
+      "target": ".agents/skills/mf-mode-benchmark-checklist"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-blast-radius",
+      "source": "skills/mf-mode-blast-radius",
+      "target": ".agents/skills/mf-mode-blast-radius"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-bro",
+      "source": "skills/mf-mode-bro",
+      "target": ".agents/skills/mf-mode-bro"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-correct",
+      "source": "skills/mf-mode-correct",
+      "target": ".agents/skills/mf-mode-correct"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-create-formal-verification-skill",
+      "source": "skills/mf-mode-create-formal-verification-skill",
+      "target": ".agents/skills/mf-mode-create-formal-verification-skill"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-create-verification-skill",
+      "source": "skills/mf-mode-create-verification-skill",
+      "target": ".agents/skills/mf-mode-create-verification-skill"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-figure-it-out",
+      "source": "skills/mf-mode-figure-it-out",
+      "target": ".agents/skills/mf-mode-figure-it-out"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-help",
+      "source": "skills/mf-mode-help",
+      "target": ".agents/skills/mf-mode-help"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-how",
+      "source": "skills/mf-mode-how",
+      "target": ".agents/skills/mf-mode-how"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-in-your-own-words",
+      "source": "skills/mf-mode-in-your-own-words",
+      "target": ".agents/skills/mf-mode-in-your-own-words"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-interrogate",
+      "source": "skills/mf-mode-interrogate",
+      "target": ".agents/skills/mf-mode-interrogate"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-ketchup",
+      "source": "skills/mf-mode-ketchup",
+      "target": ".agents/skills/mf-mode-ketchup"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-ketchup-video",
+      "source": "skills/mf-mode-ketchup-video",
+      "target": ".agents/skills/mf-mode-ketchup-video"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-maintain-formal-verification-skill",
+      "source": "skills/mf-mode-maintain-formal-verification-skill",
+      "target": ".agents/skills/mf-mode-maintain-formal-verification-skill"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-maintain-verification-skill",
+      "source": "skills/mf-mode-maintain-verification-skill",
+      "target": ".agents/skills/mf-mode-maintain-verification-skill"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-no-comments",
+      "source": "skills/mf-mode-no-comments",
+      "target": ".agents/skills/mf-mode-no-comments"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-recall",
+      "source": "skills/mf-mode-recall",
+      "target": ".agents/skills/mf-mode-recall"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-reflect",
+      "source": "skills/mf-mode-reflect",
+      "target": ".agents/skills/mf-mode-reflect"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-sharpen",
+      "source": "skills/mf-mode-sharpen",
+      "target": ".agents/skills/mf-mode-sharpen"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-show-me-your-work",
+      "source": "skills/mf-mode-show-me-your-work",
+      "target": ".agents/skills/mf-mode-show-me-your-work"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-statechart",
+      "source": "skills/mf-mode-statechart",
+      "target": ".agents/skills/mf-mode-statechart"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-swarm",
+      "source": "skills/mf-mode-swarm",
+      "target": ".agents/skills/mf-mode-swarm"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-tdd",
+      "source": "skills/mf-mode-tdd",
+      "target": ".agents/skills/mf-mode-tdd"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-teach",
+      "source": "skills/mf-mode-teach",
+      "target": ".agents/skills/mf-mode-teach"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-technical-writing",
+      "source": "skills/mf-mode-technical-writing",
+      "target": ".agents/skills/mf-mode-technical-writing"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-typescript-best-practices",
+      "source": "skills/mf-mode-typescript-best-practices",
+      "target": ".agents/skills/mf-mode-typescript-best-practices"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-unslop",
+      "source": "skills/mf-mode-unslop",
+      "target": ".agents/skills/mf-mode-unslop"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-why",
+      "source": "skills/mf-mode-why",
+      "target": ".agents/skills/mf-mode-why"
+    },
+    {
+      "kind": "profile",
+      "name": "mf-mode-comment-sicko",
+      "source": "profiles/mf-mode-comment-sicko",
+      "target": ".agents/@montflow/profiles/mf-mode-comment-sicko"
+    },
+    {
+      "kind": "profile",
+      "name": "mf-mode-generic-worker",
+      "source": "profiles/mf-mode-generic-worker",
+      "target": ".agents/@montflow/profiles/mf-mode-generic-worker"
+    },
+    {
+      "kind": "playbook",
+      "name": "authoring-a-skill",
+      "source": "playbooks/authoring-a-skill",
+      "target": ".agents/@montflow/playbooks/authoring-a-skill"
+    },
+    {
+      "kind": "playbook",
+      "name": "autonomous-run",
+      "source": "playbooks/autonomous-run",
+      "target": ".agents/@montflow/playbooks/autonomous-run"
+    },
+    {
+      "kind": "playbook",
+      "name": "autopilot-full",
+      "source": "playbooks/autopilot-full",
+      "target": ".agents/@montflow/playbooks/autopilot-full"
+    },
+    {
+      "kind": "playbook",
+      "name": "autopilot-stack",
+      "source": "playbooks/autopilot-stack",
+      "target": ".agents/@montflow/playbooks/autopilot-stack"
+    },
+    {
+      "kind": "playbook",
+      "name": "babysit",
+      "source": "playbooks/babysit",
+      "target": ".agents/@montflow/playbooks/babysit"
+    },
+    {
+      "kind": "playbook",
+      "name": "bug-fix",
+      "source": "playbooks/bug-fix",
+      "target": ".agents/@montflow/playbooks/bug-fix"
+    },
+    {
+      "kind": "playbook",
+      "name": "eval",
+      "source": "playbooks/eval",
+      "target": ".agents/@montflow/playbooks/eval"
+    },
+    {
+      "kind": "playbook",
+      "name": "feature",
+      "source": "playbooks/feature",
+      "target": ".agents/@montflow/playbooks/feature"
+    },
+    {
+      "kind": "playbook",
+      "name": "hillclimb",
+      "source": "playbooks/hillclimb",
+      "target": ".agents/@montflow/playbooks/hillclimb"
+    },
+    {
+      "kind": "playbook",
+      "name": "investigation",
+      "source": "playbooks/investigation",
+      "target": ".agents/@montflow/playbooks/investigation"
+    },
+    {
+      "kind": "playbook",
+      "name": "multi-phase-plan",
+      "source": "playbooks/multi-phase-plan",
+      "target": ".agents/@montflow/playbooks/multi-phase-plan"
+    },
+    {
+      "kind": "playbook",
+      "name": "opening-a-pr",
+      "source": "playbooks/opening-a-pr",
+      "target": ".agents/@montflow/playbooks/opening-a-pr"
+    },
+    {
+      "kind": "playbook",
+      "name": "pause-safely",
+      "source": "playbooks/pause-safely",
+      "target": ".agents/@montflow/playbooks/pause-safely"
+    },
+    {
+      "kind": "playbook",
+      "name": "perf-issue",
+      "source": "playbooks/perf-issue",
+      "target": ".agents/@montflow/playbooks/perf-issue"
+    },
+    {
+      "kind": "playbook",
+      "name": "prototype",
+      "source": "playbooks/prototype",
+      "target": ".agents/@montflow/playbooks/prototype"
+    },
+    {
+      "kind": "playbook",
+      "name": "refactoring",
+      "source": "playbooks/refactoring",
+      "target": ".agents/@montflow/playbooks/refactoring"
+    },
+    {
+      "kind": "playbook",
+      "name": "runtime-forensics",
+      "source": "playbooks/runtime-forensics",
+      "target": ".agents/@montflow/playbooks/runtime-forensics"
+    },
+    {
+      "kind": "playbook",
+      "name": "session-pickup",
+      "source": "playbooks/session-pickup",
+      "target": ".agents/@montflow/playbooks/session-pickup"
+    },
+    {
+      "kind": "playbook",
+      "name": "shipping",
+      "source": "playbooks/shipping",
+      "target": ".agents/@montflow/playbooks/shipping"
+    },
+    {
+      "kind": "playbook",
+      "name": "trace-forensics",
+      "source": "playbooks/trace-forensics",
+      "target": ".agents/@montflow/playbooks/trace-forensics"
+    },
+    {
+      "kind": "playbook",
+      "name": "visual-parity",
+      "source": "playbooks/visual-parity",
+      "target": ".agents/@montflow/playbooks/visual-parity"
+    },
+    {
+      "kind": "playbook",
+      "name": "worktree-cleanup",
+      "source": "playbooks/worktree-cleanup",
+      "target": ".agents/@montflow/playbooks/worktree-cleanup"
+    },
+    {
+      "kind": "principle",
+      "name": "attack-the-premise",
+      "source": "principles/attack-the-premise",
+      "target": ".agents/@montflow/principles/attack-the-premise"
+    },
+    {
+      "kind": "principle",
+      "name": "boundary-discipline",
+      "source": "principles/boundary-discipline",
+      "target": ".agents/@montflow/principles/boundary-discipline"
+    },
+    {
+      "kind": "principle",
+      "name": "build-the-lever",
+      "source": "principles/build-the-lever",
+      "target": ".agents/@montflow/principles/build-the-lever"
+    },
+    {
+      "kind": "principle",
+      "name": "encode-lessons-in-structure",
+      "source": "principles/encode-lessons-in-structure",
+      "target": ".agents/@montflow/principles/encode-lessons-in-structure"
+    },
+    {
+      "kind": "principle",
+      "name": "exhaust-the-design-space",
+      "source": "principles/exhaust-the-design-space",
+      "target": ".agents/@montflow/principles/exhaust-the-design-space"
+    },
+    {
+      "kind": "principle",
+      "name": "experience-first",
+      "source": "principles/experience-first",
+      "target": ".agents/@montflow/principles/experience-first"
+    },
+    {
+      "kind": "principle",
+      "name": "explain-the-number",
+      "source": "principles/explain-the-number",
+      "target": ".agents/@montflow/principles/explain-the-number"
+    },
+    {
+      "kind": "principle",
+      "name": "fix-root-causes",
+      "source": "principles/fix-root-causes",
+      "target": ".agents/@montflow/principles/fix-root-causes"
+    },
+    {
+      "kind": "principle",
+      "name": "foundational-thinking",
+      "source": "principles/foundational-thinking",
+      "target": ".agents/@montflow/principles/foundational-thinking"
+    },
+    {
+      "kind": "principle",
+      "name": "guard-the-context-window",
+      "source": "principles/guard-the-context-window",
+      "target": ".agents/@montflow/principles/guard-the-context-window"
+    },
+    {
+      "kind": "principle",
+      "name": "laziness-protocol",
+      "source": "principles/laziness-protocol",
+      "target": ".agents/@montflow/principles/laziness-protocol"
+    },
+    {
+      "kind": "principle",
+      "name": "make-operations-idempotent",
+      "source": "principles/make-operations-idempotent",
+      "target": ".agents/@montflow/principles/make-operations-idempotent"
+    },
+    {
+      "kind": "principle",
+      "name": "migrate-callers-then-delete-legacy-apis",
+      "source": "principles/migrate-callers-then-delete-legacy-apis",
+      "target": ".agents/@montflow/principles/migrate-callers-then-delete-legacy-apis"
+    },
+    {
+      "kind": "principle",
+      "name": "minimize-reader-load",
+      "source": "principles/minimize-reader-load",
+      "target": ".agents/@montflow/principles/minimize-reader-load"
+    },
+    {
+      "kind": "principle",
+      "name": "model-the-domain",
+      "source": "principles/model-the-domain",
+      "target": ".agents/@montflow/principles/model-the-domain"
+    },
+    {
+      "kind": "principle",
+      "name": "never-block-on-the-human",
+      "source": "principles/never-block-on-the-human",
+      "target": ".agents/@montflow/principles/never-block-on-the-human"
+    },
+    {
+      "kind": "principle",
+      "name": "outcome-oriented-execution",
+      "source": "principles/outcome-oriented-execution",
+      "target": ".agents/@montflow/principles/outcome-oriented-execution"
+    },
+    {
+      "kind": "principle",
+      "name": "prove-it-works",
+      "source": "principles/prove-it-works",
+      "target": ".agents/@montflow/principles/prove-it-works"
+    },
+    {
+      "kind": "principle",
+      "name": "redesign-from-first-principles",
+      "source": "principles/redesign-from-first-principles",
+      "target": ".agents/@montflow/principles/redesign-from-first-principles"
+    },
+    {
+      "kind": "principle",
+      "name": "separate-before-serializing-shared-state",
+      "source": "principles/separate-before-serializing-shared-state",
+      "target": ".agents/@montflow/principles/separate-before-serializing-shared-state"
+    },
+    {
+      "kind": "principle",
+      "name": "sequence-verifiable-units",
+      "source": "principles/sequence-verifiable-units",
+      "target": ".agents/@montflow/principles/sequence-verifiable-units"
+    },
+    {
+      "kind": "principle",
+      "name": "subtract-before-you-add",
+      "source": "principles/subtract-before-you-add",
+      "target": ".agents/@montflow/principles/subtract-before-you-add"
+    },
+    {
+      "kind": "principle",
+      "name": "test-behavior-not-implementation",
+      "source": "principles/test-behavior-not-implementation",
+      "target": ".agents/@montflow/principles/test-behavior-not-implementation"
+    },
+    {
+      "kind": "principle",
+      "name": "type-system-discipline",
+      "source": "principles/type-system-discipline",
+      "target": ".agents/@montflow/principles/type-system-discipline"
+    }
+  ]
+}

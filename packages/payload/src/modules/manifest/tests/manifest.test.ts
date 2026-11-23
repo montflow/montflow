@@ -20,8 +20,7 @@ const PACKAGES = [
   'mf-reviews',
   'mf-references',
   'mf-model-fallback',
-  'mf-principles',
-  'mf-playbooks',
+  'mf-mode',
 ] as const;
 
 /** Read a package's `payload.json`, or undefined when it has none. */

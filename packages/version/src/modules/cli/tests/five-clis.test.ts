@@ -16,15 +16,7 @@ import * as Vitest from '@effect/vitest';
  */
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../../../../..');
-const CLI_PACKAGES = [
-  'mf-skills',
-  'mf-prompts',
-  'mf-profiles',
-  'mf-reviews',
-  'mf-principles',
-  'mf-playbooks',
-  'mf-feature',
-] as const;
+const CLI_PACKAGES = ['mf-skills', 'mf-prompts', 'mf-profiles', 'mf-reviews', 'mf-mode'] as const;
 
 interface Manifest {
   readonly name: string;

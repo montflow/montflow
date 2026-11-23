@@ -54,11 +54,11 @@ const UTILITIES: Readonly<Record<string, Utility>> = {
     install: (dir, check) => ['sync', '--source', MONTFLOW, '--target', dir, ...(check ? ['--check'] : [])],
     verify: (dir) => [['verify', '--dir', dir]],
   },
-  feature: {
-    pkg: 'mf-feature',
-    cli: 'mf-feature',
+  mode: {
+    pkg: 'mf-mode',
+    cli: 'mf-mode',
     install: doctor,
-    verify: (dir) => [['roles', 'verify', '--dir', dir]],
+    verify: (dir) => [['verify', '--dir', dir]],
   },
   profiles: {
     pkg: 'mf-profiles',
@@ -69,18 +69,6 @@ const UTILITIES: Readonly<Record<string, Utility>> = {
   prompts: {
     pkg: 'mf-prompts',
     cli: 'mf-prompts',
-    install: doctor,
-    verify: (dir) => [['verify', '--all', '--dir', dir]],
-  },
-  principles: {
-    pkg: 'mf-principles',
-    cli: 'mf-principles',
-    install: doctor,
-    verify: (dir) => [['verify', '--all', '--dir', dir]],
-  },
-  playbooks: {
-    pkg: 'mf-playbooks',
-    cli: 'mf-playbooks',
     install: doctor,
     verify: (dir) => [['verify', '--all', '--dir', dir]],
   },
@@ -188,7 +176,7 @@ console.log(
 );
 if (failures === 0 && !check) {
   console.log(
-    'next: commit .gitignore and the .agents/ files this run wrote (never .agents/references/); run `mf-feature roles set` to choose harnesses and models per role',
+    'next: commit .gitignore and the .agents/ files this run wrote (never .agents/references/); run `mf-mode roles set` to choose harnesses and models per role',
   );
 }
 process.exitCode = failures === 0 ? 0 : 1;

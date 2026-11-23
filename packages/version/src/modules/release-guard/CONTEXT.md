@@ -1,6 +1,6 @@
 # Release guard
 
-Constants shared by the release-guard script and its tests: the eight CLI package
+Constants shared by the release-guard script and its tests: the six CLI package
 names and the sentence each CHANGELOG must carry.
 
 ## Belongs here

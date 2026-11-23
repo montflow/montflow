@@ -12,10 +12,10 @@
     "**/*.generated.ts",
     "**/scripts/**",
     "tooling/oxlint/anti-slop",
-    "packages/mf-principles/principles",
-    "packages/mf-playbooks/playbooks",
-    "packages/mf-feature/skills",
-    "packages/mf-feature/profiles",
+    "packages/mf-mode/principles",
+    "packages/mf-mode/playbooks",
+    "packages/mf-mode/skills",
+    "packages/mf-mode/profiles",
     "pi"
   ]
 }

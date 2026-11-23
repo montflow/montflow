@@ -242,15 +242,7 @@ Vitest.describe('notice anchors runtime', () => {
       const guide = yield* Effect.promise(() =>
         readFile(join(REPO_ROOT, 'guides/updating.md'), 'utf8'),
       );
-      for (const cli of [
-        'mf-skills',
-        'mf-prompts',
-        'mf-profiles',
-        'mf-reviews',
-        'mf-principles',
-        'mf-playbooks',
-        'mf-feature',
-      ]) {
+      for (const cli of ['mf-skills', 'mf-prompts', 'mf-profiles', 'mf-reviews', 'mf-mode']) {
         Vitest.expect(guide, cli).toContain(`## ${cli}`);
       }
     }),

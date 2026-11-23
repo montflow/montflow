@@ -47,9 +47,7 @@ aliases for frozen records.
 | `mf-profiles` | Profile store truth: `verify`, `doctor`, `list`, and `show`. |
 | `mf-reviews` | Review series truth: `verify`, `doctor`, `list`, `show`, `create`, and `resume`. |
 | `mf-references` | Reference store truth: `verify`, `doctor`, `list`, `show`, `add`, `update`, and `sync`. |
-| `mf-principles` | Principle store truth: `verify`, `doctor`, `list`, and `show`. |
-| `mf-playbooks` | Playbook store truth: `verify`, `doctor`, `list`, and `show`. |
-| `mf-feature` | Roles and dispatch: `roles [show\|set\|unset\|verify\|resolve]` and `dispatch`. |
+| `mf-mode` | The mf-mode package: `doctor`, `verify` (roles, principles and playbooks together), `principles [list\|show\|verify]`, `playbooks [list\|show\|verify]`, `roles [show\|set\|unset\|verify\|resolve]`, and `dispatch`. |
 | `mf-model-fallback` | Model fallback chains: `status`, `doctor`, and `list`. |
 
 ## Verification
@@ -105,7 +103,7 @@ aliases for frozen records.
 - Utility verifies, each runnable alone: `mf-release:check`,
   `mf-skills:check`, `mf-prompts:check`, `mf-profiles:check`,
   `mf-model-fallback:check`, `mf-reviews:check`, `mf-references:check`,
-  `mf-principles:check`, `mf-playbooks:check`, `mf-feature:check`.
+  `mf-mode:check`.
   They verify release metadata (CLI versions, fixed group, tags, changelogs)
   and this repo's own artifacts (`.agents/skills`, `.agents/@montflow/prompts`,
   `.agents/@montflow/profiles`, `.agents/@montflow/reviews`,

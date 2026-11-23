@@ -1,9 +1,0 @@
-package: '@montflow/principles'
-kinds:
-  - kind: principles
-    sourceDir: 'principles/'
-    targetDir: '.agents/@montflow/principles/'
-    naming: 'by-directory'
-    compare: contents
-    installPolicy: repair
-    required: true

@@ -22,8 +22,7 @@ const PACKAGES = [
   'mf-reviews',
   'mf-references',
   'mf-model-fallback',
-  'mf-principles',
-  'mf-playbooks',
+  'mf-mode',
 ] as const;
 
 /** Run a command and return its status and combined output. */

@@ -16,9 +16,7 @@ const MANIFEST_PACKAGES = [
   'reviews',
   'references',
   'model-fallback',
-  'principles',
-  'playbooks',
-  'feature',
+  'mode',
 ] as const;
 
 interface RootManifest {

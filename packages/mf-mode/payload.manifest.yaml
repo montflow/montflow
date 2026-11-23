@@ -1,0 +1,30 @@
+package: '@montflow/mode'
+kinds:
+  - kind: skills
+    sourceDir: 'skills/'
+    targetDir: '.agents/skills/'
+    naming: 'by-directory'
+    compare: contents
+    installPolicy: repair
+    required: true
+  - kind: profiles
+    sourceDir: 'profiles/'
+    targetDir: '.agents/@montflow/profiles/'
+    naming: 'by-directory'
+    compare: contents
+    installPolicy: repair
+    required: true
+  - kind: principles
+    sourceDir: 'principles/'
+    targetDir: '.agents/@montflow/principles/'
+    naming: 'by-directory'
+    compare: contents
+    installPolicy: repair
+    required: true
+  - kind: playbooks
+    sourceDir: 'playbooks/'
+    targetDir: '.agents/@montflow/playbooks/'
+    naming: 'by-directory'
+    compare: contents
+    installPolicy: repair
+    required: true

@@ -32,11 +32,11 @@ From the repository root:
 
 ```bash
 bun run .agents/references/montflow/scripts/setup.ts            # every utility
-bun run .agents/references/montflow/scripts/setup.ts --only feature,principles,playbooks
+bun run .agents/references/montflow/scripts/setup.ts --only mode
 bun run .agents/references/montflow/scripts/setup.ts --check    # write nothing; exit 1 when anything is missing or stale
 ```
 
-Utilities: `skills`, `feature`, `profiles`, `prompts`, `principles`, `playbooks`, `reviews`, `references`, `model-fallback`. Without `--only`, all of them. Re-running is safe: every step is idempotent.
+Utilities: `skills`, `mode`, `profiles`, `prompts`, `reviews`, `references`, `model-fallback`. Without `--only`, all of them. Re-running is safe: every step is idempotent.
 
 ## 3. Read the report
 
@@ -45,7 +45,7 @@ One `step=… utility=… status=…` line per command, then `summary … failed
 ## 4. Finish
 
 - Commit `.gitignore` and the `.agents/` files the run wrote. Never commit `.agents/references/`.
-- Tell the user they can choose a harness and model per role with `mf-feature roles set` (see the `mf-feature` package README), or leave every role on its default.
+- Tell the user they can choose a harness and model per role with `mf-mode roles set` (see the `mf-mode` package README), or leave every role on its default.
 
 # Reference
 

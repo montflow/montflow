@@ -14,9 +14,7 @@ const PACKAGES = [
   'mf-reviews',
   'mf-references',
   'mf-model-fallback',
-  'mf-principles',
-  'mf-playbooks',
-  'mf-feature',
+  'mf-mode',
 ] as const;
 
 /** Where a package's generated module lives, accepting both doctor layouts. */
