@@ -19,7 +19,7 @@ The Principles section below grounds every trigger. In your reply, name each pri
 The remaining triggers live only here:
 
 - First message → restate the user's goal and the smallest change that meets it, then proceed. Open each subagent brief, PR `## Why`, and final report with the goal.
-- Starting any agent, whether a Task subagent or a Project worker → the first line of its kickoff is `Read <path>/worker.md before anything else.`, with `<path>` the absolute path of this skill's folder. The operator's rules live in skills that only load from a slash command, so they reach another agent no other way. Keep the rest of the kickoff to the goal and the task, plus this file's absolute path for a `mf-mode-generic-worker`.
+- Starting any agent, whether a Task subagent or a Project worker → the first line of its kickoff is `Read <path>/worker.md before anything else.`, with `<path>` the absolute path of this skill's folder. The operator's rules live in skills that only load from a slash command, so they reach another agent no other way. Keep the rest of the kickoff to the goal and the task, plus this file's absolute path for a `mf-mode-generic-worker`, plus the trace line from **mf-mode-observe** when `--observe` is on.
 - A fork you could settle by running something → prototype it per `mf-mode playbooks show prototype` instead of asking.
 - Code → name the data shape first. Across a function boundary → **mf-mode-architect**. Fan-out → **mf-mode-swarm**. Bakeoff → **mf-mode-arena**. Contested design → **mf-mode-interrogate**.
 - Prose, your reply included → **mf-mode-unslop**. Docs, PR descriptions, commit messages → **mf-mode-technical-writing**.
@@ -29,6 +29,13 @@ The remaining triggers live only here:
 - PR status → the **Babysit** playbook. Landing a green stack → the **Shipping** playbook.
 - Bot review comments → judge each on its merits.
 - Long or unattended work → **mf-mode-show-me-your-work**.
+
+## Flags
+
+Flags come before the task, as in `/mf-mode --observe --report <task>`, and hold for the whole run.
+
+- `--observe` → **mf-mode-observe** from the first message. The run appends its events to a trace file, every worker kickoff carries the trace line, and the reply names the trace path.
+- `--report` → `--observe`, plus **mf-mode-report** before the final reply. The reply links the report.
 
 ## Principles
 

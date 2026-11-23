@@ -9,7 +9,7 @@ mechanical decisions and reads its principle and playbook stores:
 
 | What                                                                | Where it is installed                                    | Installed by        |
 | ------------------------------------------------------------------- | -------------------------------------------------------- | ------------------- |
-| The `mf-mode` skill and 31 `mf-mode-*` skills                       | `.agents/skills/`                                        | `mf-mode doctor`    |
+| The `mf-mode` skill and 33 `mf-mode-*` skills                       | `.agents/skills/`                                        | `mf-mode doctor`    |
 | `mf-mode-generic-worker`, the subagent every delegating step spawns | `.agents/@montflow/profiles/`                            | `mf-mode doctor`    |
 | `mf-mode-comment-sicko`, the comment reviewer                       | `.agents/@montflow/profiles/`                            | `mf-mode doctor`    |
 | 24 principles                                                       | `.agents/@montflow/principles/`                          | `mf-mode doctor`    |
@@ -68,6 +68,19 @@ What you will see:
 
 `/mf-mode-help` explains any part of mf-mode, which skill to use for a job,
 and how to cut costs.
+
+### 4. Measure a run
+
+```text
+/mf-mode --report fix the flaky retry test in packages/api and open a PR
+```
+
+`--observe` keeps a trace of the run. The lead and its workers append one JSON
+line per phase, worker, CI run, check, friction and decision to a scratch
+file (the `mf-mode-observe` skill). `--report` turns on `--observe` and, at
+the end, renders the trace into a self-contained HTML page with a timeline, a
+paths diagram, per-worker stats and friction (the `mf-mode-report` skill). The
+reply names both files.
 
 ## Delegation: who runs each subagent
 
