@@ -22,6 +22,7 @@ export const StoreLive = RolesStore.Default.pipe(Layer.provide(PlatformLive));
 /** Every store the binary's commands read: roles, principles, and playbooks. */
 export const Live = Layer.mergeAll(
   StoreLive,
+  PlatformLive,
   Host.Default,
   PrincipleStore.Default.pipe(Layer.provide(PlatformLive)),
   PlaybookStore.Default.pipe(Layer.provide(PlatformLive)),

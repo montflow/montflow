@@ -1,14 +1,14 @@
 # Skill scripts
 
-Tests for the scripts that ship inside `skills/`: `mf-mode-observe`'s
-`scripts/emit.sh` and `mf-mode-report`'s `scripts/report.ts`.
+Tests for the script that ships inside `skills/`: `mf-mode-observe`'s
+`scripts/emit.sh`, the appender the lead and its workers call.
 
 ## Rules
 
-- **The scripts live in the skill.** They run from the installed copy under
-  `.agents/skills/`, so they import nothing outside the Node standard library.
-- **Their tests live here.** vitest and `tsc` cover `src/`, and the tests do
-  not ship with the skill. `report.ts` is type-checked through the test's import.
-- **The trace event shape is shared.** `emit.sh` writes it and `report.ts`
-  parses it. The round-trip tests pipe one into the other, so a kind or field
-  one side drops fails here.
+- **The script lives in the skill.** It runs from the installed copy under
+  `.agents/skills/` with nothing but bash, so appending costs no runtime.
+- **Its tests live here.** vitest covers `src/`, and the tests do not ship
+  with the skill.
+- **The event shape is shared with `../../modules/trace/`.** The round-trip
+  tests pipe `emit.sh` output through `parseTrace`, so a kind or field one
+  side drops fails here.
