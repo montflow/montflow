@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.0] - 2026-11-23
+
+### Added
+
+- Layout Selection for bare repos (`<root>/.bare/` with sibling worktrees): worktrees at `<root>/<prefix>/<name>`
+- mf-mode worktrees at `<root>/mf/<prefix>/<name>` in the bare layout
+- Step 3b opens a herdr workspace (`herdr workspace create --no-focus`) for the new worktree when herdr is present
+- Guidance that agents commit and push from inside the worktree, and need write access to the shared git dir
+
 ## [1.5.0] - 2026-10-12
 
 ### Added
