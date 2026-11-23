@@ -12,70 +12,92 @@ imported and renamed into the `mf-` namespace. Its entry point is the
 **mf-mode** skill, an agent style built from skills, principles and playbooks.
 Everything is project-local. There are no npm packages and no global installs.
 
-## Quick start
+## Setup
 
-You need `git` and `bun`. The CLIs run from a montflow checkout inside your
-repository, at `.agents/references/montflow`.
+You need `git` and `bun`. Everything montflow installs is project-local: a
+git-ignored checkout at `.agents/references/montflow`, and stores under
+`.agents/` that you commit.
 
-1. Clone montflow and install its dependencies. `--ignore-scripts` keeps
-   montflow's git hooks out of your repository.
+### Setup prompt
 
-   ```bash
-   mkdir -p .agents/references
+Paste this into your coding agent (Claude Code, Codex, OpenCode, Pi, Cursor)
+from the root of the repository you want to set up:
+
+````text
+Set up montflow in this repository. Run every command from the repository
+root. Stop at the first failure and show me its output; never work around it.
+
+1. Check that `git` and `bun` are installed and that this is a git
+   repository.
+2. If `.agents/references/montflow` does not exist, clone montflow there:
    git clone https://github.com/montflow/montflow.git .agents/references/montflow
+3. Install its dependencies without its git hooks:
    bun install --cwd .agents/references/montflow --ignore-scripts
-   M="$PWD/.agents/references/montflow"
-   ```
+4. Run the setup script. It registers the checkout (pinned at its commit),
+   git-ignores .agents/references, then installs and verifies every montflow
+   utility:
+   bun run .agents/references/montflow/scripts/setup.ts
+   To install only some utilities, add --only with a comma-separated list
+   from: skills, mode, profiles, prompts, principles, playbooks, reviews,
+   references, model-fallback. Without --only, install all of them.
+5. Read the summary line. It must say failed=0.
+6. Add this section to AGENTS.md (create the file if it has none):
 
-2. Pin the commit you cloned, so every clone of your repository uses the same
-   one. Commit this file. The clone itself stays git-ignored.
+   ## montflow
+   - CLIs: `bun run --cwd .agents/references/montflow/packages/<pkg> cli <verb> --dir "$PWD"` (mf-skills, mf-mode, mf-principles, mf-playbooks, mf-profiles, mf-prompts, mf-reviews, mf-references).
+   - Start rigorous work with `/mf-mode <task>`. Before spawning any subagent, run `mf-mode roles resolve <role>` and follow each seat's `next=`.
+   - Re-run or repair the install with the `mf-setup` skill.
 
-   ```text
-   .agents/@montflow/references/montflow/REFERENCE.md
-   ---
-   name: montflow
-   url: https://github.com/montflow/montflow.git
-   purpose: The montflow monorepo, used as the install source.
-   added: <YYYY-MM-DD>
-   ref: <output of git -C "$M" rev-parse HEAD>
-   ---
-   ```
+7. Show me `git status`, then commit `.gitignore`, `AGENTS.md` and the new
+   `.agents/` files in one commit: "chore: set up montflow". Never commit
+   `.agents/references/`.
+8. Tell me I can choose a harness and model per role with
+   `mf-mode roles set` (see .agents/references/montflow/packages/mode/README.md),
+   or leave every role on its default.
+````
 
-3. Copy montflow's public skills, `mf-mode` and every `mf-mode-*` included,
-   into `.agents/skills`.
+After setup, the `mf-setup` skill re-runs the same script to add a utility,
+repair the stores after an update (`--check` reports without writing), or set
+up a fresh clone of your repository.
 
-   ```bash
-   bun run --cwd "$M/packages/skills" cli sync --source "$M" --target "$PWD"
-   ```
+### What the script does
 
-4. Install each package's payload: principles, playbooks, profiles and the
-   skills each CLI ships. `mf-references doctor` also adds
-   `.agents/references` to `.gitignore`.
+```mermaid
+flowchart TD
+    clone[".agents/references/montflow<br/>(git-ignored clone)"] --> setup["scripts/setup.ts [--only …] [--check]"]
+    setup --> reg["mf-references add montflow<br/>adopts the clone, pinned at HEAD<br/>mf-references doctor: .gitignore"]
+    reg --> sync["mf-skills sync<br/>montflow's public skills → .agents/skills"]
+    sync --> doctors["each utility's doctor<br/>mode, profiles, prompts, principles,<br/>playbooks, reviews, references, model-fallback"]
+    doctors --> verify["each utility's verify"]
+    verify --> summary(["summary … failed=0"])
+```
 
-   ```bash
-   for pkg in skills prompts profiles reviews references principles playbooks; do
-     bun run --cwd "$M/packages/$pkg" cli doctor --dir "$PWD"
-   done
-   ```
-
-5. Verify the stores.
-
-   ```bash
-   bun run --cwd "$M/packages/skills" cli verify --dir "$PWD"
-   bun run --cwd "$M/packages/principles" cli verify --all --dir "$PWD"
-   bun run --cwd "$M/packages/playbooks" cli verify --all --dir "$PWD"
-   ```
-
-6. Start a task in your agent with `/mf-mode`:
-
-   ```text
-   /mf-mode fix the flaky retry test in packages/api and open a PR
-   /mf-mode add a CSV export to the reports page
-   ```
+| Utility | Installs | Into |
+| --- | --- | --- |
+| `skills` | montflow's public skills (`mf-skills sync`) | `.agents/skills/` |
+| `mode` | the `mf-mode` and `mf-mode-*` skills, the `mf-mode-generic-worker` and `mf-mode-comment-sicko` profiles | `.agents/skills/`, `.agents/@montflow/profiles/` |
+| `profiles` | six reviewer profiles (bookkeeper, effect-reviewer, …) | `.agents/@montflow/profiles/` |
+| `prompts` | `mf-create-prompts`, `mf-execute-prompts` | `.agents/skills/` |
+| `principles` | 24 principles | `.agents/@montflow/principles/` |
+| `playbooks` | 22 playbooks | `.agents/@montflow/playbooks/` |
+| `reviews` | `mf-adversarial-review`, `mf-addressing-adversarial-review` | `.agents/skills/` |
+| `references` | `mf-add-reference`, `mf-find-reference` (montflow itself is always registered) | `.agents/skills/` |
+| `model-fallback` | the model-fallback setup prompt (the plugin itself is OpenCode-only) | `.agents/@montflow/prompts/` |
 
 The `mf-*` names are not on your `PATH`. Run each CLI as
-`bun run --cwd "$M/packages/<pkg>" cli <verb> --dir "$PWD"`. Wrap the ones you
-use in `package.json` scripts. To update, see [guides/updating.md](guides/updating.md).
+`bun run --cwd .agents/references/montflow/packages/<pkg> cli <verb> --dir "$PWD"`,
+and wrap the ones you use in `package.json` scripts. To update montflow, see
+[guides/updating.md](guides/updating.md), then run the setup script again.
+
+### Start a task
+
+```text
+/mf-mode fix the flaky retry test in packages/api and open a PR
+/mf-mode add a CSV export to the reports page
+```
+
+How a task runs, and how to pick the harness and model for each kind of
+subagent, is in the [`mf-mode` README](packages/mode/README.md).
 
 ## How it works
 

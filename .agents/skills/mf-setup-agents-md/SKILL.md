@@ -1,9 +1,9 @@
 ---
-name: setup-agents
+name: mf-setup-agents-md
 description: Creates a minimal AGENTS.md for a project — package manager, languages, commands, verification rules, skills location. Use when a project has no AGENTS.md or its AGENTS.md is bloated and needs trimming to essentials.
 id: bd1ca8a4580cf219
 author: Daniel Montilla
-version: 1.0.0
+version: 1.1.0
 license: MIT
 dependencies:
   - executing-skills

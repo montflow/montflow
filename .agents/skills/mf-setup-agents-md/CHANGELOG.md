@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.0] - 2026-11-23
+
+### Changed
+
+- Renamed from `setup-agents` to `mf-setup-agents-md`: every skill montflow authors carries the `mf-` prefix
+
 ## [1.0.0] - 2026-08-30
 
 ### Added

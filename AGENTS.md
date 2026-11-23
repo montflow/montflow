@@ -27,6 +27,7 @@ bun@1.3.13 — lockfile is source of truth
 - verify all mf artifacts/invariants: `bun run mf:check`
 - verify release metadata (fixed version, tags, changelogs): `bun run mf:check:release`
 - pack plugins for Git install: `bun run pack:plugins`
+- set montflow up in another repo: `bun run <montflow>/scripts/setup.ts --dir <repo> [--only a,b] [--check]` (README "Setup prompt")
 - gate (full): `bun run mf:gate`
 - gate (fast, no test suite): `bun run mf:gate:fast`
 - install pre-push hook: `bun run hooks:install`
