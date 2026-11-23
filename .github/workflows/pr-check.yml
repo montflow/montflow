@@ -1,10 +1,12 @@
 # PR shape check.
 #
-# Lightweight and shell-only on purpose: it needs no install, build, or
-# checkout. It reads the pull request from `github.event` and enforces the
-# repo's PR convention — Conventional Commits title, the two required body
-# sections, and `main` as the base — so a malformed PR fails in seconds
-# instead of at merge time. The heavy verification stays in `verify.yml`.
+# Lightweight on purpose: no install and no build. It reads the pull request
+# from `github.event` and enforces the repo's PR convention — `main` as the
+# base, then the title and body against the PR body standard that agents run
+# locally as `mf-mode pr check` — so a malformed PR fails in seconds instead
+# of at merge time. The standard lives in packages/mf-mode/src/modules/pr,
+# which imports nothing, so bare Bun runs it from a sparse checkout. The heavy
+# verification stays in `verify.yml`.
 #
 # Boundary: this workflow never runs tests, lints, or typechecks. Hooks
 # cannot cover a PR title or body (they only see local commits/pushes);
@@ -19,7 +21,8 @@ concurrency:
   group: pr-check-${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   check:
@@ -38,18 +41,13 @@ jobs:
             exit 1
           fi
 
-      - name: Check title is Conventional Commits
-        run: |
-          title_pattern='^(feat|fix|docs|chore|refactor|test|perf|ci|build|revert)(\([a-z0-9-]+\))?!?: [a-z].{9,}$'
-          if ! printf '%s' "$PR_TITLE" | grep -Eq "$title_pattern"; then
-            echo "::error::title must match Conventional Commits: $title_pattern" >&2
-            echo "::error::got: $PR_TITLE" >&2
-            exit 1
-          fi
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: packages/mf-mode
 
-      - name: Check body sections
-        run: |
-          missing=0
-          printf '%s' "$PR_BODY" | grep -qi '^## Summary' || { echo "::error::body missing ## Summary" >&2; missing=1; }
-          printf '%s' "$PR_BODY" | grep -qi '^## Verification' || { echo "::error::body missing ## Verification" >&2; missing=1; }
-          exit "$missing"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.13"
+
+      - name: Check title and body against the PR body standard
+        run: printf '%s' "$PR_BODY" | bun packages/mf-mode/scripts/pr-check.ts --title "$PR_TITLE" --human

@@ -363,8 +363,10 @@ feat/
 /.agents/skills/mf-mode-maintain-formal-verification-skill/
 /.agents/skills/mf-mode-maintain-verification-skill/
 /.agents/skills/mf-mode-no-comments/
+/.agents/skills/mf-mode-observe/
 /.agents/skills/mf-mode-recall/
 /.agents/skills/mf-mode-reflect/
+/.agents/skills/mf-mode-report/
 /.agents/skills/mf-mode-sharpen/
 /.agents/skills/mf-mode-show-me-your-work/
 /.agents/skills/mf-mode-statechart/

@@ -10,6 +10,11 @@ import * as PlaybookEngines from './playbook-engines.apps.module.js';
 import * as PlaybookRenderers from './playbook-renderers.apps.module.js';
 import * as PrincipleEngines from './principle-engines.apps.module.js';
 import * as PrincipleRenderers from './principle-renderers.apps.module.js';
+import * as Pr from '../../modules/pr/index.js';
+import * as PrEngines from './pr-engines.apps.module.js';
+import * as PrRenderers from './pr-renderers.apps.module.js';
+import * as ReportEngines from './report-engines.apps.module.js';
+import * as ReportRenderers from './report-renderers.apps.module.js';
 
 /**
  * The `mf-mode` binary's command tree, built with `effect/cli`.
@@ -52,6 +57,11 @@ export const COMMANDS = [
   'playbooks list',
   'playbooks show',
   'playbooks verify',
+  'report',
+  'pr',
+  'pr template',
+  'pr check',
+  'pr attach',
   'version',
 ] as const;
 
@@ -430,10 +440,114 @@ const dispatchCommand = Command.make(
   ),
 );
 
+const reportCommand = Command.make(
+  'report',
+  {
+    trace: Argument.String('trace').pipe(
+      Argument.withDescription('The mf-mode-observe trace: one JSON event per line.'),
+    ),
+    out: optionalString('out', 'Directory for the files. Defaults to the trace’s directory.'),
+    title: optionalString('title', 'Report title. Defaults to the run.start summary.'),
+    browser: optionalString(
+      'browser',
+      'Chromium-family browser for the PNG and PDF. Found when omitted: MF_MODE_BROWSER, PATH, a Playwright headless shell, then /Applications.',
+    ),
+    noImages: optionalBoolean('no-images', 'Write the HTML only.'),
+    dir: dirFlag,
+  },
+  (config) =>
+    ReportEngines.report({
+      root: rootOf(config.dir),
+      trace: config.trace,
+      out: Option.getOrUndefined(config.out),
+      title: Option.getOrUndefined(config.title),
+      browser: Option.getOrUndefined(config.browser),
+      images: !config.noImages,
+    }).pipe(
+      Effect.matchEffect({
+        onFailure: refuse,
+        onSuccess: (result) => Console.log(ReportRenderers.report(result)),
+      }),
+    ),
+).pipe(
+  Command.withDescription(
+    'Render an mf-mode-observe trace into <name>.report.html, plus a PNG of its summary and a PDF of the page when a Chromium-family browser is found. A missing browser skips the images and still exits 0.',
+  ),
+);
+
+const prTemplateCommand = Command.make('template', {}, () => writeRaw(Pr.template())).pipe(
+  Command.withDescription('Print the PR body skeleton: every section of the standard, in order.'),
+);
+
+const prCheckCommand = Command.make(
+  'check',
+  {
+    bodyFile: Flag.String('body-file').pipe(Flag.withDescription('File holding the PR body.')),
+    title: optionalString('title', 'The PR title, checked as Conventional Commits.'),
+    human: humanFlag,
+    dir: dirFlag,
+  },
+  (config) =>
+    Effect.gen(function* () {
+      const report = yield* PrEngines.check({
+        root: rootOf(config.dir),
+        bodyFile: config.bodyFile,
+        title: Option.getOrUndefined(config.title),
+      });
+      yield* Console.log(Pr.render(report, { human: config.human }));
+      if (report.errors > 0) yield* exitFailed;
+    }).pipe(Effect.catch(refuse)),
+).pipe(
+  Command.withDescription(
+    'Hold a PR body to the standard before publishing: errors (non-zero exit) and hints, each with its fix.',
+  ),
+);
+
+const prAttachCommand = Command.make(
+  'attach',
+  {
+    files: Argument.String('file').pipe(
+      Argument.withDescription('Files to attach: report PNG and PDF, screenshots.'),
+      Argument.variadic({ min: 1 }),
+    ),
+    branch: optionalString('branch', 'Assets branch. Defaults to assets/<current branch>.'),
+    remote: Flag.String('remote').pipe(
+      Flag.withDescription('Remote to push to.'),
+      Flag.withDefault('origin'),
+    ),
+    repo: optionalString('repo', 'owner/name, when the remote URL is not on GitHub.'),
+    dir: dirFlag,
+  },
+  (config) =>
+    PrEngines.attach({
+      root: rootOf(config.dir),
+      files: config.files,
+      branch: Option.getOrUndefined(config.branch),
+      remote: config.remote,
+      repo: Option.getOrUndefined(config.repo),
+    }).pipe(
+      Effect.matchEffect({
+        onFailure: refuse,
+        onSuccess: (result) => Console.log(PrRenderers.attached(result)),
+      }),
+    ),
+).pipe(
+  Command.withDescription(
+    'Push files to an orphan assets branch on GitHub and print markdown that shows them in a PR body. Nothing reaches the PR’s own branch.',
+  ),
+);
+
+const prCommand = Command.make('pr').pipe(
+  Command.withDescription(
+    'The PR body standard: `template` prints the skeleton, `check` holds a body to it, `attach` hosts proof files.',
+  ),
+  Command.withSubcommands([prTemplateCommand, prCheckCommand, prAttachCommand]),
+);
+
 /** The root command the binary runs. */
 export const rootCommand = Command.make(INVOCATION).pipe(
   Command.withDescription(
-    'mf-mode: roles and dispatch (which harness and model run delegated work), plus the principle and playbook stores.',
+    'mf-mode: roles and dispatch (which harness and model run delegated work), the principle and playbook stores, run reports, and the PR body standard.',
   ),
   Command.withSubcommands([
     doctorCommand,
@@ -442,6 +556,8 @@ export const rootCommand = Command.make(INVOCATION).pipe(
     verifyAllCommand,
     principlesCommand,
     playbooksCommand,
+    reportCommand,
+    prCommand,
     Cli.versionCommand({ packageRoot: PACKAGE_ROOT, generated: PACKAGE_IDENTITY }),
   ]),
   Command.provide(Engines.Live),

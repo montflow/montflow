@@ -124,6 +124,12 @@
     },
     {
       "kind": "skill",
+      "name": "mf-mode-observe",
+      "source": "skills/mf-mode-observe",
+      "target": ".agents/skills/mf-mode-observe"
+    },
+    {
+      "kind": "skill",
       "name": "mf-mode-recall",
       "source": "skills/mf-mode-recall",
       "target": ".agents/skills/mf-mode-recall"
@@ -133,6 +139,12 @@
       "name": "mf-mode-reflect",
       "source": "skills/mf-mode-reflect",
       "target": ".agents/skills/mf-mode-reflect"
+    },
+    {
+      "kind": "skill",
+      "name": "mf-mode-report",
+      "source": "skills/mf-mode-report",
+      "target": ".agents/skills/mf-mode-report"
     },
     {
       "kind": "skill",

@@ -9,7 +9,8 @@ import type * as Dispatch from '../../modules/dispatch/index.js';
 
 /**
  * The process the CLI runs in: its environment, which executables are on
- * `PATH`, and the one spawn `dispatch` makes. Tests provide a fake.
+ * `PATH`, the spawn `dispatch` makes, and the captured runs `report` (a
+ * headless browser) and `pr attach` (git) make. Tests provide a fake.
  */
 
 export interface Impl {
@@ -22,6 +23,28 @@ export interface Impl {
    * @returns the child's exit code; 127 when the binary cannot be spawned
    */
   readonly run: (plan: Dispatch.Plan, cwd: string) => Effect.Effect<number>;
+  /**
+   * Run a binary to its end and capture what it printed. Argv only, no shell.
+   * @returns the exit code (127 when it cannot be spawned, 124 past the timeout), stdout and stderr
+   */
+  readonly exec: (
+    binary: string,
+    args: ReadonlyArray<string>,
+    options?: ExecOptions,
+  ) => Effect.Effect<Captured>;
+}
+
+export interface ExecOptions {
+  readonly cwd?: string | undefined;
+  readonly stdin?: string | undefined;
+  /** Stop the child after this long. Default one minute. */
+  readonly timeoutMs?: number | undefined;
+}
+
+export interface Captured {
+  readonly code: number;
+  readonly stdout: string;
+  readonly stderr: string;
 }
 
 export const Id = '@montflow/ModeHost';
@@ -64,6 +87,32 @@ const make = (): Impl => {
         child.on('close', (code) => resume(Effect.succeed(code ?? 1)));
         if (plan.stdin !== undefined && child.stdin !== null) child.stdin.end(plan.stdin);
       }),
+    exec: (binary, args, options = {}) =>
+      Effect.callback<Captured>((resume) => {
+        const out: Array<Buffer> = [];
+        const err: Array<Buffer> = [];
+        const child = spawn(binary, [...args], {
+          cwd: options.cwd,
+          env,
+          timeout: options.timeoutMs ?? 60_000,
+          stdio: [options.stdin === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+        });
+        child.stdout?.on('data', (chunk: Buffer) => out.push(chunk));
+        child.stderr?.on('data', (chunk: Buffer) => err.push(chunk));
+        child.on('error', (error) =>
+          resume(Effect.succeed({ code: 127, stdout: '', stderr: error.message })),
+        );
+        child.on('close', (code, signal) =>
+          resume(
+            Effect.succeed({
+              code: signal === 'SIGTERM' ? 124 : (code ?? 1),
+              stdout: Buffer.concat(out).toString('utf8'),
+              stderr: Buffer.concat(err).toString('utf8'),
+            }),
+          ),
+        );
+        if (options.stdin !== undefined && child.stdin !== null) child.stdin.end(options.stdin);
+      }),
   };
 };
 
@@ -79,6 +128,8 @@ export const fake = (options: {
   readonly installed?: ReadonlyArray<string>;
   readonly exitCode?: number;
   readonly runs?: Array<Dispatch.Plan>;
+  /** Answers each `exec`; without it every binary is missing (127). */
+  readonly exec?: (binary: string, args: ReadonlyArray<string>, options: ExecOptions) => Captured;
 }): Layer.Layer<Host> =>
   Layer.succeed(Host, {
     env: options.env ?? {},
@@ -88,4 +139,9 @@ export const fake = (options: {
         options.runs?.push(plan);
         return options.exitCode ?? 0;
       }),
+    exec: (binary, args, execOptions = {}) =>
+      Effect.sync(
+        () =>
+          options.exec?.(binary, args, execOptions) ?? { code: 127, stdout: '', stderr: 'missing' },
+      ),
   });

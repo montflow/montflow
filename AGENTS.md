@@ -47,7 +47,7 @@ aliases for frozen records.
 | `mf-profiles` | Profile store truth: `verify`, `doctor`, `list`, and `show`. |
 | `mf-reviews` | Review series truth: `verify`, `doctor`, `list`, `show`, `create`, and `resume`. |
 | `mf-references` | Reference store truth: `verify`, `doctor`, `list`, `show`, `add`, `update`, and `sync`. |
-| `mf-mode` | The mf-mode package: `doctor`, `verify` (roles, principles and playbooks together), `principles [list\|show\|verify]`, `playbooks [list\|show\|verify]`, `roles [show\|set\|unset\|verify\|resolve]`, and `dispatch`. |
+| `mf-mode` | The mf-mode package: `doctor`, `verify` (roles, principles and playbooks together), `principles [list\|show\|verify]`, `playbooks [list\|show\|verify]`, `roles [show\|set\|unset\|verify\|resolve]`, `dispatch`, `report` (run trace to HTML, PNG and PDF), and `pr [template\|check\|attach]` (the PR body standard). |
 | `mf-model-fallback` | Model fallback chains: `status`, `doctor`, and `list`. |
 
 ## Verification
