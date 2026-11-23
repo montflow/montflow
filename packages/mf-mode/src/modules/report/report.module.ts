@@ -38,6 +38,29 @@ const DOT = ' \u{b7} ';
 const clip = (value: string, max: number): string =>
   value.length > max ? value.slice(0, max - 1).trimEnd() + ELLIPSIS : value;
 
+/** A glyph's rough advance in em for the report's system sans, erring wide. */
+const advance = (char: string): number => {
+  if (/[ijlI.,:;'|!]/.test(char)) return 0.28;
+  if (/[ frt()[\]{}/\\"-]/.test(char)) return 0.37;
+  if (/[MW@%]/.test(char)) return 0.92;
+  if (/[mw]/.test(char)) return 0.78;
+  if (/[A-Z0-9#&]/.test(char)) return 0.66;
+  return (char.codePointAt(0) ?? 0) >= 0x2000 ? 1 : 0.585;
+};
+
+const ems = (text: string): number =>
+  Array.from(text).reduce((sum, char) => sum + advance(char), 0);
+
+/** Clip text with an ellipsis so its estimated width at fontPx fits in px. */
+const fit = (text: string, px: number, fontPx: number, bold = false): string => {
+  const room = px / (fontPx * (bold ? 1.04 : 1));
+  if (ems(text) <= room) return text;
+  const chars = Array.from(text);
+  let width = ems(text) + advance(ELLIPSIS);
+  while (chars.length > 0 && width > room) width -= advance(chars.pop() ?? '');
+  return chars.join('').trimEnd() + ELLIPSIS;
+};
+
 const num = (value: number): string => String(Math.round(value * 10) / 10);
 
 const tip = (lines: ReadonlyArray<string | undefined>): string =>
@@ -113,7 +136,7 @@ const timeline = (model: RunModel): string => {
         '" class="lane" text-anchor="end"><title>' +
         escape(lane.label) +
         '</title>' +
-        escape(clip(lane.label, 20)) +
+        escape(fit(lane.label, gutter - 16, 12, true)) +
         '</text>',
       '<line x1="' +
         gutter +
@@ -127,7 +150,7 @@ const timeline = (model: RunModel): string => {
     );
   }
 
-  for (const interval of model.intervals) {
+  for (const [index, interval] of model.intervals.entries()) {
     const y0 = laneY.get(interval.lane);
     if (y0 === undefined) continue;
     const inset = Math.min(interval.depth, 2) * 7;
@@ -169,15 +192,27 @@ const timeline = (model: RunModel): string => {
         ]) +
         '/>',
     );
-    const room = Math.floor((w - 12) / 6.4);
-    if (interval.family === 'phase' && room >= 6 && laneHeight - inset * 2 >= 16) {
+    const room = w - 12;
+    if (interval.family === 'phase' && room >= 36 && laneHeight - inset * 2 >= 16) {
       parts.push(
-        '<text x="' +
+        '<clipPath id="bar' +
+          index +
+          '"><rect x="' +
+          num(x0) +
+          '" y="' +
+          (y0 + inset) +
+          '" width="' +
+          num(w - 6) +
+          '" height="' +
+          (laneHeight - inset * 2) +
+          '"/></clipPath><text x="' +
           num(x0 + 6) +
           '" y="' +
           (y0 + laneHeight / 2 + 4) +
-          '" class="in-label">' +
-          escape(clip(interval.label, room)) +
+          '" class="in-label" clip-path="url(#bar' +
+          index +
+          ')">' +
+          escape(fit(interval.label, room, 11)) +
           '</text>',
       );
     }
@@ -299,7 +334,13 @@ const timeline = (model: RunModel): string => {
         '" y="' +
         y +
         '" class="tick" text-anchor="middle">' +
-        escape(milestone.label) +
+        escape(
+          fit(
+            milestone.label,
+            Math.min(180, 2 * Math.min(x(milestone.at), width - x(milestone.at)) - 8),
+            11,
+          ),
+        ) +
         '</text>',
     );
   });
@@ -452,17 +493,18 @@ const storyGrid = (story: Story) => {
   return { boxes, wires, rows: row };
 };
 
-/** Clip a URL label in the middle at a path segment, so its host and its last segments stay. */
-const clipLabel = (box: Box, max: number): string => {
-  if (box.cls !== 'url' || box.label.length <= max) return clip(box.label, max);
+/** Fit a node title to px; a URL loses the middle of its path, so its host and its last segments stay. */
+const fitLabel = (box: Box, px: number): string => {
+  const fitted = fit(box.label, px, 12.5, true);
+  if (box.cls !== 'url' || fitted === box.label) return fitted;
   const [host = '', ...segments] = box.label.split('/');
   let tail = '';
   for (const segment of segments.toReversed()) {
-    const next = '/' + segment + tail;
-    if (host.length + 2 + next.length > max) break;
-    tail = next;
+    const next = host + '/' + ELLIPSIS + '/' + segment + tail;
+    if (fit(next, px, 12.5, true) !== next) break;
+    tail = '/' + segment + tail;
   }
-  return tail === '' ? clip(box.label, max) : host + '/' + ELLIPSIS + tail;
+  return tail === '' ? fitted : host + '/' + ELLIPSIS + tail;
 };
 
 const paths = (model: RunModel): string => {
@@ -573,6 +615,8 @@ const paths = (model: RunModel): string => {
     const labelKey = JSON.stringify([wire.from, wire.label]);
     if (wire.label !== '' && !labelled.has(labelKey)) {
       labelled.add(labelKey);
+      const room =
+        anchor === 'start' ? width - mx - 4 : Math.min(150, 2 * Math.min(mx, width - mx) - 8);
       labels.push(
         '<text x="' +
           num(mx) +
@@ -583,13 +627,12 @@ const paths = (model: RunModel): string => {
           '"' +
           tip([refLabel(wire.from) + ' to ' + refLabel(wire.to), wire.label]) +
           '>' +
-          (wire.fail ? CROSS + ' ' : '') +
-          escape(clip(wire.label, 30)) +
+          escape(fit((wire.fail ? CROSS + ' ' : '') + wire.label, room, 11)) +
           '</text>',
       );
     }
   }
-  for (const box of boxes) {
+  for (const [index, box] of boxes.entries()) {
     const p = at.get(box.id);
     if (p === undefined) continue;
     parts.push(
@@ -605,21 +648,32 @@ const paths = (model: RunModel): string => {
         nodeWidth +
         '" height="' +
         nodeHeight +
-        '" rx="8"/>' +
-        '<text x="' +
+        '" rx="8"/><clipPath id="node' +
+        index +
+        '"><rect x="' +
+        (p.x + 6) +
+        '" y="' +
+        p.y +
+        '" width="' +
+        (nodeWidth - 12) +
+        '" height="' +
+        nodeHeight +
+        '"/></clipPath><g clip-path="url(#node' +
+        index +
+        ')"><text x="' +
         (p.x + 12) +
         '" y="' +
         (p.y + 19) +
         '" class="nt">' +
-        escape(clipLabel(box, 32)) +
+        escape(fitLabel(box, nodeWidth - 24)) +
         '</text>' +
         '<text x="' +
         (p.x + 12) +
         '" y="' +
         (p.y + 35) +
         '" class="ns">' +
-        escape(clip(box.sub, 40)) +
-        '</text></g>',
+        escape(fit(box.sub, nodeWidth - 24, 11)) +
+        '</text></g></g>',
     );
   }
   return (

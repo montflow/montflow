@@ -31,6 +31,41 @@ const STORY = [
   '{"v":1,"ts":"2026-01-01T10:10:00Z","actor":"lead","kind":"phase.end","summary":"Pick a design","span":"design","status":"ok"}',
 ].join('\n');
 
+/** Absurdly long labels in every spot a diagram draws text. */
+const LONG = {
+  step: ('Investigate WHY ' + 'every module and every call path '.repeat(7)).slice(0, 200),
+  branch: ('feat/' + 'WWW-mmm-a-branch-name-that-keeps-going-'.repeat(4)).slice(0, 120),
+  url:
+    'https://github.com/montflow/montflow/blob/main/' +
+    'deeply/nested/'.repeat(6) +
+    'report.module.ts',
+  lane: 'w-' + 'MMMMWWWW'.repeat(8),
+  link: 'stacked on top of a long account of how these two outputs relate WWWW MMMM and why',
+};
+
+const STRESS = [
+  '{"v":1,"ts":"2026-01-01T10:00:00Z","actor":"lead","kind":"run.start","summary":"Stress","attrs":{"playbook":"feature"}}',
+  '{"v":1,"ts":"2026-01-01T10:00:00Z","actor":"lead","kind":"phase.start","summary":"' +
+    LONG.step +
+    '","span":"p1"}',
+  '{"v":1,"ts":"2026-01-01T10:01:00Z","actor":"lead","kind":"worker.start","summary":"Task","span":"' +
+    LONG.lane +
+    '"}',
+  '{"v":1,"ts":"2026-01-01T10:09:00Z","actor":"lead","kind":"worker.end","summary":"done","span":"' +
+    LONG.lane +
+    '","status":"ok","refs":["branch:' +
+    LONG.branch +
+    '","url:' +
+    LONG.url +
+    '","pr:#7"]}',
+  '{"v":1,"ts":"2026-01-01T10:09:00Z","actor":"lead","kind":"link","summary":"' +
+    LONG.link +
+    '","refs":["pr:#7","branch:' +
+    LONG.branch +
+    '"]}',
+  '{"v":1,"ts":"2026-01-01T10:10:00Z","actor":"lead","kind":"phase.end","summary":"x","span":"p1","status":"ok"}',
+].join('\n');
+
 const pathsSvg = (trace: string): string => {
   const html = renderReport(buildModel(parseTrace(trace)), 'trace.jsonl');
   return html.slice(html.indexOf('<h2>Paths</h2>'), html.indexOf('<div data-detail>'));
@@ -78,6 +113,39 @@ Vitest.describe('report', () => {
       Vitest.expect(svg).toContain('>feat/widget</text>');
     },
   );
+
+  Vitest.it('clips long labels to their boxes and keeps the full text in the tooltip', () => {
+    const html = renderReport(buildModel(parseTrace(STRESS)), 'trace.jsonl');
+    const svgs = html.match(/<svg[\s\S]*?<\/svg>/g) ?? [];
+    Vitest.expect(svgs).toHaveLength(2);
+    const texts = svgs.flatMap((svg) =>
+      [...svg.matchAll(/<text[^>]*>(?:<title>[^<]*<\/title>)?([^<]*)<\/text>/g)].map(
+        (match) => match[1] ?? '',
+      ),
+    );
+    const starts = ['1. Investigate', 'Investigate WHY', 'feat/WWW', 'w-MMMM', 'stacked on'];
+    const long = texts.filter((text) => starts.some((start) => text.startsWith(start)));
+    Vitest.expect(long.length).toBeGreaterThanOrEqual(6);
+    for (const text of long) Vitest.expect(text.endsWith('\u{2026}')).toBe(true);
+    for (const full of [LONG.step, LONG.branch, LONG.lane, LONG.link]) {
+      Vitest.expect(texts.some((text) => text.includes(full))).toBe(false);
+      Vitest.expect(html).toContain(full);
+    }
+    Vitest.expect(texts.find((text) => text.startsWith('w-MMMM'))?.length).toBeLessThan(16);
+    Vitest.expect(texts).toContain('github.com/\u{2026}/report.module.ts');
+
+    const [timelineSvg = '', pathSvg = ''] = svgs;
+    const inLabels = timelineSvg.match(/class="in-label"[^>]*/g) ?? [];
+    Vitest.expect(inLabels.length).toBeGreaterThan(0);
+    for (const label of inLabels) Vitest.expect(label).toMatch(/clip-path="url\(#bar\d+\)"/);
+    const nodes = pathSvg.match(/<g class="node /g)?.length ?? 0;
+    const clipped = pathSvg.match(
+      /<g clip-path="url\(#node\d+\)"><text[^>]*class="nt">[^<]*<\/text><text[^>]*class="ns">/g,
+    );
+    Vitest.expect(clipped?.length).toBe(nodes);
+    const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]);
+    Vitest.expect(new Set(ids).size).toBe(ids.length);
+  });
 
   Vitest.it('still draws a playbook node for a trace with no phases', () => {
     const svg = pathsSvg(
