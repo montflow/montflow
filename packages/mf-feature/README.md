@@ -249,6 +249,7 @@ principle, profile, the harnesses reference and the wiki for
 
 ### Where the files come from
 
-`scripts/import-mfstack.ts` writes `skills/`, `profiles/` and `payload.json`
-from the pinned pstack clone; never edit them by hand. See
-[wiki/mf-feature.md](../../wiki/mf-feature.md) for the import and the full design.
+`skills/` and `profiles/` are montflow's own, forked from pstack 0.15.46 and
+edited directly. After changing one, run `bun run generate:payload` here and
+`bun run mf:doctor` at the root. See [wiki/mf-feature.md](../../wiki/mf-feature.md)
+for the origin and the full design.

@@ -160,7 +160,7 @@ Read [AGENTS.md](AGENTS.md) first. The main commands:
 bun install
 bun run mf:gate:fast   # lint, format, typecheck, every mf check
 bun run mf:gate        # the above plus tests, the TUI suite and the smoke
-bun run mf:check       # every store and the pstack import check
+bun run mf:check       # every store
 bun run mf:doctor      # repair every payload package
 ```
 

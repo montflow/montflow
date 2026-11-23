@@ -48,7 +48,6 @@ const SOURCES = (): ReadonlyArray<string> => [
   ...markdown(NodePath.join(REPO, 'packages/mf-playbooks/playbooks')),
   ...markdown(NodePath.join(REPO, 'packages/mf-principles/principles')),
   ...markdown(NodePath.join(REPO, 'packages/mf-profiles/profiles')),
-  ...markdown(NodePath.join(REPO, 'scripts/mfstack')),
   NodePath.join(REPO, 'wiki/mf-feature.md'),
   NodePath.join(REPO, 'README.md'),
   NodePath.join(REPO, 'packages/mf-feature/README.md'),
