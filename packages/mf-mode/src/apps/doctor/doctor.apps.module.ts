@@ -19,7 +19,8 @@ import manifestJson from '../../../payload.json' with { type: 'json' };
  * (`.agents/@montflow/playbooks/`).
  *
  * Anything the package does not ship is user data: doctor never reads,
- * rewrites, or deletes it. The roles file is never touched.
+ * rewrites, or deletes it. The roles file is never touched, and neither is the
+ * repo's extension store (`.agents/@montflow/mf-mode/extensions/`).
  */
 
 /** The validated manifest this package ships. */

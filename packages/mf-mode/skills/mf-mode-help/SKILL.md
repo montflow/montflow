@@ -134,7 +134,7 @@ Playbooks are step lists inside `/mf-mode`, not skills, so they have no slash co
 
 Without `/mf-mode`, a phrase such as "babysit this pr" can start your harness's own skill for the same job instead. `mf-mode playbooks list` lists every playbook.
 
-mfstack has no planning skill. Your harness's plan mode, if it has one, works alongside it. For work that spans phases or stacked PRs, asking `/mf-mode` for a plan runs the [Multi-phase plan playbook](../../@montflow/playbooks/multi-phase-plan/PLAYBOOK.md), which writes the plan and doesn't implement it. For a design question, the Prototype playbook or `/mf-mode-architect` settles it in code first.
+mfstack has no planning skill. Your harness's plan mode, if it has one, works alongside it. For work that spans phases or stacked PRs, asking `/mf-mode` for a plan runs the Multi-phase plan playbook (`mf-mode playbooks show multi-phase-plan`), which writes the plan and doesn't implement it. For a design question, the Prototype playbook or `/mf-mode-architect` settles it in code first.
 
 Principles are one-rule documents in the principles store that `/mf-mode` reads and cites in its replies. The user rarely asks for one. They steer with the names instead, as in "apply prove it works. show me the real output." `mf-mode principles list` lists them, and `mf-mode principles show <name>` prints one.
 
