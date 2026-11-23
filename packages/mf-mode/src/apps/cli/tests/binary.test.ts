@@ -59,11 +59,16 @@ const INVOCATION = /(?:`|^\$ )mf-mode ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?/gm;
 const COMMANDS: ReadonlyArray<string> = Binary.COMMANDS;
 
 Vitest.describe('mf-mode binary', () => {
-  Vitest.it('has every command the COMMANDS list names', () => {
-    for (const command of COMMANDS) {
-      Vitest.expect(run([...command.split(' '), '--help']).status, command).toBe(0);
-    }
-  });
+  // One spawn per command path; on a loaded CI runner each `bun run` takes a few seconds.
+  Vitest.it(
+    'has every command the COMMANDS list names',
+    () => {
+      for (const command of COMMANDS) {
+        Vitest.expect(run([...command.split(' '), '--help']).status, command).toBe(0);
+      }
+    },
+    120_000,
+  );
 
   Vitest.it('every mf-mode command named in shipped text exists', () => {
     const unknown: Array<string> = [];
