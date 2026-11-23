@@ -85,6 +85,8 @@ const make = Effect.gen(function* () {
       .pipe(Effect.mapError(() => new StoreError({ message: `Unknown playbook '${name}'.` })));
   });
 
+  const readEntries = (dir: string) => fs.readDirectory(dir).pipe(Effect.orElseSucceed(() => []));
+
   /**
    * Names of the directories under one store that hold its entry file. A
    * missing store holds none.
@@ -93,8 +95,7 @@ const make = Effect.gen(function* () {
    * @returns the entry names
    */
   const entryNames = (dir: string, file: string): Effect.Effect<ReadonlySet<string>> =>
-    fs.readDirectory(dir).pipe(
-      Effect.orElseSucceed((): ReadonlyArray<string> => []),
+    readEntries(dir).pipe(
       Effect.flatMap((entries) =>
         Effect.forEach(entries, (entry) =>
           fs.exists(path.join(dir, entry, file)).pipe(
@@ -106,22 +107,44 @@ const make = Effect.gen(function* () {
       Effect.map((names) => new Set(names.filter((name): name is string => name !== undefined))),
     );
 
-  /**
-   * The names a playbook's `skills`, `principles`, and `playbooks` lists
-   * resolve against, read from the same workspace root: skill directories
-   * holding a `SKILL.md`, principle directories holding a `PRINCIPLE.md`, and
-   * playbook directories holding a `PLAYBOOK.md`. Read by path, never through
-   * another package, so the stores stay independent.
-   * @param root - workspace root
-   * @returns the reference sets
-   */
+  const scriptFiles = (dir: string): Effect.Effect<ReadonlyArray<string>> =>
+    Effect.gen(function* () {
+      const entries = yield* readEntries(dir);
+      const children = yield* Effect.forEach(
+        entries.filter((entry) => entry !== 'node_modules'),
+        Effect.fnUntraced(function* (entry) {
+          const child = path.join(dir, entry);
+          const type = yield* fs.stat(child).pipe(
+            Effect.map((info) => info.type),
+            Effect.orElseSucceed(() => undefined),
+          );
+          if (type === 'File') return [child];
+          if (type !== 'Directory') return [];
+          const isLink = yield* fs.readLink(child).pipe(Effect.isSuccess);
+          return isLink ? [] : yield* scriptFiles(child);
+        }),
+      );
+      return children.flat();
+    });
+
+  const installedScripts = Effect.fn('PlaybookStore.installedScripts')(function* (root: string) {
+    const dir = path.join(root, ...Playbook.SKILLS_DIR);
+    const skills = yield* readEntries(dir);
+    const files = yield* Effect.forEach(skills, (skill) =>
+      scriptFiles(path.join(dir, skill, 'scripts')),
+    );
+    return new Set(files.flat().map((file) => path.relative(root, file).split(path.sep).join('/')));
+  });
+
   const references = Effect.fn('PlaybookStore.references')(function* (root: string) {
-    const [skills, principles, playbooks] = yield* Effect.all([
-      entryNames(path.join(root, ...Playbook.SKILLS_DIR), Playbook.SKILL_FILE),
+    const skillsDir = path.join(root, ...Playbook.SKILLS_DIR);
+    const [skills, principles, playbooks, scripts] = yield* Effect.all([
+      entryNames(skillsDir, Playbook.SKILL_FILE),
       entryNames(path.join(root, ...Playbook.PRINCIPLES_DIR), Playbook.PRINCIPLE_FILE),
       entryNames(storeRoot(path, root), Playbook.FILE),
+      installedScripts(root),
     ]);
-    const resolved: Playbook.References = { root, skills, principles, playbooks };
+    const resolved: Playbook.References = { root, skills, principles, playbooks, scripts };
     return resolved;
   });
 

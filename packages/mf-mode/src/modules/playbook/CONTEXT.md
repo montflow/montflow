@@ -12,6 +12,9 @@ The playbook model and its mechanical standard. Pure: no IO.
   and every reference resolved against the `References` the caller gathered.
   A body with no list item (`1.` or `-`) is a warning, because some upstream
   playbooks are prose
+- `scriptPathsOf` finds script paths in inline code spans. `verifyFile` requires
+  each path to start at `.agents/skills/<skill>/scripts/` and checks it against
+  `References.scripts` when the caller supplies `References`.
 - Store constants (`FILE`, `STORE_DIR`, and the skills and principles paths a
   reference resolves against)
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.1] - 2026-11-23
+
+### Added
+
+- Link to Worktree cleanup for closing the herdr workspace after Git cleanup verifies.
+
 ## [1.6.0] - 2026-11-23
 
 ### Added

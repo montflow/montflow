@@ -58,9 +58,9 @@ mf-mode playbooks verify --all      # shape and references check
 
 ### Housekeeping
 
-| Playbook                              | Use it when                                                                                  |
-| ------------------------------------- | -------------------------------------------------------------------------------------------- |
-| [worktree-cleanup](#worktree-cleanup) | Reclaim disk by pruning merged or abandoned worktrees and stale ios simulators, safety-gated |
+| Playbook                              | Use it when                                                                                                     |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| [worktree-cleanup](#worktree-cleanup) | Clean up a merged run and close its herdr workspace, or reclaim disk from unused worktrees and stale simulators |
 
 ## Picking one
 
@@ -370,13 +370,11 @@ Reply must contain: list each PR with its verdict, in place of what merged.
 
 ### worktree-cleanup
 
-**Reclaiming disk from merged or abandoned worktrees and stale simulators.**
+**Cleaning up a merged run or reclaiming disk from unused worktrees and stale simulators.**
 
-Snapshot and audit with `scripts/worktree-audit.sh` → treat its buckets as advice and cross-check pinned and active chats → verify usage via transcripts → pause on uncommitted work → prune the confirmed set → reclaim simulators and caches.
+Run `bash .agents/skills/mf-mode/scripts/worktree-audit.sh` and cross-check pinned and active chats before deleting anything. For post-merge cleanup, verify the PR and branch tips, then remove the worktree and its branches. Keep assets branches referenced by merged PR bodies. For a sweep, keep branch refs and reclaim only the confirmed worktrees, simulators, and caches in scope. Verify the cleanup before closing any matching herdr workspace.
 
-The one playbook that deletes user state with no code review to catch a slip, so its gates are the review.
-
-Reply must contain: `df -h /` before and after with space reclaimed, the worktrees pruned, and a one-line reason for each held back (in-use by which chat, or uncommitted work).
+Reply must contain the scope, gates checked, verified removals, and the reason for every skipped step. For a sweep, include disk space before and after. For a scheduled self-close, include the log path.
 
 ## Where playbooks come from
 

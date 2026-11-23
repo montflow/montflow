@@ -14,12 +14,15 @@ const file = (frontmatter: string, body: string): string => `---\n${frontmatter}
 
 const GOOD_FM = 'name: demo\ndescription: Do the demo.';
 const GOOD_BODY = '# Demo\n\nFraming.\n\n1. Step one.\n2. Step two.\n\n## Reply\n\nWhat changed.\n';
+const AUDIT_SCRIPT = '.agents/skills/mf-mode/scripts/worktree-audit.sh';
+const WATCH_SCRIPT = '.agents/skills/mf-mode/scripts/watch-pr/watch-pr';
 
 const REFERENCES: Playbook.References = {
   root: '/ws',
   skills: new Set(['mf-mode-why']),
   principles: new Set(['fix-root-causes']),
   playbooks: new Set(['demo', 'opening-a-pr']),
+  scripts: new Set([AUDIT_SCRIPT, WATCH_SCRIPT]),
 };
 
 const messages = (result: Playbook.VerifyResult): ReadonlyArray<string> =>
@@ -115,6 +118,27 @@ Vitest.describe('Playbook.verifyFile', () => {
     Vitest.expect(
       messages(Playbook.verifyFile('demo', file(`${GOOD_FM}\nskills: one`, GOOD_BODY), REFERENCES)),
     ).toStrictEqual(['error skills: Must be a YAML list of names.']);
+  });
+
+  Vitest.it('accepts installed script paths alone or inside inline commands', () => {
+    const scripts = file(
+      GOOD_FM,
+      `# Demo\n\n1. Run \`${AUDIT_SCRIPT}\` or \`bash ${WATCH_SCRIPT} --status-only\`.\n`,
+    );
+    Vitest.expect(Playbook.verifyFile('demo', scripts, REFERENCES).issues).toStrictEqual([]);
+  });
+
+  Vitest.it('fails unanchored and missing script paths', () => {
+    const scripts = file(
+      GOOD_FM,
+      '# Demo\n\n1. Run `scripts/worktree-audit.sh [-b <ref>]` and `.agents/skills/mf-mode/scripts/missing.sh`.\n',
+    );
+    const result = Playbook.verifyFile('demo', scripts, REFERENCES);
+    Vitest.expect(result.valid).toBe(false);
+    Vitest.expect(messages(result)).toStrictEqual([
+      "error scripts: Anchor 'scripts/worktree-audit.sh' at .agents/skills/<skill>/scripts/.",
+      "error scripts: Script '.agents/skills/mf-mode/scripts/missing.sh' does not exist at /ws/.agents/skills/mf-mode/scripts/missing.sh.",
+    ]);
   });
 });
 

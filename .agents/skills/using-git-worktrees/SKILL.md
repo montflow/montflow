@@ -6,7 +6,7 @@ description: >-
   or before executing implementation plans.
 id: f0a3ce02dd486fc5
 author: montflow
-version: 1.6.0
+version: 1.6.1
 license: MIT
 dependencies:
   - executing-skills
@@ -225,6 +225,8 @@ fi
 - `HERDR_ENV` is set when this shell already runs inside herdr. Otherwise the CLI must reach a running herdr server.
 - `--no-focus` keeps focus on the current agent. Drop it only when the user wants to switch to the new space.
 - Herdr absent: skip silently. Herdr command fails: report the error and continue; the worktree exists either way.
+
+After merge, use Worktree cleanup (`mf-mode playbooks show worktree-cleanup`). It closes the herdr workspace after Git cleanup verifies.
 
 ## Step 4: Project Setup (gate: before any agent starts)
 
