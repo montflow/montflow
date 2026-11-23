@@ -9,7 +9,7 @@ mechanical decisions and reads its principle and playbook stores:
 
 | What                                                                | Where it is installed                                    | Installed by        |
 | ------------------------------------------------------------------- | -------------------------------------------------------- | ------------------- |
-| The `mf-mode` skill and 33 `mf-mode-*` skills                       | `.agents/skills/`                                        | `mf-mode doctor`    |
+| The `mf-mode` skill and 34 `mf-mode-*` skills                       | `.agents/skills/`                                        | `mf-mode doctor`    |
 | `mf-mode-generic-worker`, the subagent every delegating step spawns | `.agents/@montflow/profiles/`                            | `mf-mode doctor`    |
 | `mf-mode-comment-sicko`, the comment reviewer                       | `.agents/@montflow/profiles/`                            | `mf-mode doctor`    |
 | 24 principles                                                       | `.agents/@montflow/principles/`                          | `mf-mode doctor`    |

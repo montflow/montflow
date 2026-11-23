@@ -64,6 +64,12 @@
     },
     {
       "kind": "skill",
+      "name": "mf-mode-deslop",
+      "source": "skills/mf-mode-deslop",
+      "target": ".agents/skills/mf-mode-deslop"
+    },
+    {
+      "kind": "skill",
       "name": "mf-mode-figure-it-out",
       "source": "skills/mf-mode-figure-it-out",
       "target": ".agents/skills/mf-mode-figure-it-out"

@@ -26,7 +26,7 @@ The remaining triggers live only here:
 - Code → name the data shape first. Across a function boundary → **mf-mode-architect**. Fan-out → **mf-mode-swarm**. Bakeoff → **mf-mode-arena**. Contested design → **mf-mode-interrogate**.
 - Prose, your reply included → **mf-mode-unslop**. Docs, PR descriptions, commit messages → **mf-mode-technical-writing**.
 - PR body → start from `mf-mode pr template`, and publish only when `mf-mode pr check` shows no error. Screenshots and report images → `mf-mode pr attach`, under `## Proof`.
-- Before commit → `/deslop` from the `cursor-team-kit` plugin. Before review → **mf-mode-no-comments**.
+- Before commit → **mf-mode-deslop**. Before review → **mf-mode-no-comments**.
 - Shipping UI / IDE / CLI → `control-ui` or `control-cli` from `cursor-team-kit`.
 - A number you measured → **mf-mode-benchmark-checklist**.
 - PR status → the **Babysit** playbook. Landing a green stack → the **Shipping** playbook.
