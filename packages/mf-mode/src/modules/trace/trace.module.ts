@@ -195,22 +195,66 @@ export interface WorkerStat {
   readonly outputs: ReadonlyArray<string>;
 }
 
-export interface GraphNode {
-  readonly id: string;
-  readonly type: string;
-  readonly label: string;
-  readonly sub: string;
-  readonly layer: number;
-  readonly row: number;
+/** What the Paths diagram tells: the playbook, its steps in order, who ran each, what each produced. */
+export interface Story {
+  /** `playbook` on `run.start`. */
+  readonly playbook: string | undefined;
+  /** The `run.start` summary, '' without one. */
+  readonly goal: string;
+  /** Issue refs on `run.start`. */
+  readonly inputs: ReadonlyArray<string>;
+  /** Workers and outputs outside any lead phase: they hang off the playbook. */
+  readonly loose: StoryLane;
+  /** The lead's top-level phases, in start order. */
+  readonly steps: ReadonlyArray<StoryStep>;
+  /** `link` events between two outputs the story already holds. */
+  readonly links: ReadonlyArray<StoryLink>;
 }
 
-export interface GraphEdge {
+export interface StoryLane {
+  readonly workers: ReadonlyArray<StoryWorker>;
+  readonly outputs: ReadonlyArray<StoryOutput>;
+}
+
+export interface StoryStep extends StoryLane {
+  readonly id: string;
+  readonly label: string;
+  /** The skill the step routed to, or the playbook it ran: `skill` or `playbook` on `phase.start`. */
+  readonly via: string | undefined;
+  readonly from: number;
+  readonly to: number;
+  readonly open: boolean;
+  readonly status: Status | undefined;
+}
+
+export interface StoryWorker {
+  readonly id: string;
+  readonly task: string;
+  readonly playbook: string | undefined;
+  /** The skill that spawned it. */
+  readonly via: string | undefined;
+  readonly model: string;
+  readonly from: number;
+  readonly to: number;
+  readonly open: boolean;
+  readonly status: Status | undefined;
+  /** Issue refs on `worker.start`. */
+  readonly inputs: ReadonlyArray<string>;
+  readonly outputs: ReadonlyArray<StoryOutput>;
+}
+
+export interface StoryOutput {
+  readonly ref: string;
+  /** A PR's CI state when CI ran on it, else the summary of the event that produced it. */
+  readonly note: string;
+  readonly fail: boolean;
+}
+
+export interface StoryLink {
   readonly from: string;
   readonly to: string;
   readonly label: string;
   readonly fail: boolean;
-  /** A worker's input or output, as opposed to a `link` event the lead appended. */
-  readonly structural: boolean;
 }
 
 export interface Kpi {
@@ -230,8 +274,7 @@ export interface RunModel {
   readonly intervals: ReadonlyArray<Interval>;
   readonly milestones: ReadonlyArray<{ readonly at: number; readonly label: string }>;
   readonly workers: ReadonlyArray<WorkerStat>;
-  readonly nodes: ReadonlyArray<GraphNode>;
-  readonly edges: ReadonlyArray<GraphEdge>;
+  readonly story: Story;
   readonly kpis: ReadonlyArray<Kpi>;
   readonly leadCalls: number | undefined;
   readonly busy: number;
@@ -361,175 +404,158 @@ const peakOverlap = (ranges: ReadonlyArray<readonly [number, number]>): number =
   return peak;
 };
 
-const refType = (ref: string): string => {
+/** The type of a `type:id` ref: `pr`, `issue`, `branch`; `ref` without one. */
+export const refType = (ref: string): string => {
   const colon = ref.indexOf(':');
   return colon > 0 ? ref.slice(0, colon) : 'ref';
 };
 
-const refLabel = (ref: string): string => {
+/** A ref as a person reads it: PR #55, issue #23, a branch name, commit 2e99d6f, a URL's host and path. */
+export const refLabel = (ref: string): string => {
   const type = refType(ref);
   const id = ref.slice(type.length + 1) || ref;
   if (type === 'pr') return 'PR ' + id;
   if (type === 'issue') return 'issue ' + id;
+  if (type === 'commit') return 'commit ' + id;
+  if (type === 'url' && URL.canParse(id)) {
+    const url = new URL(id);
+    return url.host + url.pathname.replace(/\/$/, '');
+  }
   return id;
 };
 
-const GRAPH_TYPES = new Set(['issue', 'pr']);
+/** The refs the Workers table lists as a worker's outputs. */
+const RESULT_TYPES = new Set(['issue', 'pr']);
 
-const buildGraph = (events: ReadonlyArray<TraceEvent>, intervals: ReadonlyArray<Interval>) => {
-  const order: Array<string> = [];
-  const subs = new Map<string, string>();
-  const types = new Map<string, string>();
-  const labels = new Map<string, string>();
-  const edges = new Map<string, GraphEdge>();
-  const node = (id: string, type: string, label: string, sub?: string) => {
-    if (!types.has(id)) {
-      order.push(id);
-      types.set(id, type);
-      labels.set(id, label);
-    }
-    if (sub !== undefined && !subs.has(id)) subs.set(id, sub);
-  };
-  const edge = (from: string, to: string, label: string, fail: boolean, structural: boolean) => {
-    if (from === to) return;
-    const key = from + SEP + to;
-    const prior = edges.get(key);
-    edges.set(key, {
-      from,
-      to,
-      label: prior === undefined || prior.label === '' ? label : prior.label,
-      fail: fail || (prior?.fail ?? false),
-      structural: structural || (prior?.structural ?? false),
-    });
-  };
-  for (const worker of intervals.filter((interval) => interval.family === 'worker')) {
-    const id = 'worker:' + worker.id;
-    const inputs = worker.start.refs.filter((ref) => GRAPH_TYPES.has(refType(ref)));
-    for (const ref of inputs) node(ref, refType(ref), refLabel(ref), worker.label);
-    node(
-      id,
-      'worker',
-      worker.id,
-      formatDuration(worker.to - worker.from) +
-        (worker.open ? ', still running' : '') +
-        (worker.status === 'fail' ? ', failed' : ''),
-    );
-    for (const ref of inputs) edge(ref, id, '', false, true);
-    for (const ref of worker.end?.refs ?? []) {
-      if (!GRAPH_TYPES.has(refType(ref)) || inputs.includes(ref)) continue;
-      node(ref, refType(ref), refLabel(ref), 'from ' + worker.id);
-      edge(id, ref, '', worker.status === 'fail', true);
-    }
-  }
-  for (const event of events) {
-    if (event.kind !== 'link' || event.refs.length < 2) continue;
-    const [head, ...tail] = event.refs;
-    if (head === undefined) continue;
-    node(head, refType(head), refLabel(head));
-    for (const ref of tail) {
-      node(ref, refType(ref), refLabel(ref));
-      edge(head, ref, event.summary, event.status === 'fail', false);
-    }
-  }
-  if (order.length === 0) {
-    const phases = intervals.filter(
-      (interval) => interval.family === 'phase' && interval.depth === 0,
-    );
-    let previous: string | undefined;
-    phases.forEach((phase, index) => {
-      const id = 'phase:' + index;
-      node(id, 'phase', phase.label, phase.lane + ', ' + formatDuration(phase.to - phase.from));
-      if (previous !== undefined) edge(previous, id, '', false, true);
-      previous = id;
-    });
-  }
-  for (const event of events) {
-    if (event.kind === 'link') continue;
-    for (const ref of event.refs) {
-      if (types.has(ref) && !subs.has(ref)) subs.set(ref, event.summary);
-    }
-  }
-  const edgeList = [...edges.values()];
-  const layer = layerNodes(order, edgeList);
-  const rows = orderRows(order, edgeList, layer);
-  const nodes = order.map((id) => ({
-    id,
-    type: types.get(id) ?? 'ref',
-    label: labels.get(id) ?? id,
-    sub: subs.get(id) ?? '',
-    layer: layer.get(id) ?? 0,
-    row: rows.get(id) ?? 0,
-  }));
-  return { nodes, edges: edgeList };
+const isIssue = (ref: string): boolean => refType(ref) === 'issue';
+
+const modelOf = (attrs: Readonly<Record<string, string>>): string =>
+  [attrs['harness'], attrs['model'], attrs['effort']].filter(Boolean).join(' ');
+
+const CI_WORDS = { ok: 'CI passed', fail: 'CI failed', skip: 'CI skipped' } as const;
+
+/** The state of the last CI span whose refs name this PR. */
+const ciNote = (ref: string, intervals: ReadonlyArray<Interval>): string | undefined => {
+  const last = intervals.findLast(
+    (interval) =>
+      interval.family === 'ci' &&
+      (interval.start.refs.includes(ref) || (interval.end?.refs.includes(ref) ?? false)),
+  );
+  if (last === undefined) return undefined;
+  if (last.open) return 'CI running';
+  return last.status === undefined ? 'CI ended' : CI_WORDS[last.status];
 };
+
+const contains = (span: { readonly from: number; readonly to: number }, at: number): boolean =>
+  span.from <= at && at <= span.to;
 
 /**
- * Longest-path layers. Worker inputs and outputs always push a layer. A link
- * pushes only a node no worker produced, so two PRs linked by a stack stay in
- * the column of the workers that opened them. An edge that closes a cycle is
- * ignored for layering.
+ * Fold the events into the run's story. Each ref has one owner, the first to
+ * produce it: a worker for its own events, else the lead step whose interval
+ * holds the event, else the loose lane under the playbook.
  */
-const layerNodes = (
-  order: ReadonlyArray<string>,
-  edges: ReadonlyArray<GraphEdge>,
-): Map<string, number> => {
-  const produced = new Set(edges.filter((e) => e.structural).map((e) => e.to));
-  const out = new Map<string, Array<string>>();
-  for (const { from, to, structural } of edges) {
-    if (structural || !produced.has(to)) out.set(from, [...(out.get(from) ?? []), to]);
-  }
-  const state = new Map<string, 'visiting' | 'done'>();
-  const post: Array<string> = [];
-  const forward = new Set<string>();
-  const visit = (id: string) => {
-    state.set(id, 'visiting');
-    for (const next of out.get(id) ?? []) {
-      const seen = state.get(next);
-      if (seen === 'visiting') continue;
-      forward.add(id + SEP + next);
-      if (seen === undefined) visit(next);
-    }
-    state.set(id, 'done');
-    post.push(id);
-  };
-  for (const id of order) if (!state.has(id)) visit(id);
-  const layer = new Map<string, number>(order.map((id) => [id, 0]));
-  for (const id of post.toReversed()) {
-    for (const next of out.get(id) ?? []) {
-      if (!forward.has(id + SEP + next)) continue;
-      layer.set(next, Math.max(layer.get(next) ?? 0, (layer.get(id) ?? 0) + 1));
-    }
-  }
-  return layer;
-};
+const buildStory = (
+  events: ReadonlyArray<TraceEvent>,
+  intervals: ReadonlyArray<Interval>,
+  runStart: TraceEvent | undefined,
+): Story => {
+  const inputs = (runStart?.refs ?? []).filter(isIssue);
+  const loose = { workers: new Array<StoryWorker>(), outputs: new Array<StoryOutput>() };
+  const steps = intervals
+    .filter(
+      (interval) => interval.family === 'phase' && interval.lane === 'lead' && interval.depth === 0,
+    )
+    .map((phase) => {
+      const attrs = { ...phase.end?.attrs, ...phase.start.attrs };
+      return {
+        id: phase.id,
+        label: phase.label,
+        via: nonEmpty(attrs['skill']) ?? nonEmpty(attrs['playbook']),
+        from: phase.from,
+        to: phase.to,
+        open: phase.open,
+        status: phase.status,
+        workers: new Array<StoryWorker>(),
+        outputs: new Array<StoryOutput>(),
+      };
+    });
+  const laneAt = (at: number) => steps.find((step) => contains(step, at)) ?? loose;
 
-/** Row inside each layer: first-seen order, then one barycenter sweep. */
-const orderRows = (
-  order: ReadonlyArray<string>,
-  edges: ReadonlyArray<GraphEdge>,
-  layer: ReadonlyMap<string, number>,
-): Map<string, number> => {
-  const row = new Map<string, number>();
-  const layers = new Map<number, Array<string>>();
-  for (const id of order) {
-    const at = layer.get(id) ?? 0;
-    layers.set(at, [...(layers.get(at) ?? []), id]);
-  }
-  const depth = Math.max(0, ...layers.keys());
-  for (let at = 0; at <= depth; at += 1) {
-    const ids = layers.get(at) ?? [];
-    const score = (id: string, index: number): number => {
-      const parents = edges
-        .filter((e) => e.to === id && (layer.get(e.from) ?? 0) < at)
-        .map((e) => row.get(e.from) ?? 0);
-      return parents.length === 0 ? index : parents.reduce((a, b) => a + b, 0) / parents.length;
+  const byEvent = new Map<TraceEvent, StoryWorker & { outputs: Array<StoryOutput> }>();
+  const workers = intervals
+    .filter((interval) => interval.family === 'worker')
+    .map((interval) => {
+      const attrs = { ...interval.start.attrs, ...interval.end?.attrs };
+      const worker = {
+        id: interval.id,
+        task: interval.label,
+        playbook: nonEmpty(attrs['playbook']),
+        via: nonEmpty(attrs['skill']),
+        model: modelOf(attrs),
+        from: interval.from,
+        to: interval.to,
+        open: interval.open,
+        status: interval.status,
+        inputs: interval.start.refs.filter(isIssue),
+        outputs: new Array<StoryOutput>(),
+      };
+      byEvent.set(interval.start, worker);
+      if (interval.end !== undefined) byEvent.set(interval.end, worker);
+      const named = steps.filter((step) => step.id === interval.start.attrs['phase']);
+      const lane =
+        named.find((step) => contains(step, interval.from)) ?? named[0] ?? laneAt(interval.from);
+      lane.workers.push(worker);
+      return worker;
+    });
+  const workerOf = (actor: string, at: number) => {
+    const same = workers.filter((worker) => worker.id === actor);
+    return same.findLast((worker) => worker.from <= at) ?? same[0];
+  };
+
+  const owned = new Set<string>();
+  const links: Array<StoryLink> = [];
+  for (const event of events) {
+    const owner = byEvent.get(event) ?? workerOf(event.actor, event.at) ?? laneAt(event.at);
+    const skip = new Set([...inputs, ...('inputs' in owner ? owner.inputs : [])]);
+    const fail = event.status === 'fail';
+    const take = (ref: string, note: string) => {
+      if (owned.has(ref) || skip.has(ref)) return;
+      owned.add(ref);
+      const ci = refType(ref) === 'pr' ? ciNote(ref, intervals) : undefined;
+      owner.outputs.push({ ref, note: ci ?? note, fail });
     };
-    const ranked = ids
-      .map((id, index) => ({ id, score: score(id, index), index }))
-      .toSorted((a, b) => a.score - b.score || a.index - b.index);
-    ranked.forEach(({ id }, index) => row.set(id, index));
+    if (event.kind === 'link') {
+      const [head, ...tail] = event.refs;
+      if (head === undefined) continue;
+      for (const ref of tail) {
+        if (!owned.has(ref)) take(ref, event.summary);
+        else if (
+          owned.has(head) &&
+          ref !== head &&
+          !links.some((link) => link.from === head && link.to === ref)
+        ) {
+          links.push({ from: head, to: ref, label: event.summary, fail });
+        }
+      }
+    } else if (event.kind === 'worker.start') {
+      for (const ref of event.refs) if (!isIssue(ref)) take(ref, '');
+    } else if (
+      event.kind === 'worker.end' ||
+      event.kind === 'phase.end' ||
+      event.kind === 'run.end'
+    ) {
+      for (const ref of event.refs) take(ref, event.summary);
+    }
   }
-  return row;
+
+  return {
+    playbook: nonEmpty(runStart?.attrs['playbook']),
+    goal: runStart?.summary ?? '',
+    inputs,
+    loose,
+    steps,
+    links,
+  };
 };
 
 const sum = (values: ReadonlyArray<number>): number => values.reduce((a, b) => a + b, 0);
@@ -587,7 +613,7 @@ export const buildModel = (trace: Trace, title?: string): RunModel => {
     return {
       id: interval.lane,
       task: interval.label,
-      model: [attrs['harness'], attrs['model'], attrs['effort']].filter(Boolean).join(' '),
+      model: modelOf(attrs),
       from: interval.from,
       to: interval.to,
       open: interval.open,
@@ -598,7 +624,7 @@ export const buildModel = (trace: Trace, title?: string): RunModel => {
       checksFail: checks.filter((event) => event.status === 'fail').length,
       friction: friction.length,
       frictionSecs: sum(friction.map((event) => event.secs ?? 0)),
-      outputs: (interval.end?.refs ?? []).filter((ref) => GRAPH_TYPES.has(refType(ref))),
+      outputs: (interval.end?.refs ?? []).filter((ref) => RESULT_TYPES.has(refType(ref))),
     };
   });
 
@@ -663,7 +689,6 @@ export const buildModel = (trace: Trace, title?: string): RunModel => {
     },
   ];
 
-  const graph = buildGraph(events, intervals);
   return {
     title: title ?? runStart?.summary ?? 'mf-mode run',
     t0,
@@ -675,8 +700,7 @@ export const buildModel = (trace: Trace, title?: string): RunModel => {
     intervals,
     milestones,
     workers,
-    nodes: graph.nodes,
-    edges: graph.edges,
+    story: buildStory(events, intervals, runStart),
     kpis,
     leadCalls,
     busy,
