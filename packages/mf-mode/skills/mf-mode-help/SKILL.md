@@ -86,6 +86,7 @@ The default answer is `/mf-mode`, which runs most of the others when its steps n
 | Strip comments before review, using a reviewer that didn't write them | [`/mf-mode-no-comments`](../mf-mode-no-comments/SKILL.md) |
 | Clean AI tells out of prose | [`/mf-mode-unslop`](../mf-mode-unslop/SKILL.md) |
 | Write docs, an RFC, a README, a PR description, or a commit message to a standard | [`/mf-mode-technical-writing`](../mf-mode-technical-writing/SKILL.md) |
+| Write a PR body a reviewer reads at a glance, with screenshots, and check it before publishing | `mf-mode pr template`, `mf-mode pr attach`, `mf-mode pr check` |
 | Hear the last reply again in plain words | [`/mf-mode-bro`](../mf-mode-bro/SKILL.md) |
 | Give agents a scripted way to drive the app and prove behavior | [`/mf-mode-create-verification-skill`](../mf-mode-create-verification-skill/SKILL.md) |
 | Bring a verification skill and its feature map back in line with the app | [`/mf-mode-maintain-verification-skill`](../mf-mode-maintain-verification-skill/SKILL.md) |
@@ -95,7 +96,7 @@ The default answer is `/mf-mode`, which runs most of the others when its steps n
 | Vet a performance number before reporting or acting on it | [`/mf-mode-benchmark-checklist`](../mf-mode-benchmark-checklist/SKILL.md) |
 | Run a large or cross-cutting change, or one to review after stepping away | [`/mf-mode-figure-it-out`](../mf-mode-figure-it-out/SKILL.md) |
 | Keep a decision log during a run, and review it afterward | [`/mf-mode-show-me-your-work`](../mf-mode-show-me-your-work/SKILL.md) |
-| Measure a run: trace what it did as it went, then see it as a report with a timeline, paths, workers and friction | `/mf-mode --observe` or `/mf-mode --report`, which run [`mf-mode-observe`](../mf-mode-observe/SKILL.md) and [`mf-mode-report`](../mf-mode-report/SKILL.md) |
+| Measure a run: trace what it did as it went, then see it as a report (HTML, PNG, PDF) with a timeline, paths, workers and friction | `/mf-mode --observe` or `/mf-mode --report`, which run [`mf-mode-observe`](../mf-mode-observe/SKILL.md) and [`mf-mode-report`](../mf-mode-report/SKILL.md) (`mf-mode report`) |
 | Pick a harness and model for each role | `mf-mode roles set` |
 | Turn their own working habits into a personal mode skill | [`/mf-mode-automate-me`](../mf-mode-automate-me/SKILL.md) |
 | Turn what a finished task taught into skill edits | [`/mf-mode-reflect`](../mf-mode-reflect/SKILL.md) |

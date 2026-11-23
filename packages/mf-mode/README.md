@@ -78,9 +78,32 @@ and how to cut costs.
 `--observe` keeps a trace of the run. The lead and its workers append one JSON
 line per phase, worker, CI run, check, friction and decision to a scratch
 file (the `mf-mode-observe` skill). `--report` turns on `--observe` and, at
-the end, renders the trace into a self-contained HTML page with a timeline, a
-paths diagram, per-worker stats and friction (the `mf-mode-report` skill). The
-reply names both files.
+the end, runs `mf-mode report` on the trace: a self-contained HTML page with a
+timeline, a paths diagram, per-worker stats and friction, a PNG of its summary
+and a PDF of the page (the `mf-mode-report` skill). The PNG and PDF go in the
+PR body under `## Proof`.
+
+### 5. Read the PR at a glance
+
+Every PR an mf-mode agent opens follows one standard, printed by
+`mf-mode pr template`:
+
+| Section        | Holds                                                         |
+| -------------- | ------------------------------------------------------------- |
+| `Summary`      | What changed and why, in at most three sentences              |
+| `What changed` | One bullet per change a reviewer would look for               |
+| `Decisions`    | Each choice a reviewer would question, and why (optional)     |
+| `Proof`        | Screenshots, the report PNG and PDF, links to runs (optional) |
+| `Blast Radius` | What else it touches or could break, and how to back it out   |
+| `Verification` | The commands that ran and their results                       |
+| `Follow-ups`   | What is left, and who does it (optional)                      |
+
+`mf-mode pr check` holds a body to it before the agent publishes: errors
+(a missing section, a placeholder, over 40 lines, no command in Verification)
+exit non-zero, and hints (no proof, a wall of text) say what to fix.
+`mf-mode pr attach` hosts the proof: images go to GitHub's attachment store and
+render inline, and a PDF goes to an orphan `assets/<branch>` branch, where
+GitHub's viewer shows it. Nothing reaches the PR's own branch.
 
 ## Delegation: who runs each subagent
 
@@ -235,6 +258,10 @@ mf-mode roles unset <role>                               # back to the defaults
 mf-mode roles verify [--human] [--dir <root>]            # non-zero on any error; no file is valid
 mf-mode roles resolve <role> [--harness <h>] [--human] [--verbose]
 mf-mode dispatch <role> --seat <n> --brief <file> [--profile <name>|none] [--read-only] [--harness <h>] [--dry-run]
+mf-mode report <trace> [--out <dir>] [--title <t>] [--theme light|dark] [--browser <path>] [--no-images]
+mf-mode pr template                                     # the PR body skeleton
+mf-mode pr check --body-file <file> [--title <t>] [--human]   # errors exit non-zero; hints never do
+mf-mode pr attach <file>... [--branch <b>] [--remote <r>] [--repo owner/name]
 ```
 
 `resolve` prints one line per seat. Each ends with `next=`, the one thing to do:

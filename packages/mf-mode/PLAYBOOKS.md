@@ -48,13 +48,13 @@ mf-mode playbooks verify --all      # shape and references check
 
 ### Get a PR merged
 
-| Playbook                            | Use it when                                                                                                                                        |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [opening-a-pr](#opening-a-pr)       | Open a ready pr from small ordered commits with a conventional commits title and a briefing-style body. invoked at the end of every other playbook |
-| [babysit](#babysit)                 | Drive a pr or a stack to merge-ready: conflicts, review threads, ci                                                                                |
-| [shipping](#shipping)               | Independently verify a green stack, then land the contiguous verified run bottom-up through github by default or origin when available             |
-| [autopilot-full](#autopilot-full)   | Run independent prs to merged with one owner per pr. a swarm verifies each code-ready head, and every later change to the patch gets a fresh check |
-| [autopilot-stack](#autopilot-stack) | Autopilot-full without the merge. build and verify prs for the operator to review and land, stacking a pr only on a pr it builds on                |
+| Playbook                            | Use it when                                                                                                                                                      |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [opening-a-pr](#opening-a-pr)       | Open a ready pr from small ordered commits with a conventional commits title and a body that passes mf-mode pr check. invoked at the end of every other playbook |
+| [babysit](#babysit)                 | Drive a pr or a stack to merge-ready: conflicts, review threads, ci                                                                                              |
+| [shipping](#shipping)               | Independently verify a green stack, then land the contiguous verified run bottom-up through github by default or origin when available                           |
+| [autopilot-full](#autopilot-full)   | Run independent prs to merged with one owner per pr. a swarm verifies each code-ready head, and every later change to the patch gets a fresh check               |
+| [autopilot-stack](#autopilot-stack) | Autopilot-full without the merge. build and verify prs for the operator to review and land, stacking a pr only on a pr it builds on                              |
 
 ### Housekeeping
 
@@ -324,7 +324,7 @@ Reply must contain: where the prior agent stopped, what you inherited vs redid (
 
 **The last step of nearly every other playbook.**
 
-Work from a worktree off trunk → rebase into small landable commits → run `/deslop` → conventional-commits title → a briefing-style body (Why, What changed, Scope, Tradeoffs, Blast Radius, Verification) → open the PR ready, not draft.
+Work from a worktree off trunk → rebase into small landable commits → run `/deslop` → conventional-commits title → a body from `mf-mode pr template` (Summary, What changed, Decisions, Proof, Blast Radius, Verification, Follow-ups), proof attached with `mf-mode pr attach`, no error from `mf-mode pr check` → open the PR ready, not draft.
 
 Opening a PR does not start a babysit.
 
