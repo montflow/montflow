@@ -115,6 +115,22 @@ Prove the update took effect:
 bun run --cwd "$M/packages/playbooks" cli version --json
 ```
 
+## mf-mode
+
+```bash
+bun run --cwd "$M/packages/mode" cli version --check
+```
+
+Prove the update took effect:
+
+```bash
+bun run --cwd "$M/packages/mode" cli version --json
+```
+
+`mf-mode` ships no store: the roles file is per user and never touched by an
+update. Run `mf-mode roles verify` after updating, since a new version may
+reject a model the old one accepted.
+
 ## Installed stores
 
 A workspace installed with `mf-skills sync` records what it received in

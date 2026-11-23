@@ -12,7 +12,8 @@ This file is written by montflow, not imported from pstack. A cell that says "ch
 | Read-only subagent | `subagent_type: "Explore"`, and the brief says "do not edit files" | check | an agent configured without edit tools | check | `readonly: true` | Say "do not edit files" in the brief and check `git status` afterward. |
 | Isolated subagent (its own checkout) | `isolation: "worktree"` | check | check | check | `environment: "cloud"` | Create a git worktree per worker and name it in the brief. |
 | Background subagent | the default | check | check | check | `run_in_background: true` | Run it in the foreground. |
-| A profile as a subagent (`mf-agent`, `comment-sicko`, `role-*`) | Pass the profile's model and paste `mf-profiles show <name>` into the brief, or install it as `.claude/agents/<name>.md` | Paste the profile into the brief | `mf-profiles` registers profiles as agents in OpenCode | Paste the profile into the brief | `subagent_type: "<name>"` when installed as an agent | Paste `mf-profiles show <name>` into the brief. |
+| A profile as a subagent (`mf-mode-generic-worker`, `mf-mode-comment-sicko`) | Pass the profile's model and paste `mf-profiles show <name>` into the brief, or install it as `.claude/agents/<name>.md` | Paste the profile into the brief | `mf-profiles` registers profiles as agents in OpenCode | Paste the profile into the brief | `subagent_type: "<name>"` when installed as an agent | Paste `mf-profiles show <name>` into the brief. |
+| Run a seat on another harness | `mf-mode dispatch` (runs `claude -p`) | `mf-mode dispatch` (runs `codex exec`) | `mf-mode dispatch` (runs `opencode run`) | `mf-mode dispatch` (runs `pi -p`) | not supported | Run the seat natively on your own model and say so. |
 | Todo list | `TodoWrite` | `update_plan` | `todowrite` | check | the todo tool | Keep the list in your reply and update it at each phase. |
 | Ask the user a structured question | `AskUserQuestion` (absent in `-p` mode) | ask in plain text | check | ask in plain text | `AskQuestion` | Ask in plain text, with numbered options. |
 | Loop or wake-up for long runs | `/loop`, or scheduled wake-ups | check | check | check | `/loop` | Keep working until the check passes; end the turn only with the reason you stopped. |
@@ -23,9 +24,11 @@ This file is written by montflow, not imported from pstack. A cell that says "ch
 
 ## Models
 
-Models are set per role in montflow profiles: `mf-profiles show role-<role>`. A role profile's `model` (or `models` for a panel) is written in the form your harness accepts. Claude Code takes `opus`, `sonnet`, `haiku` or `fable` plus an effort; Cursor and OpenCode take full model ids. `inherit-parent` or a missing model runs the role on the session's model.
+Which harness and model run a role is per user, in `.agents/@montflow/mode/roles.json` (git-ignored). Never read or edit that file yourself: `mf-mode roles resolve <role>` returns one line per seat, already resolved for the harness you run in, and `mf-mode roles verify` rejects any model its harness does not run (`fable` under `codex`, a bare `gpt-5.5` under `opencode`). Model names are each harness's own: Claude Code takes `opus`, `sonnet`, `haiku`, `fable` or a `claude-*` id plus an effort; Codex takes OpenAI ids (`gpt-*`); OpenCode and Pi take `provider/model`.
 
-When a model is rejected, never pass it again: fall back to the role's default in the Subagents section of the **mf-mode** skill, then the closest model of the same family, then the session's model, and say so.
+`mf-mode` tells which harness you run in from the environment Claude Code, Codex and OpenCode set. When it cannot (Pi, or one harness started inside another), it refuses and asks for `--harness`. A session started by `mf-mode dispatch` carries `MF_MODE_HARNESS`, so a nested lead resolves correctly.
+
+When a model is rejected at spawn time, never pass it again: fall back to the role's default in the Subagents section of the **mf-mode** skill, then the closest model of the same family, then the session's model, and say so.
 
 ## Features some harnesses lack
 

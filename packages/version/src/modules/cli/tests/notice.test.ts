@@ -249,6 +249,7 @@ Vitest.describe('notice anchors runtime', () => {
         'mf-reviews',
         'mf-principles',
         'mf-playbooks',
+        'mf-mode',
       ]) {
         Vitest.expect(guide, cli).toContain(`## ${cli}`);
       }

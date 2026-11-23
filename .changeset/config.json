@@ -11,7 +11,8 @@
       "@montflow/reviews",
       "@montflow/references",
       "@montflow/principles",
-      "@montflow/playbooks"
+      "@montflow/playbooks",
+      "@montflow/mode"
     ]
   ],
   "access": "public",

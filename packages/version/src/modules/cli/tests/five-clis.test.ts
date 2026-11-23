@@ -23,6 +23,7 @@ const CLI_PACKAGES = [
   'reviews',
   'principles',
   'playbooks',
+  'mode',
 ] as const;
 
 interface Manifest {

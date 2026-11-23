@@ -208,6 +208,8 @@ jobs:
             script: mf-principles:check
           - target: playbooks
             script: mf-playbooks:check
+          - target: mode
+            script: mf-mode:check
           - target: mfstack
             script: mfstack:check
     steps:

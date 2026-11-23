@@ -94,7 +94,9 @@ mf-mode is a loop an agent runs over those stores:
    interrogate, unslop, no-comments and others.
 4. Read each principle it applies (`mf-principles show <name>`) and cite it in
    the reply.
-5. Delegate to subagents. Each one reads `worker.md` first.
+5. Delegate to subagents. `mf-mode roles resolve <role>` says which harness
+   and model run each one, and `mf-mode dispatch` runs a seat on another
+   harness. Each subagent reads `worker.md` first.
 6. Verify, reply in the house style, and finish with the `opening-a-pr`
    playbook.
 
@@ -112,6 +114,7 @@ The [wiki](wiki/index.md) explains the mode in full, with diagrams:
 | `mf-references` | `.agents/@montflow/references` | `doctor`, `list`, `show`, `verify`, `add`, `update`, `sync`, `status`, `remove`, `version` |
 | `mf-principles` | `.agents/@montflow/principles` | `doctor`, `list`, `show`, `verify`, `version` |
 | `mf-playbooks` | `.agents/@montflow/playbooks` | `doctor`, `list`, `show`, `verify`, `version` |
+| `mf-mode` | `.agents/@montflow/mode/roles.json` (per user, git-ignored) | `roles` (`show`, `set`, `unset`, `verify`, `resolve`), `dispatch`, `version` |
 | `mf-model-fallback` | model fallback chains | `status`, `show`, `models`, `set`, `migrate`, `verify`, `doctor`, `remove` |
 
 Each CLI prints its own usage: `bun run --cwd packages/<pkg> cli --help`.

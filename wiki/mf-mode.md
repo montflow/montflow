@@ -14,7 +14,7 @@ The text comes from poteto's [pstack](https://github.com/cursor/plugins/tree/mai
 | Principles | 24 short rules, each with when it applies | `.agents/@montflow/principles/<name>/PRINCIPLE.md` | `mf-principles list`, `mf-principles show <name>` |
 | Playbooks | 22 step lists for kinds of task, each naming the skills, principles and playbooks it uses | `.agents/@montflow/playbooks/<name>/PLAYBOOK.md` | `mf-playbooks list`, `mf-playbooks show <name>` |
 | Profiles | `mf-mode-generic-worker` (the generic worker every delegating step spawns) and `mf-mode-comment-sicko` (the comment reviewer) | `.agents/@montflow/profiles/<name>/PROFILE.md` | `mf-profiles show <name>` |
-| Roles | Which harness and model run each kind of subagent, as ordered preferences per seat (planned) | `.agents/@montflow/mode/roles.json`, git-ignored | `mf-mode roles resolve <role>` |
+| Roles | Which harness and model run each kind of subagent, as ordered preferences per seat | `.agents/@montflow/mode/roles.json`, git-ignored | `mf-mode roles`, `mf-mode roles resolve <role>` |
 | Helper scripts | pstack's scripts, such as `watch-pr` and `worktree-audit.sh` | `.agents/skills/mf-mode/scripts/` | the skills that name them |
 
 Skills are plain files in the skill store. Principles and playbooks each have their own store and CLI, so an agent can list them by one line each and read only the ones it needs.
@@ -207,18 +207,19 @@ A role is a list of **seats**. A single role has one seat, a panel has several. 
 
 A harness is **available** when it is the harness the session runs in, or when its CLI (`claude`, `codex`, `opencode`, `pi`) is installed. A seat that resolves to the current harness runs **natively**: the lead spawns it with its own subagent tool. A seat that resolves to another harness is **dispatched**: `mf-mode dispatch` runs it there headless (`claude -p`, `codex exec`, `opencode run`) and returns its report.
 
-The lead never picks a harness itself. It asks the CLI:
+The lead never picks a harness itself. It asks the CLI, and does what each seat line's `next=` says:
 
 ```
-$ mf-mode roles resolve interrogate-reviewers --harness claude-code
-seat 1  claude-code  fable                 high  native
-seat 2  codex        gpt-5.5               high  dispatch
-seat 3  opencode     google/gemini-4-neon        dispatch
+$ mf-mode roles resolve interrogate-reviewers
+role=interrogate-reviewers source=set current=claude-code seats=3
+seat=1 run=native harness=claude-code model=fable effort=high next="spawn with your subagent tool on this model and effort"
+seat=2 run=dispatch harness=codex model=gpt-5.5 effort=high next="mf-mode dispatch interrogate-reviewers --seat 2 --brief <file>"
+seat=3 run=dropped skipped="pi:google/gemini-4-neon (pi not installed)" next="skip this seat and say so"
 ```
 
 ```mermaid
 flowchart TD
-    step["playbook step needs role R"] --> resolve["mf-mode roles resolve R --harness {current}"]
+    step["playbook step needs role R"] --> resolve["mf-mode roles resolve R"]
     resolve --> file{"R set in roles.json?"}
     file -- no --> def["defaults from the mf-mode Subagents section,<br/>on the current harness"]
     file -- yes --> seat["for each seat: first candidate<br/>whose harness is available"]
@@ -233,8 +234,42 @@ flowchart TD
 - **Unset roles.** A role that is not in the file resolves to the defaults in the Subagents section of the `mf-mode` skill, on the current harness. Those defaults name no vendor or model id: the strongest model at high effort, one step lower for trivial edits, three vendors for a panel when the harness offers them.
 - **Dropped seats.** A seat with no available candidate is dropped and reported. A panel keeps going with the seats it has (arena needs at least two runners).
 - **Invalid combinations.** `mf-mode roles verify` checks every candidate against what its harness accepts. Claude Code takes `opus`, `sonnet`, `haiku` or `fable` plus an effort. Codex takes OpenAI models only, so `fable` under `codex` is an error. OpenCode takes `provider/model`. A bad combination fails before anything runs.
-- **Setting roles.** `mf-mode roles set <role> …` writes the file, replacing pstack's `/setup-pstack`. `mf-mode roles` shows what is set.
+- **Setting roles.** `mf-mode roles set <role> --seat <spec>` writes the file, replacing pstack's `/setup-pstack`. A spec is the seat's candidates in preference order, `harness:model[:effort]`, comma-separated; repeat `--seat` for each seat of a panel. `mf-mode roles` shows what is set, in the same spec form, and `mf-mode roles unset <role>` goes back to the defaults.
 - **OpenCode extra.** The OpenCode `model-fallback` plugin, which switches models on quota errors, can later read the same file to build its fallback chains. That stays OpenCode-only; the roles file does not depend on it.
+
+### The mf-mode CLI
+
+`packages/mode` ships `mf-mode`. It owns every mechanical decision about roles, so the skill text only says "run this and do what it prints". It reads no store and ships no payload: the roles file is per user.
+
+| Command | What it does |
+| --- | --- |
+| `mf-mode roles` (or `roles show`) | Every role: `<role>: default`, or its seats as specs, seats split by ` \| ` |
+| `mf-mode roles set <role> --seat <spec>…` | Writes one role. Refuses, and writes nothing, when `verify` would fail |
+| `mf-mode roles unset <role>` | Removes one role, so it resolves to the defaults |
+| `mf-mode roles verify` | Checks the file. Non-zero on any error. No file is valid |
+| `mf-mode roles resolve <role>` | One `key=value` line per seat, each ending in `next=` |
+| `mf-mode dispatch <role> --seat <n> --brief <file>` | Runs a dispatch seat headless and prints its report |
+
+How the CLI keeps agents from guessing:
+
+- **It tells the harness itself.** `--harness` wins, then `MF_MODE_HARNESS`, then the environment markers Claude Code (`CLAUDECODE`), Codex (`CODEX_THREAD_ID`, `CODEX_SANDBOX*`) and OpenCode (`OPENCODE`) set for the commands they run. No marker, or markers from two harnesses, is a refusal that asks for `--harness`. It never guesses.
+- **Every seat line names its next step.** `next=` is a spawn instruction, the exact `mf-mode dispatch` command, or "skip this seat and say so".
+- **`dispatch` takes a role and a seat number, never a harness or model.** It resolves the seat itself, so a lead cannot dispatch to the wrong harness. It refuses a `native` or `dropped` seat and says what to do instead.
+- **Nothing resolves from a bad file.** `resolve`, `show`, `set` and `dispatch` refuse a file with errors and point at `roles verify`.
+- **The text cannot drift from the CLI.** The package's binary test scans every `mf-mode` skill, playbook, principle, profile, the harnesses reference and this page for `` `mf-mode <command>` ``, and fails on a command the binary does not have.
+
+What `dispatch` runs, from the workspace root, with `MF_MODE_HARNESS=<harness>` set in the child so a lead nested inside it resolves correctly:
+
+| Harness | Command | `--read-only` |
+| --- | --- | --- |
+| `claude-code` | `claude -p --model M [--effort E] --permission-mode auto`, brief on stdin | `--permission-mode plan` |
+| `codex` | `codex exec --model M [--config model_reasoning_effort="E"] --sandbox workspace-write -`, brief on stdin | `--sandbox read-only` |
+| `opencode` | `opencode run --model M[#E] --auto <brief>` | `--agent plan` |
+| `pi` | `pi -p --model M [--thinking E] <brief>` | `--tools read,grep,find,ls` |
+
+The brief is the profile's instructions (default `mf-mode-generic-worker`, `--profile none` for none), then the kickoff. `--dry-run` prints the command without running it. The Claude Code, Codex and OpenCode commands were run against their real CLIs; the Pi command follows its documented flags and has not been run.
+
+`bun run mf-mode:check` runs `roles verify` on this checkout, and is part of `mf:check` and the CI matrix.
 
 ## The import
 
@@ -277,13 +312,10 @@ Never edit imported text by hand. Change the script, rerun the import, then run 
 
 Not built yet:
 
-- **The `mf-mode` CLI** (`packages/mode`), in Effect, harness-agnostic:
-  - `mf-mode roles`, `roles set`, `roles verify`, `roles resolve`: the roles file described in [Agents and roles](#agents-and-roles).
-  - `mf-mode dispatch`: run a resolved seat headless on another harness.
-  - pstack's scripts (watch-pr, worktree audit, decision log, statechart) ported to Effect.
+- **pstack's scripts in `mf-mode`.** watch-pr, the worktree audit, the decision log and the statechart, ported to Effect as `mf-mode` commands.
 - **Harness adapters.** Only where a harness needs one: OpenCode, Pi, Claude Code, Codex. The goal is harness-agnostic text plus CLIs.
 
-Until the `mf-mode` CLI ships, `mf-mode roles resolve` does not exist: every role runs on the defaults in `mf-mode`, natively on the current harness. The `opening-a-pr` playbook still mentions `/deslop`, which montflow does not ship.
+The `opening-a-pr` playbook still mentions `/deslop`, which montflow does not ship.
 
 ## See also
 
