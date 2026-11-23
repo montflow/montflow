@@ -322,6 +322,168 @@ Vitest.describe('CLI engines update', () => {
       yield* cleanup(root, origin.dir);
     }).pipe(Effect.provide(realLive)),
   );
+
+  Vitest.it.effect('update --ref pins a commit and --latest removes the ref', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      const second = yield* Effect.promise(() => advanceOrigin(origin.dir));
+      yield* Effect.promise(() => seedEntry(root, { name: 'fixture' }));
+
+      const pinned = yield* Engines.update({ cwd: root }, 'fixture', {
+        ref: second,
+        invocation: 'mf-references',
+      });
+      Vitest.expect(pinned).toMatchObject({ kind: 'updated', slug: 'fixture' });
+      if ('entryDiff' in pinned && pinned.entryDiff !== undefined) {
+        Vitest.expect(pinned.entryDiff.new).toBe(second);
+      }
+      const raw = yield* Effect.promise(() =>
+        readFile(join(root, Reference.STORE_DIR, 'fixture', Reference.ENTRY_FILE), 'utf8'),
+      );
+      Vitest.expect(raw).toContain(`ref: ${second}`);
+
+      const latest = yield* Engines.update({ cwd: root }, 'fixture', {
+        latest: true,
+        invocation: 'mf-references',
+      });
+      Vitest.expect(latest).toMatchObject({ kind: 'updated', slug: 'fixture' });
+      if ('entryDiff' in latest && latest.entryDiff !== undefined) {
+        Vitest.expect(latest.entryDiff.old).toBe(second);
+        Vitest.expect(latest.entryDiff.new).toBeUndefined();
+      }
+      const raw2 = yield* Effect.promise(() =>
+        readFile(join(root, Reference.STORE_DIR, 'fixture', Reference.ENTRY_FILE), 'utf8'),
+      );
+      Vitest.expect(raw2).not.toContain('ref:');
+
+      yield* cleanup(root, origin.dir);
+    }).pipe(Effect.provide(realLive)),
+  );
+
+  Vitest.it.effect('update --latest fast-forwards the branch to the remote head', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      yield* Effect.promise(() => advanceOrigin(origin.dir));
+      yield* Effect.promise(() => seedEntry(root, { name: 'fixture', ref: origin.first }));
+
+      const result = yield* Engines.update({ cwd: root }, 'fixture', {
+        latest: true,
+        invocation: 'mf-references',
+      });
+      Vitest.expect(result).toMatchObject({ kind: 'updated', slug: 'fixture' });
+      const head = yield* Effect.promise(() =>
+        git(Reference.clonePath(root, 'fixture'), ['rev-parse', 'HEAD']),
+      );
+      Vitest.expect(head).not.toBe(origin.first);
+
+      yield* cleanup(root, origin.dir);
+    }).pipe(Effect.provide(realLive)),
+  );
+});
+
+Vitest.describe('CLI engines update wizard', () => {
+  Vitest.it.effect('wizard latest path chooses latest and refreshes', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      yield* Effect.promise(() => advanceOrigin(origin.dir));
+      yield* Effect.promise(() => seedEntry(root, { name: 'fixture', ref: origin.first }));
+      const answers = ['2', 'y'];
+      const written: Array<string> = [];
+      const result = yield* Engines.updateWizard({ cwd: root }, 'fixture', {
+        invocation: 'mf-references',
+        interactive: true,
+        readLine: (_prompt) => {
+          const value = answers.shift() ?? '';
+          return Effect.succeed(value);
+        },
+        write: (text) =>
+          Effect.sync(() => {
+            written.push(text);
+          }),
+      });
+      Vitest.expect(result).toMatchObject({ kind: 'updated', slug: 'fixture' });
+      Vitest.expect(written.join('\n')).toContain('tracking');
+      Vitest.expect(written.join('\n')).toContain('Which target');
+
+      yield* cleanup(root, origin.dir);
+    }).pipe(Effect.provide(realLive)),
+  );
+
+  Vitest.it.effect('wizard commit path resolves, shows metadata, and pins', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      const second = yield* Effect.promise(() => advanceOrigin(origin.dir));
+      yield* Effect.promise(() => seedEntry(root, { name: 'fixture' }));
+      const answers = ['1', second.slice(0, 7), 'y'];
+      const written: Array<string> = [];
+      const result = yield* Engines.updateWizard({ cwd: root }, 'fixture', {
+        invocation: 'mf-references',
+        interactive: true,
+        readLine: (_prompt) => {
+          const value = answers.shift() ?? '';
+          return Effect.succeed(value);
+        },
+        write: (text) =>
+          Effect.sync(() => {
+            written.push(text);
+          }),
+      });
+      Vitest.expect(result).toMatchObject({ kind: 'updated', slug: 'fixture' });
+      Vitest.expect(written.join('\n')).toContain(`commit ${second.slice(0, 7)}`);
+
+      yield* cleanup(root, origin.dir);
+    }).pipe(Effect.provide(realLive)),
+  );
+
+  Vitest.it.effect('wizard refuses an unresolvable commit hash', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const origin = yield* Effect.promise(makeOrigin);
+      yield* Effect.promise(() => makeClone(root, 'fixture', origin.dir, URL));
+      yield* Effect.promise(() => seedEntry(root, { name: 'fixture' }));
+      const answers = ['1', 'ffffffffffffffffffffffffffffffffffffffff'];
+      const wizardError = yield* Effect.gen(function* () {
+        const result = yield* Engines.updateWizard({ cwd: root }, 'fixture', {
+          invocation: 'mf-references',
+          interactive: true,
+          readLine: (_prompt) => {
+            const value = answers.shift() ?? '';
+            return Effect.succeed(value);
+          },
+          write: () => Effect.void,
+        });
+        return result;
+      }).pipe(Effect.flip, Effect.provide(realLive));
+      Vitest.expect(wizardError).toContain('refused');
+
+      yield* cleanup(root, origin.dir);
+    }).pipe(Effect.provide(realLive)),
+  );
+
+  Vitest.it.effect('wizard is a usage error when stdin is not a TTY', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      yield* Effect.promise(() => seedEntry(root, { name: 'fixture' }));
+      const refused = yield* Effect.gen(function* () {
+        const result = yield* Engines.updateWizard({ cwd: root }, 'fixture', {
+          invocation: 'mf-references',
+          interactive: false,
+        });
+        return result;
+      }).pipe(Effect.flip, Effect.provide(realLive));
+      Vitest.expect(refused).toContain('requires a terminal');
+
+      yield* cleanup(root);
+    }).pipe(Effect.provide(realLive)),
+  );
 });
 
 Vitest.describe('CLI engines sync', () => {

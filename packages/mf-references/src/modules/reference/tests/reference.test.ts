@@ -199,4 +199,22 @@ Vitest.describe('Reference schema and codec', () => {
     Vitest.expect(decoded.kind).toBe('invalid');
     if (decoded.kind === 'invalid') Vitest.expect(decoded.reason).toContain('url:');
   });
+
+  Vitest.it('withRef sets and removes the ref line while preserving the body', () => {
+    const document = Reference.decodeReferenceFile(DEFAULT_BRANCH_ENTRY);
+    Vitest.expect(document).toBeDefined();
+    if (document === undefined) return;
+    const pinned = Reference.withRef(document, 'cd9a14a6b688d4021bee381dfd39d2cef9c0f862');
+    Vitest.expect(pinned.reference.ref).toBe('cd9a14a6b688d4021bee381dfd39d2cef9c0f862');
+    Vitest.expect(pinned.body).toBe(document.body);
+    const encoded = Reference.encodeReferenceFile(pinned);
+    Vitest.expect(encoded).toContain('ref: cd9a14a6b688d4021bee381dfd39d2cef9c0f862');
+
+    const unpinned = Reference.withRef(document, undefined);
+    Vitest.expect(unpinned.reference.ref).toBeUndefined();
+    Vitest.expect(Reference.encodeReferenceFile(unpinned)).not.toContain('ref:');
+
+    const trimmed = Reference.withRef(document, '  v1  ');
+    Vitest.expect(trimmed.reference.ref).toBe('v1');
+  });
 });

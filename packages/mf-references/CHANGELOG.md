@@ -10,6 +10,8 @@
 
 - `add` adopts an existing clone at `.agents/references/<slug>` whose `origin` is the same URL, pinning it at its HEAD (or `--ref`) instead of refusing, so a workspace can register the checkout it was bootstrapped from
 - `mf-references doctor` reads `payload.json` and checks or repairs the two reference skills; `doctor --check` is report-only and `mf-references:check` ends with it
+- `mf-references update` gains `--ref <commit|tag|branch>` (pin a target, validated against the remote, and refresh), `--latest` (drop the `ref:` pin and follow the tracked branch), and `--wizard` (interactive prompt, or a bare TTY `update <name>`); a `--ref`/`--latest`/`--wizard` run prints the `REFERENCE.md` change as a diff and leaves it uncommitted
+- `status`/`verify` and the renderers surface the tracking-vs-pinned distinction: a branch `ref:` is `tracking <branch>`, a commit/tag is `pinned to <sha7>` (full 40-hex with `--verbose`); `list --verbose` shows `ref=branch:main` vs `ref=commit:abc1234`
 
 ### Changed
 

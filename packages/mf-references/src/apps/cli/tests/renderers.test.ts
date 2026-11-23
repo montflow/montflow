@@ -26,6 +26,8 @@ const statusRow = (
   behind: fields.behind,
   ahead: fields.ahead,
   failure: fields.failure,
+  refKind: fields.refKind,
+  pin: fields.pin,
 });
 
 const statusReport = (rows: ReadonlyArray<Git.StatusRow>): Git.StatusReport => ({
@@ -177,6 +179,25 @@ Vitest.describe('renderers agent default', () => {
     Vitest.expect(Renderers.updated(update('present'))).toBe('present alpha');
     Vitest.expect(Renderers.updated(update('refused'))).toContain('refused: alpha is dirty');
 
+    const pinnedWithDiff = Renderers.updated({
+      kind: 'updated',
+      slug: 'alpha',
+      head: '1234567abcdef',
+      entryDiff: { old: 'main', new: '1234567abcdef' },
+      message: 'updated alpha head=1234567',
+    });
+    Vitest.expect(pinnedWithDiff).toContain('updated alpha head=1234567');
+    Vitest.expect(pinnedWithDiff).toContain('-ref: main');
+    Vitest.expect(pinnedWithDiff).toContain('+ref: 1234567abcdef');
+
+    const latestWithDiff = Renderers.updated({
+      kind: 'present',
+      slug: 'alpha',
+      entryDiff: { old: '1234567abcdef', new: undefined },
+      message: 'present alpha',
+    });
+    Vitest.expect(latestWithDiff).toContain('-ref: 1234567abcdef');
+
     const updatedAll = Renderers.updatedAll({
       entries: [
         { slug: 'alpha', result: update('updated') },
@@ -229,6 +250,58 @@ Vitest.describe('renderers agent default', () => {
     });
     Vitest.expect(removed).toBe('removed alpha clone=kept');
     assertAgentClean(removed);
+
+    const pinned = Renderers.status(
+      statusReport([
+        statusRow({
+          slug: 'alpha',
+          state: 'present',
+          message: 'present alpha',
+          refKind: 'commit',
+          pin: 'cd9a14a6b688d4021bee381dfd39d2cef9c0f862',
+        }),
+        statusRow({
+          slug: 'beta',
+          state: 'present',
+          message: 'present beta',
+          refKind: 'branch',
+          upstream: 'origin/main',
+        }),
+      ]),
+    );
+    Vitest.expect(pinned).toContain('present alpha pinned to cd9a14a');
+    Vitest.expect(pinned).toContain('present beta tracking main');
+    assertAgentClean(pinned);
+  });
+
+  Vitest.it('surfaces the full pin and the list ref-kind column verbosely', () => {
+    const status = Renderers.status(
+      statusReport([
+        statusRow({
+          slug: 'alpha',
+          state: 'present',
+          message: 'present alpha',
+          refKind: 'commit',
+          pin: 'cd9a14a6b688d4021bee381dfd39d2cef9c0f862',
+        }),
+      ]),
+      { human: false, verbose: true },
+    );
+    Vitest.expect(status).toContain('pinned to cd9a14a6b688d4021bee381dfd39d2cef9c0f862');
+
+    const list = Renderers.list(
+      [
+        { ...row('alpha', true), ref: 'main', refKind: 'branch' },
+        {
+          ...row('beta', true),
+          ref: 'cd9a14a6b688d4021bee381dfd39d2cef9c0f862',
+          refKind: 'commit',
+        },
+      ],
+      { human: false, verbose: true },
+    );
+    Vitest.expect(list).toContain('ref=branch:main');
+    Vitest.expect(list).toContain('ref=commit:cd9a14a6b688d4021bee381dfd39d2cef9c0f862');
   });
 
   Vitest.it('—verbose stays additive for every verb', () => {
