@@ -139,8 +139,7 @@ ROOT=$(dirname "$GIT_COMMON")   # bare layout only
 
 **Bare layout** (`<root>/.bare/` plus sibling worktrees, e.g. `<root>/main/`, `<root>/feat/my-feature/`):
 
-- Normal work: `LOCATION=$ROOT`, path `$ROOT/$BRANCH` (e.g. `$ROOT/feat/my-feature`).
-- **mf-mode work:** `LOCATION=$ROOT/mf`, path `$ROOT/mf/$BRANCH`. Run in mf-mode when the task was started with `/mf-mode` or a calling skill says so. Keeping mf-mode trees under `mf/` separates them from feature branches.
+- Worktree path is always `$ROOT/$BRANCH` (e.g. `$ROOT/feat/my-feature`).
 - No `.worktrees/` directory and no ignore check are needed: the worktrees live outside the `.bare/` git data, not inside another checkout.
 
 **Plain layout:** follow Directory Selection below.
@@ -196,7 +195,7 @@ git worktree add "$path" -b "$BRANCH" "$BASE"
 cd "$path"
 ```
 
-For the bare layout, `LOCATION` is `$ROOT` or `$ROOT/mf` as set by Layout Selection, so `$path` is the `$ROOT/$BRANCH` or `$ROOT/mf/$BRANCH` path above.
+For the bare layout, `LOCATION` is `$ROOT` as set by Layout Selection, so `$path` is the `$ROOT/$BRANCH` path above.
 
 **Agents commit and push from inside the worktree.** Git keeps each worktree's index and HEAD under `<common-dir>/worktrees/<name>`, so an agent working in the worktree also writes to the shared git dir. Grant write access to the worktree folder and to `<common-dir>` (`$ROOT/.bare/` in the bare layout). Do not relocate git data to dodge a sandbox denial; report the denial instead.
 
@@ -297,7 +296,6 @@ Ready to implement <feature-name>
 | Setup not finished | Do not start agents; report the failing command (Step 4) |
 | Herdr detected | Open a workspace for the worktree, `--no-focus`, after setup (Step 6) |
 | Bare layout (`<root>/.bare/`) | Worktree at `<root>/$BRANCH` (Layout Selection) |
-| mf-mode task, bare layout | Worktree at `<root>/mf/$BRANCH` (Layout Selection) |
 | `.worktrees/` exists | Use it (verify ignored) |
 | `worktrees/` exists | Use it (verify ignored) |
 | Both exist | Use `.worktrees/` |
@@ -347,7 +345,7 @@ Ready to implement <feature-name>
 - Skip Step 2a by jumping straight to Step 2b git commands
 - Create a worktree without a resolved type, name, and origin (Step 1)
 - Push the branch to origin unless the user asked for it (`PUSH=true`)
-- Put a bare-layout worktree anywhere but `<root>/$BRANCH` (or `<root>/mf/$BRANCH` for mf-mode)
+- Put a bare-layout worktree anywhere but `<root>/$BRANCH`
 - Move git data out of `<common-dir>` to work around a sandbox denial
 - Start an agent, or open a herdr space, before Step 4 setup has finished
 - Create worktree without verifying it is ignored (project-local)
