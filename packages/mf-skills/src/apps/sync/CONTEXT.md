@@ -11,6 +11,10 @@ this engine; neither front end owns a domain rule.
 - `isInternalSkill(markdown)` — the public/internal classification, delegating
   to the shared `Skill.hasMetadataFlag(markdown, 'internal')` nested-frontmatter
   reader
+- **A diverged target is skipped.** A workspace's own copy — a target
+  `SKILL.md` carrying `metadata.diverged: true` — is reported `skipped` with
+  reason `diverged` and never copied or counted as drift; removing the flag
+  brings it back under sync.
 - `checkoutRoot(path)` / `skillsStoreDir(path, root)` — the default checkout
   and the `<root>/.agents/skills` store layout
 - `DEFAULT_SYNC_INVOCATION` — the slash form, used when a caller does not name
