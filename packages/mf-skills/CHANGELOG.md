@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.0
+
+### Minor Changes
+
+- [#34](https://github.com/montflow/montflow/pull/34) [`7b643ac`](https://github.com/montflow/montflow/commit/7b643acc25250959b12d961f3bb09cb08c14a019) Thanks [@DanielMontilla](https://github.com/DanielMontilla)! - using-git-worktrees 1.6.0: bare-repo layout (worktrees always at `<root>/<branch>`), agents commit from inside the worktree, and open a herdr workspace for the new worktree when herdr is present.
+
+### Patch Changes
+
+- [#41](https://github.com/montflow/montflow/pull/41) [`c9ede22`](https://github.com/montflow/montflow/commit/c9ede22bc4b77a2e03508c844c42d18968bbba68) Thanks [@DanielMontilla](https://github.com/DanielMontilla)! - Require the worktree audit and chat checks before cleanup. Verify worktree and branch removal before closing the herdr workspace. Reject broken playbook script paths.
+
+  using-git-worktrees 1.6.1 points to the Worktree cleanup playbook for closing the herdr workspace after merge.
+
 ## Unreleased
 
 ### Added
