@@ -11,7 +11,6 @@
 ### Added
 
 - Layout Selection for bare repos (`<root>/.bare/` with sibling worktrees): worktrees at `<root>/<prefix>/<name>`
-- mf-mode worktrees at `<root>/mf/<prefix>/<name>` in the bare layout
 - Step 4 gates agent start: `direnv allow` in the worktree when `.envrc` exists, then the dependency install, each checked before any agent starts
 - Step 6 opens a herdr workspace (`herdr workspace create --no-focus`) for the new worktree when herdr is present, after setup
 - Guidance that agents commit and push from inside the worktree, and need write access to the shared git dir
