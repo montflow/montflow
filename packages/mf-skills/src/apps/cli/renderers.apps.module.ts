@@ -40,6 +40,7 @@ export const show = (raw: string): string => raw;
 
 /** The one-line verdict for a single verification result. */
 export const verifyLine = (result: Skill.VerifyResult): string => {
+  if (result.diverged === true) return '\u2713 diverged';
   if (result.valid) return '\u2713 verified';
   const count = result.issues.length;
   return `\u2717 not verified \u2014 ${count} issue${count === 1 ? '' : 's'}`;
