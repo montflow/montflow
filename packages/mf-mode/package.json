@@ -1,6 +1,6 @@
 {
   "name": "@montflow/mode",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "private": true,
   "description": "mf-mode: its skills, profiles, principles and playbooks, roles and dispatch, and the mf-mode CLI",
   "keywords": [

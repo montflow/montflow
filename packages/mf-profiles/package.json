@@ -1,6 +1,6 @@
 {
   "name": "@montflow/profiles",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "private": true,
   "description": "Effect-first agent profile primitives (profiles, PROFILE.md store) and the mf-profiles CLI",
   "keywords": [

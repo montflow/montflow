@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.0
+
+### Patch Changes
+
+- Updated dependencies [[`c9ede22`](https://github.com/montflow/montflow/commit/c9ede22bc4b77a2e03508c844c42d18968bbba68), [`7b643ac`](https://github.com/montflow/montflow/commit/7b643acc25250959b12d961f3bb09cb08c14a019)]:
+  - @montflow/skills@0.1.0
+
 ## 0.0.2
 
 ### Patch Changes
