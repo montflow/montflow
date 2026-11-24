@@ -72,12 +72,14 @@ means depends on ownership:
 - **Montflow skills** (`mf-*`) are held to the full standard
   (`Skill.verifyStandardSkillFile`): required frontmatter fields, `name`
   matching the directory, and the three body sections above.
+- **Diverged montflow skills** carrying `metadata.diverged: true` are exempt —
+  `mf-skills verify` reports `✓ diverged` and skips the standard checks.
 - **Generic and vendored skills** keep their own name and only have to exist —
   a directory with a `SKILL.md` verifies, whatever its shape.
 
 `Re-verify` re-runs the check on the file; `Transform to standard` (shown only
-while a montflow skill is unverified) spawns an agent to fix the shape without
-changing what the skill teaches.
+while a montflow skill is unverified — never for a diverged one) spawns an agent
+to fix the shape without changing what the skill teaches.
 
 ## Parse rules that bite
 

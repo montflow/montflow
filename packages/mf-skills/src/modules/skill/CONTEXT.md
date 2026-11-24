@@ -15,12 +15,14 @@ Effect `Schema.Class` identifier.
   `skillId` is the immutable 16-hex frontmatter `id` — two different things.
 - `decodeUnknown`, `encode` for the class, plus `decodeSkillFile` /
   `encodeSkillFile` for the `SKILL.md` file (frontmatter + body)
-- Frontmatter parser (`parseSkillFile`, `fieldString`, `fieldStrings`) — one
-  grammar shared by the store and the verifier
+- Frontmatter parser (`parseSkillFile`, `fieldString`, `fieldStrings`,
+  `hasMetadataFlag`) — one grammar shared by the store, the verifier, and sync
 - Mechanical verification (`verifySkillFile`, `verifyStandardSkillFile`,
   `verifyInfoLine`, `kindOf`): montflow skills (`mf-*`) must satisfy the
   full standard (required frontmatter `name`, `description`, `id`, `author`,
-  `version` plus a non-empty body, in any shape); generic and vendored skills only have to exist. Style stays a
+  `version` plus a non-empty body, in any shape); a skill carrying
+  `metadata.diverged: true` is exempt and reports `✓ diverged`; generic and
+  vendored skills only have to exist. Style stays a
   review concern.
 - Slug helpers for skill names (`isValidName`, `slugify`)
 - New-skill defaults (`generateSkillId`, `DEFAULT_AUTHOR`, `DEFAULT_VERSION`,

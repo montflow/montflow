@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.7.0] - 2026-11-23
+
+### Added
+
+- A montflow skill can diverge from the standard with `metadata.diverged: true`; the CLI verifier exempts it and reports `✓ diverged`.
+
 ## [1.6.1] - 2026-10-26
 
 ### Changed
