@@ -8,8 +8,9 @@ this engine; neither front end owns a domain rule.
 
 - `runSync({ from, dir, check, invocation })` — copies `<from>/.agents/skills/`
   into `<dir>/.agents/skills/`, returning per-skill outcomes as data
-- `isInternalSkill(markdown)` — the public/internal classification, read from
-  the nested `metadata.internal` frontmatter key
+- `isInternalSkill(markdown)` — the public/internal classification, delegating
+  to the shared `Skill.hasMetadataFlag(markdown, 'internal')` nested-frontmatter
+  reader
 - `checkoutRoot(path)` / `skillsStoreDir(path, root)` — the default checkout
   and the `<root>/.agents/skills` store layout
 - `DEFAULT_SYNC_INVOCATION` — the slash form, used when a caller does not name

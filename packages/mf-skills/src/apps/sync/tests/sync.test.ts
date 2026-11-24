@@ -126,6 +126,13 @@ Vitest.describe('Sync.isInternalSkill', () => {
     Vitest.expect(Sync.isInternalSkill(skillFile('open'))).toBe(false);
     Vitest.expect(Sync.isInternalSkill('# no frontmatter here\n')).toBe(false);
   });
+
+  Vitest.it('reads diverged as public, not internal', () => {
+    Vitest.expect(Sync.isInternalSkill(skillFile('probe', 'metadata:\n  diverged: true\n'))).toBe(
+      false,
+    );
+    Vitest.expect(Sync.isInternalSkill(skillFile('probe', 'diverged: true\n'))).toBe(false);
+  });
 });
 
 Vitest.describe('Sync.resolveDefaultSource', () => {

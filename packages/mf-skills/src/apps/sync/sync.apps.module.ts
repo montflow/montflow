@@ -1,5 +1,6 @@
 import { NodeFileSystem, NodePath } from '@effect/platform-node';
 import { Clock, Effect, FileSystem, Layer, Path, Result, Schema } from 'effect';
+import * as Skill from '../../modules/skill/index.js';
 
 /**
  * `mf-skills sync` — copy this checkout's public skills into a workspace
@@ -164,81 +165,9 @@ export interface SyncOptions {
 const reasonOf = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
 
-/** Frontmatter lines between the opening and closing `---`, or undefined. */
-const frontmatterLines = (markdown: string): ReadonlyArray<string> | undefined => {
-  const lines = markdown.split(/\r?\n/);
-  if ((lines[0] ?? '').trim() !== '---') return undefined;
-  const end = lines.findIndex((line, index) => index > 0 && line.trim() === '---');
-  return end === -1 ? undefined : lines.slice(1, end);
-};
-
-/** Normalise a YAML scalar: strip one layer of quotes and surrounding space. */
-const scalar = (value: string): string =>
-  value
-    .trim()
-    .replace(/^['"]|['"]$/g, '')
-    .trim()
-    .toLowerCase();
-
-/** True when a scalar reads as YAML `true` regardless of spelling. */
-const isTrue = (value: string): boolean => scalar(value) === 'true';
-
-/** Indentation width of a frontmatter line. */
-const indentOf = (line: string): number => line.length - line.trimStart().length;
-
-/** The `internal` value in a YAML flow mapping body, if present. */
-const flowInternal = (body: string): string | undefined => {
-  for (const part of body.replace(/^\{|\}$/g, '').split(',')) {
-    const match = /^\s*([\w-]+)\s*:\s*(.*?)\s*$/.exec(part);
-    if (match !== null && (match[1] ?? '').toLowerCase() === 'internal') return match[2] ?? '';
-  }
-  return undefined;
-};
-
-/**
- * True when a `SKILL.md` frontmatter carries `metadata.internal: true`.
- *
- * The nested `metadata` mapping is read directly: `Skill.parseSkillFile`
- * flattens indented keys, so a sibling top-level `internal` must not be
- * mistaken for the nested flag. Block mappings, flow mappings, and quoted or
- * whitespace-padded scalars all count.
- * @param markdown - raw SKILL.md contents
- * @returns true when the skill is internal
- */
-export const isInternalSkill = (markdown: string): boolean => {
-  const lines = frontmatterLines(markdown);
-  if (lines === undefined) return false;
-  for (let index = 0; index < lines.length; index++) {
-    const line = lines[index] ?? '';
-    const topLevel = /^([\w-]+):(.*)$/.exec(line);
-    if (topLevel === null || (topLevel[1] ?? '').toLowerCase() !== 'metadata') continue;
-
-    const value = (topLevel[2] ?? '').trim();
-    if (value.startsWith('{')) {
-      const internal = flowInternal(value);
-      if (internal !== undefined && isTrue(internal)) return true;
-      continue;
-    }
-    if (value !== '') continue;
-
-    // Block mapping: only the first child indentation is `metadata`'s own
-    // level, so a deeper `internal` belongs to some nested mapping.
-    let childIndent: number | undefined;
-    for (let child = index + 1; child < lines.length; child++) {
-      const nestedLine = lines[child] ?? '';
-      const trimmed = nestedLine.trim();
-      if (trimmed === '' || trimmed.startsWith('#')) continue;
-      if (indentOf(nestedLine) === 0) break;
-      childIndent ??= indentOf(nestedLine);
-      if (indentOf(nestedLine) !== childIndent) continue;
-      const nested = /^([\w-]+):(.*)$/.exec(trimmed);
-      if (nested !== null && (nested[1] ?? '').toLowerCase() === 'internal') {
-        if (isTrue(nested[2] ?? '')) return true;
-      }
-    }
-  }
-  return false;
-};
+/** True when a `SKILL.md` frontmatter carries `metadata.internal: true`. */
+export const isInternalSkill = (markdown: string): boolean =>
+  Skill.hasMetadataFlag(markdown, 'internal');
 
 /** True when two byte arrays hold the same bytes. */
 const sameBytes = (a: Uint8Array, b: Uint8Array): boolean => {
