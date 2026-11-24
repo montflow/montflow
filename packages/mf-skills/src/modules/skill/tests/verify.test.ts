@@ -33,6 +33,25 @@ Vitest.describe('Skill.verifySkillFile', () => {
     Vitest.expect(result.issues).toStrictEqual([]);
   });
 
+  Vitest.it('exempts a diverged montflow file from the standard', () => {
+    const result = Skill.verifySkillFile(
+      'mf-test-skill',
+      validFile.replace(
+        '---\n\n# When To Use',
+        'metadata:\n  diverged: true\n---\n\n# When To Use',
+      ),
+    );
+    Vitest.expect(result).toStrictEqual({ valid: true, issues: [], diverged: true });
+  });
+
+  Vitest.it('does not exempt on a top-level diverged key', () => {
+    const result = Skill.verifySkillFile(
+      'mf-test-skill',
+      validFile.replace('---\n\n# When To Use', 'diverged: true\n---\n\n# When To Use'),
+    );
+    Vitest.expect(result.diverged).toBeUndefined();
+  });
+
   Vitest.it('accepts any generic or vendored skill that exists', () => {
     // A generic skill is only required to exist; its contents are not held
     // to the montflow standard.
@@ -193,6 +212,12 @@ Vitest.describe('Skill.verifySkillFile', () => {
 Vitest.describe('Skill.verifyInfoLine', () => {
   Vitest.it('renders the verified check', () => {
     Vitest.expect(Skill.verifyInfoLine({ valid: true, issues: [] })).toBe('✓ verified');
+  });
+
+  Vitest.it('renders the diverged check', () => {
+    Vitest.expect(Skill.verifyInfoLine({ valid: true, issues: [], diverged: true })).toBe(
+      '✓ diverged',
+    );
   });
 
   Vitest.it('renders the unverified cross with a count', () => {

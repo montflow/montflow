@@ -99,6 +99,21 @@ Vitest.describe('Skill.encodeSkillFile', () => {
       Vitest.expect(encoded).not.toContain('version:');
       Vitest.expect(encoded).not.toContain('license:');
       Vitest.expect(encoded).not.toContain('groups:');
+      Vitest.expect(encoded).not.toContain('metadata:');
+    }),
+  );
+
+  Vitest.it.effect('round-trips the diverged flag through encode', () =>
+    Effect.gen(function* () {
+      const skill = yield* Skill.decodeSkillFile(
+        'demo',
+        '---\nname: demo\ndescription: d.\nmetadata:\n  diverged: true\n---\n\nBody.\n',
+      );
+      const encoded = Skill.encodeSkillFile(skill);
+      Vitest.expect(encoded).toContain('metadata:');
+      Vitest.expect(encoded).toContain('  diverged: true');
+      const redecoded = yield* Skill.decodeSkillFile('demo', encoded);
+      Vitest.expect(redecoded.diverged).toBe(true);
     }),
   );
 });
