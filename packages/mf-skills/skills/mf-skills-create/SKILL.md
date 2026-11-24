@@ -3,7 +3,7 @@ name: mf-skills-create
 description: Authors a workspace skill under .agents/skills/<name>/ — a SKILL.md with the required frontmatter and `# When To Use` / `# Pipeline` / `# Reference` body — from the rules below. Use when an agent must create a skill directly, without dispatching a session or shelling out.
 id: 94b1651acdb76a86
 author: montflow
-version: 1.2.0
+version: 1.2.1
 license: MIT
 groups:
   - skills
@@ -54,9 +54,12 @@ skill names to load first).
 **Diverging from the standard.** A montflow skill that intentionally does not
 follow the full standard carries `metadata.diverged: true`. The verifier then
 exempts it: `mf-skills verify` reports `✓ diverged` instead of checking the
-standard, and the interactive menu hides `Transform to standard`. Use this only
-when a skill must keep a non-standard shape on purpose. Generic and vendored
-skills never need it — they are not held to the standard anyway.
+standard, and the interactive menu hides `Transform to standard`. On the target
+side, `mf-skills sync` leaves a diverged skill alone (reported
+`Skipped (diverged)`), so the skill stops receiving upstream updates until the
+flag is removed. Use this only when a skill must keep a non-standard shape on
+purpose. Generic and vendored skills never need it — they are not held to the
+standard anyway.
 
 ```yaml
 metadata:

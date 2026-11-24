@@ -5,6 +5,7 @@
 ### Added
 
 - A montflow skill carrying `metadata.diverged: true` in its frontmatter is exempt from the full standard: `mf-skills verify` reports `✓ diverged`, the interactive menu hides `Transform to standard`, and the schema round-trips the flag. `Skill.hasMetadataFlag` is the single nested-frontmatter reader shared with sync's public/internal classification.
+- `sync` leaves a **target** skill carrying `metadata.diverged: true` alone: it is reported `Skipped (diverged)` and never counted as drift, so a workspace can add a local rule to a synced skill without breaking `--check`. The source's flag keeps its verify meaning; only the target copy decides.
 
 ### Changed
 

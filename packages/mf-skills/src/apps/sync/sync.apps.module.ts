@@ -667,6 +667,23 @@ const syncSkill = (
       };
     }
 
+    // A diverged target is the workspace's own copy: it carries
+    // `metadata.diverged: true` and is edited locally, so sync leaves it alone
+    // (and reports it skipped rather than drift). The source's diverged flag
+    // keeps its meaning from the verifier — only the target copy decides
+    // whether sync overwrites it.
+    const targetMarkdown = yield* readTextIfPresent(fs, path.join(target, 'SKILL.md'));
+    if (targetMarkdown !== undefined && Skill.hasMetadataFlag(targetMarkdown, 'diverged')) {
+      return {
+        name,
+        outcome: 'skipped' as const,
+        source,
+        target,
+        reason: 'diverged',
+        files: [],
+      };
+    }
+
     const files = yield* filesUnder(fs, path, source);
     yield* assertInsideStore(fs, path, target, store);
     const targetPresent = (yield* resolvePathIfPresent(fs, target)).kind === 'present';

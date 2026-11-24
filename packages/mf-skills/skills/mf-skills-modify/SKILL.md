@@ -3,7 +3,7 @@ name: mf-skills-modify
 description: Modifies, updates, extends, or audits an existing workspace skill under .agents/skills/<name>/ while keeping the skill schema valid. Use when an agent must edit a skill, add to it, or fix its shape without dispatching a session.
 id: c0eec01fb3fdeac6
 author: montflow
-version: 1.1.0
+version: 1.1.1
 license: MIT
 groups:
   - skills
@@ -49,7 +49,9 @@ entry. Present the plan before editing.
 - Preserve frontmatter fields you are not intentionally changing, including
   `metadata.diverged: true` when the skill carries it.
 - Add `metadata.diverged: true` only when the skill must intentionally keep a
-  non-standard shape; the verifier will stop holding it to the standard.
+  non-standard shape; the verifier will stop holding it to the standard, and
+  `mf-skills sync` will stop overwriting the skill (reported `Skipped (diverged)`)
+  so it stops receiving upstream updates.
 - Keep the description saying WHEN to use the skill.
 - Reference existing skills only; do not invent dependency names.
 - Update `CHANGELOG.md` when the change is user-visible.

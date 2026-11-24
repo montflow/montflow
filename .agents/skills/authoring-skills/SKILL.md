@@ -3,7 +3,7 @@ name: authoring-skills
 description: Guides the creation, formatting, and refinement of Skills. Use when the user wants to write a new Skill, convert documentation into a Skill, or audit an existing Skill.
 id: b186a4a0ab10373c
 author: Daniel Montilla
-version: 1.7.0
+version: 1.7.1
 license: MIT
 dependencies:
   - executing-skills
@@ -56,7 +56,7 @@ Write the YAML frontmatter. All fields below are required:
 
 Optional fields: `license` (license name), `groups` (array of categories — see taxonomy below), `dependencies` (array of skill names required to exist before running).
 
-**Diverging from the standard.** A montflow skill (`mf-*`) that must intentionally keep a non-standard shape carries `metadata.diverged: true`. The CLI verifier then exempts it (`mf-skills verify` reports `✓ diverged`), and the interactive menu hides `Transform to standard`. Use it only for a deliberate, permanent departure; generic/vendored skills never need it because they are not held to the standard anyway.
+**Diverging from the standard.** A montflow skill (`mf-*`) that must intentionally keep a non-standard shape carries `metadata.diverged: true`. The CLI verifier then exempts it (`mf-skills verify` reports `✓ diverged`), the interactive menu hides `Transform to standard`, and `mf-skills sync` leaves a diverged target skill alone (reported `Skipped (diverged)`), so it stops receiving upstream updates until the flag is removed. Use it only for a deliberate, permanent departure; generic/vendored skills never need it because they are not held to the standard anyway.
 
 ```yaml
 metadata:

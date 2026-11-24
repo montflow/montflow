@@ -56,17 +56,22 @@ const skillFile = (name: string, extraFrontmatter = ''): string =>
 /** Nested frontmatter that marks a skill internal. */
 const INTERNAL = 'metadata:\n  internal: true\n';
 
+/** Nested frontmatter that marks a target skill diverged (workspace-owned). */
+const DIVERGED = 'metadata:\n  diverged: true\n';
+
 /** Write a skill into a root's store, with optional extra files. */
 const writeSkill = (
   root: string,
   name: string,
   options: {
     readonly internal?: boolean;
+    readonly diverged?: boolean;
     readonly files?: Readonly<Record<string, string | Uint8Array>>;
   } = {},
 ): Promise<void> => {
   const base = `.agents/skills/${name}`;
-  return write(root, `${base}/SKILL.md`, skillFile(name, options.internal === true ? INTERNAL : ''))
+  const flag = options.internal === true ? INTERNAL : options.diverged === true ? DIVERGED : '';
+  return write(root, `${base}/SKILL.md`, skillFile(name, flag))
     .then(() =>
       Promise.all(
         Object.entries(options.files ?? {}).map(([file, contents]) =>
@@ -300,6 +305,85 @@ Vitest.describe('Sync.runSync', () => {
           { file: 'SKILL.md', outcome: 'unchanged' },
         ]);
         Vitest.expect(second.drifted).toBe(false);
+      }),
+    ),
+  );
+
+  Vitest.it.effect('leaves a diverged target skill alone and reports it skipped', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() =>
+          Promise.all([
+            writeSkill(sandbox.checkout, 'alpha'),
+            writeSkill(sandbox.checkout, 'beta'),
+          ]),
+        );
+        // First sync copies both; then the workspace diverges `beta` and edits it.
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        yield* Effect.promise(() =>
+          write(
+            sandbox.workspace,
+            '.agents/skills/beta/SKILL.md',
+            skillFile('beta', 'metadata:\n  diverged: true\n') + '\nlocal edit\n',
+          ),
+        );
+
+        const checked = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+        Vitest.expect(
+          checked.skills.map((skill) => [skill.name, skill.outcome, skill.reason]),
+        ).toStrictEqual([
+          ['alpha', 'unchanged', undefined],
+          ['beta', 'skipped', 'diverged'],
+        ]);
+        Vitest.expect(checked.drifted).toBe(false);
+
+        // A real sync also leaves the diverged target bytes alone.
+        const synced = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+        });
+        Vitest.expect(synced.skills.find((skill) => skill.name === 'beta')?.outcome).toBe(
+          'skipped',
+        );
+        Vitest.expect(
+          yield* Effect.promise(() => readAt(sandbox.workspace, '.agents/skills/beta/SKILL.md')),
+        ).toBe(skillFile('beta', 'metadata:\n  diverged: true\n') + '\nlocal edit\n');
+      }),
+    ),
+  );
+
+  Vitest.it.effect('reports drift for a non-diverged edited target and overwrites it', () =>
+    withSandbox((sandbox) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => writeSkill(sandbox.checkout, 'alpha'));
+        yield* Sync.runSync({ from: sandbox.checkout, dir: sandbox.workspace });
+        yield* Effect.promise(() =>
+          write(
+            sandbox.workspace,
+            '.agents/skills/alpha/SKILL.md',
+            skillFile('alpha') + '\nedit\n',
+          ),
+        );
+
+        const checked = yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+          check: true,
+        });
+        Vitest.expect(checked.skills[0]?.outcome).toBe('updated');
+        Vitest.expect(checked.drifted).toBe(true);
+
+        yield* Sync.runSync({
+          from: sandbox.checkout,
+          dir: sandbox.workspace,
+        });
+        Vitest.expect(
+          yield* Effect.promise(() => readAt(sandbox.workspace, '.agents/skills/alpha/SKILL.md')),
+        ).toBe(skillFile('alpha'));
       }),
     ),
   );

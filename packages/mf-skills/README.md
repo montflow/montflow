@@ -50,6 +50,9 @@ mf-skills sync --source <checkout> --target <workspace-root> [--check] [--verbos
 - Public means the `SKILL.md` frontmatter does not carry
   `metadata.internal: true`. Internal skills (e.g. `mf-skills-sync`) are
   skipped, reported, and never copied.
+- A target skill carrying `metadata.diverged: true` is the workspace's own
+  copy: sync leaves it alone (reported `Skipped (diverged)`) and never counts
+  it as drift. It stops receiving upstream updates until the flag is removed.
 - Each skill directory is copied whole — `SKILL.md`, plus `CHANGELOG.md`,
   `GATES.md`, and any other file when present — and unrelated skills at the
   target are left untouched.
