@@ -27,13 +27,17 @@ const program = Effect.gen(function* () {
 
 1. `Skill` — the Class: `id` (directory slug), `skillId` (16-hex frontmatter id),
    `name`, `description`, `author`, `version`, `license`, `groups`,
-   `dependencies`, `body`.
+   `dependencies`, `diverged` (true when the frontmatter carries
+   `metadata.diverged: true`), `body`.
 2. `decodeUnknown` / `encode` — class codecs; `decodeSkillFile` /
    `encodeSkillFile` handle the whole `SKILL.md` file.
 3. `isValidName(name)` — slug check. `slugify(raw)` — display name → slug.
 4. `verifySkillFile(dirName, markdown)` — ownership-aware shape check
    (`mf-skills verify`): `mf-*` skills must satisfy the full standard
-   (`verifyStandardSkillFile`); generic and vendored skills only have to exist.
+   (`verifyStandardSkillFile`); a skill carrying `metadata.diverged: true` is
+   exempt and reports `✓ diverged`; generic and vendored skills only have to
+   exist. `hasMetadataFlag(markdown, flag)` reads one nested `metadata` flag
+   (block and flow mappings, quoted scalars all count).
 5. `mf-skills` (binary) / `/mf-skills` (OpenCode) — `doctor`, `list`, `show`,
    `verify`, `create`, `modify`, `delete` over `.agents/skills/`.
 6. /mf-skills — the interactive menu: browse, list, manual or agentic

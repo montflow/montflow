@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.0] - 2026-11-23
+
+### Added
+
+- A montflow skill can diverge from the standard with `metadata.diverged: true`: `mf-skills verify` reports `✓ diverged` and skips the standard checks, and the interactive menu hides `Transform to standard`.
+
 ## [1.1.1] - 2026-10-22
 
 ### Changed

@@ -38,6 +38,12 @@ export class Skill extends Schema.Class<Skill>('Skill')({
   license: Schema.optional(Schema.String),
   groups: Schema.Array(Schema.String),
   dependencies: Schema.Array(Schema.String),
+  /**
+   * Frontmatter `metadata.diverged: true`: the skill intentionally departs
+   * from the montflow standard, so the verifier exempts it from the full
+   * standard and authoring flows leave it alone.
+   */
+  diverged: Schema.optional(Schema.Boolean),
   body: Schema.String,
 }) {}
 
@@ -194,6 +200,83 @@ export const parseSkillFile = (markdown: string): ParsedSkillFile | null => {
   };
 };
 
+/** Frontmatter lines between the opening and closing `---`, or undefined. */
+const frontmatterLines = (markdown: string): ReadonlyArray<string> | undefined => {
+  const lines = markdown.split(/\r?\n/);
+  if ((lines[0] ?? '').trim() !== '---') return undefined;
+  const end = lines.findIndex((line, index) => index > 0 && line.trim() === '---');
+  return end === -1 ? undefined : lines.slice(1, end);
+};
+
+/** Normalise a YAML scalar: strip one layer of quotes and surrounding space. */
+const scalar = (value: string): string =>
+  value
+    .trim()
+    .replace(/^['"]|['"]$/g, '')
+    .trim()
+    .toLowerCase();
+
+/** True when a scalar reads as YAML `true` regardless of spelling. */
+const isTrue = (value: string): boolean => scalar(value) === 'true';
+
+/** Indentation width of a frontmatter line. */
+const indentOf = (line: string): number => line.length - line.trimStart().length;
+
+/** A key's value inside a YAML flow mapping body, if present. */
+const flowValue = (body: string, key: string): string | undefined => {
+  for (const part of body.replace(/^\{|\}$/g, '').split(',')) {
+    const match = /^\s*([\w-]+)\s*:\s*(.*?)\s*$/.exec(part);
+    if (match !== null && (match[1] ?? '').toLowerCase() === key) return match[2] ?? '';
+  }
+  return undefined;
+};
+
+/**
+ * True when a `SKILL.md` frontmatter carries `metadata.<flag>: true`.
+ *
+ * The nested `metadata` mapping is read directly: `parseSkillFile`
+ * flattens indented keys, so a sibling top-level `<flag>` must not be
+ * mistaken for the nested one. Block mappings, flow mappings, and quoted or
+ * whitespace-padded scalars all count.
+ * @param markdown - raw SKILL.md contents
+ * @param flag - the nested `metadata` key to look for
+ * @returns true when the nested flag reads as true
+ */
+export const hasMetadataFlag = (markdown: string, flag: string): boolean => {
+  const lines = frontmatterLines(markdown);
+  if (lines === undefined) return false;
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index] ?? '';
+    const topLevel = /^([\w-]+):(.*)$/.exec(line);
+    if (topLevel === null || (topLevel[1] ?? '').toLowerCase() !== 'metadata') continue;
+
+    const value = (topLevel[2] ?? '').trim();
+    if (value.startsWith('{')) {
+      const nested = flowValue(value, flag);
+      if (nested !== undefined && isTrue(nested)) return true;
+      continue;
+    }
+    if (value !== '') continue;
+
+    // Block mapping: only the first child indentation is `metadata`'s own
+    // level, so a deeper `<flag>` belongs to some nested mapping.
+    let childIndent: number | undefined;
+    for (let child = index + 1; child < lines.length; child++) {
+      const nestedLine = lines[child] ?? '';
+      const trimmed = nestedLine.trim();
+      if (trimmed === '' || trimmed.startsWith('#')) continue;
+      if (indentOf(nestedLine) === 0) break;
+      childIndent ??= indentOf(nestedLine);
+      if (indentOf(nestedLine) !== childIndent) continue;
+      const nested = /^([\w-]+):(.*)$/.exec(trimmed);
+      if (nested !== null && (nested[1] ?? '').toLowerCase() === flag) {
+        if (isTrue(nested[2] ?? '')) return true;
+      }
+    }
+  }
+  return false;
+};
+
 /**
  * Decode one `SKILL.md` file into a `Skill`. The directory name is the
  * `id`; frontmatter `name` falls back to it. Malformed files fail.
@@ -220,6 +303,7 @@ export const decodeSkillFile = (
     license: fieldString(fields, 'license'),
     groups: fieldStrings(fields, 'groups'),
     dependencies: fieldStrings(fields, 'dependencies'),
+    diverged: hasMetadataFlag(markdown, 'diverged'),
     body,
   }).pipe(Effect.mapError(() => `Invalid skill '${dirName}'.`));
 };
@@ -243,6 +327,9 @@ export const encodeSkillFile = (skill: Skill): string => {
   if (skill.dependencies.length > 0) {
     lines.push('dependencies:');
     for (const dependency of skill.dependencies) lines.push(`  - ${dependency}`);
+  }
+  if (skill.diverged === true) {
+    lines.push('metadata:', '  diverged: true');
   }
   lines.push('---', '');
   if (skill.body !== '') lines.push(skill.body, '');
@@ -291,6 +378,12 @@ export interface VerifyIssue {
 export interface VerifyResult {
   readonly valid: boolean;
   readonly issues: ReadonlyArray<VerifyIssue>;
+  /**
+   * True when the skill was exempted from the standard by
+   * `metadata.diverged: true`. A valid result here is a conscious
+   * opt-out, not a pass.
+   */
+  readonly diverged?: boolean | undefined;
 }
 
 const issue = (field: string, message: string): VerifyIssue => ({ field, message });
@@ -365,8 +458,13 @@ export const verifyStandardSkillFile = (dirName: string, markdown: string): Veri
  * @param markdown - raw SKILL.md contents
  * @returns the result; `valid` is true only with zero issues
  */
-export const verifySkillFile = (dirName: string, markdown: string): VerifyResult =>
-  isMontflow(dirName) ? verifyStandardSkillFile(dirName, markdown) : { valid: true, issues: [] };
+export const verifySkillFile = (dirName: string, markdown: string): VerifyResult => {
+  if (!isMontflow(dirName)) return { valid: true, issues: [] };
+  if (hasMetadataFlag(markdown, 'diverged')) {
+    return { valid: true, issues: [], diverged: true };
+  }
+  return verifyStandardSkillFile(dirName, markdown);
+};
 
 /**
  * One generic verify status line for the detail-menu info panel, verdict
@@ -376,6 +474,7 @@ export const verifySkillFile = (dirName: string, markdown: string): VerifyResult
  * @returns one status line for the panel
  */
 export const verifyInfoLine = (result: VerifyResult): string => {
+  if (result.diverged === true) return '\u2713 diverged';
   if (result.valid) return '\u2713 verified';
   const count = result.issues.length;
   return `\u2717 not verified \u2014 ${count} issue${count === 1 ? '' : 's'}`;

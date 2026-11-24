@@ -170,6 +170,39 @@ Vitest.describe('Engines.verify', () => {
     }),
   );
 
+  Vitest.it.effect('exempts a diverged montflow skill and renders it as diverged', () =>
+    Effect.gen(function* () {
+      const root = yield* Effect.promise(freshRoot);
+      const dir = join(root, '.agents', 'skills', 'mf-renegade');
+      yield* Effect.promise(() => mkdir(dir, { recursive: true }));
+      yield* Effect.promise(() =>
+        writeFile(
+          join(dir, 'SKILL.md'),
+          [
+            '---',
+            'name: mf-renegade',
+            'description: Deliberately off-standard.',
+            'metadata:',
+            '  diverged: true',
+            '---',
+            '',
+            '# When To Use',
+            '',
+            'x.',
+            '',
+          ].join('\n'),
+          'utf8',
+        ),
+      );
+
+      const report = yield* Engines.verify({ cwd: root }, 'mf-renegade');
+      Vitest.expect(report.valid).toBe(true);
+      Vitest.expect(report.issueCount).toBe(0);
+      Vitest.expect(Renderers.verify(report, { verbose: true })).toContain('✓ diverged');
+      yield* cleanup(root);
+    }),
+  );
+
   Vitest.it.effect('an explicit unknown name fails', () =>
     Effect.gen(function* () {
       const root = yield* Effect.promise(freshRoot);

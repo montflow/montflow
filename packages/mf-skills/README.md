@@ -20,7 +20,10 @@ Subcommands: `doctor`, `list`, `show`, `verify [name]`, `create`, `modify`,
 whose `SKILL.md` passes or fails verification. `verify` checks each `SKILL.md`
 against its ownership class (`Skill.verifySkillFile`): montflow skills
 (`mf-*`) must satisfy the full standard, while generic and vendored
-skills only have to exist. It exits non-zero when a skill fails. Store commands
+skills only have to exist. A montflow skill carrying `metadata.diverged: true`
+in its frontmatter is exempt from the standard — `verify` reports it as
+`✓ diverged`, and the interactive menu hides `Transform to standard`. The CLI
+exits non-zero when a skill fails. Store commands
 accept `--dir` to target a workspace root other than the working directory;
 `sync` instead takes `--source`/`--target` (see below).
 

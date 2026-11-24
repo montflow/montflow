@@ -1005,6 +1005,10 @@ export const notifyVerifyResult = (
   result: Skill.VerifyResult,
 ): Effect.Effect<void> =>
   Effect.sync(() => {
+    if (result.diverged === true) {
+      ui.notify(`✓ '${id}' diverged from the standard format by flag.`, 'info');
+      return;
+    }
     if (result.valid) {
       ui.notify(`✓ '${id}' matches the standard format.`, 'info');
       return;

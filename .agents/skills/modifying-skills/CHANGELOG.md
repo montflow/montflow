@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.0] - 2026-11-23
+
+### Added
+
+- A skill carrying `metadata.diverged: true` is exempt from the standard; `mf-skills verify` reports `✓ diverged` rather than checking the shape.
+
 ## [1.2.0] - 2026-08-30
 
 ### Removed
