@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.7.1] - 2026-11-24
+
+### Changed
+
+- A diverged skill also stops sync from overwriting it: `mf-skills sync` leaves a target skill carrying `metadata.diverged: true` alone and reports it `Skipped (diverged)`.
+
 ## [1.7.0] - 2026-11-23
 
 ### Added

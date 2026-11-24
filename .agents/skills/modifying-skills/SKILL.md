@@ -3,7 +3,7 @@ name: modifying-skills
 description: Modifies, updates, extends, or audits existing skills in .agents/skills/. Use when the user wants to edit an existing skill, add content to a skill, audit a skill for quality, or update skill metadata.
 id: cb9ed8fd8e9b253a
 author: Daniel
-version: 1.3.0
+version: 1.3.1
 license: MIT
 groups:
   - skills
@@ -26,7 +26,7 @@ Confirm which skill to modify. If unspecified, ask the user. Locate the skill at
 
 ## 2. Load Current State
 
-Read all relevant files in the skill directory: `SKILL.md`, `CHANGELOG.md`, `GATES.md`, and any files in `documentation/`, `templates/`, `SCRIPTS/`. Note `metadata.diverged: true`: a skill carrying it is exempt from the standard, so `mf-skills verify` reports `✓ diverged` rather than checking the shape.
+Read all relevant files in the skill directory: `SKILL.md`, `CHANGELOG.md`, `GATES.md`, and any files in `documentation/`, `templates/`, `SCRIPTS/`. Note `metadata.diverged: true`: a skill carrying it is exempt from the standard, so `mf-skills verify` reports `✓ diverged` rather than checking the shape, and `mf-skills sync` leaves a diverged target skill alone (reported `Skipped (diverged)`), so it stops receiving upstream updates until the flag is removed.
 
 ## 3. Audit (if applicable)
 
