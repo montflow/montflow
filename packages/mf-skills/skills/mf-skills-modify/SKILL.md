@@ -3,7 +3,7 @@ name: mf-skills-modify
 description: Modifies, updates, extends, or audits an existing workspace skill under .agents/skills/<name>/ while keeping the skill schema valid. Use when an agent must edit a skill, add to it, or fix its shape without dispatching a session.
 id: c0eec01fb3fdeac6
 author: montflow
-version: 1.0.1
+version: 1.1.0
 license: MIT
 groups:
   - skills
@@ -32,7 +32,9 @@ Confirm which skill to change; if unspecified, ask. Locate it at
 
 Read `SKILL.md` and every supporting file. Note the frontmatter (`name`, `id`,
 `author`, `version`, `license`, `groups`, `dependencies`) and the body's three
-sections.
+sections. Also note `metadata.diverged: true`: a skill carrying it is exempt
+from the standard, so `mf-skills verify` reports `✓ diverged` rather than
+checking the shape.
 
 ## 3. Plan and Confirm the Change
 
@@ -44,14 +46,18 @@ entry. Present the plan before editing.
 
 - Keep the schema valid: `name` still equals the directory; `id` never changes;
   `# When To Use`, `# Pipeline`, and `# Reference` stay present.
-- Preserve frontmatter fields you are not intentionally changing.
+- Preserve frontmatter fields you are not intentionally changing, including
+  `metadata.diverged: true` when the skill carries it.
+- Add `metadata.diverged: true` only when the skill must intentionally keep a
+  non-standard shape; the verifier will stop holding it to the standard.
 - Keep the description saying WHEN to use the skill.
 - Reference existing skills only; do not invent dependency names.
 - Update `CHANGELOG.md` when the change is user-visible.
 
 ## 5. Self-Check Before You Stop
 
-- `name`, `id`, `author`, `version`, and `description` are still valid.
+- `name`, `id`, `author`, `version`, and `description` are still valid (unless
+  the skill is diverged, which is a conscious opt-out).
 - The three body sections are present.
 - Verify mechanically, then fix every issue it reports:
 
@@ -59,6 +65,8 @@ entry. Present the plan before editing.
 mf-skills verify <name>          # the binary, scriptable
 /mf-skills verify <name>         # the same command in the OpenCode host
 ```
+
+- A diverged skill verifying as `✓ diverged` is a pass, not a failure.
 
 - Nothing outside the target skill directory was touched.
 

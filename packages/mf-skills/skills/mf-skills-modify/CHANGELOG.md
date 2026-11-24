@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.0] - 2026-11-23
+
+### Added
+
+- Documented the `metadata.diverged: true` flag: a diverged skill is exempt from the standard, `mf-skills verify` reports `✓ diverged` as a pass, and editing must preserve the flag unless intentionally changing it.
+
 ## [1.0.1] - 2026-10-22
 
 ### Changed
